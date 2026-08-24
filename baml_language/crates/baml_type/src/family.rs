@@ -216,10 +216,8 @@ ty_family! {
         RustType {
             attr: TyAttr,
         } = 18,
-        /// The `type` metatype keyword — a runtime value that wraps a `Ty`
+        /// The `reflect.Type` metatype — a runtime value that wraps a `Ty`
         /// (reflection). A leaf concrete type.
-        ///
-        /// Renders as the `type` keyword (qualified name `baml.reflect.Type`).
         #[axis(concrete)]
         Type {
             attr: TyAttr,

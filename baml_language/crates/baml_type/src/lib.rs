@@ -557,8 +557,8 @@ impl Ty {
         }
     }
 
-    /// Meta-type — a runtime value that wraps a `Ty`. Renders as the `type`
-    /// keyword though its qualified name is `baml.reflect.Type`.
+    /// Meta-type — a runtime value that wraps a `Ty`. Renders as
+    /// `reflect.Type`.
     pub fn type_type() -> Self {
         Ty::Type {
             attr: TyAttr::default(),
@@ -912,7 +912,7 @@ impl<N: Clone> Ty<N> {
             // The wildcard hole renders as the `_` the user wrote.
             Ty::Infer { .. } => "_".to_string(),
             Ty::RustType { .. } => "$rust_type".to_string(),
-            Ty::Type { .. } => "type".to_string(),
+            Ty::Type { .. } => "reflect.Type".to_string(),
             // Opaque leaf types render as their fixed qualified names; these
             // strings feed canonical dumps and must stay byte-identical.
             Ty::Resource { .. } => "ai.Resource".to_string(),
@@ -1124,10 +1124,9 @@ impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
             Ty::EvolvingList(inner, _) => write!(f, "{inner}[]"),
             Ty::EvolvingMap(key, value, _) => write!(f, "map<{key}, {value}>"),
             // Opaque leaf types: render identically to `render_with` so the two
-            // renderers never diverge. (`type`/`$rust_type` are keywords; the
-            // resource/prompt handles render as their fixed qualified names.)
+            // renderers never diverge.
             Ty::RustType { .. } => write!(f, "$rust_type"),
-            Ty::Type { .. } => write!(f, "type"),
+            Ty::Type { .. } => write!(f, "reflect.Type"),
             Ty::Resource { .. } => write!(f, "ai.Resource"),
             Ty::PromptAst { .. } => write!(f, "ai.Prompt"),
         }
@@ -1374,7 +1373,7 @@ mod tests {
     fn test_display_opaque_types() {
         assert_eq!(Ty::resource().to_string(), "ai.Resource");
         assert_eq!(Ty::prompt_ast().to_string(), "ai.Prompt");
-        assert_eq!(Ty::type_type().to_string(), "type");
+        assert_eq!(Ty::type_type().to_string(), "reflect.Type");
     }
 
     #[test]

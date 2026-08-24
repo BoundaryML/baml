@@ -5,7 +5,7 @@ source: crates/baml_tests/src/corpus.rs
 fn user.fixtures.numeric_literal_method_call.IntToStringBareLiteral() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: type
+    let _1: reflect.Type
 
     bb0: {
         _1 = load_type(7);
@@ -59,7 +59,7 @@ fn user.fixtures.numeric_literal_method_call.FloatFloorBareLiteral() -> float {
 fn user.fixtures.numeric_literal_method_call.BigintToStringBareLiteral() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: type
+    let _1: reflect.Type
 
     bb0: {
         _1 = load_type(42n);

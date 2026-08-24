@@ -1,0 +1,406 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 (package reflect) ===
+fn reflect.array.Type.reflect.TypeView.as_type = builtin(vm)
+
+fn reflect.array.Type.element_type = builtin(vm)
+
+fn reflect.class.Field.metadata(self: reflect.class.Field) -> reflect.Meta {
+    // Locals:
+    let _0: reflect.Meta // _0 // return
+    let _1: reflect.class.Field // self // param
+
+    bb0: {
+        _0 = copy _1.2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn reflect.class.Field.value(self: reflect.class.Field) -> null | T {
+    // Locals:
+    let _0: null | T // _0 // return
+    let _1: reflect.class.Field // self // param
+    let _2: unknown
+    let _3: unknown
+    let _4: baml.AnyClass // owner
+    let _5: unknown // e
+    let _6: baml.AnyClass
+    let _7: string
+    let _8: reflect.Type
+    let _9: bool
+    let _10: string
+    let _11: string // message
+    let _12: baml.errors.TypeMismatch
+    let _13: string
+
+    bb0: {
+        _2 = copy _1.3;
+        _3 = copy _2;
+        _3 = narrow_bind copy _3 as Interface(QualifiedTypeName { pkg: Dep("baml"), namespace: [], name: "AnyClass" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const null;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _4 = copy _3;
+        _6 = copy _4;
+        _7 = copy _1.0;
+        _8 = load_type(#0);
+        _0 = call const fn reflect.class.get_field<copy _8>(copy _6, copy _7) -> [bb3, unwind: bb4];
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _9 = is_type(copy _5, reflect.errors.CompilationError);
+        branch copy _9 -> [bb6, bb5];
+    }
+
+    bb5: {
+        rethrow copy _5;
+    }
+
+    bb6: {
+        _10 = copy _5.0;
+        _11 = copy _10;
+        _13 = copy _11;
+        _12 = baml.errors.TypeMismatch { copy _13 };
+        throw copy _12;
+    }
+}
+
+fn reflect.class.new(name: string, fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>>, implementations: reflect.interface.Implementation[]) -> reflect.class.Type {
+    // Locals:
+    let _0: reflect.class.Type // _0 // return
+    let _1: string // name // param
+    let _2: map<string, reflect.Type | reflect.WithMeta<reflect.Type>> // fields // param
+    let _3: reflect.interface.Implementation[] // implementations // param
+    let _4: bool
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = []: reflect.interface.Implementation[];
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = call const fn reflect.class._new(copy _1, copy _2, copy _3) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn reflect.class._new = builtin(vm)
+
+fn reflect.class.builder = builtin(vm)
+
+fn reflect.class.Builder.field = builtin(vm)
+
+fn reflect.class.Builder.type = builtin(vm)
+
+fn reflect.class.Builder.build(self: reflect.class.Builder, implementations: reflect.interface.Implementation[]) -> reflect.class.Type {
+    // Locals:
+    let _0: reflect.class.Type // _0 // return
+    let _1: reflect.class.Builder // self // param
+    let _2: reflect.interface.Implementation[] // implementations // param
+    let _3: bool
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = []: reflect.interface.Implementation[];
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = call const fn reflect.class.Builder._build(copy _1, copy _2) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn reflect.class.Builder._build = builtin(vm)
+
+fn reflect.class.PendingType.array = builtin(vm)
+
+fn reflect.class.PendingType.optional = builtin(vm)
+
+fn reflect.class.PendingType.union = builtin(vm)
+
+fn reflect.class.PendingType.resolved = builtin(vm)
+
+fn reflect.class.PendingType.meta = builtin(vm)
+
+fn reflect.class.get_field = builtin(vm)
+
+fn reflect.class.Type.reflect.TypeView.as_type = builtin(vm)
+
+fn reflect.class.Type.fields = builtin(vm)
+
+fn reflect.class.Type.meta = builtin(vm)
+
+fn reflect.enum.value = builtin(vm)
+
+fn reflect.enum.new = builtin(vm)
+
+fn reflect.enum.get_value = builtin(vm)
+
+fn reflect.enum.Type.reflect.TypeView.as_type = builtin(vm)
+
+fn reflect.enum.Type.values = builtin(vm)
+
+fn reflect.enum.Type.meta = builtin(vm)
+
+fn reflect.function.Type.reflect.TypeView.as_type = builtin(vm)
+
+fn reflect.function.Type.params = builtin(vm)
+
+fn reflect.function.Type.return_type = builtin(vm)
+
+fn reflect.interface.Type.reflect.TypeView.as_type = builtin(vm)
+
+fn reflect.interface.Type.implemented_by = builtin(vm)
+
+fn reflect.interface.Implementation.field = builtin(vm)
+
+fn reflect.interface.implementation = builtin(vm)
+
+fn reflect.literal.new = builtin(vm)
+
+fn reflect.literal.Type.reflect.TypeView.as_type = builtin(vm)
+
+fn reflect.map.new = builtin(vm)
+
+fn reflect.map.Type.reflect.TypeView.as_type = builtin(vm)
+
+fn reflect.map.Type.key_type = builtin(vm)
+
+fn reflect.map.Type.value_type = builtin(vm)
+
+fn reflect.primitive.Type.reflect.TypeView.as_type = builtin(vm)
+
+fn reflect.union.new = builtin(vm)
+
+fn reflect.union.Type.reflect.TypeView.as_type = builtin(vm)
+
+fn reflect.union.Type.member_types = builtin(vm)
+
+fn reflect.TypeView.as_type(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn reflect.Package.current = builtin(intrinsic)
+
+fn reflect.Package.compile(files: map<string, string>, packages: map<string, reflect.Package>) -> reflect.Package {
+    // Locals:
+    let _0: reflect.Package // _0 // return
+    let _1: map<string, string> // files // param
+    let _2: map<string, reflect.Package> // packages // param
+    let _3: bool
+    let _4: reflect.Package // artifact
+    let _5: reflect.Package
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = {  }: map<string, reflect.Package>;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _4 = sys_op const fn reflect.Package._compile(copy _1, copy _2) -> bb3;
+    }
+
+    bb3: {
+        _5 = copy _4;
+        _0 = call const fn reflect.Package._finish(copy _5, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn reflect.Package._compile = builtin(io)
+
+fn reflect.Package._finish = builtin(vm)
+
+fn reflect.Package.get_class = builtin(vm)
+
+fn reflect.Package.get_enum = builtin(vm)
+
+fn reflect.Package.get_interface = builtin(vm)
+
+fn reflect.Package.with_types = builtin(vm)
+
+fn reflect.Package.get_function = builtin(vm)
+
+fn reflect.Package.classes = builtin(vm)
+
+fn reflect.Package.enums = builtin(vm)
+
+fn reflect.Package.interfaces = builtin(vm)
+
+fn reflect.Package.functions = builtin(vm)
+
+fn reflect.Package.tests = builtin(vm)
+
+fn reflect.Package.diagnostics = builtin(vm)
+
+fn reflect.Session.new(packages: map<string, reflect.Package>) -> reflect.Session {
+    // Locals:
+    let _0: reflect.Session // _0 // return
+    let _1: map<string, reflect.Package> // packages // param
+    let _2: bool
+
+    bb0: {
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _1 = {  }: map<string, reflect.Package>;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = call const fn reflect.Session._new(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn reflect.Session._new = builtin(vm)
+
+fn reflect.Session.eval(self: reflect.Session, source: string) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: reflect.Session // self // param
+    let _2: string // source // param
+    let _3: reflect.Package // artifact
+    let _4: reflect.Type
+    let _5: unknown // _
+    let _6: reflect.Package
+    let _7: reflect.Type
+    let _8: reflect.errors.EvaluationError
+
+    bb0: {
+        _4 = load_type(#0);
+        _3 = sys_op const fn reflect.Session._compile(copy _1, copy _2, copy _4) -> bb1;
+    }
+
+    bb1: {
+        _6 = copy _3;
+        _7 = load_type(#0);
+        _0 = call const fn reflect.Session._finish<copy _7>(copy _1, copy _6) -> [bb2, unwind: bb3];
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw_if_panic copy _5 -> bb4;
+    }
+
+    bb4: {
+        _8 = reflect.errors.EvaluationError { const "session evaluation failed" };
+        throw copy _8;
+    }
+}
+
+fn reflect.Session._compile = builtin(io)
+
+fn reflect.Session._finish = builtin(vm)
+
+fn reflect.Session.diagnostics = builtin(vm)
+
+fn reflect.signature = builtin(vm)
+
+fn reflect.call_any = builtin(vm)
+
+fn reflect.Type.of = builtin(intrinsic)
+
+fn reflect.Type.of_value = builtin(vm)
+
+fn reflect.Type.array = builtin(vm)
+
+fn reflect.Type.optional = builtin(vm)
+
+fn reflect.Type.to_baml = builtin(vm)
+
+fn reflect.Type.kind = builtin(vm)
+
+fn reflect.Type.as_class = builtin(vm)
+
+fn reflect.Type.as_enum = builtin(vm)
+
+fn reflect.Type.as_union = builtin(vm)
+
+fn reflect.Type.as_literal = builtin(vm)
+
+fn reflect.Type.as_array = builtin(vm)
+
+fn reflect.Type.as_map = builtin(vm)
+
+fn reflect.Type.as_interface = builtin(vm)
+
+fn reflect.Type.as_primitive = builtin(vm)
+
+fn reflect.Type.as_function = builtin(vm)
+
+fn reflect.Type._validate_renderable = builtin(vm)
+
+fn reflect.Type.meta = builtin(vm)
+
+fn reflect.Type.baml.ToString.to_string(self: reflect.Type) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: reflect.Type // self // param
+
+    bb0: {
+        _0 = call const fn reflect.Type._to_string_impl(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn reflect.Type._to_string_impl = builtin(vm)
+
+fn reflect.Type.implements = builtin(vm)
+
+fn reflect.Type.implemented_by = builtin(vm)

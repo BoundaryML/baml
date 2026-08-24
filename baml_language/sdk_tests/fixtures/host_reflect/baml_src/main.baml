@@ -32,9 +32,9 @@ function HostParse<T>(raw: string) -> T {
 }
 
 function HostTypeEqual<A, B>() -> bool {
-  type.of<A>() == type.of<B>()
+  reflect.Type.of<A>() == reflect.Type.of<B>()
 }
 
 function HostTypeName<T>() -> string {
-  type.of<T>().to_string()
+  reflect.Type.of<T>().to_string()
 }

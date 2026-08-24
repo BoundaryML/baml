@@ -17,7 +17,7 @@ function main() -> int throws unknown {
 "####;
 
 const S11_LIVENESS_PROBE: &str = r#####"
-function escape_one_session_value() -> type throws unknown {
+function escape_one_session_value() -> reflect.Type throws unknown {
   let dependency = reflect.Package.compile({
     "dep.baml": #"
       class Mounted {
@@ -30,7 +30,7 @@ function escape_one_session_value() -> type throws unknown {
   s.eval(#"let first = Escaped { value: "first" }"#)
   s.eval(#"let count = 2"#)
   s.eval(#"let note = "history""#)
-  s.eval<type>(#"type.of<Escaped>()"#)
+  s.eval<reflect.Type>(#"reflect.Type.of<Escaped>()"#)
 }
 "#####;
 
@@ -115,12 +115,12 @@ function scenario_7() -> bool throws unknown {
     app.ValidateOrThrow(draft.title, draft.body)
     let approved = true
   "#) catch (e) {
-    baml.reflect.errors.EvaluationError => null,
+    reflect.errors.EvaluationError => null,
     _ => throw e,
   }
   let saved = s.eval<string>(#"saved"#)
   let approved_missing = s.eval<bool>(#"approved"#) catch (_) {
-    baml.reflect.errors.CompilationError => true,
+    reflect.errors.CompilationError => true,
     _ => false,
   }
 
@@ -129,12 +129,12 @@ function scenario_7() -> bool throws unknown {
     let checked = app.Validate(-1)
     let y = "hi"
   "#) catch (e) {
-    baml.reflect.errors.EvaluationError => null,
+    reflect.errors.EvaluationError => null,
     _ => throw e,
   }
   let x = s.eval<int>(#"x"#)
   let y_missing = (s.eval<string>(#"y"#) == "") catch (_) {
-    baml.reflect.errors.CompilationError => true,
+    reflect.errors.CompilationError => true,
     _ => false,
   }
 
@@ -149,7 +149,7 @@ function scenario_7() -> bool throws unknown {
   // A failed compile never poisons the Session.
   let compile_failed = false
   let _ = s.eval(#"let broken: MissingType = null"#) catch (_) {
-    baml.reflect.errors.CompilationError => { compile_failed = true },
+    reflect.errors.CompilationError => { compile_failed = true },
     _ => null,
   }
   let continued = s.eval<int>(#"x + 1"#)
@@ -168,7 +168,7 @@ function scenario_7() -> bool throws unknown {
 function diagnostic_submission_name() -> string throws unknown {
   let s = reflect.Session.new()
   let _ = s.eval(#"let bad: MissingType = null"#) catch (e) {
-    baml.reflect.errors.CompilationError => {
+    reflect.errors.CompilationError => {
       let span = e.diagnostics[0].span ?? throw "missing diagnostic span"
       return span.file ?? ""
     },
@@ -180,7 +180,7 @@ function diagnostic_submission_name() -> string throws unknown {
 function package_current_is_rejected() -> bool throws unknown {
   let s = reflect.Session.new()
   let _ = s.eval(#"reflect.Package.current()"#) catch (_) {
-    baml.reflect.errors.CompilationError => return true,
+    reflect.errors.CompilationError => return true,
     _ => return false,
   }
   false
@@ -188,20 +188,20 @@ function package_current_is_rejected() -> bool throws unknown {
 
 function runtime_and_failed_contracts() -> bool throws unknown {
   let s = reflect.Session.new()
-  let string_t = type.of<string>()
+  let string_t = reflect.Type.of<string>()
   let value = s.eval<unreflect(string_t)>(#""ok""#)
   let rejected = (s.eval<string>(#"
     let should_not_exist = 7
     42
   "#) == "") catch (_) {
-    baml.reflect.errors.CompilationError => true,
+    reflect.errors.CompilationError => true,
     _ => false,
   }
   let missing = (s.eval<int>(#"should_not_exist"#) == 0) catch (_) {
-    baml.reflect.errors.CompilationError => true,
+    reflect.errors.CompilationError => true,
     _ => false,
   }
-  type.of_value(value) == string_t && rejected && missing
+  reflect.Type.of_value(value) == string_t && rejected && missing
 }
 
 function concurrent_eval_is_busy() -> bool throws unknown {
@@ -209,7 +209,7 @@ function concurrent_eval_is_busy() -> bool throws unknown {
   let pending = spawn { s.eval<int>(#"app.Wait()"#) }
   baml.sys.sleep(baml.time.Duration.from_milliseconds(20))
   let busy = (s.eval<int>(#"1"#) == 0) catch (_) {
-    baml.reflect.errors.SessionBusy => true,
+    reflect.errors.SessionBusy => true,
     _ => false,
   }
   let waited = await pending
@@ -255,12 +255,12 @@ function client_declaration_is_lazy() -> bool throws unknown {
 function runtime_type_binding_persists() -> bool throws unknown {
   let s = reflect.Session.new()
   let first = s.eval<bool>(#"
-    type T = unreflect(type.of<string>());
-    type.of<T>() == type.of<string>()
+    type T = unreflect(reflect.Type.of<string>());
+    reflect.Type.of<T>() == reflect.Type.of<string>()
   "#)
-  let later = s.eval<bool>(#"type.of<T>() == type.of<string>()"#)
-  s.eval(#"type T = unreflect(type.of<int>());"#)
-  let rebound = s.eval<bool>(#"type.of<T>() == type.of<int>()"#)
+  let later = s.eval<bool>(#"reflect.Type.of<T>() == reflect.Type.of<string>()"#)
+  s.eval(#"type T = unreflect(reflect.Type.of<int>());"#)
+  let rebound = s.eval<bool>(#"reflect.Type.of<T>() == reflect.Type.of<int>()"#)
   first && later && rebound
 }
 
@@ -269,8 +269,8 @@ function session_declarations_are_generative() -> bool throws unknown {
   let right = reflect.Session.new()
   left.eval(#"class SameName { value string }"#)
   right.eval(#"class SameName { value string }"#)
-  let left_type = left.eval<type>(#"type.of<SameName>()"#)
-  let right_type = right.eval<type>(#"type.of<SameName>()"#)
+  let left_type = left.eval<reflect.Type>(#"reflect.Type.of<SameName>()"#)
+  let right_type = right.eval<reflect.Type>(#"reflect.Type.of<SameName>()"#)
   left_type != right_type
 }
 
@@ -418,7 +418,7 @@ function main() -> bool throws unknown {
     let a = b
     let b = a
   "#) catch (e) {
-    baml.reflect.errors.CompilationError => {
+    reflect.errors.CompilationError => {
       diagnosed = e.diagnostics.length() > 0
     },
     _ => null,
@@ -672,7 +672,7 @@ function main() -> string throws unknown {
   let s = reflect.Session.new()
   s.eval(#"let n = 5"#)
   let _ = s.eval<5>(#"n"#) catch (e) {
-    baml.reflect.errors.CompilationError => return e.diagnostics[0].message,
+    reflect.errors.CompilationError => return e.diagnostics[0].message,
     _ => return "wrong error",
   }
   "accepted"
@@ -692,7 +692,7 @@ function main() -> string throws unknown {
 const SESSION_LET_WIDENING_MEMBERS: &str = r####"
 function probe(s: reflect.Session, source: string) -> string throws unknown {
   let _ = s.eval(source) catch (e) {
-    baml.reflect.errors.CompilationError => return e.diagnostics[0].message,
+    reflect.errors.CompilationError => return e.diagnostics[0].message,
     _ => return "wrong error",
   }
   "unexpected success"
@@ -716,7 +716,7 @@ ${probe(s, #"flag.to_string()"#)}`
 const SESSION_LET_WIDENING_EXHAUSTIVENESS: &str = r####"
 function probe(s: reflect.Session, source: string) -> string throws unknown {
   let _ = s.eval(source) catch (e) {
-    baml.reflect.errors.CompilationError => return e.diagnostics[0].message,
+    reflect.errors.CompilationError => return e.diagnostics[0].message,
     _ => return "wrong error",
   }
   "accepted"
@@ -755,7 +755,7 @@ const SESSION_LET_ANNOTATION_REJECTED: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
   let _ = s.eval(#"let n: int = 5"#) catch (e) {
-    baml.reflect.errors.CompilationError => return e.diagnostics[0].message,
+    reflect.errors.CompilationError => return e.diagnostics[0].message,
     _ => return "wrong error",
   }
   "unexpected success"
@@ -797,7 +797,7 @@ function main() -> string throws unknown {
   s.eval(#"let v = ["a", "b"]"#)
   s.eval(#"let m = { "k": 1, "j": 2 }"#)
   s.eval(#"let p = P { name: "ada" }"#)
-  s.eval(#"let cls = reflect.class.new("R", { "a": type.of<string>() })"#)
+  s.eval(#"let cls = reflect.class.new("R", { "a": reflect.Type.of<string>() })"#)
   s.eval<string>(
     #"`${n.abs()}|${text.to_upper_case()}|${v.length()}|${m.length()}|${v.join("-")}|${m.keys().join("-")}|${p.greet()}|${cls.fields()[0].name}`"#
   )
@@ -986,7 +986,7 @@ fn ordinary_compile_errors(source: &str) -> Vec<String> {
 const SESSION_ASSIGN_PROBE: &str = r####"
 function probe(s: reflect.Session, source: string) -> string throws unknown {
   let _ = s.eval(source) catch (e) {
-    baml.reflect.errors.CompilationError => return `${e.diagnostics[0].code}: ${e.diagnostics[0].message}`,
+    reflect.errors.CompilationError => return `${e.diagnostics[0].code}: ${e.diagnostics[0].message}`,
     baml.panics.Panic => return "compiled, panicked at runtime",
     _ => return "wrong error",
   }

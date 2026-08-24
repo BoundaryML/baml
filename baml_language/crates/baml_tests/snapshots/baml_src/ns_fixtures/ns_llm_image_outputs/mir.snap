@@ -10,7 +10,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage(prompt: string, client: null | 
     let _3: bool
     let _4: ai.RunResult<image>
     let _5: ai.Agent<image>
-    let _6: type
+    let _6: reflect.Type
     let _7: ai.FunctionSpec<image>
 
     bb0: {
@@ -33,7 +33,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage(prompt: string, client: null | 
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<image, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<image, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -53,7 +53,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage$build_request(prompt: string, c
     let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.FunctionSpec<image>
-    let _5: type
+    let _5: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -83,7 +83,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage$parse(json: string) -> image {
     // Locals:
     let _0: image // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(image);
@@ -101,8 +101,8 @@ fn user.fixtures.llm_image_outputs.GenerateImage$render_prompt(prompt: string) -
     let _1: string // prompt // param
     let _2: ai.FunctionSpec<image>
     let _3: string
-    let _4: type
-    let _5: type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.llm_image_outputs.GenerateImage$spec(copy _1) -> [bb1];
@@ -171,15 +171,15 @@ fn .<lambda(GenerateImage$spec, 0)>( __spec_output_format: string) -> ai.Prompt 
     let _7: int
     let _8: string[]
     let _9: string
-    let _10: type
+    let _10: reflect.Type
     let _11: int
     let _12: unknown[]
     let _13: string
-    let _14: type
+    let _14: reflect.Type
     let _15: int
     let _16: string[]
     let _17: ""
-    let _18: type
+    let _18: reflect.Type
     let _19: string[]
     let _20: unknown[]
     let _21: string[]
@@ -237,8 +237,8 @@ fn user.fixtures.llm_image_outputs.GenerateImage$stream(prompt: string, client: 
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
     let _4: ai.FunctionSpec<image>
-    let _5: type
-    let _6: type
+    let _5: reflect.Type
+    let _6: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -273,7 +273,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: null
     let _3: bool
     let _4: ai.RunResult<image[]>
     let _5: ai.Agent<image[]>
-    let _6: type
+    let _6: reflect.Type
     let _7: ai.FunctionSpec<image[]>
 
     bb0: {
@@ -296,7 +296,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: null
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<image[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image[]>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<image[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image[]>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -316,7 +316,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet$build_request(prompt: string
     let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.FunctionSpec<image[]>
-    let _5: type
+    let _5: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -346,7 +346,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet$parse(json: string) -> image
     // Locals:
     let _0: image[] // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(image[]);
@@ -364,8 +364,8 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet$render_prompt(prompt: string
     let _1: string // prompt // param
     let _2: ai.FunctionSpec<image[]>
     let _3: string
-    let _4: type
-    let _5: type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet$spec(copy _1) -> [bb1];
@@ -434,15 +434,15 @@ fn .<lambda(GenerateImageSet$spec, 0)>( __spec_output_format: string) -> ai.Prom
     let _7: int
     let _8: string[]
     let _9: string
-    let _10: type
+    let _10: reflect.Type
     let _11: int
     let _12: unknown[]
     let _13: string
-    let _14: type
+    let _14: reflect.Type
     let _15: int
     let _16: string[]
     let _17: ""
-    let _18: type
+    let _18: reflect.Type
     let _19: string[]
     let _20: unknown[]
     let _21: string[]
@@ -500,8 +500,8 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet$stream(prompt: string, clien
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
     let _4: ai.FunctionSpec<image[]>
-    let _5: type
-    let _6: type
+    let _5: reflect.Type
+    let _6: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -536,7 +536,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, c
     let _3: bool
     let _4: ai.RunResult<(string | image)[]>
     let _5: ai.Agent<(string | image)[]>
-    let _6: type
+    let _6: reflect.Type
     let _7: ai.FunctionSpec<(string | image)[]>
 
     bb0: {
@@ -559,7 +559,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, c
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<(string | image)[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<(string | image)[]>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<(string | image)[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<(string | image)[]>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -579,7 +579,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$build_request(pro
     let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.FunctionSpec<(string | image)[]>
-    let _5: type
+    let _5: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -609,7 +609,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$parse(json: strin
     // Locals:
     let _0: (string | image)[] // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type((image | string)[]);
@@ -627,8 +627,8 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$render_prompt(pro
     let _1: string // prompt // param
     let _2: ai.FunctionSpec<(string | image)[]>
     let _3: string
-    let _4: type
-    let _5: type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(copy _1) -> [bb1];
@@ -698,23 +698,23 @@ fn .<lambda(GenerateMixedImageNarrative$spec, 0)>( __spec_output_format: string)
     let _8: int
     let _9: string[]
     let _10: string
-    let _11: type
+    let _11: reflect.Type
     let _12: int
     let _13: unknown[]
     let _14: string
-    let _15: type
+    let _15: reflect.Type
     let _16: int
     let _17: string[]
     let _18: "\n\n"
-    let _19: type
+    let _19: reflect.Type
     let _20: int
     let _21: unknown[]
     let _22: string
-    let _23: type
+    let _23: reflect.Type
     let _24: int
     let _25: string[]
     let _26: ""
-    let _27: type
+    let _27: reflect.Type
     let _28: string[]
     let _29: unknown[]
     let _30: string[]
@@ -789,8 +789,8 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$stream(prompt: st
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
     let _4: ai.FunctionSpec<(string | image)[]>
-    let _5: type
-    let _6: type
+    let _5: reflect.Type
+    let _6: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;

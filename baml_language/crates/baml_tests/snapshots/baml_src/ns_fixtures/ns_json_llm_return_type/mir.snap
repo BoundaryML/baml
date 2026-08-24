@@ -9,7 +9,7 @@ fn user.fixtures.json_llm_return_type.ExtractAny(client: null | ai.Client) -> in
     let _2: bool
     let _3: ai.RunResult<baml.json.json>
     let _4: ai.Agent<baml.json.json>
-    let _5: type
+    let _5: reflect.Type
     let _6: ai.FunctionSpec<baml.json.json>
 
     bb0: {
@@ -32,7 +32,7 @@ fn user.fixtures.json_llm_return_type.ExtractAny(client: null | ai.Client) -> in
     }
 
     bb4: {
-        _3 = virtual_call run as ai.Runner<int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<baml.json.json>>(copy _4, copy _6) -> [bb5];
+        _3 = virtual_call run as ai.Runner<int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<baml.json.json>>(copy _4, copy _6) -> [bb5];
     }
 
     bb5: {
@@ -51,7 +51,7 @@ fn user.fixtures.json_llm_return_type.ExtractAny$build_request(client: null | ai
     let _1: null | ai.Client // client // param
     let _2: bool
     let _3: ai.FunctionSpec<baml.json.json>
-    let _4: type
+    let _4: reflect.Type
 
     bb0: {
         _2 = copy _1 == const <omitted>;
@@ -81,7 +81,7 @@ fn user.fixtures.json_llm_return_type.ExtractAny$parse(json: string) -> int | fl
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(baml.json.json);
@@ -98,8 +98,8 @@ fn user.fixtures.json_llm_return_type.ExtractAny$render_prompt() -> ai.Prompt {
     let _0: ai.Prompt // _0 // return
     let _1: ai.FunctionSpec<baml.json.json>
     let _2: string
-    let _3: type
-    let _4: type
+    let _3: reflect.Type
+    let _4: reflect.Type
 
     bb0: {
         _1 = call const fn user.fixtures.json_llm_return_type.ExtractAny$spec() -> [bb1];
@@ -168,15 +168,15 @@ fn .<lambda(ExtractAny$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     let _8: int
     let _9: string[]
     let _10: string
-    let _11: type
+    let _11: reflect.Type
     let _12: int
     let _13: unknown[]
     let _14: string
-    let _15: type
+    let _15: reflect.Type
     let _16: int
     let _17: string[]
     let _18: ""
-    let _19: type
+    let _19: reflect.Type
     let _20: string[]
     let _21: unknown[]
     let _22: string[]
@@ -234,8 +234,8 @@ fn user.fixtures.json_llm_return_type.ExtractAny$stream(client: null | ai.stream
     let _1: null | ai.stream.StreamingClient // client // param
     let _2: bool
     let _3: ai.FunctionSpec<baml.json.json>
-    let _4: type
-    let _5: type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _2 = copy _1 == const <omitted>;

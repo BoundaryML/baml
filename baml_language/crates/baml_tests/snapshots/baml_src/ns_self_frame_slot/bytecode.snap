@@ -198,7 +198,7 @@ function self_frame_slot.Crate.Marked.mark(self: <unresolved type #1128955336240
 
 function self_frame_slot.Crate.Marked.type_name(self: <unresolved type #112895533624084><#0>) -> string {
     load_type self_frame_slot.Crate<#0>
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
@@ -226,7 +226,7 @@ function self_frame_slot.Croc.Marked.mark(self: <unresolved type #98055404820686
 
 function self_frame_slot.Croc.Marked.type_name(self: <unresolved type #98055404820686>) -> string {
     load_type self_frame_slot.Croc
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
@@ -245,7 +245,7 @@ function self_frame_slot.IntShelf.Store<int>.describe(self: <unresolved type #38
 
 function self_frame_slot.Kinded.kind_name(self: <unresolved type #50357239318358>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
@@ -332,7 +332,7 @@ function self_frame_slot.Marked$for$T[].mark(self: #0[]) -> string {
 
 function self_frame_slot.Marked$for$T[].type_name(self: #0[]) -> string {
     load_type #0[]
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
@@ -360,19 +360,19 @@ function self_frame_slot.Marked$for$int.mark(self: int) -> string {
 
 function self_frame_slot.Marked$for$int.type_name(self: int) -> string {
     load_type int
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
 function self_frame_slot.Store.describe(self: <unresolved type #36303163464226><#1>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _5
     load_type #1
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _7
     load_type #2
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _9
     load_var _5
     load_const "/"

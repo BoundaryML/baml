@@ -100,7 +100,7 @@ fn .<lambda(<lambda($init_test_ns_fixtures_ns_testset_vibes_nested_main, 0)>, 1)
     let _13: string // ex
     let _14: void
     let _15: string
-    let _16: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure
+    let _16: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
 
     bb0: {
         _4 = copy capture[0];
@@ -191,7 +191,7 @@ fn .<lambda(<lambda($init_test_ns_fixtures_ns_testset_vibes_nested_main, 0)>, 3)
     let _8: string // sentiments [captured]
     let _9: void
     let _10: string
-    let _11: (testing.TestCollector) -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | testing.InvalidTestName | ai.errors.Failure
+    let _11: (testing.TestCollector) -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | testing.InvalidTestName | ai.errors.Failure
 
     bb0: {
         _2 = [const "happy", const "sad"]: string[];
@@ -242,7 +242,7 @@ fn .<lambda(<lambda(<lambda($init_test_ns_fixtures_ns_testset_vibes_nested_main,
     let _9: string // ex
     let _10: void
     let _11: string
-    let _12: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure
+    let _12: () -> void throws baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
 
     bb0: {
         _3 = copy capture[0];
@@ -317,7 +317,7 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: nu
     let _3: bool
     let _4: ai.RunResult<fixtures.testset_vibes_nested.Sentiment>
     let _5: ai.Agent<fixtures.testset_vibes_nested.Sentiment>
-    let _6: type
+    let _6: reflect.Type
     let _7: ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment>
 
     bb0: {
@@ -340,7 +340,7 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: nu
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<fixtures.testset_vibes_nested.Sentiment, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.testset_vibes_nested.Sentiment>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<fixtures.testset_vibes_nested.Sentiment, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.testset_vibes_nested.Sentiment>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -360,7 +360,7 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment$build_request(text: stri
     let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment>
-    let _5: type
+    let _5: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -390,7 +390,7 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment$parse(json: string) -> f
     // Locals:
     let _0: fixtures.testset_vibes_nested.Sentiment // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(fixtures.testset_vibes_nested.Sentiment);
@@ -408,8 +408,8 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment$render_prompt(text: stri
     let _1: string // text // param
     let _2: ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment>
     let _3: string
-    let _4: type
-    let _5: type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.testset_vibes_nested.ClassifySentiment$spec(copy _1) -> [bb1];
@@ -478,15 +478,15 @@ fn .<lambda(ClassifySentiment$spec, 0)>( __spec_output_format: string) -> ai.Pro
     let _7: int
     let _8: string[]
     let _9: string
-    let _10: type
+    let _10: reflect.Type
     let _11: int
     let _12: unknown[]
     let _13: string
-    let _14: type
+    let _14: reflect.Type
     let _15: int
     let _16: string[]
     let _17: ""
-    let _18: type
+    let _18: reflect.Type
     let _19: string[]
     let _20: unknown[]
     let _21: string[]
@@ -544,8 +544,8 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment$stream(text: string, cli
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
     let _4: ai.FunctionSpec<fixtures.testset_vibes_nested.Sentiment>
-    let _5: type
-    let _6: type
+    let _5: reflect.Type
+    let _6: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -581,7 +581,7 @@ fn user.fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, c
     let _4: bool
     let _5: ai.RunResult<string[]>
     let _6: ai.Agent<string[]>
-    let _7: type
+    let _7: reflect.Type
     let _8: ai.FunctionSpec<string[]>
 
     bb0: {
@@ -604,7 +604,7 @@ fn user.fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, c
     }
 
     bb4: {
-        _5 = virtual_call run as ai.Runner<string[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string[]>>(copy _6, copy _8) -> [bb5];
+        _5 = virtual_call run as ai.Runner<string[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string[]>>(copy _6, copy _8) -> [bb5];
     }
 
     bb5: {
@@ -625,7 +625,7 @@ fn user.fixtures.testset_vibes_nested.GenerateTests$build_request(count: int, to
     let _3: null | ai.Client // client // param
     let _4: bool
     let _5: ai.FunctionSpec<string[]>
-    let _6: type
+    let _6: reflect.Type
 
     bb0: {
         _4 = copy _3 == const <omitted>;
@@ -655,7 +655,7 @@ fn user.fixtures.testset_vibes_nested.GenerateTests$parse(json: string) -> strin
     // Locals:
     let _0: string[] // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(string[]);
@@ -674,8 +674,8 @@ fn user.fixtures.testset_vibes_nested.GenerateTests$render_prompt(count: int, to
     let _2: string // topic // param
     let _3: ai.FunctionSpec<string[]>
     let _4: string
-    let _5: type
-    let _6: type
+    let _5: reflect.Type
+    let _6: reflect.Type
 
     bb0: {
         _3 = call const fn user.fixtures.testset_vibes_nested.GenerateTests$spec(copy _1, copy _2) -> [bb1];
@@ -745,23 +745,23 @@ fn .<lambda(GenerateTests$spec, 0)>( __spec_output_format: string) -> ai.Prompt 
     let _7: int
     let _8: string[]
     let _9: string
-    let _10: type
+    let _10: reflect.Type
     let _11: int
     let _12: unknown[]
     let _13: int
-    let _14: type
+    let _14: reflect.Type
     let _15: int
     let _16: string[]
     let _17: " tests about "
-    let _18: type
+    let _18: reflect.Type
     let _19: int
     let _20: unknown[]
     let _21: string
-    let _22: type
+    let _22: reflect.Type
     let _23: int
     let _24: string[]
     let _25: ""
-    let _26: type
+    let _26: reflect.Type
     let _27: string[]
     let _28: unknown[]
     let _29: string[]
@@ -836,8 +836,8 @@ fn user.fixtures.testset_vibes_nested.GenerateTests$stream(count: int, topic: st
     let _3: null | ai.stream.StreamingClient // client // param
     let _4: bool
     let _5: ai.FunctionSpec<string[]>
-    let _6: type
-    let _7: type
+    let _6: reflect.Type
+    let _7: reflect.Type
 
     bb0: {
         _4 = copy _3 == const <omitted>;
@@ -918,7 +918,7 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: n
     let _3: bool
     let _4: ai.RunResult<string>
     let _5: ai.Agent<string>
-    let _6: type
+    let _6: reflect.Type
     let _7: ai.FunctionSpec<string>
 
     bb0: {
@@ -941,7 +941,7 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: n
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -961,7 +961,7 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment2$build_request(text: str
     let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.FunctionSpec<string>
-    let _5: type
+    let _5: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -991,7 +991,7 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment2$parse(json: string) -> 
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(string);
@@ -1009,8 +1009,8 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment2$render_prompt(text: str
     let _1: string // text // param
     let _2: ai.FunctionSpec<string>
     let _3: string
-    let _4: type
-    let _5: type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.testset_vibes_nested.ClassifySentiment2$spec(copy _1) -> [bb1];
@@ -1079,15 +1079,15 @@ fn .<lambda(ClassifySentiment2$spec, 0)>( __spec_output_format: string) -> ai.Pr
     let _7: int
     let _8: string[]
     let _9: string
-    let _10: type
+    let _10: reflect.Type
     let _11: int
     let _12: unknown[]
     let _13: string
-    let _14: type
+    let _14: reflect.Type
     let _15: int
     let _16: string[]
     let _17: ""
-    let _18: type
+    let _18: reflect.Type
     let _19: string[]
     let _20: unknown[]
     let _21: string[]
@@ -1145,8 +1145,8 @@ fn user.fixtures.testset_vibes_nested.ClassifySentiment2$stream(text: string, cl
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
     let _4: ai.FunctionSpec<string>
-    let _5: type
-    let _6: type
+    let _5: reflect.Type
+    let _6: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;

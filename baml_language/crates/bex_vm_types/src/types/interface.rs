@@ -31,7 +31,7 @@ pub struct InterfaceDef {
 
     /// Runtime package that declared this interface; null for a static
     /// declaration. A member back-edge: reaching the interface keeps its
-    /// package alive, the same ownership shape `RuntimeTypeProvenance::owner`
+    /// package alive, the same ownership shape ``Class::owner``
     /// gives classes and enums. This is a GC edge, never serialized.
     #[borsh(skip)]
     pub owner: HeapPtr,

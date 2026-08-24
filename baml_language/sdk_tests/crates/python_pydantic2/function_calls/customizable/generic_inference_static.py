@@ -49,7 +49,7 @@ optional_only(_types={"T": int})
 # Reflected BAML type handles are also valid type tokens. Cover both generated
 # stub shapes: inferable generics make `_types` optional, while body-only
 # generics require it.
-reflected_int: BamlType = reflect.type_.of(int)
+reflected_int: BamlType = reflect.Type.of(int)
 optional_only(_types={"T": reflected_int})
 assert_type(one_type_arg(_types={"T": reflected_int}), str)
 

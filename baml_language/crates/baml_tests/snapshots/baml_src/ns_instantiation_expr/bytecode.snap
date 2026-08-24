@@ -108,7 +108,7 @@ function instantiation_expr.bound_method_value() -> int {
 
 function instantiation_expr.describe() -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 

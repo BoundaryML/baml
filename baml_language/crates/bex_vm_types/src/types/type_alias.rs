@@ -42,7 +42,7 @@ pub struct TypeAliasDef {
     /// Runtime package that declared this alias; null for a static (or
     /// standalone) declaration. A member back-edge: reaching the alias keeps
     /// its package — globals, dependencies, sibling declarations — alive, the
-    /// same ownership shape `RuntimeTypeProvenance::owner` gives classes and
+    /// same ownership shape ``Class::owner`` gives classes and
     /// enums. This is a GC edge, never serialized.
     #[borsh(skip)]
     pub owner: crate::HeapPtr,

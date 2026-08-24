@@ -722,7 +722,7 @@ fn completions_for_type_position(
     }
 
     // ── Builtin package types (baml, env) ─────────────────────────────────────
-    for builtin_pkg in &["baml", "env"] {
+    for builtin_pkg in &["baml"] {
         let builtin_id = PackageId::new(db, Name::new(builtin_pkg));
         let builtin = package_items(db, builtin_id);
         for ns_items in builtin.namespaces.values() {
@@ -831,15 +831,13 @@ fn completions_for_package_path(
     let res_ctx =
         baml_compiler2_hir_ty::package_interface::package_resolution_context(db, own_pkg_id);
 
-    // Check if the first segment is a known package name. The BEP-066 keyword
-    // shorthands (`reflect.` ≡ `baml.reflect.`, `type.` ≡ `baml.type.`)
-    // complete as the `baml` namespaces they alias; a real package of that
-    // name wins.
+    // Check if the first segment is a known package name. `json` is the sole
+    // namespace shorthand and completes as the `baml.json` namespace.
     let first_segment = Name::new(&segments[0]);
     let (pkg_items, namespace_path): (_, Vec<Name>) =
         match res_ctx.items_for_package(db, &first_segment) {
             Some(items) => (items, segments[1..].iter().map(Name::new).collect()),
-            None if matches!(segments[0].as_str(), "reflect" | "type") => {
+            None if segments[0].as_str() == "json" => {
                 let baml_items = res_ctx.items_for_package(db, &Name::new("baml"))?;
                 (baml_items, segments.iter().map(Name::new).collect())
             }
@@ -1481,14 +1479,12 @@ fn completions_for_value_position(
                 .with_sort(format!("{:03}_{}", sort_prefix + 500, package_name)),
         );
     }
-    // The BEP-066 keyword shorthand `reflect` (≡ `baml.reflect`) completes like
-    // a package root even though it is a namespace of `baml`. (`type` is not
-    // offered bare: as an expression head it only carries `of`/`of_value`, and
-    // a bare `type` completion would collide with the primitive type name.)
+    // `json` is not a package, but remains a compiler-owned shorthand for the
+    // `baml.json` namespace.
     items.push(
-        Completion::new("reflect", CompletionKind::Module)
-            .with_detail("baml.reflect")
-            .with_sort(format!("{:03}_reflect", sort_prefix + 500)),
+        Completion::new("json", CompletionKind::Module)
+            .with_detail("baml.json")
+            .with_sort(format!("{:03}_json", sort_prefix + 500)),
     );
 
     // ── Package-level values (functions, template strings, clients) ───────────

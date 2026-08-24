@@ -122,7 +122,7 @@ function send_as<T>(
 
 // The return type's schema as prompt text, in the standard dialect —
 // exactly what ${ctx.output_format} renders in an LLM function block.
-function render_output_format(t: type) -> string throws baml.reflect.errors.CompilationError {
+function render_output_format(t: reflect.Type) -> string throws reflect.errors.CompilationError {
     root.internal.validate_output_type(t);
     root.internal.render_output_format(t)
 }

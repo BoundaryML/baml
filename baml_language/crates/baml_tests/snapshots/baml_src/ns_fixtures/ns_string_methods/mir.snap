@@ -7,7 +7,7 @@ fn user.fixtures.string_methods.Upper(s: string) -> string {
     let _0: string // _0 // return
     let _1: string // s // param
     let _2: string
-    let _3: type
+    let _3: reflect.Type
 
     bb0: {
         _2 = call const fn baml.String.to_upper_case(copy _1) -> [bb1];
@@ -28,7 +28,7 @@ fn user.fixtures.string_methods.StartsWith(s: string) -> string {
     let _0: string // _0 // return
     let _1: string // s // param
     let _2: bool
-    let _3: type
+    let _3: reflect.Type
 
     bb0: {
         _2 = call const fn baml.String.starts_with(copy _1, const "hello") -> [bb1];
@@ -50,7 +50,7 @@ fn user.fixtures.string_methods.SplitCount(s: string) -> string {
     let _1: string // s // param
     let _2: int
     let _3: string[]
-    let _4: type
+    let _4: reflect.Type
 
     bb0: {
         _3 = call const fn baml.String.split(copy _1, const ",") -> [bb1];
@@ -76,7 +76,7 @@ fn user.fixtures.string_methods.Trimmed(s: string) -> string {
     let _0: string // _0 // return
     let _1: string // s // param
     let _2: string
-    let _3: type
+    let _3: reflect.Type
 
     bb0: {
         _2 = call const fn baml.String.trim(copy _1) -> [bb1];

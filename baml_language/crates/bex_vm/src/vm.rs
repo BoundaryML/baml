@@ -1899,7 +1899,7 @@ impl BexVm {
             let type_value = if let Some(type_value) = direct {
                 type_value
             } else if let Some(result) =
-                crate::package_baml::runtime_class_builder::coerce_pending_type_arg(self, value)
+                crate::package_reflect::runtime_class_builder::coerce_pending_type_arg(self, value)
             {
                 result.map_err(VmError::thrown_fresh)?
             } else {
@@ -3263,7 +3263,7 @@ impl BexVm {
             // A future carries the `<T, E>` it was spawned at (resolved against
             // the spawning frame), so its concrete type is the faithful
             // `Future<T, E>` — the subject of `is`/`match` arms and
-            // `type.of`.
+            // `reflect.Type.of`.
             Object::Future(fut) => ConcreteRealizedTy::Future(
                 Box::new(fut.returns().clone()),
                 Box::new(fut.throws().clone()),
@@ -5601,7 +5601,7 @@ impl BexVm {
     /// `HeapPtr` is `callee` unchanged — keeping the `BoundMethod` identity so
     /// that `execute_call_from_locals_offset` can extract the receiver's
     /// `class_type_args` to seed `frame.type_args` (needed for
-    /// `type.of<T>()` inside generic methods invoked indirectly).
+    /// `reflect.Type.of<T>()` inside generic methods invoked indirectly).
     /// `execute_call_from_locals_offset` and `load_function` both unwrap the
     /// `BoundMethod` to its inner `Function` for dispatch.
     fn resolve_bound_method_callee(&self, callee: HeapPtr, args: &mut Vec<Value>) -> HeapPtr {
@@ -6412,7 +6412,7 @@ impl BexVm {
 
         // For GenericFunction callees (`let f = foo<int>; f(x)`), the bound
         // concrete type args seed frame.type_args so type-reifying bodies
-        // (type.of<T>, json natives) resolve T at runtime. (The
+        // (reflect.Type.of<T>, json natives) resolve T at runtime. (The
         // Closure/BoundMethod type args are classified in the consolidated match
         // above; GenericFunction is specific to generic instantiation values.)
         let gf_type_args: Box<[bex_vm_types::RealizedTy]> = match self.get_object(callee_ptr) {
@@ -6893,8 +6893,10 @@ impl BexVm {
                 }
 
                 let diagnostic = runtime_type::mismatched_types();
-                let error =
-                    crate::package_baml::type_kinds::alloc_compilation_error(self, &[diagnostic]);
+                let error = crate::package_reflect::type_kinds::alloc_compilation_error(
+                    self,
+                    &[diagnostic],
+                );
                 return Err(VmError::thrown_fresh(error));
             }
         }
@@ -6930,7 +6932,7 @@ impl BexVm {
             })?;
             let diagnostic = runtime_type::mismatched_types();
             let error =
-                crate::package_baml::type_kinds::alloc_compilation_error(self, &[diagnostic]);
+                crate::package_reflect::type_kinds::alloc_compilation_error(self, &[diagnostic]);
             return Err(VmError::thrown_fresh(error));
         }
         Ok(())
@@ -8542,7 +8544,7 @@ impl BexVm {
                     };
                     // The receiver's class-level slots need no exact carrier:
                     // the resolver realizes them off `Self` as head-carrying
-                    // types, so `type.of<T>()` in an impl or default-method
+                    // types, so `reflect.Type.of<T>()` in an impl or default-method
                     // body dereferences the caller's own declaration rather
                     // than deriving a fresh identity for it.
                     let type_values = match method_type_args.as_ref() {
@@ -9297,7 +9299,7 @@ impl BexVm {
                         self.as_string(&value)?.to_string()
                     };
                     let value =
-                        crate::package_baml::reflect::current_package_value(self, &package_name);
+                        crate::package_reflect::reflect::current_package_value(self, &package_name);
                     self.stack.push(value);
                 }
 

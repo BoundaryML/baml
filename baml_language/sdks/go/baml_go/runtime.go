@@ -691,11 +691,11 @@ func outboundFailure(kind string, value *cffi.BamlOutboundValue, trace []string)
 		Trace: append([]string(nil), trace...), Value: decoded,
 	}
 	switch className {
-	case "baml.reflect.errors.CompilationError":
+	case "reflect.errors.CompilationError":
 		return &CompilationError{BamlError: base, Diagnostics: decodeDiagnostics(decoded)}
-	case "baml.reflect.errors.EvaluationError":
+	case "reflect.errors.EvaluationError":
 		return &EvaluationError{BamlError: base}
-	case "baml.reflect.errors.SessionBusy":
+	case "reflect.errors.SessionBusy":
 		return &SessionBusy{BamlError: base}
 	default:
 		return &base

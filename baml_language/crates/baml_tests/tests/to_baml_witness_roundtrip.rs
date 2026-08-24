@@ -17,7 +17,7 @@ function main() -> bool throws unknown {
   let witness = reflect.interface.implementation<Named<Value = string>>()
     .field("name", class_field = "display_name")
   let original = reflect.class.new("Person", {
-    "display_name": type.of<string>(),
+    "display_name": reflect.Type.of<string>(),
   }, implementations = [witness])
   let source = original.as_type().to_baml()
   let checked_source = source + #"
@@ -33,7 +33,7 @@ function as_named(value: Person) -> Named<Value = string> {
   let compiled = compiled_package.get_class("root.Person")
     ?? throw "missing compiled Person"
 
-  original.as_type().implements(type.of<Named<Value = string>>())
+  original.as_type().implements(reflect.Type.of<Named<Value = string>>())
     && original.as_type() != compiled.as_type()
     && compiled.fields()[0].name == "display_name"
     && compiled_package.functions().get("root.as_named") != null

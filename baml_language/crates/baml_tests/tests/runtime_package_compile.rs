@@ -77,7 +77,7 @@ function namespace_and_dependency_mounts() -> bool throws unknown {
 
 function mounted_runtime_interface_and_return_types_stay_hidden() -> bool throws unknown {
   let runtime_minted = reflect.class.new("RuntimeMinted", {
-    "value": type.of<string>(),
+    "value": reflect.Type.of<string>(),
   })
   let app = reflect.Package.current().with_types({
     "RuntimeMinted": runtime_minted,
@@ -233,7 +233,7 @@ function Extract<T>(document: string) -> T {
 "#
   })
   let extracted = pkg.get_function<(string) -> ai.Prompt>("root.Extract$render_prompt") catch (e) {
-    baml.reflect.errors.CompilationError => {
+    reflect.errors.CompilationError => {
       return e.diagnostics[0].code
     },
     _ => return "wrong error",
@@ -280,7 +280,7 @@ function Read(state: app.AgentState) -> string {
     { "main.baml": "function main() -> int { 1 }" },
     packages = { "baml": root_package },
   ) catch (e) {
-    baml.reflect.errors.CompilationError => { rejected = true },
+    reflect.errors.CompilationError => { rejected = true },
     _ => throw e,
   }
   ordered && rejected
@@ -452,7 +452,7 @@ async fn rejected_compile_returns_real_diagnostic_without_running_init() {
     else {
         panic!("CompilationError throw was not an instance: {value:?}")
     };
-    assert_eq!(class_name, "baml.reflect.errors.CompilationError");
+    assert_eq!(class_name, "reflect.errors.CompilationError");
     let Some(BexExternalValue::Array { items, .. }) = fields.get("diagnostics") else {
         panic!("CompilationError did not contain diagnostics: {fields:?}")
     };
@@ -507,7 +507,7 @@ async fn get_function_mismatch_throws_compiler_subtyping_diagnostic() {
     else {
         panic!("expected CompilationError instance")
     };
-    assert_eq!(class_name, "baml.reflect.errors.CompilationError");
+    assert_eq!(class_name, "reflect.errors.CompilationError");
     let Some(BexExternalValue::Array { items, .. }) = fields.get("diagnostics") else {
         panic!("missing diagnostics: {fields:?}")
     };
@@ -534,7 +534,7 @@ async fn unspecialized_generic_get_function_reports_reflection_limit() {
     else {
         panic!("expected CompilationError instance")
     };
-    assert_eq!(class_name, "baml.reflect.errors.CompilationError");
+    assert_eq!(class_name, "reflect.errors.CompilationError");
     let Some(BexExternalValue::Array { items, .. }) = fields.get("diagnostics") else {
         panic!("missing diagnostics: {fields:?}")
     };

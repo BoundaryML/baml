@@ -489,7 +489,7 @@ impl<N: crate::Head> TyTemplate<N> {
             // frame always supplies every slot the template can reference: the
             // compiler seeds generic frames at full declared width, with an
             // unconstrained parameter seeded as an explicit `unknown` (so
-            // `type.of<T>()` under an unknown-typed call still reflects
+            // `reflect.Type.of<T>()` under an unknown-typed call still reflects
             // the honest top type through a real slot). An out-of-range index is
             // therefore a frame-layout bug — reported, never silently realized.
             Self::TypeArgRef(n) => match type_args.get(*n as usize) {

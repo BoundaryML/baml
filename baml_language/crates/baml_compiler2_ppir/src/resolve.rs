@@ -155,9 +155,8 @@ fn accessible_package_items<'db>(
 
 /// Resolve the package and namespace split for a qualified path.
 ///
-/// A real accessible package wins. If there is none, BEP-066's `reflect`,
-/// `type`, and `json` roots are interpreted as namespaces of the accessible
-/// builtin `baml` package, matching compiler name resolution and completions.
+/// A real accessible package wins. If there is none, `json` is interpreted as
+/// a namespace of the accessible builtin `baml` package.
 fn accessible_path_package<'db>(
     db: &'db dyn crate::Db,
     file: SourceFile,
@@ -172,7 +171,7 @@ fn accessible_path_package<'db>(
     if let Some(items) = accessible_package_items(db, file, first) {
         return Some((first.clone(), items, 1));
     }
-    if matches!(first.as_str(), "reflect" | "type" | "json") {
+    if first.as_str() == "json" {
         let baml = Name::new("baml");
         let items = accessible_package_items(db, file, &baml)?;
         return Some((baml, items, 0));
@@ -184,7 +183,7 @@ fn accessible_path_package<'db>(
 ///
 /// Single-segment paths are resolved via `resolve_name_at`. Multi-segment
 /// paths treat the first segment as either `root` (the current file's
-/// package), a literal package name, or a BEP-066 builtin namespace shorthand;
+/// package), a literal package name, or the builtin `json` namespace shorthand;
 /// the remaining segments look up inside that package.
 pub fn resolve_path_at<'db>(
     db: &'db dyn crate::Db,

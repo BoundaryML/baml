@@ -176,7 +176,7 @@ function env_ref_clients.EnvRefDynamicEcho(question: string, client: <unresolved
     call user.env_ref_clients.EnvRefDynamicEcho$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -185,7 +185,7 @@ function env_ref_clients.EnvRefDynamicEcho(question: string, client: <unresolved
     return
 }
 
-function env_ref_clients.EnvRefDynamicEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+function env_ref_clients.EnvRefDynamicEcho$build_request(question: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -299,7 +299,7 @@ function env_ref_clients.EnvRefEcho(question: string, client: <unresolved type #
     call user.env_ref_clients.EnvRefEcho$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -308,7 +308,7 @@ function env_ref_clients.EnvRefEcho(question: string, client: <unresolved type #
     return
 }
 
-function env_ref_clients.EnvRefEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+function env_ref_clients.EnvRefEcho$build_request(question: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -426,7 +426,7 @@ function env_ref_clients.EnvRefResolvedEcho(question: string, client: <unresolve
     call user.env_ref_clients.EnvRefResolvedEcho$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -435,7 +435,7 @@ function env_ref_clients.EnvRefResolvedEcho(question: string, client: <unresolve
     return
 }
 
-function env_ref_clients.EnvRefResolvedEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+function env_ref_clients.EnvRefResolvedEcho$build_request(question: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -539,7 +539,7 @@ function env_ref_clients.LiveEnvRefEcho(question: string, client: <unresolved ty
     call user.env_ref_clients.LiveEnvRefEcho$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -548,7 +548,7 @@ function env_ref_clients.LiveEnvRefEcho(question: string, client: <unresolved ty
     return
 }
 
-function env_ref_clients.LiveEnvRefEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+function env_ref_clients.LiveEnvRefEcho$build_request(question: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -651,7 +651,7 @@ function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: <unres
     call user.env_ref_clients.LiveEnvRefFallbackEcho$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -660,7 +660,7 @@ function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: <unres
     return
 }
 
-function env_ref_clients.LiveEnvRefFallbackEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+function env_ref_clients.LiveEnvRefFallbackEcho$build_request(question: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -846,7 +846,7 @@ function env_ref_clients.dynamic_client_selector_runs_against_the_mock() -> stri
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -861,7 +861,7 @@ function env_ref_clients.env_ref_api_key_reaches_the_wire() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -876,7 +876,7 @@ function env_ref_clients.env_ref_base_url_resolves_at_request_time() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -1302,7 +1302,7 @@ function env_ref_clients.explicit_resolve_selector_runs_against_the_mock() -> st
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1
@@ -1339,7 +1339,7 @@ function env_ref_clients.plain_string_api_key_still_works() -> string {
     call user.llm_mock.MockResponse.ok
     store_var _3
     load_type string
-    load_type baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure
+    load_type baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
     load_var _3
     load_type llm_mock.MockResponse
     alloc_array 1

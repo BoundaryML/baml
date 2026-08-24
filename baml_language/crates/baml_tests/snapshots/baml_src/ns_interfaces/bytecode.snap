@@ -1962,10 +1962,10 @@ function interfaces.GimpEchoer.GimpEcho<int>.echo(self: <unresolved type #399954
 
 function interfaces.GoopDescriber<T>$for$GoopBox<T>.describe(self: <unresolved type #44924369220760><#0>, value: #1) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _4
     load_type #1
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _6
     load_var _4
     load_const ":"
@@ -2610,33 +2610,33 @@ function interfaces.bgfb_same(x: #0) -> bool {
 function interfaces.birr_main() -> bool {
     load_type interfaces.BirrContainer<int>
     load_type interfaces.BirrPrintable<int>
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     jump_if_false L0
     pop 1
     load_type interfaces.BirrContainer<string>
     load_type interfaces.BirrPrintable<string>
-    call baml.TypeValue.implements
+    call reflect.Type.implements
 
   L0:
     jump_if_false L1
     pop 1
     load_type interfaces.BirrPrintable<int>
     load_type interfaces.BirrContainer<int>
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
 
   L1:
     jump_if_false L2
     pop 1
     load_type interfaces.BirrPrintable<string>
     load_type interfaces.BirrContainer<string>
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
 
   L2:
     jump_if_false L3
     pop 1
     load_type interfaces.BirrPrintable<int>
     load_type interfaces.BirrContainer<string>
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
     unary_op !
 
   L3:
@@ -2644,7 +2644,7 @@ function interfaces.birr_main() -> bool {
     pop 1
     load_type interfaces.BirrPrintable<string>
     load_type interfaces.BirrContainer<int>
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
     unary_op !
 
   L4:
@@ -3374,7 +3374,7 @@ function interfaces.f2d_main() -> string {
 function interfaces.f2ri_main() -> bool {
     load_type interfaces.F2riPerson
     load_type interfaces.F2riPrintable
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     return
 }
 
@@ -3383,12 +3383,12 @@ function interfaces.f2rs_main() -> bool {
     store_var printable
     load_var printable
     load_type interfaces.F2rsPerson
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
     jump_if_false L0
     pop 1
     load_var printable
     load_type interfaces.F2rsTeam
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
 
   L0:
     return
@@ -3703,14 +3703,14 @@ function interfaces.fz33_maybe_dog(want_dog: bool) -> <unresolved type #10120604
 function interfaces.fz34_main() -> bool {
     load_type interfaces.Fz34IntBox
     load_type interfaces.Fz34Box<string>
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     return
 }
 
 function interfaces.fz35_main() -> bool {
     load_type interfaces.Fz35Box<string>
     load_type interfaces.Fz35IntBox
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
     return
 }
 
@@ -4595,12 +4595,12 @@ function interfaces.oobp_main() -> string {
 function interfaces.oobv_main() -> bool {
     load_type interfaces.OobvDog
     load_type interfaces.OobvAnimal
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     jump_if_false L0
     pop 1
     load_type interfaces.OobvAnimal
     load_type interfaces.OobvDog
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
 
   L0:
     return
@@ -4678,11 +4678,11 @@ function interfaces.rcpm_main() -> bool {
 function interfaces.ribi_main() -> bool {
     load_type interfaces.RibiDog
     load_type interfaces.RibiAnimal
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     store_var direct
     load_type interfaces.RibiAnimal
     load_type interfaces.RibiDog
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
     store_var reverse
     load_var2 1 2
     cmp_op ==
@@ -4692,21 +4692,21 @@ function interfaces.ribi_main() -> bool {
 function interfaces.ridn_main() -> bool {
     load_type interfaces.RidnAnimal
     load_type interfaces.RidnAnimal
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     return
 }
 
 function interfaces.riff_main() -> bool {
     load_type interfaces.RiffRock
     load_type interfaces.RiffAnimal
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     return
 }
 
 function interfaces.riig_is_animal() -> bool {
     load_type #0
     load_type interfaces.RiigAnimal
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     return
 }
 
@@ -4727,20 +4727,20 @@ function interfaces.riig_main() -> bool {
 function interfaces.ritf_main() -> bool {
     load_type interfaces.RitfDog
     load_type interfaces.RitfAnimal
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     return
 }
 
 function interfaces.ritv_main() -> bool {
     load_type interfaces.RitvEmployee
     load_type interfaces.RitvNamed
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     return
 }
 
 function interfaces.rtit_main() -> string {
     load_type interfaces.RtitAnimal
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
@@ -5040,7 +5040,7 @@ function interfaces.uf06_main() -> int {
     load_const 0
     store_var d1
     load_var2 1 2
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     pop_jump_if_false L0
     load_const 1
     store_var d1
@@ -5049,7 +5049,7 @@ function interfaces.uf06_main() -> int {
     load_const 0
     store_var d2
     load_var2 2 1
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
     pop_jump_if_false L1
     load_const 1
     store_var d2
@@ -5058,7 +5058,7 @@ function interfaces.uf06_main() -> int {
     load_const 0
     store_var d4
     load_var2 1 3
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     pop_jump_if_false L2
     load_const 1
     store_var d4
@@ -5067,7 +5067,7 @@ function interfaces.uf06_main() -> int {
     load_const 0
     store_var d5
     load_var2 3 1
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
     pop_jump_if_false L3
     load_const 1
     store_var d5
@@ -5179,7 +5179,7 @@ function interfaces.ufp2_main() -> int {
     store_var a
     load_var ub
     load_type interfaces.Ufp2Box<int | string | null>
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     pop_jump_if_false L0
     load_var a
     load_const 1
@@ -5189,7 +5189,7 @@ function interfaces.ufp2_main() -> int {
   L0:
     load_var ub
     load_type interfaces.Ufp2Box<string | int | null>
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     pop_jump_if_false L1
     load_var a
     load_const 10
@@ -5254,7 +5254,7 @@ function interfaces.ufp5_main() -> int {
     store_var a
     load_var ub
     load_type interfaces.Ufp5Box<int | int>
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     pop_jump_if_false L0
     load_var a
     load_const 1
@@ -5264,7 +5264,7 @@ function interfaces.ufp5_main() -> int {
   L0:
     load_var ub
     load_type interfaces.Ufp5Box<int | string>
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     pop_jump_if_false L1
     load_var a
     load_const 10
@@ -5383,12 +5383,12 @@ function interfaces.urrc_take(child: <unresolved type #135898467687152><int>) ->
 function interfaces.urrs_main() -> bool {
     load_type interfaces.UrrsBox<int>
     load_type interfaces.UrrsPrintable
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     jump_if_false L0
     pop 1
     load_type interfaces.UrrsBox<string>
     load_type interfaces.UrrsPrintable
-    call baml.TypeValue.implements
+    call reflect.Type.implements
 
   L0:
     return
@@ -5478,10 +5478,10 @@ function interfaces.w306_main() -> string {
 
 function interfaces.w306_names() -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var naked
     load_type interfaces.W306Box<#0>
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var wrapped
     load_const "naked="
     load_var naked
@@ -5496,14 +5496,14 @@ function interfaces.w306_names() -> string {
 function interfaces.w307_box_impls_intbox() -> bool {
     load_type interfaces.W307Box<#0>
     load_type interfaces.W307IntBox
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
     return
 }
 
 function interfaces.w307_box_impls_stringbox() -> bool {
     load_type interfaces.W307Box<#0>
     load_type interfaces.W307StringBox
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
     return
 }
 
@@ -5564,11 +5564,11 @@ function interfaces.w312_main() -> string {
 function interfaces.w315_main() -> int {
     load_type int
     load_type interfaces.W315Debuggable
-    call baml.TypeValue.implements
+    call reflect.Type.implements
     store_var a
     load_type interfaces.W315Debuggable
     load_type int
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
     store_var b
     load_var a
     jump_if_false L0
@@ -5595,12 +5595,12 @@ function interfaces.w3bg_main() -> bool {
     store_var int_box
     load_var int_box
     load_type interfaces.W3bgIntBox
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
     jump_if_false L0
     pop 1
     load_var int_box
     load_type interfaces.W3bgStringBox
-    call baml.TypeValue.implemented_by
+    call reflect.Type.implemented_by
     unary_op !
 
   L0:

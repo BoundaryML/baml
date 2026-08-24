@@ -142,7 +142,7 @@ func Test_reflection_compile_errors_are_typed(t *testing.T) {
 	if !errors.As(err, &compilation) {
 		t.Fatalf("compile error = %T %v; want *reflect.CompilationError", err, err)
 	}
-	if compilation.ClassName != "baml.reflect.errors.CompilationError" {
+	if compilation.ClassName != "reflect.errors.CompilationError" {
 		t.Fatalf("compilation class = %q", compilation.ClassName)
 	}
 }

@@ -22,7 +22,7 @@ function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: <unres
     call user.fixtures.llm_image_outputs.GenerateImage$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<image, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image>>
+    load_type ai.Runner<image, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -31,7 +31,7 @@ function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: <unres
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImage$build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.llm_image_outputs.GenerateImage$build_request(prompt: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -149,7 +149,7 @@ function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: <un
     call user.fixtures.llm_image_outputs.GenerateImageSet$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<image[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image[]>>
+    load_type ai.Runner<image[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image[]>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -158,7 +158,7 @@ function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: <un
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet$build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.llm_image_outputs.GenerateImageSet$build_request(prompt: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -276,7 +276,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, 
     call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<(string | image)[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<(string | image)[]>>
+    load_type ai.Runner<(string | image)[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<(string | image)[]>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -285,7 +285,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, 
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative$build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative$build_request(prompt: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==

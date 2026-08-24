@@ -24,9 +24,9 @@ def test_runtime_class_definition_preserves_nested_metadata():
     record = reflect.class_.new(
         "RuntimeRecord",
         {
-            "label": reflect.type_.of(str).meta(alias="display_label"),
+            "label": reflect.Type.of(str).meta(alias="display_label"),
             "category": category,
-            "scores": reflect.type_.of(int).array(),
+            "scores": reflect.Type.of(int).array(),
         },
     )
 
@@ -52,7 +52,7 @@ def test_compiled_package_returns_class_graph():
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go
 def test_wire_occurrences_are_fresh_and_handles_reject_serialization():
-    runtime_type = reflect.class_.new("Fresh", {"value": reflect.type_.of(int)})
+    runtime_type = reflect.class_.new("Fresh", {"value": reflect.Type.of(int)})
     assert HostTypeEqual(_types={"A": runtime_type, "B": runtime_type}) is False
     with pytest.raises(TypeError, match="cannot be serialized"):
         pickle.dumps(runtime_type)
@@ -63,9 +63,9 @@ def test_known_type_tokens_compose_and_reject_unknowns():
     assert HostTypeName(_types={"T": int}) == "int"
     assert HostTypeName(_types={"T": list[Optional[str]]}) == "(string | null)[]"
     assert HostTypeName(_types={"T": StaticNamed}) == "StaticNamed"
-    assert reflect.type_.of(int).optional().array()
+    assert reflect.Type.of(int).optional().array()
     assert hasattr(reflect, "class_") and not hasattr(reflect, "class")
-    assert hasattr(reflect, "type_") and not hasattr(reflect, "type")
+    assert hasattr(reflect, "Type") and not hasattr(reflect, "type_")
 
     class NotGenerated:
         pass
@@ -84,7 +84,7 @@ def test_generated_class_subclasses_resolve_to_declared_type():
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go
 def test_host_handles_expose_composition_only():
-    runtime_type = reflect.type_.of(int)
+    runtime_type = reflect.Type.of(int)
     assert not hasattr(runtime_type, "kind")
     assert not hasattr(runtime_type, "fields")
     assert not hasattr(runtime_type, "as_type")
@@ -95,4 +95,4 @@ def test_reflection_compile_errors_are_typed():
     with pytest.raises(BamlError) as exc_info:
         reflect.Package.compile({"broken.baml": "class {"})
 
-    assert exc_info.value.class_name == "baml.reflect.errors.CompilationError"
+    assert exc_info.value.class_name == "reflect.errors.CompilationError"

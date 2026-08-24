@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function unknown_error.$init_test_ns_unknown_error_unknown_error(registry: testing.TestCollector) -> null {
+function unknown_error.$init_test_ns_unknown_error_unknown_error(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.unknown_error"
     load_const "unknown_error_from_known_preserves_identity"
@@ -90,19 +90,19 @@ function unknown_error.$init_test_ns_unknown_error_unknown_error(registry: testi
     return
 }
 
-function unknown_error.UeRunnerImpl.UeRunner.run(self: unknown_error.UeRunnerImpl) -> bool {
+function unknown_error.UeRunnerImpl.UeRunner.run(self: <unresolved type #122143658744037>) -> bool {
     call user.unknown_error.ue_origin
     return
 }
 
-function unknown_error.ue_call_reflect(target: baml.AnyFunction<Returns = bool, Throws = unknown>) -> bool {
+function unknown_error.ue_call_reflect(target: <unresolved type #56645786973401><Returns = bool, Throws = unknown>) -> bool {
     load_type bool
     load_type unknown
     load_var target
     load_type string
     load_type unknown
     alloc_map 0
-    call baml.reflect.call_any
+    call reflect.call_any
     return
 }
 
@@ -370,7 +370,7 @@ function unknown_error.ue_gc_root() -> bool {
     throw
 }
 
-function unknown_error.ue_interface_boundary(runner: unknown_error.UeRunner) -> bool {
+function unknown_error.ue_interface_boundary(runner: <unresolved type #55206239409731>) -> bool {
     load_var runner
     load_type unknown_error.UeRunner
     load_const "run"
@@ -502,7 +502,7 @@ function unknown_error.ue_preserves_origin_trace() -> bool {
     return
 }
 
-function unknown_error.ue_reflect_boundary(target: baml.AnyFunction<Returns = bool, Throws = unknown>) -> bool {
+function unknown_error.ue_reflect_boundary(target: <unresolved type #56645786973401><Returns = bool, Throws = unknown>) -> bool {
     load_var target
     call user.unknown_error.ue_call_reflect
     jump L0

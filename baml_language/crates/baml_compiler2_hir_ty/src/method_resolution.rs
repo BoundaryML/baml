@@ -133,7 +133,10 @@ pub(crate) fn external_class_for_type(
             builtin(&[], "Bool", Vec::new())
         }
         TyKind::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
-        TyKind::Type { .. } => builtin(&[], "TypeValue", Vec::new()),
+        TyKind::Type { .. } => (
+            TypeName::new(Name::new("reflect"), Vec::new(), Name::new("Type")),
+            Vec::new(),
+        ),
         TyKind::Media(kind, _) => {
             let class = match kind {
                 MediaKind::Image => "Image",
@@ -202,9 +205,13 @@ pub(crate) fn receiver_class<'db>(
             builtin(&[], "Bool", Vec::new())
         }
         TyKind::Uint8Array { .. } => builtin(&[], "Uint8Array", Vec::new()),
-        // The `type` primitive's members (reflection, BEP-039) live on
-        // `class baml.TypeValue` - `reflect.type_of<T>().to_string()`.
-        TyKind::Type { .. } => builtin(&[], "TypeValue", Vec::new()),
+        TyKind::Type { .. } => {
+            let qtn = TypeName::new(Name::new("reflect"), Vec::new(), Name::new("Type"));
+            match facts.definition_of(&qtn) {
+                Some(Definition::Class(class)) => Some((class, Vec::new())),
+                _ => None,
+            }
+        }
         TyKind::Media(kind, _) => {
             let class = match kind {
                 MediaKind::Image => "Image",

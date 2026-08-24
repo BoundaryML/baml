@@ -5,15 +5,23 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0003
 
   × unresolved name: `reflect.type_of`
-   ╭─[main.baml:6:5]
- 6 │     reflect.type_of<int>()
-   ·     ───────────────
-   ╰────
+    ╭─[main.baml:11:5]
+ 11 │     reflect.type_of<int>()
+    ·     ───────────────
+    ╰────
 
   [type] E0003
 
-  × unresolved name: `baml.reflect.type_of`
-    ╭─[main.baml:10:5]
- 10 │     baml.reflect.type_of<string>()
+  × unresolved name: `type_of`
+    ╭─[main.baml:15:5]
+ 15 │     reflect.Type.type_of<string>()
     ·     ────────────────────
+    ╰────
+
+  [type] E0007
+
+  × type `reflect.Type` has no member `type_of`
+    ╭─[main.baml:19:5]
+ 19 │     reflect.Type.of_value(1).type_of()
+    ·     ──────────────────────────────────
     ╰────

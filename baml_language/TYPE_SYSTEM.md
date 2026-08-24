@@ -224,18 +224,18 @@ Internally, when we call the specialized function `foo<int>(123)`, the bound typ
 This is best illustrated by BAML's runtime reflection:
 
 ```baml
-function asdf<T>() -> type {
-	reflect.type_of<T>() // `type_of` basically takes the type-parameter and returns it as a value
+function asdf<T>() -> reflect.Type {
+	reflect.Type.of<T>() // `Type.of` takes the type parameter and returns it as a value
 }
 
 ////////
 
 asdf<int>() // should return type `int`
-// we passed type-parameter `int` into `asdf`, which passed it into `reflect.type_of`, which returned it as a value.
+// we passed type parameter `int` into `asdf`, which passed it into `reflect.Type.of`, which returned it as a value.
 ```
 
 **How does this actually get run under the hood?**
-For the function call `foo<int>(123)`, the run time `foo` function effectively receive two parameters: type `T=int` and value `a=123`. The compiler has ensured that the bounds for each are correct.
+For the function call `foo<int>(123)`, the run time `foo` function effectively receives two parameters: type argument `T=int` and value `a=123`. The compiler has ensured that the bounds for each are correct.
 
 - The constructor for `Box` is called, with type parameter `T -> int` (inferred and filled in by the compiler) and value `a -> 123`.
 - The value is assigned to `out`.

@@ -104,6 +104,7 @@ const RUNTIME_OWNED_CLASS_REEXPORTS: &[(&str, &str)] = &[
     ("baml.media.Video", "BamlVideo"),
     ("baml.media.Pdf", "BamlPdf"),
     (AI_STREAM_STREAM, "BamlStream"),
+    ("reflect.Type", "reflectType"),
 ];
 
 fn runtime_owned_reexport_name(c: &TypeScriptClass) -> Option<&'static str> {
@@ -593,7 +594,6 @@ fn write_preamble_ts(
             "import type {{ BamlHandle as _BamlHandle }} from \"{runtime_package}\";"
         );
     }
-    let is_reflect = body.leaf.segments == ["baml", "reflect"];
     if is_root {
         out.push_str(&runtime_import_line(
             state,
@@ -612,15 +612,10 @@ fn write_preamble_ts(
             out.push('\n');
             write_child_reexports(out, kids, callable_child_aliases);
         }
-        out.push_str("\nexport { reflect } from \"./baml/index.js\";\n");
     } else {
-        let extra: &[&str] = if is_reflect { &["reflectType"] } else { &[] };
-        out.push_str(&runtime_import_line(state, extra, runtime_package));
+        out.push_str(&runtime_import_line(state, &[], runtime_package));
         out.push_str(&cross_leaf_imports(state, &body.leaf));
         write_child_reexports(out, kids, callable_child_aliases);
-        if is_reflect {
-            out.push_str("const __baml_type = reflectType;\nexport { __baml_type as type };\n");
-        }
     }
 }
 

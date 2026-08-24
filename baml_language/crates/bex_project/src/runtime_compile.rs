@@ -1043,7 +1043,8 @@ fn rewrite_identifiers(
                     .map(|&i| tokens[i].kind);
                 let next = significant.get(position + 1).map(|&i| tokens[i].kind);
                 let reserved_package_root = next == Some(TokenKind::Dot)
-                    && matches!(token.text.as_str(), "json" | "reflect" | "type");
+                    && (token.text.as_str() == "json"
+                        || baml_builtins2::stdlib_package_names().contains(&token.text.as_str()));
                 if prev == Some(TokenKind::Dot)
                     || next == Some(TokenKind::Colon)
                     || reserved_package_root

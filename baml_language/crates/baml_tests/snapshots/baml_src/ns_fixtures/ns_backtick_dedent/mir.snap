@@ -52,9 +52,9 @@ fn user.fixtures.backtick_dedent.WithInterps(name: string, count: int) -> string
     let _3: string
     let _4: string
     let _5: string
-    let _6: type
+    let _6: reflect.Type
     let _7: string
-    let _8: type
+    let _8: reflect.Type
 
     bb0: {
         _6 = load_type(string);
@@ -107,7 +107,7 @@ fn user.fixtures.backtick_dedent.ForLoopVerbatim(xs: string[]) -> string {
     let _10: string
     let _11: string
     let _12: string
-    let _13: type
+    let _13: reflect.Type
 
     bb0: {
         _2 = const "";
@@ -154,7 +154,7 @@ fn user.fixtures.backtick_dedent.MultilineInterpVerbatim() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(string);

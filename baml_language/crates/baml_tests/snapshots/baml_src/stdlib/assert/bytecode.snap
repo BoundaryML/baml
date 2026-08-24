@@ -194,7 +194,7 @@ function assert.is_type(actual: unknown) -> #0 {
     jump L1
 
   L0:
-    load_type type
+    load_type reflect.Type
     load_type #0
     call baml.String.from
     store_var _8

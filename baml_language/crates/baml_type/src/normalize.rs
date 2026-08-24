@@ -763,7 +763,7 @@ impl<H: Head> NormalTy<H> {
     /// (union, interface, hole, type variable, …) for which no disjointness is
     /// provable.
     /// Whether `head` is one of the reflection type-kind classes
-    /// (`baml.reflect.<kind>.Type`).
+    /// (`reflect.<kind>.Type`).
     ///
     /// The algebra's second nominal special case, recognized the same way as the
     /// first (`baml.AnyFunction`): by asking the context for each known name's
@@ -772,15 +772,11 @@ impl<H: Head> NormalTy<H> {
     /// can turn a name the algebra knows into a head it can compare.
     fn head_is_type_kind_class<C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
         crate::type_kind::TypeKind::ALL.iter().any(|kind| {
-            let name = crate::QualifiedTypeName::new(
-                crate::Name::new("baml"),
-                vec![
-                    crate::Name::new("reflect"),
-                    crate::Name::new(kind.namespace()),
-                ],
-                crate::Name::new("Type"),
-            );
-            ctx.head_lookup(&name).is_some_and(|known| &known == head)
+            // `TypeKind::class_name` is the one source of the kind-view
+            // spelling; duplicating it here is how a package rename silently
+            // un-recognizes the whole family.
+            ctx.head_lookup(&kind.class_name())
+                .is_some_and(|known| &known == head)
         })
     }
 

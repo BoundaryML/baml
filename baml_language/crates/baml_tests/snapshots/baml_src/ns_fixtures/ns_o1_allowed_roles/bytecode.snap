@@ -22,7 +22,7 @@ function fixtures.o1_allowed_roles.AskGpt4o(question: string, client: <unresolve
     call user.fixtures.o1_allowed_roles.AskGpt4o$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -31,7 +31,7 @@ function fixtures.o1_allowed_roles.AskGpt4o(question: string, client: <unresolve
     return
 }
 
-function fixtures.o1_allowed_roles.AskGpt4o$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.o1_allowed_roles.AskGpt4o$build_request(question: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -134,7 +134,7 @@ function fixtures.o1_allowed_roles.AskO1(question: string, client: <unresolved t
     call user.fixtures.o1_allowed_roles.AskO1$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -143,7 +143,7 @@ function fixtures.o1_allowed_roles.AskO1(question: string, client: <unresolved t
     return
 }
 
-function fixtures.o1_allowed_roles.AskO1$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.o1_allowed_roles.AskO1$build_request(question: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==

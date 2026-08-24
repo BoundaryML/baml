@@ -4070,10 +4070,10 @@ async fn reflection_bounded_impl_cycle_terminates() {
 
         function main() -> int {
             let score = 0
-            if type.of<Node>().implements(type.of<A>()) {
+            if reflect.Type.of<Node>().implements(reflect.Type.of<A>()) {
                 score = score + 1
             }
-            if type.of<Node>().implements(type.of<B>()) {
+            if reflect.Type.of<Node>().implements(reflect.Type.of<B>()) {
                 score = score + 10
             }
             return score

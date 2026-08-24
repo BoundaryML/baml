@@ -1267,8 +1267,8 @@ fn reflect_class_implements_interface() {
         }
 
         function main() -> bool {
-            let dog_t = type.of<Dog>()
-            let animal_t = type.of<Animal>()
+            let dog_t = reflect.Type.of<Dog>()
+            let animal_t = reflect.Type.of<Animal>()
             return dog_t.implements(animal_t)
         }
         "#,
@@ -1289,8 +1289,8 @@ fn reflect_implemented_by_is_reverse() {
         }
 
         function main() -> bool {
-            let dog_t = type.of<Dog>()
-            let animal_t = type.of<Animal>()
+            let dog_t = reflect.Type.of<Dog>()
+            let animal_t = reflect.Type.of<Animal>()
             return animal_t.implemented_by(dog_t)
         }
         "#,
@@ -6781,7 +6781,7 @@ fn wf3_out_of_body_primitive_field_bearing_is_e0126_pins() {
 }
 
 /// wf3: a bare generic interface in a type-argument position
-/// (`type.of<Box>()`, no type args) is an arity error like any other
+/// (`reflect.Type.of<Box>()`, no type args) is an arity error like any other
 /// type position — a generic head is written fully explicit or inferred
 /// wholesale, never a partial wildcard. (This replaces the old undocumented
 /// wildcard-matching behavior; a deliberate every-instantiation reflection
@@ -6800,8 +6800,8 @@ async fn wf3_bare_generic_interface_reflection_is_arity_error() {
             }
         }
         function main() -> bool {
-            let bare = type.of<Box>()
-            return bare.implemented_by(type.of<IntBox>())
+            let bare = reflect.Type.of<Box>()
+            return bare.implemented_by(reflect.Type.of<IntBox>())
         }
         "#,
         "type `Box` expects 1 type argument(s), got 0",

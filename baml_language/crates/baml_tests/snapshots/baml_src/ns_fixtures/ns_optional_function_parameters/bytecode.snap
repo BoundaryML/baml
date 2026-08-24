@@ -23,7 +23,7 @@ function fixtures.optional_function_parameters.AskDocs(query: string, max_result
     call user.fixtures.optional_function_parameters.AskDocs$spec
     store_var _9
     load_var2 6 7
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _6
@@ -32,7 +32,7 @@ function fixtures.optional_function_parameters.AskDocs(query: string, max_result
     return
 }
 
-function fixtures.optional_function_parameters.AskDocs$build_request(query: string, max_results: int, filter: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.optional_function_parameters.AskDocs$build_request(query: string, max_results: int, filter: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==

@@ -161,7 +161,7 @@ pub fn external_to_outbound(
             }))
         }
 
-        // A reflected BAML type returned as a value (`type.of<T>()`)
+        // A reflected BAML type returned as a value (`reflect.Type.of<T>()`)
         // crosses the boundary as a first-class `Ty`, sharing the inbound
         // representation. Must precede the opaque-ADT catch-all, which would
         // otherwise box it into a handle.

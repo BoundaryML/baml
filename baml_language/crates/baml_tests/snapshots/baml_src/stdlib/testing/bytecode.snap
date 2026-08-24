@@ -463,6 +463,55 @@ function testing.TestCollector.register_test_set_at(self: <unresolved type #4967
     return
 }
 
+function testing.TestPool.acquire(self: <unresolved type #118264986786077>) -> null {
+  L0:
+    load_const true
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    jump L5
+
+  L2:
+    load_type int
+    load_var self
+    load_field .tokens
+    call baml.Array.pop
+    store_var _5
+    load_var _5
+    narrow_bind int, slot=2
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 10
+    call baml.time.Duration.from_milliseconds
+    sys_op baml.sys.sleep
+    pop 1
+    jump L0
+    load_var e
+    throw_if_panic
+    jump L0
+
+  L4:
+    load_const null
+
+  L5:
+    return
+}
+
+function testing.TestPool.release(self: <unresolved type #118264986786077>) -> null {
+    load_type int
+    load_var self
+    load_field .tokens
+    load_const 1
+    call baml.Array.push
+    pop 1
+    load_const null
+    return
+}
+
 function testing.TestRegistry.expand_set(self: <unresolved type #26487773213760>, name: string) -> (<unresolved type #112046581445265> | <unresolved type #91171177102271>)[] {
     load_var self
     load_field .collector
@@ -643,31 +692,44 @@ function testing.TestRegistry.new(collector: <unresolved type #49679510787122>) 
 }
 
 function testing.TestRegistry.run_all(self: <unresolved type #26487773213760>) -> <unresolved type #38539982593899> {
-    load_var self
+    load_const 0
+    call testing.test_pool
+    store_var _2
+    load_var2 1 2
+    call testing.TestRegistry.run_all_pooled
+    return
+}
+
+function testing.TestRegistry.run_all_pooled(self: <unresolved type #26487773213760>, pool: <unresolved type #118264986786077>) -> <unresolved type #38539982593899> {
+    load_var2 1 2
     call testing.testset_children
     load_const null
+    load_var pool
     call testing.run_testset
     return
 }
 
-function testing.TestRegistry.run_filtered(self: <unresolved type #26487773213760>, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> <unresolved type #77139304646434> {
+function testing.TestRegistry.run_filtered(self: <unresolved type #26487773213760>, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[], max_concurrency: int) -> <unresolved type #77139304646434> {
     load_var2 1 2
     load_var2 3 4
     load_var cli_exclude
     call testing.select_names_layered
     store_var selected_names
+    load_var max_concurrency
+    call testing.test_pool
+    store_var pool
     load_var profile_include
     container_len
-    store_var _12
-    load_var _12
+    store_var _14
+    load_var _14
     load_const 0
     cmp_int_op ==
     jump_if_false L0
     pop 1
     load_var profile_exclude
     container_len
-    store_var _13
-    load_var _13
+    store_var _15
+    load_var _15
     load_const 0
     cmp_int_op ==
 
@@ -676,8 +738,8 @@ function testing.TestRegistry.run_filtered(self: <unresolved type #2648777321376
     pop 1
     load_var cli_include
     container_len
-    store_var _14
-    load_var _14
+    store_var _16
+    load_var _16
     load_const 0
     cmp_int_op ==
 
@@ -686,8 +748,8 @@ function testing.TestRegistry.run_filtered(self: <unresolved type #2648777321376
     pop 1
     load_var cli_exclude
     container_len
-    store_var _15
-    load_var _15
+    store_var _17
+    load_var _17
     load_const 0
     cmp_int_op ==
 
@@ -696,13 +758,14 @@ function testing.TestRegistry.run_filtered(self: <unresolved type #2648777321376
     jump L4
 
   L3:
-    load_var2 1 6
-    call testing.TestRegistry.run_selected
+    load_var2 1 7
+    load_var pool
+    call testing.TestRegistry.run_selected_pooled
     jump L5
 
   L4:
-    load_var self
-    call testing.TestRegistry.run_all
+    load_var2 1 8
+    call testing.TestRegistry.run_all_pooled
 
   L5:
     load_var selected_names
@@ -711,9 +774,21 @@ function testing.TestRegistry.run_filtered(self: <unresolved type #2648777321376
 }
 
 function testing.TestRegistry.run_selected(self: <unresolved type #26487773213760>, names: string[]) -> <unresolved type #38539982593899> {
+    load_const 0
+    call testing.test_pool
+    store_var _3
     load_var2 1 2
+    load_var _3
+    call testing.TestRegistry.run_selected_pooled
+    return
+}
+
+function testing.TestRegistry.run_selected_pooled(self: <unresolved type #26487773213760>, names: string[], pool: <unresolved type #118264986786077>) -> <unresolved type #38539982593899> {
+    load_var2 1 2
+    load_var pool
     call testing.testset_children_selected
     load_const null
+    load_var pool
     call testing.run_testset
     return
 }
@@ -827,11 +902,16 @@ function testing.TestRegistry.run_testset(self: <unresolved type #26487773213760
     load_var name
     cmp_op ==
     pop_jump_if_false L0
+    load_const 0
+    call testing.test_pool
+    store_var pool
     load_var2 1 5
     call testing.TestRegistry.expand_testset_registry
+    load_var pool
     call testing.testset_children
     load_var ts
     load_field .runner
+    load_var pool
     call testing.run_testset
     jump L5
 
@@ -844,33 +924,33 @@ function testing.TestRegistry.run_testset(self: <unresolved type #26487773213760
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _19
+    store_var _22
 
   L3:
-    load_var _19
+    load_var _22
     load_type baml.iter.Iterator<Error = never, Item = string>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _20
-    load_var _20
+    store_var _23
+    load_var _23
     is_type baml.iter.Done
     pop_jump_if_false L4
     jump L6
 
   L4:
-    load_var _20
+    load_var _23
     store_var k
     load_var self
     load_field .expansions
     load_var k
     load_map_element
     store_var sub
-    load_var2 2 8
+    load_var2 2 9
     load_const "::"
     bin_op +
     call baml.String.starts_with
     pop_jump_if_false L3
-    load_var2 9 2
+    load_var2 10 2
     call testing.TestRegistry.run_testset
 
   L5:
@@ -2858,10 +2938,13 @@ function testing.pattern_may_match_descendant(pattern: string, prefix: string) -
     return
 }
 
-function testing.run_children_parallel(children: <unresolved type #93725257556349>[]) -> <unresolved type #38539982593899> {
-    load_var ?5
+function testing.run_children_parallel(children: <unresolved type #93725257556349>[], pool: <unresolved type #118264986786077>) -> <unresolved type #38539982593899> {
+    load_var ?2
     make_cell
-    store_var ?5
+    store_var ?2
+    load_var ?6
+    make_cell
+    store_var ?6
     load_type future<testing.NamedChildReport, never>
     alloc_array 0
     store_var futures
@@ -2869,25 +2952,49 @@ function testing.run_children_parallel(children: <unresolved type #9372525755634
     load_type baml.iter.Iterable<Error = never, Item = testing.TestSetChild>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _3
+    store_var _4
 
   L0:
-    load_var _3
+    load_var _4
     load_type baml.iter.Iterator<Error = never, Item = testing.TestSetChild>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _4
-    load_var _4
+    store_var _5
+    load_var _5
     is_type baml.iter.Done
     pop_jump_if_false L1
-    jump L2
+    jump L4
 
   L1:
     load_const null
     make_cell
     store_var child
-    load_var _4
-    store_deref ?5
+    load_var _5
+    store_deref ?6
+    load_deref ?6
+    load_field .is_container
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_deref ?2
+    call testing.TestPool.acquire
+    pop 1
+    load_var2 6 2
+    make_closure .<lambda(run_children_parallel, 1)>, 2
+    load_const null
+    load_const null
+    load_type testing.NamedChildReport
+    load_type never
+    spawn
+    store_var _18
+    load_type future<testing.NamedChildReport, never>
+    load_var2 3 8
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L3:
     load_var child
     make_closure .<lambda(run_children_parallel, 0)>, 1
     load_const null
@@ -2895,14 +3002,14 @@ function testing.run_children_parallel(children: <unresolved type #9372525755634
     load_type testing.NamedChildReport
     load_type never
     spawn
-    store_var _11
+    store_var _13
     load_type future<testing.NamedChildReport, never>
-    load_var2 2 6
+    load_var2 3 7
     call baml.Array.push
     pop 1
     jump L0
 
-  L2:
+  L4:
     load_type testing.NamedChildReport
     load_type never
     load_var futures
@@ -3014,7 +3121,7 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> <unre
     return
 }
 
-function testing.run_testset(children: <unresolved type #93725257556349>[], runner: ((<unresolved type #93725257556349>[]) -> <unresolved type #38539982593899> throws never) | null) -> <unresolved type #38539982593899> {
+function testing.run_testset(children: <unresolved type #93725257556349>[], runner: ((<unresolved type #93725257556349>[]) -> <unresolved type #38539982593899> throws never) | null, pool: <unresolved type #118264986786077>) -> <unresolved type #38539982593899> {
     load_var runner
     load_const null
     cmp_op ==
@@ -3027,7 +3134,7 @@ function testing.run_testset(children: <unresolved type #93725257556349>[], runn
     jump L2
 
   L1:
-    load_var children
+    load_var2 1 3
     call testing.run_children_parallel
 
   L2:
@@ -3283,26 +3390,59 @@ function testing.test_child(name: string, body: () -> void throws unknown, runne
     load_var2 1 2
     load_var runner
     make_closure .<lambda(test_child, 0)>, 2
-    init_instance testing.TestSetChild .name, .run
+    load_const false
+    init_instance testing.TestSetChild .name, .run, .is_container
     return
 }
 
-function testing.testset_child(registry: <unresolved type #26487773213760>, ts: <unresolved type #48992417349648>) -> <unresolved type #93725257556349> {
-    load_var ?1
-    make_cell
-    store_var ?1
-    load_var ?2
-    make_cell
-    store_var ?2
-    load_deref ?2
-    load_field .name
-    load_var2 1 2
-    make_closure .<lambda(testset_child, 0)>, 2
-    init_instance testing.TestSetChild .name, .run
+function testing.test_pool(max_concurrency: int) -> <unresolved type #118264986786077> {
+    load_var max_concurrency
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 64
+    store_var limit
+    jump L2
+
+  L1:
+    load_var max_concurrency
+    store_var limit
+
+  L2:
+    load_type int
+    alloc_array 0
+    store_var tokens
+    load_const 0
+    store_var i
+
+  L3:
+    load_var2 4 2
+    cmp_int_op <
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var tokens
+    init_instance testing.TestPool .tokens
     return
+
+  L5:
+    load_type int
+    load_var tokens
+    load_const 1
+    call baml.Array.push
+    pop 1
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L3
 }
 
-function testing.testset_child_selected(registry: <unresolved type #26487773213760>, ts: <unresolved type #48992417349648>, names: string[]) -> <unresolved type #93725257556349> {
+function testing.testset_child(registry: <unresolved type #26487773213760>, ts: <unresolved type #48992417349648>, pool: <unresolved type #118264986786077>) -> <unresolved type #93725257556349> {
     load_var ?1
     make_cell
     store_var ?1
@@ -3315,87 +3455,37 @@ function testing.testset_child_selected(registry: <unresolved type #264877732137
     load_deref ?2
     load_field .name
     load_var2 1 2
-    load_var names
-    make_closure .<lambda(testset_child_selected, 0)>, 3
-    init_instance testing.TestSetChild .name, .run
+    load_var pool
+    make_closure .<lambda(testset_child, 0)>, 3
+    load_const true
+    init_instance testing.TestSetChild .name, .run, .is_container
     return
 }
 
-function testing.testset_children(registry: <unresolved type #26487773213760>) -> <unresolved type #93725257556349>[] {
-    load_type testing.TestSetChild
-    alloc_array 0
-    store_var children
-    load_var registry
-    load_field .collector
-    load_field .tests
-    load_type baml.iter.Iterable<Error = never, Item = testing.TestRegistration>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _4
-
-  L0:
-    load_var _4
-    load_type baml.iter.Iterator<Error = never, Item = testing.TestRegistration>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _5
-    load_var _5
-    is_type baml.iter.Done
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var _5
-    store_var_load_var t
+function testing.testset_child_selected(registry: <unresolved type #26487773213760>, ts: <unresolved type #48992417349648>, names: string[], pool: <unresolved type #118264986786077>) -> <unresolved type #93725257556349> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_var ?4
+    make_cell
+    store_var ?4
+    load_deref ?2
     load_field .name
-    load_var t
-    load_field .body
-    load_var t
-    load_field .runner
-    call testing.test_child
-    store_var _10
-    load_type testing.TestSetChild
-    load_var2 2 6
-    call baml.Array.push
-    pop 1
-    jump L0
-
-  L2:
-    load_var registry
-    load_field .collector
-    load_field .testsets
-    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _16
-
-  L3:
-    load_var _16
-    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _17
-    load_var _17
-    is_type baml.iter.Done
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
-    load_var2 1 8
-    call testing.testset_child
-    store_var _22
-    load_type testing.TestSetChild
-    load_var2 2 9
-    call baml.Array.push
-    pop 1
-    jump L3
-
-  L5:
-    load_var children
+    load_var2 1 2
+    load_var2 3 4
+    make_closure .<lambda(testset_child_selected, 0)>, 4
+    load_const true
+    init_instance testing.TestSetChild .name, .run, .is_container
     return
 }
 
-function testing.testset_children_selected(registry: <unresolved type #26487773213760>, names: string[]) -> <unresolved type #93725257556349>[] {
+function testing.testset_children(registry: <unresolved type #26487773213760>, pool: <unresolved type #118264986786077>) -> <unresolved type #93725257556349>[] {
     load_type testing.TestSetChild
     alloc_array 0
     store_var children
@@ -3422,17 +3512,12 @@ function testing.testset_children_selected(registry: <unresolved type #264877732
     load_var _6
     store_var_load_var t
     load_field .name
-    load_var names
-    call testing._name_selected
-    pop_jump_if_false L0
-    load_var t
-    load_field .name
     load_var t
     load_field .body
     load_var t
     load_field .runner
     call testing.test_child
-    store_var _13
+    store_var _11
     load_type testing.TestSetChild
     load_var2 3 7
     call baml.Array.push
@@ -3446,32 +3531,112 @@ function testing.testset_children_selected(registry: <unresolved type #264877732
     load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
-    store_var _19
+    store_var _17
 
   L3:
-    load_var _19
+    load_var _17
     load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
-    store_var _20
-    load_var _20
+    store_var _18
+    load_var _18
     is_type baml.iter.Done
     pop_jump_if_false L4
     jump L5
 
   L4:
+    load_var2 1 9
+    load_var pool
+    call testing.testset_child
+    store_var _23
+    load_type testing.TestSetChild
+    load_var2 3 10
+    call baml.Array.push
+    pop 1
+    jump L3
+
+  L5:
+    load_var children
+    return
+}
+
+function testing.testset_children_selected(registry: <unresolved type #26487773213760>, names: string[], pool: <unresolved type #118264986786077>) -> <unresolved type #93725257556349>[] {
+    load_type testing.TestSetChild
+    alloc_array 0
+    store_var children
+    load_var registry
+    load_field .collector
+    load_field .tests
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestRegistration>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _6
+
+  L0:
+    load_var _6
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestRegistration>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _7
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _7
+    store_var_load_var t
+    load_field .name
+    load_var names
+    call testing._name_selected
+    pop_jump_if_false L0
+    load_var t
+    load_field .name
+    load_var t
+    load_field .body
+    load_var t
+    load_field .runner
+    call testing.test_child
+    store_var _14
+    load_type testing.TestSetChild
+    load_var2 4 8
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L2:
+    load_var registry
+    load_field .collector
+    load_field .testsets
+    load_type baml.iter.Iterable<Error = never, Item = testing.TestSetRegistration>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _20
+
+  L3:
     load_var _20
+    load_type baml.iter.Iterator<Error = never, Item = testing.TestSetRegistration>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _21
+    load_var _21
+    is_type baml.iter.Done
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var _21
     store_var_load_var ts
     load_field .name
     load_var names
     call testing._has_selected_descendant
     pop_jump_if_false L3
-    load_var2 1 10
-    load_var names
+    load_var2 1 11
+    load_var2 2 3
     call testing.testset_child_selected
-    store_var _27
+    store_var _28
     load_type testing.TestSetChild
-    load_var2 3 11
+    load_var2 4 12
     call baml.Array.push
     pop 1
     jump L3

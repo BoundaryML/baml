@@ -15,9 +15,9 @@ function TenantPersonType() -> reflect.class.Type {
     .field("name")
     .field("email")
   reflect.class.new("AcmePerson", {
-    "name": type.of<string>(),
-    "email": type.of<string>(),
-    "favorite_editor": type.of<string>(),
+    "name": reflect.Type.of<string>(),
+    "email": reflect.Type.of<string>(),
+    "favorite_editor": reflect.Type.of<string>(),
   }, implementations = [anchor_impl])
 }
 
@@ -42,7 +42,7 @@ function Run(document: string) -> app.AcmePerson {
   let extract = pkg.get_function<(string) -> PersonAnchor>("root.Run")
     ?? throw "missing root.Run"
   let person = extract(#"{"name":"Ada","email":"ada@example.com","favorite_editor":"vim"}"#)
-  if (type.of_value(person) != person_t.as_type()) {
+  if (reflect.Type.of_value(person) != person_t.as_type()) {
     throw "compiled wrapper did not return the mounted type"
   }
   person.name + "|" + person.email
@@ -64,21 +64,21 @@ function Items() -> Item[] { [Item { value: "bound" }] }
 
   let escaped: unknown = {
     type T = unreflect(operand());
-    if (type.of<T>() != item_ct.as_type()) {
-      throw "type.of<T>() did not preserve the bound value"
+    if (reflect.Type.of<T>() != item_ct.as_type()) {
+      throw "reflect.Type.of<T>() did not preserve the bound value"
     }
     let get_items = pkg.get_function<() -> T[]>("root.Items")
       ?? throw "missing root.Items"
     let items: T[] = get_items()
     let item: T = items[0]
-    if (type.of_value(item) != type.of<T>()) {
+    if (reflect.Type.of_value(item) != reflect.Type.of<T>()) {
       throw "typed result did not retain T"
     }
     item
   }
 
   binding_evaluations == 1
-    && type.of_value(escaped) == item_ct.as_type()
+    && reflect.Type.of_value(escaped) == item_ct.as_type()
 }
 "####;
 
@@ -102,19 +102,19 @@ async fn type_bindings_work_in_lambdas_and_nested_shadowing_uses_distinct_slots(
     let output = baml_test!(
         r#"
 function main() -> bool {
-  let string_t = type.of<string>()
-  let int_t = type.of<int>()
-  let check = (bound: type) -> {
+  let string_t = reflect.Type.of<string>()
+  let int_t = reflect.Type.of<int>()
+  let check = (bound: reflect.Type) -> {
     type T = unreflect(bound);
-    type.of<T>() == bound
+    reflect.Type.of<T>() == bound
   }
 
   type T = unreflect(string_t);
   let inner = {
     type T = unreflect(int_t);
-    type.of<T>() == int_t
+    reflect.Type.of<T>() == int_t
   }
-  type.of<T>() == string_t && inner && check(int_t)
+  reflect.Type.of<T>() == string_t && inner && check(int_t)
 }
 "#
     );
@@ -136,16 +136,16 @@ function needs_bound<A extends SomeInterface>() -> string {
 function main() -> bool {
   let witness = reflect.interface.implementation<SomeInterface>().field("label")
   let conforming = reflect.class.new("Conforming", {
-    "label": type.of<string>(),
+    "label": reflect.Type.of<string>(),
   }, implementations = [witness])
   let nonconforming = reflect.class.new("Nonconforming", {
-    "other": type.of<string>(),
+    "other": reflect.Type.of<string>(),
   })
 
   let rejected = {
     type T = unreflect(nonconforming.as_type());
     let result = needs_bound<T>() catch (e) {
-      baml.reflect.errors.CompilationError => e.diagnostics[0].code
+      reflect.errors.CompilationError => e.diagnostics[0].code
     }
     result is string && result == "E0001"
   }
@@ -165,7 +165,7 @@ function main() -> bool {
 async fn top_level_runtime_type_binding_is_rejected() {
     let _ = baml_test!(
         r#"
-type T = unreflect(type.of<string>())
+type T = unreflect(reflect.Type.of<string>())
 function main() -> string { "unreachable" }
 "#
     );
@@ -177,7 +177,7 @@ async fn type_binding_name_is_not_visible_outside_its_block() {
     let _ = baml_test!(
         r#"
 function invalid() -> unknown {
-  let t = type.of<string>()
+  let t = reflect.Type.of<string>()
   let escaped: unknown = {
     type T = unreflect(t);
     null
@@ -199,16 +199,16 @@ type ExistingAlias = string
 function ExistingFunction() -> null { null }
 
 function main() -> string throws unknown {
-  let dynamic_t = reflect.class.new("Dynamic", { "value": type.of<string>() })
+  let dynamic_t = reflect.class.new("Dynamic", { "value": reflect.Type.of<string>() })
   let alias_collision = reflect.Package.current().with_types({ "ExistingAlias": dynamic_t }) catch (e) {
-    baml.reflect.errors.CompilationError => e.diagnostics[0].code
+    reflect.errors.CompilationError => e.diagnostics[0].code
   }
   let function_collision = reflect.Package.current().with_types({ "ExistingFunction": dynamic_t }) catch (e) {
-    baml.reflect.errors.CompilationError => e.diagnostics[0].code
+    reflect.errors.CompilationError => e.diagnostics[0].code
   }
   let first_view = reflect.Package.current().with_types({ "Mounted": dynamic_t })
   let view_collision = first_view.with_types({ "Mounted": dynamic_t }) catch (e) {
-    baml.reflect.errors.CompilationError => e.diagnostics[0].code
+    reflect.errors.CompilationError => e.diagnostics[0].code
   }
   let a = if alias_collision is string { alias_collision } else { "alias collision accepted" }
   let f = if function_collision is string { function_collision } else { "function collision accepted" }
@@ -228,9 +228,9 @@ async fn with_types_rejects_non_identifier_keys() {
     let output = baml_test!(
         r#"
 function main() -> string throws unknown {
-  let dynamic_t = reflect.class.new("Dynamic", { "value": type.of<string>() })
+  let dynamic_t = reflect.class.new("Dynamic", { "value": reflect.Type.of<string>() })
   let result = reflect.Package.current().with_types({ "not an identifier": dynamic_t }) catch (e) {
-    baml.reflect.errors.CompilationError => e.diagnostics[0].code
+    reflect.errors.CompilationError => e.diagnostics[0].code
   }
   if result is string { result } else { "invalid key was accepted" }
 }
@@ -297,14 +297,14 @@ async fn interface_impl_methods_keep_runtime_type_definitions() {
                 }
 
                 function describe(self) -> string throws never {
-                    type.of<T>().to_string()
+                    reflect.Type.of<T>().to_string()
                 }
             }
         }
 
         function main() -> string throws unknown {
             let output_type = reflect.class.new("RuntimeOutput", {
-                "name": type.of<string>(),
+                "name": reflect.Type.of<string>(),
             }).as_type()
             type Out = unreflect(output_type)
 
@@ -336,7 +336,7 @@ async fn agent_run_parses_a_reflected_output_type() {
 
         function main() -> string throws unknown {{
             let output_type = reflect.class.new("RuntimeOutput", {{
-                "name": type.of<string>(),
+                "name": reflect.Type.of<string>(),
             }}).as_type()
             type Out = unreflect(output_type)
 
@@ -362,7 +362,7 @@ async fn agent_run_parses_a_reflected_output_type() {
 
 /// B-1582 follow-up: definitions crossed dispatch, but *identity* did not.
 /// The resolver realizes an impl frame off the receiver's `Self`, which carries
-/// realized types only, so `type.of<T>()` in the body derived a fresh mint —
+/// realized types only, so `reflect.Type.of<T>()` in the body derived a fresh mint —
 /// structurally the right type, `==`-wrong against the value the caller minted.
 /// Every identity-keyed pattern (a registry, a stored type compared with `==`)
 /// silently missed. Covered here: an implements-block method, an inherited
@@ -372,14 +372,14 @@ async fn minted_type_identity_survives_interface_dispatch() {
     let output = baml_test!(
         r##"
         interface Probe<Out> {
-            function same(self, t: type) -> bool throws never
-            function same_from_default(self, t: type) -> bool throws never {
-                type.of<Out>() == t
+            function same(self, t: reflect.Type) -> bool throws never
+            function same_from_default(self, t: reflect.Type) -> bool throws never {
+                reflect.Type.of<Out>() == t
             }
         }
 
         interface Relay<Out> {
-            function relay(self, t: type) -> bool throws unknown
+            function relay(self, t: reflect.Type) -> bool throws unknown
         }
 
         class Holder<T> {
@@ -388,13 +388,13 @@ async fn minted_type_identity_survives_interface_dispatch() {
             }
 
             implements Probe<T> {
-                function same(self, t: type) -> bool throws never {
-                    type.of<T>() == t
+                function same(self, t: reflect.Type) -> bool throws never {
+                    reflect.Type.of<T>() == t
                 }
             }
 
             implements Relay<T> {
-                function relay(self, t: type) -> bool throws unknown {
+                function relay(self, t: reflect.Type) -> bool throws unknown {
                     // Two-hop: the second interface operand is materialized
                     // inside this frame, so it has to carry the identity on.
                     Holder<T>.new().same(t)
@@ -404,7 +404,7 @@ async fn minted_type_identity_survives_interface_dispatch() {
 
         function main() -> string throws unknown {
             let output_type = reflect.class.new("RuntimeOutput", {
-                "name": type.of<string>(),
+                "name": reflect.Type.of<string>(),
             }).as_type()
             type Out = unreflect(output_type)
 
@@ -431,7 +431,7 @@ async fn interface_impl_methods_look_up_a_type_keyed_registry() {
     let output = baml_test!(
         r##"
         class Entry {
-            key: type,
+            key: reflect.Type,
             label: string,
         }
 
@@ -446,7 +446,7 @@ async fn interface_impl_methods_look_up_a_type_keyed_registry() {
 
             implements Named<T> {
                 function label(self, first: Entry, second: Entry) -> string throws never {
-                    let wanted = type.of<T>()
+                    let wanted = reflect.Type.of<T>()
                     if (first.key == wanted) {
                         first.label
                     } else if (second.key == wanted) {
@@ -460,10 +460,10 @@ async fn interface_impl_methods_look_up_a_type_keyed_registry() {
 
         function main() -> string throws unknown {
             let first_type = reflect.class.new("Shape", {
-                "name": type.of<string>(),
+                "name": reflect.Type.of<string>(),
             }).as_type()
             let second_type = reflect.class.new("Shape", {
-                "name": type.of<string>(),
+                "name": reflect.Type.of<string>(),
             }).as_type()
             type First = unreflect(first_type)
             type Second = unreflect(second_type)
@@ -493,7 +493,7 @@ async fn dispatch_identity_separates_distinct_mints_and_leaves_static_generics_a
     let output = baml_test!(
         r##"
         interface Probe<Out> {
-            function same(self, t: type) -> bool throws never
+            function same(self, t: reflect.Type) -> bool throws never
         }
 
         class Holder<T> {
@@ -502,18 +502,18 @@ async fn dispatch_identity_separates_distinct_mints_and_leaves_static_generics_a
             }
 
             implements Probe<T> {
-                function same(self, t: type) -> bool throws never {
-                    type.of<T>() == t
+                function same(self, t: reflect.Type) -> bool throws never {
+                    reflect.Type.of<T>() == t
                 }
             }
         }
 
         function main() -> string throws unknown {
             let mine = reflect.class.new("Shape", {
-                "name": type.of<string>(),
+                "name": reflect.Type.of<string>(),
             }).as_type()
             let other = reflect.class.new("Shape", {
-                "name": type.of<string>(),
+                "name": reflect.Type.of<string>(),
             }).as_type()
             type Mine = unreflect(mine)
 
@@ -522,8 +522,8 @@ async fn dispatch_identity_separates_distinct_mints_and_leaves_static_generics_a
             let foreign_mint = holder.same(other)
 
             let static_holder = Holder<string>.new()
-            let static_match = static_holder.same(type.of<string>())
-            let static_miss = static_holder.same(type.of<int>())
+            let static_match = static_holder.same(reflect.Type.of<string>())
+            let static_miss = static_holder.same(reflect.Type.of<int>())
             `${own_mint}|${foreign_mint}|${static_match}|${static_miss}`
         }
         "##
@@ -538,7 +538,7 @@ async fn dispatch_identity_separates_distinct_mints_and_leaves_static_generics_a
 /// Under name-keyed recovery this was deliberately FALSE — several definitions
 /// can spell `user.Item`, so answering from the name risked a wrong identity
 /// and recovery declined. A frame slot now carries the declaration's own head,
-/// so `type.of<T>()` in the impl body *is* the caller's type: there is no
+/// so `reflect.Type.of<T>()` in the impl body *is* the caller's type: there is no
 /// separate identity token to lose, and nothing name-shaped to answer from.
 /// `name()` still pins that the definition travels too.
 #[tokio::test]
@@ -546,9 +546,9 @@ async fn runtime_package_declarations_keep_definitions_and_identity() {
     let output = baml_test!(
         r##"
         interface Probe<Out> {
-            function same(self, t: type) -> bool throws never
+            function same(self, t: reflect.Type) -> bool throws never
             function name(self) -> string throws never {
-                type.of<Out>().to_string()
+                reflect.Type.of<Out>().to_string()
             }
         }
 
@@ -558,8 +558,8 @@ async fn runtime_package_declarations_keep_definitions_and_identity() {
             }
 
             implements Probe<T> {
-                function same(self, t: type) -> bool throws never {
-                    type.of<T>() == t
+                function same(self, t: reflect.Type) -> bool throws never {
+                    reflect.Type.of<T>() == t
                 }
             }
         }
@@ -587,7 +587,7 @@ class Item { value string }
 /// overlay onto anything materialized in a frame that touched a runtime type,
 /// so binding a compiled package's `Item` puts `user.Item` in this frame's
 /// overlay — and the static `Holder<Item>` dispatch below then sees it. Reading
-/// the overlay by plain name reported `type.of<T>() != type.of<Item>()` and
+/// the overlay by plain name reported `reflect.Type.of<T>() != reflect.Type.of<Item>()` and
 /// `==` the *package's* declaration, which no runtime-created type can
 /// reproduce.
 #[tokio::test]
@@ -599,7 +599,7 @@ async fn static_class_slots_are_not_answered_from_a_same_named_runtime_definitio
         }
 
         interface Probe<Out> {
-            function same(self, t: type) -> bool throws never
+            function same(self, t: reflect.Type) -> bool throws never
         }
 
         class Holder<T> {
@@ -608,8 +608,8 @@ async fn static_class_slots_are_not_answered_from_a_same_named_runtime_definitio
             }
 
             implements Probe<T> {
-                function same(self, t: type) -> bool throws never {
-                    type.of<T>() == t
+                function same(self, t: reflect.Type) -> bool throws never {
+                    reflect.Type.of<T>() == t
                 }
             }
         }
@@ -625,7 +625,7 @@ class Item { value string }
             let _shadow_holder = Holder<Shadow>.new()
 
             let holder = Holder<Item>.new()
-            `${holder.same(type.of<Item>())}|${holder.same(runtime_item)}`
+            `${holder.same(reflect.Type.of<Item>())}|${holder.same(runtime_item)}`
         }
         "##
     );
@@ -645,7 +645,7 @@ async fn same_named_declarations_from_two_packages_keep_separate_identities() {
     let output = baml_test!(
         r##"
         interface Probe<Out> {
-            function same(self, t: type) -> bool throws never
+            function same(self, t: reflect.Type) -> bool throws never
         }
 
         class Holder<T> {
@@ -654,8 +654,8 @@ async fn same_named_declarations_from_two_packages_keep_separate_identities() {
             }
 
             implements Probe<T> {
-                function same(self, t: type) -> bool throws never {
-                    type.of<T>() == t
+                function same(self, t: reflect.Type) -> bool throws never {
+                    reflect.Type.of<T>() == t
                 }
             }
         }
@@ -696,7 +696,7 @@ async fn dispatch_identity_covers_owner_and_method_slots_together() {
     let output = baml_test!(
         r##"
         interface Probe<Out> {
-            function pair<M>(self, own: type, method: type) -> string throws never
+            function pair<M>(self, own: reflect.Type, method: reflect.Type) -> string throws never
         }
 
         class Holder<T> {
@@ -705,18 +705,18 @@ async fn dispatch_identity_covers_owner_and_method_slots_together() {
             }
 
             implements Probe<T> {
-                function pair<M>(self, own: type, method: type) -> string throws never {
-                    `${type.of<T>() == own}|${type.of<M>() == method}|${type.of<T>() == method}`
+                function pair<M>(self, own: reflect.Type, method: reflect.Type) -> string throws never {
+                    `${reflect.Type.of<T>() == own}|${reflect.Type.of<M>() == method}|${reflect.Type.of<T>() == method}`
                 }
             }
         }
 
         function main() -> string throws unknown {
             let owner_type = reflect.class.new("Owner", {
-                "name": type.of<string>(),
+                "name": reflect.Type.of<string>(),
             }).as_type()
             let method_type = reflect.class.new("Method", {
-                "name": type.of<string>(),
+                "name": reflect.Type.of<string>(),
             }).as_type()
             type Owner = unreflect(owner_type)
             type Method = unreflect(method_type)
@@ -738,7 +738,7 @@ async fn dispatch_identity_covers_a_runtime_enum_slot() {
     let output = baml_test!(
         r##"
         interface Probe<Out> {
-            function same(self, t: type) -> bool throws never
+            function same(self, t: reflect.Type) -> bool throws never
         }
 
         class Holder<T> {
@@ -747,8 +747,8 @@ async fn dispatch_identity_covers_a_runtime_enum_slot() {
             }
 
             implements Probe<T> {
-                function same(self, t: type) -> bool throws never {
-                    type.of<T>() == t
+                function same(self, t: reflect.Type) -> bool throws never {
+                    reflect.Type.of<T>() == t
                 }
             }
         }
@@ -801,7 +801,7 @@ function Items() -> Item[] { [Item { value: "bound", next: null }] }
 
             // A diagnostic that has to name the type it rejected.
             let contract = pkg.get_function<() -> Item>("root.Items") catch (e) {
-                baml.reflect.errors.CompilationError => e.diagnostics[0].message,
+                reflect.errors.CompilationError => e.diagnostics[0].message,
                 _ => "wrong error",
             }
             let diagnostic = if contract is string { contract } else { "no diagnostic" }
@@ -853,8 +853,8 @@ class Item { value string, count int }
 /// The same `Item`, built by `reflect.class.new`.
 const ORIGIN_CLASS_NEW: &str = r##"
             let item_type = reflect.class.new("Item", {
-                "value": type.of<string>(),
-                "count": type.of<int>(),
+                "value": reflect.Type.of<string>(),
+                "count": reflect.Type.of<int>(),
             }).as_type()
 "##;
 
@@ -947,13 +947,13 @@ async fn a_runtime_compile_diagnostic_names_a_mounted_runtime_class() {
         r##"
         function main() -> string throws unknown {
             let item_type = reflect.class.new("Item", {
-                "value": type.of<string>(),
+                "value": reflect.Type.of<string>(),
             }).as_type()
             let app = reflect.Package.current().with_types({ "Item": item_type })
             let compiled = reflect.Package.compile({ "wrong.baml": #"
 function Run() -> int { app.Item { value: "x" } }
               "# }, packages = { "app": app }) catch (e) {
-                baml.reflect.errors.CompilationError => e.diagnostics[0].message,
+                reflect.errors.CompilationError => e.diagnostics[0].message,
                 _ => "not a CompilationError",
             }
             if compiled is string { compiled } else { "the wrong program compiled" }

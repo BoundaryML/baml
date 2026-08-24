@@ -1,16 +1,16 @@
 function is_type_runtime_value() -> bool {
-    let value: type | int = type.of<int>();
-    value is type
+    let value: reflect.Type | int = reflect.Type.of<int>();
+    value is reflect.Type
 }
 
 function is_type_rejects_non_type() -> bool {
-    let value: type | int = 7;
-    value is type
+    let value: reflect.Type | int = 7;
+    value is reflect.Type
 }
 
 function if_let_binds_type_runtime_value() -> string {
-    let value: type | int = type.of<string>();
-    if let runtime_type: type = value {
+    let value: reflect.Type | int = reflect.Type.of<string>();
+    if let runtime_type: reflect.Type = value {
         runtime_type.to_string()
     } else {
         "not type"
@@ -32,9 +32,9 @@ function is_distinguishes_media_runtime_values() -> bool {
         && !(pdf_value is image)
 }
 
-function classify_type_runtime_value(value: type | int) -> string {
+function classify_type_runtime_value(value: reflect.Type | int) -> string {
     match (value) {
-        let runtime_type: type => runtime_type.to_string(),
+        let runtime_type: reflect.Type => runtime_type.to_string(),
         int => "int",
     }
 }
@@ -49,7 +49,7 @@ function classify_media_runtime_value(value: image | audio | video | pdf) -> str
 }
 
 function match_recognizes_type_runtime_values() -> bool {
-    classify_type_runtime_value(type.of<string>()) == "string"
+    classify_type_runtime_value(reflect.Type.of<string>()) == "string"
         && classify_type_runtime_value(7) == "int"
 }
 

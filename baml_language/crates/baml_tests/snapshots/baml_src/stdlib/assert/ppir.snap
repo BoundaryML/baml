@@ -20,7 +20,7 @@ function assert.is_true(condition: bool) -> void  [expr] {
   {  } if (Not condition) {  } baml.sys.panic("assertion failed:...")
 }
 function assert.is_type(actual: unknown) -> T  [expr] {
-  {  } match (actual) { T => actual, _ => { let t: type = type.of() } baml.sys.panic(`...`) }
+  {  } match (actual) { T => actual, _ => { let t: reflect.Type = reflect.Type.of() } baml.sys.panic(`...`) }
 }
 function assert.not_null(value: unknown?) -> void  [expr] {
   {  } if (value Eq null) {  } baml.sys.panic("assertion failed:...")

@@ -21,7 +21,7 @@ type InvokeError = Failure
     | baml.errors.Timeout
     | baml.errors.UnknownError
     | baml.panics.Cancelled
-    | baml.reflect.errors.CompilationError;
+    | reflect.errors.CompilationError;
 
 // Every raw type the client stack is known to raise before classification.
 // This union is deliberately CLOSED: when a new throw appears anywhere in
@@ -59,7 +59,7 @@ function normalize(error: RaisedInClient) -> InvokeError throws never {
         },
         let timeout: baml.errors.Timeout => timeout,
         let cancelled: baml.panics.Cancelled => cancelled,
-        let compilation: baml.reflect.errors.CompilationError => compilation,
+        let compilation: reflect.errors.CompilationError => compilation,
         let invalid: baml.errors.InvalidArgument => {
             InvalidRequest {
                 provider: "client",

@@ -106,10 +106,10 @@ function optional_chain_type_args.$init_test_ns_optional_chain_type_args_optiona
 
 function optional_chain_type_args.Boxed.both(self: <unresolved type #126190315225735><#0>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _3
     load_type #1
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _5
     load_var _3
     load_const "/"
@@ -121,7 +121,7 @@ function optional_chain_type_args.Boxed.both(self: <unresolved type #12619031522
 
 function optional_chain_type_args.Boxed.describe(self: <unresolved type #126190315225735><#0>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
@@ -138,7 +138,7 @@ function optional_chain_type_args.Callables.method(self: <unresolved type #60982
 
 function optional_chain_type_args.Cat.Speaker.speak(self: <unresolved type #18733967728171>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _2
     load_const "cat:"
     load_var _2
@@ -148,13 +148,13 @@ function optional_chain_type_args.Cat.Speaker.speak(self: <unresolved type #1873
 
 function optional_chain_type_args.Dog.Speaker.speak(self: <unresolved type #75908162368493>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
 function optional_chain_type_args.Holder.ident(self: <unresolved type #82740753195475>, v: #0) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
@@ -178,16 +178,16 @@ function optional_chain_type_args.Holder.plain(self: <unresolved type #827407531
 
 function optional_chain_type_args.Holder.value(self: <unresolved type #82740753195475>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 
 function optional_chain_type_args.Pair.Tagged.tag(self: <unresolved type #115681419361973><#0>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _3
     load_type #1
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _5
     load_var _3
     load_const "/"
@@ -932,7 +932,7 @@ function optional_chain_type_args.reflected_field_read_fn() -> int | null {
     store_var _6
     load_type int
     load_var _6
-    call baml.reflect.class.Field.value
+    call reflect.class.Field.value
     jump L4
 
   L3:
@@ -980,7 +980,7 @@ function optional_chain_type_args.reflected_field_wrong_type_arg_fn() -> string 
     store_var _8
     load_type string
     load_var _8
-    call baml.reflect.class.Field.value
+    call reflect.class.Field.value
     jump L6
     load_var e
     is_type baml.errors.TypeMismatch
@@ -1051,7 +1051,7 @@ function optional_chain_type_args.reflected_missing_field_fn() -> int | null {
     store_var _6
     load_type int
     load_var _6
-    call baml.reflect.class.Field.value
+    call reflect.class.Field.value
     jump L4
 
   L3:

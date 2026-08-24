@@ -23,7 +23,7 @@ function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: <un
     call user.fixtures.anyfunction_reflect.RuntimeClassify$spec
     store_var _7
     load_var2 4 5
-    load_type ai.Runner<#0, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<#0>>
+    load_type ai.Runner<#0, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<#0>>
     load_const "run"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -32,7 +32,7 @@ function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: <un
     return
 }
 
-function fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -147,14 +147,14 @@ function fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> s
     load_const "warm"
     load_const <omitted>
     load_const <omitted>
-    call baml.reflect.enum.value
+    call reflect.enum.value
     store_var _3
     load_const "Category"
     load_var _3
     load_const "BLUE"
-    load_type string | baml.reflect.enum.Value
+    load_type string | reflect.enum.Value
     alloc_array 2
-    call baml.reflect.enum.new
+    call reflect.enum.new
     store_var category
     load_var category
     load_const "sample"
@@ -164,7 +164,7 @@ function fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> s
     load_var category
     load_const "\"k7\""
     call user.fixtures.anyfunction_reflect.RuntimeClassify$parse
-    call baml.reflect.enum.get_value
+    call reflect.enum.get_value
     store_var _10
     load_var2 3 4
     bin_op +
@@ -173,15 +173,15 @@ function fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> s
 
 function fixtures.anyfunction_reflect.signature_access(f: <unresolved type #56645786973401><Returns = unknown, Throws = unknown>) -> string {
     load_var f
-    call baml.reflect.signature
+    call reflect.signature
     store_var sig
     load_var sig
     load_field .returns
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _5
     load_var sig
     load_field .errors
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _7
     load_var sig
     load_field .args
@@ -198,14 +198,14 @@ function fixtures.anyfunction_reflect.signature_access(f: <unresolved type #5664
     store_var parts
     load_var sig
     load_field .args
-    load_type baml.iter.Iterable<Error = never, Item = baml.reflect.Arg>
+    load_type baml.iter.Iterable<Error = never, Item = reflect.Arg>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _14
 
   L0:
     load_var _14
-    load_type baml.iter.Iterator<Error = never, Item = baml.reflect.Arg>
+    load_type baml.iter.Iterator<Error = never, Item = reflect.Arg>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _15
@@ -223,7 +223,7 @@ function fixtures.anyfunction_reflect.signature_access(f: <unresolved type #5664
     store_var _19
     load_var arg
     load_field .type
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _22
     load_var2 11 12
     bin_op +
@@ -232,7 +232,7 @@ function fixtures.anyfunction_reflect.signature_access(f: <unresolved type #5664
 
   L2:
     load_type string
-    load_type baml.reflect.Arg
+    load_type reflect.Arg
     load_var sig
     load_field .opts
     call baml.Map.keys
@@ -256,7 +256,7 @@ function fixtures.anyfunction_reflect.signature_access(f: <unresolved type #5664
     load_var _29
     store_var key
     load_type string
-    load_type baml.reflect.Arg
+    load_type reflect.Arg
     load_var sig
     load_field .opts
     load_var key
@@ -272,7 +272,7 @@ function fixtures.anyfunction_reflect.signature_access(f: <unresolved type #5664
     store_var _41
     load_var opt
     load_field .1
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     store_var _44
     load_var2 17 18
     bin_op +
@@ -313,7 +313,7 @@ function fixtures.anyfunction_reflect.typed_dispatch(name: string, args: map<str
     load_type string | fixtures.anyfunction_reflect.Doc[]
     load_type fixtures.anyfunction_reflect.ToolError
     load_var2 4 2
-    call baml.reflect.call_any
+    call reflect.call_any
     jump L11
     load_var e
     is_type fixtures.anyfunction_reflect.ToolError
@@ -322,13 +322,13 @@ function fixtures.anyfunction_reflect.typed_dispatch(name: string, args: map<str
 
   L4:
     load_var e
-    is_type baml.reflect.InvalidArgumentError
+    is_type reflect.InvalidArgumentError
     pop_jump_if_false L5
     jump L8
 
   L5:
     load_var e
-    is_type baml.reflect.errors.CompilationError
+    is_type reflect.errors.CompilationError
     pop_jump_if_false L6
     jump L7
 

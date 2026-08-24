@@ -570,8 +570,8 @@ mod tests {
     fn renders_builtin_class_with_impls() {
         let db = make_db();
         insta::assert_snapshot!(render(&db, "baml.time.Duration"));
-        assert!(render(&db, "baml.reflect.class.Type").contains("baml.AnyClass"));
-        assert!(!render(&db, "baml.reflect.enum.Type").contains("baml.AnyClass"));
+        assert!(render(&db, "reflect.class.Type").contains("baml.AnyClass"));
+        assert!(!render(&db, "reflect.enum.Type").contains("baml.AnyClass"));
     }
 
     #[test]

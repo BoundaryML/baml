@@ -1,0 +1,367 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function reflect.Package._compile(files: map<string, string>, packages: map<string, <unresolved type #64179906468232>>) -> <unresolved type #64179906468232> {
+}
+
+function reflect.Package._finish(artifact: <unresolved type #64179906468232>, packages: map<string, <unresolved type #64179906468232>>) -> <unresolved type #64179906468232> {
+}
+
+function reflect.Package.classes(self: <unresolved type #64179906468232>) -> map<string, <unresolved type #3200895997298>> {
+}
+
+function reflect.Package.compile(files: map<string, string>, packages: map<string, <unresolved type #64179906468232>>) -> <unresolved type #64179906468232> {
+    load_var packages
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    load_type reflect.Package
+    alloc_map 0
+    store_var packages
+
+  L0:
+    load_var2 1 2
+    sys_op reflect.Package._compile
+    load_var packages
+    call reflect.Package._finish
+    return
+}
+
+function reflect.Package.diagnostics(self: <unresolved type #64179906468232>) -> <unresolved type #30536114753175>[] {
+}
+
+function reflect.Package.enums(self: <unresolved type #64179906468232>) -> map<string, <unresolved type #23012032074673>> {
+}
+
+function reflect.Package.functions(self: <unresolved type #64179906468232>) -> map<string, <unresolved type #9365991084978>> {
+}
+
+function reflect.Package.get_class(self: <unresolved type #64179906468232>, name: string) -> <unresolved type #3200895997298> | null {
+}
+
+function reflect.Package.get_enum(self: <unresolved type #64179906468232>, name: string) -> <unresolved type #23012032074673> | null {
+}
+
+function reflect.Package.get_function(self: <unresolved type #64179906468232>, name: string) -> #0 | null {
+}
+
+function reflect.Package.get_interface(self: <unresolved type #64179906468232>, name: string) -> <unresolved type #112075677625167> | null {
+}
+
+function reflect.Package.interfaces(self: <unresolved type #64179906468232>) -> map<string, <unresolved type #112075677625167>> {
+}
+
+function reflect.Package.tests(self: <unresolved type #64179906468232>) -> map<string, () -> null throws unknown> {
+}
+
+function reflect.Package.with_types(self: <unresolved type #64179906468232>, types: map<string, reflect.Type | <unresolved type #75267922868641>>) -> <unresolved type #64179906468232> {
+}
+
+function reflect.Session._compile(self: <unresolved type #50920569839308>, source: string) -> <unresolved type #64179906468232> {
+}
+
+function reflect.Session._finish(self: <unresolved type #50920569839308>, artifact: <unresolved type #64179906468232>) -> #0 {
+}
+
+function reflect.Session._new(packages: map<string, <unresolved type #64179906468232>>) -> <unresolved type #50920569839308> {
+}
+
+function reflect.Session.diagnostics(self: <unresolved type #50920569839308>) -> <unresolved type #30536114753175>[] {
+}
+
+function reflect.Session.eval(self: <unresolved type #50920569839308>, source: string) -> #0 {
+    load_var2 1 2
+    load_type #0
+    sys_op reflect.Session._compile
+    store_var artifact
+    load_type #0
+    load_var2 1 3
+    call reflect.Session._finish
+    jump L0
+    load_var _
+    throw_if_panic
+    load_const "session evaluation failed"
+    init_instance reflect.errors.EvaluationError .message
+    throw
+
+  L0:
+    return
+}
+
+function reflect.Session.new(packages: map<string, <unresolved type #64179906468232>>) -> <unresolved type #50920569839308> {
+    load_var packages
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type string
+    load_type reflect.Package
+    alloc_map 0
+    store_var packages
+
+  L0:
+    load_var packages
+    call reflect.Session._new
+    return
+}
+
+function reflect.Type._to_string_impl(self: <unresolved type #106413984101864>) -> string {
+}
+
+function reflect.Type._validate_renderable(self: <unresolved type #106413984101864>) -> void {
+}
+
+function reflect.Type.array(self: <unresolved type #106413984101864>) -> <unresolved type #130427048863513> {
+}
+
+function reflect.Type.as_array(self: <unresolved type #106413984101864>) -> <unresolved type #130427048863513> | null {
+}
+
+function reflect.Type.as_class(self: <unresolved type #106413984101864>) -> <unresolved type #3200895997298> | null {
+}
+
+function reflect.Type.as_enum(self: <unresolved type #106413984101864>) -> <unresolved type #23012032074673> | null {
+}
+
+function reflect.Type.as_function(self: <unresolved type #106413984101864>) -> <unresolved type #9365991084978> | null {
+}
+
+function reflect.Type.as_interface(self: <unresolved type #106413984101864>) -> <unresolved type #112075677625167> | null {
+}
+
+function reflect.Type.as_literal(self: <unresolved type #106413984101864>) -> <unresolved type #30629264836227> | null {
+}
+
+function reflect.Type.as_map(self: <unresolved type #106413984101864>) -> <unresolved type #73965862840736> | null {
+}
+
+function reflect.Type.as_primitive(self: <unresolved type #106413984101864>) -> <unresolved type #31039457947117> | null {
+}
+
+function reflect.Type.as_union(self: <unresolved type #106413984101864>) -> <unresolved type #3019029334155> | null {
+}
+
+function reflect.Type.baml.ToString.to_string(self: <unresolved type #106413984101864>) -> string {
+    load_var self
+    call reflect.Type._to_string_impl
+    return
+}
+
+function reflect.Type.implemented_by(self: <unresolved type #106413984101864>, other: reflect.Type) -> bool {
+}
+
+function reflect.Type.implements(self: <unresolved type #106413984101864>, other: reflect.Type) -> bool {
+}
+
+function reflect.Type.kind(self: <unresolved type #106413984101864>) -> <unresolved type #3200895997298> | <unresolved type #23012032074673> | <unresolved type #3019029334155> | <unresolved type #30629264836227> | <unresolved type #130427048863513> | <unresolved type #73965862840736> | <unresolved type #112075677625167> | <unresolved type #31039457947117> | <unresolved type #9365991084978> {
+}
+
+function reflect.Type.meta(self: <unresolved type #106413984101864>, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> <unresolved type #86170595668069><reflect.Type> {
+}
+
+function reflect.Type.of_value(value: unknown) -> reflect.Type {
+}
+
+function reflect.Type.optional(self: <unresolved type #106413984101864>) -> <unresolved type #3019029334155> {
+}
+
+function reflect.Type.to_baml(self: <unresolved type #106413984101864>) -> string {
+}
+
+function reflect.array.Type.element_type(self: <unresolved type #130427048863513>) -> reflect.Type {
+}
+
+function reflect.array.Type.reflect.TypeView.as_type(self: <unresolved type #130427048863513>) -> reflect.Type {
+}
+
+function reflect.call_any(f: <unresolved type #56645786973401><Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
+}
+
+function reflect.class.Builder._build(self: <unresolved type #31496796853733>, implementations: <unresolved type #30553782666757>[]) -> <unresolved type #3200895997298> {
+}
+
+function reflect.class.Builder.build(self: <unresolved type #31496796853733>, implementations: <unresolved type #30553782666757>[]) -> <unresolved type #3200895997298> {
+    load_var implementations
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type reflect.interface.Implementation
+    alloc_array 0
+    store_var implementations
+
+  L0:
+    load_var2 1 2
+    call reflect.class.Builder._build
+    return
+}
+
+function reflect.class.Builder.field(self: <unresolved type #31496796853733>, name: string, ty: reflect.Type | <unresolved type #86170595668069><reflect.Type> | <unresolved type #22863121127901> | <unresolved type #86170595668069><<unresolved type #22863121127901>>) -> <unresolved type #31496796853733> {
+}
+
+function reflect.class.Builder.type(self: <unresolved type #31496796853733>) -> <unresolved type #22863121127901> {
+}
+
+function reflect.class.Field.metadata(self: <unresolved type #21943740533182>) -> <unresolved type #105595230800669> {
+    load_var self
+    load_field .meta
+    return
+}
+
+function reflect.class.Field.value(self: <unresolved type #21943740533182>) -> #0 | null {
+    load_var self
+    load_field ._owner
+    store_var _3
+    load_var _3
+    narrow_bind baml.AnyClass, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L4
+
+  L1:
+    load_type #0
+    load_var2 2 1
+    load_field .name
+    call reflect.class.get_field
+    jump L4
+    load_var e
+    is_type reflect.errors.CompilationError
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var e
+    rethrow
+
+  L3:
+    load_var e
+    load_field .0
+    init_instance baml.errors.TypeMismatch .message
+    throw
+
+  L4:
+    return
+}
+
+function reflect.class.PendingType.array(self: <unresolved type #22863121127901>) -> <unresolved type #22863121127901> {
+}
+
+function reflect.class.PendingType.meta(self: <unresolved type #22863121127901>, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> <unresolved type #86170595668069><<unresolved type #22863121127901>> {
+}
+
+function reflect.class.PendingType.optional(self: <unresolved type #22863121127901>) -> <unresolved type #22863121127901> {
+}
+
+function reflect.class.PendingType.resolved(self: <unresolved type #22863121127901>) -> reflect.Type | null {
+}
+
+function reflect.class.PendingType.union(self: <unresolved type #22863121127901>, others: (reflect.Type | <unresolved type #22863121127901>)[]) -> <unresolved type #22863121127901> {
+}
+
+function reflect.class.Type.fields(self: <unresolved type #3200895997298>) -> <unresolved type #21943740533182>[] {
+}
+
+function reflect.class.Type.meta(self: <unresolved type #3200895997298>) -> <unresolved type #105595230800669> {
+}
+
+function reflect.class.Type.reflect.TypeView.as_type(self: <unresolved type #3200895997298>) -> reflect.Type {
+}
+
+function reflect.class._new(name: string, fields: map<string, reflect.Type | <unresolved type #86170595668069><reflect.Type>>, implementations: <unresolved type #30553782666757>[]) -> <unresolved type #3200895997298> {
+}
+
+function reflect.class.builder(name: string) -> <unresolved type #31496796853733> {
+}
+
+function reflect.class.get_field(value: unknown, name: string) -> #0 {
+}
+
+function reflect.class.new(name: string, fields: map<string, reflect.Type | <unresolved type #86170595668069><reflect.Type>>, implementations: <unresolved type #30553782666757>[]) -> <unresolved type #3200895997298> {
+    load_var implementations
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_type reflect.interface.Implementation
+    alloc_array 0
+    store_var implementations
+
+  L0:
+    load_var2 1 2
+    load_var implementations
+    call reflect.class._new
+    return
+}
+
+function reflect.enum.Type.meta(self: <unresolved type #23012032074673>) -> <unresolved type #105595230800669> {
+}
+
+function reflect.enum.Type.reflect.TypeView.as_type(self: <unresolved type #23012032074673>) -> reflect.Type {
+}
+
+function reflect.enum.Type.values(self: <unresolved type #23012032074673>) -> <unresolved type #136205526693870>[] {
+}
+
+function reflect.enum.get_value(value: unknown) -> string {
+}
+
+function reflect.enum.new(name: string, values: (string | <unresolved type #136205526693870>)[]) -> <unresolved type #23012032074673> {
+}
+
+function reflect.enum.value(name: string, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> <unresolved type #136205526693870> {
+}
+
+function reflect.function.Type.params(self: <unresolved type #9365991084978>) -> <unresolved type #28429231547309>[] {
+}
+
+function reflect.function.Type.reflect.TypeView.as_type(self: <unresolved type #9365991084978>) -> reflect.Type {
+}
+
+function reflect.function.Type.return_type(self: <unresolved type #9365991084978>) -> reflect.Type {
+}
+
+function reflect.interface.Implementation.field(self: <unresolved type #30553782666757>, interface_field: string, class_field: string | null) -> <unresolved type #30553782666757> {
+}
+
+function reflect.interface.Type.implemented_by(self: <unresolved type #112075677625167>, other: reflect.Type) -> bool {
+}
+
+function reflect.interface.Type.reflect.TypeView.as_type(self: <unresolved type #112075677625167>) -> reflect.Type {
+}
+
+function reflect.interface.implementation() -> <unresolved type #30553782666757> {
+}
+
+function reflect.literal.Type.reflect.TypeView.as_type(self: <unresolved type #30629264836227>) -> reflect.Type {
+}
+
+function reflect.literal.new(value: string | int | bool) -> <unresolved type #30629264836227> {
+}
+
+function reflect.map.Type.key_type(self: <unresolved type #73965862840736>) -> reflect.Type {
+}
+
+function reflect.map.Type.reflect.TypeView.as_type(self: <unresolved type #73965862840736>) -> reflect.Type {
+}
+
+function reflect.map.Type.value_type(self: <unresolved type #73965862840736>) -> reflect.Type {
+}
+
+function reflect.map.new(key: reflect.Type, value: reflect.Type) -> <unresolved type #73965862840736> {
+}
+
+function reflect.primitive.Type.reflect.TypeView.as_type(self: <unresolved type #31039457947117>) -> reflect.Type {
+}
+
+function reflect.signature(f: <unresolved type #56645786973401><Returns = unknown, Throws = unknown>) -> <unresolved type #83035491750234> {
+}
+
+function reflect.union.Type.member_types(self: <unresolved type #3019029334155>) -> reflect.Type[] {
+}
+
+function reflect.union.Type.reflect.TypeView.as_type(self: <unresolved type #3019029334155>) -> reflect.Type {
+}
+
+function reflect.union.new(types: reflect.Type[]) -> <unresolved type #3019029334155> {
+}

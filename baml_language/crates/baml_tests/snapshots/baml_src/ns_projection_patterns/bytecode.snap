@@ -192,7 +192,7 @@ function projection_patterns.Labeled.is_label(self: <unresolved type #6209987496
 
 function projection_patterns.Labeled.label_name(self: <unresolved type #62099874967616>) -> string {
     load_type #1
-    call baml.TypeValue.baml.ToString.to_string
+    call reflect.Type.baml.ToString.to_string
     return
 }
 

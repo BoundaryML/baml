@@ -24,12 +24,12 @@ function fixtures.type_annotation.test_optional(function_name: string) -> string
     return
 }
 
-function fixtures.type_annotation.test_param(t: type) -> string {
+function fixtures.type_annotation.test_param(t: reflect.Type) -> string {
     load_const "ok"
     return
 }
 
-function fixtures.type_annotation.test_return_type(function_name: string) -> type {
+function fixtures.type_annotation.test_return_type(function_name: string) -> reflect.Type {
     load_var function_name
     sys_op ai.internal.get_return_type
     return

@@ -4,7 +4,7 @@
 // must carry the correct runtime `class_type_args`, and a method dispatched
 // through a multi-implementor interface must receive the resolved
 // class/interface type args in its frame. Without this, a method body that
-// reads its enclosing `T` at runtime — `type.of<T>()`, or constructing
+// reads its enclosing `T` at runtime — `reflect.Type.of<T>()`, or constructing
 // `Other<T>{}` — resolves `T` to `unknown`; the new instance gets empty
 // `class_type_args`; and the runtime `IsType` dispatch guard falls through to
 // the WRONG implementor (a silent wrong answer, or a field-access panic when
@@ -184,7 +184,7 @@ test "inferred_static_ctor_dispatches_through_generic_interface" {
 interface Named<T> {
   function first(self) -> T throws never
   function tname(self) -> string throws never {
-    return type.of<T>().to_string()
+    return reflect.Type.of<T>().to_string()
   }
 }
 
@@ -269,7 +269,7 @@ test "class_method_builds_generic_via_class_type_var" {
 
 interface Counter<T> {
   function element_type(self) -> string throws never {
-    return type.of<T>().to_string()
+    return reflect.Type.of<T>().to_string()
   }
   function describe(self) -> string throws never
 }
@@ -307,7 +307,7 @@ test "default_method_forward_reads_interface_type_var" {
 // The interface request pins no type args (it has none), so the dispatch guard
 // is `Any` and can't name the implementor's class args statically. The matched
 // runtime instance still carries them, so the dispatched class-owned method
-// must resolve its class `T` (here via `type.of<T>()`).
+// must resolve its class `T` (here via `reflect.Type.of<T>()`).
 
 interface Describable {
   function describe(self) -> string throws never
@@ -317,7 +317,7 @@ class TypedBox<T> {
     value: T,
     implements Describable {
         function describe(self) -> string {
-            return type.of<T>().to_string();
+            return reflect.Type.of<T>().to_string();
         }
     }
 }
@@ -356,7 +356,7 @@ test "generic_class_behind_nongeneric_interface_reads_type_var" {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function free_fn_tname<T>(a: T[]) -> string {
-    return type.of<T>().to_string();
+    return reflect.Type.of<T>().to_string();
 }
 
 function free_fn_inferred_t() -> string {
@@ -460,7 +460,7 @@ test "inferred_ctor_default_method_collects_all" {
 // to `unknown` (the unseeded status quo), not lower `Self` to `void`.
 
 function echo_type<T>(a: T) -> string {
-    return type.of<T>().to_string();
+    return reflect.Type.of<T>().to_string();
 }
 
 interface SelfEcho {
@@ -510,7 +510,7 @@ interface TypeProbe {
 class ProbeA {
     implements TypeProbe {
         function seen<U>(self, value: U) -> string {
-            return type.of<U>().to_string();
+            return reflect.Type.of<U>().to_string();
         }
     }
 }
@@ -544,7 +544,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:4:1 (comment) len=76 "// must carry the correct runtime `class_type_args`, and a method dispatched"
 // interfaces_inferred_generic_type_args.baml:5:1 (comment) len=66 "// through a multi-implementor interface must receive the resolved"
 // interfaces_inferred_generic_type_args.baml:6:1 (comment) len=75 "// class/interface type args in its frame. Without this, a method body that"
-// interfaces_inferred_generic_type_args.baml:7:1 (comment) len=73 "// reads its enclosing `T` at runtime — `type.of<T>()`, or constructing"
+// interfaces_inferred_generic_type_args.baml:7:1 (comment) len=81 "// reads its enclosing `T` at runtime — `reflect.Type.of<T>()`, or constructing"
 // interfaces_inferred_generic_type_args.baml:8:1 (comment) len=74 "// `Other<T>{}` — resolves `T` to `unknown`; the new instance gets empty"
 // interfaces_inferred_generic_type_args.baml:9:1 (comment) len=78 "// `class_type_args`; and the runtime `IsType` dispatch guard falls through to"
 // interfaces_inferred_generic_type_args.baml:10:1 (comment) len=77 "// the WRONG implementor (a silent wrong answer, or a field-access panic when"
@@ -908,13 +908,14 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:186:34 (keyword) len=6 "throws"
 // interfaces_inferred_generic_type_args.baml:186:41 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:187:5 (keyword) len=6 "return"
-// interfaces_inferred_generic_type_args.baml:187:12 (namespace) [defaultLibrary] len=4 "type"
-// interfaces_inferred_generic_type_args.baml:187:16 (namespace) [defaultLibrary] len=1 "."
-// interfaces_inferred_generic_type_args.baml:187:17 (function) len=2 "of"
-// interfaces_inferred_generic_type_args.baml:187:19 (operator) len=1 "<"
-// interfaces_inferred_generic_type_args.baml:187:20 (type) len=1 "T"
-// interfaces_inferred_generic_type_args.baml:187:21 (operator) len=1 ">"
-// interfaces_inferred_generic_type_args.baml:187:25 (method) len=9 "to_string"
+// interfaces_inferred_generic_type_args.baml:187:12 (namespace) [defaultLibrary] len=7 "reflect"
+// interfaces_inferred_generic_type_args.baml:187:19 (namespace) [defaultLibrary] len=1 "."
+// interfaces_inferred_generic_type_args.baml:187:20 (class) [defaultLibrary] len=4 "Type"
+// interfaces_inferred_generic_type_args.baml:187:25 (method) len=2 "of"
+// interfaces_inferred_generic_type_args.baml:187:27 (operator) len=1 "<"
+// interfaces_inferred_generic_type_args.baml:187:28 (type) len=1 "T"
+// interfaces_inferred_generic_type_args.baml:187:29 (operator) len=1 ">"
+// interfaces_inferred_generic_type_args.baml:187:33 (method) len=9 "to_string"
 // interfaces_inferred_generic_type_args.baml:191:1 (keyword) len=5 "class"
 // interfaces_inferred_generic_type_args.baml:191:7 (class) [declaration] len=8 "ArrNamed"
 // interfaces_inferred_generic_type_args.baml:191:15 (operator) len=1 "<"
@@ -1128,13 +1129,14 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:271:41 (keyword) len=6 "throws"
 // interfaces_inferred_generic_type_args.baml:271:48 (type) [defaultLibrary] len=5 "never"
 // interfaces_inferred_generic_type_args.baml:272:5 (keyword) len=6 "return"
-// interfaces_inferred_generic_type_args.baml:272:12 (namespace) [defaultLibrary] len=4 "type"
-// interfaces_inferred_generic_type_args.baml:272:16 (namespace) [defaultLibrary] len=1 "."
-// interfaces_inferred_generic_type_args.baml:272:17 (function) len=2 "of"
-// interfaces_inferred_generic_type_args.baml:272:19 (operator) len=1 "<"
-// interfaces_inferred_generic_type_args.baml:272:20 (type) len=1 "T"
-// interfaces_inferred_generic_type_args.baml:272:21 (operator) len=1 ">"
-// interfaces_inferred_generic_type_args.baml:272:25 (method) len=9 "to_string"
+// interfaces_inferred_generic_type_args.baml:272:12 (namespace) [defaultLibrary] len=7 "reflect"
+// interfaces_inferred_generic_type_args.baml:272:19 (namespace) [defaultLibrary] len=1 "."
+// interfaces_inferred_generic_type_args.baml:272:20 (class) [defaultLibrary] len=4 "Type"
+// interfaces_inferred_generic_type_args.baml:272:25 (method) len=2 "of"
+// interfaces_inferred_generic_type_args.baml:272:27 (operator) len=1 "<"
+// interfaces_inferred_generic_type_args.baml:272:28 (type) len=1 "T"
+// interfaces_inferred_generic_type_args.baml:272:29 (operator) len=1 ">"
+// interfaces_inferred_generic_type_args.baml:272:33 (method) len=9 "to_string"
 // interfaces_inferred_generic_type_args.baml:274:3 (keyword) len=8 "function"
 // interfaces_inferred_generic_type_args.baml:274:12 (method) [declaration] len=8 "describe"
 // interfaces_inferred_generic_type_args.baml:274:21 (parameter) [declaration] len=4 "self"
@@ -1207,7 +1209,7 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:307:1 (comment) len=79 "// The interface request pins no type args (it has none), so the dispatch guard"
 // interfaces_inferred_generic_type_args.baml:308:1 (comment) len=79 "// is `Any` and can't name the implementor's class args statically. The matched"
 // interfaces_inferred_generic_type_args.baml:309:1 (comment) len=76 "// runtime instance still carries them, so the dispatched class-owned method"
-// interfaces_inferred_generic_type_args.baml:310:1 (comment) len=56 "// must resolve its class `T` (here via `type.of<T>()`)."
+// interfaces_inferred_generic_type_args.baml:310:1 (comment) len=64 "// must resolve its class `T` (here via `reflect.Type.of<T>()`)."
 // interfaces_inferred_generic_type_args.baml:312:1 (keyword) len=9 "interface"
 // interfaces_inferred_generic_type_args.baml:312:11 (interface) [declaration] len=11 "Describable"
 // interfaces_inferred_generic_type_args.baml:313:3 (keyword) len=8 "function"
@@ -1230,13 +1232,14 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:319:27 (parameter) [declaration] len=4 "self"
 // interfaces_inferred_generic_type_args.baml:319:36 (type) [defaultLibrary] len=6 "string"
 // interfaces_inferred_generic_type_args.baml:320:13 (keyword) len=6 "return"
-// interfaces_inferred_generic_type_args.baml:320:20 (namespace) [defaultLibrary] len=4 "type"
-// interfaces_inferred_generic_type_args.baml:320:24 (namespace) [defaultLibrary] len=1 "."
-// interfaces_inferred_generic_type_args.baml:320:25 (function) len=2 "of"
-// interfaces_inferred_generic_type_args.baml:320:27 (operator) len=1 "<"
-// interfaces_inferred_generic_type_args.baml:320:28 (type) len=1 "T"
-// interfaces_inferred_generic_type_args.baml:320:29 (operator) len=1 ">"
-// interfaces_inferred_generic_type_args.baml:320:33 (method) len=9 "to_string"
+// interfaces_inferred_generic_type_args.baml:320:20 (namespace) [defaultLibrary] len=7 "reflect"
+// interfaces_inferred_generic_type_args.baml:320:27 (namespace) [defaultLibrary] len=1 "."
+// interfaces_inferred_generic_type_args.baml:320:28 (class) [defaultLibrary] len=4 "Type"
+// interfaces_inferred_generic_type_args.baml:320:33 (method) len=2 "of"
+// interfaces_inferred_generic_type_args.baml:320:35 (operator) len=1 "<"
+// interfaces_inferred_generic_type_args.baml:320:36 (type) len=1 "T"
+// interfaces_inferred_generic_type_args.baml:320:37 (operator) len=1 ">"
+// interfaces_inferred_generic_type_args.baml:320:41 (method) len=9 "to_string"
 // interfaces_inferred_generic_type_args.baml:325:1 (keyword) len=5 "class"
 // interfaces_inferred_generic_type_args.baml:325:7 (class) [declaration] len=10 "PlainThing"
 // interfaces_inferred_generic_type_args.baml:326:5 (property) [declaration] len=1 "n"
@@ -1294,13 +1297,14 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:358:30 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:358:38 (type) [defaultLibrary] len=6 "string"
 // interfaces_inferred_generic_type_args.baml:359:5 (keyword) len=6 "return"
-// interfaces_inferred_generic_type_args.baml:359:12 (namespace) [defaultLibrary] len=4 "type"
-// interfaces_inferred_generic_type_args.baml:359:16 (namespace) [defaultLibrary] len=1 "."
-// interfaces_inferred_generic_type_args.baml:359:17 (function) len=2 "of"
-// interfaces_inferred_generic_type_args.baml:359:19 (operator) len=1 "<"
-// interfaces_inferred_generic_type_args.baml:359:20 (type) len=1 "T"
-// interfaces_inferred_generic_type_args.baml:359:21 (operator) len=1 ">"
-// interfaces_inferred_generic_type_args.baml:359:25 (method) len=9 "to_string"
+// interfaces_inferred_generic_type_args.baml:359:12 (namespace) [defaultLibrary] len=7 "reflect"
+// interfaces_inferred_generic_type_args.baml:359:19 (namespace) [defaultLibrary] len=1 "."
+// interfaces_inferred_generic_type_args.baml:359:20 (class) [defaultLibrary] len=4 "Type"
+// interfaces_inferred_generic_type_args.baml:359:25 (method) len=2 "of"
+// interfaces_inferred_generic_type_args.baml:359:27 (operator) len=1 "<"
+// interfaces_inferred_generic_type_args.baml:359:28 (type) len=1 "T"
+// interfaces_inferred_generic_type_args.baml:359:29 (operator) len=1 ">"
+// interfaces_inferred_generic_type_args.baml:359:33 (method) len=9 "to_string"
 // interfaces_inferred_generic_type_args.baml:362:1 (keyword) len=8 "function"
 // interfaces_inferred_generic_type_args.baml:362:10 (function) [declaration] len=18 "free_fn_inferred_t"
 // interfaces_inferred_generic_type_args.baml:362:34 (type) [defaultLibrary] len=6 "string"
@@ -1540,13 +1544,14 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:462:26 (type) len=1 "T"
 // interfaces_inferred_generic_type_args.baml:462:32 (type) [defaultLibrary] len=6 "string"
 // interfaces_inferred_generic_type_args.baml:463:5 (keyword) len=6 "return"
-// interfaces_inferred_generic_type_args.baml:463:12 (namespace) [defaultLibrary] len=4 "type"
-// interfaces_inferred_generic_type_args.baml:463:16 (namespace) [defaultLibrary] len=1 "."
-// interfaces_inferred_generic_type_args.baml:463:17 (function) len=2 "of"
-// interfaces_inferred_generic_type_args.baml:463:19 (operator) len=1 "<"
-// interfaces_inferred_generic_type_args.baml:463:20 (type) len=1 "T"
-// interfaces_inferred_generic_type_args.baml:463:21 (operator) len=1 ">"
-// interfaces_inferred_generic_type_args.baml:463:25 (method) len=9 "to_string"
+// interfaces_inferred_generic_type_args.baml:463:12 (namespace) [defaultLibrary] len=7 "reflect"
+// interfaces_inferred_generic_type_args.baml:463:19 (namespace) [defaultLibrary] len=1 "."
+// interfaces_inferred_generic_type_args.baml:463:20 (class) [defaultLibrary] len=4 "Type"
+// interfaces_inferred_generic_type_args.baml:463:25 (method) len=2 "of"
+// interfaces_inferred_generic_type_args.baml:463:27 (operator) len=1 "<"
+// interfaces_inferred_generic_type_args.baml:463:28 (type) len=1 "T"
+// interfaces_inferred_generic_type_args.baml:463:29 (operator) len=1 ">"
+// interfaces_inferred_generic_type_args.baml:463:33 (method) len=9 "to_string"
 // interfaces_inferred_generic_type_args.baml:466:1 (keyword) len=9 "interface"
 // interfaces_inferred_generic_type_args.baml:466:11 (interface) [declaration] len=8 "SelfEcho"
 // interfaces_inferred_generic_type_args.baml:467:3 (keyword) len=8 "function"
@@ -1642,13 +1647,14 @@ test "interface_dispatch_sees_inferred_method_type_arg" {
 // interfaces_inferred_generic_type_args.baml:512:39 (type) len=1 "U"
 // interfaces_inferred_generic_type_args.baml:512:45 (type) [defaultLibrary] len=6 "string"
 // interfaces_inferred_generic_type_args.baml:513:13 (keyword) len=6 "return"
-// interfaces_inferred_generic_type_args.baml:513:20 (namespace) [defaultLibrary] len=4 "type"
-// interfaces_inferred_generic_type_args.baml:513:24 (namespace) [defaultLibrary] len=1 "."
-// interfaces_inferred_generic_type_args.baml:513:25 (function) len=2 "of"
-// interfaces_inferred_generic_type_args.baml:513:27 (operator) len=1 "<"
-// interfaces_inferred_generic_type_args.baml:513:28 (type) len=1 "U"
-// interfaces_inferred_generic_type_args.baml:513:29 (operator) len=1 ">"
-// interfaces_inferred_generic_type_args.baml:513:33 (method) len=9 "to_string"
+// interfaces_inferred_generic_type_args.baml:513:20 (namespace) [defaultLibrary] len=7 "reflect"
+// interfaces_inferred_generic_type_args.baml:513:27 (namespace) [defaultLibrary] len=1 "."
+// interfaces_inferred_generic_type_args.baml:513:28 (class) [defaultLibrary] len=4 "Type"
+// interfaces_inferred_generic_type_args.baml:513:33 (method) len=2 "of"
+// interfaces_inferred_generic_type_args.baml:513:35 (operator) len=1 "<"
+// interfaces_inferred_generic_type_args.baml:513:36 (type) len=1 "U"
+// interfaces_inferred_generic_type_args.baml:513:37 (operator) len=1 ">"
+// interfaces_inferred_generic_type_args.baml:513:41 (method) len=9 "to_string"
 // interfaces_inferred_generic_type_args.baml:518:1 (keyword) len=5 "class"
 // interfaces_inferred_generic_type_args.baml:518:7 (class) [declaration] len=6 "ProbeB"
 // interfaces_inferred_generic_type_args.baml:519:5 (keyword) len=10 "implements"

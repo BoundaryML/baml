@@ -13,7 +13,7 @@ function EmptyOf<T>() -> T[] {
 
 test "non-closure generic list ops over a runtime-bound element type" {
     let item_t = reflect.class
-        .new("BoundItem", { "value": type.of<string>() })
+        .new("BoundItem", { "value": reflect.Type.of<string>() })
         .as_type();
     type Bound = unreflect(item_t);
     let items = EmptyOf<Bound>();
@@ -35,7 +35,7 @@ test "non-closure generic list ops over a runtime-bound element type" {
 // missed. Promote this to a `test` once that is fixed.
 function ClosureOverRuntimeBoundElement() -> int {
     let item_t = reflect.class
-        .new("BoundPredicate", { "value": type.of<string>() })
+        .new("BoundPredicate", { "value": reflect.Type.of<string>() })
         .as_type();
     type Bound = unreflect(item_t);
     let items = EmptyOf<Bound>();
@@ -63,8 +63,8 @@ class Holder<T> {
         self.items.length()
     }
 
-    function matches_type(self, expected: type) -> bool {
-        type.of<T>() == expected
+    function matches_type(self, expected: reflect.Type) -> bool {
+        reflect.Type.of<T>() == expected
     }
 
     function first_or_null(self) -> T? {
@@ -74,7 +74,7 @@ class Holder<T> {
 
 test "method calls on a generic class receiver with a runtime-bound argument" {
     let item_t = reflect.class
-        .new("BoundHeld", { "value": type.of<string>() })
+        .new("BoundHeld", { "value": reflect.Type.of<string>() })
         .as_type();
     type Bound = unreflect(item_t);
     // The empty array must come from `EmptyOf<Bound>()`: a bare `[]` argument
@@ -86,7 +86,7 @@ test "method calls on a generic class receiver with a runtime-bound argument" {
     assert.equal(holder.count(), 0);
     // Pins the receiver's type argument, not just empty-list behavior: a
     // regression that widened `Bound` to `unknown` would still return 0 and
-    // null above, but `type.of<T>()` inside the method would no longer equal
+    // null above, but `reflect.Type.of<T>()` inside the method would no longer equal
     // the minted `item_t`.
     assert.is_true(holder.matches_type(item_t));
     assert.is_true(holder.first_or_null() == null)

@@ -636,7 +636,7 @@ function openai_lower_journal(j: ai.Journal) -> OaInputItem[] {
 // `image` enables the provider-side image_generation tool. sys_llm set
 // `tool_choice` for both Required and Available, so the two modes only ever
 // differed in that one is unreachable — one predicate is enough.
-function _openai_wants_image(output_type: type) -> bool {
+function _openai_wants_image(output_type: reflect.Type) -> bool {
     ai.internal._media_shape(output_type).ends_with(":image")
 }
 

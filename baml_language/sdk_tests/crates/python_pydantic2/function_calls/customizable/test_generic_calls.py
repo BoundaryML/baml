@@ -160,7 +160,7 @@ def test_generic_calls_consume_int_wrapper_baseline():
 
 
 # --- GenericBox<T>.get(self) -> string : class TypeVar from the receiver -----
-# Binding-sensitive: `get` is `type.of<T>()`. `get` has no own TypeVars,
+# Binding-sensitive: `get` is `reflect.Type.of<T>()`. `get` has no own TypeVars,
 # so there's nothing to subscript — `T` rides on the parameterized receiver.
 
 
@@ -227,7 +227,7 @@ def test_generic_calls_instance_method_unparameterized_receiver_raises():
 
 
 # --- extract<A, B, C, D>(a: GenericPair<GenericPair<A,B>, GenericPair<C,D>>) --
-# Nested generic. Binding-sensitive: body is `type.of<A|B|C|D>()`.
+# Nested generic. Binding-sensitive: body is `reflect.Type.of<A|B|C|D>()`.
 
 
 def test_generic_calls_extract_explicit():

@@ -307,7 +307,7 @@ impl std::fmt::Display for TypeRefDisplay<'_> {
                 Ok(())
             }
             TypeRefKind::BuiltinUnknown => write!(f, "unknown"),
-            TypeRefKind::Type => write!(f, "type"),
+            TypeRefKind::Type => write!(f, "reflect.Type"),
             TypeRefKind::Rust => write!(f, "$rust_type"),
             TypeRefKind::Error => write!(f, "error"),
             TypeRefKind::Unknown => write!(f, "?"),
