@@ -195,7 +195,21 @@ class OnEventScriptedClient {
 
     function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
       let _ = input;
-      ai.ModelTurn { calls: [],
+      ai.ModelTurn {
+        // One hand-made wire record so hosts can assert the generated
+        // ai.events.LLMCall model arrives through on_event.
+        calls: [
+          ai.events.LLMCall {
+            client_name: "scripted",
+            provider: "scripted",
+            timing: ai.events.Timing { start_time_utc_ms: 1000n, duration_ms: 42n, ttft_ms: null },
+            http_request: null,
+            http_response: ai.events.HttpResponse { status: 200, headers: {}, body: null },
+            usage: null,
+            selected: true,
+            sse_responses: null,
+          },
+        ],
         content: [ai.content.Text { text: "{\"name\": \"Ada\", \"email\": null}" }],
         stop_reason: ai.content.StopReason.Complete,
         usage: ai.events.Usage { input_tokens: 3, output_tokens: 5, cached_input_tokens: null, reasoning_tokens: null },

@@ -36,15 +36,42 @@ def test_on_event_plain_call_delivers_events():
     result = on_event_probe("ignored-by-scripted-client", on_event=seen.append)
     assert isinstance(result, Resume)
     assert result.name == "Ada"
-    # Journal order: one attempt, no tools, no repair re-asks.
+    # Journal order: one attempt, no tools, no repair re-asks; the scripted
+    # client's wire record rides between AssistantMessage and Usage.
     assert [type(e) for e in seen] == [
         events.RunStarted,
         events.AssistantMessage,
+        events.LLMCall,
         events.Usage,
         events.FinalProduced,
     ]
-    usage = seen[2]
+    usage = seen[3]
     assert (usage.input_tokens, usage.output_tokens) == (3, 5)
+
+
+# SDK_PARITY_LINT(skip): host on_event listener coverage lands Python-first; other SDKs port separately
+def test_on_event_plain_call_delivers_llm_call_model():
+    import baml_sdk.ai.events as events
+    from baml_sdk.lorem import on_event_probe
+
+    seen = []
+    on_event_probe("ignored-by-scripted-client", on_event=seen.append)
+    # The wire record is a generated model, delivered after AssistantMessage.
+    calls = [e for e in seen if isinstance(e, events.LLMCall)]
+    assert len(calls) == 1, f"expected one LLMCall, got {seen!r}"
+    assistant_at = next(
+        i for i, e in enumerate(seen) if isinstance(e, events.AssistantMessage)
+    )
+    call_at = next(i for i, e in enumerate(seen) if e is calls[0])
+    assert call_at > assistant_at
+    call = calls[0]
+    assert call.selected is True
+    assert isinstance(call.timing, events.Timing)
+    assert call.timing.duration_ms == 42
+    assert isinstance(call.http_response, events.HttpResponse)
+    assert call.http_response.status == 200
+    assert call.http_request is None
+    assert call.sse_responses is None
 
 
 # SDK_PARITY_LINT(skip): host on_event listener coverage lands Python-first; other SDKs port separately
