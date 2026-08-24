@@ -40,8 +40,9 @@ pub struct Package {
     /// `Object::TypeAlias`. Non-recursive aliases are expanded at lowering and
     /// never reach here.
     pub type_aliases: IndexMap<LocalName, HeapPtr>,
-    /// Enriched, source-less compiler interface for mounting this package under
-    /// an alias in a later `Package.compile` call.
+    /// Versioned artifact containing the enriched, source-less compiler
+    /// interface for mounting this package under an alias in a later
+    /// `Package.compile` call.
     pub interface_blob: Vec<u8>,
     /// Compiler-synthesized test registrar for this package, when it has tests.
     pub test_init: Option<HeapPtr>,
@@ -130,9 +131,10 @@ pub struct ProgramPackage {
     /// Implemented-interface `ObjectIndex` → the impl rules of it declared in
     /// this package (may target an interface from a dependency).
     pub impl_rules: IndexMap<ObjectIndex, Vec<ProgramImplRule>>,
-    /// `borsh(PackageInterface)`, captured at build time and embedded in packs.
+    /// Recursive type aliases defined in the package.
     pub type_aliases: IndexMap<LocalName, ObjectIndex>,
-    /// `borsh(PackageInterface)`, captured at build time and embedded in packs.
+    /// Versioned `PackageInterface` artifact captured at build time and
+    /// embedded in generated programs.
     pub interface_blob: Vec<u8>,
     /// The package's synthesized `$init_test`, if present.
     pub test_init: Option<ObjectIndex>,

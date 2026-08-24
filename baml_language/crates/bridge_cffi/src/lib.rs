@@ -156,10 +156,11 @@ pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
 
 /// Initialize the global runtime from serialized BAML bytecode.
 ///
-/// The payload is the same borsh-encoded `bex_vm_types::Program` that
-/// `baml pack` embeds in its pack envelope. Decoding and engine construction
-/// live behind `bex_project::new_from_bytecode` so the bridge stays on the
-/// `bex_project` surface rather than reaching into bex internals.
+/// The payload is a versioned artifact containing `bex_vm_types::Program`.
+/// Validation, decoding, and engine construction live behind
+/// `bex_project::new_from_bytecode` so the bridge stays on the `bex_project`
+/// surface rather than reaching into bex internals. Artifact validation runs
+/// even when the optional generated `baml.toml` metadata is absent.
 pub fn initialize_runtime_from_bytecode_with_sys_ops(
     bytecode: &[u8],
     embedded_baml_toml: Option<&str>,

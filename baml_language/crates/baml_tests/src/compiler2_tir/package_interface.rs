@@ -853,7 +853,8 @@ fn dep_interface_rows_resolve_only_for_mounted_packages() {
             )]),
         )]
         .into(),
-    );
+    )
+    .unwrap();
     let res_ctx = package_resolution_context(&db, PackageId::new(&db, Name::new("user")));
 
     let path = |parts: &[&str]| -> Vec<Name> { parts.iter().map(|p| Name::new(*p)).collect() };
@@ -1066,14 +1067,16 @@ pub(super) mod mounted {
             iface.types.values().any(|ns| !ns.is_empty()),
             "the library fixture must export at least one type"
         );
-        borsh::to_vec(iface).expect("serialize app interface")
+        baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, iface)
+            .expect("serialize app interface")
     }
 
     /// A fresh consumer database with `blob` mounted as `app` and NO `app`
     /// source anywhere.
     fn consumer_db(blob: Vec<u8>, files: &[(&str, &str)]) -> ProjectDatabase {
         let mut db = make_db();
-        db.set_mounted_packages([("app".to_string(), blob)].into());
+        db.set_mounted_packages([("app".to_string(), blob)].into())
+            .unwrap();
         for (path, src) in files {
             db.file(path, src);
         }

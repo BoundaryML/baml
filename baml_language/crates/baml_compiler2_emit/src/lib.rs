@@ -376,8 +376,8 @@ fn capture_package_exports(
                 if baml_builtins2::stdlib_package_names().contains(&package_name.as_str()) {
                     Vec::new()
                 } else {
-                    borsh::to_vec(interface)
-                        .expect("PackageInterface serialization into Vec is infallible")
+                    baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
+                        .expect("PackageInterface artifact serialization into Vec is infallible")
                 };
             let mut functions = interface
                 .functions

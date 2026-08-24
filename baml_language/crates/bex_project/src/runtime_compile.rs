@@ -287,15 +287,16 @@ fn enrich_runtime_mount(
         stubs.push((namespace, name, source));
     }
 
-    let mut interface =
-        borsh::from_slice::<PackageInterface>(&package.interface_blob).map_err(|error| {
-            RuntimeCompileDiagnostic {
-                code: "E_RUNTIME_INTERFACE".to_string(),
-                message: error.to_string(),
-                severity: RuntimeDiagnosticSeverity::Error,
-                span: None,
-            }
-        })?;
+    let mut interface = baml_artifact::decode::<PackageInterface>(
+        baml_artifact::ArtifactKind::PackageInterface,
+        &package.interface_blob,
+    )
+    .map_err(|error| RuntimeCompileDiagnostic {
+        code: "E_RUNTIME_INTERFACE".to_string(),
+        message: error.to_string(),
+        severity: RuntimeDiagnosticSeverity::Error,
+        span: None,
+    })?;
     // A package object may be mounted under any source-visible alias. Its
     // exported call targets retain the package's original identity in the
     // persisted interface, so relocate those symbolic link names to the alias.
@@ -644,7 +645,7 @@ fn enrich_runtime_mount(
     }
     stubs.sort();
     stubs.dedup();
-    borsh::to_vec(&interface)
+    baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
         .map(|blob| (blob, stubs))
         .map_err(|error| RuntimeCompileDiagnostic {
             code: "E_RUNTIME_INTERFACE".to_string(),
@@ -1752,7 +1753,14 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             .map(|(name, blob, _)| (name.clone(), blob.clone()))
             .collect::<BTreeMap<_, _>>();
         let precompiled_stdlib_names = stdlib.interfaces.keys().cloned().collect::<Vec<_>>();
-        db.set_mounted_packages(mounted);
+        db.set_mounted_packages(mounted).map_err(|message| {
+            vec![RuntimeCompileDiagnostic {
+                code: "E_RUNTIME_INTERFACE".to_string(),
+                message,
+                severity: RuntimeDiagnosticSeverity::Error,
+                span: None,
+            }]
+        })?;
         db.set_precompiled_stdlib_packages(stdlib.interfaces);
         debug_assert!(
             precompiled_stdlib_names.iter().all(|name| {
@@ -1877,14 +1885,16 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         }
 
         let interface = package_interface(&db, PackageId::new(&db, Name::new("user")));
-        let interface_blob = borsh::to_vec(interface).map_err(|error| {
-            vec![RuntimeCompileDiagnostic {
-                code: "E_RUNTIME_INTERFACE".to_string(),
-                message: error.to_string(),
-                severity: RuntimeDiagnosticSeverity::Error,
-                span: None,
-            }]
-        })?;
+        let interface_blob =
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
+                .map_err(|error| {
+                    vec![RuntimeCompileDiagnostic {
+                        code: "E_RUNTIME_INTERFACE".to_string(),
+                        message: error.to_string(),
+                        severity: RuntimeDiagnosticSeverity::Error,
+                        span: None,
+                    }]
+                })?;
         let options = CompileOptions {
             emit_test_cases: crate::precompiled_stdlib_config::EMIT_TEST_CASES,
         };

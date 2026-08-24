@@ -593,6 +593,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_artifact"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_version",
+ "borsh",
+ "log",
+ "sha2",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "baml_base"
 version = "0.0.0-beta"
 dependencies = [
@@ -651,6 +662,7 @@ name = "baml_cli"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
+ "baml_artifact",
  "baml_builtins2",
  "baml_codegen_types",
  "baml_db",
@@ -744,6 +756,7 @@ dependencies = [
 name = "baml_compiler2_emit"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_artifact",
  "baml_base",
  "baml_builtins2",
  "baml_compiler2_ast",
@@ -783,6 +796,7 @@ dependencies = [
 name = "baml_compiler2_hir_ty"
 version = "0.1.0"
 dependencies = [
+ "baml_artifact",
  "baml_base",
  "baml_builtins2",
  "baml_compiler2_ast",
@@ -891,6 +905,7 @@ dependencies = [
 name = "baml_db"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_artifact",
  "baml_base",
  "baml_builtins2",
  "baml_compiler2_ast",
@@ -1052,11 +1067,11 @@ dependencies = [
 name = "baml_pack_host"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_artifact",
  "baml_exec",
  "bex_engine",
  "bex_events",
  "bex_project",
- "borsh",
  "libsui",
  "sys_native",
  "tokio",
@@ -1122,6 +1137,7 @@ dependencies = [
 name = "baml_tests"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_artifact",
  "baml_base",
  "baml_builtins2",
  "baml_cli",
@@ -1358,6 +1374,7 @@ name = "bex_project"
 version = "0.0.0-beta"
 dependencies = [
  "async-trait",
+ "baml_artifact",
  "baml_base",
  "baml_builtins2",
  "baml_compiler2_emit",
@@ -1583,6 +1600,7 @@ checksum = "36f64beae40a84da1b4b26ff2761a5b895c12adc41dc25aaee1c4f2bbfe97a6e"
 name = "bridge_cffi"
 version = "0.218.1"
 dependencies = [
+ "baml_artifact",
  "baml_version",
  "bex_events",
  "bex_project",
@@ -6321,13 +6339,13 @@ version = "0.1.0"
 name = "sdk_test_harness_setup"
 version = "0.1.0"
 dependencies = [
+ "baml_artifact",
  "baml_base",
  "baml_codegen_types",
  "baml_db",
  "baml_ide",
  "baml_type",
  "baml_version",
- "borsh",
  "proc-macro2",
  "quote",
  "sdkgen_cpp",
@@ -6421,10 +6439,10 @@ dependencies = [
 name = "sdkgen_csharp"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_artifact",
  "baml_base",
  "baml_codegen_types",
  "bex_vm_types",
- "borsh",
  "serde",
  "serde_json",
  "sha2",

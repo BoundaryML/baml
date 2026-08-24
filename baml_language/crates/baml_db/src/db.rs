@@ -858,12 +858,23 @@ impl ProjectDatabase {
 
     /// Replace the mounted source-less package map and invalidate all tracked
     /// package/interface lookups that read it.
-    pub fn set_mounted_packages(&mut self, by_package: BTreeMap<String, Vec<u8>>) {
+    pub fn set_mounted_packages(
+        &mut self,
+        by_package: BTreeMap<String, Vec<u8>>,
+    ) -> Result<(), String> {
+        for (name, bytes) in &by_package {
+            baml_artifact::decode::<baml_compiler2_hir_ty::package_interface::PackageInterface>(
+                baml_artifact::ArtifactKind::PackageInterface,
+                bytes,
+            )
+            .map_err(|error| format!("mounted package `{name}`: {error}"))?;
+        }
         let mounts = self.mounts();
         mounts.set_by_package(self).to(by_package);
         mounts
             .set_immutable_precompiled(self)
             .to(std::collections::BTreeSet::new());
+        Ok(())
     }
 
     /// Install compiler-built stdlib interfaces into the mounted-package
@@ -1149,7 +1160,19 @@ mod tests {
         // runtime compiler mounts a dependency's interface (the semantic
         // authority) and adds a stub source root for the same package (emit
         // slots); the compiler's source-vs-blob contract decides precedence.
-        db.set_mounted_packages(BTreeMap::from([("dep".to_owned(), Vec::new())]));
+        let blob = baml_artifact::encode(
+            baml_artifact::ArtifactKind::PackageInterface,
+            &baml_compiler2_hir_ty::package_interface::PackageInterface {
+                types: std::iter::empty().collect(),
+                functions: std::iter::empty().collect(),
+                throw_sets: baml_compiler2_hir_ty::package_interface::FunctionThrowSets::default(),
+                namespaces: std::collections::BTreeSet::default(),
+                impls: Vec::default(),
+            },
+        )
+        .unwrap();
+        db.set_mounted_packages(BTreeMap::from([("dep".to_owned(), blob)]))
+            .unwrap();
         let dep = db.add_source_root(dependency_spec("/dep", "dep")).unwrap();
         // Dependency roots sort before the workspace root; Dynamic roots
         // (runtime-loaded) sort after it, whatever the insertion order.

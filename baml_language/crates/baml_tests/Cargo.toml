@@ -10,6 +10,7 @@ build = "build.rs"
 doctest = false
 
 [dependencies]
+baml_artifact = { workspace = true }
 baml_base = { workspace = true }
 baml_compiler2_ast = { workspace = true }
 baml_compiler2_emit = { workspace = true }

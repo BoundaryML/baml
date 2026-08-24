@@ -48,5 +48,8 @@ wasm-bindgen-futures = { workspace = true }
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 cbindgen = { workspace = true }
 
+[dev-dependencies]
+baml_artifact = { workspace = true }
+
 [package.metadata.ci]
 wasm_support = true

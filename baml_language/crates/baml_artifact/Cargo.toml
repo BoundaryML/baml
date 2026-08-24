@@ -1,5 +1,5 @@
 [package]
-name = "sdkgen_csharp"
+name = "baml_artifact"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
@@ -9,21 +9,21 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-
-[dependencies]
-baml_artifact = { workspace = true }
-baml_base = { workspace = true }
-baml_codegen_types = { workspace = true }
-bex_vm_types = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-sha2 = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }
+description = "Versioned envelope for BAML compiler artifacts"
+build = "build.rs"
 
 [lib]
 doctest = false
 
 [lints]
 workspace = true
+
+[dependencies]
+baml_version = { workspace = true }
+borsh = { workspace = true }
+log = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+
+[build-dependencies]
+baml_version = { workspace = true }

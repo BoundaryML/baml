@@ -93,11 +93,34 @@ fn library_db() -> ProjectDatabase {
 fn library_blob() -> Vec<u8> {
     let db = library_db();
     assert_no_diagnostic_errors(&db);
-    borsh::to_vec(package_interface(
-        &db,
-        PackageId::new(&db, Name::new("app")),
-    ))
+    baml_artifact::encode(
+        baml_artifact::ArtifactKind::PackageInterface,
+        package_interface(&db, PackageId::new(&db, Name::new("app"))),
+    )
     .expect("package interface serializes")
+}
+
+#[test]
+fn mounted_interface_skew_is_rejected_before_installation() {
+    let mut blob = library_blob();
+    blob[baml_artifact::MAGIC.len()..baml_artifact::MAGIC.len() + size_of::<u32>()]
+        .copy_from_slice(&(baml_artifact::FORMAT_VERSION + 1).to_le_bytes());
+
+    let mut db = ProjectDatabase::new();
+    db.set_project_root(std::path::Path::new("/hir-ty-package-interface-skew"));
+    let error = db
+        .set_mounted_packages([("app".to_owned(), blob)].into())
+        .unwrap_err();
+    assert_eq!(
+        error,
+        format!(
+            "mounted package `app`: package interface: toolchain {} / format {}; this runtime: {} / format {} — recompile the package and runtime with the same BAML toolchain",
+            baml_artifact::BUILD_FINGERPRINT,
+            baml_artifact::FORMAT_VERSION + 1,
+            baml_artifact::BUILD_FINGERPRINT,
+            baml_artifact::FORMAT_VERSION,
+        )
+    );
 }
 
 #[test]
@@ -166,7 +189,8 @@ fn enriched_interface_is_symbolic_loc_free_and_borsh_stable() {
 fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new("/hir-ty-package-interface-consumer"));
-    db.set_mounted_packages([("app".to_owned(), library_blob())].into());
+    db.set_mounted_packages([("app".to_owned(), library_blob())].into())
+        .unwrap();
     db.file("main.baml", "function main() -> int throws never { 0 }");
     let context = package_resolution_context(&db, PackageId::new(&db, Name::new("user")));
 
@@ -240,7 +264,8 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
 fn error_messages(source: &str) -> Vec<String> {
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new("/hir-ty-package-interface-errors"));
-    db.set_mounted_packages([("app".to_owned(), library_blob())].into());
+    db.set_mounted_packages([("app".to_owned(), library_blob())].into())
+        .unwrap();
     db.file("ns_reflect/local.baml", "class Type<T> { value T }");
     db.file("main.baml", source);
     collect_diagnostics(&db)
@@ -449,7 +474,9 @@ fn mounted_witnesses_members_defaults_and_symbolic_calls_type_check_source_less(
     mounted.workspace(std::path::Path::new(
         "/hir-ty-package-interface-parity-mounted",
     ));
-    mounted.set_mounted_packages([("app".to_owned(), library_blob())].into());
+    mounted
+        .set_mounted_packages([("app".to_owned(), library_blob())].into())
+        .unwrap();
     mounted.file("main.baml", WITNESS_CONSUMER);
     let mut local = library_db();
     local.file("main.baml", WITNESS_CONSUMER);
@@ -519,17 +546,18 @@ function value() -> int throws never {
 "#,
     );
     assert_no_diagnostic_errors(&library);
-    let blob = borsh::to_vec(package_interface(
-        &library,
-        PackageId::new(&library, Name::new("native")),
-    ))
+    let blob = baml_artifact::encode(
+        baml_artifact::ArtifactKind::PackageInterface,
+        package_interface(&library, PackageId::new(&library, Name::new("native"))),
+    )
     .expect("native package interface serializes");
 
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new(
         "/hir-ty-package-interface-native-consumer",
     ));
-    db.set_mounted_packages([("native".to_owned(), blob)].into());
+    db.set_mounted_packages([("native".to_owned(), blob)].into())
+        .unwrap();
     db.file(
         "main.baml",
         r#"
