@@ -1255,7 +1255,7 @@ pub(crate) mod support {
                 let type_ref_spans = baml_compiler2_ppir::body_type_ref_spans(db, owner);
                 let mut rendered = Vec::new();
                 for diagnostic in &inference.diagnostics {
-                    rendered.push(diagnostic.render_with_type_refs(
+                    rendered.push(diagnostic.render_with_body_type_refs(
                         db,
                         file,
                         source_map.as_ref(),
@@ -1270,7 +1270,7 @@ pub(crate) mod support {
                     let defaults_spans =
                         baml_compiler2_ppir::body_type_ref_spans(db, defaults_owner);
                     for diagnostic in &defaults.diagnostics {
-                        rendered.push(diagnostic.render_with_type_refs(
+                        rendered.push(diagnostic.render_with_body_type_refs(
                             db,
                             file,
                             defaults_map.as_ref(),

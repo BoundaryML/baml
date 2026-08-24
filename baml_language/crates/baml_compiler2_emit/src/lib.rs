@@ -4430,16 +4430,14 @@ fn compute_function_metadata<'db>(
                 .filter_map(|&(store, id)| {
                     let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
                         .with_bounds(scope_bounds.clone())
-                        .with_frame(frame.clone())
-                        .with_diagnostics();
-                    let lowered = ctx
-                        .lower_type_ref_at(
-                            store,
-                            id,
-                            baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
-                        )
-                        .to_plain();
-                    let clean = ctx.take_diagnostics().is_empty();
+                        .with_frame(frame.clone());
+                    let (lowered, diagnostics) = ctx.lower_type_ref_at_with_diagnostics(
+                        store,
+                        id,
+                        baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
+                    );
+                    let lowered = lowered.to_plain();
+                    let clean = diagnostics.is_empty();
                     let bound_ty = if enclosing_interface.is_some() {
                         substitute_ty(&lowered, &interface_signature_bindings)
                     } else {
