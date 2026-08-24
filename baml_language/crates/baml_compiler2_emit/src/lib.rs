@@ -6,6 +6,7 @@ mod analysis;
 mod emit;
 mod pull_semantics;
 mod stack_carry;
+#[cfg(any(debug_assertions, test))]
 mod verifier;
 
 use std::collections::{HashMap, HashSet};
