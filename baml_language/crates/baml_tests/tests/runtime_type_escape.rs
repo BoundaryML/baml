@@ -125,6 +125,7 @@ class ProbeClient {
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
             ai.ModelTurn {
+                calls: [],
                 content: [ai.content.Text { text: self.reply }],
                 stop_reason: ai.content.StopReason.Complete,
                 usage: null,
