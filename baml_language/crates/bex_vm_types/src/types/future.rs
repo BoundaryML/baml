@@ -82,8 +82,12 @@ pub struct Future {
     id: FutureId,
     /// The return/throws types that the value will match.
     /// Used for reflection/pattern matching.
-    /// Read-only: set once when the future is created.
-    types: Arc<FutureOutputTypes>,
+    /// Set once when the future is created; the GC repoints the heads inside
+    /// through [`Future::visit_heads_mut`] when their declarations move.
+    /// `Box`, not `Arc`: a shared allocation cannot be soundly head-walked
+    /// (repointing would either fork it or mutate every holder), and the GC's
+    /// relocation `Clone` must produce an independently-fixable copy.
+    types: Box<FutureOutputTypes>,
     /// Written at most once by whichever writer wins the `state` CAS.
     /// Valid only when `state` indicates `Ready` or `Error`. For
     /// `Cancelled` / `InternalError`, this stays uninitialized.
@@ -243,7 +247,7 @@ impl Future {
             state: AtomicU8::new(FutureTag::Pending as u8),
             flags: AtomicU8::new(0),
             id,
-            types: Arc::new(FutureOutputTypes { returns, throws }),
+            types: Box::new(FutureOutputTypes { returns, throws }),
             value: UnsafeCell::new(MaybeUninit::uninit()),
             error_trace: Arc::new(OnceLock::new()),
             cancel,
@@ -287,6 +291,22 @@ impl Future {
 
     pub fn returns(&self) -> &RealizedTy {
         &self.types.returns
+    }
+
+    /// Every head the output types reach — the `Future<T, E>` the spawn site
+    /// was typed at. Named like the generated family walks so
+    /// `visit_object_heads(_mut)` can call it uniformly: the declarations
+    /// these heads name must stay live, and be repointed, for as long as the
+    /// future itself — independent of the settled value.
+    pub fn visit_heads(&self, f: &mut impl FnMut(&crate::TypeHead)) {
+        self.types.returns.visit_heads(f);
+        self.types.throws.visit_heads(f);
+    }
+
+    /// Mutable twin of [`Self::visit_heads`], for the GC's repoint pass.
+    pub fn visit_heads_mut(&mut self, f: &mut impl FnMut(&mut crate::TypeHead)) {
+        self.types.returns.visit_heads_mut(f);
+        self.types.throws.visit_heads_mut(f);
     }
 
     pub fn throws(&self) -> &RealizedTy {
@@ -563,7 +583,7 @@ impl Clone for Future {
             state: AtomicU8::new(0), // placeholder; rewritten below
             flags: AtomicU8::new(self.flags.load(Ordering::Acquire)),
             id: self.id,
-            types: Arc::clone(&self.types),
+            types: self.types.clone(),
             value: UnsafeCell::new(MaybeUninit::uninit()),
             error_trace: Arc::clone(&self.error_trace),
             cancel: self.cancel.clone(),
@@ -741,6 +761,7 @@ impl From<&Future> for FutureType {
     }
 }
 
+#[derive(Clone)]
 struct FutureOutputTypes {
     returns: RealizedTy,
     throws: RealizedTy,

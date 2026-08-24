@@ -10289,34 +10289,45 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 event.value = Value::object(new_ptr);
             }
         }
-        let address_forwarding = roots
-            .iter()
-            .map(|(old, new)| (old.as_ptr() as usize, new.as_ptr() as usize))
-            .collect::<HashMap<_, _>>();
+        // Forward a tagged runtime identity (`ptr | 1`) through the GC's
+        // forwarding map. The probe key is rebuilt from the untagged address
+        // and used only as a map key — `HeapPtr`'s `Eq`/`Hash` compare the
+        // pointer alone (the `heap_debug` epoch is excluded), and the key is
+        // never dereferenced. Probing `roots` directly keeps this O(1) per
+        // cache entry: `forward_roots` runs once per permit holder per GC, so
+        // materializing a by-address copy of the whole forwarding map here
+        // multiplied every GC by the live thread count (a corpus-scale run
+        // spent most of its wall clock inside that collect, world parked).
+        // A tagged identity absent from the map keeps today's behavior: the
+        // memo entry is dropped and re-derived from the authoritative
+        // created-once table on the owning package.
+        let forward_identity = |identity: usize| -> Option<usize> {
+            if identity & 1 == 0 {
+                return Some(identity);
+            }
+            let addr = (identity & !1) as *mut Object;
+            // SAFETY: the pointer is used only as a lookup key; it is never
+            // dereferenced, so validity of the pointee is not required.
+            #[cfg(not(feature = "heap_debug"))]
+            let key = unsafe { HeapPtr::from_ptr(addr) };
+            // SAFETY: as above; the epoch does not participate in `Eq`/`Hash`,
+            // so a zero epoch probes correctly.
+            #[cfg(feature = "heap_debug")]
+            let key = unsafe { HeapPtr::from_ptr(addr, 0) };
+            roots
+                .get(&key)
+                .map(|forwarded| (forwarded.as_ptr() as usize) | 1)
+        };
         let old_load_type_cache = std::mem::take(&mut self.static_load_type_cache);
         for ((identity, index), ptr) in old_load_type_cache {
-            let identity = if identity & 1 == 0 {
-                Some(identity)
-            } else {
-                address_forwarding
-                    .get(&(identity & !1))
-                    .map(|forwarded| forwarded | 1)
-            };
-            if let Some(identity) = identity {
+            if let Some(identity) = forward_identity(identity) {
                 self.static_load_type_cache
                     .insert((identity, index), roots.get(&ptr).copied().unwrap_or(ptr));
             }
         }
         let old_virtual_call_cache = std::mem::take(&mut self.static_virtual_call_cache);
         for (mut key, target) in old_virtual_call_cache {
-            let identity = if key.caller_function_addr & 1 == 0 {
-                Some(key.caller_function_addr)
-            } else {
-                address_forwarding
-                    .get(&(key.caller_function_addr & !1))
-                    .map(|forwarded| forwarded | 1)
-            };
-            if let Some(identity) = identity {
+            if let Some(identity) = forward_identity(key.caller_function_addr) {
                 key.caller_function_addr = identity;
                 self.static_virtual_call_cache.insert(key, target);
             }

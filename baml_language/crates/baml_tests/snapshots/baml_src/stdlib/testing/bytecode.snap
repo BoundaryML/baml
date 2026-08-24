@@ -3112,6 +3112,24 @@ function testing.run_test(body: () -> void throws unknown, runner: ((() -> <unre
     call_indirect
     call_indirect
     jump L2
+    load_var e
+    throw_if_panic
+    load_var _8
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _16
+    load_const "fail"
+    load_const "fail"
+    load_const 0
+    load_const "test runner middleware failed: "
+    load_var _16
+    bin_op +
+    init_instance testing.RunReport .outcome, .duration_ms, .message
+    load_type testing.RunReport
+    alloc_array 1
+    init_instance testing.TestReport .outcome, .runs
+    jump L2
 
   L1:
     load_var base_run

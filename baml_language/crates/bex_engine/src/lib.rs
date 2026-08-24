@@ -1369,16 +1369,33 @@ fn enforce_host_throw_contract(
     }
     // The contract arrives in the wire's spelling; anchor it so both operands
     // and the context share the runtime's head before asking the algebra.
-    let anchored_contract = crate::conversion::anchor_wire_ty(&thread.vm, contract).ok();
-    let on_contract = anchored_contract.as_ref().is_some_and(|contract| {
-        runtime_ty
-            .as_ref()
-            .is_some_and(|rt: &bex_vm_types::RuntimeTy| {
-                // The VM is the runtime `TypeContext`; operands upcast to `Ty` by a
-                // zero-cost borrow.
-                baml_type::normalize::is_subtype(rt.as_ty(), contract.as_ty(), &thread.vm)
-            })
-    });
+    let Ok(anchored_contract) = crate::conversion::anchor_wire_ty(&thread.vm, contract) else {
+        // The CONTRACT is the unresolvable side here — it names a
+        // declaration this engine cannot anchor (an unmounted anonymous
+        // type overlaid as a bare name). Blaming the thrown value would
+        // report a contract violation the value may never have committed,
+        // so name the actual defect instead. Still a panic: a throw that
+        // cannot be checked must not silently pass as on-contract.
+        let (host_class, host_language) =
+            extract_host_diagnostics_from_value(value, thread.proof());
+        let panic = bex_vm::errors::VmPanic::HostContractViolation {
+            message: format!(
+                "host callable's declared throws contract (`{contract}`) names a \
+                 declaration this engine cannot resolve, so the thrown value cannot \
+                 be checked against it",
+            ),
+            class_name: host_class,
+            language: host_language,
+        };
+        return thread.vm.panic_to_exception_value(panic);
+    };
+    let on_contract = runtime_ty
+        .as_ref()
+        .is_some_and(|rt: &bex_vm_types::RuntimeTy| {
+            // The VM is the runtime `TypeContext`; operands upcast to `Ty` by a
+            // zero-cost borrow.
+            baml_type::normalize::is_subtype(rt.as_ty(), anchored_contract.as_ty(), &thread.vm)
+        });
     if on_contract {
         return value;
     }
@@ -7064,6 +7081,14 @@ impl BexEngine {
         let source = source.to_string();
         let expected = host_call_type_arg(args.get(2).copied(), 2, "eval type contract")
             .map_err(|error| OpError::new(operation, error))?;
+        // Spell the contract for the compiler HERE, while this thread still
+        // holds the heap permit: the request outlives the permit (the compile
+        // task runs across the sys-op await), so a head inside it could go
+        // stale under a collection before the compiler read it.
+        let expected = match expected.try_map_heads(&mut bex_vm_types::TypeHead::to_name) {
+            Ok(named) => bex_vm_types::SessionContract::Checkable(named),
+            Err(_) => bex_vm_types::SessionContract::NamesRuntimeDeclaration,
+        };
 
         let busy = {
             let Object::Package(package) = vm.get_object(package_ptr) else {

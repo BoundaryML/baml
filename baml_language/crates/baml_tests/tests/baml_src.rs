@@ -41,13 +41,24 @@ fn baml_test() {
             }
         })
         .unwrap_or_else(|| workspace_root.join("target"));
-    // SAFETY: `BAML_CACHE_DIR` is only ever read back (by the CLI cache layer
-    // inside the `run_cli` call below); the one other test in this binary
-    // (`promptfiddle_demo_compiles`) touches no environment, and nothing else
-    // in this process mutates it.
+    // SAFETY: `set_var` races with *any* concurrent environment access, so
+    // the obligation is single-threadedness, not merely "no other writers".
+    // This is the only `#[test]` in this binary (the Prompt Fiddle check runs
+    // inside it, on this same thread, below), so no other test thread exists
+    // to call `getenv` while this writes.
     unsafe {
         std::env::set_var("BAML_CACHE_DIR", target_dir.join("baml-corpus-cache"));
     }
+
+    // Folded into this test rather than a sibling `#[test]` so the `set_var`
+    // above stays sound: libtest would run a sibling concurrently on another
+    // thread, and its compiler stack reads the environment.
+    //
+    // This cross-workspace include is intentionally cursed: Prompt Fiddle owns
+    // the demo, while this existing test binary checks it without a second
+    // compiler build.
+    let demo = include_str!("../../../../typescript2/app-promptfiddle/src/playground/default.baml");
+    baml_project::testing::compile_multi_file(&[("baml_src/main.baml", demo)]);
 
     let argv = vec![
         "baml".to_string(),
@@ -60,13 +71,4 @@ fn baml_test() {
         matches!(code, baml_cli::ExitCode::Success),
         "baml test exited with {code:?}"
     );
-}
-
-#[test]
-fn promptfiddle_demo_compiles() {
-    // This cross-workspace include is intentionally cursed: Prompt Fiddle owns
-    // the demo, while this existing test binary checks it without a second compiler build.
-    let source =
-        include_str!("../../../../typescript2/app-promptfiddle/src/playground/default.baml");
-    baml_project::testing::compile_multi_file(&[("baml_src/main.baml", source)]);
 }

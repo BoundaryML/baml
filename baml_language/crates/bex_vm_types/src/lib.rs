@@ -38,7 +38,7 @@ pub use runtime_compile::{
     RuntimeDiagnosticSeverity, RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs,
     RuntimePackageMount, RuntimeSessionCompileArtifact, RuntimeSessionCompileRequest,
     RuntimeSessionInitializer, RuntimeSessionStep, RuntimeSourceSpan, RuntimeTypeMount,
-    SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
+    SessionContract, SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
 };
 pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use type_head::TypeHead;

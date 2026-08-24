@@ -154,9 +154,11 @@ impl TypeHead {
         if !self.is_resolved() {
             return None;
         }
-        // SAFETY: as in `head_display_name` — a resolved head points into the
-        // heap's compile-time region, which is never moved or collected, and
-        // this reads a declaration that is immutable after load.
+        // SAFETY: as in `tagged_name` — the caller holds the heap permit for
+        // the read and the collector forwards heads when declarations move
+        // (runtime-created declarations live in the moving region; this very
+        // function's `Anonymous` arm exists for them). A declaration is
+        // immutable after it is created.
         #[expect(
             unsafe_code,
             reason = "recovering a head's name requires reading its declaration"
@@ -330,11 +332,13 @@ impl baml_type::HeadDisplay for TypeHead {
         if !self.is_resolved() {
             return format!("<unresolved type #{}>", self.tag.as_i64());
         }
-        // SAFETY: a resolved head points at a declaration object, and every
-        // declaration lives in the heap's compile-time region — never moved,
-        // never collected (see `BexHeap::compile_time_ptr`) — so the pointer
-        // stays valid for as long as the heap does. Read-only, and declarations
-        // are immutable after load, so no aliasing obligation arises either.
+        // SAFETY: a resolved head points at a declaration object. Compiled
+        // declarations live in the never-moved compile-time region; a
+        // runtime-created one lives in the moving region, where the caller's
+        // heap permit keeps the collector parked and head fixup has already
+        // forwarded this pointer past any earlier move. Read-only, and
+        // declarations are immutable after creation, so no aliasing obligation
+        // arises either.
         #[expect(
             unsafe_code,
             reason = "naming a head requires reading the declaration it points at"

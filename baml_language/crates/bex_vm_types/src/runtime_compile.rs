@@ -78,6 +78,24 @@ pub struct SessionVisibleSymbol {
     pub type_value: Option<String>,
 }
 
+/// The `eval<T>` contract, spelled for the compiler's name-headed world.
+///
+/// Converted from the head-typed contract **at request construction, under
+/// the heap permit**: the compile task runs after the VM releases its permit,
+/// so a head crossing into it could go stale the moment a collection moves the
+/// declaration it points at. Nothing heap-shaped may live in the request.
+#[derive(Clone, Debug)]
+pub enum SessionContract {
+    /// A contract every head of which has a declared name — checkable by the
+    /// compiler. `unknown` for an uncontracted eval.
+    Checkable(baml_type::RuntimeTy),
+    /// The contract names a runtime-created declaration, which has no name
+    /// the compiler can check a submission against. Carried as a fact so the
+    /// compiler reports the unstateable contract rather than comparing a
+    /// stand-in.
+    NamesRuntimeDeclaration,
+}
+
 /// Session-specific inputs copied out of the heap before the compiler yield.
 #[derive(Clone, Debug)]
 pub struct RuntimeSessionCompileRequest {
@@ -90,7 +108,7 @@ pub struct RuntimeSessionCompileRequest {
     /// The newest source-visible binding for every flat-scope name.
     pub visible: IndexMap<String, SessionVisibleSymbol>,
     /// Runtime contract supplied by `eval<T>` (unknown for uncontracted eval).
-    pub expected: crate::RuntimeTy,
+    pub expected: SessionContract,
     /// Keeps the one-eval permit live across compile and execution.
     pub lease: SessionEvalLease,
 }

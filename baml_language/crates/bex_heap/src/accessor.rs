@@ -639,9 +639,17 @@ fn convert_object(
                     .map(|arg| {
                         arg.try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
                             .map(|named| baml_type::RuntimeTy::from(&named))
-                            .map_err(|head| AccessError::TypeMismatch {
-                                expected: "a nameable type argument",
-                                actual: head.to_string(),
+                            .or_else(|head| {
+                                // Lossy mode (traces) degrades the one
+                                // unnameable argument to `unknown` instead of
+                                // discarding the whole value tree.
+                                if lossy {
+                                    return Ok(baml_type::RuntimeTy::unknown());
+                                }
+                                Err(AccessError::TypeMismatch {
+                                    expected: "a nameable type argument",
+                                    actual: head.to_string(),
+                                })
                             })
                     })
                     .collect::<Result<_, _>>()?,

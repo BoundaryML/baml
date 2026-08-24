@@ -143,7 +143,7 @@ pub trait TypeContext<H: Head = QualifiedTypeName> {
     /// inspect: a name-based context returns the name itself (the identity,
     /// always available), while a runtime context resolves the declaration on
     /// its heap and hands back a handle — state only the context has, and the
-    /// reason this cannot live on [`Head`](crate::Head).
+    /// reason this cannot live on [`Head`].
     ///
     /// Used for the algebra's one nominal special case, `baml.AnyFunction`,
     /// whose pins are covariant unlike every other interface.

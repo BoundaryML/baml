@@ -501,7 +501,11 @@ impl BexHeap {
                 continue;
             };
             let previous = by_tag.insert(tag, self.compile_time_ptr(index));
-            debug_assert!(
+            // A release build must fail closed here: with two claimants the
+            // insert silently keeps the last one, and every head carrying this
+            // tag would bind to it — cross-wired dispatch, not an error state
+            // anything downstream can detect.
+            assert!(
                 previous.is_none(),
                 "two compile-time declarations carry the tag {tag:?}: the pool must \
                  hold each declaration exactly once for heads to have one referent",

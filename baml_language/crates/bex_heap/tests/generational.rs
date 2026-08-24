@@ -1358,3 +1358,68 @@ fn type_alias_owner_is_traced_and_forwarded() {
     );
     assert!(matches!(unsafe { alias.owner.get() }, Object::Package(_)));
 }
+
+/// A live future's `Future<T, E>` output-type heads are real GC edges: the
+/// declarations they name stay live and the heads are repointed when those
+/// declarations move. Regression for the walk gap where `Object::Future` was
+/// excluded from `visit_object_heads(_mut)` — its root walk repoints only the
+/// future object itself, so an output type naming a runtime-created class
+/// dangled (and the class could be collected) after a major collection.
+#[test]
+fn future_output_type_heads_are_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+
+    let class_name = QualifiedTypeName::local(Name::new("SpawnOut"));
+    let type_tag = baml_type::typetag::TypeTag::of_head("SpawnOut");
+    let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
+        name: bex_vm_types::DeclarationName::Declared(class_name),
+        fields: Vec::new(),
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+        type_tag,
+        ty_attr: TyAttr::default(),
+        has_cleanup: false,
+        generic_param_count: 0,
+        owner: bex_vm_types::HeapPtr::null(),
+    })));
+    let returns = RealizedTy::Class(
+        bex_vm_types::TypeHead::new(class_ptr, type_tag),
+        Vec::new(),
+        TyAttr::default(),
+    );
+    let future = bex_vm_types::types::Future::pending(
+        bex_vm_types::types::FutureId::from_usize(1),
+        returns,
+        RealizedTy::never(),
+        bex_vm_types::types::CancellationToken::new(),
+    );
+    let future_ptr = tlab.alloc(Object::Future(future));
+
+    // Root ONLY the future: the class must survive through the output-type
+    // head alone.
+    let (stats, roots, _forwarding) =
+        unsafe { heap.collect_garbage_generational(&[future_ptr], CollectionLevel::Major) };
+    tlab.invalidate();
+    assert_eq!(stats.live_count, 2, "the class is live through the head");
+
+    let moved_future = roots[0];
+    let Object::Future(future) = (unsafe { moved_future.get() }) else {
+        panic!("root ceased to be a future")
+    };
+    let RealizedTy::Class(head, _, _) = future.returns() else {
+        panic!("future returns ceased to be a class")
+    };
+    assert!(head.is_resolved());
+    assert_ne!(
+        head.ptr(),
+        class_ptr,
+        "a major collection moves Gen0 objects, so the head must be repointed"
+    );
+    let Object::Class(class) = (unsafe { head.ptr().get() }) else {
+        panic!("forwarded head does not point at the class")
+    };
+    assert_eq!(class.type_tag, type_tag, "identity survives the move");
+}

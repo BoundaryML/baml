@@ -105,10 +105,17 @@ pub fn compile_baml_to_sap(baml_source: &str, type_expr: &str) -> Result<Compile
                         .ok_or_else(|| {
                             format!("Synthetic class {PARSE_CLASS} missing field {PARSE_FIELD}")
                         })?;
-                    parse_field_ty = field
-                        .field_type
-                        .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
-                        .ok();
+                    parse_field_ty = Some(
+                        field
+                            .field_type
+                            .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
+                            .map_err(|head| {
+                                format!(
+                                    "Synthetic class {PARSE_CLASS} field {PARSE_FIELD} has an \
+                                     unnameable head: {head}"
+                                )
+                            })?,
+                    );
                     // Don't add the synthetic class to the definitions.
                     continue;
                 }

@@ -1078,7 +1078,7 @@ struct SessionCompile {
     /// The global holding the submission's result, checked against `expected`.
     result_global: String,
     /// The contract from `eval<T>`; unknown when the eval is uncontracted.
-    expected: bex_vm_types::RuntimeTy,
+    expected: bex_vm_types::SessionContract,
     lease: bex_vm_types::SessionEvalLease,
 }
 
@@ -1793,7 +1793,9 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         if let Some(session) = &session
             && !matches!(
                 session.expected,
-                bex_vm_types::RuntimeTy::BuiltinUnknown { .. }
+                bex_vm_types::SessionContract::Checkable(
+                    baml_type::RuntimeTy::BuiltinUnknown { .. }
+                )
             )
         {
             let file = session.artifact.submission_name.as_str();
@@ -1805,12 +1807,12 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 let_initializer_type(&db, result_name).unwrap_or_else(baml_type::Ty::unknown);
             // The check runs in the compiler's context, which names declarations
             // rather than pointing at them. `eval<T>` can be handed a
-            // runtime-created type, which has no name to recover — report that
-            // as the unstateable contract it is, rather than comparing against a
+            // runtime-created type, which has no name to recover — the engine
+            // classified that under the heap permit (nothing heap-shaped may
+            // reach this task; see `SessionContract`), so report the
+            // unstateable contract it recorded rather than comparing against a
             // stand-in and reporting whatever mismatch the stand-in produces.
-            let Ok(expected) = session
-                .expected
-                .try_map_heads(&mut bex_vm_types::TypeHead::to_name)
+            let bex_vm_types::SessionContract::Checkable(expected) = session.expected.clone()
             else {
                 return Err(vec![runtime_diagnostic(
                     DiagnosticId::TypeMismatch,

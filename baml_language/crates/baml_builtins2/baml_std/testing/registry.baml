@@ -554,7 +554,9 @@ function run_children_parallel(children: TestSetChild[], pool: TestPool) -> Test
             pool.acquire();
             futures.push(spawn {
                 let named = NamedChildReport { name: child.name, report: child.run() };
-                // `run` is total (`throws never`), so the slot always returns.
+                // `run` is total: a leaf is `run_test`, whose runner arm
+                // catches middleware panics precisely so this release is
+                // reached on every outcome.
                 pool.release();
                 named
             })
@@ -628,8 +630,24 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
     match (runner) {
         null => base_run(),
         let r: TestRunner => {
-            let wrapped: TestReportThunk = r(base_run);
-            wrapped()
+            // Runner middleware is user code with no totality contract of its
+            // own. Catching here is what makes `run_test` total — the leaf
+            // dispatcher's pool slot is released after this returns, so a
+            // panicking runner must become a failed report, never an escaped
+            // throw that strands the slot.
+            {
+                let wrapped: TestReportThunk = r(base_run);
+                wrapped()
+            } catch_all (e, ctx) {
+                _ => TestReport {
+                    outcome: "fail",
+                    runs: [RunReport {
+                        outcome: "fail",
+                        duration_ms: 0,
+                        message: "test runner middleware failed: " + ctx.to_string(),
+                    }],
+                }
+            }
         },
     }
 }

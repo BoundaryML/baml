@@ -2421,10 +2421,16 @@ fn testing.run_test(body: () -> void throws unknown, runner: null | ((() -> test
     let _4: bool
     let _5: () -> testing.TestReport throws never
     let _6: (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never // r
-    let _7: () -> testing.TestReport throws never // wrapped
-    let _8: (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never
-    let _9: () -> testing.TestReport throws never
-    let _10: () -> testing.TestReport throws never
+    let _7: unknown // e
+    let _8: unknown
+    let _9: () -> testing.TestReport throws never // wrapped
+    let _10: (() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never
+    let _11: () -> testing.TestReport throws never
+    let _12: () -> testing.TestReport throws never
+    let _13: testing.RunReport[]
+    let _14: testing.RunReport
+    let _15: string
+    let _16: string
 
     bb0: {
         _3 = make_closure lambda[0](copy _1);
@@ -2434,22 +2440,38 @@ fn testing.run_test(body: () -> void throws unknown, runner: null | ((() -> test
 
     bb1: {
         _6 = copy _2;
-        _8 = copy _6;
-        _9 = copy _3;
-        _7 = call copy _8(copy _9) -> [bb2];
+        _10 = copy _6;
+        _11 = copy _3;
+        _9 = call copy _10(copy _11) -> [bb2, unwind: bb4];
     }
 
     bb2: {
-        _10 = copy _7;
-        _0 = call copy _10() -> [bb4];
+        _12 = copy _9;
+        _0 = call copy _12() -> [bb7, unwind: bb4];
     }
 
     bb3: {
         _5 = copy _3;
-        _0 = call copy _5() -> [bb4];
+        _0 = call copy _5() -> [bb7];
     }
 
     bb4: {
+        throw_if_panic copy _7 -> bb5;
+    }
+
+    bb5: {
+        _16 = virtual_call to_string as baml.ToString(copy _8) -> [bb6];
+    }
+
+    bb6: {
+        _15 = const "test runner middleware failed: " + copy _16;
+        _14 = testing.RunReport { const "fail", const 0_i64, copy _15 };
+        _13 = [copy _14]: testing.RunReport[];
+        _0 = testing.TestReport { const "fail", copy _13 };
+        goto -> bb7;
+    }
+
+    bb7: {
         return;
     }
 }

@@ -1,4 +1,4 @@
-//! Every [`TypeHead`](crate::TypeHead) an [`Object`] reaches.
+//! Every [`TypeHead`] an [`Object`] reaches.
 //!
 //! A head is a pointer into the heap, so the collector must trace and repoint it
 //! exactly like any other reference. The walk *within* a type is generated
@@ -13,9 +13,10 @@
 //! forms are expanded from one macro rather than written twice — a body that
 //! could drift is a body that will.
 //!
-//! `Object::Future` is absent by construction: its output types sit behind
-//! accessors on an interior-mutable struct, so the collector reaches them
-//! through the future's own root walk rather than here.
+//! `Object::Future` walks through [`crate::types::Future::visit_heads`]: its
+//! output types live behind accessors, but their heads are ordinary heap
+//! edges — the future's *root* walk only repoints the future object itself,
+//! so liveness and repointing of the output-type declarations happen here.
 
 use crate::{Object, TypeHead};
 
@@ -149,17 +150,16 @@ macro_rules! walk_object_heads {
                     fut.returns.$visit(f);
                     fut.throws.$visit(f);
                 }
+                Object::Future(fut) => fut.$visit(f),
                 Object::Array(array) => array.element_ty.$visit(f),
                 Object::Map(map) => {
                     map.key_ty.$visit(f);
                     map.value_ty.$visit(f);
                 }
                 // Carry no head. `Package` and `Enum` reference declarations by
-                // pointer, `Future` hands its output types out behind accessors
-                // (see the module doc), and the rest are plain values.
+                // pointer, and the rest are plain values.
                 Object::Package(_)
                 | Object::Enum(_)
-                | Object::Future(_)
                 | Object::Variant(_)
                 | Object::Cell(_)
                 | Object::String(_)
