@@ -935,7 +935,7 @@ pub(crate) fn synthesize_spec_agent_run_body(
         span,
     );
 
-    // ai.Agent.new(client = client)
+    // ai.Agent.new(client = client, on_event = on_event)
     let agent_path = ctx.alloc_expr(Expr::Path(vec![Name::new("ai"), Name::new("Agent")]), span);
     let new_callee = ctx.alloc_expr(
         Expr::MemberAccess {
@@ -945,11 +945,15 @@ pub(crate) fn synthesize_spec_agent_run_body(
         span,
     );
     let client_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);
+    let on_event_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("on_event")]), span);
     let new_call = ctx.alloc_expr(
         Expr::Call {
             callee: new_callee,
             type_args: vec![],
-            args: vec![CallArg::named("client", client_ref)],
+            args: vec![
+                CallArg::named("client", client_ref),
+                CallArg::named("on_event", on_event_ref),
+            ],
         },
         span,
     );
@@ -1019,7 +1023,7 @@ pub fn synthesize_spec_stream_body(
         span,
     );
 
-    // ai.stream.from_spec<TS, TF>(spec, client = client)
+    // ai.stream.from_spec<TS, TF>(spec, client = client, on_event = on_event)
     let stream_spec_callee = ctx.alloc_expr(
         Expr::Path(vec![
             Name::new("ai"),
@@ -1029,6 +1033,7 @@ pub fn synthesize_spec_stream_body(
         span,
     );
     let client_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);
+    let on_event_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("on_event")]), span);
     let call = ctx.alloc_expr(
         Expr::Call {
             callee: stream_spec_callee,
@@ -1036,6 +1041,7 @@ pub fn synthesize_spec_stream_body(
             args: vec![
                 CallArg::positional(spec_call),
                 CallArg::named("client", client_ref),
+                CallArg::named("on_event", on_event_ref),
             ],
         },
         span,

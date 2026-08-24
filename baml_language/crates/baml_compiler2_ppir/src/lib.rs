@@ -253,7 +253,7 @@ fn synthesize_llm_stream_companion(
     let user_params: Vec<ast::Param> = func
         .params
         .iter()
-        .filter(|p| p.name.as_str() != "client")
+        .filter(|p| p.name.as_str() != "client" && p.name.as_str() != "on_event")
         .cloned()
         .collect();
     let (body, source_map) = ast::synthesize_spec_stream_body(

@@ -31,14 +31,14 @@ class Agent {
     schema_attempts: int,
     client: Client?,
     tool_errors: root.tools.ErrorMode,
-    on_event: (root.events.Event) -> null throws never,
+    on_event: ((root.events.Event) -> void throws never)?,
 
     function new(
         max_steps: int = 12,
         schema_attempts: int = 2,
         client: Client? = null,
         tool_errors: root.tools.ErrorMode = root.tools.ErrorMode.Report,
-        on_event: ((root.events.Event) -> null throws never)? = null,
+        on_event: ((root.events.Event) -> void)? = null,
     ) -> Agent {
         if (schema_attempts < 1) {
             throw baml.errors.InvalidArgument {
@@ -50,12 +50,7 @@ class Agent {
             schema_attempts: schema_attempts,
             client: client,
             tool_errors: tool_errors,
-            on_event: on_event
-                ?? (
-                    (e: root.events.Event) -> {
-                        null
-                    }
-                ),
+            on_event: root.events.guard(on_event),
         }
     }
 
@@ -300,12 +295,14 @@ class Agent {
     // Emit any events appended since `seen` to on_event; returns the new count.
     function _emit_from(self, j: Journal, seen: int) -> int {
         let entries = j.entries();
-        let i = seen;
-        while (i < entries.length()) {
-            if let e: root.events.Event = entries.at(i) {
-                let _ = self.on_event(e);
+        if let cb: (root.events.Event) -> void throws never = self.on_event {
+            let i = seen;
+            while (i < entries.length()) {
+                if let e: root.events.Event = entries.at(i) {
+                    cb(e);
+                }
+                i = i + 1;
             }
-            i = i + 1;
         }
         entries.length()
     }

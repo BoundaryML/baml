@@ -444,6 +444,7 @@ class Stream<TStream, TFinal> {
 function from_spec<TStream, TFinal>(
     spec: root.FunctionSpec<TFinal>,
     client: StreamingClient? = null,
+    on_event: ((root.events.Event) -> void)? = null,
 ) -> Stream<TStream, TFinal> {
     if (!spec.tools().is_empty()) {
         throw baml.errors.InvalidArgument {
@@ -467,6 +468,13 @@ function from_spec<TStream, TFinal>(
     let provider = match (selected) {
         let c: root.Client => c.id(),
     };
+    let emit = root.events.guard(on_event);
+    if let cb: (root.events.Event) -> void throws never = emit {
+        cb(root.events.RunStarted {
+            spec_name: spec.name(),
+            arguments: spec.arguments(),
+        });
+    }
     let turns = selected.invoke_stream(
         root.ModelTurnInput {
             prompt: spec.prompt_template,
@@ -477,11 +485,25 @@ function from_spec<TStream, TFinal>(
     );
     // The host-facing stream is `ai.stream.Stream`. It is provider-agnostic:
     // all it needs is a way to pull the next text delta from TurnStream.
-    let _ = provider;
     Stream {
         _next_text: () -> {
             match (turns.next()) {
-                let d: Done => null,
+                let d: Done => {
+                    // Settle: fold the completed turn (this is where the
+                    // previously-discarded streamed usage is recovered) and
+                    // emit the same events the Agent path emits.
+                    if let cb: (root.events.Event) -> void throws never = emit {
+                        let turn = turns.final_turn();
+                        cb(root.events.AssistantMessage {
+                            content: turn.content,
+                            client_id: provider,
+                        });
+                        if let u: root.events.Usage = turn.usage {
+                            cb(u);
+                        }
+                    }
+                    null
+                },
                 let s: string => s,
             } catch_all (e) {
                 _ => throw root.errors.normalize(e),

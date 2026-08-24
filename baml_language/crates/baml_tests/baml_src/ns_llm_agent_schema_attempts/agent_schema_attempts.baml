@@ -105,10 +105,9 @@ test "Agent rejects a mutated schema attempt count before invoking" {
     let probe = InvocationProbe { count: 0 };
     let event_probe = InvocationProbe { count: 0 };
     let scripted = InvalidSchemaClient { probe: probe };
-    let on_event = (event: ai.events.Event) -> null throws never {
+    let on_event = (event: ai.events.Event) -> void {
         let _ = event;
         event_probe.count += 1;
-        null
     };
     let agent = ai.Agent.new(client = scripted, on_event = on_event);
     agent.schema_attempts = 0;

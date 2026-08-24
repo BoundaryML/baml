@@ -52,3 +52,19 @@ type Event = RunStarted
     | ToolFailed
     | Usage
     | FinalProduced;
+
+// Wrap a listener so a listener error can never fail or alter a run.
+// A null listener stays null; callers `if let` and skip emission entirely.
+// `E` accepts fallible listeners (host callables included); the wrapper
+// swallows whatever they throw, hence the `throws never` on the returned type.
+function guard<E>(
+    listener: ((Event) -> void throws E)?,
+) -> ((Event) -> void throws never)? {
+    if let cb: (Event) -> void throws E = listener {
+        (e: Event) -> void {
+            cb(e) catch_all (err) { _ => {} }
+        }
+    } else {
+        null
+    }
+}
