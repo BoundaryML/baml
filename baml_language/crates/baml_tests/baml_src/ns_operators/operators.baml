@@ -102,6 +102,9 @@ test "shift_right_saturates_to_sign" {
     // positive value.
     assert.equal(ops_shr(-8, 2), -2)
     assert.equal((-8) >> 2, -2)
+
+    let negative = ops_shr(1, 0 - 1) catch (e) { baml.panics.NegativeBitShift => 7 };
+    assert.equal(negative, 7)
 }
 
 // Bitwise NOT (`~`) is two's-complement complement: `~x == -x - 1`. Regression

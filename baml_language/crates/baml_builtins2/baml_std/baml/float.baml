@@ -407,11 +407,7 @@ class Float {
     ///
     /// `rng` defaults to `random.SystemRandom`, the host's cryptographic entropy
     /// source; pass a seeded generator to make the draw reproducible. Each call
-    /// consumes exactly one value from `rng`, unlike `int.random`, and yields one
-    /// of the `2^53` multiples of `2^-53` in `[0, 1)`, matching f64's mantissa
-    /// precision. So
-    /// `random() * range + offset` produces a uniform sample in any
-    /// `[offset, offset + range)` interval whose endpoints are representable.
+    /// consumes one `random_int` value and uses 53 random bits.
     ///
     /// # Examples
     /// ```
@@ -426,11 +422,7 @@ class Float {
         float._unit_from_draw(rng.random_int())
     }
 
-    /// Internal: reads 53 bits of one uniform `int` draw as a multiple of `2^-53`
-    /// in `[0.0, 1.0)`.
-    ///
-    /// Every draw maps to a value, so there is no rejection loop and `random`
-    /// needs only a single draw.
+    /// Internal: maps 53 bits of an `int` draw onto `[0.0, 1.0)`.
     function _unit_from_draw(draw: int) -> float throws never {
         $rust_function
     }

@@ -248,16 +248,8 @@ class Int {
     /// Throws `InvalidArgument` if `lower >= upper` (the range would be empty).
     /// `rng` defaults to `random.SystemRandom`, the host's cryptographic entropy
     /// source; pass a seeded generator to make the draw reproducible. The largest
-    /// representable half-open range is supported (e.g.
-    /// `random(int.min_value(), int.max_value())` returns a value in
-    /// `[int.min_value(), int.max_value())`; `int.max_value()` itself is never
-    /// returned).
-    ///
-    /// The result is unbiased, and pays for that with rejection sampling: the
-    /// number of values taken from `rng` is unbounded in the worst case. A draw
-    /// is rejected only when it lands in the tail that would over-represent the
-    /// low end of the range, at worst half the time, and for any range well
-    /// under the full `int` domain, almost never.
+    /// representable half-open range is supported. Rejection sampling avoids
+    /// modulo bias, so one result may consume multiple values from `rng`.
     ///
     /// # Examples
     /// ```
@@ -281,9 +273,7 @@ class Int {
                 message: "int.random: lower (" + string.from(lower) + ") must be less than upper (" + string.from(upper) + ")"
             };
         }
-        // The count of values in the range runs to 2^63 - 1, which is not itself an
-        // `int`, so the reduction is done natively in wider arithmetic. The loop
-        // stays here because only this side can reach `rng` for another draw.
+        // Rust maps each draw; BAML owns retries because it can call `rng` again.
         let r = int._random_in_range(rng.random_int(), lower, upper);
         while (r == upper) {
             r = int._random_in_range(rng.random_int(), lower, upper);
@@ -291,14 +281,8 @@ class Int {
         r
     }
 
-    /// Internal: maps one uniform full-range draw onto `[lower, upper)`.
-    ///
-    /// Returns `upper` to mean "this draw landed in the biased tail; draw
-    /// again". That is unambiguous because the range is half-open, so `upper` is
-    /// never itself a valid result.
-    ///
-    /// Returns `upper` for an invalid range as a defensive fallback. Public
-    /// callers reject invalid ranges before invoking this helper.
+    /// Internal: maps one full-range draw onto `[lower, upper)`, returning
+    /// `upper` when the draw must be rejected.
     function _random_in_range(draw: int, lower: int, upper: int) -> int throws never {
         $rust_function
     }

@@ -3,14 +3,8 @@ use bex_vm_types::Value;
 use super::{BamlClassInt, PackageBamlImpl};
 use crate::errors::{VmBamlError, VmRustFnError};
 
-/// Number of distinct values a full-range `int` draw can take: the size of the
-/// whole `int` domain. `2^63` today; `2^64` if `int` ever widens to a full i64.
-///
-/// This is why the reduction below is 128-bit rather than 64-bit: at the i64
-/// width a range can span the entire domain, which no longer fits in a `u64`.
-/// Deriving the span from the `Value` bounds keeps a widening a one-place
-/// change instead of a hunt for arithmetic that silently starts wrapping.
-pub(super) const INT_DOMAIN_SPAN: u128 =
+/// Number of values in the BAML `int` domain.
+const INT_DOMAIN_SPAN: u128 =
     (Value::INT_MAX as i128 - Value::INT_MIN as i128 + 1).cast_unsigned();
 
 impl BamlClassInt for PackageBamlImpl {
@@ -120,31 +114,14 @@ impl BamlClassInt for PackageBamlImpl {
         if lower >= upper {
             return upper;
         }
-        debug_assert!(
-            lower < upper,
-            "int._random_in_range: an empty range is the caller's to reject"
-        );
-        // Both differences are positive and at most `INT_DOMAIN_SPAN`, so the
-        // unsigned casts cannot lose a sign: `lower < upper` by precondition,
-        // and `draw >= Value::INT_MIN` for any `int`.
         let range = (i128::from(upper) - i128::from(lower)).cast_unsigned();
-        // Re-bias the signed draw into an unsigned offset uniform over
-        // `[0, INT_DOMAIN_SPAN)`.
         let u = (i128::from(draw) - i128::from(Value::INT_MIN)).cast_unsigned();
 
-        // The largest multiple of `range` that fits in the draw space. Draws at
-        // or above it form the tail that would over-represent small offsets, so
-        // they are rejected rather than folded back in. That rejection is what
-        // makes the result exactly unbiased rather than merely close. `range`
-        // is at most `INT_DOMAIN_SPAN - 1`, so `zone` is never zero and at most
-        // half the draws are rejected; for the common case of a range far below
-        // the domain, a rejection is vanishingly rare.
+        // Reject the remainder above the largest multiple of `range`.
         let zone = INT_DOMAIN_SPAN / range * range;
         if u >= zone {
             return upper;
         }
-        // `u % range < range == upper - lower`, so the sum lands in
-        // `[lower, upper)` and is representable.
         i64::try_from(i128::from(lower) + (u % range).cast_signed())
             .unwrap_or_else(|_| unreachable!("int._random_in_range: offset is below upper - lower"))
     }

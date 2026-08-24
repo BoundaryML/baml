@@ -770,68 +770,26 @@ test "float_random_distinct_values" {
     assert.is_true(float_random_distinct_values())
 }
 
-// random: the `rng` parameter
+class FixedFloatRng {
+    draw: int,
 
-function float_random_seed() -> uint8array {
-    // Bound to a local: a byte-string literal in tail position is not
-    // recognized as the return value (E0029), like the workaround in ns_ints.
-    let seed = b"\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2a\x2b\x2c\x2d\x2e\x2f\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3a\x3b\x3c\x3d\x3e\x3f\x40";
-    seed
-}
-
-// float_random_seeded_is_reproducible: two generators on the same seed must
-// walk the same 50 values. This is the point of the parameter; the default
-// SystemRandom cannot be replayed.
-function float_random_seeded_is_reproducible() -> bool {
-    let a = baml.random.Xoshiro256PlusPlus.new(seed = float_random_seed());
-    let b = baml.random.Xoshiro256PlusPlus.new(seed = float_random_seed());
-    let ok = true;
-    let i = 0;
-    while (i < 50) {
-        let x = float.random(rng = a);
-        let y = float.random(rng = b);
-        if (x != y || x < 0.0 || x >= 1.0) {
-            ok = false
-        } else {
-            null
+    implements baml.random.Rng {
+        function random(self, bytes: int) -> uint8array {
+            let empty = b"";
+            empty
         }
-        i = i + 1
+
+        function random_int(self) -> int {
+            self.draw
+        }
     }
-    ok
 }
 
-test "float_random_seeded_is_reproducible" {
-    assert.is_true(float_random_seeded_is_reproducible())
-}
-
-// float_random_seeded_spans_unit_interval: a seeded generator must still cover
-// both halves of [0, 1) and stay inside it. Unlike `int.random`, no draw is
-// ever rejected, so 200 calls consume exactly 200 values from `rng`.
-function float_random_seeded_spans_unit_interval() -> bool {
-    let rng = baml.random.ChaCha20.new(seed = float_random_seed());
-    let ok = true;
-    let below = 0;
-    let above = 0;
-    let i = 0;
-    while (i < 200) {
-        let r = float.random(rng = rng);
-        if (r < 0.0 || r >= 1.0) {
-            ok = false
-        } else {
-            null
-        }
-        if (r < 0.5) {
-            below = below + 1
-        } else {
-            above = above + 1
-        }
-        i = i + 1
-    }
-    ok && below >= 60 && above >= 60
-}
-
-test "float_random_seeded_spans_unit_interval" {
-    assert.is_true(float_random_seeded_spans_unit_interval())
+test "float_random_uses_rng" {
+    assert.equal(float.random(rng = FixedFloatRng { draw: 0 }), 0.0);
+    assert.equal(float.random(rng = FixedFloatRng { draw: int.min_value() }), 0.5);
+    let high = float.random(rng = FixedFloatRng { draw: -1 });
+    assert.is_true(high > 0.99 && high < 1.0)
 }
 
 // ─── Equality (== / !=) ───────────────────────────────────────────────────────

@@ -195,21 +195,8 @@ impl BamlClassFloat for PackageBamlImpl {
         reason = "bits <= 2^53 - 1 fits f64's mantissa exactly"
     )]
     fn _unit_from_draw(draw: i64) -> f64 {
-        // Uniform draw on [0, 1) using 53 mantissa bits: take 53 uniform bits
-        // and multiply by 2^-53.
-        //
-        // Bits 10..=62 are the top 53 of the 63 the draw actually carries. A BAML
-        // `int` is i63 held sign-extended in a 64-bit word, so bit 63 merely
-        // repeats bit 62; taking the top 53 bits *of the word* would hand back
-        // two identical leading bits, hence the shift by 10 rather than 11. Any
-        // 53 of bits 0..=62 are equally uniform, so this prefers the high end
-        // purely as insurance: a generator with weak low-order bits (a classic
-        // LCG, say) breaks `random_int`'s uniformity contract, but only the low
-        // bits, and nothing forces a user-supplied `Rng` to be well-behaved.
+        // Bit 63 only repeats the i63 sign bit, so use bits 10..=62.
         let bits = (draw.cast_unsigned() >> 10) & ((1u64 << 53) - 1); // <= 2^53 - 1
-        // 2^-53 = 1.0 / (1u64 << 53). The cast `bits as f64` is lossless
-        // because bits <= 2^53 - 1 fits in f64's 53-bit mantissa, and scaling by
-        // a power of two is exact, so every result is a true multiple of 2^-53.
         bits as f64 * (1.0 / (1u64 << 53) as f64)
     }
 

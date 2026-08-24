@@ -487,435 +487,407 @@ function bigints.$init_test_ns_bigints_bigints(registry: testing.TestCollector) 
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "bigint_random_seeded_is_reproducible"
+    load_const "bigint_random_rejection_boundary"
     make_closure .<lambda($init_test_ns_bigints_bigints, 69)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "bigint_random_rejection_boundary"
+    load_const "test_bigint_eq_same_alloc"
     make_closure .<lambda($init_test_ns_bigints_bigints, 70)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "bigint_random_internal_invalid_range_returns_sentinel"
+    load_const "test_bigint_eq_distinct_allocs"
     make_closure .<lambda($init_test_ns_bigints_bigints, 71)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "bigint_random_bit_boundaries"
+    load_const "test_bigint_ordering_lt"
     make_closure .<lambda($init_test_ns_bigints_bigints, 72)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "bigint_random_wide_and_negative"
+    load_const "test_bigint_ordering_gt_eq"
     make_closure .<lambda($init_test_ns_bigints_bigints, 73)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_eq_same_alloc"
+    load_const "test_bigint_ordering_ne"
     make_closure .<lambda($init_test_ns_bigints_bigints, 74)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_eq_distinct_allocs"
+    load_const "test_bigint_ordering_large"
     make_closure .<lambda($init_test_ns_bigints_bigints, 75)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_ordering_lt"
+    load_const "test_bigint_arithmetic_add"
     make_closure .<lambda($init_test_ns_bigints_bigints, 76)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_ordering_gt_eq"
+    load_const "test_bigint_arithmetic_sub"
     make_closure .<lambda($init_test_ns_bigints_bigints, 77)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_ordering_ne"
+    load_const "test_bigint_arithmetic_mul"
     make_closure .<lambda($init_test_ns_bigints_bigints, 78)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_ordering_large"
+    load_const "test_bigint_arithmetic_div"
     make_closure .<lambda($init_test_ns_bigints_bigints, 79)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_arithmetic_add"
+    load_const "test_bigint_arithmetic_mod"
     make_closure .<lambda($init_test_ns_bigints_bigints, 80)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_arithmetic_sub"
+    load_const "test_bigint_bitwise_and"
     make_closure .<lambda($init_test_ns_bigints_bigints, 81)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_arithmetic_mul"
+    load_const "test_bigint_bitwise_or"
     make_closure .<lambda($init_test_ns_bigints_bigints, 82)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_arithmetic_div"
+    load_const "test_bigint_bitwise_xor"
     make_closure .<lambda($init_test_ns_bigints_bigints, 83)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_arithmetic_mod"
+    load_const "test_bigint_bitwise_shl"
     make_closure .<lambda($init_test_ns_bigints_bigints, 84)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_bitwise_and"
+    load_const "test_bigint_bitwise_shr"
     make_closure .<lambda($init_test_ns_bigints_bigints, 85)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_bitwise_or"
+    load_const "test_bigint_bitwise_negative"
     make_closure .<lambda($init_test_ns_bigints_bigints, 86)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_bitwise_xor"
+    load_const "test_bigint_div_by_zero"
     make_closure .<lambda($init_test_ns_bigints_bigints, 87)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_bitwise_shl"
+    load_const "test_bigint_mod_by_zero"
     make_closure .<lambda($init_test_ns_bigints_bigints, 88)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_bitwise_shr"
+    load_const "test_bigint_arithmetic_huge"
     make_closure .<lambda($init_test_ns_bigints_bigints, 89)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_bitwise_negative"
+    load_const "test_bigint_int_mixed_add_left"
     make_closure .<lambda($init_test_ns_bigints_bigints, 90)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_div_by_zero"
+    load_const "test_bigint_int_mixed_add_right"
     make_closure .<lambda($init_test_ns_bigints_bigints, 91)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_mod_by_zero"
+    load_const "test_bigint_int_mixed_mul"
     make_closure .<lambda($init_test_ns_bigints_bigints, 92)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_arithmetic_huge"
+    load_const "test_bigint_int_mixed_shl"
     make_closure .<lambda($init_test_ns_bigints_bigints, 93)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_int_mixed_add_left"
+    load_const "test_bigint_int_mixed_bitand_neg_one_with_mask"
     make_closure .<lambda($init_test_ns_bigints_bigints, 94)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_int_mixed_add_right"
+    load_const "test_bigint_int_mixed_bitor"
     make_closure .<lambda($init_test_ns_bigints_bigints, 95)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_int_mixed_mul"
+    load_const "test_bigint_int_mixed_bitxor"
     make_closure .<lambda($init_test_ns_bigints_bigints, 96)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_int_mixed_shl"
+    load_const "test_bigint_int_mixed_shr"
     make_closure .<lambda($init_test_ns_bigints_bigints, 97)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_int_mixed_bitand_neg_one_with_mask"
+    load_const "test_bigint_int_mixed_comparison_eq"
     make_closure .<lambda($init_test_ns_bigints_bigints, 98)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_int_mixed_bitor"
+    load_const "test_bigint_pow_alloc_failure"
     make_closure .<lambda($init_test_ns_bigints_bigints, 99)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_int_mixed_bitxor"
+    load_const "test_bigint_shl_alloc_failure"
     make_closure .<lambda($init_test_ns_bigints_bigints, 100)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_int_mixed_shr"
+    load_const "test_bigint_shl_negative_shift"
     make_closure .<lambda($init_test_ns_bigints_bigints, 101)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_int_mixed_comparison_eq"
+    load_const "test_bigint_shr_negative_shift"
     make_closure .<lambda($init_test_ns_bigints_bigints, 102)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_pow_alloc_failure"
+    load_const "test_bigint_mul_pre_flight_alloc_failure"
     make_closure .<lambda($init_test_ns_bigints_bigints, 103)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_shl_alloc_failure"
+    load_const "test_bigint_pow_normal_works"
     make_closure .<lambda($init_test_ns_bigints_bigints, 104)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_shl_negative_shift"
+    load_const "test_bigint_pow_neg_exp_one"
     make_closure .<lambda($init_test_ns_bigints_bigints, 105)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_shr_negative_shift"
+    load_const "test_bigint_pow_neg_exp_neg_one"
     make_closure .<lambda($init_test_ns_bigints_bigints, 106)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_mul_pre_flight_alloc_failure"
+    load_const "test_bigint_pow_neg_exp_zero_base"
     make_closure .<lambda($init_test_ns_bigints_bigints, 107)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_pow_normal_works"
+    load_const "test_bigint_pow_zero_zero"
     make_closure .<lambda($init_test_ns_bigints_bigints, 108)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_pow_neg_exp_one"
+    load_const "test_bigint_pow_one_huge_exponent"
     make_closure .<lambda($init_test_ns_bigints_bigints, 109)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_pow_neg_exp_neg_one"
+    load_const "test_bigint_pow_neg_one_huge_even"
     make_closure .<lambda($init_test_ns_bigints_bigints, 110)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_pow_neg_exp_zero_base"
+    load_const "test_bigint_pow_neg_one_huge_odd"
     make_closure .<lambda($init_test_ns_bigints_bigints, 111)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_pow_zero_zero"
+    load_const "test_bigint_pow_zero_huge_exponent"
     make_closure .<lambda($init_test_ns_bigints_bigints, 112)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_pow_one_huge_exponent"
+    load_const "test_bigint_ilog_base_two"
     make_closure .<lambda($init_test_ns_bigints_bigints, 113)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_pow_neg_one_huge_even"
+    load_const "test_bigint_ilog_base_ten"
     make_closure .<lambda($init_test_ns_bigints_bigints, 114)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_pow_neg_one_huge_odd"
+    load_const "test_bigint_ilog_large_input"
     make_closure .<lambda($init_test_ns_bigints_bigints, 115)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_pow_zero_huge_exponent"
+    load_const "test_bigint_ilog_floor"
     make_closure .<lambda($init_test_ns_bigints_bigints, 116)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_ilog_base_two"
+    load_const "test_bigint_to_json_returns_string"
     make_closure .<lambda($init_test_ns_bigints_bigints, 117)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_ilog_base_ten"
+    load_const "test_bigint_to_json_large"
     make_closure .<lambda($init_test_ns_bigints_bigints, 118)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_ilog_large_input"
+    load_const "bigint_to_string_bare_literal"
     make_closure .<lambda($init_test_ns_bigints_bigints, 119)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_ilog_floor"
+    load_const "bigint_hex_literal"
     make_closure .<lambda($init_test_ns_bigints_bigints, 120)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_to_json_returns_string"
+    load_const "bigint_octal_literal"
     make_closure .<lambda($init_test_ns_bigints_bigints, 121)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "test_bigint_to_json_large"
+    load_const "bigint_binary_literal"
     make_closure .<lambda($init_test_ns_bigints_bigints, 122)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "bigint_to_string_bare_literal"
+    load_const "bigint_underscore_separators"
     make_closure .<lambda($init_test_ns_bigints_bigints, 123)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "bigint_hex_literal"
+    load_const "bigint_hex_underscores"
     make_closure .<lambda($init_test_ns_bigints_bigints, 124)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "bigint_octal_literal"
+    load_const "bigint_negative_prefixed"
     make_closure .<lambda($init_test_ns_bigints_bigints, 125)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.bigints"
-    load_const "bigint_binary_literal"
-    make_closure .<lambda($init_test_ns_bigints_bigints, 126)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.bigints"
-    load_const "bigint_underscore_separators"
-    make_closure .<lambda($init_test_ns_bigints_bigints, 127)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.bigints"
-    load_const "bigint_hex_underscores"
-    make_closure .<lambda($init_test_ns_bigints_bigints, 128)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.bigints"
-    load_const "bigint_negative_prefixed"
-    make_closure .<lambda($init_test_ns_bigints_bigints, 129)>, 0
-    load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_var registry
-    load_const "root.bigints"
     load_const "bigint_hex_beyond_int_range"
-    make_closure .<lambda($init_test_ns_bigints_bigints, 130)>, 0
+    make_closure .<lambda($init_test_ns_bigints_bigints, 126)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
@@ -1137,93 +1109,6 @@ function bigints.bigint_pick_b() -> int | bigint {
     return
 }
 
-function bigints.bigint_random_bit_boundaries() -> bool {
-    call user.bigints.bigint_random_seed
-    call baml.random.ChaCha20.new
-    store_var rng
-    load_const true
-    store_var ok
-    load_const 0
-    store_var i
-
-  L0:
-    load_var i
-    load_const 300
-    cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var ok
-    return
-
-  L2:
-    load_const 7n
-    load_const 8n
-    load_var rng
-    call baml.Bigint.random
-    store_var one
-    load_const 0n
-    load_const 256n
-    load_var rng
-    call baml.Bigint.random
-    store_var pow2
-    load_const 0n
-    load_const 257n
-    load_var rng
-    call baml.Bigint.random
-    store_var past
-    load_var one
-    load_const 7n
-    cmp_bigint_op !=
-    pop_jump_if_false L3
-    load_const false
-    store_var ok
-
-  L3:
-    load_var pow2
-    load_const 0n
-    cmp_bigint_op <
-    jump_if_false L4
-    jump L5
-
-  L4:
-    pop 1
-    load_var pow2
-    load_const 256n
-    cmp_bigint_op >=
-
-  L5:
-    pop_jump_if_false L6
-    load_const false
-    store_var ok
-
-  L6:
-    load_var past
-    load_const 0n
-    cmp_bigint_op <
-    jump_if_false L7
-    jump L8
-
-  L7:
-    pop 1
-    load_var past
-    load_const 257n
-    cmp_bigint_op >=
-
-  L8:
-    pop_jump_if_false L9
-    load_const false
-    store_var ok
-
-  L9:
-    load_var i
-    load_const 1
-    add_int
-    store_var i
-    jump L0
-}
-
 function bigints.bigint_random_in_range_fn() -> bool {
     load_const 10n
     load_const 20n
@@ -1241,161 +1126,6 @@ function bigints.bigint_random_in_range_fn() -> bool {
 
   L0:
     return
-}
-
-function bigints.bigint_random_seed() -> uint8array {
-    load_const b"\x41\x42\x43\x44\x45\x46\x47\x48\x49\x4a\x4b\x4c\x4d\x4e\x4f\x50\x51\x52\x53\x54\x55\x56\x57\x58\x59\x5a\x5b\x5c\x5d\x5e\x5f\x60"
-    call baml.deep_copy
-    return
-}
-
-function bigints.bigint_random_seeded_is_reproducible() -> bool {
-    call user.bigints.bigint_random_seed
-    call baml.random.Xoshiro256PlusPlus.new
-    store_var a
-    call user.bigints.bigint_random_seed
-    call baml.random.Xoshiro256PlusPlus.new
-    store_var b
-    load_const true
-    store_var ok
-    load_const 0
-    store_var i
-
-  L0:
-    load_var i
-    load_const 30
-    cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var ok
-    return
-
-  L2:
-    load_const 0n
-    load_const 1000000000000000000000000n
-    load_var a
-    call baml.Bigint.random
-    store_var x
-    load_const 0n
-    load_const 1000000000000000000000000n
-    load_var b
-    call baml.Bigint.random
-    store_var y
-    load_var2 5 6
-    cmp_bigint_op !=
-    jump_if_false L3
-    jump L4
-
-  L3:
-    pop 1
-    load_var x
-    load_const 0n
-    cmp_bigint_op <
-
-  L4:
-    jump_if_false L5
-    jump L6
-
-  L5:
-    pop 1
-    load_var x
-    load_const 1000000000000000000000000n
-    cmp_bigint_op >=
-
-  L6:
-    pop_jump_if_false L7
-    load_const false
-    store_var ok
-
-  L7:
-    load_var i
-    load_const 1
-    add_int
-    store_var i
-    jump L0
-}
-
-function bigints.bigint_random_wide_and_negative() -> bool {
-    call user.bigints.bigint_random_seed
-    call baml.random.Xoshiro256PlusPlus.new
-    store_var rng
-    load_const true
-    store_var ok
-    load_const false
-    store_var saw_negative
-    load_const false
-    store_var saw_positive
-    load_const 0
-    store_var i
-
-  L0:
-    load_var i
-    load_const 200
-    cmp_int_op <
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
-    load_var ok
-    jump_if_false L2
-    pop 1
-    load_var saw_negative
-
-  L2:
-    jump_if_false L3
-    pop 1
-    load_var saw_positive
-
-  L3:
-    return
-
-  L4:
-    load_const -100000000000000000000000000000n
-    load_const 100000000000000000000000000000n
-    load_var rng
-    call baml.Bigint.random
-    store_var r
-    load_var r
-    load_const -100000000000000000000000000000n
-    cmp_bigint_op <
-    jump_if_false L5
-    jump L6
-
-  L5:
-    pop 1
-    load_var r
-    load_const 100000000000000000000000000000n
-    cmp_bigint_op >=
-
-  L6:
-    pop_jump_if_false L7
-    load_const false
-    store_var ok
-
-  L7:
-    load_var r
-    load_const 0n
-    cmp_bigint_op <
-    pop_jump_if_false L8
-    jump L9
-
-  L8:
-    load_const true
-    store_var saw_positive
-    jump L10
-
-  L9:
-    load_const true
-    store_var saw_negative
-
-  L10:
-    load_var i
-    load_const 1
-    add_int
-    store_var i
-    jump L0
 }
 
 function bigints.bigint_shl_alloc_failure_fn() -> bigint {

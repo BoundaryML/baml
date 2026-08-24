@@ -200,11 +200,8 @@ class Bigint {
     /// `rng` defaults to `random.SystemRandom`, the host's cryptographic entropy
     /// source; pass a seeded generator to make the draw reproducible.
     ///
-    /// Each attempt consumes enough bytes to represent every zero-based offset
-    /// in the range. For example, `[0n, 256n)` consumes one byte per attempt.
-    /// The result is unbiased, which costs rejection sampling: the number of
-    /// attempts is unbounded in the worst case, though each is accepted with
-    /// probability at least one half.
+    /// Rejection sampling avoids modulo bias, so one result may consume multiple
+    /// draws from `rng`.
     ///
     /// # Examples
     /// ```
@@ -228,8 +225,6 @@ class Bigint {
                 message: "bigint.random: lower (" + string.from(lower) + ") must be less than upper (" + string.from(upper) + ")"
             };
         }
-        // How many bytes an attempt needs depends only on the range, so resolve it
-        // once rather than per draw.
         let width = bigint._random_byte_count(lower, upper);
         let r = bigint._random_in_range(rng.random(width), lower, upper);
         while (r == upper) {
@@ -238,25 +233,13 @@ class Bigint {
         r
     }
 
-    /// Internal: the number of random bytes one `_random_in_range` attempt needs
-    /// for `[lower, upper)`. Zero when the range holds a single value.
-    ///
-    /// Returns `0` for an invalid range as a defensive fallback. Public callers
-    /// reject invalid ranges before invoking this helper.
+    /// Internal: number of bytes needed for one draw over `[lower, upper)`.
     function _random_byte_count(lower: bigint, upper: bigint) -> int throws never {
         $rust_function
     }
 
-    /// Internal: maps the bytes of one draw onto `[lower, upper)`.
-    ///
-    /// Returns `upper` to mean "this draw landed in the biased tail; draw
-    /// again". That is unambiguous because the range is half-open, so `upper` is
-    /// never itself a valid result. A draw shorter than `_random_byte_count`
-    /// asked for is rejected the same way, rather than quietly narrowing the
-    /// distribution.
-    ///
-    /// Returns `upper` for an invalid range as a defensive fallback. Public
-    /// callers reject invalid ranges before invoking this helper.
+    /// Internal: maps one draw onto `[lower, upper)`, returning `upper` when the
+    /// draw must be rejected.
     function _random_in_range(
         draw: uint8array,
         lower: bigint,

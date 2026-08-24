@@ -5,7 +5,7 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0004
 
   ⚠ `5` and `5n` share no value, so this comparison is always false
-     ╭─[bigints.baml:748:21]
- 748 │     assert.is_true((5 == 5n) == false)
+     ╭─[bigints.baml:666:21]
+ 666 │     assert.is_true((5 == 5n) == false)
      ·                     ───────
      ╰────

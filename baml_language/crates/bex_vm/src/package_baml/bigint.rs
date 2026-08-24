@@ -241,15 +241,10 @@ impl BamlClassBigint for PackageBamlImpl {
             unreachable!("bigint._random_in_range: a range that wide cannot be allocated")
         });
         if draw.len() < width {
-            // The generator handed back fewer bytes than `_random_byte_count`
-            // asked for. Using them anyway would zero the high end of every
-            // sample, so reject instead of silently skewing the distribution.
             return upper;
         }
 
-        // Keep exactly `bits` bits: mask the excess off the leading byte. Without
-        // this a range like 257 (two bytes, nine bits) would draw over a
-        // 16-bit space and reject 99.6% of the time.
+        // Mask unused high bits so rejection stays below one half.
         let mut buf = draw[..width].to_vec();
         if let Some(top) = buf.first_mut() {
             let excess = width as u64 * 8 - bits;

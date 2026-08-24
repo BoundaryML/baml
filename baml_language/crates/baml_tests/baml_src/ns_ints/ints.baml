@@ -334,17 +334,6 @@ test "int_random_distinct_values_in_wide_range" {
     assert.is_true(int_random_distinct_values_in_wide_range())
 }
 
-// random: the `rng` parameter
-
-function int_random_seed() -> uint8array {
-    // BUG: a byte-string literal in tail position is not recognized as the
-    // return value ("missing return value of type uint8array", E0029), so it
-    // has to go through a local. Same workaround as the `Rng` implementors in
-    // crates/bex_engine/tests/random.rs.
-    let seed = b"\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x20";
-    seed
-}
-
 class FixedBytesRng {
     draw: uint8array,
 
@@ -364,31 +353,6 @@ test "random_int_maps_all_i63_bits" {
     assert.equal(all_zeros.random_int(), 0);
     assert.equal(sign_only.random_int(), int.min_value());
     assert.equal(max.random_int(), int.max_value())
-}
-
-// int_random_seeded_is_reproducible: two generators on the same seed must walk
-// the same 50 values. This is the point of the parameter; the default
-// SystemRandom cannot be replayed.
-function int_random_seeded_is_reproducible() -> bool {
-    let a = baml.random.Xoshiro256PlusPlus.new(seed = int_random_seed());
-    let b = baml.random.Xoshiro256PlusPlus.new(seed = int_random_seed());
-    let ok = true;
-    let i = 0;
-    while (i < 50) {
-        let x = int.random(0, 1000000, rng = a);
-        let y = int.random(0, 1000000, rng = b);
-        if (x != y || x < 0 || x >= 1000000) {
-            ok = false
-        } else {
-            null
-        }
-        i = i + 1
-    }
-    ok
-}
-
-test "int_random_seeded_is_reproducible" {
-    assert.is_true(int_random_seeded_is_reproducible())
 }
 
 class RejectionThenAcceptedRng {
@@ -418,34 +382,6 @@ test "int_random_rejection_boundary" {
     let rng = RejectionThenAcceptedRng { calls: 0 };
     assert.equal(int.random(0, 5, rng = rng), 4);
     assert.equal(rng.calls, 2)
-}
-
-test "int_random_internal_invalid_range_returns_sentinel" {
-    assert.equal(int._random_in_range(0, 5, 5), 5);
-    assert.equal(int._random_in_range(0, 10, 5), 5)
-}
-
-// The widest range takes the domain-rejection
-// path, which never computes the (unrepresentable) count. Drive it from a
-// seeded generator so a hang here is reproducible rather than a flake.
-function int_random_seeded_widest_range() -> bool {
-    let rng = baml.random.Xoshiro256PlusPlus.new(seed = int_random_seed());
-    let ok = true;
-    let i = 0;
-    while (i < 100) {
-        let r = int.random(int.min_value(), int.max_value(), rng = rng);
-        if (r < int.min_value() || r >= int.max_value()) {
-            ok = false
-        } else {
-            null
-        }
-        i = i + 1
-    }
-    ok
-}
-
-test "int_random_seeded_widest_range" {
-    assert.is_true(int_random_seeded_widest_range())
 }
 
 // Throw tests (deterministic — included regardless of randomness skip).

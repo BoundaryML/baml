@@ -998,453 +998,458 @@ function floats.$init_test_ns_floats_floats(registry: testing.TestCollector) -> 
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_random_seeded_is_reproducible"
+    load_const "float_random_uses_rng"
     make_closure .<lambda($init_test_ns_floats_floats, 142)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_random_seeded_spans_unit_interval"
+    load_const "float_eq_float_eq_int_literal_fold"
     make_closure .<lambda($init_test_ns_floats_floats, 143)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_float_eq_int_literal_fold"
+    load_const "float_eq_float_neq_int_distinct_fold"
     make_closure .<lambda($init_test_ns_floats_floats, 144)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_float_neq_int_distinct_fold"
+    load_const "float_eq_fold_ordinary_equal"
     make_closure .<lambda($init_test_ns_floats_floats, 145)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_fold_ordinary_equal"
+    load_const "float_eq_fold_ordinary_unequal_false"
     make_closure .<lambda($init_test_ns_floats_floats, 146)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_fold_ordinary_unequal_false"
+    load_const "float_eq_int_eq_float_literal_fold"
     make_closure .<lambda($init_test_ns_floats_floats, 147)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_int_eq_float_literal_fold"
+    load_const "float_eq_large_integer_valued_fold"
     make_closure .<lambda($init_test_ns_floats_floats, 148)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_large_integer_valued_fold"
+    load_const "float_eq_neg_zero_lit_equals_neg_zero_lit_fold"
     make_closure .<lambda($init_test_ns_floats_floats, 149)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_neg_zero_lit_equals_neg_zero_lit_fold"
+    load_const "float_eq_positive_zero_equals_negative_zero_fold"
     make_closure .<lambda($init_test_ns_floats_floats, 150)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_positive_zero_equals_negative_zero_fold"
+    load_const "float_eq_null_eq_float_symmetric_false"
     make_closure .<lambda($init_test_ns_floats_floats, 151)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_null_eq_float_symmetric_false"
+    load_const "float_eq_two_pow_53_cross_type_false"
     make_closure .<lambda($init_test_ns_floats_floats, 152)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_two_pow_53_cross_type_false"
+    load_const "float_eq_classic_imprecision_sum"
     make_closure .<lambda($init_test_ns_floats_floats, 153)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_classic_imprecision_sum"
+    load_const "float_eq_div_third_eq_shortest"
     make_closure .<lambda($init_test_ns_floats_floats, 154)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_div_third_eq_shortest"
+    load_const "float_eq_div_third_ne_truncated"
     make_closure .<lambda($init_test_ns_floats_floats, 155)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_div_third_ne_truncated"
+    load_const "float_eq_float_eq_null_is_false"
     make_closure .<lambda($init_test_ns_floats_floats, 156)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_float_eq_null_is_false"
+    load_const "float_eq_float_neq_null_is_true"
     make_closure .<lambda($init_test_ns_floats_floats, 157)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_float_neq_null_is_true"
+    load_const "float_eq_half_underflow_to_zero"
     make_closure .<lambda($init_test_ns_floats_floats, 158)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_half_underflow_to_zero"
+    load_const "float_eq_inf_minus_inf_is_nan_ne_self"
     make_closure .<lambda($init_test_ns_floats_floats, 159)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_inf_minus_inf_is_nan_ne_self"
+    load_const "float_eq_inf_plus_one_equals_inf"
     make_closure .<lambda($init_test_ns_floats_floats, 160)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_inf_plus_one_equals_inf"
+    load_const "float_eq_large_magnitude_precision_loss"
     make_closure .<lambda($init_test_ns_floats_floats, 161)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_large_magnitude_precision_loss"
+    load_const "float_eq_max_finite_ne_inf"
     make_closure .<lambda($init_test_ns_floats_floats, 162)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_max_finite_ne_inf"
+    load_const "float_eq_mul_imprecision_eq_rounded"
     make_closure .<lambda($init_test_ns_floats_floats, 163)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_mul_imprecision_eq_rounded"
+    load_const "float_eq_mul_imprecision_ne_point3"
     make_closure .<lambda($init_test_ns_floats_floats, 164)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_mul_imprecision_ne_point3"
+    load_const "float_eq_nan_arith_propagates_ne_self"
     make_closure .<lambda($init_test_ns_floats_floats, 165)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_nan_arith_propagates_ne_self"
+    load_const "float_eq_nan_const_not_equal_number"
     make_closure .<lambda($init_test_ns_floats_floats, 166)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_nan_const_not_equal_number"
+    load_const "float_eq_nan_eq_null_is_false"
     make_closure .<lambda($init_test_ns_floats_floats, 167)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_nan_eq_null_is_false"
+    load_const "float_eq_nan_ne_number_is_true"
     make_closure .<lambda($init_test_ns_floats_floats, 168)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_nan_ne_number_is_true"
+    load_const "float_eq_nan_ne_self_is_true"
     make_closure .<lambda($init_test_ns_floats_floats, 169)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_nan_ne_self_is_true"
+    load_const "float_eq_nan_not_equal_infinity"
     make_closure .<lambda($init_test_ns_floats_floats, 170)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_nan_not_equal_infinity"
+    load_const "float_eq_nan_not_equal_to_self"
     make_closure .<lambda($init_test_ns_floats_floats, 171)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_nan_not_equal_to_self"
+    load_const "float_eq_neg_inf_equals_neg_inf"
     make_closure .<lambda($init_test_ns_floats_floats, 172)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_neg_inf_equals_neg_inf"
+    load_const "float_eq_neg_zero_from_division"
     make_closure .<lambda($init_test_ns_floats_floats, 173)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_neg_zero_from_division"
+    load_const "float_eq_neg_zero_ne_pos_zero_runtime_false"
     make_closure .<lambda($init_test_ns_floats_floats, 174)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_neg_zero_ne_pos_zero_runtime_false"
+    load_const "float_eq_overflow_to_inf"
     make_closure .<lambda($init_test_ns_floats_floats, 175)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_overflow_to_inf"
+    load_const "float_eq_parse_inf_equals_inf_const"
     make_closure .<lambda($init_test_ns_floats_floats, 176)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_parse_inf_equals_inf_const"
+    load_const "float_eq_parse_inf_ne_neg_inf"
     make_closure .<lambda($init_test_ns_floats_floats, 177)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_parse_inf_ne_neg_inf"
+    load_const "float_eq_parse_neg_inf_equals_neg_inf_const"
     make_closure .<lambda($init_test_ns_floats_floats, 178)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_parse_neg_inf_equals_neg_inf_const"
+    load_const "float_eq_parse_roundtrip"
     make_closure .<lambda($init_test_ns_floats_floats, 179)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_parse_roundtrip"
+    load_const "float_eq_parse_roundtrip_imprecise_all_runtime"
     make_closure .<lambda($init_test_ns_floats_floats, 180)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_parse_roundtrip_imprecise_all_runtime"
+    load_const "float_eq_pi_eq_pi"
     make_closure .<lambda($init_test_ns_floats_floats, 181)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_pi_eq_pi"
+    load_const "float_eq_pi_ne_truncated"
     make_closure .<lambda($init_test_ns_floats_floats, 182)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_pi_ne_truncated"
+    load_const "float_eq_pos_inf_equals_pos_inf"
     make_closure .<lambda($init_test_ns_floats_floats, 183)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_pos_inf_equals_pos_inf"
+    load_const "float_eq_pos_inf_ne_neg_inf"
     make_closure .<lambda($init_test_ns_floats_floats, 184)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_pos_inf_ne_neg_inf"
+    load_const "float_eq_runtime_float_eq_int"
     make_closure .<lambda($init_test_ns_floats_floats, 185)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_runtime_float_eq_int"
+    load_const "float_eq_runtime_float_neq_int_distinct"
     make_closure .<lambda($init_test_ns_floats_floats, 186)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_runtime_float_neq_int_distinct"
+    load_const "float_eq_runtime_int_eq_float"
     make_closure .<lambda($init_test_ns_floats_floats, 187)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_runtime_int_eq_float"
+    load_const "float_eq_runtime_int_neq_float_distinct"
     make_closure .<lambda($init_test_ns_floats_floats, 188)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_runtime_int_neq_float_distinct"
+    load_const "float_eq_runtime_ordinary_unequal_false"
     make_closure .<lambda($init_test_ns_floats_floats, 189)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_runtime_ordinary_unequal_false"
+    load_const "float_eq_runtime_signed_zero"
     make_closure .<lambda($init_test_ns_floats_floats, 190)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_runtime_signed_zero"
+    load_const "float_eq_self_equal_nonliteral"
     make_closure .<lambda($init_test_ns_floats_floats, 191)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_self_equal_nonliteral"
+    load_const "float_eq_sqrt_irrational_ne_two"
     make_closure .<lambda($init_test_ns_floats_floats, 192)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_sqrt_irrational_ne_two"
+    load_const "float_eq_sqrt_irrational_property"
     make_closure .<lambda($init_test_ns_floats_floats, 193)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_sqrt_irrational_property"
+    load_const "float_eq_subnormal_nonzero"
     make_closure .<lambda($init_test_ns_floats_floats, 194)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_subnormal_nonzero"
+    load_const "float_eq_sum_equals_exact_rounded"
     make_closure .<lambda($init_test_ns_floats_floats, 195)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_eq_sum_equals_exact_rounded"
+    load_const "nan_comparison"
     make_closure .<lambda($init_test_ns_floats_floats, 196)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "nan_comparison"
+    load_const "float_nan_lt_method_is_false"
     make_closure .<lambda($init_test_ns_floats_floats, 197)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_nan_lt_method_is_false"
+    load_const "float_nan_ge_method_is_false"
     make_closure .<lambda($init_test_ns_floats_floats, 198)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_nan_ge_method_is_false"
+    load_const "float_floor_bare_literal"
     make_closure .<lambda($init_test_ns_floats_floats, 199)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_floor_bare_literal"
+    load_const "float_underscore_mantissa"
     make_closure .<lambda($init_test_ns_floats_floats, 200)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_underscore_mantissa"
+    load_const "float_underscore_fraction"
     make_closure .<lambda($init_test_ns_floats_floats, 201)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_underscore_fraction"
+    load_const "float_underscore_exponent"
     make_closure .<lambda($init_test_ns_floats_floats, 202)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_underscore_exponent"
+    load_const "float_underscore_everywhere"
     make_closure .<lambda($init_test_ns_floats_floats, 203)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.floats"
-    load_const "float_underscore_everywhere"
+    load_const "float_abs_negative_zero"
     make_closure .<lambda($init_test_ns_floats_floats, 204)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
-    load_var registry
-    load_const "root.floats"
-    load_const "float_abs_negative_zero"
-    make_closure .<lambda($init_test_ns_floats_floats, 205)>, 0
     load_const null
-    call testing.TestCollector.register_test_at
-    pop 1
-    load_const null
+    return
+}
+
+function floats.FixedFloatRng.baml.random.Rng.random(self: floats.FixedFloatRng, bytes: int) -> uint8array {
+    load_const b""
+    call baml.deep_copy
+    return
+}
+
+function floats.FixedFloatRng.baml.random.Rng.random_int(self: floats.FixedFloatRng) -> int {
+    load_var self
+    load_field .draw
     return
 }
 
@@ -1594,161 +1599,4 @@ function floats.float_random_returns_a_float() -> bool {
 
   L0:
     return
-}
-
-function floats.float_random_seed() -> uint8array {
-    load_const b"\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2a\x2b\x2c\x2d\x2e\x2f\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3a\x3b\x3c\x3d\x3e\x3f\x40"
-    call baml.deep_copy
-    return
-}
-
-function floats.float_random_seeded_is_reproducible() -> bool {
-    call user.floats.float_random_seed
-    call baml.random.Xoshiro256PlusPlus.new
-    store_var a
-    call user.floats.float_random_seed
-    call baml.random.Xoshiro256PlusPlus.new
-    store_var b
-    load_const true
-    store_var ok
-    load_const 0
-    store_var i
-
-  L0:
-    load_var i
-    load_const 50
-    cmp_int_op <
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var ok
-    return
-
-  L2:
-    load_var a
-    call baml.Float.random
-    store_var x
-    load_var b
-    call baml.Float.random
-    store_var y
-    load_var2 5 6
-    cmp_float_op !=
-    jump_if_false L3
-    jump L4
-
-  L3:
-    pop 1
-    load_var x
-    load_const 0.0
-    cmp_float_op <
-
-  L4:
-    jump_if_false L5
-    jump L6
-
-  L5:
-    pop 1
-    load_var x
-    load_const 1.0
-    cmp_float_op >=
-
-  L6:
-    pop_jump_if_false L7
-    load_const false
-    store_var ok
-
-  L7:
-    load_var i
-    load_const 1
-    add_int
-    store_var i
-    jump L0
-}
-
-function floats.float_random_seeded_spans_unit_interval() -> bool {
-    call user.floats.float_random_seed
-    call baml.random.ChaCha20.new
-    store_var rng
-    load_const true
-    store_var ok
-    load_const 0
-    store_var below
-    load_const 0
-    store_var above
-    load_const 0
-    store_var i
-
-  L0:
-    load_var i
-    load_const 200
-    cmp_int_op <
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
-    load_var ok
-    jump_if_false L2
-    pop 1
-    load_var below
-    load_const 60
-    cmp_int_op >=
-
-  L2:
-    jump_if_false L3
-    pop 1
-    load_var above
-    load_const 60
-    cmp_int_op >=
-
-  L3:
-    return
-
-  L4:
-    load_var rng
-    call baml.Float.random
-    store_var r
-    load_var r
-    load_const 0.0
-    cmp_float_op <
-    jump_if_false L5
-    jump L6
-
-  L5:
-    pop 1
-    load_var r
-    load_const 1.0
-    cmp_float_op >=
-
-  L6:
-    pop_jump_if_false L7
-    load_const false
-    store_var ok
-
-  L7:
-    load_var r
-    load_const 0.5
-    cmp_float_op <
-    pop_jump_if_false L8
-    jump L9
-
-  L8:
-    load_var above
-    load_const 1
-    add_int
-    store_var above
-    jump L10
-
-  L9:
-    load_var below
-    load_const 1
-    add_int
-    store_var below
-
-  L10:
-    load_var i
-    load_const 1
-    add_int
-    store_var i
-    jump L0
 }
