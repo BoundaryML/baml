@@ -241,9 +241,9 @@ fn user.fixtures.optional_function_parameters.AskDocs(query: string, max_results
     let _4: null | ai.Client // client // param
     let _5: bool
     let _6: ai.RunResult<string>
-    let _7: ai.Agent<string>
-    let _8: reflect.Type
-    let _9: ai.FunctionSpec<string>
+    let _7: ai.Agent
+    let _8: ai.FunctionSpec<string>
+    let _9: reflect.Type
 
     bb0: {
         _5 = copy _4 == const <omitted>;
@@ -256,16 +256,16 @@ fn user.fixtures.optional_function_parameters.AskDocs(query: string, max_results
     }
 
     bb2: {
-        _8 = load_type(string);
-        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _4, const <omitted>, const <omitted>) -> [bb3];
+        _7 = call const fn ai.Agent.new(const <omitted>, const <omitted>, copy _4, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
-        _9 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb4];
+        _8 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb4];
     }
 
     bb4: {
-        _6 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _7, copy _9) -> [bb5];
+        _9 = load_type(string);
+        _6 = call const fn ai.Agent.run<copy _9>(copy _7, copy _8) -> [bb5];
     }
 
     bb5: {

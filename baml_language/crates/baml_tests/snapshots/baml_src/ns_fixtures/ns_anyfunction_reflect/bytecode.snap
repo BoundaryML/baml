@@ -10,7 +10,6 @@ function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.
     store_var client
 
   L0:
-    load_type #0
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -21,13 +20,10 @@ function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.
     load_type #0
     load_var input
     call user.fixtures.anyfunction_reflect.RuntimeClassify$spec
-    store_var _7
-    load_var2 4 5
-    load_type ai.Runner<#0, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<#0>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    store_var _6
+    load_type #0
+    load_var2 3 4
+    call ai.Agent.run
     load_field .value
     return
 }

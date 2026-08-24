@@ -10,7 +10,6 @@ function fixtures.llm_quoted_prompt.BacktickPrompt(topic: string, client: ai.Cli
     store_var client
 
   L0:
-    load_type string
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -20,13 +19,10 @@ function fixtures.llm_quoted_prompt.BacktickPrompt(topic: string, client: ai.Cli
     store_var _5
     load_var topic
     call user.fixtures.llm_quoted_prompt.BacktickPrompt$spec
-    store_var _7
-    load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    store_var _6
+    load_type string
+    load_var2 3 4
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -122,7 +118,6 @@ function fixtures.llm_quoted_prompt.QuotedPrompt(topic: string, client: ai.Clien
     store_var client
 
   L0:
-    load_type string
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -132,13 +127,10 @@ function fixtures.llm_quoted_prompt.QuotedPrompt(topic: string, client: ai.Clien
     store_var _5
     load_var topic
     call user.fixtures.llm_quoted_prompt.QuotedPrompt$spec
-    store_var _7
-    load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    store_var _6
+    load_type string
+    load_var2 3 4
+    call ai.Agent.run
     load_field .value
     return
 }

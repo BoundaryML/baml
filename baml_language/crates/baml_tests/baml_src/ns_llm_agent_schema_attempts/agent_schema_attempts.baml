@@ -40,20 +40,20 @@ class InvalidSchemaClient {
     }
 }
 
-function run_invalid_schema(agent: ai.Agent<int>) -> string {
+function run_invalid_schema(agent: ai.Agent) -> string {
     let _ = agent.run(SchemaAttemptSpec@spec());
     "accepted"
 }
 
 function schema_attempt_validation_message(schema_attempts: int) -> string {
-    let _ = ai.Agent<int>.new(schema_attempts = schema_attempts);
+    let _ = ai.Agent.new(schema_attempts = schema_attempts);
     "accepted"
 }
 
 test "default Agent makes two total schema attempts" {
     let probe = InvocationProbe { count: 0 };
     let scripted = InvalidSchemaClient { probe: probe };
-    let agent = ai.Agent<int>.new(client = scripted);
+    let agent = ai.Agent.new(client = scripted);
 
     let raw_output = run_invalid_schema(agent) catch (e) {
         ai.errors.ParseFailed => e.raw_output,
@@ -66,7 +66,7 @@ test "default Agent makes two total schema attempts" {
 test "configured Agent makes one total schema attempt" {
     let probe = InvocationProbe { count: 0 };
     let scripted = InvalidSchemaClient { probe: probe };
-    let agent = ai.Agent<int>.new(client = scripted, schema_attempts = 1);
+    let agent = ai.Agent.new(client = scripted, schema_attempts = 1);
 
     let raw_output = run_invalid_schema(agent) catch (e) {
         ai.errors.ParseFailed => e.raw_output,
@@ -79,7 +79,7 @@ test "configured Agent makes one total schema attempt" {
 test "configured Agent makes three total schema attempts" {
     let probe = InvocationProbe { count: 0 };
     let scripted = InvalidSchemaClient { probe: probe };
-    let agent = ai.Agent<int>.new(client = scripted, schema_attempts = 3);
+    let agent = ai.Agent.new(client = scripted, schema_attempts = 3);
 
     let raw_output = run_invalid_schema(agent) catch (e) {
         ai.errors.ParseFailed => e.raw_output,
@@ -110,7 +110,7 @@ test "Agent rejects a mutated schema attempt count before invoking" {
         event_probe.count += 1;
         null
     };
-    let agent = ai.Agent<int>.new(client = scripted, on_event = on_event);
+    let agent = ai.Agent.new(client = scripted, on_event = on_event);
     agent.schema_attempts = 0;
 
     let message = run_invalid_schema(agent) catch (e) {

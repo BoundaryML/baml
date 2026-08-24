@@ -10,9 +10,9 @@ fn user.fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client:
     let _3: null | ai.Client // client // param
     let _4: bool
     let _5: ai.RunResult<string>
-    let _6: ai.Agent<string>
-    let _7: reflect.Type
-    let _8: ai.FunctionSpec<string>
+    let _6: ai.Agent
+    let _7: ai.FunctionSpec<string>
+    let _8: reflect.Type
 
     bb0: {
         _4 = copy _3 == const <omitted>;
@@ -25,16 +25,16 @@ fn user.fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client:
     }
 
     bb2: {
-        _7 = load_type(string);
-        _6 = call const fn ai.Agent.new<copy _7>(const <omitted>, const <omitted>, copy _3, const <omitted>, const <omitted>) -> [bb3];
+        _6 = call const fn ai.Agent.new(const <omitted>, const <omitted>, copy _3, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
-        _8 = call const fn user.fixtures.comment_in_type.FunctionWithComments$spec(copy _1, copy _2) -> [bb4];
+        _7 = call const fn user.fixtures.comment_in_type.FunctionWithComments$spec(copy _1, copy _2) -> [bb4];
     }
 
     bb4: {
-        _5 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _6, copy _8) -> [bb5];
+        _8 = load_type(string);
+        _5 = call const fn ai.Agent.run<copy _8>(copy _6, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -253,9 +253,9 @@ fn user.fixtures.comment_in_type.CommentAfterArrow(client: null | ai.Client) -> 
     let _1: null | ai.Client // client // param
     let _2: bool
     let _3: ai.RunResult<string>
-    let _4: ai.Agent<string>
-    let _5: reflect.Type
-    let _6: ai.FunctionSpec<string>
+    let _4: ai.Agent
+    let _5: ai.FunctionSpec<string>
+    let _6: reflect.Type
 
     bb0: {
         _2 = copy _1 == const <omitted>;
@@ -268,16 +268,16 @@ fn user.fixtures.comment_in_type.CommentAfterArrow(client: null | ai.Client) -> 
     }
 
     bb2: {
-        _5 = load_type(string);
-        _4 = call const fn ai.Agent.new<copy _5>(const <omitted>, const <omitted>, copy _1, const <omitted>, const <omitted>) -> [bb3];
+        _4 = call const fn ai.Agent.new(const <omitted>, const <omitted>, copy _1, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
-        _6 = call const fn user.fixtures.comment_in_type.CommentAfterArrow$spec() -> [bb4];
+        _5 = call const fn user.fixtures.comment_in_type.CommentAfterArrow$spec() -> [bb4];
     }
 
     bb4: {
-        _3 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _4, copy _6) -> [bb5];
+        _6 = load_type(string);
+        _3 = call const fn ai.Agent.run<copy _6>(copy _4, copy _5) -> [bb5];
     }
 
     bb5: {

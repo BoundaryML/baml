@@ -859,7 +859,7 @@ function ai._run_one_tool(self: ?, tb: root.tools.Toolbox, call: root.content.To
 function ai._validated_schema_attempts(self: ?) -> int  [expr] {
   { if (self.schema_attempts Lt 1) { throw baml.errors.InvalidArgument { message: "Agent schema_atte..." } } } self.schema_attempts
 }
-function ai.new(max_steps: int = 12, schema_attempts: int = 2, client: Client? = null, tool_errors: root.tools.ErrorMode = root.tools.ErrorMode.Report, on_event: (root.events.Event) -> null throws never? = null) -> ai.Agent<Out>  [expr] {
+function ai.new(max_steps: int = 12, schema_attempts: int = 2, client: Client? = null, tool_errors: root.tools.ErrorMode = root.tools.ErrorMode.Report, on_event: (root.events.Event) -> null throws never? = null) -> ai.Agent  [expr] {
   { if (schema_attempts Lt 1) { throw baml.errors.InvalidArgument { message: "Agent schema_atte..." } } } ai.Agent { max_steps: max_steps, schema_attempts: schema_attempts, client: client, tool_errors: tool_errors, on_event: on_event NullCoalesce (e: root.events.Event) -> { {  } null } }
 }
 function ai.run(self: ?, spec: FunctionSpec<Out>) -> Self.Output  [missing]

@@ -10,7 +10,6 @@ function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Cli
     store_var client
 
   L0:
-    load_type image
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -20,13 +19,10 @@ function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Cli
     store_var _5
     load_var prompt
     call user.fixtures.llm_image_outputs.GenerateImage$spec
-    store_var _7
-    load_var2 4 5
-    load_type ai.Runner<image, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    store_var _6
+    load_type image
+    load_var2 3 4
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -137,7 +133,6 @@ function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.
     store_var client
 
   L0:
-    load_type image[]
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -147,13 +142,10 @@ function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.
     store_var _5
     load_var prompt
     call user.fixtures.llm_image_outputs.GenerateImageSet$spec
-    store_var _7
-    load_var2 4 5
-    load_type ai.Runner<image[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image[]>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    store_var _6
+    load_type image[]
+    load_var2 3 4
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -264,7 +256,6 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, 
     store_var client
 
   L0:
-    load_type (image | string)[]
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -274,13 +265,10 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, 
     store_var _5
     load_var prompt
     call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec
-    store_var _7
-    load_var2 4 5
-    load_type ai.Runner<(string | image)[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<(string | image)[]>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    store_var _6
+    load_type (string | image)[]
+    load_var2 3 4
+    call ai.Agent.run
     load_field .value
     return
 }

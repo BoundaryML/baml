@@ -6,7 +6,7 @@ class user.Box {
   value: T
 }
 function user.GetBoxedInt(client: ai.Client | null = null) -> user.Box<int> throws never {
-  ai.Agent.new<Box<int>>(client = client).run(GetBoxedInt$spec()).value : user.Box<int>
+  ai.Agent.new(client = client).run(GetBoxedInt$spec()).value : user.Box<int>
 }
 function user.GetBoxedInt$spec() -> ai.FunctionSpec<user.Box<int>> throws never {
   ai.FunctionSpec { spec_name: "GetBoxedInt", args: map {  }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Dummy) } : ai.FunctionSpec<user.Box<int>>

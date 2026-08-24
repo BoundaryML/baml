@@ -71,7 +71,6 @@ function runtime_render_identity.Render(client: ai.Client | null) -> #0 {
     store_var client
 
   L0:
-    load_type #0
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -81,13 +80,10 @@ function runtime_render_identity.Render(client: ai.Client | null) -> #0 {
     store_var _4
     load_type #0
     call user.runtime_render_identity.Render$spec
-    store_var _6
-    load_var2 3 4
-    load_type ai.Runner<#0, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<#0>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
+    store_var _5
+    load_type #0
+    load_var2 2 3
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -178,7 +174,6 @@ function runtime_render_identity.RenderPair(client: ai.Client | null) -> runtime
     store_var client
 
   L0:
-    load_type runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -189,13 +184,10 @@ function runtime_render_identity.RenderPair(client: ai.Client | null) -> runtime
     load_type #0
     load_type #1
     call user.runtime_render_identity.RenderPair$spec
-    store_var _6
-    load_var2 3 4
-    load_type ai.Runner<runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
+    store_var _5
+    load_type runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>
+    load_var2 2 3
+    call ai.Agent.run
     load_field .value
     return
 }

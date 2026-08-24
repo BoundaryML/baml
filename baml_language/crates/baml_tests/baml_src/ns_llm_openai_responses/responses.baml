@@ -159,7 +159,7 @@ function oai_request_shape() -> string {
                 verbosity = "low",
                 parallel_tool_calls = true,
             );
-            let result = ai.Agent<string>.new(client = cl).run(OaiEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
             let sent = mock.last_request();
             [
                 result.value,
@@ -239,7 +239,7 @@ function oai_passthrough() -> string {
                 headers = { "X-Trace": "abc", "authorization": "Bearer overridden" },
                 query_params = { "api-version": "2024 05" },
             );
-            let result = ai.Agent<string>.new(client = cl).run(OaiEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
             let sent = mock.last_request();
             [
                 result.value,
@@ -383,7 +383,7 @@ function oai_image_generation() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<image>.new(client = cl).run(OaiPicture@spec("a red apple"));
+            let result = ai.Agent.new(client = cl).run(OaiPicture@spec("a red apple"));
             let sent = mock.last_request();
             [
                 result.value.base64(),
@@ -479,7 +479,7 @@ function oai_usage_details() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(OaiEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
             [
                 result.usage.input_tokens.to_string(),
                 result.usage.output_tokens.to_string(),
@@ -505,7 +505,7 @@ function oai_sparse_usage() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(OaiEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
             `${result.value}|${result.usage.input_tokens}|${result.usage.output_tokens}`
         },
     )
@@ -547,7 +547,7 @@ test "oai_bad_tool_arguments" {
 
 // A provider error status is classified, never reported as a transport failure.
 function _oai_run(cl: openai.ResponsesClient) -> string {
-    let result = ai.Agent<string>.new(client = cl).run(OaiEcho@spec("Say pong."));
+    let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
     result.value
 }
 
@@ -1066,7 +1066,7 @@ function _oai_live_client() -> openai.ResponsesClient {
 
 // The whole wire path against the real endpoint: typed body, auth, parse.
 function oai_live_answers() -> bool {
-    let result = ai.Agent<string>.new(client = _oai_live_client())
+    let result = ai.Agent.new(client = _oai_live_client())
         .run(OaiEcho@spec("Say pong."));
     result.value.trim().length() > 0 && result.usage.output_tokens > 0
 }
@@ -1083,7 +1083,7 @@ function oai_live_streams() -> bool {
 // gate: OPENAI_LIVE_IMAGE=1.
 function oai_live_generates_image() -> bool {
     let cl = openai.ResponsesClient.new(model = "gpt-4o-mini");
-    let picture = ai.Agent<image>.new(client = cl).run(OaiPicture@spec("a single red apple"));
+    let picture = ai.Agent.new(client = cl).run(OaiPicture@spec("a single red apple"));
     picture.value.base64().length() > 0
 }
 

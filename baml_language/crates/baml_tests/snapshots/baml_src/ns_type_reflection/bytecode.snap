@@ -57,7 +57,6 @@ function type_reflection.GetBar(client: ai.Client | null) -> type_reflection.Bar
     store_var client
 
   L0:
-    load_type type_reflection.Bar
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -66,13 +65,10 @@ function type_reflection.GetBar(client: ai.Client | null) -> type_reflection.Bar
     call ai.Agent.new
     store_var _4
     call user.type_reflection.GetBar$spec
-    store_var _6
-    load_var2 3 4
-    load_type ai.Runner<type_reflection.Bar, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<type_reflection.Bar>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
+    store_var _5
+    load_type type_reflection.Bar
+    load_var2 2 3
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -159,7 +155,6 @@ function type_reflection.GetFoo(client: ai.Client | null) -> type_reflection.Foo
     store_var client
 
   L0:
-    load_type type_reflection.Foo
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -168,13 +163,10 @@ function type_reflection.GetFoo(client: ai.Client | null) -> type_reflection.Foo
     call ai.Agent.new
     store_var _4
     call user.type_reflection.GetFoo$spec
-    store_var _6
-    load_var2 3 4
-    load_type ai.Runner<type_reflection.Foo, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<type_reflection.Foo>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
+    store_var _5
+    load_type type_reflection.Foo
+    load_var2 2 3
+    call ai.Agent.run
     load_field .value
     return
 }

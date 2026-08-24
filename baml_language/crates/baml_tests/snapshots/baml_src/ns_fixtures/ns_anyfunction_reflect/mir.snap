@@ -353,9 +353,9 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: null
     let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.RunResult<T>
-    let _5: ai.Agent<T>
-    let _6: reflect.Type
-    let _7: ai.FunctionSpec<T>
+    let _5: ai.Agent
+    let _6: ai.FunctionSpec<T>
+    let _7: reflect.Type
     let _8: reflect.Type
 
     bb0: {
@@ -369,17 +369,17 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: null
     }
 
     bb2: {
-        _6 = load_type(#0);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = call const fn ai.Agent.new(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
-        _8 = load_type(#0);
-        _7 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _8>(copy _1) -> [bb4];
+        _7 = load_type(#0);
+        _6 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _7>(copy _1) -> [bb4];
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<#0, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<#0>>(copy _5, copy _7) -> [bb5];
+        _8 = load_type(#0);
+        _4 = call const fn ai.Agent.run<copy _8>(copy _5, copy _6) -> [bb5];
     }
 
     bb5: {

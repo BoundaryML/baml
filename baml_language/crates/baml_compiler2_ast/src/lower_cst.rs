@@ -465,7 +465,6 @@ fn lower_function(
                     .iter()
                     .map(|param| param.name.clone())
                     .collect::<Vec<_>>(),
-                return_type.clone(),
                 llm_body_def.span,
             );
             Some(FunctionBodyDef::Expr(expr_body, source_map))

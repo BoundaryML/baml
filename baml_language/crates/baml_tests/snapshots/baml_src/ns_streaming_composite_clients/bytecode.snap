@@ -99,7 +99,6 @@ function streaming_composite_clients.CompositeStreamSpec(client: ai.Client | nul
     store_var client
 
   L0:
-    load_type string
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -108,13 +107,10 @@ function streaming_composite_clients.CompositeStreamSpec(client: ai.Client | nul
     call ai.Agent.new
     store_var _4
     call user.streaming_composite_clients.CompositeStreamSpec$spec
-    store_var _6
-    load_var2 3 4
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
+    store_var _5
+    load_type string
+    load_var2 2 3
+    call ai.Agent.run
     load_field .value
     return
 }

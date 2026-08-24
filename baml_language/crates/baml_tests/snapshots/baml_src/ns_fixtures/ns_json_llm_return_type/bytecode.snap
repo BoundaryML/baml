@@ -10,7 +10,6 @@ function fixtures.json_llm_return_type.ExtractAny(client: ai.Client | null) -> b
     store_var client
 
   L0:
-    load_type baml.json.json
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -19,13 +18,10 @@ function fixtures.json_llm_return_type.ExtractAny(client: ai.Client | null) -> b
     call ai.Agent.new
     store_var _4
     call user.fixtures.json_llm_return_type.ExtractAny$spec
-    store_var _6
-    load_var2 3 4
-    load_type ai.Runner<int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<baml.json.json>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
+    store_var _5
+    load_type baml.json.json
+    load_var2 2 3
+    call ai.Agent.run
     load_field .value
     return
 }

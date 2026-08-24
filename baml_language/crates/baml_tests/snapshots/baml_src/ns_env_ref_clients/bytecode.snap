@@ -164,7 +164,6 @@ function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client |
     store_var client
 
   L0:
-    load_type string
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -174,13 +173,10 @@ function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client |
     store_var _5
     load_var question
     call user.env_ref_clients.EnvRefDynamicEcho$spec
-    store_var _7
-    load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    store_var _6
+    load_type string
+    load_var2 3 4
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -287,7 +283,6 @@ function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null) 
     store_var client
 
   L0:
-    load_type string
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -297,13 +292,10 @@ function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null) 
     store_var _5
     load_var question
     call user.env_ref_clients.EnvRefEcho$spec
-    store_var _7
-    load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    store_var _6
+    load_type string
+    load_var2 3 4
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -414,7 +406,6 @@ function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client 
     store_var client
 
   L0:
-    load_type string
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -424,13 +415,10 @@ function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client 
     store_var _5
     load_var question
     call user.env_ref_clients.EnvRefResolvedEcho$spec
-    store_var _7
-    load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    store_var _6
+    load_type string
+    load_var2 3 4
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -527,7 +515,6 @@ function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | nu
     store_var client
 
   L0:
-    load_type string
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -537,13 +524,10 @@ function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | nu
     store_var _5
     load_var question
     call user.env_ref_clients.LiveEnvRefEcho$spec
-    store_var _7
-    load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    store_var _6
+    load_type string
+    load_var2 3 4
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -639,7 +623,6 @@ function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Cli
     store_var client
 
   L0:
-    load_type string
     load_const <omitted>
     load_const <omitted>
     load_var client
@@ -649,13 +632,10 @@ function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Cli
     store_var _5
     load_var question
     call user.env_ref_clients.LiveEnvRefFallbackEcho$spec
-    store_var _7
-    load_var2 4 5
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    store_var _6
+    load_type string
+    load_var2 3 4
+    call ai.Agent.run
     load_field .value
     return
 }

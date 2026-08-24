@@ -65,7 +65,7 @@ function capture_client_timeout(client: ai.Client) -> unknown {
 }
 
 function capture_agent_timeout(client: ai.Client) -> unknown {
-    ai.Agent<string>.new(client = client).run(TimeoutSpec@spec()) catch_all (e) {
+    ai.Agent.new(client = client).run(TimeoutSpec@spec()) catch_all (e) {
         _ => e,
     }
 }

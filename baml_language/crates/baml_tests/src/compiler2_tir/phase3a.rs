@@ -223,7 +223,7 @@ function main() -> string {
         "render-prompt/build-request companions must preserve the defaulted argument as named:\n{tir}"
     );
     assert!(
-        tir.contains("ai.Agent.new<string>")
+        tir.contains("ai.Agent.new(")
             && tir.contains("Greet$spec(name, suffix = suffix)")
             && tir.contains("ai.stream.from_spec(Greet$spec(name, suffix = suffix)"),
         "direct and stream companions must name the defaulted spec argument:\n{tir}"
