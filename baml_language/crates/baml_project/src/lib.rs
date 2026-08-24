@@ -27,7 +27,9 @@ mod db;
 
 pub mod param_schema;
 pub mod position;
+pub mod stdlib_prefix;
 pub mod symbols;
+
 #[cfg(feature = "testing")]
 pub mod testing;
 
