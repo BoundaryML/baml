@@ -19,7 +19,7 @@ class StreamScript {
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
-            ai.ModelTurn { content: [], stop_reason: ai.content.StopReason.Complete, usage: null }
+            ai.ModelTurn { calls: [], content: [], stop_reason: ai.content.StopReason.Complete, usage: null }
         }
     }
 

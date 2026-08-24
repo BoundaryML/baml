@@ -46,7 +46,7 @@ class McpConnection {
             },
         ) catch_all (e) {
             _ => {
-                throw root.errors.NetworkFailure {
+                throw root.errors.NetworkFailure { status_code: null,
                     provider: `mcp/${name}`,
                     detail: `the MCP server could not start: ${e.to_string()}`,
                     raw_body: null,
@@ -71,7 +71,7 @@ class McpConnection {
         let framed = [line, "\n"].join("");
         let _ = self.p.write_stdin(framed) catch_all (e) {
             _ => {
-                throw root.errors.NetworkFailure {
+                throw root.errors.NetworkFailure { status_code: null,
                     provider: `mcp/${self.server_name}`,
                     detail: `writing to the MCP server failed: ${e.to_string()}`,
                     raw_body: null,
@@ -89,7 +89,7 @@ class McpConnection {
         while (true) {
             let next = self.p.stdout.next() catch_all (e) {
                 _ => {
-                    throw root.errors.NetworkFailure {
+                    throw root.errors.NetworkFailure { status_code: null,
                         provider: `mcp/${self.server_name}`,
                         detail: `reading from the MCP server failed: ${e.to_string()}`,
                         raw_body: null,
@@ -119,7 +119,7 @@ class McpConnection {
                     }
                 },
                 _ => {
-                    throw root.errors.NetworkFailure {
+                    throw root.errors.NetworkFailure { status_code: null,
                         provider: `mcp/${self.server_name}`,
                         detail: `the MCP server stream ended before answering ${method}`,
                         raw_body: null,
@@ -128,7 +128,7 @@ class McpConnection {
             };
         }
         // unreachable: the loop returns on a matching id or throws at EOF
-        throw root.errors.NetworkFailure {
+        throw root.errors.NetworkFailure { status_code: null,
             provider: `mcp/${self.server_name}`,
             detail: `no response for ${method}`,
             raw_body: null,

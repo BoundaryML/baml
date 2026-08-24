@@ -2878,6 +2878,12 @@ impl io::IoNamespaceHttp for NativeSysOps {
             }
 
             let url = response.url().to_string();
+            let status_code = i64::from(response.status().as_u16());
+            let headers: indexmap::IndexMap<String, String> = response
+                .headers()
+                .iter()
+                .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
+                .collect();
             // Legacy TTFT semantics start after the SSE response opens and end
             // on the first parsed event; connection/headers are governed only
             // by the total request timeout.
@@ -3001,6 +3007,8 @@ impl io::IoNamespaceHttp for NativeSysOps {
             let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(handle);
             Ok(owned::http::SseStream {
                 url,
+                status_code,
+                headers,
                 _handle: handle,
             })
         })

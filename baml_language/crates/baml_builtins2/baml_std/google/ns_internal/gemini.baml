@@ -925,7 +925,7 @@ function google_parse(resp: GmResponse, seq: int, provider: string = "google") -
     } else {
         ai.content.StopReason.Complete
     };
-    ai.ModelTurn { content: content, stop_reason: stop, usage: _gm_usage(resp.usageMetadata) }
+    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: _gm_usage(resp.usageMetadata) }
 }
 
 // ---------------------------------------------------------------------------
@@ -962,7 +962,7 @@ function _gm_sse_failure(provider: string, error: unknown) -> ai.errors.Failure 
             return ai.errors.classify_http(provider, status, body);
         }
     }
-    ai.errors.NetworkFailure {
+    ai.errors.NetworkFailure { status_code: null,
         provider: provider,
         detail: `transport failed before a response arrived: ${text}`,
         raw_body: null,
@@ -1146,8 +1146,14 @@ function gemini_invoke(c: root.GoogleClient, input: ai.ModelTurnInput) -> ai.Mod
     // from it are stable across re-renders.
     let seq = input.journal.entries().length();
     let req = google_render(c, input);
-    let resp = ai.wire.send_as<GmResponse>(req, "google");
-    google_parse(resp, seq)
+    let sent = ai.wire.send_as_with_wire<GmResponse>(
+        req,
+        "google",
+        c.id(),
+        capture_wire = c.capture_wire,
+    );
+    let turn = google_parse(sent.value, seq);
+    ai.ModelTurn { ...turn, calls: [sent.call] }
 }
 
 function _google_decode_batch(batch: string) -> ai.stream.StreamEvent[] {
@@ -1161,15 +1167,53 @@ function gemini_invoke_stream(
     input: ai.ModelTurnInput,
 ) -> ai.stream.TurnStream {
     let req = _google_request(c, input, true);
+    let started = baml.time.Instant.now();
+    let sse = _gm_open_sse(req, "google");
     // Strict termination: the `finishReason` fragment decodes as TurnDone, so
     // a connection that closes before it is a truncated turn, not an answer.
-    ai.stream.TurnStream.from_sse(
-        _gm_open_sse(req, "google"),
+    let stream = ai.stream.TurnStream.from_sse(
+        sse,
         (batch: string) -> {
             _google_decode_batch(batch) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         },
         require_terminal = "google",
-    )
+    );
+    let call = ai.events.LLMCall {
+        client_name: c.id(),
+        provider: "google",
+        timing: ai.events.Timing {
+            start_time_utc_ms: started.to_timestamp_milliseconds(),
+            duration_ms: null,
+            ttft_ms: null,
+        },
+        http_request: if (c.capture_wire) {
+            baml.http.Request {
+                method: req.method,
+                url: ai.wire.redact_url_secrets(req.url),
+                headers: req.headers,
+                body: req.body,
+            }
+        } else {
+            null
+        },
+        http_response: ai.events.HttpResponse {
+            status: sse.status_code,
+            headers: sse.headers,
+            body: null,
+        },
+        usage: null,
+        selected: true,
+        sse_responses: if (c.capture_wire) {
+            []
+        } else {
+            null
+        },
+    };
+    stream._calls = [call];
+    stream._wire_call = call;
+    stream._call_started = started;
+    stream._capture_sse = c.capture_wire;
+    stream
 }

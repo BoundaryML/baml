@@ -33,7 +33,7 @@ class ScriptedClient {
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
-            ai.ModelTurn {
+            ai.ModelTurn { calls: [],
                 content: [ai.content.Text { text: "{\"message\": \"hi\"}" }],
                 stop_reason: ai.content.StopReason.Complete,
                 usage: ai.events.Usage { input_tokens: 3, output_tokens: 5, cached_input_tokens: null, reasoning_tokens: null },
@@ -51,6 +51,7 @@ function label_of(e: ai.events.Event) -> string {
         let x: ai.events.ToolCompleted => "ToolCompleted",
         let x: ai.events.ToolFailed => "ToolFailed",
         let x: ai.events.Usage => "Usage",
+        let x: ai.events.LLMCall => "LLMCall",
         let x: ai.events.FinalProduced => "FinalProduced",
     }
 }

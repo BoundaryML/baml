@@ -366,20 +366,26 @@ function _vertex_request(
 function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = vertex_render(c, input);
     if (_vertex_publisher(c) == "anthropic") {
-        let resp = ai.wire.send_as<anthropic.internal.AnthropicResponse>(
+        let sent = ai.wire.send_as_with_wire<anthropic.internal.AnthropicResponse>(
             req,
             "vertex",
+            c.id(),
+            capture_wire = c.capture_wire,
             request_timeout_ms = c.request_timeout_ms,
         );
-        return anthropic.internal.anthropic_parse(resp);
+        let turn = anthropic.internal.anthropic_parse(sent.value);
+        return ai.ModelTurn { ...turn, calls: [sent.call] };
     }
     let seq = input.journal.entries().length();
-    let resp = ai.wire.send_as<root.internal.GmResponse>(
+    let sent = ai.wire.send_as_with_wire<root.internal.GmResponse>(
         req,
         "vertex",
+        c.id(),
+        capture_wire = c.capture_wire,
         request_timeout_ms = c.request_timeout_ms,
     );
-    root.internal.google_parse(resp, seq, provider = "vertex")
+    let turn = root.internal.google_parse(sent.value, seq, provider = "vertex");
+    ai.ModelTurn { ...turn, calls: [sent.call] }
 }
 
 function _vertex_decode_batch(batch: string) -> ai.stream.StreamEvent[] {
@@ -395,6 +401,7 @@ function vertex_invoke_stream(
     input: ai.ModelTurnInput,
 ) -> ai.stream.TurnStream {
     let req = _vertex_request(c, input, true, preview = false);
+    let started = baml.time.Instant.now();
     let sse = root.internal._gm_open_sse(
         req,
         "vertex",
@@ -405,9 +412,9 @@ function vertex_invoke_stream(
     // Gemini's `finishReason` fragment), so both streams are strict: a
     // connection cut mid-answer raises instead of reporting the partial text
     // as a completed turn.
-    if (_vertex_publisher(c) == "anthropic") {
+    let stream = if (_vertex_publisher(c) == "anthropic") {
         let state = anthropic.internal.AnthStreamState.new();
-        return ai.stream.TurnStream.from_sse(
+        ai.stream.TurnStream.from_sse(
             sse,
             (batch: string) -> {
                 anthropic.internal.anthropic_decode_batch(batch, state) catch_all (e) {
@@ -415,15 +422,53 @@ function vertex_invoke_stream(
                 }
             },
             require_terminal = "vertex",
-        );
-    }
-    ai.stream.TurnStream.from_sse(
-        sse,
-        (batch: string) -> {
-            _vertex_decode_batch(batch) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
-            }
+        )
+    } else {
+        ai.stream.TurnStream.from_sse(
+            sse,
+            (batch: string) -> {
+                _vertex_decode_batch(batch) catch_all (e) {
+                    _ => throw ai.errors.normalize(e),
+                }
+            },
+            require_terminal = "vertex",
+        )
+    };
+    let call = ai.events.LLMCall {
+        client_name: c.id(),
+        provider: "vertex",
+        timing: ai.events.Timing {
+            start_time_utc_ms: started.to_timestamp_milliseconds(),
+            duration_ms: null,
+            ttft_ms: null,
         },
-        require_terminal = "vertex",
-    )
+        http_request: if (c.capture_wire) {
+            baml.http.Request {
+                method: req.method,
+                // Express mode signs the request with `?key=…` in the URL.
+                url: ai.wire.redact_url_secrets(req.url),
+                headers: req.headers,
+                body: req.body,
+            }
+        } else {
+            null
+        },
+        http_response: ai.events.HttpResponse {
+            status: sse.status_code,
+            headers: sse.headers,
+            body: null,
+        },
+        usage: null,
+        selected: true,
+        sse_responses: if (c.capture_wire) {
+            []
+        } else {
+            null
+        },
+    };
+    stream._calls = [call];
+    stream._wire_call = call;
+    stream._call_started = started;
+    stream._capture_sse = c.capture_wire;
+    stream
 }

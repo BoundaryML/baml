@@ -101,13 +101,13 @@ function normalize(error: RaisedInClient) -> InvokeError throws never {
             }
         },
         let io: baml.errors.Io => {
-            NetworkFailure { provider: "client", detail: io.message, raw_body: null }
+            NetworkFailure { status_code: null, provider: "client", detail: io.message, raw_body: null }
         },
         let json_parse: baml.json.JsonParseError => {
-            NetworkFailure { provider: "client", detail: json_parse.message, raw_body: null }
+            NetworkFailure { status_code: null, provider: "client", detail: json_parse.message, raw_body: null }
         },
         let json_decode: baml.json.JsonDecodeError => {
-            NetworkFailure { provider: "client", detail: json_decode.message, raw_body: null }
+            NetworkFailure { status_code: null, provider: "client", detail: json_decode.message, raw_body: null }
         },
     }
 }
@@ -120,6 +120,9 @@ function normalize_invoke(error: RaisedInClient) -> InvokeError throws never {
 class RateLimited {
     provider: string,
     retry_after_ms: int?,
+    // The HTTP status that classified here (429); null when constructed
+    // without a wire response.
+    status_code: int?,
     raw_body: string?,
     implements Failure {
         function retry_safety(self) -> RetrySafety {
@@ -131,6 +134,9 @@ class RateLimited {
 class NetworkFailure {
     provider: string,
     detail: string,
+    // The HTTP status that classified here (408/5xx); null for pure
+    // transport failures that never produced a response.
+    status_code: int?,
     raw_body: string?,
     implements Failure {
         function retry_safety(self) -> RetrySafety {
@@ -257,13 +263,19 @@ function classify_http(
     headers: map<string, string>? = null,
 ) -> Failure {
     if (status_code == 429) {
-        RateLimited {
+        RateLimited { status_code: null,
             provider: provider,
             retry_after_ms: root.internal._retry_after_ms(headers),
+            status_code: status_code,
             raw_body: body,
         }
     } else if (status_code == 408 || status_code >= 500) {
-        NetworkFailure { provider: provider, detail: `http ${status_code}`, raw_body: body }
+        NetworkFailure { status_code: null,
+            provider: provider,
+            detail: `http ${status_code}`,
+            status_code: status_code,
+            raw_body: body,
+        }
     } else {
         InvalidRequest {
             provider: provider,

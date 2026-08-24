@@ -13,6 +13,10 @@ class ClaudeCodeClient {
     // an .mcp.json "mcpServers" entry). The map is read fresh on every
     // invoke, so an entry added between turns attaches on the next turn.
     mcp_servers: map<string, json>,
+    // Accepted for surface consistency with the HTTP-backed clients, but INERT
+    // here: the transport is a local process, there is no HTTP request or
+    // response to record, and this client never fabricates wire records.
+    capture_wire: bool,
 
     function new(
         model: string = "haiku",
@@ -22,6 +26,7 @@ class ClaudeCodeClient {
         permission_mode: string = "default",
         harness_tools: string[] = [],
         mcp_servers: map<string, json>? = null,
+        capture_wire: bool = false,
     ) -> ClaudeCodeClient {
         let servers: map<string, json> = {};
         ClaudeCodeClient {
@@ -32,6 +37,7 @@ class ClaudeCodeClient {
             permission_mode: permission_mode,
             harness_tools: harness_tools,
             mcp_servers: mcp_servers ?? servers,
+            capture_wire: capture_wire,
         }
     }
 

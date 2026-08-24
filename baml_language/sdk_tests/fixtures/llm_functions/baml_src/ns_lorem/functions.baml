@@ -195,7 +195,7 @@ class OnEventScriptedClient {
 
     function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
       let _ = input;
-      ai.ModelTurn {
+      ai.ModelTurn { calls: [],
         content: [ai.content.Text { text: "{\"name\": \"Ada\", \"email\": null}" }],
         stop_reason: ai.content.StopReason.Complete,
         usage: ai.events.Usage { input_tokens: 3, output_tokens: 5, cached_input_tokens: null, reasoning_tokens: null },

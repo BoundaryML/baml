@@ -31,7 +31,7 @@ class InvalidSchemaClient {
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
             self.probe.count += 1;
-            ai.ModelTurn {
+            ai.ModelTurn { calls: [],
                 content: [ai.content.Text { text: "schema-mismatch" }],
                 stop_reason: ai.content.StopReason.Complete,
                 usage: null,

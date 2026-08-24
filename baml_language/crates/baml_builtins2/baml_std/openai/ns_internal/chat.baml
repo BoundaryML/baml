@@ -1341,22 +1341,27 @@ function chat_parse(
         null => null,
     };
 
-    ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
+    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
 }
 
 // Transport + classification for the non-streaming path. This mirrors
-// `ai.wire.send_as` but decodes through `baml.json.to`, which honours the
-// `baml.FromJson` override that maps the `function` wire key onto `CcToolCall.fn`.
+// `ai.wire.send_as_with_wire` but decodes through `baml.json.to`, which honours
+// the `baml.FromJson` override that maps the `function` wire key onto
+// `CcToolCall.fn` — so the LLMCall wire record is built inline here with the
+// same shape `send_as_with_wire` produces.
 function _chat_send(
     request: baml.http.Request,
     provider: string,
+    client_name: string,
+    capture_wire: bool = false,
     audio_mime: string = "audio/wav",
     request_timeout_ms: int? = null,
 ) -> ai.ModelTurn {
+    let started = baml.time.Instant.now();
     let response = baml.http.send(request, timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0)) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw ai.errors.NetworkFailure {
+            throw ai.errors.NetworkFailure { status_code: null,
                 provider: provider,
                 detail: `transport failed before a response arrived: ${e.to_string()}`,
                 raw_body: null,
@@ -1366,7 +1371,7 @@ function _chat_send(
     let text = response.text() catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw ai.errors.NetworkFailure {
+            throw ai.errors.NetworkFailure { status_code: null,
                 provider: provider,
                 detail: "the response body could not be read completely",
                 raw_body: null,
@@ -1387,7 +1392,39 @@ function _chat_send(
     let decoded = baml.json.to<CcResponse>(baml.json.parse(text)) catch_all (e) {
         _ => throw ai.errors.ParseFailed { provider: provider, raw_output: text },
     };
-    chat_parse(decoded, provider, text, audio_mime = audio_mime)
+    let turn = chat_parse(decoded, provider, text, audio_mime = audio_mime);
+    let call = ai.events.LLMCall {
+        client_name: client_name,
+        provider: provider,
+        timing: ai.events.Timing {
+            start_time_utc_ms: started.to_timestamp_milliseconds(),
+            duration_ms: started.elapsed().to_milliseconds(),
+            ttft_ms: null,
+        },
+        http_request: if (capture_wire) {
+            baml.http.Request {
+                method: request.method,
+                url: ai.wire.redact_url_secrets(request.url),
+                headers: request.headers,
+                body: request.body,
+            }
+        } else {
+            null
+        },
+        http_response: ai.events.HttpResponse {
+            status: response.status_code,
+            headers: response.headers,
+            body: if (capture_wire) {
+                ai.wire.redact_url_secrets(text)
+            } else {
+                null
+            },
+        },
+        usage: null,
+        selected: true,
+        sse_responses: null,
+    };
+    ai.ModelTurn { ...turn, calls: [call] }
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.
@@ -1395,12 +1432,15 @@ function chat_invoke(
     compat: ChatCompat,
     params: ChatParams,
     input: ai.ModelTurnInput,
+    capture_wire: bool = false,
     request_timeout_ms: int? = null,
 ) -> ai.ModelTurn {
     let request = chat_render(compat, params, input, false);
     _chat_send(
         request,
         compat.provider,
+        chat_client_id(compat, params),
+        capture_wire = capture_wire,
         audio_mime = _chat_audio_output_mime(params.request_body),
         request_timeout_ms = request_timeout_ms,
     )
@@ -1587,7 +1627,7 @@ function _chat_stream_failure(provider: string, detail: string) -> ai.errors.Fai
             }
         }
     }
-    ai.errors.NetworkFailure {
+    ai.errors.NetworkFailure { status_code: null,
         provider: provider,
         detail: `transport failed before a response arrived: ${detail}`,
         raw_body: null,
@@ -1608,11 +1648,13 @@ function chat_invoke_stream(
     compat: ChatCompat,
     params: ChatParams,
     input: ai.ModelTurnInput,
+    capture_wire: bool = false,
     request_timeout_ms: int? = null,
     time_to_first_token_timeout_ms: int? = null,
 ) -> ai.stream.TurnStream {
     let request = chat_render(compat, params, input, true);
     let decoder = ChatStreamDecoder.new(provider = compat.provider);
+    let started = baml.time.Instant.now();
     let sse = baml.http.fetch_sse(
         request,
         timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
@@ -1625,7 +1667,7 @@ function chat_invoke_stream(
     // the stream throw `ai.errors.NetworkFailure` there instead of reporting the
     // partial text as a completed turn, which is what silently fed truncated
     // answers to `require_done` / `Retry`.
-    ai.stream.TurnStream.from_sse(
+    let stream = ai.stream.TurnStream.from_sse(
         sse,
         (batch) -> {
             decoder.decode(batch) catch_all (e) {
@@ -1633,5 +1675,41 @@ function chat_invoke_stream(
             }
         },
         require_terminal = compat.provider,
-    )
+    );
+    let call = ai.events.LLMCall {
+        client_name: chat_client_id(compat, params),
+        provider: compat.provider,
+        timing: ai.events.Timing {
+            start_time_utc_ms: started.to_timestamp_milliseconds(),
+            duration_ms: null,
+            ttft_ms: null,
+        },
+        http_request: if (capture_wire) {
+            baml.http.Request {
+                method: request.method,
+                url: ai.wire.redact_url_secrets(request.url),
+                headers: request.headers,
+                body: request.body,
+            }
+        } else {
+            null
+        },
+        http_response: ai.events.HttpResponse {
+            status: sse.status_code,
+            headers: sse.headers,
+            body: null,
+        },
+        usage: null,
+        selected: true,
+        sse_responses: if (capture_wire) {
+            []
+        } else {
+            null
+        },
+    };
+    stream._calls = [call];
+    stream._wire_call = call;
+    stream._call_started = started;
+    stream._capture_sse = capture_wire;
+    stream
 }

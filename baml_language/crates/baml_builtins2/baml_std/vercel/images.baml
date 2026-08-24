@@ -51,6 +51,10 @@ class AiGatewayImageClient {
     request_body: baml.json.json?,
     headers: map<string, string>?,
     query_params: map<string, string>?,
+    // Record request/response bodies on the LLMCall wire records delivered
+    // through on_event. Status, headers, and timing are always recorded; this
+    // flag only gates the bodies.
+    capture_wire: bool,
 
     function new(
         model: string = "openai/gpt-image-1",
@@ -63,6 +67,7 @@ class AiGatewayImageClient {
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
+        capture_wire: bool = false,
     ) -> AiGatewayImageClient {
         AiGatewayImageClient {
             model: model,
@@ -75,6 +80,7 @@ class AiGatewayImageClient {
             request_body: request_body,
             headers: headers,
             query_params: query_params,
+            capture_wire: capture_wire,
         }
     }
 

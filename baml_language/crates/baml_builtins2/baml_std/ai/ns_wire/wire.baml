@@ -92,7 +92,7 @@ function send_as<T>(
     let resp = baml.http.send(req, timeout = timeout) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw root.errors.NetworkFailure {
+            throw root.errors.NetworkFailure { status_code: null,
             provider: provider,
             // redacted: the rendered transport error can embed the request URL,
             // and some providers authenticate through a query parameter.
@@ -104,7 +104,7 @@ function send_as<T>(
     let text = resp.text() catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw root.errors.NetworkFailure {
+            throw root.errors.NetworkFailure { status_code: null,
             provider: provider,
             detail: "the response body could not be read completely",
             raw_body: null,
@@ -118,6 +118,93 @@ function send_as<T>(
     baml.json.from_string<T>(text) catch_all (e) {
         _ => throw root.errors.ParseFailed { provider: provider, raw_output: text },
     }
+}
+
+/// `send_as_with_wire`'s result: the decoded envelope plus the wire record.
+class SentAs<T> {
+    value: T,
+    call: root.events.LLMCall,
+}
+
+/// Same contract as `send_as`, plus the LLMCall wire record. On a non-2xx or
+/// transport failure this still throws the same classified error `send_as`
+/// throws — composite clients build failed-leg records from the error itself
+/// (`_failed_leg_call`), so no record accompanies a throw. `capture_wire`
+/// gates the request/response bodies; status, headers, and timing are always
+/// recorded. The request URL and captured response body are redacted with
+/// `redact_url_secrets` before storing.
+function send_as_with_wire<T>(
+    req: baml.http.Request,
+    provider: string,
+    client_name: string,
+    capture_wire: bool = false,
+    request_timeout_ms: int? = null,
+) -> SentAs<T> {
+    let started = baml.time.Instant.now();
+    let timeout = match (request_timeout_ms) {
+        let milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds),
+        null => null,
+    };
+    let resp = baml.http.send(req, timeout = timeout) catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        _ => {
+            throw root.errors.NetworkFailure { status_code: null,
+            provider: provider,
+            detail: `transport failed before a response arrived: ${redact_url_secrets(e.to_string())}`,
+            raw_body: null,
+        }
+        },
+    };
+    let text = resp.text() catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        _ => {
+            throw root.errors.NetworkFailure { status_code: null,
+            provider: provider,
+            detail: "the response body could not be read completely",
+            raw_body: null,
+        }
+        },
+    };
+    if (!resp.ok()) {
+        throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers)
+    }
+    let value = baml.json.from_string<T>(text) catch_all (e) {
+        _ => throw root.errors.ParseFailed { provider: provider, raw_output: text },
+    };
+    let call = root.events.LLMCall {
+        client_name: client_name,
+        provider: provider,
+        timing: root.events.Timing {
+            start_time_utc_ms: started.to_timestamp_milliseconds(),
+            duration_ms: started.elapsed().to_milliseconds(),
+            ttft_ms: null,
+        },
+        http_request: if (capture_wire) {
+            baml.http.Request {
+                method: req.method,
+                url: redact_url_secrets(req.url),
+                headers: req.headers,
+                body: req.body,
+            }
+        } else {
+            null
+        },
+        http_response: root.events.HttpResponse {
+            status: resp.status_code,
+            headers: resp.headers,
+            body: if (capture_wire) {
+                redact_url_secrets(text)
+            } else {
+                null
+            },
+        },
+        // The provider parse fills the turn-level usage; the wire record does
+        // not re-derive it here.
+        usage: null,
+        selected: true,
+        sse_responses: null,
+    };
+    SentAs { value: value, call: call }
 }
 
 // The return type's schema as prompt text, in the standard dialect —

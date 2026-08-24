@@ -250,6 +250,10 @@ class Agent {
         }
         // every attempt commits: the journal is the complete record
         let batch: root.events.Event[] = [root.events.AssistantMessage { content: turn.content, client_id: c.id() }];
+        // wire records ride the journal: failed legs first, selected last
+        for (let call in turn.calls) {
+            batch.push(call);
+        }
         for (let u in turn.tool_uses()) {
             batch.push(root.events.ToolRequested { id: u.id, name: u.name, args: u.args });
         }
