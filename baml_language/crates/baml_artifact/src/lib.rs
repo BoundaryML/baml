@@ -136,11 +136,34 @@ pub fn encode<T: BorshSerialize>(kind: ArtifactKind, value: &T) -> Result<Vec<u8
 
 /// Wrap an already-serialized payload in a versioned artifact envelope.
 pub fn encode_payload(kind: ArtifactKind, payload: &[u8]) -> Result<Vec<u8>, Error> {
-    let header = ArtifactHeader {
-        build_fingerprint: BUILD_FINGERPRINT.to_owned(),
+    encode_payload_with_metadata(FORMAT_VERSION, BUILD_FINGERPRINT, kind, payload)
+}
+
+fn encode_payload_with_metadata(
+    artifact_format: u32,
+    build_fingerprint: &str,
+    kind: ArtifactKind,
+    payload: &[u8],
+) -> Result<Vec<u8>, Error> {
+    let payload_len = u64::try_from(payload.len()).map_err(|error| Error::Encode {
         kind,
-        payload_len: payload.len() as u64,
-        payload_hash: Sha256::digest(payload).into(),
+        message: error.to_string(),
+    })?;
+    let header = ArtifactHeader {
+        build_fingerprint: build_fingerprint.to_owned(),
+        kind,
+        payload_len,
+        payload_hash: authenticated_hash(
+            artifact_format,
+            build_fingerprint,
+            kind,
+            payload_len,
+            payload,
+        )
+        .map_err(|error| Error::Encode {
+            kind,
+            message: error.to_string(),
+        })?,
     };
     let header_bytes = borsh::to_vec(&header).map_err(|error| Error::Encode {
         kind,
@@ -152,11 +175,32 @@ pub fn encode_payload(kind: ArtifactKind, payload: &[u8]) -> Result<Vec<u8>, Err
         .ok_or(Error::Truncated { kind })?;
     let mut artifact = Vec::with_capacity(capacity);
     artifact.extend_from_slice(MAGIC);
-    artifact.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
+    artifact.extend_from_slice(&artifact_format.to_le_bytes());
     artifact.extend_from_slice(&(header_bytes.len() as u64).to_le_bytes());
     artifact.extend_from_slice(&header_bytes);
     artifact.extend_from_slice(payload);
     Ok(artifact)
+}
+
+/// Hash the canonical Borsh encoding of the authenticated metadata followed by
+/// the payload. Keep this field order in sync with [`ArtifactHeader`].
+fn authenticated_hash(
+    artifact_format: u32,
+    build_fingerprint: &str,
+    kind: ArtifactKind,
+    payload_len: u64,
+    payload: &[u8],
+) -> std::io::Result<Hash> {
+    let mut metadata = Vec::new();
+    BorshSerialize::serialize(&artifact_format, &mut metadata)?;
+    BorshSerialize::serialize(build_fingerprint, &mut metadata)?;
+    BorshSerialize::serialize(&kind, &mut metadata)?;
+    BorshSerialize::serialize(&payload_len, &mut metadata)?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(metadata);
+    hasher.update(payload);
+    Ok(hasher.finalize().into())
 }
 
 /// Validate and deserialize an artifact payload.
@@ -199,6 +243,34 @@ pub fn decode_payload(kind: ArtifactKind, bytes: &[u8]) -> Result<&[u8], Error> 
             message: error.to_string(),
         })?;
 
+    let payload_len = usize::try_from(header.payload_len).map_err(|_| Error::Truncated { kind })?;
+    let payload_end = header_end
+        .checked_add(payload_len)
+        .ok_or(Error::Truncated { kind })?;
+    let payload = bytes
+        .get(header_end..payload_end)
+        .ok_or(Error::Truncated { kind })?;
+    if payload_end != bytes.len() {
+        return Err(Error::InvalidHeader {
+            kind,
+            message: "trailing bytes after payload".to_owned(),
+        });
+    }
+    let expected_hash = authenticated_hash(
+        artifact_format,
+        &header.build_fingerprint,
+        header.kind,
+        header.payload_len,
+        payload,
+    )
+    .map_err(|error| Error::InvalidHeader {
+        kind,
+        message: error.to_string(),
+    })?;
+    if expected_hash != header.payload_hash {
+        return Err(Error::InvalidPayloadHash { kind });
+    }
+
     if artifact_format != FORMAT_VERSION
         || (ENFORCE_BUILD_FINGERPRINT && header.build_fingerprint != BUILD_FINGERPRINT)
     {
@@ -224,23 +296,6 @@ pub fn decode_payload(kind: ArtifactKind, bytes: &[u8]) -> Result<&[u8], Error> 
             actual: header.kind,
         });
     }
-
-    let payload_len = usize::try_from(header.payload_len).map_err(|_| Error::Truncated { kind })?;
-    let payload_end = header_end
-        .checked_add(payload_len)
-        .ok_or(Error::Truncated { kind })?;
-    let payload = bytes
-        .get(header_end..payload_end)
-        .ok_or(Error::Truncated { kind })?;
-    if payload_end != bytes.len() {
-        return Err(Error::InvalidHeader {
-            kind,
-            message: "trailing bytes after payload".to_owned(),
-        });
-    }
-    if <Hash>::from(Sha256::digest(payload)) != header.payload_hash {
-        return Err(Error::InvalidPayloadHash { kind });
-    }
     Ok(payload)
 }
 
@@ -257,9 +312,14 @@ mod tests {
 
     #[test]
     fn version_skew_has_actionable_message() {
-        let mut artifact = encode(ArtifactKind::Program, &7_u32).unwrap();
-        artifact[MAGIC.len()..MAGIC.len() + size_of::<u32>()]
-            .copy_from_slice(&(FORMAT_VERSION + 1).to_le_bytes());
+        let payload = borsh::to_vec(&7_u32).unwrap();
+        let artifact = encode_payload_with_metadata(
+            FORMAT_VERSION + 1,
+            BUILD_FINGERPRINT,
+            ArtifactKind::Program,
+            &payload,
+        )
+        .unwrap();
 
         let error = decode::<u32>(ArtifactKind::Program, &artifact).unwrap_err();
         assert_eq!(
@@ -273,9 +333,14 @@ mod tests {
 
     #[test]
     fn build_skew_follows_the_channel_policy() {
-        let mut artifact = encode(ArtifactKind::Program, &7_u32).unwrap();
-        // The Borsh header begins with the fingerprint String's u32 length.
-        artifact[PREFIX_LEN + size_of::<u32>()] ^= 1;
+        let payload = borsh::to_vec(&7_u32).unwrap();
+        let artifact = encode_payload_with_metadata(
+            FORMAT_VERSION,
+            "different-build-fingerprint",
+            ArtifactKind::Program,
+            &payload,
+        )
+        .unwrap();
 
         let result = decode::<u32>(ArtifactKind::Program, &artifact);
         if ENFORCE_BUILD_FINGERPRINT {
@@ -283,6 +348,20 @@ mod tests {
         } else {
             assert_eq!(result.unwrap(), 7);
         }
+    }
+
+    #[test]
+    fn rejects_kind_metadata_corruption() {
+        let mut artifact = encode(ArtifactKind::Program, &7_u32).unwrap();
+        // The Borsh header starts with the fingerprint String, followed by the
+        // one-byte ArtifactKind discriminant.
+        let kind_offset = PREFIX_LEN + size_of::<u32>() + BUILD_FINGERPRINT.len();
+        artifact[kind_offset] = borsh::to_vec(&ArtifactKind::PackageInterface).unwrap()[0];
+
+        assert!(matches!(
+            decode::<u32>(ArtifactKind::PackageInterface, &artifact),
+            Err(Error::InvalidPayloadHash { .. })
+        ));
     }
 
     #[test]

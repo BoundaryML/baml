@@ -1048,11 +1048,11 @@ pub(super) mod mounted {
     use super::super::support::make_db;
 
     /// Compile `files` as the source of a library package named `app` and
-    /// capture its `borsh(PackageInterface)` blob. The files ride under
-    /// `<builtin>/app/…` so `file_package` assigns them the `app` package —
-    /// the blob's qualified names therefore read `app.…`, matching the mount
-    /// alias exactly (re-aliasing a blob under a different name is out of
-    /// scope for this PR).
+    /// capture its `ArtifactKind::PackageInterface` envelope. The files ride
+    /// under `<builtin>/app/…` so `file_package` assigns them the `app`
+    /// package — the blob's qualified names therefore read `app.…`, matching
+    /// the mount alias exactly (re-aliasing a blob under a different name is
+    /// out of scope for this PR).
     pub(crate) fn app_blob(files: &[(&str, &str)]) -> Vec<u8> {
         let mut db = make_db();
         db.dependency("app");
