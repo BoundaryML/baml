@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function lambda_sig_deduction.$init_test_ns_lambda_sig_deduction_lambda_sig_deduction(registry: testing.TestCollector) -> null {
+function lambda_sig_deduction.$init_test_ns_lambda_sig_deduction_lambda_sig_deduction(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.lambda_sig_deduction"
     load_const "map-produced futures joined by future.all, un-ascribed binding"

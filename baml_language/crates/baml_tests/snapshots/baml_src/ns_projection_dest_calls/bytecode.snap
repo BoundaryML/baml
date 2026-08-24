@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function projection_dest_calls.$init_test_ns_projection_dest_calls_projection_dest_calls(registry: testing.TestCollector) -> null {
+function projection_dest_calls.$init_test_ns_projection_dest_calls_projection_dest_calls(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.projection_dest_calls"
     load_const "equality_result_assigned_to_field"
@@ -27,12 +27,12 @@ function projection_dest_calls.$init_test_ns_projection_dest_calls_projection_de
     return
 }
 
-function projection_dest_calls.PdcNo.PdcFlag.flag(self: projection_dest_calls.PdcNo) -> bool {
+function projection_dest_calls.PdcNo.PdcFlag.flag(self: <unresolved type #120410831612300>) -> bool {
     load_const false
     return
 }
 
-function projection_dest_calls.PdcStore.require(self: projection_dest_calls.PdcStore) -> projection_dest_calls.PdcRecord {
+function projection_dest_calls.PdcStore.require(self: <unresolved type #40478579575840>) -> <unresolved type #31511659127958> {
     load_var self
     copy 0
     load_field .calls
@@ -44,7 +44,7 @@ function projection_dest_calls.PdcStore.require(self: projection_dest_calls.PdcS
     return
 }
 
-function projection_dest_calls.PdcTag.baml.ops.Equals.eq(self: projection_dest_calls.PdcTag, other: projection_dest_calls.PdcTag) -> bool {
+function projection_dest_calls.PdcTag.baml.ops.Equals.eq(self: <unresolved type #34262510511013>, other: <unresolved type #34262510511013>) -> bool {
     load_var self
     load_field .id
     load_var other
@@ -53,7 +53,7 @@ function projection_dest_calls.PdcTag.baml.ops.Equals.eq(self: projection_dest_c
     return
 }
 
-function projection_dest_calls.PdcYes.PdcFlag.flag(self: projection_dest_calls.PdcYes) -> bool {
+function projection_dest_calls.PdcYes.PdcFlag.flag(self: <unresolved type #129920256599050>) -> bool {
     load_const true
     return
 }
@@ -180,7 +180,7 @@ function projection_dest_calls.pdc_ne_into_field_true() -> bool {
     return
 }
 
-function projection_dest_calls.pdc_tag(id: int) -> projection_dest_calls.PdcTag {
+function projection_dest_calls.pdc_tag(id: int) -> <unresolved type #34262510511013> {
     load_var id
     init_instance user.projection_dest_calls.PdcTag .id
     return

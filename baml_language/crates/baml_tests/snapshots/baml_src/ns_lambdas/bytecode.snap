@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function lambdas.$init_test_ns_lambdas_lambdas(registry: testing.TestCollector) -> null {
+function lambdas.$init_test_ns_lambdas_lambdas(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.lambdas"
     load_const "iife_single_param_returns_correct_value"

@@ -9,21 +9,29 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use baml_type::{Interface, Name, QualifiedTypeName, RealizedTy, Ty};
+use baml_type::{Interface, Name, RealizedTy, Ty};
 use indexmap::IndexMap;
 
 use crate::CompilationUnit;
 
 /// Compiler-neutral structural projection of one runtime class definition.
+///
+/// `name` is the declaration's bare item name; the compile world spells it
+/// `alias.<name>` under whatever alias the package is mounted as. `tag` is the
+/// declaration's live identity, carried only so the compile seam can tell two
+/// same-named declarations apart (a fail-closed duplicate check) — it is never
+/// a compile-time identity.
 #[derive(Clone, Debug)]
 pub struct RuntimeMountedClass {
-    pub qtn: QualifiedTypeName,
+    pub name: Name,
+    pub tag: baml_type::typetag::TypeTag,
     pub fields: Vec<(Name, Ty, RuntimeMountedFieldAttrs)>,
 }
 
 #[derive(Clone, Debug)]
 pub struct RuntimeMountedEnum {
-    pub qtn: QualifiedTypeName,
+    pub name: Name,
+    pub tag: baml_type::typetag::TypeTag,
     pub variants: Vec<Name>,
 }
 
@@ -34,10 +42,13 @@ pub struct RuntimeMountedFieldAttrs {
 }
 
 /// One exact type value mounted under a source-visible export name.
+///
+/// `ty` and every field type in `classes` are already spelled from the
+/// consumer compile world's viewpoint: a runtime declaration appears as
+/// `alias.<item name>`, a compiled one as its own qualified name.
 #[derive(Clone, Debug)]
 pub struct RuntimeTypeMount {
     pub export_name: Name,
-    pub identity_name: QualifiedTypeName,
     pub ty: RealizedTy,
     pub classes: Vec<RuntimeMountedClass>,
     pub enums: Vec<RuntimeMountedEnum>,
@@ -67,6 +78,24 @@ pub struct SessionVisibleSymbol {
     pub type_value: Option<String>,
 }
 
+/// The `eval<T>` contract, spelled for the compiler's name-headed world.
+///
+/// Converted from the head-typed contract **at request construction, under
+/// the heap permit**: the compile task runs after the VM releases its permit,
+/// so a head crossing into it could go stale the moment a collection moves the
+/// declaration it points at. Nothing heap-shaped may live in the request.
+#[derive(Clone, Debug)]
+pub enum SessionContract {
+    /// A contract every head of which has a declared name — checkable by the
+    /// compiler. `unknown` for an uncontracted eval.
+    Checkable(baml_type::RuntimeTy),
+    /// The contract names a runtime-created declaration, which has no name
+    /// the compiler can check a submission against. Carried as a fact so the
+    /// compiler reports the unstateable contract rather than comparing a
+    /// stand-in.
+    NamesRuntimeDeclaration,
+}
+
 /// Session-specific inputs copied out of the heap before the compiler yield.
 #[derive(Clone, Debug)]
 pub struct RuntimeSessionCompileRequest {
@@ -79,7 +108,7 @@ pub struct RuntimeSessionCompileRequest {
     /// The newest source-visible binding for every flat-scope name.
     pub visible: IndexMap<String, SessionVisibleSymbol>,
     /// Runtime contract supplied by `eval<T>` (unknown for uncontracted eval).
-    pub expected: baml_type::RuntimeTy,
+    pub expected: SessionContract,
     /// Keeps the one-eval permit live across compile and execution.
     pub lease: SessionEvalLease,
 }

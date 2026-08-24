@@ -1,13 +1,13 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.closures.Box.unwrap(self: fixtures.closures.Box<#0>) -> #0 {
+function fixtures.closures.Box.unwrap(self: <unresolved type #71587360708269><#0>) -> #0 {
     load_var self
     load_field .value
     return
 }
 
-function fixtures.closures.Calculator.compute(self: fixtures.closures.Calculator, a: int, b: int) -> int {
+function fixtures.closures.Calculator.compute(self: <unresolved type #5439974914564>, a: int, b: int) -> int {
     load_var self
     load_field .op
     load_const "add"
@@ -28,7 +28,7 @@ function fixtures.closures.Calculator.compute(self: fixtures.closures.Calculator
     return
 }
 
-function fixtures.closures.Counter.increment(self: fixtures.closures.Counter) -> int {
+function fixtures.closures.Counter.increment(self: <unresolved type #123156399071464>) -> int {
     load_var self
     copy 0
     load_field .value
@@ -40,7 +40,7 @@ function fixtures.closures.Counter.increment(self: fixtures.closures.Counter) ->
     return
 }
 
-function fixtures.closures.Employee.full_name(self: fixtures.closures.Employee) -> string {
+function fixtures.closures.Employee.full_name(self: <unresolved type #137161884111268>) -> string {
     load_var self
     load_field .first
     load_const " "
@@ -51,7 +51,7 @@ function fixtures.closures.Employee.full_name(self: fixtures.closures.Employee) 
     return
 }
 
-function fixtures.closures.Employee.greet(self: fixtures.closures.Employee, greeting: string) -> string {
+function fixtures.closures.Employee.greet(self: <unresolved type #137161884111268>, greeting: string) -> string {
     load_var greeting
     load_const ", "
     bin_op +
@@ -61,7 +61,7 @@ function fixtures.closures.Employee.greet(self: fixtures.closures.Employee, gree
     return
 }
 
-function fixtures.closures.Encoder.encode(self: fixtures.closures.Encoder, data: string) -> string {
+function fixtures.closures.Encoder.encode(self: <unresolved type #99675075633724>, data: string) -> string {
     load_const "["
     load_var self
     load_field .charset
@@ -73,7 +73,7 @@ function fixtures.closures.Encoder.encode(self: fixtures.closures.Encoder, data:
     return
 }
 
-function fixtures.closures.Formatter.format(self: fixtures.closures.Formatter, text: string) -> string {
+function fixtures.closures.Formatter.format(self: <unresolved type #24510906989098>, text: string) -> string {
     load_var self
     load_field .prefix
     load_var text
@@ -81,7 +81,7 @@ function fixtures.closures.Formatter.format(self: fixtures.closures.Formatter, t
     return
 }
 
-function fixtures.closures.RangeCheck.is_valid(self: fixtures.closures.RangeCheck, n: int) -> bool {
+function fixtures.closures.RangeCheck.is_valid(self: <unresolved type #9353010410907>, n: int) -> bool {
     load_var2 2 1
     load_field .min
     cmp_int_op >=
@@ -102,7 +102,7 @@ function fixtures.closures.apply(f: (int, int) -> int throws never, a: int, b: i
     return
 }
 
-function fixtures.closures.apply_to_each(items: fixtures.closures.Employee[], f: (fixtures.closures.Employee) -> string throws never) -> string[] {
+function fixtures.closures.apply_to_each(items: <unresolved type #137161884111268>[], f: (<unresolved type #137161884111268>) -> string throws never) -> string[] {
     load_type fixtures.closures.Employee
     load_type string
     load_type unknown
@@ -162,7 +162,7 @@ function fixtures.closures.test_bound_validator() -> bool[] {
     return
 }
 
-function fixtures.closures.test_field_chain_bind(cfg: fixtures.closures.Config) -> string {
+function fixtures.closures.test_field_chain_bind(cfg: <unresolved type #91130587163858>) -> string {
     load_const "payload"
     load_var cfg
     load_field .encoder

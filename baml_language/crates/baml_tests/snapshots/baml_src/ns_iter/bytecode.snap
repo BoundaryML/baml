@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function iter.$init_test_ns_iter_iter(registry: testing.TestCollector) -> null {
+function iter.$init_test_ns_iter_iter(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.iter"
     load_const "iter_collect"
@@ -447,12 +447,12 @@ function iter.$init_test_ns_iter_iter(registry: testing.TestCollector) -> null {
     return
 }
 
-function iter.FlakyIterator.baml.iter.Iterable.iter(self: iter.FlakyIterator) -> baml.iter.Iterator<Error = baml.errors.InvalidArgument, Item = int> {
+function iter.FlakyIterator.baml.iter.Iterable.iter(self: <unresolved type #109593414120175>) -> <unresolved type #134608312336441><Error = <unresolved type #59433995467168>, Item = int> {
     load_var self
     return
 }
 
-function iter.FlakyIterator.baml.iter.Iterator.next(self: iter.FlakyIterator) -> int | baml.iter.Done {
+function iter.FlakyIterator.baml.iter.Iterator.next(self: <unresolved type #109593414120175>) -> int | <unresolved type #77132703667455> {
     load_var self
     load_field .pos
     load_var self
@@ -505,7 +505,7 @@ function iter.FlakyIterator.baml.iter.Iterator.next(self: iter.FlakyIterator) ->
     throw
 }
 
-function iter.FlakyIterator.new(values: int[], fail_at: int) -> iter.FlakyIterator {
+function iter.FlakyIterator.new(values: int[], fail_at: int) -> <unresolved type #109593414120175> {
     load_var values
     load_const 0
     load_var fail_at
@@ -513,17 +513,17 @@ function iter.FlakyIterator.new(values: int[], fail_at: int) -> iter.FlakyIterat
     return
 }
 
-function iter.IterShadow.iter(self: iter.IterShadow) -> string {
+function iter.IterShadow.iter(self: <unresolved type #17704306164814>) -> string {
     load_const "shadow"
     return
 }
 
-function iter.ResumableIterator.baml.iter.Iterable.iter(self: iter.ResumableIterator) -> baml.iter.Iterator<Error = never, Item = int> {
+function iter.ResumableIterator.baml.iter.Iterable.iter(self: <unresolved type #73385325316526>) -> <unresolved type #134608312336441><Error = never, Item = int> {
     load_var self
     return
 }
 
-function iter.ResumableIterator.baml.iter.Iterator.next(self: iter.ResumableIterator) -> int | baml.iter.Done {
+function iter.ResumableIterator.baml.iter.Iterator.next(self: <unresolved type #73385325316526>) -> int | <unresolved type #77132703667455> {
     load_var self
     load_field .pos
     load_var self
@@ -575,7 +575,7 @@ function iter.ResumableIterator.baml.iter.Iterator.next(self: iter.ResumableIter
     return
 }
 
-function iter.ResumableIterator.new(values: int[], done_at: int) -> iter.ResumableIterator {
+function iter.ResumableIterator.new(values: int[], done_at: int) -> <unresolved type #73385325316526> {
     load_var values
     load_const 0
     load_var done_at
@@ -593,7 +593,7 @@ function iter.iter_array_as_iterable_param() -> int[] {
     return
 }
 
-function iter.iter_array_as_iterable_param_inner(xs: baml.iter.Iterable<Error = never, Item = int>) -> int[] {
+function iter.iter_array_as_iterable_param_inner(xs: <unresolved type #120313837417593><Error = never, Item = int>) -> int[] {
     load_var xs
     load_type baml.iter.Iterable<Error = never, Item = int>
     load_const "iter"
@@ -2097,7 +2097,7 @@ function iter.iter_repeat() -> int[] {
     return
 }
 
-function iter.iter_shadowed_param_for_in(source: baml.iter.Iterable<Error = never, Item = int>) -> string[] {
+function iter.iter_shadowed_param_for_in(source: <unresolved type #120313837417593><Error = never, Item = int>) -> string[] {
     load_type string
     alloc_array 0
     store_var out
@@ -2133,7 +2133,7 @@ function iter.iter_shadowed_param_for_in(source: baml.iter.Iterable<Error = neve
     return
 }
 
-function iter.iter_shadowed_param_method(source: baml.iter.Iterable<Error = never, Item = int>) -> string {
+function iter.iter_shadowed_param_method(source: <unresolved type #120313837417593><Error = never, Item = int>) -> string {
     alloc_instance user.iter.IterShadow
     call user.iter.IterShadow.iter
     return

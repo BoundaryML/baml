@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function is_operator.$init_test_ns_is_operator_is_operator(registry: testing.TestCollector) -> null {
+function is_operator.$init_test_ns_is_operator_is_operator(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.is_operator"
     load_const "is_type_match_true"
@@ -482,7 +482,7 @@ function is_operator.describe_int_string_bool(v: int | string | bool) -> string 
     return
 }
 
-function is_operator.describe_success_failure(v: is_operator.Success | is_operator.Failure) -> string {
+function is_operator.describe_success_failure(v: <unresolved type #95533548708892> | <unresolved type #38513786227101>) -> string {
     load_var v
     is_type is_operator.Success
     pop_jump_if_false L0
@@ -512,7 +512,7 @@ function is_operator.describe_success_failure(v: is_operator.Success | is_operat
     return
 }
 
-function is_operator.describe_success_or_failed(v: is_operator.Success | is_operator.Failure) -> string {
+function is_operator.describe_success_or_failed(v: <unresolved type #95533548708892> | <unresolved type #38513786227101>) -> string {
     load_var v
     is_type is_operator.Success
     pop_jump_if_false L0

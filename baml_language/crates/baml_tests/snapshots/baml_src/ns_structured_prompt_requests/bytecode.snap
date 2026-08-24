@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function structured_prompt_requests.$init_test_ns_structured_prompt_requests_structured_prompt_requests(registry: testing.TestCollector) -> null {
+function structured_prompt_requests.$init_test_ns_structured_prompt_requests_structured_prompt_requests(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.structured_prompt_requests"
     load_const "generated build_request companion is network-free and overridable"
@@ -153,7 +153,7 @@ function structured_prompt_requests.$init_test_ns_structured_prompt_requests_str
     return
 }
 
-function structured_prompt_requests.AudioShape(sound: audio, client: ai.Client | null) -> string {
+function structured_prompt_requests.AudioShape(sound: audio, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -179,7 +179,7 @@ function structured_prompt_requests.AudioShape(sound: audio, client: ai.Client |
     return
 }
 
-function structured_prompt_requests.AudioShape$build_request(sound: audio, client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.AudioShape$build_request(sound: audio, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -204,7 +204,7 @@ function structured_prompt_requests.AudioShape$parse(json: string) -> string {
     return
 }
 
-function structured_prompt_requests.AudioShape$render_prompt(sound: audio) -> ai.Prompt {
+function structured_prompt_requests.AudioShape$render_prompt(sound: audio) -> <unresolved type #135172864440005> {
     load_var sound
     call user.structured_prompt_requests.AudioShape$spec
     store_var _2
@@ -217,7 +217,7 @@ function structured_prompt_requests.AudioShape$render_prompt(sound: audio) -> ai
     return
 }
 
-function structured_prompt_requests.AudioShape$spec(sound: audio) -> ai.FunctionSpec<string> {
+function structured_prompt_requests.AudioShape$spec(sound: audio) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -254,7 +254,7 @@ function structured_prompt_requests.AudioShape$spec(sound: audio) -> ai.Function
     return
 }
 
-function structured_prompt_requests.AudioShape$stream(sound: audio, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.AudioShape$stream(sound: audio, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -273,7 +273,7 @@ function structured_prompt_requests.AudioShape$stream(sound: audio, client: ai.s
     return
 }
 
-function structured_prompt_requests.ChatMediaShape(photo: image, client: ai.Client | null) -> string {
+function structured_prompt_requests.ChatMediaShape(photo: image, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -299,7 +299,7 @@ function structured_prompt_requests.ChatMediaShape(photo: image, client: ai.Clie
     return
 }
 
-function structured_prompt_requests.ChatMediaShape$build_request(photo: image, client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.ChatMediaShape$build_request(photo: image, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -324,7 +324,7 @@ function structured_prompt_requests.ChatMediaShape$parse(json: string) -> string
     return
 }
 
-function structured_prompt_requests.ChatMediaShape$render_prompt(photo: image) -> ai.Prompt {
+function structured_prompt_requests.ChatMediaShape$render_prompt(photo: image) -> <unresolved type #135172864440005> {
     load_var photo
     call user.structured_prompt_requests.ChatMediaShape$spec
     store_var _2
@@ -337,7 +337,7 @@ function structured_prompt_requests.ChatMediaShape$render_prompt(photo: image) -
     return
 }
 
-function structured_prompt_requests.ChatMediaShape$spec(photo: image) -> ai.FunctionSpec<string> {
+function structured_prompt_requests.ChatMediaShape$spec(photo: image) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -362,7 +362,7 @@ function structured_prompt_requests.ChatMediaShape$spec(photo: image) -> ai.Func
     return
 }
 
-function structured_prompt_requests.ChatMediaShape$stream(photo: image, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.ChatMediaShape$stream(photo: image, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -381,7 +381,7 @@ function structured_prompt_requests.ChatMediaShape$stream(photo: image, client: 
     return
 }
 
-function structured_prompt_requests.ExplicitRolesShape(client: ai.Client | null) -> string {
+function structured_prompt_requests.ExplicitRolesShape(client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -406,7 +406,7 @@ function structured_prompt_requests.ExplicitRolesShape(client: ai.Client | null)
     return
 }
 
-function structured_prompt_requests.ExplicitRolesShape$build_request(client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.ExplicitRolesShape$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -430,7 +430,7 @@ function structured_prompt_requests.ExplicitRolesShape$parse(json: string) -> st
     return
 }
 
-function structured_prompt_requests.ExplicitRolesShape$render_prompt() -> ai.Prompt {
+function structured_prompt_requests.ExplicitRolesShape$render_prompt() -> <unresolved type #135172864440005> {
     call user.structured_prompt_requests.ExplicitRolesShape$spec
     store_var _1
     load_type string
@@ -442,7 +442,7 @@ function structured_prompt_requests.ExplicitRolesShape$render_prompt() -> ai.Pro
     return
 }
 
-function structured_prompt_requests.ExplicitRolesShape$spec() -> ai.FunctionSpec<string> {
+function structured_prompt_requests.ExplicitRolesShape$spec() -> <unresolved type #25974768157144><string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -461,7 +461,7 @@ function structured_prompt_requests.ExplicitRolesShape$spec() -> ai.FunctionSpec
     return
 }
 
-function structured_prompt_requests.ExplicitRolesShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.ExplicitRolesShape$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -479,7 +479,7 @@ function structured_prompt_requests.ExplicitRolesShape$stream(client: ai.stream.
     return
 }
 
-function structured_prompt_requests.FirstShape(client: ai.Client | null) -> string {
+function structured_prompt_requests.FirstShape(client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -504,7 +504,7 @@ function structured_prompt_requests.FirstShape(client: ai.Client | null) -> stri
     return
 }
 
-function structured_prompt_requests.FirstShape$build_request(client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.FirstShape$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -528,7 +528,7 @@ function structured_prompt_requests.FirstShape$parse(json: string) -> string {
     return
 }
 
-function structured_prompt_requests.FirstShape$render_prompt() -> ai.Prompt {
+function structured_prompt_requests.FirstShape$render_prompt() -> <unresolved type #135172864440005> {
     call user.structured_prompt_requests.FirstShape$spec
     store_var _1
     load_type string
@@ -540,7 +540,7 @@ function structured_prompt_requests.FirstShape$render_prompt() -> ai.Prompt {
     return
 }
 
-function structured_prompt_requests.FirstShape$spec() -> ai.FunctionSpec<string> {
+function structured_prompt_requests.FirstShape$spec() -> <unresolved type #25974768157144><string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -559,7 +559,7 @@ function structured_prompt_requests.FirstShape$spec() -> ai.FunctionSpec<string>
     return
 }
 
-function structured_prompt_requests.FirstShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.FirstShape$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -577,7 +577,7 @@ function structured_prompt_requests.FirstShape$stream(client: ai.stream.Streamin
     return
 }
 
-function structured_prompt_requests.GenericShape(client: ai.Client | null) -> structured_prompt_requests.Outer<#0> {
+function structured_prompt_requests.GenericShape(client: <unresolved type #34575171419448> | null) -> <unresolved type #40800902933108><#0> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -603,7 +603,7 @@ function structured_prompt_requests.GenericShape(client: ai.Client | null) -> st
     return
 }
 
-function structured_prompt_requests.GenericShape$build_request(client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.GenericShape$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -621,14 +621,14 @@ function structured_prompt_requests.GenericShape$build_request(client: ai.Client
     return
 }
 
-function structured_prompt_requests.GenericShape$parse(json: string) -> structured_prompt_requests.Outer<#0> {
+function structured_prompt_requests.GenericShape$parse(json: string) -> <unresolved type #40800902933108><#0> {
     load_type structured_prompt_requests.Outer<#0>
     load_var json
     call baml.sap.parse
     return
 }
 
-function structured_prompt_requests.GenericShape$render_prompt() -> ai.Prompt {
+function structured_prompt_requests.GenericShape$render_prompt() -> <unresolved type #135172864440005> {
     load_type #0
     call user.structured_prompt_requests.GenericShape$spec
     store_var _1
@@ -641,7 +641,7 @@ function structured_prompt_requests.GenericShape$render_prompt() -> ai.Prompt {
     return
 }
 
-function structured_prompt_requests.GenericShape$spec() -> ai.FunctionSpec<structured_prompt_requests.Outer<#0>> {
+function structured_prompt_requests.GenericShape$spec() -> <unresolved type #25974768157144><<unresolved type #40800902933108><#0>> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -661,7 +661,7 @@ function structured_prompt_requests.GenericShape$spec() -> ai.FunctionSpec<struc
     return
 }
 
-function structured_prompt_requests.GenericShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<structured_prompt_requests.Outer$stream<#0> | null, structured_prompt_requests.Outer<#0>> {
+function structured_prompt_requests.GenericShape$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><<unresolved type #52891254805384><#0> | null, <unresolved type #40800902933108><#0>> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -680,7 +680,7 @@ function structured_prompt_requests.GenericShape$stream(client: ai.stream.Stream
     return
 }
 
-function structured_prompt_requests.Greet(name: string, suffix: string, client: ai.Client | null) -> string {
+function structured_prompt_requests.Greet(name: string, suffix: string, client: <unresolved type #34575171419448> | null) -> string {
     load_var suffix
     load_const <omitted>
     cmp_op ==
@@ -714,7 +714,7 @@ function structured_prompt_requests.Greet(name: string, suffix: string, client: 
     return
 }
 
-function structured_prompt_requests.Greet$build_request(name: string, suffix: string, client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.Greet$build_request(name: string, suffix: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var suffix
     load_const <omitted>
     cmp_op ==
@@ -747,7 +747,7 @@ function structured_prompt_requests.Greet$parse(json: string) -> string {
     return
 }
 
-function structured_prompt_requests.Greet$render_prompt(name: string, suffix: string) -> ai.Prompt {
+function structured_prompt_requests.Greet$render_prompt(name: string, suffix: string) -> <unresolved type #135172864440005> {
     load_var suffix
     load_const <omitted>
     cmp_op ==
@@ -768,7 +768,7 @@ function structured_prompt_requests.Greet$render_prompt(name: string, suffix: st
     return
 }
 
-function structured_prompt_requests.Greet$spec(name: string, suffix: string) -> ai.FunctionSpec<string> {
+function structured_prompt_requests.Greet$spec(name: string, suffix: string) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -809,7 +809,7 @@ function structured_prompt_requests.Greet$spec(name: string, suffix: string) -> 
     return
 }
 
-function structured_prompt_requests.Greet$stream(name: string, suffix: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.Greet$stream(name: string, suffix: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var suffix
     load_const <omitted>
     cmp_op ==
@@ -836,7 +836,7 @@ function structured_prompt_requests.Greet$stream(name: string, suffix: string, c
     return
 }
 
-function structured_prompt_requests.MediaAll(photo: image, sound: audio, document: pdf, movie: video, client: ai.Client | null) -> string {
+function structured_prompt_requests.MediaAll(photo: image, sound: audio, document: pdf, movie: video, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -863,7 +863,7 @@ function structured_prompt_requests.MediaAll(photo: image, sound: audio, documen
     return
 }
 
-function structured_prompt_requests.MediaAll$build_request(photo: image, sound: audio, document: pdf, movie: video, client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.MediaAll$build_request(photo: image, sound: audio, document: pdf, movie: video, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -889,7 +889,7 @@ function structured_prompt_requests.MediaAll$parse(json: string) -> string {
     return
 }
 
-function structured_prompt_requests.MediaAll$render_prompt(photo: image, sound: audio, document: pdf, movie: video) -> ai.Prompt {
+function structured_prompt_requests.MediaAll$render_prompt(photo: image, sound: audio, document: pdf, movie: video) -> <unresolved type #135172864440005> {
     load_var2 1 2
     load_var2 3 4
     call user.structured_prompt_requests.MediaAll$spec
@@ -903,7 +903,7 @@ function structured_prompt_requests.MediaAll$render_prompt(photo: image, sound: 
     return
 }
 
-function structured_prompt_requests.MediaAll$spec(photo: image, sound: audio, document: pdf, movie: video) -> ai.FunctionSpec<string> {
+function structured_prompt_requests.MediaAll$spec(photo: image, sound: audio, document: pdf, movie: video) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -956,7 +956,7 @@ function structured_prompt_requests.MediaAll$spec(photo: image, sound: audio, do
     return
 }
 
-function structured_prompt_requests.MediaAll$stream(photo: image, sound: audio, document: pdf, movie: video, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.MediaAll$stream(photo: image, sound: audio, document: pdf, movie: video, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -976,7 +976,7 @@ function structured_prompt_requests.MediaAll$stream(photo: image, sound: audio, 
     return
 }
 
-function structured_prompt_requests.MediaImageAudioPdf(photo: image, sound: audio, document: pdf, client: ai.Client | null) -> string {
+function structured_prompt_requests.MediaImageAudioPdf(photo: image, sound: audio, document: pdf, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1003,7 +1003,7 @@ function structured_prompt_requests.MediaImageAudioPdf(photo: image, sound: audi
     return
 }
 
-function structured_prompt_requests.MediaImageAudioPdf$build_request(photo: image, sound: audio, document: pdf, client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.MediaImageAudioPdf$build_request(photo: image, sound: audio, document: pdf, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1029,7 +1029,7 @@ function structured_prompt_requests.MediaImageAudioPdf$parse(json: string) -> st
     return
 }
 
-function structured_prompt_requests.MediaImageAudioPdf$render_prompt(photo: image, sound: audio, document: pdf) -> ai.Prompt {
+function structured_prompt_requests.MediaImageAudioPdf$render_prompt(photo: image, sound: audio, document: pdf) -> <unresolved type #135172864440005> {
     load_var2 1 2
     load_var document
     call user.structured_prompt_requests.MediaImageAudioPdf$spec
@@ -1043,7 +1043,7 @@ function structured_prompt_requests.MediaImageAudioPdf$render_prompt(photo: imag
     return
 }
 
-function structured_prompt_requests.MediaImageAudioPdf$spec(photo: image, sound: audio, document: pdf) -> ai.FunctionSpec<string> {
+function structured_prompt_requests.MediaImageAudioPdf$spec(photo: image, sound: audio, document: pdf) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -1091,7 +1091,7 @@ function structured_prompt_requests.MediaImageAudioPdf$spec(photo: image, sound:
     return
 }
 
-function structured_prompt_requests.MediaImageAudioPdf$stream(photo: image, sound: audio, document: pdf, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.MediaImageAudioPdf$stream(photo: image, sound: audio, document: pdf, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1111,7 +1111,7 @@ function structured_prompt_requests.MediaImageAudioPdf$stream(photo: image, soun
     return
 }
 
-function structured_prompt_requests.MediaImagePdf(photo: image, document: pdf, client: ai.Client | null) -> string {
+function structured_prompt_requests.MediaImagePdf(photo: image, document: pdf, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1137,7 +1137,7 @@ function structured_prompt_requests.MediaImagePdf(photo: image, document: pdf, c
     return
 }
 
-function structured_prompt_requests.MediaImagePdf$build_request(photo: image, document: pdf, client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.MediaImagePdf$build_request(photo: image, document: pdf, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1162,7 +1162,7 @@ function structured_prompt_requests.MediaImagePdf$parse(json: string) -> string 
     return
 }
 
-function structured_prompt_requests.MediaImagePdf$render_prompt(photo: image, document: pdf) -> ai.Prompt {
+function structured_prompt_requests.MediaImagePdf$render_prompt(photo: image, document: pdf) -> <unresolved type #135172864440005> {
     load_var2 1 2
     call user.structured_prompt_requests.MediaImagePdf$spec
     store_var _3
@@ -1175,7 +1175,7 @@ function structured_prompt_requests.MediaImagePdf$render_prompt(photo: image, do
     return
 }
 
-function structured_prompt_requests.MediaImagePdf$spec(photo: image, document: pdf) -> ai.FunctionSpec<string> {
+function structured_prompt_requests.MediaImagePdf$spec(photo: image, document: pdf) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -1217,7 +1217,7 @@ function structured_prompt_requests.MediaImagePdf$spec(photo: image, document: p
     return
 }
 
-function structured_prompt_requests.MediaImagePdf$stream(photo: image, document: pdf, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.MediaImagePdf$stream(photo: image, document: pdf, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1236,7 +1236,7 @@ function structured_prompt_requests.MediaImagePdf$stream(photo: image, document:
     return
 }
 
-function structured_prompt_requests.MediaShape(photo: image, client: ai.Client | null) -> string {
+function structured_prompt_requests.MediaShape(photo: image, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1262,7 +1262,7 @@ function structured_prompt_requests.MediaShape(photo: image, client: ai.Client |
     return
 }
 
-function structured_prompt_requests.MediaShape$build_request(photo: image, client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.MediaShape$build_request(photo: image, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1287,7 +1287,7 @@ function structured_prompt_requests.MediaShape$parse(json: string) -> string {
     return
 }
 
-function structured_prompt_requests.MediaShape$render_prompt(photo: image) -> ai.Prompt {
+function structured_prompt_requests.MediaShape$render_prompt(photo: image) -> <unresolved type #135172864440005> {
     load_var photo
     call user.structured_prompt_requests.MediaShape$spec
     store_var _2
@@ -1300,7 +1300,7 @@ function structured_prompt_requests.MediaShape$render_prompt(photo: image) -> ai
     return
 }
 
-function structured_prompt_requests.MediaShape$spec(photo: image) -> ai.FunctionSpec<string> {
+function structured_prompt_requests.MediaShape$spec(photo: image) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -1325,7 +1325,7 @@ function structured_prompt_requests.MediaShape$spec(photo: image) -> ai.Function
     return
 }
 
-function structured_prompt_requests.MediaShape$stream(photo: image, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.MediaShape$stream(photo: image, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1344,7 +1344,7 @@ function structured_prompt_requests.MediaShape$stream(photo: image, client: ai.s
     return
 }
 
-function structured_prompt_requests.PreludeShape(client: ai.Client | null) -> string {
+function structured_prompt_requests.PreludeShape(client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1369,7 +1369,7 @@ function structured_prompt_requests.PreludeShape(client: ai.Client | null) -> st
     return
 }
 
-function structured_prompt_requests.PreludeShape$build_request(client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.PreludeShape$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1393,7 +1393,7 @@ function structured_prompt_requests.PreludeShape$parse(json: string) -> string {
     return
 }
 
-function structured_prompt_requests.PreludeShape$render_prompt() -> ai.Prompt {
+function structured_prompt_requests.PreludeShape$render_prompt() -> <unresolved type #135172864440005> {
     call user.structured_prompt_requests.PreludeShape$spec
     store_var _1
     load_type string
@@ -1405,7 +1405,7 @@ function structured_prompt_requests.PreludeShape$render_prompt() -> ai.Prompt {
     return
 }
 
-function structured_prompt_requests.PreludeShape$spec() -> ai.FunctionSpec<string> {
+function structured_prompt_requests.PreludeShape$spec() -> <unresolved type #25974768157144><string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -1424,7 +1424,7 @@ function structured_prompt_requests.PreludeShape$spec() -> ai.FunctionSpec<strin
     return
 }
 
-function structured_prompt_requests.PreludeShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.PreludeShape$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1442,7 +1442,7 @@ function structured_prompt_requests.PreludeShape$stream(client: ai.stream.Stream
     return
 }
 
-function structured_prompt_requests.RequestShape(input: string, client: ai.Client | null) -> string {
+function structured_prompt_requests.RequestShape(input: string, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1468,7 +1468,7 @@ function structured_prompt_requests.RequestShape(input: string, client: ai.Clien
     return
 }
 
-function structured_prompt_requests.RequestShape$build_request(input: string, client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.RequestShape$build_request(input: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1493,7 +1493,7 @@ function structured_prompt_requests.RequestShape$parse(json: string) -> string {
     return
 }
 
-function structured_prompt_requests.RequestShape$render_prompt(input: string) -> ai.Prompt {
+function structured_prompt_requests.RequestShape$render_prompt(input: string) -> <unresolved type #135172864440005> {
     load_var input
     call user.structured_prompt_requests.RequestShape$spec
     store_var _2
@@ -1506,7 +1506,7 @@ function structured_prompt_requests.RequestShape$render_prompt(input: string) ->
     return
 }
 
-function structured_prompt_requests.RequestShape$spec(input: string) -> ai.FunctionSpec<string> {
+function structured_prompt_requests.RequestShape$spec(input: string) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -1546,7 +1546,7 @@ function structured_prompt_requests.RequestShape$spec(input: string) -> ai.Funct
     return
 }
 
-function structured_prompt_requests.RequestShape$stream(input: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.RequestShape$stream(input: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1565,7 +1565,7 @@ function structured_prompt_requests.RequestShape$stream(input: string, client: a
     return
 }
 
-function structured_prompt_requests.RoledShape(client: ai.Client | null) -> string {
+function structured_prompt_requests.RoledShape(client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1590,7 +1590,7 @@ function structured_prompt_requests.RoledShape(client: ai.Client | null) -> stri
     return
 }
 
-function structured_prompt_requests.RoledShape$build_request(client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.RoledShape$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1614,7 +1614,7 @@ function structured_prompt_requests.RoledShape$parse(json: string) -> string {
     return
 }
 
-function structured_prompt_requests.RoledShape$render_prompt() -> ai.Prompt {
+function structured_prompt_requests.RoledShape$render_prompt() -> <unresolved type #135172864440005> {
     call user.structured_prompt_requests.RoledShape$spec
     store_var _1
     load_type string
@@ -1626,7 +1626,7 @@ function structured_prompt_requests.RoledShape$render_prompt() -> ai.Prompt {
     return
 }
 
-function structured_prompt_requests.RoledShape$spec() -> ai.FunctionSpec<string> {
+function structured_prompt_requests.RoledShape$spec() -> <unresolved type #25974768157144><string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -1660,7 +1660,7 @@ function structured_prompt_requests.RoledShape$spec() -> ai.FunctionSpec<string>
     return
 }
 
-function structured_prompt_requests.RoledShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.RoledShape$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1678,7 +1678,7 @@ function structured_prompt_requests.RoledShape$stream(client: ai.stream.Streamin
     return
 }
 
-function structured_prompt_requests.RolelessImageShape(photo: image, client: ai.Client | null) -> string {
+function structured_prompt_requests.RolelessImageShape(photo: image, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1704,7 +1704,7 @@ function structured_prompt_requests.RolelessImageShape(photo: image, client: ai.
     return
 }
 
-function structured_prompt_requests.RolelessImageShape$build_request(photo: image, client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.RolelessImageShape$build_request(photo: image, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1729,7 +1729,7 @@ function structured_prompt_requests.RolelessImageShape$parse(json: string) -> st
     return
 }
 
-function structured_prompt_requests.RolelessImageShape$render_prompt(photo: image) -> ai.Prompt {
+function structured_prompt_requests.RolelessImageShape$render_prompt(photo: image) -> <unresolved type #135172864440005> {
     load_var photo
     call user.structured_prompt_requests.RolelessImageShape$spec
     store_var _2
@@ -1742,7 +1742,7 @@ function structured_prompt_requests.RolelessImageShape$render_prompt(photo: imag
     return
 }
 
-function structured_prompt_requests.RolelessImageShape$spec(photo: image) -> ai.FunctionSpec<string> {
+function structured_prompt_requests.RolelessImageShape$spec(photo: image) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -1767,7 +1767,7 @@ function structured_prompt_requests.RolelessImageShape$spec(photo: image) -> ai.
     return
 }
 
-function structured_prompt_requests.RolelessImageShape$stream(photo: image, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.RolelessImageShape$stream(photo: image, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1786,7 +1786,7 @@ function structured_prompt_requests.RolelessImageShape$stream(photo: image, clie
     return
 }
 
-function structured_prompt_requests.RolelessShape(client: ai.Client | null) -> string {
+function structured_prompt_requests.RolelessShape(client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1811,7 +1811,7 @@ function structured_prompt_requests.RolelessShape(client: ai.Client | null) -> s
     return
 }
 
-function structured_prompt_requests.RolelessShape$build_request(client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.RolelessShape$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1835,7 +1835,7 @@ function structured_prompt_requests.RolelessShape$parse(json: string) -> string 
     return
 }
 
-function structured_prompt_requests.RolelessShape$render_prompt() -> ai.Prompt {
+function structured_prompt_requests.RolelessShape$render_prompt() -> <unresolved type #135172864440005> {
     call user.structured_prompt_requests.RolelessShape$spec
     store_var _1
     load_type string
@@ -1847,7 +1847,7 @@ function structured_prompt_requests.RolelessShape$render_prompt() -> ai.Prompt {
     return
 }
 
-function structured_prompt_requests.RolelessShape$spec() -> ai.FunctionSpec<string> {
+function structured_prompt_requests.RolelessShape$spec() -> <unresolved type #25974768157144><string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -1866,7 +1866,7 @@ function structured_prompt_requests.RolelessShape$spec() -> ai.FunctionSpec<stri
     return
 }
 
-function structured_prompt_requests.RolelessShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.RolelessShape$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1884,7 +1884,7 @@ function structured_prompt_requests.RolelessShape$stream(client: ai.stream.Strea
     return
 }
 
-function structured_prompt_requests.WhitespaceShape(client: ai.Client | null) -> string {
+function structured_prompt_requests.WhitespaceShape(client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1909,7 +1909,7 @@ function structured_prompt_requests.WhitespaceShape(client: ai.Client | null) ->
     return
 }
 
-function structured_prompt_requests.WhitespaceShape$build_request(client: ai.Client | null) -> baml.http.Request {
+function structured_prompt_requests.WhitespaceShape$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1933,7 +1933,7 @@ function structured_prompt_requests.WhitespaceShape$parse(json: string) -> strin
     return
 }
 
-function structured_prompt_requests.WhitespaceShape$render_prompt() -> ai.Prompt {
+function structured_prompt_requests.WhitespaceShape$render_prompt() -> <unresolved type #135172864440005> {
     call user.structured_prompt_requests.WhitespaceShape$spec
     store_var _1
     load_type string
@@ -1945,7 +1945,7 @@ function structured_prompt_requests.WhitespaceShape$render_prompt() -> ai.Prompt
     return
 }
 
-function structured_prompt_requests.WhitespaceShape$spec() -> ai.FunctionSpec<string> {
+function structured_prompt_requests.WhitespaceShape$spec() -> <unresolved type #25974768157144><string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -1964,7 +1964,7 @@ function structured_prompt_requests.WhitespaceShape$spec() -> ai.FunctionSpec<st
     return
 }
 
-function structured_prompt_requests.WhitespaceShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function structured_prompt_requests.WhitespaceShape$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1982,7 +1982,7 @@ function structured_prompt_requests.WhitespaceShape$stream(client: ai.stream.Str
     return
 }
 
-function structured_prompt_requests._input_for(spec: ai.FunctionSpec<string>) -> ai.ModelTurnInput {
+function structured_prompt_requests._input_for(spec: <unresolved type #25974768157144><string>) -> <unresolved type #66661248708833> {
     load_var spec
     load_field .prompt_template
     store_var _2
@@ -2000,7 +2000,7 @@ function structured_prompt_requests._input_for(spec: ai.FunctionSpec<string>) ->
     return
 }
 
-function structured_prompt_requests._roled_body(request: baml.http.Request) -> baml.json.json {
+function structured_prompt_requests._roled_body(request: <unresolved type #50857447195238>) -> <unresolved type #1888633819501> {
     load_var request
     load_field .body
     call baml.json.parse

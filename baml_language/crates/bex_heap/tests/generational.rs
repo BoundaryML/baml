@@ -7,13 +7,14 @@
 
 use std::sync::Arc;
 
-use baml_type::{Name, QualifiedTypeName, RealizedTy, TyAttr};
+use baml_type::{Name, QualifiedTypeName, TyAttr};
 use bex_external_types::WeakHeapRef;
 use bex_heap::{BexHeap, CollectionLevel, Generation, Tlab};
 use bex_vm_types::{
-    Class, GenericFunction, GlobalIndex, Object,
+    Class, ClassField, GenericFunction, GlobalIndex, Object, RealizedTy,
     types::{
-        DynTypeDefs, LocalName, MintId, Package, RuntimePackage, RuntimeTypeProvenance, TypeValue,
+        InterfaceDef, LocalName, MethodImpl, Package, RuntimeImplRule, RuntimePackage,
+        TypeAliasDef, TypeValue,
     },
 };
 use indexmap::IndexMap;
@@ -113,7 +114,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             interfaces: IndexMap::new(),
             impl_rules: IndexMap::new(),
             functions: IndexMap::new(),
-            recursive_type_aliases: IndexMap::new(),
+            type_aliases: IndexMap::new(),
             interface_blob: Vec::new(),
             test_init: None,
             mounted_types: IndexMap::new(),
@@ -128,40 +129,35 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
                 dependency_names: IndexMap::new(),
                 init: None,
                 initialized: true,
-                mint: None,
             })),
             session: None,
         };
         let package_ptr = tlab.alloc(Object::Package(Box::new(package)));
-        let ty = RealizedTy::Class(
-            QualifiedTypeName::local(Name::new("RuntimeClass")),
-            Vec::new(),
-            TyAttr::default(),
-        );
-        let type_ptr = tlab.alloc_type(TypeValue::runtime(ty, MintId::Runtime(1), package_ptr));
         let class_name = QualifiedTypeName::local(Name::new("RuntimeClass"));
+        let type_tag = baml_type::typetag::TypeTag::of_head("RuntimeClass");
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: class_name.clone(),
+            name: bex_vm_types::DeclarationName::Declared(class_name.clone()),
             fields: Vec::new(),
             description: None,
             alias: None,
             docstring: None,
             other: IndexMap::new(),
-            type_tag: baml_type::typetag::class_type_tag("RuntimeClass"),
+            type_tag,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: Some(RuntimeTypeProvenance {
-                mint: MintId::Runtime(1),
-                defs: DynTypeDefs::default(),
-                owner: package_ptr,
-            }),
+            owner: package_ptr,
         })));
+        let ty = RealizedTy::Class(
+            bex_vm_types::TypeHead::new(class_ptr, type_tag),
+            Vec::new(),
+            TyAttr::default(),
+        );
+        let type_ptr = tlab.alloc_type(TypeValue::new(ty));
         let function_ptr = tlab.alloc(Object::GenericFunction(GenericFunction {
             function: GlobalIndex::from_raw(0),
             type_args: Box::new([]),
             runtime_package: package_ptr,
-            exact_type_values: None,
         }));
         // SAFETY: this TLAB exclusively owns both fresh Gen0 objects and no GC
         // can run concurrently in this single-threaded test.
@@ -177,9 +173,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
         );
         let runtime = package.runtime.as_mut().expect("runtime image");
         runtime.objects = vec![type_ptr, function_ptr, class_ptr].into_boxed_slice();
-        runtime
-            .type_values
-            .insert("RuntimeClass".to_string(), type_ptr);
+        runtime.type_values.insert(class_ptr, type_ptr);
         (tlab, package_ptr, function_ptr)
     }
 
@@ -198,16 +192,23 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
     let Object::Package(package) = (unsafe { moved_package.get() }) else {
         panic!("root ceased to be a package")
     };
-    let moved_type = package.runtime.as_ref().unwrap().type_values["RuntimeClass"];
-    let Object::Type(type_value) = (unsafe { moved_type.get() }) else {
-        panic!("package mint ceased to be a type")
-    };
-    assert_eq!(type_value.owner, moved_package);
     let moved_class = package.classes.values().next().copied().unwrap();
+    let moved_type = package.runtime.as_ref().unwrap().type_values[&moved_class];
+    let Object::Type(type_value) = (unsafe { moved_type.get() }) else {
+        panic!("package type value ceased to be a type")
+    };
+    let RealizedTy::Class(head, _, _) = &type_value.ty else {
+        panic!("package type value ceased to wrap a class type")
+    };
+    assert_eq!(
+        head.ptr(),
+        moved_class,
+        "the type's head must follow its declaration"
+    );
     let Object::Class(class) = (unsafe { moved_class.get() }) else {
         panic!("package class ceased to be a class")
     };
-    assert_eq!(class.runtime_type.as_ref().unwrap().owner, moved_package);
+    assert_eq!(class.owner, moved_package);
     assert_eq!(forwarding.get(&package_ptr), Some(&moved_package));
 
     let dropped_heap = BexHeap::new(vec![]);
@@ -1032,4 +1033,393 @@ fn test_gen1_container_acquires_young_ref_survives_minor_gc_chain() {
         s, "B_contents",
         "B must survive two minor GCs via the post-promotion card mark"
     );
+}
+
+/// A helper: an otherwise-empty static-shaped package.
+fn empty_package() -> Package {
+    Package {
+        exported_names: Vec::new(),
+        classes: IndexMap::new(),
+        enums: IndexMap::new(),
+        interfaces: IndexMap::new(),
+        impl_rules: IndexMap::new(),
+        functions: IndexMap::new(),
+        type_aliases: IndexMap::new(),
+        interface_blob: Vec::new(),
+        test_init: None,
+        mounted_types: IndexMap::new(),
+        runtime: None,
+        session: None,
+    }
+}
+
+/// A session graft inserts runtime `Object::TypeAlias` pointers into
+/// `Package.type_aliases`; the collector must keep them alive and repoint the
+/// map entry when the alias moves.
+#[test]
+fn package_type_aliases_are_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let alias_name = QualifiedTypeName::local(Name::new("SessionAlias"));
+    let alias_ptr = tlab.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
+        name: alias_name.clone(),
+        type_tag: baml_type::typetag::TypeTag::of_head("SessionAlias"),
+        definition: RealizedTy::int(),
+        owner: bex_vm_types::HeapPtr::null(),
+    })));
+    let mut package = empty_package();
+    package.type_aliases.insert(
+        LocalName {
+            namespace: Vec::new(),
+            name: Name::new("SessionAlias"),
+        },
+        alias_ptr,
+    );
+    let package_ptr = tlab.alloc(Object::Package(Box::new(package)));
+
+    // Root only the package: the alias must survive through the map alone, and
+    // the entry must track the alias across two moves plus a compaction.
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[package_ptr], CollectionLevel::Minor) };
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+    let (stats, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+
+    assert_eq!(stats.live_count, 2, "package and alias should both survive");
+    let Object::Package(package) = (unsafe { roots[0].get() }) else {
+        panic!("root was not the package")
+    };
+    let forwarded = *package
+        .type_aliases
+        .values()
+        .next()
+        .expect("alias entry was lost");
+    assert_ne!(
+        forwarded, alias_ptr,
+        "the alias moved, so the entry must be repointed"
+    );
+    let Object::TypeAlias(alias) = (unsafe { forwarded.get() }) else {
+        panic!("type_aliases entry does not point at a TypeAlias")
+    };
+    assert_eq!(alias.name, alias_name);
+}
+
+/// A field's exact-operand `TypeValue` reaches its declaration through a head,
+/// and that declaration's `owner` is what keeps the package alive. The
+/// collector must walk the whole chain — field type, head, owner — and repoint
+/// each link.
+#[test]
+fn a_field_type_value_keeps_its_declaration_and_package_alive() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
+    let enum_tag = baml_type::typetag::TypeTag::fresh_dynamic();
+    let enum_ptr = tlab.alloc(Object::Enum(Box::new(bex_vm_types::Enum {
+        name: bex_vm_types::DeclarationName::Anonymous(Name::new("FieldEnum")),
+        variants: Vec::new(),
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+        type_tag: enum_tag,
+        ty_attr: TyAttr::default(),
+        owner: package_ptr,
+    })));
+    let field_ty = RealizedTy::Enum(
+        bex_vm_types::TypeHead::new(enum_ptr, enum_tag),
+        TyAttr::default(),
+    );
+    let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
+        name: bex_vm_types::DeclarationName::Declared(QualifiedTypeName::local(Name::new(
+            "FieldOwner",
+        ))),
+        fields: vec![ClassField {
+            name: "value".to_string(),
+            field_type: bex_vm_types::RuntimeTy::from(field_ty.clone()),
+            field_template: bex_vm_types::TyTemplate::from(field_ty.clone()),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: IndexMap::new(),
+            skip: false,
+            runtime_type: Some(TypeValue::new(field_ty)),
+        }],
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+        type_tag: baml_type::typetag::TypeTag::of_head("FieldOwner"),
+        ty_attr: TyAttr::default(),
+        has_cleanup: false,
+        generic_param_count: 0,
+        owner: bex_vm_types::HeapPtr::null(),
+    })));
+
+    // Root only the outer class: the enum survives through the field type's
+    // head, and the package survives through the enum's owner — across moves
+    // and a compaction.
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[class_ptr], CollectionLevel::Minor) };
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+    let (stats, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+
+    assert_eq!(
+        stats.live_count, 3,
+        "class, field enum, and owner package should all survive"
+    );
+    let Object::Class(class) = (unsafe { roots[0].get() }) else {
+        panic!("root was not the class")
+    };
+    let exact = class.fields[0]
+        .runtime_type
+        .as_ref()
+        .expect("field runtime type was lost");
+    let RealizedTy::Enum(head, _) = &exact.ty else {
+        panic!("field runtime type ceased to wrap an enum")
+    };
+    assert_eq!(head.tag(), enum_tag, "a move must not change identity");
+    assert_ne!(
+        head.ptr(),
+        enum_ptr,
+        "the enum moved, so the head must be repointed"
+    );
+    let Object::Enum(enm) = (unsafe { head.ptr().get() }) else {
+        panic!("the field type's head does not point at an enum")
+    };
+    assert_ne!(
+        enm.owner, package_ptr,
+        "the package moved, so owner must be repointed"
+    );
+    assert!(
+        matches!(unsafe { enm.owner.get() }, Object::Package(_)),
+        "the declaration's owner does not point at the package"
+    );
+}
+
+/// A runtime-allocated impl rule (a session's `implements` block or an
+/// anonymous class's witness) points at a moving interface and moving method
+/// bodies. The collector must keep both alive through the rule and repoint
+/// them when they move — dispatch reads `methods[].fqn` straight off the rule.
+#[test]
+fn impl_rule_edges_are_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let iface_name = QualifiedTypeName::local(Name::new("Runtime"));
+    let iface_ptr = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
+        name: iface_name.clone(),
+        type_tag: baml_type::typetag::TypeTag::of_head("Runtime"),
+        args: Vec::new(),
+        requires: Vec::new(),
+        assoc: Vec::new(),
+        fields: Vec::new(),
+        methods: Vec::new(),
+        owner: bex_vm_types::HeapPtr::null(),
+    })));
+    // Any heap object serves as the method body's stand-in target.
+    let method_ptr = tlab.alloc_string("method body".to_string());
+    let rule_ptr = tlab.alloc(Object::ImplRule(Box::new(RuntimeImplRule {
+        interface_head: iface_ptr,
+        for_ty_pattern: baml_type::TyTemplate::from(RealizedTy::int()),
+        generic_param_bounds: Vec::new(),
+        interface_args: Vec::new(),
+        interface_assoc: Vec::new(),
+        methods: IndexMap::from([(
+            Name::new("run"),
+            MethodImpl {
+                fqn: method_ptr,
+                frame: Vec::new(),
+            },
+        )]),
+        field_links: Box::default(),
+    })));
+
+    // Root only the rule across two moves and a compaction.
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[rule_ptr], CollectionLevel::Minor) };
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+    let (stats, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+
+    assert_eq!(
+        stats.live_count, 3,
+        "rule, interface and method body must all survive"
+    );
+    let Object::ImplRule(rule) = (unsafe { roots[0].get() }) else {
+        panic!("root was not the impl rule")
+    };
+    assert_ne!(
+        rule.interface_head, iface_ptr,
+        "interface moved; head must be repointed"
+    );
+    let Object::Interface(iface) = (unsafe { rule.interface_head.get() }) else {
+        panic!("interface_head does not point at an interface")
+    };
+    assert_eq!(iface.name, iface_name);
+    let fqn = rule.methods["run"].fqn;
+    assert_ne!(fqn, method_ptr, "method body moved; fqn must be repointed");
+    assert!(matches!(unsafe { fqn.get() }, Object::String(_)));
+}
+
+/// A runtime-declared interface back-references its owning package and points
+/// at its default-method bodies; the collector must keep both alive through
+/// the interface alone and repoint them as they move.
+#[test]
+fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
+    let body_ptr = tlab.alloc_string("default body".to_string());
+    let iface_ptr = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
+        name: QualifiedTypeName::local(Name::new("SessionIface")),
+        type_tag: baml_type::typetag::TypeTag::of_head("SessionIface"),
+        args: Vec::new(),
+        requires: Vec::new(),
+        assoc: Vec::new(),
+        fields: Vec::new(),
+        methods: vec![bex_vm_types::types::InterfaceMethodDef {
+            name: Name::new("greet"),
+            args: Vec::new(),
+            kwargs: Vec::new(),
+            returns: baml_type::RuntimeTy::Void {
+                attr: TyAttr::default(),
+            },
+            errors: baml_type::RuntimeTy::Void {
+                attr: TyAttr::default(),
+            },
+            default: Some(bex_vm_types::ObjectIndex::from_raw(0)),
+            default_fn: body_ptr,
+        }],
+        owner: package_ptr,
+    })));
+
+    // Root only the interface across two moves and a compaction.
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[iface_ptr], CollectionLevel::Minor) };
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+    let (stats, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+
+    assert_eq!(
+        stats.live_count, 3,
+        "interface, owner package and default body must all survive"
+    );
+    let Object::Interface(iface) = (unsafe { roots[0].get() }) else {
+        panic!("root was not the interface")
+    };
+    assert_ne!(
+        iface.owner, package_ptr,
+        "package moved; owner must be repointed"
+    );
+    assert!(matches!(unsafe { iface.owner.get() }, Object::Package(_)));
+    let bound = iface.methods[0].default_fn;
+    assert_ne!(
+        bound, body_ptr,
+        "default body moved; default_fn must be repointed"
+    );
+    assert!(matches!(unsafe { bound.get() }, Object::String(_)));
+}
+
+/// A runtime-declared alias back-references its owning package; the collector
+/// must keep the package alive through the alias alone.
+#[test]
+fn type_alias_owner_is_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
+    let alias_ptr = tlab.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
+        name: QualifiedTypeName::local(Name::new("OwnedAlias")),
+        type_tag: baml_type::typetag::TypeTag::of_head("OwnedAlias"),
+        definition: RealizedTy::int(),
+        owner: package_ptr,
+    })));
+
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[alias_ptr], CollectionLevel::Minor) };
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
+    let (stats, roots, _) =
+        unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Major) };
+
+    assert_eq!(
+        stats.live_count, 2,
+        "alias and owner package must both survive"
+    );
+    let Object::TypeAlias(alias) = (unsafe { roots[0].get() }) else {
+        panic!("root was not the alias")
+    };
+    assert_ne!(
+        alias.owner, package_ptr,
+        "package moved; owner must be repointed"
+    );
+    assert!(matches!(unsafe { alias.owner.get() }, Object::Package(_)));
+}
+
+/// A live future's `Future<T, E>` output-type heads are real GC edges: the
+/// declarations they name stay live and the heads are repointed when those
+/// declarations move. Regression for the walk gap where `Object::Future` was
+/// excluded from `visit_object_heads(_mut)` — its root walk repoints only the
+/// future object itself, so an output type naming a runtime-created class
+/// dangled (and the class could be collected) after a major collection.
+#[test]
+fn future_output_type_heads_are_traced_and_forwarded() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+
+    let class_name = QualifiedTypeName::local(Name::new("SpawnOut"));
+    let type_tag = baml_type::typetag::TypeTag::of_head("SpawnOut");
+    let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
+        name: bex_vm_types::DeclarationName::Declared(class_name),
+        fields: Vec::new(),
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+        type_tag,
+        ty_attr: TyAttr::default(),
+        has_cleanup: false,
+        generic_param_count: 0,
+        owner: bex_vm_types::HeapPtr::null(),
+    })));
+    let returns = RealizedTy::Class(
+        bex_vm_types::TypeHead::new(class_ptr, type_tag),
+        Vec::new(),
+        TyAttr::default(),
+    );
+    let future = bex_vm_types::types::Future::pending(
+        bex_vm_types::types::FutureId::from_usize(1),
+        returns,
+        RealizedTy::never(),
+        bex_vm_types::types::CancellationToken::new(),
+    );
+    let future_ptr = tlab.alloc(Object::Future(future));
+
+    // Root ONLY the future: the class must survive through the output-type
+    // head alone.
+    let (stats, roots, _forwarding) =
+        unsafe { heap.collect_garbage_generational(&[future_ptr], CollectionLevel::Major) };
+    tlab.invalidate();
+    assert_eq!(stats.live_count, 2, "the class is live through the head");
+
+    let moved_future = roots[0];
+    let Object::Future(future) = (unsafe { moved_future.get() }) else {
+        panic!("root ceased to be a future")
+    };
+    let RealizedTy::Class(head, _, _) = future.returns() else {
+        panic!("future returns ceased to be a class")
+    };
+    assert!(head.is_resolved());
+    assert_ne!(
+        head.ptr(),
+        class_ptr,
+        "a major collection moves Gen0 objects, so the head must be repointed"
+    );
+    let Object::Class(class) = (unsafe { head.ptr().get() }) else {
+        panic!("forwarded head does not point at the class")
+    };
+    assert_eq!(class.type_tag, type_tag, "identity survives the move");
 }

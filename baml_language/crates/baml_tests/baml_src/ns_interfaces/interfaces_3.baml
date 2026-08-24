@@ -546,8 +546,9 @@ test "positional_typevar_union_interface_args_dispatch" {
 // ── Ported from tests/interfaces.rs ──────────────────────────────────────────
 
 // The dispatch cache keys on the *realized* interface arguments, not just the
-// static type-value mint: two `Tagged<...>` instantiations on one class must
-// select different implementations from the same fact-poor structural context.
+// interface's nominal identity: two `Tagged<...>` instantiations on one class
+// must select different implementations from the same fact-poor structural
+// context.
 interface VdcAnimal {}
 
 class VdcDog {

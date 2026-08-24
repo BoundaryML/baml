@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.test_with_not_keyword.$init_test_ns_fixtures_ns_test_with_not_keyword_main(registry: testing.TestCollector) -> null {
+function fixtures.test_with_not_keyword.$init_test_ns_fixtures_ns_test_with_not_keyword_main(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.fixtures.test_with_not_keyword"
     load_const "with as field"
@@ -13,7 +13,7 @@ function fixtures.test_with_not_keyword.$init_test_ns_fixtures_ns_test_with_not_
     return
 }
 
-function fixtures.test_with_not_keyword.make_foo() -> fixtures.test_with_not_keyword.Foo {
+function fixtures.test_with_not_keyword.make_foo() -> <unresolved type #11937554914037> {
     load_const 1
     init_instance user.fixtures.test_with_not_keyword.Foo .x
     return

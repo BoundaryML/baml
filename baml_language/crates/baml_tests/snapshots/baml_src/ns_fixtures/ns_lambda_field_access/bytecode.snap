@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.lambda_field_access.test_captured_field_access(obj: fixtures.lambda_field_access.Outer) -> string {
+function fixtures.lambda_field_access.test_captured_field_access(obj: <unresolved type #98198871176098>) -> string {
     load_var ?1
     make_cell
     store_var ?1
@@ -11,7 +11,7 @@ function fixtures.lambda_field_access.test_captured_field_access(obj: fixtures.l
     return
 }
 
-function fixtures.lambda_field_access.test_captured_nested_field(obj: fixtures.lambda_field_access.Outer) -> int {
+function fixtures.lambda_field_access.test_captured_nested_field(obj: <unresolved type #98198871176098>) -> int {
     load_var ?1
     make_cell
     store_var ?1
@@ -21,7 +21,7 @@ function fixtures.lambda_field_access.test_captured_nested_field(obj: fixtures.l
     return
 }
 
-function fixtures.lambda_field_access.test_lambda_param_and_capture(obj: fixtures.lambda_field_access.Outer) -> int {
+function fixtures.lambda_field_access.test_lambda_param_and_capture(obj: <unresolved type #98198871176098>) -> int {
     load_var ?1
     make_cell
     store_var ?1
@@ -32,7 +32,7 @@ function fixtures.lambda_field_access.test_lambda_param_and_capture(obj: fixture
     return
 }
 
-function fixtures.lambda_field_access.test_nested_lambda_capture(obj: fixtures.lambda_field_access.Outer) -> string {
+function fixtures.lambda_field_access.test_nested_lambda_capture(obj: <unresolved type #98198871176098>) -> string {
     load_var ?1
     make_cell
     store_var ?1
@@ -42,7 +42,7 @@ function fixtures.lambda_field_access.test_nested_lambda_capture(obj: fixtures.l
     return
 }
 
-function fixtures.lambda_field_access.test_no_leak_after_lambda(obj: fixtures.lambda_field_access.Outer) -> string {
+function fixtures.lambda_field_access.test_no_leak_after_lambda(obj: <unresolved type #98198871176098>) -> string {
     load_var ?1
     make_cell
     store_var ?1
@@ -55,7 +55,7 @@ function fixtures.lambda_field_access.test_no_leak_after_lambda(obj: fixtures.la
     return
 }
 
-function fixtures.lambda_field_access.test_sequential_lambdas(obj: fixtures.lambda_field_access.Outer) -> int {
+function fixtures.lambda_field_access.test_sequential_lambdas(obj: <unresolved type #98198871176098>) -> int {
     load_var ?1
     make_cell
     store_var ?1

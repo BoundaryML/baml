@@ -1098,6 +1098,14 @@ fn run_filtered_report(
     invocation: &TestInvocation,
 ) -> Result<BexExternalValue> {
     let (call_ctx, logs) = ctx.call_context(CallId::next());
+    // Cap concurrently RUNNING test bodies at twice the core count. The
+    // runner admits a leaf only when a slot is free, so a five-thousand-test
+    // corpus holds ~2N live VM threads instead of five thousand — which keeps
+    // per-thread GC costs bounded and keeps wall-clock timing assertions
+    // meaningful under full-corpus load.
+    let max_concurrency =
+        i64::try_from(std::thread::available_parallelism().map_or(8, std::num::NonZero::get) * 2)
+            .unwrap_or(16);
     let result = ctx.block_on_with_logs(
         ctx.engine.call_function(
             "testing.TestRegistry.run_filtered",
@@ -1107,6 +1115,7 @@ fn run_filtered_report(
                 string_array(&invocation.profile_exclude),
                 string_array(&invocation.cli_include),
                 string_array(&invocation.cli_exclude),
+                BexExternalValue::Int(max_concurrency),
             ],
             call_ctx,
             true,

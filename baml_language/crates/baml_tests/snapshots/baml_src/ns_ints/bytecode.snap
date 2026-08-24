@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function ints.$init_test_ns_ints_ints(registry: testing.TestCollector) -> null {
+function ints.$init_test_ns_ints_ints(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.ints"
     load_const "int_abs_positive"

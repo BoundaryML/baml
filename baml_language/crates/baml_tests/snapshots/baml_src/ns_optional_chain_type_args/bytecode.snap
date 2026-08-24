@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function optional_chain_type_args.$init_test_ns_optional_chain_type_args_optional_chain_type_args(registry: testing.TestCollector) -> null {
+function optional_chain_type_args.$init_test_ns_optional_chain_type_args_optional_chain_type_args(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.optional_chain_type_args"
     load_const "explicit_type_arg_matches_let_else"
@@ -104,7 +104,7 @@ function optional_chain_type_args.$init_test_ns_optional_chain_type_args_optiona
     return
 }
 
-function optional_chain_type_args.Boxed.both(self: optional_chain_type_args.Boxed<#0>) -> string {
+function optional_chain_type_args.Boxed.both(self: <unresolved type #126190315225735><#0>) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     store_var _3
@@ -119,13 +119,13 @@ function optional_chain_type_args.Boxed.both(self: optional_chain_type_args.Boxe
     return
 }
 
-function optional_chain_type_args.Boxed.describe(self: optional_chain_type_args.Boxed<#0>) -> string {
+function optional_chain_type_args.Boxed.describe(self: <unresolved type #126190315225735><#0>) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function optional_chain_type_args.Callables.method(self: optional_chain_type_args.Callables, v: int) -> string {
+function optional_chain_type_args.Callables.method(self: <unresolved type #6098275091522>, v: int) -> string {
     load_type int
     load_var v
     call baml.String.from
@@ -136,7 +136,7 @@ function optional_chain_type_args.Callables.method(self: optional_chain_type_arg
     return
 }
 
-function optional_chain_type_args.Cat.Speaker.speak(self: optional_chain_type_args.Cat) -> string {
+function optional_chain_type_args.Cat.Speaker.speak(self: <unresolved type #18733967728171>) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     store_var _2
@@ -146,43 +146,43 @@ function optional_chain_type_args.Cat.Speaker.speak(self: optional_chain_type_ar
     return
 }
 
-function optional_chain_type_args.Dog.Speaker.speak(self: optional_chain_type_args.Dog) -> string {
+function optional_chain_type_args.Dog.Speaker.speak(self: <unresolved type #75908162368493>) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function optional_chain_type_args.Holder.ident(self: optional_chain_type_args.Holder, v: #0) -> string {
+function optional_chain_type_args.Holder.ident(self: <unresolved type #82740753195475>, v: #0) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function optional_chain_type_args.Holder.inner(self: optional_chain_type_args.Holder) -> optional_chain_type_args.Holder | null {
+function optional_chain_type_args.Holder.inner(self: <unresolved type #82740753195475>) -> <unresolved type #82740753195475> | null {
     load_var self
     load_field .raw
     init_instance user.optional_chain_type_args.Holder .raw
     return
 }
 
-function optional_chain_type_args.Holder.inner_missing(self: optional_chain_type_args.Holder) -> optional_chain_type_args.Holder | null {
+function optional_chain_type_args.Holder.inner_missing(self: <unresolved type #82740753195475>) -> <unresolved type #82740753195475> | null {
     load_const null
     return
 }
 
-function optional_chain_type_args.Holder.plain(self: optional_chain_type_args.Holder) -> string {
+function optional_chain_type_args.Holder.plain(self: <unresolved type #82740753195475>) -> string {
     load_var self
     load_field .raw
     return
 }
 
-function optional_chain_type_args.Holder.value(self: optional_chain_type_args.Holder) -> string {
+function optional_chain_type_args.Holder.value(self: <unresolved type #82740753195475>) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function optional_chain_type_args.Pair.Tagged.tag(self: optional_chain_type_args.Pair<#0>) -> string {
+function optional_chain_type_args.Pair.Tagged.tag(self: <unresolved type #115681419361973><#0>) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     store_var _3
@@ -197,7 +197,7 @@ function optional_chain_type_args.Pair.Tagged.tag(self: optional_chain_type_args
     return
 }
 
-function optional_chain_type_args.animal(which: int) -> optional_chain_type_args.Dog | optional_chain_type_args.Cat | null {
+function optional_chain_type_args.animal(which: int) -> <unresolved type #75908162368493> | <unresolved type #18733967728171> | null {
     load_var which
     load_const 0
     cmp_int_op ==
@@ -228,7 +228,7 @@ function optional_chain_type_args.animal(which: int) -> optional_chain_type_args
     return
 }
 
-function optional_chain_type_args.boxed(present: bool) -> optional_chain_type_args.Boxed<int> | null {
+function optional_chain_type_args.boxed(present: bool) -> <unresolved type #126190315225735><int> | null {
     load_var present
     pop_jump_if_false L0
     jump L1
@@ -545,7 +545,7 @@ function optional_chain_type_args.concrete_receiver_interface_method_fn() -> str
     return
 }
 
-function optional_chain_type_args.counted(c: optional_chain_type_args.EvalCounter) -> optional_chain_type_args.Callables | null {
+function optional_chain_type_args.counted(c: <unresolved type #97773164698853>) -> <unresolved type #6098275091522> | null {
     load_var2 1 1
     load_field .n
     load_const 1
@@ -556,7 +556,7 @@ function optional_chain_type_args.counted(c: optional_chain_type_args.EvalCounte
     return
 }
 
-function optional_chain_type_args.counted_null_after_two(c: optional_chain_type_args.EvalCounter) -> optional_chain_type_args.Callables | null {
+function optional_chain_type_args.counted_null_after_two(c: <unresolved type #97773164698853>) -> <unresolved type #6098275091522> | null {
     load_var2 1 1
     load_field .n
     load_const 1
@@ -581,7 +581,7 @@ function optional_chain_type_args.counted_null_after_two(c: optional_chain_type_
     return
 }
 
-function optional_chain_type_args.dog(present: bool) -> optional_chain_type_args.Dog | null {
+function optional_chain_type_args.dog(present: bool) -> <unresolved type #75908162368493> | null {
     load_var present
     pop_jump_if_false L0
     jump L1
@@ -668,7 +668,7 @@ function optional_chain_type_args.explicit_type_arg_null_receiver_fn() -> string
     return
 }
 
-function optional_chain_type_args.holder(present: bool) -> optional_chain_type_args.Holder | null {
+function optional_chain_type_args.holder(present: bool) -> <unresolved type #82740753195475> | null {
     load_var present
     pop_jump_if_false L0
     jump L1
@@ -854,14 +854,14 @@ function optional_chain_type_args.optional_chain_tmp_path(name: string) -> strin
     return
 }
 
-function optional_chain_type_args.optional_file(path: string) -> baml.fs.File | null {
+function optional_chain_type_args.optional_file(path: string) -> <unresolved type #98405344117422> | null {
     load_var path
     load_const "r"
     sys_op baml.fs.open
     return
 }
 
-function optional_chain_type_args.pair(which: int) -> optional_chain_type_args.Pair<int> | optional_chain_type_args.Pair<string> | null {
+function optional_chain_type_args.pair(which: int) -> <unresolved type #115681419361973><int> | <unresolved type #115681419361973><string> | null {
     load_var which
     load_const 0
     cmp_int_op ==
@@ -1061,7 +1061,7 @@ function optional_chain_type_args.reflected_missing_field_fn() -> int | null {
     return
 }
 
-function optional_chain_type_args.speaker(present: bool) -> optional_chain_type_args.Speaker | null {
+function optional_chain_type_args.speaker(present: bool) -> <unresolved type #50435934471718> | null {
     load_var present
     pop_jump_if_false L0
     jump L1

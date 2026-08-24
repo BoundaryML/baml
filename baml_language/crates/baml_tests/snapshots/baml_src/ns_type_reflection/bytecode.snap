@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function type_reflection.$init_test_ns_type_reflection_type_reflection(registry: testing.TestCollector) -> null {
+function type_reflection.$init_test_ns_type_reflection_type_reflection(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.type_reflection"
     load_const "eq_type_values_same"
@@ -48,7 +48,7 @@ function type_reflection.$init_test_ns_type_reflection_type_reflection(registry:
     return
 }
 
-function type_reflection.GetBar(client: ai.Client | null) -> type_reflection.Bar {
+function type_reflection.GetBar(client: <unresolved type #34575171419448> | null) -> <unresolved type #1016106543391> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -73,7 +73,7 @@ function type_reflection.GetBar(client: ai.Client | null) -> type_reflection.Bar
     return
 }
 
-function type_reflection.GetBar$build_request(client: ai.Client | null) -> baml.http.Request {
+function type_reflection.GetBar$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -90,14 +90,14 @@ function type_reflection.GetBar$build_request(client: ai.Client | null) -> baml.
     return
 }
 
-function type_reflection.GetBar$parse(json: string) -> type_reflection.Bar {
+function type_reflection.GetBar$parse(json: string) -> <unresolved type #1016106543391> {
     load_type type_reflection.Bar
     load_var json
     call baml.sap.parse
     return
 }
 
-function type_reflection.GetBar$render_prompt() -> ai.Prompt {
+function type_reflection.GetBar$render_prompt() -> <unresolved type #135172864440005> {
     call user.type_reflection.GetBar$spec
     store_var _1
     load_type type_reflection.Bar
@@ -109,7 +109,7 @@ function type_reflection.GetBar$render_prompt() -> ai.Prompt {
     return
 }
 
-function type_reflection.GetBar$spec() -> ai.FunctionSpec<type_reflection.Bar> {
+function type_reflection.GetBar$spec() -> <unresolved type #25974768157144><<unresolved type #1016106543391>> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -128,7 +128,7 @@ function type_reflection.GetBar$spec() -> ai.FunctionSpec<type_reflection.Bar> {
     return
 }
 
-function type_reflection.GetBar$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<type_reflection.Bar$stream | null, type_reflection.Bar> {
+function type_reflection.GetBar$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><<unresolved type #91345224971265> | null, <unresolved type #1016106543391>> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -146,7 +146,7 @@ function type_reflection.GetBar$stream(client: ai.stream.StreamingClient | null)
     return
 }
 
-function type_reflection.GetFoo(client: ai.Client | null) -> type_reflection.Foo {
+function type_reflection.GetFoo(client: <unresolved type #34575171419448> | null) -> <unresolved type #17509135595086> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -171,7 +171,7 @@ function type_reflection.GetFoo(client: ai.Client | null) -> type_reflection.Foo
     return
 }
 
-function type_reflection.GetFoo$build_request(client: ai.Client | null) -> baml.http.Request {
+function type_reflection.GetFoo$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -188,14 +188,14 @@ function type_reflection.GetFoo$build_request(client: ai.Client | null) -> baml.
     return
 }
 
-function type_reflection.GetFoo$parse(json: string) -> type_reflection.Foo {
+function type_reflection.GetFoo$parse(json: string) -> <unresolved type #17509135595086> {
     load_type type_reflection.Foo
     load_var json
     call baml.sap.parse
     return
 }
 
-function type_reflection.GetFoo$render_prompt() -> ai.Prompt {
+function type_reflection.GetFoo$render_prompt() -> <unresolved type #135172864440005> {
     call user.type_reflection.GetFoo$spec
     store_var _1
     load_type type_reflection.Foo
@@ -207,7 +207,7 @@ function type_reflection.GetFoo$render_prompt() -> ai.Prompt {
     return
 }
 
-function type_reflection.GetFoo$spec() -> ai.FunctionSpec<type_reflection.Foo> {
+function type_reflection.GetFoo$spec() -> <unresolved type #25974768157144><<unresolved type #17509135595086>> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -226,7 +226,7 @@ function type_reflection.GetFoo$spec() -> ai.FunctionSpec<type_reflection.Foo> {
     return
 }
 
-function type_reflection.GetFoo$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<type_reflection.Foo$stream | null, type_reflection.Foo> {
+function type_reflection.GetFoo$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><<unresolved type #118087982629110> | null, <unresolved type #17509135595086>> {
     load_var client
     load_const <omitted>
     cmp_op ==

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function prompt_parameter.$init_test_ns_prompt_parameter_prompt_parameter(registry: testing.TestCollector) -> null {
+function prompt_parameter.$init_test_ns_prompt_parameter_prompt_parameter(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.prompt_parameter"
     load_const "prompt parameter expression bodies"
@@ -13,7 +13,7 @@ function prompt_parameter.$init_test_ns_prompt_parameter_prompt_parameter(regist
     return
 }
 
-function prompt_parameter.Echo.echo(self: prompt_parameter.Echo, prompt: string) -> string {
+function prompt_parameter.Echo.echo(self: <unresolved type #30340993782301>, prompt: string) -> string {
     load_var prompt
     return
 }

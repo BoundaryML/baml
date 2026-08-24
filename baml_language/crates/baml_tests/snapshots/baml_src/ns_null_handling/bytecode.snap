@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function null_handling.$init_test_ns_null_handling_null_handling(registry: testing.TestCollector) -> null {
+function null_handling.$init_test_ns_null_handling_null_handling(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.null_handling"
     load_const "safe_assign_null_skips"
@@ -97,7 +97,7 @@ function null_handling.$init_test_ns_null_handling_null_handling(registry: testi
     return
 }
 
-function null_handling.nh_combined_lhs_null(node: null_handling.NhNode | null, items: int[] | null) -> int | null {
+function null_handling.nh_combined_lhs_null(node: <unresolved type #55313974077105> | null, items: int[] | null) -> int | null {
     load_var node
     load_const null
     cmp_op ==
@@ -155,7 +155,7 @@ function null_handling.nh_combined_lhs_null(node: null_handling.NhNode | null, i
     return
 }
 
-function null_handling.nh_combined_rhs_null(node: null_handling.NhNode | null, items: int[] | null) -> int | null {
+function null_handling.nh_combined_rhs_null(node: <unresolved type #55313974077105> | null, items: int[] | null) -> int | null {
     load_var node
     load_const null
     cmp_op ==
@@ -213,7 +213,7 @@ function null_handling.nh_combined_rhs_null(node: null_handling.NhNode | null, i
     return
 }
 
-function null_handling.nh_compound_assign_non_null(user: null_handling.NhUser | null) -> int | null {
+function null_handling.nh_compound_assign_non_null(user: <unresolved type #25804038131958> | null) -> int | null {
     load_var user
     load_const null
     cmp_op ==
@@ -247,7 +247,7 @@ function null_handling.nh_compound_assign_non_null(user: null_handling.NhUser | 
     return
 }
 
-function null_handling.nh_compound_assign_null(user: null_handling.NhUser | null) -> int | null {
+function null_handling.nh_compound_assign_null(user: <unresolved type #25804038131958> | null) -> int | null {
     load_var user
     load_const null
     cmp_op ==
@@ -281,7 +281,7 @@ function null_handling.nh_compound_assign_null(user: null_handling.NhUser | null
     return
 }
 
-function null_handling.nh_multi_union_optional_access(animal: null_handling.NhCat | null_handling.NhDog | null) -> string | null {
+function null_handling.nh_multi_union_optional_access(animal: <unresolved type #119885045624235> | <unresolved type #36321751909229> | null) -> string | null {
     load_var animal
     load_const null
     cmp_op ==
@@ -546,7 +546,7 @@ function null_handling.nh_safe_assign_index_null(items: int[] | null) -> int | n
     return
 }
 
-function null_handling.nh_safe_assign_non_null(user: null_handling.NhUser | null) -> string | null {
+function null_handling.nh_safe_assign_non_null(user: <unresolved type #25804038131958> | null) -> string | null {
     load_var user
     load_const null
     cmp_op ==
@@ -602,7 +602,7 @@ function null_handling.nh_safe_assign_non_null(user: null_handling.NhUser | null
     return
 }
 
-function null_handling.nh_safe_assign_null(user: null_handling.NhUser | null) -> string | null {
+function null_handling.nh_safe_assign_null(user: <unresolved type #25804038131958> | null) -> string | null {
     load_var user
     load_const null
     cmp_op ==

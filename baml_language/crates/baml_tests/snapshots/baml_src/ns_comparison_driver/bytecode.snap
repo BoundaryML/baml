@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function comparison_driver.$init_test_ns_comparison_driver_comparison_driver(registry: testing.TestCollector) -> null {
+function comparison_driver.$init_test_ns_comparison_driver_comparison_driver(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.comparison_driver"
     load_const "driver_primitives_and_gate"
@@ -125,7 +125,7 @@ function comparison_driver.$init_test_ns_comparison_driver_comparison_driver(reg
     return
 }
 
-function comparison_driver.CdMoney.baml.ops.Compare.lt(self: comparison_driver.CdMoney, other: comparison_driver.CdMoney) -> bool {
+function comparison_driver.CdMoney.baml.ops.Compare.lt(self: <unresolved type #131488010237563>, other: <unresolved type #131488010237563>) -> bool {
     load_var self
     load_field .cents
     load_var other
@@ -134,7 +134,7 @@ function comparison_driver.CdMoney.baml.ops.Compare.lt(self: comparison_driver.C
     return
 }
 
-function comparison_driver.CdMoney.baml.ops.Equals.eq(self: comparison_driver.CdMoney, other: comparison_driver.CdMoney) -> bool {
+function comparison_driver.CdMoney.baml.ops.Equals.eq(self: <unresolved type #131488010237563>, other: <unresolved type #131488010237563>) -> bool {
     load_var self
     load_field .cents
     load_var other
@@ -143,7 +143,7 @@ function comparison_driver.CdMoney.baml.ops.Equals.eq(self: comparison_driver.Cd
     return
 }
 
-function comparison_driver.CdNestedTag.baml.ops.Equals.eq(self: comparison_driver.CdNestedTag, other: comparison_driver.CdNestedTag) -> bool {
+function comparison_driver.CdNestedTag.baml.ops.Equals.eq(self: <unresolved type #6629893405934>, other: <unresolved type #6629893405934>) -> bool {
     load_var self
     load_field .id
     load_var other
@@ -152,12 +152,12 @@ function comparison_driver.CdNestedTag.baml.ops.Equals.eq(self: comparison_drive
     return
 }
 
-function comparison_driver.CdOdd.baml.ops.Compare.gt(self: comparison_driver.CdOdd, other: comparison_driver.CdOdd) -> bool {
+function comparison_driver.CdOdd.baml.ops.Compare.gt(self: <unresolved type #130000690493562>, other: <unresolved type #130000690493562>) -> bool {
     load_const true
     return
 }
 
-function comparison_driver.CdOdd.baml.ops.Compare.lt(self: comparison_driver.CdOdd, other: comparison_driver.CdOdd) -> bool {
+function comparison_driver.CdOdd.baml.ops.Compare.lt(self: <unresolved type #130000690493562>, other: <unresolved type #130000690493562>) -> bool {
     load_var self
     load_field .n
     load_var other
@@ -166,7 +166,7 @@ function comparison_driver.CdOdd.baml.ops.Compare.lt(self: comparison_driver.CdO
     return
 }
 
-function comparison_driver.CdOdd.baml.ops.Equals.eq(self: comparison_driver.CdOdd, other: comparison_driver.CdOdd) -> bool {
+function comparison_driver.CdOdd.baml.ops.Equals.eq(self: <unresolved type #130000690493562>, other: <unresolved type #130000690493562>) -> bool {
     load_var self
     load_field .n
     load_var other
@@ -175,7 +175,7 @@ function comparison_driver.CdOdd.baml.ops.Equals.eq(self: comparison_driver.CdOd
     return
 }
 
-function comparison_driver.CdTag.baml.ops.Equals.eq(self: comparison_driver.CdTag, other: comparison_driver.CdTag) -> bool {
+function comparison_driver.CdTag.baml.ops.Equals.eq(self: <unresolved type #22247835027199>, other: <unresolved type #22247835027199>) -> bool {
     load_var self
     load_field .id
     load_var other
@@ -184,12 +184,12 @@ function comparison_driver.CdTag.baml.ops.Equals.eq(self: comparison_driver.CdTa
     return
 }
 
-function comparison_driver.baml.ops.Compare$for$CdOrderedEnum.lt(self: comparison_driver.CdOrderedEnum, other: comparison_driver.CdOrderedEnum) -> bool {
+function comparison_driver.baml.ops.Compare$for$CdOrderedEnum.lt(self: <unresolved type #113032218238947>, other: <unresolved type #113032218238947>) -> bool {
     load_const true
     return
 }
 
-function comparison_driver.baml.ops.Equals$for$CdBox<T>.eq(self: comparison_driver.CdBox<#0>, other: comparison_driver.CdBox<#0>) -> bool {
+function comparison_driver.baml.ops.Equals$for$CdBox<T>.eq(self: <unresolved type #7955956455006><#0>, other: <unresolved type #7955956455006><#0>) -> bool {
     load_var self
     load_field .v
     load_var other
@@ -198,24 +198,24 @@ function comparison_driver.baml.ops.Equals$for$CdBox<T>.eq(self: comparison_driv
     return
 }
 
-function comparison_driver.baml.ops.Equals$for$CdOrderedEnum.eq(self: comparison_driver.CdOrderedEnum, other: comparison_driver.CdOrderedEnum) -> bool {
+function comparison_driver.baml.ops.Equals$for$CdOrderedEnum.eq(self: <unresolved type #113032218238947>, other: <unresolved type #113032218238947>) -> bool {
     load_const false
     return
 }
 
-function comparison_driver.baml.ops.Equals$for$CdTotalEq.eq(self: comparison_driver.CdTotalEq, other: comparison_driver.CdTotalEq) -> bool {
+function comparison_driver.baml.ops.Equals$for$CdTotalEq.eq(self: <unresolved type #136566816286215>, other: <unresolved type #136566816286215>) -> bool {
     load_const true
     return
 }
 
-function comparison_driver.cd_box_int_one() -> comparison_driver.CdBox<int> {
+function comparison_driver.cd_box_int_one() -> <unresolved type #7955956455006><int> {
     load_const 1
     load_type int
     init_instance<1> user.comparison_driver.CdBox .v
     return
 }
 
-function comparison_driver.cd_box_str_one() -> comparison_driver.CdBox<string> {
+function comparison_driver.cd_box_str_one() -> <unresolved type #7955956455006><string> {
     load_const "1"
     load_type string
     init_instance<1> user.comparison_driver.CdBox .v
@@ -823,7 +823,7 @@ function comparison_driver.cd_lt_int(a: int, b: int) -> bool {
     return
 }
 
-function comparison_driver.cd_lt_money(a: comparison_driver.CdMoney, b: comparison_driver.CdMoney) -> bool {
+function comparison_driver.cd_lt_money(a: <unresolved type #131488010237563>, b: <unresolved type #131488010237563>) -> bool {
     load_type comparison_driver.CdMoney
     load_var2 1 2
     call user.comparison_driver.cd_lt_g
@@ -905,14 +905,14 @@ function comparison_driver.cd_m_le_true_true() -> bool {
     return
 }
 
-function comparison_driver.cd_mk_box_int(v: int) -> comparison_driver.CdBox<int> {
+function comparison_driver.cd_mk_box_int(v: int) -> <unresolved type #7955956455006><int> {
     load_var v
     load_type int
     init_instance<1> user.comparison_driver.CdBox .v
     return
 }
 
-function comparison_driver.cd_mk_line(ax: int, ay: int, bx: int, by: int) -> comparison_driver.CdLine {
+function comparison_driver.cd_mk_line(ax: int, ay: int, bx: int, by: int) -> <unresolved type #4586761045907> {
     load_var2 1 2
     call user.comparison_driver.cd_mk_point
     load_var2 3 4
@@ -921,33 +921,33 @@ function comparison_driver.cd_mk_line(ax: int, ay: int, bx: int, by: int) -> com
     return
 }
 
-function comparison_driver.cd_mk_point(x: int, y: int) -> comparison_driver.CdPoint {
+function comparison_driver.cd_mk_point(x: int, y: int) -> <unresolved type #129432543625357> {
     load_var2 1 2
     init_instance user.comparison_driver.CdPoint .x, .y
     return
 }
 
-function comparison_driver.cd_mk_tag(id: int, note: string) -> comparison_driver.CdTag {
+function comparison_driver.cd_mk_tag(id: int, note: string) -> <unresolved type #22247835027199> {
     load_var2 1 2
     init_instance user.comparison_driver.CdTag .id, .note
     return
 }
 
-function comparison_driver.cd_mk_ubox_a() -> comparison_driver.CdUBox<int | string> {
+function comparison_driver.cd_mk_ubox_a() -> <unresolved type #81222006667797><int | string> {
     load_const 1
     load_type int | string
     init_instance<1> user.comparison_driver.CdUBox .v
     return
 }
 
-function comparison_driver.cd_mk_ubox_b() -> comparison_driver.CdUBox<string | int> {
+function comparison_driver.cd_mk_ubox_b() -> <unresolved type #81222006667797><string | int> {
     load_const 1
     load_type string | int
     init_instance<1> user.comparison_driver.CdUBox .v
     return
 }
 
-function comparison_driver.cd_mk_wrapper(id: int, note: string, label: string) -> comparison_driver.CdWrapper {
+function comparison_driver.cd_mk_wrapper(id: int, note: string, label: string) -> <unresolved type #103106759389104> {
     load_var2 1 2
     init_instance user.comparison_driver.CdNestedTag .id, .note
     load_var label
@@ -955,7 +955,7 @@ function comparison_driver.cd_mk_wrapper(id: int, note: string, label: string) -
     return
 }
 
-function comparison_driver.cd_money(c: int) -> comparison_driver.CdMoney {
+function comparison_driver.cd_money(c: int) -> <unresolved type #131488010237563> {
     load_var c
     init_instance user.comparison_driver.CdMoney .cents
     return
@@ -977,7 +977,7 @@ function comparison_driver.cd_not_cheaper() -> bool {
     return
 }
 
-function comparison_driver.cd_odd(n: int) -> comparison_driver.CdOdd {
+function comparison_driver.cd_odd(n: int) -> <unresolved type #130000690493562> {
     load_var n
     init_instance user.comparison_driver.CdOdd .n
     return

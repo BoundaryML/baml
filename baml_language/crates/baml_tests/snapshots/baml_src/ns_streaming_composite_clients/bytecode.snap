@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function streaming_composite_clients.$init_test_ns_streaming_composite_clients_streaming_composite_clients(registry: testing.TestCollector) -> null {
+function streaming_composite_clients.$init_test_ns_streaming_composite_clients_streaming_composite_clients(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.streaming_composite_clients"
     load_const "retry_stream_success"
@@ -90,7 +90,7 @@ function streaming_composite_clients.$init_test_ns_streaming_composite_clients_s
     return
 }
 
-function streaming_composite_clients.CompositeStreamSpec(client: ai.Client | null) -> string {
+function streaming_composite_clients.CompositeStreamSpec(client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -115,7 +115,7 @@ function streaming_composite_clients.CompositeStreamSpec(client: ai.Client | nul
     return
 }
 
-function streaming_composite_clients.CompositeStreamSpec$build_request(client: ai.Client | null) -> baml.http.Request {
+function streaming_composite_clients.CompositeStreamSpec$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -139,7 +139,7 @@ function streaming_composite_clients.CompositeStreamSpec$parse(json: string) -> 
     return
 }
 
-function streaming_composite_clients.CompositeStreamSpec$render_prompt() -> ai.Prompt {
+function streaming_composite_clients.CompositeStreamSpec$render_prompt() -> <unresolved type #135172864440005> {
     call user.streaming_composite_clients.CompositeStreamSpec$spec
     store_var _1
     load_type string
@@ -151,7 +151,7 @@ function streaming_composite_clients.CompositeStreamSpec$render_prompt() -> ai.P
     return
 }
 
-function streaming_composite_clients.CompositeStreamSpec$spec() -> ai.FunctionSpec<string> {
+function streaming_composite_clients.CompositeStreamSpec$spec() -> <unresolved type #25974768157144><string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -185,7 +185,7 @@ function streaming_composite_clients.CompositeStreamSpec$spec() -> ai.FunctionSp
     return
 }
 
-function streaming_composite_clients.CompositeStreamSpec$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function streaming_composite_clients.CompositeStreamSpec$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -203,7 +203,7 @@ function streaming_composite_clients.CompositeStreamSpec$stream(client: ai.strea
     return
 }
 
-function streaming_composite_clients.NonStreamingClient.ai.Client.id(self: streaming_composite_clients.NonStreamingClient) -> string {
+function streaming_composite_clients.NonStreamingClient.ai.Client.id(self: <unresolved type #134752415359697>) -> string {
     load_var self
     load_field .probe
     load_field .events
@@ -225,7 +225,7 @@ function streaming_composite_clients.NonStreamingClient.ai.Client.id(self: strea
     return
 }
 
-function streaming_composite_clients.NonStreamingClient.ai.Client.invoke(self: streaming_composite_clients.NonStreamingClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
+function streaming_composite_clients.NonStreamingClient.ai.Client.invoke(self: <unresolved type #134752415359697>, input: <unresolved type #66661248708833>) -> <unresolved type #127276340552691> {
     load_const "not streamed"
     init_instance ai.content.Text .text
     load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
@@ -237,7 +237,7 @@ function streaming_composite_clients.NonStreamingClient.ai.Client.invoke(self: s
     return
 }
 
-function streaming_composite_clients.NonStreamingClient.ai.Client.render(self: streaming_composite_clients.NonStreamingClient, input: ai.ModelTurnInput) -> baml.http.Request {
+function streaming_composite_clients.NonStreamingClient.ai.Client.render(self: <unresolved type #134752415359697>, input: <unresolved type #66661248708833>) -> <unresolved type #50857447195238> {
     load_type string
     load_var self
     load_field .client_id
@@ -255,13 +255,13 @@ function streaming_composite_clients.NonStreamingClient.ai.Client.render(self: s
     return
 }
 
-function streaming_composite_clients.ScriptedStreamClient.ai.Client.id(self: streaming_composite_clients.ScriptedStreamClient) -> string {
+function streaming_composite_clients.ScriptedStreamClient.ai.Client.id(self: <unresolved type #103332236030586>) -> string {
     load_var self
     load_field .client_id
     return
 }
 
-function streaming_composite_clients.ScriptedStreamClient.ai.Client.invoke(self: streaming_composite_clients.ScriptedStreamClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
+function streaming_composite_clients.ScriptedStreamClient.ai.Client.invoke(self: <unresolved type #103332236030586>, input: <unresolved type #66661248708833>) -> <unresolved type #127276340552691> {
     load_type string
     load_var self
     load_field .chunks
@@ -279,7 +279,7 @@ function streaming_composite_clients.ScriptedStreamClient.ai.Client.invoke(self:
     return
 }
 
-function streaming_composite_clients.ScriptedStreamClient.ai.Client.render(self: streaming_composite_clients.ScriptedStreamClient, input: ai.ModelTurnInput) -> baml.http.Request {
+function streaming_composite_clients.ScriptedStreamClient.ai.Client.render(self: <unresolved type #103332236030586>, input: <unresolved type #66661248708833>) -> <unresolved type #50857447195238> {
     load_type string
     load_var self
     load_field .client_id
@@ -297,7 +297,7 @@ function streaming_composite_clients.ScriptedStreamClient.ai.Client.render(self:
     return
 }
 
-function streaming_composite_clients.ScriptedStreamClient.ai.stream.StreamingClient.invoke_stream(self: streaming_composite_clients.ScriptedStreamClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+function streaming_composite_clients.ScriptedStreamClient.ai.stream.StreamingClient.invoke_stream(self: <unresolved type #103332236030586>, input: <unresolved type #66661248708833>) -> <unresolved type #70118551405800> {
     load_var ?3
     make_cell
     store_var ?3
@@ -459,12 +459,12 @@ function streaming_composite_clients.ScriptedStreamClient.ai.stream.StreamingCli
     throw
 }
 
-function streaming_composite_clients.SyntheticInvokeClient.ai.Client.id(self: streaming_composite_clients.SyntheticInvokeClient) -> string {
+function streaming_composite_clients.SyntheticInvokeClient.ai.Client.id(self: <unresolved type #74132784574617>) -> string {
     load_const "synthetic-invoke"
     return
 }
 
-function streaming_composite_clients.SyntheticInvokeClient.ai.Client.invoke(self: streaming_composite_clients.SyntheticInvokeClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
+function streaming_composite_clients.SyntheticInvokeClient.ai.Client.invoke(self: <unresolved type #74132784574617>, input: <unresolved type #66661248708833>) -> <unresolved type #127276340552691> {
     load_var self
     copy 0
     load_field .attempts
@@ -489,7 +489,7 @@ function streaming_composite_clients.SyntheticInvokeClient.ai.Client.invoke(self
     throw
 }
 
-function streaming_composite_clients.SyntheticInvokeClient.ai.Client.render(self: streaming_composite_clients.SyntheticInvokeClient, input: ai.ModelTurnInput) -> baml.http.Request {
+function streaming_composite_clients.SyntheticInvokeClient.ai.Client.render(self: <unresolved type #74132784574617>, input: <unresolved type #66661248708833>) -> <unresolved type #50857447195238> {
     load_const "POST"
     load_const "https://example.invalid/synthetic-invoke"
     load_type string
@@ -500,7 +500,7 @@ function streaming_composite_clients.SyntheticInvokeClient.ai.Client.render(self
     return
 }
 
-function streaming_composite_clients.composite_input() -> ai.ModelTurnInput {
+function streaming_composite_clients.composite_input() -> <unresolved type #66661248708833> {
     call user.streaming_composite_clients.CompositeStreamSpec$spec
     store_var spec
     load_var spec
@@ -523,7 +523,7 @@ function streaming_composite_clients.composite_input() -> ai.ModelTurnInput {
     return
 }
 
-function streaming_composite_clients.drain_streaming(client_value: ai.stream.StreamingClient) -> string {
+function streaming_composite_clients.drain_streaming(client_value: <unresolved type #128660828740598>) -> string {
     call user.streaming_composite_clients.composite_input
     store_var _6
     load_var2 1 4
@@ -1303,7 +1303,7 @@ function streaming_composite_clients.round_robin_stream_rotates_once_per_stream_
     return
 }
 
-function streaming_composite_clients.scripted_client(client_id: string, chunks: string[], probe: streaming_composite_clients.StreamProbe, fail_open_attempts: int, fail_pull_attempts: int, fail_after_delta: bool, cancel_before_delta: bool, unsafe_before_delta: bool) -> streaming_composite_clients.ScriptedStreamClient {
+function streaming_composite_clients.scripted_client(client_id: string, chunks: string[], probe: <unresolved type #41447691720091>, fail_open_attempts: int, fail_pull_attempts: int, fail_after_delta: bool, cancel_before_delta: bool, unsafe_before_delta: bool) -> <unresolved type #103332236030586> {
     load_var fail_open_attempts
     load_const <omitted>
     cmp_op ==

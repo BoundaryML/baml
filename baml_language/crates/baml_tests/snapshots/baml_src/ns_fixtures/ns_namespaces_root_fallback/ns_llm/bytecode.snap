@@ -1,14 +1,14 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.namespaces_root_fallback.llm.UseConfig(cfg: fixtures.namespaces_root_fallback.Config) -> fixtures.namespaces_root_fallback.llm.Response {
+function fixtures.namespaces_root_fallback.llm.UseConfig(cfg: <unresolved type #137431079791860>) -> <unresolved type #17677474834410> {
     load_var cfg
     load_field .key
     init_instance user.fixtures.namespaces_root_fallback.llm.Response .text
     return
 }
 
-function fixtures.namespaces_root_fallback.llm.UseRootProbe(p: RootFallbackProbe) -> fixtures.namespaces_root_fallback.llm.Response {
+function fixtures.namespaces_root_fallback.llm.UseRootProbe(p: <unresolved type #64090510057040>) -> <unresolved type #17677474834410> {
     load_var p
     load_field .tag
     init_instance user.fixtures.namespaces_root_fallback.llm.Response .text

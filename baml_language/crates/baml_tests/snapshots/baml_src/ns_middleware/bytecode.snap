@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function middleware.$init_test_ns_middleware_middleware(registry: testing.TestCollector) -> null {
+function middleware.$init_test_ns_middleware_middleware(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.middleware"
     load_const "identity_transformer"
@@ -198,7 +198,7 @@ function middleware.flaky_then_42(calls: int[]) -> int {
     throw
 }
 
-function middleware.ident() -> (baml.spawn.SpawnParams<#0, #1>) -> baml.spawn.SpawnParams<#0, #1> throws never {
+function middleware.ident() -> (<unresolved type #29716594952623><#0, #1>) -> <unresolved type #29716594952623><#0, #1> throws never {
     load_type #0
     load_type #1
     make_closure .<lambda(ident, 0)>, captures=0, ntypeargs=2
@@ -379,26 +379,26 @@ function middleware.variable_bound_transformer_still_applies() -> int {
     return
 }
 
-function middleware.withAddOne() -> (baml.spawn.SpawnParams<int, #0>) -> baml.spawn.SpawnParams<int, #0> throws never {
+function middleware.withAddOne() -> (<unresolved type #29716594952623><int, #0>) -> <unresolved type #29716594952623><int, #0> throws never {
     load_type #0
     make_closure .<lambda(withAddOne, 0)>, captures=0, ntypeargs=1
     return
 }
 
-function middleware.withBomb() -> (baml.spawn.SpawnParams<#0, #1>) -> baml.spawn.SpawnParams<#0, #1> throws string {
+function middleware.withBomb() -> (<unresolved type #29716594952623><#0, #1>) -> <unresolved type #29716594952623><#0, #1> throws string {
     load_type #0
     load_type #1
     make_closure .<lambda(withBomb, 0)>, captures=0, ntypeargs=2
     return
 }
 
-function middleware.withDouble() -> (baml.spawn.SpawnParams<int, #0>) -> baml.spawn.SpawnParams<int, #0> throws never {
+function middleware.withDouble() -> (<unresolved type #29716594952623><int, #0>) -> <unresolved type #29716594952623><int, #0> throws never {
     load_type #0
     make_closure .<lambda(withDouble, 0)>, captures=0, ntypeargs=1
     return
 }
 
-function middleware.withFallback(default_value: #0) -> (baml.spawn.SpawnParams<#0, #1>) -> baml.spawn.SpawnParams<#0, never> throws never {
+function middleware.withFallback(default_value: #0) -> (<unresolved type #29716594952623><#0, #1>) -> <unresolved type #29716594952623><#0, never> throws never {
     load_var ?1
     make_cell
     store_var ?1
@@ -409,7 +409,7 @@ function middleware.withFallback(default_value: #0) -> (baml.spawn.SpawnParams<#
     return
 }
 
-function middleware.withRetry(n: int) -> (baml.spawn.SpawnParams<#0, #1>) -> baml.spawn.SpawnParams<#0, #1> throws never {
+function middleware.withRetry(n: int) -> (<unresolved type #29716594952623><#0, #1>) -> <unresolved type #29716594952623><#0, #1> throws never {
     load_var ?1
     make_cell
     store_var ?1

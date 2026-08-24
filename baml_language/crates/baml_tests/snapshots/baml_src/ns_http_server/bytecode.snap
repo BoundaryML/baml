@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function http_server.$init_test_ns_http_server_http_server(registry: testing.TestCollector) -> null {
+function http_server.$init_test_ns_http_server_http_server(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.http_server"
     load_const "server_roundtrip"
@@ -90,7 +90,7 @@ function http_server.$init_test_ns_http_server_http_server(registry: testing.Tes
     return
 }
 
-function http_server.Greeter.handle(self: http_server.Greeter, req: baml.http.Request) -> baml.http.Response {
+function http_server.Greeter.handle(self: <unresolved type #114841811873798>, req: <unresolved type #50857447195238>) -> <unresolved type #43007235494578> {
     load_var self
     load_field .prefix
     load_var req

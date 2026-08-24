@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function exceptions.$init_test_ns_exceptions_exceptions(registry: testing.TestCollector) -> null {
+function exceptions.$init_test_ns_exceptions_exceptions(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.exceptions"
     load_const "catch_literal_string_match"

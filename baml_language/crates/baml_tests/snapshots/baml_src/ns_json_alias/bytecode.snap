@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function json_alias.$init_test_ns_json_alias_json_alias(registry: testing.TestCollector) -> null {
+function json_alias.$init_test_ns_json_alias_json_alias(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.json_alias"
     load_const "field_of_type_json_lowers_cleanly"
@@ -62,12 +62,12 @@ function json_alias.$init_test_ns_json_alias_json_alias(registry: testing.TestCo
     return
 }
 
-function json_alias.JsonTagged$for$JsonWrap<baml.json.json>.tag(self: json_alias.JsonWrap<baml.json.json>) -> string {
+function json_alias.JsonTagged$for$JsonWrap<baml.json.json>.tag(self: <unresolved type #118804668150235><<unresolved type #1888633819501>>) -> string {
     load_const "json-wrap"
     return
 }
 
-function json_alias.foo_data() -> baml.json.json {
+function json_alias.foo_data() -> <unresolved type #1888633819501> {
     load_const null
     init_instance user.json_alias.Foo .data
     load_field .data
@@ -138,7 +138,7 @@ function json_alias.json_wrap_tag() -> string {
     return
 }
 
-function json_alias.match_json(j: baml.json.json) -> string {
+function json_alias.match_json(j: <unresolved type #1888633819501>) -> string {
     load_var j
     load_const null
     cmp_op ==

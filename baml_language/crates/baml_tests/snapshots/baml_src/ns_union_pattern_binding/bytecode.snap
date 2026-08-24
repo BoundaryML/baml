@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function union_pattern_binding.$init_test_ns_union_pattern_binding_union_pattern_binding(registry: testing.TestCollector) -> null {
+function union_pattern_binding.$init_test_ns_union_pattern_binding_union_pattern_binding(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.union_pattern_binding"
     load_const "union_typed_let_else_binds_first_member"

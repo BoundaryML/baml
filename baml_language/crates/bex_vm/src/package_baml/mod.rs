@@ -91,7 +91,7 @@ pub enum NativeCallResult {
     YieldToCall {
         callee: HeapPtr,
         args: Vec<Value>,
-        type_args: Vec<baml_type::RealizedTy>,
+        type_args: Vec<bex_vm_types::RealizedTy>,
         continuation: Box<dyn Continuation>,
     },
 }
@@ -147,7 +147,7 @@ impl Continuation for PassThroughContinuation {
 /// builtins take it in place of `&[Value]` with no body changes.
 pub struct ArrayView<'a> {
     /// The receiver array's declared element type (`T` of `T[]`).
-    pub ty: &'a baml_type::RealizedTy,
+    pub ty: &'a bex_vm_types::RealizedTy,
     /// The receiver array's elements.
     pub data: &'a [Value],
 }
@@ -168,9 +168,9 @@ impl std::ops::Deref for ArrayView<'_> {
 /// it in place of `&IndexMap<BexStr, Value>` with no body changes.
 pub struct MapView<'a> {
     /// The receiver map's declared key type (`K` of `map<K, V>`).
-    pub key_ty: &'a baml_type::RealizedTy,
+    pub key_ty: &'a bex_vm_types::RealizedTy,
     /// The receiver map's declared value type (`V` of `map<K, V>`).
-    pub value_ty: &'a baml_type::RealizedTy,
+    pub value_ty: &'a bex_vm_types::RealizedTy,
     /// The receiver map's entries.
     pub data: &'a indexmap::IndexMap<bex_str::BexStr, Value>,
 }
@@ -242,8 +242,12 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
             Object::Bigint(_) => "baml.Comparable$for$bigint.compare".to_string(),
             Object::Instance(inst) => {
                 let class_ptr = inst.class;
-                let fqn = match vm.get_object(class_ptr) {
-                    Object::Class(c) => c.name.render_dotted(false),
+                let qtn = match vm.get_object(class_ptr) {
+                    // `compare` methods register as globals under the class's
+                    // declared FQN at emit time. An anonymous class has no
+                    // declared FQN and no emitted methods, so it cannot
+                    // implement `Comparable` — same as the non-instance arm.
+                    Object::Class(c) => c.name.declared().cloned(),
                     _ => {
                         return Err(VmRustFnError::InternalError(
                             VmInternalError::MissingNativeFunction {
@@ -252,7 +256,13 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
                         ));
                     }
                 };
-                format!("{fqn}.baml.Comparable.compare")
+                let Some(qtn) = qtn else {
+                    return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                        message: "_compare_shim: element type does not implement Comparable"
+                            .to_string(),
+                    }));
+                };
+                format!("{}.baml.Comparable.compare", qtn.render_dotted(false))
             }
             _ => {
                 return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
@@ -325,7 +335,7 @@ pub(super) fn to_string_override_fn_name(vm: &BexVm, v: Value) -> Option<String>
     let fqn = match v.kind() {
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Instance(inst) => match vm.get_object(inst.class) {
-                Object::Class(c) => c.name.render_dotted(false),
+                Object::Class(c) => c.name.declared()?.render_dotted(false),
                 _ => return None,
             },
             Object::Type(_) => "reflect.Type".to_string(),
@@ -368,7 +378,7 @@ pub(super) fn to_json_override_fn_name(vm: &BexVm, v: Value) -> Option<String> {
     let fqn = match v.kind() {
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Instance(inst) => match vm.get_object(inst.class) {
-                Object::Class(c) => c.name.render_dotted(false),
+                Object::Class(c) => c.name.declared()?.render_dotted(false),
                 _ => return None,
             },
             _ => return None,

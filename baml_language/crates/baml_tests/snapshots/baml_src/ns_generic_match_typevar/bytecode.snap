@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function generic_match_typevar.$init_test_ns_generic_match_typevar_generic_match_typevar(registry: testing.TestCollector) -> null {
+function generic_match_typevar.$init_test_ns_generic_match_typevar_generic_match_typevar(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.generic_match_typevar"
     load_const "typevar_arm_matches_realized_int"

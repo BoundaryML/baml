@@ -2,7 +2,9 @@
 ///
 /// `reflect.Type.of<T>()` describes a type argument and
 /// `reflect.Type.of_value(value)` describes a value's concrete runtime type.
-/// Type values preserve minted identity and expose reflection methods directly.
+/// A type value's identity is its declarations': two values naming the same
+/// declarations compare equal, and a runtime-created declaration is equal only
+/// to itself. Reflection methods are exposed directly.
 class Type {
     /// Return the runtime type value for the type argument `T`.
     ///
@@ -33,7 +35,7 @@ class Type {
     function to_baml(self) -> string throws never { $rust_function }
 
     /// Returns the precise kind view of this type value. The view preserves
-    /// the receiver's mint identity.
+    /// the receiver's identity.
     //baml:vm
     function kind(self) -> reflect.TypeKind throws never {
         $rust_function
@@ -64,7 +66,7 @@ class Type {
         $rust_function
     }
 
-    /// Pair this type value with schema metadata without changing its mint.
+    /// Pair this type value with schema metadata without changing its identity.
     //baml:mut_vm
     function meta(
       self,

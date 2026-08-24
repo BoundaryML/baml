@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function tagged_template_runtime.$init_test_ns_tagged_template_runtime_tagged_template_runtime(registry: testing.TestCollector) -> null {
+function tagged_template_runtime.$init_test_ns_tagged_template_runtime_tagged_template_runtime(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.tagged_template_runtime"
     load_const "tagged_template_parts_built_in_order"
@@ -109,7 +109,7 @@ function tagged_template_runtime.tt_body_param_injection_main() -> string {
     return
 }
 
-function tagged_template_runtime.tt_cap(body: () -> baml.TaggedString throws never) -> string {
+function tagged_template_runtime.tt_cap(body: () -> <unresolved type #35460019031336> throws never) -> string {
     load_var body
     call_indirect
     store_var t
@@ -162,7 +162,7 @@ function tagged_template_runtime.tt_cstyle_for_flattens_main() -> string {
     return
 }
 
-function tagged_template_runtime.tt_fmt(body: (string) -> baml.TaggedString throws never) -> string {
+function tagged_template_runtime.tt_fmt(body: (string) -> <unresolved type #35460019031336> throws never) -> string {
     load_const "World"
     load_var body
     call_indirect
@@ -353,7 +353,7 @@ function tagged_template_runtime.tt_parts_built_in_order_main() -> string {
     return
 }
 
-function tagged_template_runtime.tt_probe(body: () -> baml.TaggedString throws never) -> string {
+function tagged_template_runtime.tt_probe(body: () -> <unresolved type #35460019031336> throws never) -> string {
     load_var body
     call_indirect
     store_var t
@@ -378,7 +378,7 @@ function tagged_template_runtime.tt_probe(body: () -> baml.TaggedString throws n
     return
 }
 
-function tagged_template_runtime.tt_render(body: () -> baml.TaggedString throws never) -> string {
+function tagged_template_runtime.tt_render(body: () -> <unresolved type #35460019031336> throws never) -> string {
     load_var body
     call_indirect
     store_var t

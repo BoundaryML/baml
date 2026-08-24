@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function tail_lambda.$init_test_ns_tail_lambda_tail_lambda(registry: testing.TestCollector) -> null {
+function tail_lambda.$init_test_ns_tail_lambda_tail_lambda(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.tail_lambda"
     load_const "tail_lambda_annotated"

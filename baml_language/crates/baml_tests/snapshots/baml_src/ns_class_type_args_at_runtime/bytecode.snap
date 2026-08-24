@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function class_type_args_at_runtime.$init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime(registry: testing.TestCollector) -> null {
+function class_type_args_at_runtime.$init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.class_type_args_at_runtime"
     load_const "method_sees_class_type_arg_int"
@@ -76,19 +76,19 @@ function class_type_args_at_runtime.$init_test_ns_class_type_args_at_runtime_cla
     return
 }
 
-function class_type_args_at_runtime.Box.describe(self: class_type_args_at_runtime.Box<#0>) -> string {
+function class_type_args_at_runtime.Box.describe(self: <unresolved type #29227986126073><#0>) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function class_type_args_at_runtime.Box2.make_describer(self: class_type_args_at_runtime.Box2<#0>) -> () -> string throws never {
+function class_type_args_at_runtime.Box2.make_describer(self: <unresolved type #90680966309929><#0>) -> () -> string throws never {
     load_type #0
     make_closure .<lambda(Box2.make_describer, 0)>, captures=0, ntypeargs=1
     return
 }
 
-function class_type_args_at_runtime.check_foo(f: class_type_args_at_runtime.Foo<int> | class_type_args_at_runtime.Foo<string>) -> bool {
+function class_type_args_at_runtime.check_foo(f: <unresolved type #140278305601464><int> | <unresolved type #140278305601464><string>) -> bool {
     load_var f
     is_type class_type_args_at_runtime.Foo<...>
     pop_jump_if_false L0
@@ -105,7 +105,7 @@ function class_type_args_at_runtime.check_foo(f: class_type_args_at_runtime.Foo<
     return
 }
 
-function class_type_args_at_runtime.check_foo_bare(f: class_type_args_at_runtime.Foo<int> | string) -> bool {
+function class_type_args_at_runtime.check_foo_bare(f: <unresolved type #140278305601464><int> | string) -> bool {
     load_var f
     is_type class_type_args_at_runtime.Foo<...>
     pop_jump_if_false L0
@@ -213,7 +213,7 @@ function class_type_args_at_runtime.method_sees_composite_class_type_arg_fn() ->
     return
 }
 
-function class_type_args_at_runtime.pick(x: class_type_args_at_runtime.Foo<int> | class_type_args_at_runtime.Foo<string>) -> string {
+function class_type_args_at_runtime.pick(x: <unresolved type #140278305601464><int> | <unresolved type #140278305601464><string>) -> string {
     load_var x
     is_type class_type_args_at_runtime.Foo<...>
     pop_jump_if_false L0

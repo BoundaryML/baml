@@ -3,15 +3,23 @@
 //! The DSL has four sections, in order:
 //! 1. `axes { a, b, c, ... }` — the membership categories.
 //! 2. one or more `type Name { includes: [..axes..], child: Self | Other }`.
-//! 3. zero or more `satellite Name { fields } methods { ... }`.
+//! 3. zero or more `satellite Name<..> { fields } methods { ... }`.
 //! 4. the master `enum`, each variant tagged with exactly one `#[axis(..)]`.
+//!
+//! The master enum's generics (e.g. `pub enum Ty<N = TypeName>`) are carried by
+//! every generated member, so the family is parameterized as a whole — `Ty<N>`,
+//! `RuntimeTy<N>`, `RealizedTy<N>`, … A satellite declares its own generics so
+//! it can opt out. Nested positions are written out in full in the DSL
+//! (`Box<Ty<N>>`, `Vec<FunctionParamTy<N>>`): the per-member rewrite is
+//! ident-for-ident, so the argument list rides along untouched and the master
+//! `enum` stays readable as ordinary Rust.
 //!
 //! [`FamilyInput`] is the raw parse; [`Family`] is the resolved form with axis
 //! and child names turned into indices and validated.
 
 use proc_macro2::TokenStream;
 use syn::{
-    Attribute, Field, Fields, Ident, ItemEnum, Token, braced, bracketed,
+    Attribute, Field, Fields, Generics, Ident, ItemEnum, Token, braced, bracketed,
     ext::IdentExt,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
@@ -49,6 +57,7 @@ enum ChildRef {
 
 struct SatelliteInput {
     name: Ident,
+    generics: Generics,
     fields: Punctuated<Field, Token![,]>,
     methods: Option<TokenStream>,
 }
@@ -122,6 +131,9 @@ fn parse_member(input: ParseStream) -> syn::Result<MemberInput> {
 fn parse_satellite(input: ParseStream) -> syn::Result<SatelliteInput> {
     input.parse::<kw::satellite>()?;
     let name: Ident = input.parse()?;
+    // Declared like an ordinary struct's generics, defaults included
+    // (`<N = TypeName>`), so bare uses of the satellite keep resolving.
+    let generics: Generics = input.parse()?;
     let content;
     braced!(content in input);
     let fields =
@@ -138,6 +150,7 @@ fn parse_satellite(input: ParseStream) -> syn::Result<SatelliteInput> {
 
     Ok(SatelliteInput {
         name,
+        generics,
         fields,
         methods,
     })
@@ -149,6 +162,11 @@ pub(crate) struct Family {
     pub(crate) master_ident: Ident,
     /// Attributes on the master `enum` (derives + docs), re-emitted per member.
     pub(crate) master_attrs: Vec<Attribute>,
+    /// Generics declared on the master `enum`, shared verbatim by every member
+    /// (so `Ty<N>` and `RuntimeTy<N>` are parameterized alike, which is what
+    /// makes them layout-comparable at a given `N`). Retains defaults; use
+    /// [`Generics::split_for_impl`] where defaults are not permitted.
+    pub(crate) generics: Generics,
     pub(crate) members: Vec<Member>,
     pub(crate) satellites: Vec<Satellite>,
     pub(crate) variants: Vec<MVariant>,
@@ -169,6 +187,10 @@ pub(crate) struct Member {
 
 pub(crate) struct Satellite {
     pub(crate) name: Ident,
+    /// The satellite's own generics — usually the family's, but declared
+    /// separately so a satellite that references no parameterized position can
+    /// stay non-generic.
+    pub(crate) generics: Generics,
     pub(crate) fields: Punctuated<Field, Token![,]>,
     pub(crate) methods: Option<TokenStream>,
 }
@@ -236,6 +258,7 @@ impl Family {
             .into_iter()
             .map(|s| Satellite {
                 name: s.name,
+                generics: s.generics,
                 fields: s.fields,
                 methods: s.methods,
             })
@@ -250,6 +273,7 @@ impl Family {
         Ok(Family {
             master_ident,
             master_attrs: master.attrs,
+            generics: master.generics,
             members: resolved_members,
             satellites: resolved_satellites,
             variants,

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function reflect_type_of.$init_test_ns_reflect_type_of_reflect_type_of(registry: testing.TestCollector) -> null {
+function reflect_type_of.$init_test_ns_reflect_type_of_reflect_type_of(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.reflect_type_of"
     load_const "type_of_class_to_string"

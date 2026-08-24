@@ -26,7 +26,7 @@ function main() -> string throws unknown {
   let app = reflect.Package.current().with_types({ "AcmePerson": person_t })
   let exported = app.get_class("root.AcmePerson") ?? throw "missing mounted class"
   if (exported.as_type() != person_t.as_type()) {
-    throw "with_types changed the mint"
+    throw "with_types changed the exported type"
   }
 
   let pkg = reflect.Package.compile({ "tenant.baml": #"
@@ -43,7 +43,7 @@ function Run(document: string) -> app.AcmePerson {
     ?? throw "missing root.Run"
   let person = extract(#"{"name":"Ada","email":"ada@example.com","favorite_editor":"vim"}"#)
   if (reflect.Type.of_value(person) != person_t.as_type()) {
-    throw "compiled wrapper did not return the mounted mint"
+    throw "compiled wrapper did not return the mounted type"
   }
   person.name + "|" + person.email
 }
@@ -534,15 +534,15 @@ async fn dispatch_identity_separates_distinct_mints_and_leaves_static_generics_a
     );
 }
 
-/// A compiled package's declarations keep their identity across dispatch, just
-/// as `reflect.class.new`'s do. Recovery reads a definition back out of the
-/// interface operand's overlay, which is keyed by qualified name, so it works
-/// exactly as far as a name is a key — and a compiled package's declarations
-/// are re-spelled `user.$dyn.<mint>.Item` when the package is grafted, which
-/// makes them one. `name()` additionally pins that the definition still travels
-/// (#4501) and that the *rendered* name is still the source spelling.
+/// A runtime *package*'s declarations keep their identity across dispatch.
+/// Under name-keyed recovery this was deliberately FALSE — several definitions
+/// can spell `user.Item`, so answering from the name risked a wrong identity
+/// and recovery declined. A frame slot now carries the declaration's own head,
+/// so `reflect.Type.of<T>()` in the impl body *is* the caller's type: there is no
+/// separate identity token to lose, and nothing name-shaped to answer from.
+/// `name()` still pins that the definition travels too.
 #[tokio::test]
-async fn runtime_package_declarations_keep_identity_across_dispatch() {
+async fn runtime_package_declarations_keep_definitions_and_identity() {
     let output = baml_test!(
         r##"
         interface Probe<Out> {
@@ -583,12 +583,13 @@ class Item { value string }
 }
 
 /// A STATIC class must not be answered from an overlay that happens to carry a
-/// runtime definition of the same source name. `LoadType` staples the whole
-/// frame overlay onto anything materialized in a frame that touched a runtime
-/// type, so binding a compiled package's `Item` puts that package's `Item` in
-/// this frame's overlay — and the static `Holder<Item>` dispatch below then
-/// sees it. What keeps them apart is that only one of the two is mint-spelled:
-/// the static slot is plain `user.Item` and matches nothing in the overlay.
+/// runtime definition of the same name. `LoadType` staples the whole frame
+/// overlay onto anything materialized in a frame that touched a runtime type,
+/// so binding a compiled package's `Item` puts `user.Item` in this frame's
+/// overlay — and the static `Holder<Item>` dispatch below then sees it. Reading
+/// the overlay by plain name reported `reflect.Type.of<T>() != reflect.Type.of<Item>()` and
+/// `==` the *package's* declaration, which no runtime-created type can
+/// reproduce.
 #[tokio::test]
 async fn static_class_slots_are_not_answered_from_a_same_named_runtime_definition() {
     let output = baml_test!(
@@ -634,11 +635,11 @@ class Item { value string }
     );
 }
 
-/// Two compiled packages that each declare `Item` keep two identities. Their
-/// qualified names carry their packages' mints, so an overlay holding both
-/// keeps them apart and each `Holder` answers with its own — the shape that
-/// could only decline while both were spelled `user.Item` and an overlay kept
-/// the first pointer it saw per name.
+/// Two compiled packages that each declare `Item` keep two identities. Each
+/// grafted declaration is reminted with its own dynamic tag and the frame slot
+/// carries its head, so nothing name-shaped exists to conflate them — the
+/// shape that could only decline while both were spelled `user.Item` and a
+/// name-keyed overlay kept the first pointer it saw per name.
 #[tokio::test]
 async fn same_named_declarations_from_two_packages_keep_separate_identities() {
     let output = baml_test!(
@@ -673,9 +674,9 @@ class Item { value string }
 
             let _first_holder = Holder<First>.new()
             let holder = Holder<Second>.new()
-            // Its own, and nobody else's. The failure this guards is the
-            // SECOND value being `true` — answering with a foreign package's
-            // identity, which is worse than not knowing.
+            // The holder's own declaration answers true — the slot carries its
+            // head. The failure this guards is the SECOND value being `true`:
+            // answering with a same-named foreign package's identity.
             `${holder.same(second_item)}|${holder.same(first_item)}`
         }
         "##
@@ -768,13 +769,13 @@ async fn dispatch_identity_covers_a_runtime_enum_slot() {
     );
 }
 
-/// The mint that makes a compiled package's declarations identity-keyed lives
-/// in a hidden namespace segment, so it must never reach a user. Every surface
-/// that renders a type name is pinned here at once — `to_string`, `to_baml`,
-/// the LLM schema `ctx.output_format` builds, and a compiler diagnostic — and
-/// each must show the name the source wrote.
+/// A runtime declaration's identity is its tag, never a spelling — so no
+/// internal identity token exists to leak, and every surface that renders a
+/// type name must show the name the source wrote. Pinned here at once:
+/// `to_string`, `to_baml`, the LLM schema `ctx.output_format` builds, and a
+/// compiler diagnostic.
 #[tokio::test]
-async fn a_package_declarations_mint_never_reaches_rendered_output() {
+async fn a_package_declarations_identity_never_reaches_rendered_output() {
     let output = baml_test!(
         r##"
         client TestClient = openai.ResponsesClient.new(
@@ -838,78 +839,10 @@ function Items() -> Item[] { [Item { value: "bound", next: null }] }
     );
 }
 
-/// A minted name is `user.$dyn.<mint>.<name>`, and it is collision-free only
-/// because source cannot write either hidden segment. Both live in the
-/// *namespace* position, and the only thing that ever puts a segment there for
-/// user code is an `ns_<name>` folder whose suffix starts with a letter or `_`
-/// and holds nothing but alphanumerics and `_` — so `ns_$dyn` and `ns_0` are
-/// not namespaces at all, they are dropped. This pins the first rejection
-/// point: a package compiled from files under both folders declares its class
-/// at the package root, nothing answers to either hidden spelling, and it stays
-/// a different type from the statically declared `Item`.
-#[tokio::test]
-async fn a_source_path_cannot_spell_the_hidden_mint_namespace() {
-    let output = baml_test!(
-        r##"
-        class Item { value string }
-
-        function main() -> string throws unknown {
-            let pkg = reflect.Package.compile({ "ns_$dyn/ns_0/a.baml": #"
-class Item { value string }
-              "# })
-            let mint_ns = if pkg.get_class("root.$dyn.Item") == null { "absent" } else { "present" }
-            let numeric_ns = if pkg.get_class("root.0.Item") == null { "absent" } else { "present" }
-            let at_root = (pkg.get_class("root.Item") ?? throw "an ns_ folder namespaced it").as_type()
-            let identity = if at_root == reflect.Type.of<Item>() { "collides" } else { "distinct" }
-            `${mint_ns}~~${numeric_ns}~~${identity}~~${at_root.to_string()}`
-        }
-        "##
-    );
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String(
-            "absent~~absent~~distinct~~Item".into()
-        ))
-    );
-}
-
-/// The second rejection point, in the *name* position. `$dyn` is a perfectly
-/// legal BAML name — the lexer takes `$`-prefixed words — so both `class $dyn`
-/// and `reflect.class.new("$dyn")` compile. Neither forges a mint: the marker
-/// means something only as a namespace segment, so the runtime-made one is
-/// minted under its own discriminator below it and the static one is not minted
-/// at all, and the two stay distinct. The other half of the hidden prefix is
-/// not even a legal name — a bare number is refused outright.
-#[tokio::test]
-async fn a_type_named_like_the_mint_marker_does_not_forge_one() {
-    let output = baml_test!(
-        r##"
-        class $dyn { value string }
-
-        function main() -> string throws unknown {
-            let made = reflect.class.new("$dyn", { "value": reflect.Type.of<string>() })
-            let numeric = reflect.class.new("0", { "value": reflect.Type.of<string>() }) catch (e) {
-                reflect.errors.CompilationError => e.diagnostics[0].message,
-                _ => "wrong error",
-            }
-            let refused = if numeric is string { numeric } else { "a bare number was accepted" }
-            let identity = if made.as_type() == reflect.Type.of<$dyn>() { "collides" } else { "distinct" }
-            `${identity}~~${made.as_type().to_string()}~~${refused}`
-        }
-        "##
-    );
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String(
-            "distinct~~$dyn~~invalid class name `0`".into()
-        ))
-    );
-}
-
 /// Binds `item_type` to a class named `Item`, compiled into a runtime package.
-/// Both origins below mint their declarations, so both must render them the
-/// same way. Two fields, so a coercion failure is reported against the class
-/// rather than being implied onto a lone field.
+/// Both origins below create runtime declarations, so both must render them
+/// the same way. Two fields, so a coercion failure is reported against the
+/// class rather than being implied onto a lone field.
 const ORIGIN_COMPILED_PACKAGE: &str = r##"
             let pkg = reflect.Package.compile({ "items.baml": #"
 class Item { value string, count int }
@@ -952,29 +885,19 @@ fn error_surfaces_source(origin: &str) -> String {
     )
 }
 
-/// A minted declaration reaching a *host* — the class name an SDK reads off a
-/// returned value.
-fn host_boundary_source(origin: &str) -> String {
-    format!(
-        r##"
-        function main() -> unknown throws unknown {{
-            {origin}
-            type Item = unreflect(item_type)
-            baml.json.from_string<Item>(#"{{"value": "ok", "count": 1}}"#)
-        }}
-        "##
-    )
-}
-
-/// The mint is an identity token, never a spelling: every surface that renders
-/// a minted class must show what canary showed for the same declaration before
-/// it was minted — `user.Item` where a package-qualified name was printed.
+/// Every surface that renders a runtime class must show the name its source
+/// wrote, never an internal identity.
 ///
-/// Schema-aligned parsing is the first of them. The failure this guards is an
-/// LLM-output coercion error reading `Expected user.$dyn.0.Item`.
+/// Schema-aligned parsing is the first of them. A runtime-*compiled* `Item`
+/// renders package-qualified `user.Item` — exactly what a static `Item` prints
+/// in the same error — while an anonymous `reflect.class.new` one renders the
+/// bare `Item`: it has no package, so its display name is its only spelling.
 #[tokio::test]
-async fn a_coercion_error_names_a_minted_class_as_its_source_spelled_it() {
-    for origin in [ORIGIN_COMPILED_PACKAGE, ORIGIN_CLASS_NEW] {
+async fn a_coercion_error_names_a_runtime_class_as_its_source_spelled_it() {
+    for (origin, expected) in [
+        (ORIGIN_COMPILED_PACKAGE, "Expected user.Item"),
+        (ORIGIN_CLASS_NEW, "Expected Item"),
+    ] {
         let source = error_surfaces_source(origin);
         let output = baml_test!(&source);
         let BexExternalValue::String(rendered) = output.result.expect("main must return") else {
@@ -982,23 +905,18 @@ async fn a_coercion_error_names_a_minted_class_as_its_source_spelled_it() {
         };
         let (sap_message, _) = rendered.split_once('~').expect("both messages");
         assert!(
-            !sap_message.contains("$dyn"),
-            "a runtime mint leaked into a coercion error: {sap_message}"
-        );
-        assert!(
-            sap_message.contains("Expected user.Item"),
-            "a coercion error must name the class as its source spelled it: {sap_message}"
+            sap_message.contains(expected),
+            "a coercion error must name the class as its source spelled it \
+             (want `{expected}`): {sap_message}"
         );
     }
 }
 
-/// `baml.json` decoding is the second. Two things move here at once: before
-/// this change a compiled package's class could not be resolved by the decoder
-/// at all — the decode failed with "class user.Item not found" — and a
-/// `reflect.class.new` one that could be resolved was reported as
-/// `user.$dyn.0.Item`.
+/// `baml.json` decoding is the second. Two behaviors pinned at once: the
+/// decoder resolves a runtime class through its head (a name lookup could not
+/// see it at all), and its errors name the class as the source spelled it.
 #[tokio::test]
-async fn a_decode_error_names_a_minted_class_as_its_source_spelled_it() {
+async fn a_decode_error_names_a_runtime_class_as_its_source_spelled_it() {
     for origin in [ORIGIN_COMPILED_PACKAGE, ORIGIN_CLASS_NEW] {
         let source = error_surfaces_source(origin);
         let output = baml_test!(&source);
@@ -1011,44 +929,20 @@ async fn a_decode_error_names_a_minted_class_as_its_source_spelled_it() {
             "a runtime mint leaked into a decode error: {decode_message}"
         );
         assert!(
-            decode_message.contains("expected JSON object for class `user.Item`"),
+            decode_message.contains("expected JSON object for class `Item`"),
             "a decode error must name the class as its source spelled it: {decode_message}"
         );
     }
 }
 
-/// The third: the `class_name` a host SDK reads off a returned instance. It is
-/// the same string a static class would carry, which is the whole contract —
-/// an SDK cannot be asked to know about a mint. That the decode *succeeds* is
-/// the other half: `baml.json` could not resolve a compiled package's class at
-/// all before this change.
+/// The fourth surface: a diagnostic from a *runtime* compile that has to name
+/// a runtime declaration. The way one reaches a compile diagnostic is a
+/// mounted type: `with_types` publishes an anonymous declaration under a mount
+/// name, and a package compiled against it can then be wrong about it. The
+/// message must name it the way the mount did — alias-qualified `app.Item`,
+/// exactly as the failing source wrote it.
 #[tokio::test]
-async fn a_minted_class_crosses_the_host_boundary_under_its_source_name() {
-    for origin in [ORIGIN_COMPILED_PACKAGE, ORIGIN_CLASS_NEW] {
-        let source = host_boundary_source(origin);
-        let output = baml_test!(&source);
-        let Ok(BexExternalValue::Instance {
-            class_name, fields, ..
-        }) = output.result
-        else {
-            panic!("expected an instance, got: {:?}", output.result);
-        };
-        assert_eq!(class_name, "user.Item");
-        assert_eq!(
-            fields.get("value"),
-            Some(&BexExternalValue::String("ok".into()))
-        );
-    }
-}
-
-/// The fourth surface: a diagnostic from a *runtime* compile that has to name a
-/// minted declaration. The compiler never sees a mint of its own — minting
-/// happens when the linked image is grafted — so the way one reaches a compile
-/// diagnostic is a mounted type: `with_types` publishes an already-minted
-/// declaration under a source name, and a package compiled against it can then
-/// be wrong about it. The message must name it the way the mount did.
-#[tokio::test]
-async fn a_runtime_compile_diagnostic_names_a_mounted_minted_class() {
+async fn a_runtime_compile_diagnostic_names_a_mounted_runtime_class() {
     let output = baml_test!(
         r##"
         function main() -> string throws unknown {
@@ -1075,7 +969,7 @@ function Run() -> int { app.Item { value: "x" } }
     );
     assert_eq!(
         diagnostic.as_str(),
-        "mismatched types: expected `int`, found `Item`"
+        "mismatched types: expected `int`, found `app.Item`"
     );
 }
 

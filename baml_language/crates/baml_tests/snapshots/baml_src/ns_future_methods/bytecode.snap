@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function future_methods.$init_test_ns_future_methods_future_methods(registry: testing.TestCollector) -> null {
+function future_methods.$init_test_ns_future_methods_future_methods(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.future_methods"
     load_const "methods_after_successful_settle"
@@ -40,7 +40,7 @@ function future_methods.fail_io() -> int {
     throw
 }
 
-function future_methods.methods_after_cancel() -> baml.future.FutureState {
+function future_methods.methods_after_cancel() -> <unresolved type #133838588634832> {
     make_closure .<lambda(methods_after_cancel, 0)>, 0
     load_const null
     load_const null
@@ -85,7 +85,7 @@ function future_methods.methods_after_successful_settle() -> bool[] {
     return
 }
 
-function future_methods.methods_on_errored_future() -> baml.future.FutureState {
+function future_methods.methods_on_errored_future() -> <unresolved type #133838588634832> {
     make_closure .<lambda(methods_on_errored_future, 0)>, 0
     load_const null
     load_const null
@@ -113,7 +113,7 @@ function future_methods.methods_on_errored_future() -> baml.future.FutureState {
     return
 }
 
-function future_methods.methods_on_pending_future() -> baml.future.FutureState {
+function future_methods.methods_on_pending_future() -> <unresolved type #133838588634832> {
     make_closure .<lambda(methods_on_pending_future, 0)>, 0
     load_const null
     load_const null

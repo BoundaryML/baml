@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.optional_function_parameters.AskDocs(query: string, max_results: int, filter: string, client: ai.Client | null) -> string {
+function fixtures.optional_function_parameters.AskDocs(query: string, max_results: int, filter: string, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -28,7 +28,7 @@ function fixtures.optional_function_parameters.AskDocs(query: string, max_result
     return
 }
 
-function fixtures.optional_function_parameters.AskDocs$build_request(query: string, max_results: int, filter: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.optional_function_parameters.AskDocs$build_request(query: string, max_results: int, filter: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -54,7 +54,7 @@ function fixtures.optional_function_parameters.AskDocs$parse(json: string) -> st
     return
 }
 
-function fixtures.optional_function_parameters.AskDocs$render_prompt(query: string, max_results: int, filter: string) -> ai.Prompt {
+function fixtures.optional_function_parameters.AskDocs$render_prompt(query: string, max_results: int, filter: string) -> <unresolved type #135172864440005> {
     load_var2 1 2
     load_var filter
     call user.fixtures.optional_function_parameters.AskDocs$spec
@@ -68,7 +68,7 @@ function fixtures.optional_function_parameters.AskDocs$render_prompt(query: stri
     return
 }
 
-function fixtures.optional_function_parameters.AskDocs$spec(query: string, max_results: int, filter: string) -> ai.FunctionSpec<string> {
+function fixtures.optional_function_parameters.AskDocs$spec(query: string, max_results: int, filter: string) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -104,7 +104,7 @@ function fixtures.optional_function_parameters.AskDocs$spec(query: string, max_r
     return
 }
 
-function fixtures.optional_function_parameters.AskDocs$stream(query: string, max_results: int, filter: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function fixtures.optional_function_parameters.AskDocs$stream(query: string, max_results: int, filter: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -218,7 +218,7 @@ function fixtures.optional_function_parameters.SearchDocs(query: string, max_res
     return
 }
 
-function fixtures.optional_function_parameters.SearchService.Docs(self: fixtures.optional_function_parameters.SearchService, query: string, filter: string | null) -> string[] {
+function fixtures.optional_function_parameters.SearchService.Docs(self: <unresolved type #120273824916951>, query: string, filter: string | null) -> string[] {
     load_var filter
     load_const <omitted>
     cmp_op ==
@@ -235,7 +235,7 @@ function fixtures.optional_function_parameters.SearchService.Docs(self: fixtures
     return
 }
 
-function fixtures.optional_function_parameters.SearchService.Run(self: fixtures.optional_function_parameters.SearchService, query: string, limit: int) -> int {
+function fixtures.optional_function_parameters.SearchService.Run(self: <unresolved type #120273824916951>, query: string, limit: int) -> int {
     load_var limit
     load_const <omitted>
     cmp_op ==

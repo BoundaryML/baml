@@ -12,10 +12,10 @@ type             reflect.TypeKind                 <builtin>/reflect/reflect.baml
 class            reflect.Signature                <builtin>/reflect/reflect.baml:59
 class            reflect.InvalidArgumentError     <builtin>/reflect/reflect.baml:81
 class            reflect.Package                  <builtin>/reflect/reflect.baml:88
-class            reflect.Session                  <builtin>/reflect/reflect.baml:185
-function         reflect.signature                <builtin>/reflect/reflect.baml:227
-function         reflect.call_any                 <builtin>/reflect/reflect.baml:243
-class            reflect.Type                     <builtin>/reflect/type.baml:6
+class            reflect.Session                  <builtin>/reflect/reflect.baml:178
+function         reflect.signature                <builtin>/reflect/reflect.baml:220
+function         reflect.call_any                 <builtin>/reflect/reflect.baml:236
+class            reflect.Type                     <builtin>/reflect/type.baml:8
 class            reflect.array.Type               <builtin>/reflect/ns_array/array.baml:2
 class            reflect.class.Field              <builtin>/reflect/ns_class/class.baml:1
 function         reflect.class.new                <builtin>/reflect/ns_class/class.baml:29
@@ -34,8 +34,7 @@ class            reflect.errors.CompilationError  <builtin>/reflect/ns_errors/er
 class            reflect.errors.EvaluationError   <builtin>/reflect/ns_errors/errors.baml:8
 class            reflect.errors.SessionBusy       <builtin>/reflect/ns_errors/errors.baml:13
 class            reflect.function.Parameter       <builtin>/reflect/ns_function/function.baml:1
-class            reflect.function.GenericParam    <builtin>/reflect/ns_function/function.baml:13
-class            reflect.function.Type            <builtin>/reflect/ns_function/function.baml:27
+class            reflect.function.Type            <builtin>/reflect/ns_function/function.baml:9
 class            reflect.interface.Type           <builtin>/reflect/ns_interface/interface.baml:2
 class            reflect.interface.Implementation <builtin>/reflect/ns_interface/interface.baml:13
 function         reflect.interface.implementation <builtin>/reflect/ns_interface/interface.baml:28

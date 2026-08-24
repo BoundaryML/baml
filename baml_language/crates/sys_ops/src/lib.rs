@@ -155,8 +155,8 @@ impl<T> io::IoClassSapParseCache for T {
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        stream_target: baml_type::RuntimeTy,
-        target: baml_type::RuntimeTy,
+        stream_target: ::sys_types::SapTy,
+        target: ::sys_types::SapTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sap::ParseCache> {
         let compiled =
@@ -232,7 +232,7 @@ impl<T> io::IoNamespaceJson for T {
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        t: baml_type::RuntimeTy,
+        t: ::sys_types::SapTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         match schema::json_schema(&t, ctx) {
@@ -245,13 +245,18 @@ impl<T> io::IoNamespaceJson for T {
 mod schema {
     use std::collections::HashSet;
 
-    use baml_type::RuntimeTy;
+    use ::sys_types::SapTy;
     use bex_external_types::BexExternalValue;
     use serde_json::{Value, json};
     use sys_types::SysOpContext;
 
-    fn json_alias_ty() -> RuntimeTy {
-        RuntimeTy::TypeAlias(
+    /// The stdlib `baml.json.json` alias as value metadata.
+    ///
+    /// `BexExternalValue` tags its containers with a declared type rather than
+    /// a lane type; `baml.json.json` is compiled, so it has a real qualified
+    /// name and this conversion is total.
+    fn json_alias_ty() -> baml_type::RuntimeTy {
+        baml_type::RuntimeTy::TypeAlias(
             baml_type::TypeName::from_dotted_path(baml_base::qualified_name::BAML_JSON_JSON),
             baml_type::TyAttr::default(),
         )
@@ -271,7 +276,7 @@ mod schema {
                 items: items.into_iter().map(json_to_bex).collect(),
             },
             Value::Object(entries) => BexExternalValue::Map {
-                key_type: RuntimeTy::string(),
+                key_type: baml_type::RuntimeTy::string(),
                 value_type: json_alias_ty(),
                 entries: entries
                     .into_iter()
@@ -281,7 +286,7 @@ mod schema {
         }
     }
 
-    pub(super) fn json_schema(ty: &RuntimeTy, ctx: &SysOpContext) -> Result<Value, String> {
+    pub(super) fn json_schema(ty: &SapTy, ctx: &SysOpContext) -> Result<Value, String> {
         let mut builder = SchemaBuilder {
             ctx,
             definitions: serde_json::Map::new(),
@@ -290,7 +295,7 @@ mod schema {
         };
 
         let (mut root, root_class_key) = match ty {
-            RuntimeTy::Class(name, _, _) => {
+            SapTy::Class(name, _, _) => {
                 let key = definition_key(name);
                 builder.building.insert(key.clone());
                 let schema = builder.class_object(name)?;
@@ -323,30 +328,28 @@ mod schema {
     }
 
     impl SchemaBuilder<'_> {
-        fn ty_schema(&mut self, ty: &RuntimeTy) -> Result<Value, String> {
+        fn ty_schema(&mut self, ty: &SapTy) -> Result<Value, String> {
             match ty {
-                RuntimeTy::Int { .. } | RuntimeTy::Bigint { .. } => {
-                    Ok(json!({ "type": "integer" }))
-                }
-                RuntimeTy::Float { .. } => Ok(json!({ "type": "number" })),
-                RuntimeTy::String { .. } => Ok(json!({ "type": "string" })),
-                RuntimeTy::Bool { .. } => Ok(json!({ "type": "boolean" })),
-                RuntimeTy::Null { .. } => Ok(json!({ "type": "null" })),
-                RuntimeTy::Uint8Array { .. } => Ok(json!({ "type": "string" })),
-                RuntimeTy::Literal(lit, _, _) => Ok(Self::literal_schema(lit)),
-                RuntimeTy::List(inner, _) => Ok(json!({
+                SapTy::Int { .. } | SapTy::Bigint { .. } => Ok(json!({ "type": "integer" })),
+                SapTy::Float { .. } => Ok(json!({ "type": "number" })),
+                SapTy::String { .. } => Ok(json!({ "type": "string" })),
+                SapTy::Bool { .. } => Ok(json!({ "type": "boolean" })),
+                SapTy::Null { .. } => Ok(json!({ "type": "null" })),
+                SapTy::Uint8Array { .. } => Ok(json!({ "type": "string" })),
+                SapTy::Literal(lit, _, _) => Ok(Self::literal_schema(lit)),
+                SapTy::List(inner, _) => Ok(json!({
                     "type": "array",
                     "items": self.ty_schema(inner)?,
                 })),
-                RuntimeTy::Map { value, .. } => Ok(json!({
+                SapTy::Map { value, .. } => Ok(json!({
                     "type": "object",
                     "additionalProperties": self.ty_schema(value)?,
                 })),
-                RuntimeTy::Union(members, _) => self.union_schema(members),
-                RuntimeTy::Enum(name, _) => Self::enum_schema(name, self.ctx),
-                RuntimeTy::Class(name, _, _) => self.class_ref(name),
-                RuntimeTy::TypeAlias(name, _) => self.type_alias_ref(name),
-                RuntimeTy::BuiltinUnknown { .. } => Ok(json!({})),
+                SapTy::Union(members, _) => self.union_schema(members),
+                SapTy::Enum(name, _) => Self::enum_schema(name, self.ctx),
+                SapTy::Class(name, _, _) => self.class_ref(name),
+                SapTy::TypeAlias(name, _) => self.type_alias_ref(name),
+                SapTy::BuiltinUnknown { .. } => Ok(json!({})),
                 other => Err(format!(
                     "json_schema: no JSON Schema representation for `{other}`"
                 )),
@@ -366,9 +369,9 @@ mod schema {
             }
         }
 
-        fn union_schema(&mut self, members: &[RuntimeTy]) -> Result<Value, String> {
-            let has_null = members.iter().any(RuntimeTy::is_null);
-            let non_null: Vec<&RuntimeTy> = members.iter().filter(|m| !m.is_null()).collect();
+        fn union_schema(&mut self, members: &[SapTy]) -> Result<Value, String> {
+            let has_null = members.iter().any(SapTy::is_null);
+            let non_null: Vec<&SapTy> = members.iter().filter(|m| !m.is_null()).collect();
             if non_null.is_empty() {
                 return Ok(json!({ "type": "null" }));
             }
@@ -402,9 +405,9 @@ mod schema {
             json!({ "anyOf": [base, { "type": "null" }] })
         }
 
-        fn enum_schema(name: &baml_type::TypeName, ctx: &SysOpContext) -> Result<Value, String> {
-            let enum_def = find_enum_definition(ctx, name)
-                .ok_or_else(|| format!("json_schema: unknown enum `{}`", name.display_name()))?;
+        fn enum_schema(head: &::sys_types::DefKey, ctx: &SysOpContext) -> Result<Value, String> {
+            let enum_def = find_enum_definition(ctx, head)
+                .ok_or_else(|| format!("json_schema: unknown enum `{}`", head.display_name()))?;
             let variants: Vec<Value> = enum_def
                 .variants
                 .iter()
@@ -420,13 +423,13 @@ mod schema {
             Ok(json!({ "type": "string", "enum": variants }))
         }
 
-        fn class_ref(&mut self, name: &baml_type::TypeName) -> Result<Value, String> {
-            let key = definition_key(name);
+        fn class_ref(&mut self, head: &::sys_types::DefKey) -> Result<Value, String> {
+            let key = definition_key(head);
             self.referenced.insert(key.clone());
 
             if !self.definitions.contains_key(&key) && !self.building.contains(&key) {
                 self.building.insert(key.clone());
-                let definition = self.class_object(name)?;
+                let definition = self.class_object(head)?;
                 self.building.remove(&key);
                 self.definitions.insert(key.clone(), definition);
             }
@@ -434,15 +437,15 @@ mod schema {
             Ok(json!({ "$ref": format!("#/$defs/{}", json_pointer_escape(&key)) }))
         }
 
-        fn type_alias_ref(&mut self, name: &baml_type::TypeName) -> Result<Value, String> {
-            let key = definition_key(name);
+        fn type_alias_ref(&mut self, head: &::sys_types::DefKey) -> Result<Value, String> {
+            let key = definition_key(head);
             self.referenced.insert(key.clone());
 
             if !self.definitions.contains_key(&key) && !self.building.contains(&key) {
-                let target = find_type_alias_definition(self.ctx, name)
+                let target = find_type_alias_definition(self.ctx, head)
                     .cloned()
                     .ok_or_else(|| {
-                        format!("json_schema: unknown type alias `{}`", name.display_name())
+                        format!("json_schema: unknown type alias `{}`", head.display_name())
                     })?;
                 self.building.insert(key.clone());
                 let definition = self.ty_schema(&target)?;
@@ -453,9 +456,9 @@ mod schema {
             Ok(json!({ "$ref": format!("#/$defs/{}", json_pointer_escape(&key)) }))
         }
 
-        fn class_object(&mut self, name: &baml_type::TypeName) -> Result<Value, String> {
-            let class_def = find_class_definition(self.ctx, name)
-                .ok_or_else(|| format!("json_schema: unknown class `{}`", name.display_name()))?
+        fn class_object(&mut self, head: &::sys_types::DefKey) -> Result<Value, String> {
+            let class_def = find_class_definition(self.ctx, head)
+                .ok_or_else(|| format!("json_schema: unknown class `{}`", head.display_name()))?
                 .clone();
 
             let mut properties = serde_json::Map::new();
@@ -479,68 +482,58 @@ mod schema {
         }
     }
 
-    fn definition_key(name: &baml_type::TypeName) -> String {
-        name.display_name().to_string()
+    /// The `$defs` key a type is published under in the emitted JSON schema.
+    ///
+    /// An output label, so it is the head's *name* — the schema is read by a
+    /// model, not by us. Identity lookups go through the definition tables,
+    /// which are keyed by the head itself.
+    fn definition_key(head: &::sys_types::DefKey) -> String {
+        head.display_name().to_string()
     }
 
     fn json_pointer_escape(value: &str) -> String {
         value.replace('~', "~0").replace('/', "~1")
     }
 
+    /// Look up a class definition by declaration identity.
+    ///
+    /// Exact, with nothing to fall back to: the key's equality is its tag, so
+    /// this finds the declaration the type actually names or nothing at all.
+    /// The old fallback scanned for a unique matching `display_name`, which
+    /// could return a *different* declaration that merely shared a spelling —
+    /// unrepresentable once the table is keyed by identity.
     fn find_class_definition<'a>(
         ctx: &'a SysOpContext,
-        type_name: &baml_type::TypeName,
+        head: &::sys_types::DefKey,
     ) -> Option<&'a sys_types::ClassDefinition> {
-        ctx.class_definitions.get(type_name).or_else(|| {
-            let mut matches = ctx
-                .class_definitions
-                .iter()
-                .filter(|(name, _)| name.display_name() == type_name.display_name())
-                .map(|(_, definition)| definition);
-            let first = matches.next()?;
-            matches.next().is_none().then_some(first)
-        })
+        ctx.class_definitions.get(head)
     }
 
+    /// See [`find_class_definition`] — same contract, for enums.
     fn find_enum_definition<'a>(
         ctx: &'a SysOpContext,
-        type_name: &baml_type::TypeName,
+        head: &::sys_types::DefKey,
     ) -> Option<&'a sys_types::EnumDefinition> {
-        ctx.enum_definitions.get(type_name).or_else(|| {
-            let mut matches = ctx
-                .enum_definitions
-                .iter()
-                .filter(|(name, _)| name.display_name() == type_name.display_name())
-                .map(|(_, definition)| definition);
-            let first = matches.next()?;
-            matches.next().is_none().then_some(first)
-        })
+        ctx.enum_definitions.get(head)
     }
 
+    /// See [`find_class_definition`] — same contract, for recursive aliases.
     fn find_type_alias_definition<'a>(
         ctx: &'a SysOpContext,
-        type_name: &baml_type::TypeName,
-    ) -> Option<&'a RuntimeTy> {
-        ctx.type_alias_definitions.get(type_name).or_else(|| {
-            let mut matches = ctx
-                .type_alias_definitions
-                .iter()
-                .filter(|(name, _)| name.display_name() == type_name.display_name())
-                .map(|(_, ty)| ty);
-            let first = matches.next()?;
-            matches.next().is_none().then_some(first)
-        })
+        head: &::sys_types::DefKey,
+    ) -> Option<&'a SapTy> {
+        ctx.type_alias_definitions.get(head)
     }
 
     #[cfg(test)]
     mod tests {
         use std::sync::Arc;
 
-        use baml_type::{RuntimeTy, TyAttr, TypeName};
+        use baml_type::{TyAttr, TypeName};
         use serde_json::json;
         use sys_types::{
-            ClassDefinition, ClassFieldDefinition, EnumDefinition, EnumVariantDefinition,
-            SysOpContext,
+            ClassDefinition, ClassFieldDefinition, DefKey, EnumDefinition, EnumVariantDefinition,
+            SapTy as RuntimeTy, SysOpContext,
         };
 
         use super::json_schema;
@@ -550,11 +543,19 @@ mod schema {
         }
 
         fn class_ty(name: &TypeName) -> RuntimeTy {
-            RuntimeTy::Class(name.clone(), Vec::new(), TyAttr::default())
+            RuntimeTy::Class(key(name), Vec::new(), TyAttr::default())
+        }
+
+        /// A lane key for a compiled test declaration.
+        fn key(name: &TypeName) -> DefKey {
+            DefKey::new(
+                baml_type::typetag::TypeTag::of_head(&name.render_dotted(false)),
+                baml_type::DeclarationName::Declared(name.clone()),
+            )
         }
 
         fn alias_ty(name: &TypeName) -> RuntimeTy {
-            RuntimeTy::TypeAlias(name.clone(), TyAttr::default())
+            RuntimeTy::TypeAlias(key(name), TyAttr::default())
         }
 
         fn field(name: &str, field_type: RuntimeTy) -> ClassFieldDefinition {
@@ -582,7 +583,7 @@ mod schema {
             let node = type_name("pkg.Node");
             let mut classes = indexmap::IndexMap::new();
             classes.insert(
-                node.clone(),
+                key(&node),
                 class_definition(
                     &node,
                     vec![field("next", RuntimeTy::optional(class_ty(&node)))],
@@ -606,11 +607,11 @@ mod schema {
             let b = type_name("pkg.B");
             let mut classes = indexmap::IndexMap::new();
             classes.insert(
-                a.clone(),
+                key(&a),
                 class_definition(&a, vec![field("b", class_ty(&b))]),
             );
             classes.insert(
-                b.clone(),
+                key(&b),
                 class_definition(&b, vec![field("a", RuntimeTy::optional(class_ty(&a)))]),
             );
             let mut ctx = SysOpContext::empty();
@@ -641,11 +642,11 @@ mod schema {
             let escaped = type_name("pkg.A/B~C");
             let mut classes = indexmap::IndexMap::new();
             classes.insert(
-                holder.clone(),
+                key(&holder),
                 class_definition(&holder, vec![field("value", class_ty(&escaped))]),
             );
             classes.insert(
-                escaped.clone(),
+                key(&escaped),
                 class_definition(&escaped, vec![field("value", RuntimeTy::int())]),
             );
             let mut ctx = SysOpContext::empty();
@@ -661,7 +662,7 @@ mod schema {
             let status = type_name("pkg.Status");
             let mut enums = indexmap::IndexMap::new();
             enums.insert(
-                status.clone(),
+                key(&status),
                 EnumDefinition {
                     name: "Status".to_string(),
                     description: None,
@@ -683,7 +684,7 @@ mod schema {
             let mut ctx = SysOpContext::empty();
             ctx.enum_definitions = Arc::new(enums);
 
-            let schema = json_schema(&RuntimeTy::Enum(status, TyAttr::default()), &ctx)
+            let schema = json_schema(&RuntimeTy::Enum(key(&status), TyAttr::default()), &ctx)
                 .expect("schema should lower");
             assert_eq!(
                 schema,
@@ -705,7 +706,7 @@ mod schema {
                 RuntimeTy::map(RuntimeTy::string(), json_alias.clone()),
             ]);
             let mut aliases = indexmap::IndexMap::new();
-            aliases.insert(json_name, target);
+            aliases.insert(key(&json_name), target);
             let mut ctx = SysOpContext::empty();
             ctx.type_alias_definitions = Arc::new(aliases);
 
@@ -735,7 +736,7 @@ impl<T> io::IoNamespaceAi for T {}
 
 /// BEP-049 §10 (M5b): the `ctx.output_format` schema string.
 pub fn render_output_format_op(
-    return_type: &baml_type::RuntimeTy,
+    return_type: &::sys_types::SapTy,
     ctx: &SysOpContext,
 ) -> SysOpOutput<String> {
     SysOpOutput::ok(crate::output_format::render_output_format(return_type, ctx))
@@ -744,7 +745,7 @@ pub fn render_output_format_op(
 /// BEP-049 §10 (M5b.2): build the opaque schema handle `Context._output_format`
 /// carries; `output_format_with(...)` renders it with caller options.
 pub fn build_output_format_op(
-    return_type: &baml_type::RuntimeTy,
+    return_type: &::sys_types::SapTy,
     ctx: &SysOpContext,
 ) -> SysOpOutput<io::owned::ai::OutputFormat> {
     let content = crate::output_format::build_output_format_content(return_type, ctx);
@@ -755,7 +756,7 @@ pub fn build_output_format_op(
 pub fn get_return_type_op(
     function_name: &str,
     ctx: &SysOpContext,
-) -> SysOpOutput<baml_type::RuntimeTy> {
+) -> SysOpOutput<::sys_types::SapTy> {
     let outcome = lookup_llm_function(function_name, &ctx.llm_functions);
     let sys_types::ResolveOutcome::Found(_, info) = outcome else {
         return SysOpOutput::err(llm_function_lookup_error(function_name, &outcome));
@@ -772,8 +773,8 @@ impl<T> io::IoNamespaceSap for T {
         _call_id: CallId,
         json: String,
         cache: io::owned::sap::ParseCache,
-        _type_arg_0: baml_type::RuntimeTy,
-        _type_arg_1: baml_type::RuntimeTy,
+        _type_arg_0: ::sys_types::SapTy,
+        _type_arg_1: ::sys_types::SapTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let Ok(sap) = cache._data.downcast::<crate::sap::SapParseCache>() else {
@@ -792,8 +793,8 @@ impl<T> io::IoNamespaceSap for T {
         _call_id: CallId,
         json: String,
         cache: io::owned::sap::ParseCache,
-        _type_arg_0: baml_type::RuntimeTy,
-        _type_arg_1: baml_type::RuntimeTy,
+        _type_arg_0: ::sys_types::SapTy,
+        _type_arg_1: ::sys_types::SapTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let Ok(sap) = cache._data.downcast::<crate::sap::SapParseCache>() else {
@@ -867,7 +868,7 @@ impl io::IoClassReflectSession for DefaultIoOps {
         _call_id: CallId,
         _session: io::owned::reflect::Session,
         _source: String,
-        _type_arg_0: baml_type::RuntimeTy,
+        _type_arg_0: ::sys_types::SapTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::reflect::Package> {
         // BexEngine intercepts Session compilation for the same reason as
@@ -1812,8 +1813,8 @@ impl io::IoNamespaceHost for DefaultIoOps {
         _call_id: CallId,
         _handle: BexExternalValue,
         _args: Vec<BexExternalValue>,
-        _type_arg_0: baml_type::RuntimeTy,
-        _type_arg_1: baml_type::RuntimeTy,
+        _type_arg_0: ::sys_types::SapTy,
+        _type_arg_1: ::sys_types::SapTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         SysOpOutput::err(VmBamlError::Unsupported {
@@ -1903,7 +1904,7 @@ impl io::IoNamespaceAiInternal for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        return_type: baml_type::RuntimeTy,
+        return_type: ::sys_types::SapTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         render_output_format_op(&return_type, ctx)
@@ -1912,7 +1913,7 @@ impl io::IoNamespaceAiInternal for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        return_type: baml_type::RuntimeTy,
+        return_type: ::sys_types::SapTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::ai::OutputFormat> {
         build_output_format_op(&return_type, ctx)
@@ -1923,7 +1924,7 @@ impl io::IoNamespaceAiInternal for DefaultIoOps {
         _c: CallId,
         function_name: String,
         ctx: &SysOpContext,
-    ) -> SysOpOutput<baml_type::RuntimeTy> {
+    ) -> SysOpOutput<::sys_types::SapTy> {
         get_return_type_op(&function_name, ctx)
     }
     fn _gcp_access_token(

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function match_arm_break_continue.$init_test_ns_match_arm_break_continue_match_arm_break_continue(registry: testing.TestCollector) -> null {
+function match_arm_break_continue.$init_test_ns_match_arm_break_continue_match_arm_break_continue(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.match_arm_break_continue"
     load_const "bare_break_and_continue_arms_control_the_loop"

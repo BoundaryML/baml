@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function cleanup.$init_test_ns_cleanup_cleanup(registry: testing.TestCollector) -> null {
+function cleanup.$init_test_ns_cleanup_cleanup(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.cleanup"
     load_const "cleanup_runs_once_on_explicit_double_call"
@@ -41,7 +41,7 @@ function cleanup.$init_test_ns_cleanup_cleanup(registry: testing.TestCollector) 
     return
 }
 
-function cleanup.CleanupResource.cleanup(self: cleanup.CleanupResource) -> void {
+function cleanup.CleanupResource.cleanup(self: <unresolved type #13780663514934>) -> void {
     load_type cleanup.CleanupResource
     load_var self
     call baml._cleanup_begin
@@ -63,7 +63,7 @@ function cleanup.CleanupResource.cleanup(self: cleanup.CleanupResource) -> void 
     return
 }
 
-function cleanup.CleanupThrowsNeverR.cleanup(self: cleanup.CleanupThrowsNeverR) -> void {
+function cleanup.CleanupThrowsNeverR.cleanup(self: <unresolved type #134707751410107>) -> void {
     load_type cleanup.CleanupThrowsNeverR
     load_var self
     call baml._cleanup_begin

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function if_else.$init_test_ns_if_else_if_else(registry: testing.TestCollector) -> null {
+function if_else.$init_test_ns_if_else_if_else(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.if_else"
     load_const "if_else_true_branch"

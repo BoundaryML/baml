@@ -125,7 +125,11 @@ fn compiled_function_metadata(source: &str, display_name_suffix: &str) -> (Vec<S
     );
 
     let (name, idx) = matches[0];
-    let Some(Object::Function(function)) = program.objects.get(*idx) else {
+    let heap = baml_tests::engine::bound_pool(&program);
+    let ptr = heap.compile_time_ptr(*idx);
+    // SAFETY: `ptr` indexes the pool the heap was just built from, and the
+    // unsealed heap outlives every read below.
+    let Object::Function(function) = (unsafe { ptr.get() }) else {
         panic!("`{name}` did not point at a function object");
     };
 

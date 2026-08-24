@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function csv.$init_test_ns_csv_csv(registry: testing.TestCollector) -> null {
+function csv.$init_test_ns_csv_csv(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.csv"
     load_const "csv_parse_line_endings"
@@ -587,7 +587,7 @@ function csv.$init_test_ns_csv_csv(registry: testing.TestCollector) -> null {
     return
 }
 
-function csv.$init_test_ns_csv_csv_smoke(registry: testing.TestCollector) -> null {
+function csv.$init_test_ns_csv_csv_smoke(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.csv"
     load_const "parse_quoted_cells"
@@ -6169,7 +6169,7 @@ function csv.join(parts: string[], sep: string) -> string {
     return
 }
 
-function csv.kind_name(k: baml.csv.CsvErrorKind) -> string {
+function csv.kind_name(k: <unresolved type #129839178998711>) -> string {
     load_var k
     discriminant
     jump_table [L9, L8, L7, L6, L5, L4, L3, L2, L1, L0], default L11

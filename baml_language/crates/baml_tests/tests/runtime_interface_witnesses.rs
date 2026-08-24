@@ -356,3 +356,139 @@ async fn open_interface_occurrence_fails_at_render_boundary() {
         ))
     );
 }
+
+/// A method-bearing interface whose methods all carry default bodies is
+/// structurally witnessable: the witness supplies the fields, and each method
+/// resolves to its default. Before emit named the defaults, every method-
+/// bearing interface was rejected as unwitnessable.
+#[tokio::test]
+async fn witness_inherits_interface_default_methods() {
+    let output = baml_test!(
+        r##"
+        interface Greeter {
+            name: string
+            function greet(self) -> string {
+                "hello, " + self.name
+            }
+        }
+
+        client TestClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+        function ExtractGreeter<T extends Greeter>(input: string) -> T {
+            client: TestClient
+            prompt: `Extract from ${input}.\n${ctx.output_format}`
+        }
+
+        function main() -> string {
+            let witness = reflect.interface.implementation<Greeter>().field("name")
+            let person_t = reflect.class.new("Person", {
+                "name": reflect.Type.of<string>(),
+            }, implementations = [witness])
+            let is_member = person_t.as_type().implements(reflect.Type.of<Greeter>())
+            let person: Greeter = ExtractGreeter$parse<unreflect(person_t.as_type())>(
+                `{"name":"Ada"}`
+            )
+            // Virtual dispatch on the witnessed value reaches the interface's
+            // default body, whose inner `self.name` reads the linked field.
+            let prefix = "no|"
+            if is_member {
+                prefix = "yes|"
+            }
+            return prefix + person.greet()
+        }
+        "##
+    );
+
+    let BexExternalValue::String(result) = output
+        .result
+        .expect("all-default-method interface should be witnessable")
+    else {
+        panic!("expected string result")
+    };
+    assert_eq!(result.as_str(), "yes|hello, Ada");
+}
+
+/// A required method (no default body) still makes the interface structurally
+/// unwitnessable — a witness has no way to supply a body.
+#[tokio::test]
+async fn witness_still_rejects_interfaces_with_required_methods() {
+    let output = baml_test!(
+        r#"
+        interface Named {
+            name: string
+            function describe(self) -> string
+        }
+
+        function main() -> string {
+            let result = reflect.interface.implementation<Named>().field("name") catch (e) {
+                reflect.errors.CompilationError => e.diagnostics[0].message
+            }
+            if result is string {
+                return result
+            }
+            return "did not throw"
+        }
+        "#
+    );
+
+    let BexExternalValue::String(result) = output
+        .result
+        .expect("required-method rejection should be catchable")
+    else {
+        panic!("expected string result")
+    };
+    assert!(
+        result.contains("cannot be witnessed structurally") && result.contains("`describe`"),
+        "unexpected message: {result}"
+    );
+}
+
+/// A runtime-compiled interface (declared inside a Session) with a default
+/// method: its default body lives in the session package's own object pool,
+/// so the pointer must be bound through the runtime graft — not the static
+/// image — and the session's witness must still inherit it.
+#[tokio::test]
+async fn session_interface_default_methods_are_bound_and_inherited() {
+    let output = baml_test!(
+        r#####"
+        function main() -> string throws unknown {
+            let s = reflect.Session.new()
+            s.eval(#"interface Greeter { who: string  function greet(self) -> string { "hello" } }"#)
+            // BUG (session hygiene, pre-existing): a top-level session `let`
+            // whose initializer combines an inline map literal with a keyword
+            // argument (`reflect.class.new("P", { "f": t }, implementations = [w])`)
+            // fails to parse after identifier rewriting. Wrapping the same
+            // expression in a session-declared function sidesteps it.
+            s.eval(#"
+                function build() -> reflect.Type {
+                    let witness = reflect.interface.implementation<Greeter>().field("who")
+                    let person_t = reflect.class.new("Person", { "who": reflect.Type.of<string>() }, implementations = [witness])
+                    person_t.as_type()
+                }
+            "#)
+            // BUG (session parse, pre-existing): `x.implements(...)` inside a
+            // Session eval fails to parse — `implements` lexes as the keyword and
+            // the session's parse wrapper does not accept it as a method name
+            // after `.`, unlike the main compiler. `implemented_by` is the same
+            // relation with the operands flipped, so it stands in here.
+            let is_member = s.eval<bool>(#"reflect.Type.of<Greeter>().implemented_by(build())"#)
+            if is_member {
+                return "witnessed"
+            }
+            return "not witnessed"
+        }
+        "#####
+    );
+
+    let BexExternalValue::String(result) = output
+        .result
+        .expect("session-declared interface should be witnessable")
+    else {
+        panic!("expected string result")
+    };
+    assert_eq!(result.as_str(), "witnessed");
+}

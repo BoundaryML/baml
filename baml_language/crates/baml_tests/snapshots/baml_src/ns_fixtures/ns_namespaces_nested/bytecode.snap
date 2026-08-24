@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.namespaces_nested.CallOpenAI(cfg: fixtures.namespaces_nested.AppConfig) -> fixtures.namespaces_nested.llm.openai.OpenAIResponse {
+function fixtures.namespaces_nested.CallOpenAI(cfg: <unresolved type #18725680750601>) -> <unresolved type #91009739535368> {
     load_const "response"
     load_const "gpt-4"
     init_instance user.fixtures.namespaces_nested.llm.openai.OpenAIResponse .text, .model

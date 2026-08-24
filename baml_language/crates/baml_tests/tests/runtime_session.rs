@@ -264,7 +264,7 @@ function runtime_type_binding_persists() -> bool throws unknown {
   first && later && rebound
 }
 
-function session_declaration_mints_are_generative() -> bool throws unknown {
+function session_declarations_are_generative() -> bool throws unknown {
   let left = reflect.Session.new()
   let right = reflect.Session.new()
   left.eval(#"class SameName { value string }"#)
@@ -390,10 +390,10 @@ async fn scoped_runtime_type_bindings_persist_and_rebind_between_submissions() {
 }
 
 #[tokio::test]
-async fn identical_declarations_in_two_sessions_have_distinct_mints() {
+async fn identical_declarations_in_two_sessions_are_distinct_types() {
     let output = baml_test!(
         baml: SCENARIO_7,
-        entry: "session_declaration_mints_are_generative"
+        entry: "session_declarations_are_generative"
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
@@ -480,21 +480,27 @@ async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
     let Object::Type(escaped_type) = (unsafe { escaped_ptr.get() }) else {
         panic!("escaped handle should point to Object::Type")
     };
-    let definition_classes = escaped_type.defs().classes.len();
-    let owner_ptr = (!escaped_type.owner.is_null())
-        .then_some(escaped_type.owner)
-        .or_else(|| {
-            escaped_type.defs().classes.values().find_map(|class_ptr| {
-                match unsafe { class_ptr.get() } {
-                    Object::Class(class) => class
-                        .runtime_type
-                        .as_ref()
-                        .map(|runtime| runtime.owner)
-                        .filter(|owner| !owner.is_null()),
-                    _ => None,
-                }
-            })
-        });
+    // A type value's edges are its heads, so its declarations — and through
+    // their owner back-edges, the session that keeps them alive — are reached
+    // by walking them. There is no sidecar to consult.
+    let mut declarations = Vec::new();
+    escaped_type.ty.visit_heads(&mut |head| {
+        if head.is_resolved() {
+            declarations.push(head.ptr());
+        }
+    });
+    let definition_classes = declarations
+        .iter()
+        .filter(|ptr| matches!(unsafe { ptr.get() }, Object::Class(_)))
+        .count();
+    let owner_ptr = declarations.iter().find_map(|ptr| {
+        let owner = match unsafe { ptr.get() } {
+            Object::Class(class) => class.owner,
+            Object::Enum(enm) => enm.owner,
+            _ => return None,
+        };
+        (!owner.is_null()).then_some(owner)
+    });
     let mut owner_is_session = false;
     let mut session_history = 0;
     let mut retained_globals = 0;
@@ -680,7 +686,7 @@ function main() -> string throws unknown {
 /// binding's and is what changed. It does **not** endorse the message itself —
 /// `to_string` is universally available through the sugar road but is not
 /// reachable through the member walk these paths use, so "has no member
-/// `to_string`" is a second, unrelated gap (filed in MIG_BRIEF). If that gap is
+/// `to_string`" is a second, unrelated gap. If that gap is
 /// fixed, this test should be re-pointed at a genuinely absent member rather
 /// than deleted.
 const SESSION_LET_WIDENING_MEMBERS: &str = r####"
@@ -766,7 +772,7 @@ function main() -> string throws unknown {
 }
 "####;
 
-/// MIG_BRIEF 4(b): a method call on a Session `let` binding reached the VM with
+/// A method call on a Session `let` binding used to reach the VM with
 /// a NULL receiver. A session binding is an initialized global, not a lexical
 /// local, so MIR's "place for this name" lookup correctly found nothing — and
 /// several roads turned that into "no receiver". Field access and indexing were
@@ -936,7 +942,7 @@ async fn client_declaration_methods_dispatch() {
     );
 }
 
-// ── MIG_BRIEF Fix 8: an assignment in a Session is an ordinary assignment ──
+// ── An assignment in a Session is an ordinary assignment ──
 //
 // A Session binding lives in a global, so an assignment to it cannot be
 // written in place and is rewritten. The rewrite used to bind the value to a
@@ -1000,7 +1006,7 @@ function main() -> string throws unknown {
 }
 "####;
 
-/// The crash shape from the #4529 review, verbatim. Every step of it now
+/// A previously crashing shape, verbatim. Every step of it now
 /// happens at compile time: the assignment is refused, and the method call
 /// that used to reach the VM with a `string` in an `int` binding still sees
 /// the `int`.

@@ -17,16 +17,16 @@ use baml_compiler_diagnostics::{
     DiagnosticId, DiagnosticPhase,
     runtime_type::{self, InvalidIdentifierKind},
 };
-use baml_type::{RealizedTy, Ty, TyAttr, normalize, normalize::TypeContext};
+use baml_type::{TyAttr, normalize, normalize::TypeContext};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    AtomicValueSlot, HeapPtr, Object, RuntimeCompileArtifact, RuntimeSessionCompileArtifact,
-    SessionEvalLease,
+    AtomicValueSlot, HeapPtr, Interface, Object, RealizedTy, RuntimeCompileArtifact,
+    RuntimeSessionCompileArtifact, SessionEvalLease, Ty,
     link::link_dynamic,
     relink::{IndexOperand, visit_object_operands},
     types::{
-        DynTypeDefs, LocalName, MethodImpl, Package, RuntimeImplRule, RuntimePackage,
-        RuntimeTypeProvenance, SessionState, TypeValue, Value,
+        LocalName, MethodImpl, Package, RuntimeImplRule, RuntimePackage, SessionState, TypeValue,
+        Value,
     },
 };
 use indexmap::IndexMap;
@@ -137,25 +137,27 @@ fn display_local_name(name: &LocalName) -> String {
         .join(".")
 }
 
-fn runtime_type_key(name: &LocalName) -> String {
-    name.namespace
-        .iter()
-        .map(baml_type::Name::as_str)
-        .chain(std::iter::once(name.name.as_str()))
-        .collect::<Vec<_>>()
-        .join(".")
-}
-
 fn stored_package_type(package: &Package, name: &LocalName) -> Option<HeapPtr> {
     name.namespace
         .is_empty()
         .then(|| package.mounted_types.get(name.name.as_str()).copied())
         .flatten()
         .or_else(|| {
+            // Two hops, each keyed by what it is actually indexed on: the
+            // package's export namespace resolves the source-visible name to a
+            // declaration, and the created-once table is keyed by that
+            // declaration.
+            let declaration = package
+                .classes
+                .get(name)
+                .or_else(|| package.enums.get(name))
+                .or_else(|| package.interfaces.get(name))?;
             package
                 .runtime
-                .as_ref()
-                .and_then(|runtime| runtime.type_values.get(&runtime_type_key(name)).copied())
+                .as_ref()?
+                .type_values
+                .get(declaration)
+                .copied()
         })
 }
 
@@ -168,12 +170,19 @@ struct PackageSubtypeContext<'a> {
     package: HeapPtr,
 }
 
-impl TypeContext for PackageSubtypeContext<'_> {
-    fn alias_def(&self, name: &baml_type::QualifiedTypeName) -> Option<Ty> {
-        TypeContext::alias_def(self.vm, name)
+impl TypeContext<bex_vm_types::TypeHead> for PackageSubtypeContext<'_> {
+    /// Resolution is the VM's: a head is a pointer into the one heap this
+    /// package lives on, so scoping the *facts* to a package does not change
+    /// how a name becomes a head.
+    fn head_lookup(&self, qtn: &baml_type::QualifiedTypeName) -> Option<bex_vm_types::TypeHead> {
+        TypeContext::head_lookup(self.vm, qtn)
     }
 
-    fn implements_interface(&self, concrete: &Ty, interface: &baml_type::Interface) -> bool {
+    fn alias_def(&self, head: &bex_vm_types::TypeHead) -> Option<Ty> {
+        TypeContext::alias_def(self.vm, head)
+    }
+
+    fn implements_interface(&self, concrete: &Ty, interface: &Interface) -> bool {
         let Ok(concrete) = RealizedTy::try_from(concrete) else {
             return false;
         };
@@ -195,39 +204,39 @@ impl TypeContext for PackageSubtypeContext<'_> {
         };
         ImplResolver::for_package(self.vm, self.package).type_implements(
             &concrete,
-            &interface.name,
+            interface.name,
             &args,
             &assoc,
         )
     }
 
-    fn type_var_bound(&self, param: &baml_type::ParamTy) -> Vec<baml_type::Interface> {
+    fn type_var_bound(&self, param: &baml_type::ParamTy) -> Vec<Interface> {
         TypeContext::type_var_bound(self.vm, param)
     }
 
-    fn interface_requires(&self, sub: &baml_type::Interface, sup: &baml_type::Interface) -> bool {
+    fn interface_requires(&self, sub: &Interface, sup: &Interface) -> bool {
         TypeContext::interface_requires(self.vm, sub, sup)
     }
 
-    fn enum_variants(&self, name: &baml_type::QualifiedTypeName) -> Option<Vec<baml_type::Name>> {
-        TypeContext::enum_variants(self.vm, name)
+    fn enum_variants(&self, head: &bex_vm_types::TypeHead) -> Option<Vec<baml_type::Name>> {
+        TypeContext::enum_variants(self.vm, head)
     }
 
     fn associated_type_bound(
         &self,
-        interface: &baml_type::Interface,
+        interface: &Interface,
         assoc: baml_type::Name,
-    ) -> Vec<baml_type::Interface> {
+    ) -> Vec<Interface> {
         TypeContext::associated_type_bound(self.vm, interface, assoc)
     }
 
     fn project(
         &self,
         base: &Ty,
-        interface: &baml_type::Interface,
+        interface: &Interface,
         member: &baml_type::Name,
         fuel: u32,
-    ) -> baml_type::normalize::ProjectionStep {
+    ) -> baml_type::normalize::ProjectionStep<bex_vm_types::TypeHead> {
         TypeContext::project(self.vm, base, interface, member, fuel)
     }
 }
@@ -239,10 +248,12 @@ fn package_class_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, class_ptr: 
     let Object::Class(class) = vm.get_object(class_ptr) else {
         unreachable!("Package.classes only contains class pointers")
     };
-    let ty = RealizedTy::Class(class.name.clone(), Vec::new(), class.ty_attr.clone());
-    let mut defs = DynTypeDefs::default();
-    defs.classes.insert(class.name.clone(), class_ptr);
-    Value::object(vm.alloc_static_type_with_defs(ty, defs))
+    let ty = RealizedTy::Class(
+        bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
+        Vec::new(),
+        class.ty_attr.clone(),
+    );
+    Value::object(vm.tlab.alloc_type(TypeValue::new(ty)))
 }
 
 fn package_enum_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, enum_ptr: HeapPtr) -> Value {
@@ -252,9 +263,11 @@ fn package_enum_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, enum_ptr: He
     let Object::Enum(enm) = vm.get_object(enum_ptr) else {
         unreachable!("Package.enums only contains enum pointers")
     };
-    let ty = RealizedTy::Enum(enm.name.clone(), enm.ty_attr.clone());
-    let defs = DynTypeDefs::with_enum(enm.name.clone(), enum_ptr);
-    Value::object(vm.alloc_static_type_with_defs(ty, defs))
+    let ty = RealizedTy::Enum(
+        bex_vm_types::TypeHead::new(enum_ptr, enm.type_tag),
+        enm.ty_attr.clone(),
+    );
+    Value::object(vm.tlab.alloc_type(TypeValue::new(ty)))
 }
 
 fn package_interface_type(
@@ -269,66 +282,12 @@ fn package_interface_type(
         unreachable!("Package.interfaces only contains interface pointers")
     };
     let ty = RealizedTy::Interface(
-        interface.name.clone(),
+        bex_vm_types::TypeHead::new(interface_ptr, interface.type_tag),
         Vec::new(),
         Vec::new(),
         TyAttr::default(),
     );
-    Value::object(vm.alloc_static_type(ty))
-}
-
-/// The definition overlay a package's own declarations form.
-///
-/// A statically compiled package needs none: its declarations live in the
-/// engine image and resolve by name. A runtime package's do not, so every
-/// `type` value reflection hands out of one has to carry this overlay or the
-/// name it mentions is unresolvable — the BEP-066 rule that a minted type and
-/// its definitions travel together.
-fn declaration_defs(
-    vm: &BexVm,
-    classes: &IndexMap<LocalName, HeapPtr>,
-    enums: &IndexMap<LocalName, HeapPtr>,
-) -> DynTypeDefs {
-    DynTypeDefs {
-        classes: classes
-            .values()
-            .filter_map(|ptr| match vm.get_object(*ptr) {
-                Object::Class(class) if !class.name.name().as_str().ends_with("$stream") => {
-                    Some((class.name.clone(), *ptr))
-                }
-                _ => None,
-            })
-            .collect(),
-        enums: enums
-            .values()
-            .filter_map(|ptr| match vm.get_object(*ptr) {
-                Object::Enum(enm) => Some((enm.name.clone(), *ptr)),
-                _ => None,
-            })
-            .collect(),
-        witnesses: Vec::new(),
-    }
-}
-
-/// [`declaration_defs`] for an already-populated package object. Empty for a
-/// null pointer, which is what a statically compiled callable reports.
-fn package_defs(vm: &BexVm, package_ptr: HeapPtr) -> DynTypeDefs {
-    if package_ptr.is_null() {
-        return DynTypeDefs::default();
-    }
-    let Object::Package(package) = vm.get_object(package_ptr) else {
-        return DynTypeDefs::default();
-    };
-    declaration_defs(vm, &package.classes, &package.enums)
-}
-
-/// Allocate a `type` value inside a definition overlay, keeping the memoized
-/// static path when there is nothing to carry.
-fn alloc_type_in(vm: &mut BexVm, ty: RealizedTy, defs: &DynTypeDefs) -> Value {
-    if defs.is_empty() {
-        return Value::object(vm.alloc_static_type(ty));
-    }
-    Value::object(vm.alloc_static_type_with_defs(ty, defs.clone()))
+    Value::object(vm.tlab.alloc_type(TypeValue::new(ty)))
 }
 
 fn allocate_runtime_declaration_types(
@@ -337,94 +296,73 @@ fn allocate_runtime_declaration_types(
     classes: &IndexMap<LocalName, HeapPtr>,
     enums: &IndexMap<LocalName, HeapPtr>,
     interfaces: &IndexMap<LocalName, HeapPtr>,
-) -> IndexMap<String, HeapPtr> {
-    let source_defs = declaration_defs(vm, classes, enums);
+) -> IndexMap<HeapPtr, HeapPtr> {
     let class_rows = classes
-        .iter()
-        .filter_map(|(name, &class_ptr)| match vm.get_object(class_ptr) {
+        .values()
+        .filter_map(|&class_ptr| match vm.get_object(class_ptr) {
             Object::Class(class) => Some((
-                runtime_type_key(name),
                 class_ptr,
-                RealizedTy::Class(class.name.clone(), Vec::new(), class.ty_attr.clone()),
+                RealizedTy::Class(
+                    bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
+                    Vec::new(),
+                    class.ty_attr.clone(),
+                ),
             )),
             _ => None,
         })
         .collect::<Vec<_>>();
     let enum_rows = enums
-        .iter()
-        .filter_map(|(name, &enum_ptr)| match vm.get_object(enum_ptr) {
+        .values()
+        .filter_map(|&enum_ptr| match vm.get_object(enum_ptr) {
             Object::Enum(enm) => Some((
-                runtime_type_key(name),
                 enum_ptr,
-                RealizedTy::Enum(enm.name.clone(), enm.ty_attr.clone()),
+                RealizedTy::Enum(
+                    bex_vm_types::TypeHead::new(enum_ptr, enm.type_tag),
+                    enm.ty_attr.clone(),
+                ),
             )),
             _ => None,
         })
         .collect::<Vec<_>>();
     let interface_rows = interfaces
-        .iter()
-        .filter_map(
-            |(name, &interface_ptr)| match vm.get_object(interface_ptr) {
-                Object::Interface(interface) => Some((
-                    runtime_type_key(name),
-                    RealizedTy::Interface(
-                        interface.name.clone(),
-                        Vec::new(),
-                        Vec::new(),
-                        TyAttr::default(),
-                    ),
-                )),
-                _ => None,
-            },
-        )
+        .values()
+        .filter_map(|&interface_ptr| match vm.get_object(interface_ptr) {
+            Object::Interface(interface) => Some((
+                interface_ptr,
+                RealizedTy::Interface(
+                    bex_vm_types::TypeHead::new(interface_ptr, interface.type_tag),
+                    Vec::new(),
+                    Vec::new(),
+                    TyAttr::default(),
+                ),
+            )),
+            _ => None,
+        })
         .collect::<Vec<_>>();
 
     let mut type_values = IndexMap::new();
-    for (name, class_ptr, ty) in class_rows {
-        let mint = vm.heap.mint_runtime_id();
-        let type_ptr = vm.alloc_type(TypeValue::runtime_with_defs(
-            ty,
-            mint,
-            source_defs.clone(),
-            package_ptr,
-        ));
+    // Each type value's head points at the declaration it names, so the value
+    // reaches its definition without a side table; the declaration's own `owner`
+    // is what keeps the package (and so its globals and dependencies) alive.
+    for (class_ptr, ty) in class_rows {
+        let type_ptr = vm.alloc_type(TypeValue::new(ty));
         let Object::Class(class) = vm.get_object_mut(class_ptr) else {
             unreachable!("runtime package class pointer changed kind")
         };
-        class.runtime_type = Some(RuntimeTypeProvenance {
-            mint,
-            defs: source_defs.clone(),
-            owner: package_ptr,
-        });
-        type_values.insert(name, type_ptr);
+        class.owner = package_ptr;
+        type_values.insert(class_ptr, type_ptr);
     }
-    for (name, enum_ptr, ty) in enum_rows {
-        let mint = vm.heap.mint_runtime_id();
-        let type_ptr = vm.alloc_type(TypeValue::runtime_with_defs(
-            ty,
-            mint,
-            source_defs.clone(),
-            package_ptr,
-        ));
+    for (enum_ptr, ty) in enum_rows {
+        let type_ptr = vm.alloc_type(TypeValue::new(ty));
         let Object::Enum(enm) = vm.get_object_mut(enum_ptr) else {
             unreachable!("runtime package enum pointer changed kind")
         };
-        enm.runtime_type = Some(RuntimeTypeProvenance {
-            mint,
-            defs: source_defs.clone(),
-            owner: package_ptr,
-        });
-        type_values.insert(name, type_ptr);
+        enm.owner = package_ptr;
+        type_values.insert(enum_ptr, type_ptr);
     }
-    for (name, ty) in interface_rows {
-        let mint = vm.heap.mint_runtime_id();
-        let type_ptr = vm.alloc_type(TypeValue::runtime_with_defs(
-            ty,
-            mint,
-            source_defs.clone(),
-            package_ptr,
-        ));
-        type_values.insert(name, type_ptr);
+    for (interface_ptr, ty) in interface_rows {
+        let type_ptr = vm.alloc_type(TypeValue::new(ty));
+        type_values.insert(interface_ptr, type_ptr);
     }
     type_values
 }
@@ -460,441 +398,22 @@ fn package_function_value(vm: &mut BexVm, package_ptr: HeapPtr, name: &LocalName
             function: slot,
             type_args: Box::new([]),
             runtime_package,
-            exact_type_values: None,
         },
     ))))
 }
 
-/// The descriptor `Package.functions()` hands out for one exported function.
-///
-/// A reconstructible signature becomes the descriptor's type, exactly as
-/// before. A generic function whose declared surface still mentions its own
-/// type parameters has no [`RealizedTy`] at all — the realized family excludes
-/// type variables — so its descriptor denotes `unknown` and refuses
-/// signature-shaped reads until it is specialized. Either way the callable
-/// travels with the value, which is what `is_generic`, `generic_params`,
-/// `specialize` and `get` read.
-fn function_descriptor(vm: &mut BexVm, package: HeapPtr, name: &LocalName) -> Option<Value> {
+fn function_type(vm: &mut BexVm, package: HeapPtr, name: &LocalName) -> Option<Value> {
     let callable = package_function_value(vm, package, name)?;
-    let ty = match vm.callable_signature(callable) {
-        Some(signature) => callee_fn_ty(&signature),
-        // Anything else that fails to reconstruct is not a callable this
-        // package can describe, and stays out of the listing as it always has.
-        None if vm.unspecialized_generic_callable_name(callable).is_some() => RealizedTy::unknown(),
-        None => return None,
-    };
-    let defs = package_defs(vm, package);
-    Some(alloc_descriptor(vm, ty, defs, callable))
-}
-
-/// Allocate a descriptor `type` value for `callable`. A non-object callable
-/// cannot happen (every function value is a heap wrapper) but degrades to a
-/// plain `type` value rather than asserting.
-fn alloc_descriptor(vm: &mut BexVm, ty: RealizedTy, defs: DynTypeDefs, callable: Value) -> Value {
-    match callable.as_object_ptr() {
-        Some(ptr) => Value::object(vm.alloc_function_descriptor(ty, defs, ptr)),
-        None => alloc_type_in(vm, ty, &defs),
-    }
-}
-
-/// The callable a function descriptor was reflected from, or `None` for an
-/// ordinary function type value.
-fn descriptor_callable(vm: &BexVm, r#type: Value) -> Option<Value> {
-    let ptr = r#type.as_object_ptr()?;
-    let Object::Type(type_value) = vm.get_object(ptr) else {
-        return None;
-    };
-    (!type_value.callable.is_null()).then(|| Value::object(type_value.callable))
-}
-
-/// A descriptor's callable together with its declared type-parameter arity and
-/// the arguments it already carries.
-struct DescriptorCallable {
-    value: Value,
-    /// De Bruijn arity: how many type arguments a complete frame needs.
-    declared: usize,
-    /// How many the callable already carries.
-    supplied: usize,
-}
-
-impl DescriptorCallable {
-    /// Type parameters still awaiting an argument.
-    fn remaining(&self) -> usize {
-        self.declared.saturating_sub(self.supplied)
-    }
-
-    /// The callable's declared name, for a diagnostic. Deliberately not part of
-    /// the struct: `is_generic` asks the arity question on every listed entry
-    /// and must not allocate a `String` to answer it.
-    fn name(&self, vm: &BexVm) -> String {
-        vm.callable_diagnostic_name(self.value)
-            .unwrap_or_else(|| "<anonymous>".to_string())
-    }
-}
-
-/// The declared name of the callable behind a descriptor, for diagnostics.
-pub(super) fn descriptor_callable_name(vm: &BexVm, r#type: Value) -> Option<String> {
-    vm.callable_diagnostic_name(descriptor_callable(vm, r#type)?)
-}
-
-/// Which signature positions of a specialized descriptor report the exact
-/// `type` value they were specialized with, by position.
-///
-/// A decomposing read (`params`, `return_type`) rebuilds the types it hands
-/// back out of the descriptor's `RealizedTy`, which re-mints them statically
-/// and so loses a runtime-minted argument's identity. A specialized descriptor
-/// hands the caller's own value back instead — the same rule `LoadType` applies
-/// to a frame's type-argument slots.
-///
-/// The mapping is **positional**, read off the callable's own
-/// [`baml_type::TyTemplate`]s: a position reports an exact value only when it
-/// is written as exactly one of the callable's type parameters. Matching on
-/// the realized type instead would be wrong — a parameter the caller wrote as
-/// a concrete type that happens to equal the supplied argument structurally
-/// (`f<T>(a: T, b: SomeClass)` specialized at `SomeClass`) is not that type
-/// parameter, and must keep its own identity. A nested occurrence (`T[]`,
-/// `map<string, T>`) has no single value to hand back and decomposes normally;
-/// the overlay it carries still resolves the name.
-#[derive(Default)]
-pub(super) struct DescriptorExactPositions {
-    params: Vec<Option<TypeValue>>,
-    ret: Option<TypeValue>,
-}
-
-impl DescriptorExactPositions {
-    pub(super) fn param(&self, index: usize) -> Option<TypeValue> {
-        self.params.get(index).cloned().flatten()
-    }
-
-    pub(super) fn ret(&self) -> Option<TypeValue> {
-        self.ret.clone()
-    }
-}
-
-pub(super) fn descriptor_exact_positions(vm: &BexVm, r#type: Value) -> DescriptorExactPositions {
-    let Some(callable) = descriptor_callable(vm, r#type) else {
-        return DescriptorExactPositions::default();
-    };
-    let Some(ptr) = callable.as_object_ptr() else {
-        return DescriptorExactPositions::default();
-    };
-    let Object::GenericFunction(generic) = vm.get_object(ptr) else {
-        return DescriptorExactPositions::default();
-    };
-    let Some(exact) = generic.exact_type_values.as_ref() else {
-        return DescriptorExactPositions::default();
-    };
-    let Some((function, _)) = vm.callable_function_and_type_args(callable) else {
-        return DescriptorExactPositions::default();
-    };
-    let at = |template: &baml_type::TyTemplate| match template {
-        baml_type::TyTemplate::TypeArgRef(slot) => exact.get(*slot as usize).cloned().flatten(),
-        _ => None,
-    };
-    DescriptorExactPositions {
-        params: function.param_types.iter().map(at).collect(),
-        ret: at(&function.return_type),
-    }
-}
-
-fn descriptor_callable_info(vm: &BexVm, r#type: Value) -> Option<DescriptorCallable> {
-    let value = descriptor_callable(vm, r#type)?;
-    let (function, supplied) = vm.callable_function_and_type_args(value)?;
-    Some(DescriptorCallable {
-        value,
-        declared: function.generic_param_bounds.len(),
-        supplied: supplied.len(),
-    })
-}
-
-/// Whether a descriptor still expects type arguments. The same arity question
-/// [`BexVm::unspecialized_generic_callable_name`] asks, phrased for a value
-/// that may not be a descriptor at all.
-pub(super) fn descriptor_is_generic(vm: &BexVm, r#type: Value) -> bool {
-    descriptor_callable_info(vm, r#type).is_some_and(|callable| callable.remaining() > 0)
-}
-
-/// The type parameters a descriptor still expects, in declaration order.
-///
-/// Names come from the callable's `display_type_params`, which render a bound
-/// inline (`T extends Shape`); the bound is stripped here — `specialize`
-/// enforces bounds, `generic_params` only names them.
-pub(super) fn descriptor_generic_params(vm: &mut BexVm, r#type: Value) -> Vec<Value> {
-    let Some(callable) = descriptor_callable_info(vm, r#type) else {
-        return Vec::new();
-    };
-    let Some((function, _)) = vm.callable_function_and_type_args(callable.value) else {
-        return Vec::new();
-    };
-    let names = function
-        .display_type_params
-        .iter()
-        .enumerate()
-        .skip(callable.supplied)
-        .map(|(index, display)| {
-            let name = display
-                .split_once(" extends ")
-                .map_or(display.as_str(), |(name, _)| name)
-                .trim();
-            // A synthesized frame slot can be nameless; report its De Bruijn
-            // position rather than an empty string.
-            if name.is_empty() {
-                format!("#{index}")
-            } else {
-                name.to_string()
-            }
-        })
-        .collect::<Vec<_>>();
-    names
-        .into_iter()
-        .map(|name| {
-            let name = Value::object(vm.alloc_string(name.as_str()));
-            copy::function::GenericParam { name }.to_value(vm)
-        })
-        .collect()
-}
-
-fn throw_diagnostic(
-    vm: &mut BexVm,
-    diagnostic: baml_compiler_diagnostics::Diagnostic,
-) -> VmRustFnError {
-    VmRustFnError::thrown_fresh(super::type_kinds::alloc_compilation_error(
-        vm,
-        &[diagnostic],
+    let signature = vm.callable_signature(callable)?;
+    let ty = callee_fn_ty(&signature);
+    Some(Value::object(
+        vm.alloc_type(bex_vm_types::types::TypeValue::new(ty)),
     ))
 }
 
-/// `Shaped` / `Container<int>` — how a violated bound is named in a diagnostic.
-/// Rendered as the interface *type* it denotes so it reads the same way as the
-/// supplied type argument beside it, rather than as a raw qualified name.
-fn render_bound(
-    interface: &baml_type::TypeName,
-    args: &[RealizedTy],
-    assoc: &[(baml_type::Name, RealizedTy)],
-) -> String {
-    RealizedTy::Interface(
-        interface.clone(),
-        args.to_vec(),
-        assoc.to_vec(),
-        TyAttr::default(),
-    )
-    .to_string()
-}
-
-/// Bind a descriptor's remaining type parameters and return a specialized
-/// descriptor.
-///
-/// The supplied `type` values are carried by reference onto the new callable
-/// (`GenericFunction::exact_type_values`), never re-minted: a runtime type
-/// keeps its identity and its definition overlay all the way into the callee's
-/// frame, which is what lets the specialized body render its schema.
-pub(super) fn descriptor_specialize(
-    vm: &mut BexVm,
-    r#type: Value,
-    args: &[Value],
-) -> Result<Value, VmRustFnError> {
-    let Some(callable) = descriptor_callable_info(vm, r#type) else {
-        return Err(throw_diagnostic(
-            vm,
-            runtime_type::specialize_without_descriptor(),
-        ));
-    };
-    let bound_slot = callable.supplied;
-    let remaining = callable.remaining();
-    if remaining == 0 {
-        // Two different mistakes reach here, and telling a caller that an
-        // already-bound generic "is not generic" sends them the wrong way.
-        let name = callable.name(vm);
-        let diagnostic = if callable.declared == 0 {
-            runtime_type::specialize_non_generic(&name)
-        } else {
-            runtime_type::specialize_already_specialized(&name)
-        };
-        return Err(throw_diagnostic(vm, diagnostic));
-    }
-    if args.len() != remaining {
-        let name = callable.name(vm);
-        return Err(throw_diagnostic(
-            vm,
-            runtime_type::specialize_arity_mismatch(&name, remaining, args.len()),
-        ));
-    }
-    // A specialized callable has to be re-wrappable, and only a
-    // `GenericFunction` addresses its target by global slot. Every descriptor
-    // this module hands out is one; a closure or bound method reaching here
-    // would be a value reflection never produced.
-    let Some(Object::GenericFunction(generic)) =
-        callable.value.as_object_ptr().map(|ptr| vm.get_object(ptr))
-    else {
-        return Err(throw_diagnostic(
-            vm,
-            runtime_type::specialize_without_descriptor(),
-        ));
-    };
-    let (slot, runtime_package) = (generic.function, generic.runtime_package);
-
-    let supplied = args
-        .iter()
-        .map(|value| super::type_kinds::reflected_type_value(vm, *value))
-        .collect::<Vec<_>>();
-
-    let (bounds, param_names, mut type_args) = {
-        let Some((function, already_bound)) = vm.callable_function_and_type_args(callable.value)
-        else {
-            return Err(throw_diagnostic(
-                vm,
-                runtime_type::specialize_without_descriptor(),
-            ));
-        };
-        (
-            function.generic_param_bounds.clone(),
-            function.display_type_params.clone(),
-            already_bound.to_vec(),
-        )
-    };
-    type_args.extend(supplied.iter().map(|value| value.ty.clone()));
-    // The same proof the VM runs before entering a runtime-checked generic
-    // call (`validate_runtime_generic_bounds`), reported as a typed diagnostic
-    // instead of a bare "mismatched types".
-    //
-    // It is rooted at the *descriptor's* package, not the calling frame's: a
-    // bound declared inside a `Package.compile`d package is local to it, and
-    // resolving the interface against whoever happens to be calling `specialize`
-    // finds nothing — every such bound would fail closed. A statically compiled
-    // descriptor has no runtime package and keeps the lexical world.
-    let resolver_root = vm.callable_runtime_package(callable.value);
-    for (index, param_bounds) in bounds.iter().enumerate().skip(bound_slot) {
-        let Some(actual) = type_args.get(index).cloned() else {
-            continue;
-        };
-        let param_name = param_names.get(index).map_or_else(
-            || format!("#{index}"),
-            |display| {
-                display
-                    .split_once(" extends ")
-                    .map_or(display.as_str(), |(name, _)| name)
-                    .trim()
-                    .to_string()
-            },
-        );
-        for bound in param_bounds {
-            let requested_args = bound
-                .args
-                .iter()
-                .map(|arg| arg.substitute(&type_args, vm).ok())
-                .collect::<Option<Vec<_>>>();
-            let requested_assoc = bound
-                .assoc
-                .iter()
-                .map(|(name, ty)| {
-                    ty.substitute(&type_args, vm)
-                        .ok()
-                        .map(|ty| (name.clone(), ty))
-                })
-                .collect::<Option<Vec<_>>>();
-            let satisfied = match (requested_args, requested_assoc) {
-                (Some(bound_args), Some(bound_assoc)) => {
-                    let resolver = if resolver_root.is_null() {
-                        ImplResolver::new(vm)
-                    } else {
-                        ImplResolver::for_package(vm, resolver_root)
-                    };
-                    let holds = resolver.type_implements(
-                        &actual,
-                        &bound.interface,
-                        &bound_args,
-                        &bound_assoc,
-                    );
-                    if holds {
-                        continue;
-                    }
-                    render_bound(&bound.interface, &bound_args, &bound_assoc)
-                }
-                // A bound that cannot be realized against a complete frame is
-                // a bound this specialization cannot discharge. Report it as
-                // the failure it is rather than raising an internal error.
-                // A runtime-minted interface names itself the way its source
-                // did, as it does everywhere a person reads it.
-                _ => bound.interface.render_source_dotted(),
-            };
-            let supplied_ty = actual.to_string();
-            let name = callable.name(vm);
-            return Err(throw_diagnostic(
-                vm,
-                runtime_type::specialize_bound_violation(
-                    &name,
-                    &param_name,
-                    &satisfied,
-                    &supplied_ty,
-                ),
-            ));
-        }
-    }
-
-    let mut exact = vec![None; bound_slot];
-    exact.extend(supplied.iter().cloned().map(Some));
-    let specialized = Value::object(vm.alloc(Object::GenericFunction(
-        bex_vm_types::GenericFunction {
-            function: slot,
-            type_args: type_args.into_boxed_slice(),
-            runtime_package,
-            exact_type_values: Some(exact.into_boxed_slice()),
-        },
-    )));
-
-    // With every slot supplied the templates realize, so this is the whole of
-    // "specialize" from the signature's point of view. If it still does not,
-    // the descriptor would be unreadable in a way `is_generic` reports as
-    // *not* generic — a dead end worse than the one this API removes. Say so.
-    let Some(signature) = vm.callable_signature(specialized) else {
-        let name = callable.name(vm);
-        return Err(throw_diagnostic(
-            vm,
-            runtime_type::specialize_signature_unreconstructible(&name),
-        ));
-    };
-    let ty = callee_fn_ty(&signature);
-    let mut defs = super::type_kinds::reflected_type_value(vm, r#type)
-        .defs()
-        .clone();
-    for value in &supplied {
-        defs.merge_from(value.defs());
-    }
-    Ok(alloc_descriptor(vm, ty, defs, specialized))
-}
-
-/// Extract a descriptor's callable through the caller's `F` contract — the
-/// descriptor-side twin of `Package.get_function`, for the specialized
-/// descriptors that have no name to look up.
-pub(super) fn descriptor_get(
-    vm: &mut BexVm,
-    r#type: Value,
-) -> Result<Option<Value>, VmRustFnError> {
-    let Some(callable) = descriptor_callable_info(vm, r#type) else {
-        return Ok(None);
-    };
-    let Some(signature) = vm.callable_signature(callable.value) else {
-        let name = callable.name(vm);
-        return Err(throw_diagnostic(
-            vm,
-            runtime_type::unspecialized_reflected_generic(&name),
-        ));
-    };
-    if let Some(name) = vm.generic_callable_body_needs_type_args(callable.value) {
-        return Err(throw_diagnostic(
-            vm,
-            runtime_type::unspecialized_reflected_generic_call(&name),
-        ));
-    }
-    let package = vm.callable_runtime_package(callable.value);
-    let name = callable.name(vm);
-    check_function_contract(vm, package, &name, &signature)?;
-    Ok(Some(callable.value))
-}
-
-/// The `F` contract check shared by `Package.get_function` and a descriptor's
-/// `get`: the callable's reconstructed function type must be a subtype of the
-/// contract the caller asked for.
+/// The `F` contract check `Package.get_function` runs: the callable's
+/// reconstructed function type must be a subtype of the contract the caller
+/// asked for.
 ///
 /// A runtime package roots the subtype context at itself so its own impls are
 /// visible; a statically compiled callable has no such root and uses the VM's
@@ -906,11 +425,17 @@ fn check_function_contract(
     signature: &CallableSignature,
 ) -> Result<(), VmRustFnError> {
     let actual = callee_fn_ty(signature);
-    let expected = vm
-        .current_call_type_args()
-        .first()
-        .cloned()
-        .unwrap_or_else(RealizedTy::unknown);
+    // The caller's `F`. Erasing a missing one to `unknown` would make the
+    // subtype check below vacuously true — every function would satisfy every
+    // requested signature — so an absent type argument is reported as the
+    // frame-seeding bug it is.
+    let Some(expected) = vm.current_call_type_args().first().cloned() else {
+        return Err(VmRustFnError::InternalError(
+            bex_vm_types::errors::VmInternalError::MissingNativeFunction {
+                name: "reflect.Package.get_function: missing type argument".to_string(),
+            },
+        ));
+    };
     let sub = Ty::from(actual.clone());
     let sup = Ty::from(expected.clone());
     let matches = if package.is_null() {
@@ -942,6 +467,48 @@ fn dependency_object(vm: &BexVm, package: HeapPtr, local: &str) -> Option<HeapPt
         .or_else(|| package.interfaces.get(&local_name))
         .or_else(|| package.functions.get(&local_name))
         .copied()
+        .or_else(|| mounted_declaration(vm, package, local))
+}
+
+/// Resolve `local` against a package's mount surface: the export name of a
+/// mounted type resolves to the declaration it is headed at, and the item name
+/// of any runtime declaration a mounted type reaches resolves to that
+/// declaration. This is the linker's name boundary for declarations that have
+/// no spelling of their own — the mount surface is the only place a consumer
+/// compile can name them, and its blob rows are spelled `alias.<item name>`.
+fn mounted_declaration(
+    vm: &BexVm,
+    package: &bex_vm_types::types::Package,
+    local: &str,
+) -> Option<HeapPtr> {
+    let head_declaration = |value: &bex_vm_types::types::TypeValue| match &value.ty {
+        RealizedTy::Class(head, ..) | RealizedTy::Enum(head, ..) => {
+            head.is_resolved().then(|| head.ptr())
+        }
+        _ => None,
+    };
+    if let Some(&type_ptr) = package.mounted_types.get(local)
+        && let Object::Type(value) = vm.get_object(type_ptr)
+        && let Some(ptr) = head_declaration(value)
+    {
+        return Some(ptr);
+    }
+    for &type_ptr in package.mounted_types.values() {
+        let Object::Type(value) = vm.get_object(type_ptr) else {
+            continue;
+        };
+        for ptr in crate::reachable::runtime_definitions(vm, &value.ty) {
+            let item = match vm.get_object(ptr) {
+                Object::Class(class) => class.name.item_name(),
+                Object::Enum(enm) => enm.name.item_name(),
+                _ => continue,
+            };
+            if item.as_str() == local {
+                return Some(ptr);
+            }
+        }
+    }
+    None
 }
 
 fn diagnostic_value(vm: &mut BexVm, diagnostic: &bex_vm_types::RuntimeCompileDiagnostic) -> Value {
@@ -1119,7 +686,7 @@ impl BamlClassPackage for PackageReflectImpl {
             Ok(artifact) => artifact.clone(),
             Err(error) => return error.into(),
         };
-        let mut plan = match link_dynamic(&artifact.units) {
+        let plan = match link_dynamic(&artifact.units) {
             Ok(plan) => plan,
             Err(error) => {
                 return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
@@ -1150,31 +717,6 @@ impl BamlClassPackage for PackageReflectImpl {
             }
         }
 
-        // Every compiled package names its declarations `user.Foo`, so the
-        // linked image alone cannot say whose `Foo` an overlay holds. Re-spell
-        // this package's own declarations under a mint-unique name before any
-        // of it reaches the heap — see `bex_vm_types::rename`. The mint is
-        // allocated here so the whole image, and the identities minted from it
-        // below, agree on one spelling.
-        let bex_vm_types::types::MintId::Runtime(package_mint_id) = vm.heap.mint_runtime_id()
-        else {
-            unreachable!("BexHeap::mint_runtime_id always returns a runtime mint")
-        };
-        let external_objects: std::collections::HashMap<usize, _> = plan
-            .external_objects
-            .iter()
-            .map(|(index, symbol)| (index.raw(), symbol))
-            .collect();
-        let owned_objects: std::collections::HashSet<usize> = (0..plan.program.objects.len())
-            .filter(|index| !external_objects.contains_key(index))
-            .collect();
-        let minted_declarations = bex_vm_types::rename::rename_package_declarations(
-            &mut plan.program,
-            &baml_type::Name::new("user"),
-            &owned_objects,
-            package_mint_id,
-        );
-
         let program_package = plan
             .program
             .packages
@@ -1188,7 +730,7 @@ impl BamlClassPackage for PackageReflectImpl {
             interfaces: IndexMap::new(),
             impl_rules: IndexMap::new(),
             functions: IndexMap::new(),
-            recursive_type_aliases: program_package.recursive_type_aliases.clone(),
+            type_aliases: IndexMap::new(),
             interface_blob: artifact.interface_blob,
             test_init: None,
             mounted_types: IndexMap::new(),
@@ -1203,44 +745,28 @@ impl BamlClassPackage for PackageReflectImpl {
                 dependency_names: dependencies.clone(),
                 init: None,
                 initialized: false,
-                mint: Some(package_mint_id),
             })),
             session: None,
         };
         let package_ptr = vm.alloc(Object::Package(Box::new(package)));
 
+        let external_objects: std::collections::HashMap<usize, _> = plan
+            .external_objects
+            .iter()
+            .map(|(index, symbol)| (index.raw(), symbol))
+            .collect();
         let mut objects = Vec::with_capacity(plan.program.objects.len());
         for (index, object) in plan.program.objects.iter().enumerate() {
             let external = external_objects.get(&index).and_then(|symbol| {
                 if matches!(symbol.kind, bex_vm_types::SymbolKind::GenericFn) {
                     return None;
                 }
-                let qtn = baml_type::QualifiedTypeName::from_dotted_path(&symbol.fq_name);
-                vm.dynamic_dispatch
-                    .class_ptr(&qtn)
-                    .or_else(|| {
-                        dependencies.values().find_map(|package_ptr| {
-                            let Object::Package(package) = vm.get_object(*package_ptr) else {
-                                return None;
-                            };
-                            package.mounted_types.values().find_map(|type_ptr| {
-                                let Object::Type(value) = vm.get_object(*type_ptr) else {
-                                    return None;
-                                };
-                                value
-                                    .defs()
-                                    .classes
-                                    .get(&qtn)
-                                    .or_else(|| value.defs().enums.get(&qtn))
-                                    .copied()
-                            })
-                        })
-                    })
-                    .or_else(|| vm.packages.object_by_name(&symbol.fq_name))
-                    .or_else(|| {
-                        let (alias, local) = symbol.fq_name.split_once('.')?;
-                        dependency_object(vm, *dependencies.get(alias)?, local)
-                    })
+                vm.packages.object_by_name(&symbol.fq_name).or_else(|| {
+                    // Alias-qualified names — a dependency's own exports and
+                    // its mount surface — resolve through the dependency.
+                    let (alias, local) = symbol.fq_name.split_once('.')?;
+                    dependency_object(vm, *dependencies.get(alias)?, local)
+                })
             });
             if let Some(ptr) = external {
                 objects.push(ptr);
@@ -1255,10 +781,23 @@ impl BamlClassPackage for PackageReflectImpl {
                 Object::GenericFunction(function) => {
                     function.runtime_package = package_ptr;
                 }
+                // Member back-edges: reaching a declaration keeps its package
+                // alive (globals, dependencies, sibling declarations).
+                Object::Interface(interface) => interface.owner = package_ptr,
+                Object::TypeAlias(alias) => alias.owner = package_ptr,
                 _ => {}
             }
             objects.push(vm.alloc(object));
         }
+        // Runtime identities are generative: remint before anything reads a
+        // declaration's tag, so every downstream read sees the real identity.
+        let owned_declarations: Vec<HeapPtr> = objects
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !external_objects.contains_key(index))
+            .map(|(_, ptr)| *ptr)
+            .collect();
+        let reminted = remint_grafted_declarations(vm, &owned_declarations);
 
         // Compile-time heap construction resolves `ConstValue::Object` into
         // stable pointers before execution. Dynamic functions need the same
@@ -1299,6 +838,15 @@ impl BamlClassPackage for PackageReflectImpl {
             };
             function.bytecode.resolved_constants = resolved;
         }
+        bind_interface_defaults(
+            vm,
+            objects
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| !external_objects.contains_key(index))
+                .map(|(_, ptr)| *ptr),
+            |index| objects[index.raw()],
+        );
 
         let external_globals: std::collections::HashMap<usize, _> = plan
             .external_globals
@@ -1358,15 +906,6 @@ impl BamlClassPackage for PackageReflectImpl {
             .iter()
             .map(|(name, index)| (name.clone(), objects[index.raw()]))
             .collect::<IndexMap<_, _>>();
-        // A minted declaration is reachable by its mint-unique name from any
-        // frame, exactly as a `reflect.class.new` one is — the engine-wide
-        // table is what makes an overlay's key resolvable outside the package
-        // that owns it.
-        for (name, index) in minted_declarations {
-            vm.dynamic_dispatch
-                .register_class(name, objects[index.raw()]);
-        }
-
         let mut impl_rules = IndexMap::new();
         for (interface_index, rules) in &program_package.impl_rules {
             let interface_ptr = objects[interface_index.raw()];
@@ -1398,6 +937,23 @@ impl BamlClassPackage for PackageReflectImpl {
                 pointers.push(pointer);
             }
             impl_rules.insert(interface_ptr, pointers);
+        }
+        // Every owned object now exists — including the impl rules, whose
+        // patterns carry heads — so the graft can bind and prove totality.
+        let owned_for_bind: Vec<HeapPtr> = objects
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !external_objects.contains_key(index))
+            .map(|(_, ptr)| *ptr)
+            .collect();
+        let mut named_surfaces = Vec::new();
+        for (alias, &dep_ptr) in &dependencies {
+            dependency_named_declarations(vm, alias, dep_ptr, &mut named_surfaces);
+        }
+        if let Err(error) =
+            bind_graft_type_heads(vm, &objects, &owned_for_bind, &named_surfaces, &reminted)
+        {
+            return error.into();
         }
         let functions = program_package
             .functions
@@ -1553,36 +1109,18 @@ impl BamlClassPackage for PackageReflectImpl {
                     format!("with_types value for `{export}` must be a type"),
                 ));
             };
+            // The head is the declaration being mounted — no lookup, no
+            // owner-package scan, and no name that could resolve to a
+            // same-named declaration from somewhere else.
             match &type_value.ty {
-                RealizedTy::Class(qtn, _, _) => {
-                    if let Some(class) = type_value
-                        .defs()
-                        .classes
-                        .get(qtn)
-                        .copied()
-                        .or_else(|| vm.dynamic_dispatch.class_ptr(qtn))
-                    {
-                        derived.classes.insert(local.clone(), class);
-                    }
+                RealizedTy::Class(head, _, _) => {
+                    derived.classes.insert(local.clone(), head.ptr());
                 }
-                RealizedTy::Enum(qtn, _) => {
-                    if let Some(enm) = type_value.defs().enums.get(qtn).copied() {
-                        derived.enums.insert(local.clone(), enm);
-                    }
+                RealizedTy::Enum(head, _) => {
+                    derived.enums.insert(local.clone(), head.ptr());
                 }
-                RealizedTy::Interface(qtn, _, _, _) => {
-                    let owned_interface = (!type_value.owner.is_null())
-                        .then(|| match vm.get_object(type_value.owner) {
-                            Object::Package(owner) => owner.interfaces.values().find_map(|ptr| {
-                                matches!(vm.get_object(*ptr), Object::Interface(interface) if interface.name == *qtn)
-                                    .then_some(*ptr)
-                            }),
-                            _ => None,
-                        })
-                        .flatten();
-                    if let Some(interface) = owned_interface.or_else(|| vm.lookup_interface(qtn)) {
-                        derived.interfaces.insert(local.clone(), interface);
-                    }
+                RealizedTy::Interface(head, _, _, _) => {
+                    derived.interfaces.insert(local.clone(), head.ptr());
                 }
                 _ => {}
             }
@@ -1725,8 +1263,7 @@ impl BamlClassPackage for PackageReflectImpl {
         functions
             .into_iter()
             .filter_map(|name| {
-                function_descriptor(vm, ptr, &name)
-                    .map(|descriptor| (display_local_name(&name).into(), descriptor))
+                function_type(vm, ptr, &name).map(|ty| (display_local_name(&name).into(), ty))
             })
             .collect()
     }
@@ -1771,6 +1308,229 @@ impl BamlClassPackage for PackageReflectImpl {
             .iter()
             .map(|diagnostic| diagnostic_value(vm, diagnostic))
             .collect()
+    }
+}
+
+/// Give every owned grafted declaration its own runtime identity.
+///
+/// A runtime-compiled declaration is generative: two compiles of one source
+/// are two types, and a declaration spelled like a static one is not that
+/// static type (`TYPE_SYSTEM.md` — nominal identity is the declaration, not the
+/// spelling). Emit content-addresses tags from names, so without this two
+/// same-named declarations would be tag-equal — reminting to a counter tag
+/// makes each graft's declarations identity-distinct by construction.
+///
+/// Safe against baked bytecode: jump tables carry only the coarse kind tags
+/// (`realized_type_tag` answers `None` for declared heads), and class/enum
+/// match arms compare `IsType` pointers, which the graft resolved to these
+/// same objects.
+///
+/// Returns the `old content tag → reminted head` rows the head bind uses to
+/// bridge the plan's internal references onto the new identities.
+fn remint_grafted_declarations(
+    vm: &mut BexVm,
+    owned: &[HeapPtr],
+) -> Vec<(baml_type::typetag::TypeTag, bex_vm_types::TypeHead)> {
+    let mut reminted = Vec::new();
+    for &ptr in owned {
+        let fresh = baml_type::typetag::TypeTag::fresh_dynamic();
+        let old = match vm.get_object_mut(ptr) {
+            Object::Class(class) => std::mem::replace(&mut class.type_tag, fresh),
+            Object::Enum(enm) => std::mem::replace(&mut enm.type_tag, fresh),
+            Object::Interface(interface) => std::mem::replace(&mut interface.type_tag, fresh),
+            Object::TypeAlias(alias) => std::mem::replace(&mut alias.type_tag, fresh),
+            _ => continue,
+        };
+        reminted.push((old, bex_vm_types::TypeHead::new(ptr, fresh)));
+    }
+    reminted
+}
+
+/// Collect every declaration a graft can legitimately name through `alias`,
+/// as `(fq_name, declaration)` rows for [`bind_graft_type_heads`]'s
+/// named-surface bridge: the dependency's exported declarations and its
+/// mounted types (whose values are `Object::Type`s wrapping the declaration's
+/// own head). Non-declarations are filtered by the bind itself.
+fn dependency_named_declarations(
+    vm: &BexVm,
+    alias: &str,
+    package_ptr: HeapPtr,
+    out: &mut Vec<(String, HeapPtr)>,
+) {
+    let Object::Package(package) = vm.get_object(package_ptr) else {
+        return;
+    };
+    let fq = |local: &bex_vm_types::types::LocalName| -> String {
+        std::iter::once(alias)
+            .chain(local.namespace.iter().map(baml_type::Name::as_str))
+            .chain(std::iter::once(local.name.as_str()))
+            .collect::<Vec<_>>()
+            .join(".")
+    };
+    for (local, &ptr) in package
+        .classes
+        .iter()
+        .chain(&package.enums)
+        .chain(&package.interfaces)
+        .chain(&package.type_aliases)
+    {
+        out.push((fq(local), ptr));
+    }
+    for (name, &type_ptr) in &package.mounted_types {
+        let Object::Type(value) = vm.get_object(type_ptr) else {
+            continue;
+        };
+        let head = match &value.ty {
+            RealizedTy::Class(head, _, _) => head,
+            RealizedTy::Enum(head, _) => head,
+            RealizedTy::Interface(head, _, _, _) => head,
+            RealizedTy::TypeAlias(head, _) => head,
+            _ => continue,
+        };
+        if head.is_resolved() {
+            out.push((format!("{alias}.{name}"), head.ptr()));
+        }
+        // Every runtime declaration the mounted type reaches is spelled
+        // `alias.<item name>` in the consumer compile world (the blob rows
+        // name it that way), so index those spellings too.
+        for ptr in crate::reachable::runtime_definitions(vm, &value.ty) {
+            let item = match vm.get_object(ptr) {
+                Object::Class(class) => class.name.item_name(),
+                Object::Enum(enm) => enm.name.item_name(),
+                _ => continue,
+            };
+            out.push((format!("{alias}.{item}"), ptr));
+        }
+    }
+}
+
+/// Bind every type head an owned grafted object carries to the declaration it
+/// names — the runtime-package twin of [`bex_heap::BexHeap::bind_type_heads`].
+///
+/// A runtime compile's emit mints heads tag-only, exactly like the static
+/// emit, so each grafted object arrives carrying unresolved heads. Tags
+/// resolve against the plan pool first (`plan_objects` spans it — its own
+/// declarations *and* the live external ones its symbols imported, so a
+/// reference into an earlier eval lands on that eval's object), then against
+/// a transient index over the compile-time pool for the type-only references
+/// no import symbol carries. Both indices are built here and dropped here.
+///
+/// A tag nothing declares is a link error, not a head to leave dangling: an
+/// unresolved head is untraceable by the collector and unresolvable by
+/// dispatch.
+fn bind_graft_type_heads(
+    vm: &mut BexVm,
+    plan_objects: &[HeapPtr],
+    owned: &[HeapPtr],
+    named_surfaces: &[(String, HeapPtr)],
+    reminted: &[(baml_type::typetag::TypeTag, bex_vm_types::TypeHead)],
+) -> Result<(), VmRustFnError> {
+    // Every entry carries BOTH halves off the target declaration: a head that
+    // lands here adopts the declaration's identity, not just its address. For
+    // a plan-local or compile-time target the two tags coincide; for a
+    // runtime-created target reached by name they do not, and the live tag is
+    // the identity.
+    let mut by_tag: std::collections::HashMap<baml_type::typetag::TypeTag, bex_vm_types::TypeHead> =
+        std::collections::HashMap::new();
+    // Reminted rows first: a plan-internal reference spells its sibling by the
+    // emit-time content tag, and must land on the reminted identity — the
+    // plan's own declaration wins that spelling over any same-named surface.
+    for &(old_tag, head) in reminted {
+        by_tag.insert(old_tag, head);
+        by_tag.insert(head.tag(), head);
+    }
+    for &ptr in plan_objects {
+        if let Some(tag) = bex_heap::BexHeap::declaration_tag(vm.get_object(ptr)) {
+            by_tag
+                .entry(tag)
+                .or_insert_with(|| bex_vm_types::TypeHead::new(ptr, tag));
+        }
+    }
+    // A declaration reachable by *name* — a dependency's export, a mounted
+    // type, an earlier eval's declaration — may be runtime-created, in which
+    // case its live tag is a counter mint while the head naming it carries a
+    // content tag. Emit spells such a reference by whichever name it resolved
+    // to — the surface's mount name or the declaration's own (synthesized)
+    // name — so each declaration is indexed under both spellings' tags, plus
+    // its live tag for a head that already carries the identity.
+    for (fq_name, ptr) in named_surfaces {
+        let object = vm.get_object(*ptr);
+        let Some(live_tag) = bex_heap::BexHeap::declaration_tag(object) else {
+            continue;
+        };
+        let bound = bex_vm_types::TypeHead::new(*ptr, live_tag);
+        // An anonymous declaration has no spelling of its own — it is only
+        // reachable through the surface names it was mounted under.
+        let declared = match object {
+            Object::Class(class) => class.name.declared().cloned(),
+            Object::Enum(enm) => enm.name.declared().cloned(),
+            Object::Interface(interface) => Some(interface.name.clone()),
+            Object::TypeAlias(alias) => Some(alias.name.clone()),
+            _ => None,
+        };
+        if let Some(name) = declared {
+            by_tag
+                .entry(baml_type::typetag::TypeTag::of_head(
+                    &name.render_dotted(false),
+                ))
+                .or_insert(bound);
+        }
+        by_tag
+            .entry(baml_type::typetag::TypeTag::of_head(fq_name))
+            .or_insert(bound);
+        by_tag.entry(live_tag).or_insert(bound);
+    }
+    let compile_time = vm.heap.compile_time_declaration_index();
+    let mut unbound: Vec<baml_type::typetag::TypeTag> = Vec::new();
+    for &ptr in owned {
+        bex_vm_types::head_walk::visit_object_heads_mut(vm.get_object_mut(ptr), &mut |head| {
+            if head.is_resolved() {
+                return;
+            }
+            if let Some(&bound) = by_tag.get(&head.tag()) {
+                *head = bound;
+            } else if let Some(&declaration) = compile_time.get(&head.tag()) {
+                // The compile-time index is keyed by each declaration's own
+                // tag, so the head's tag already is the identity.
+                head.resolve(declaration);
+            } else {
+                unbound.push(head.tag());
+            }
+        });
+    }
+    if unbound.is_empty() {
+        return Ok(());
+    }
+    unbound.sort_unstable();
+    unbound.dedup();
+    Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+        message: format!(
+            "runtime link produced type references nothing declares (tags {unbound:?})"
+        ),
+    }))
+}
+
+/// Bind each freshly grafted interface's default-method bodies from the pool
+/// index its emit wrote to the heap pointer the object landed at — the
+/// runtime-package twin of the compile-time heap's own resolution pass.
+/// `resolve` maps a plan-local `ObjectIndex` to its live pointer.
+fn bind_interface_defaults(
+    vm: &mut BexVm,
+    candidates: impl Iterator<Item = HeapPtr>,
+    resolve: impl Fn(bex_vm_types::ObjectIndex) -> HeapPtr,
+) {
+    let interfaces = candidates
+        .filter(|ptr| matches!(vm.get_object(*ptr), Object::Interface(_)))
+        .collect::<Vec<_>>();
+    for interface_ptr in interfaces {
+        let Object::Interface(interface) = vm.get_object_mut(interface_ptr) else {
+            unreachable!()
+        };
+        for method in &mut interface.methods {
+            if let Some(default) = method.default {
+                method.default_fn = resolve(default);
+            }
+        }
     }
 }
 
@@ -2012,6 +1772,10 @@ fn graft_session_submission(
             owned.push(pointer);
         }
     }
+    // Runtime identities are generative: remint before anything reads a
+    // declaration's tag (`allocate_runtime_declaration_types` builds this
+    // eval's `type` values off them below).
+    let reminted = remint_grafted_declarations(vm, &owned);
     let mut object_map = vec![0usize; objects.len()];
     let mut appended_objects = Vec::new();
     for (index, pointer) in objects.iter().copied().enumerate() {
@@ -2046,6 +1810,9 @@ fn graft_session_submission(
                 function.bytecode.compact = Some(function.bytecode.lower_to_compact());
             }
             Object::GenericFunction(function) => function.runtime_package = package_ptr,
+            // Member back-edges, as in `Package.compile` above.
+            Object::Interface(interface) => interface.owner = package_ptr,
+            Object::TypeAlias(alias) => alias.owner = package_ptr,
             _ => {}
         }
     }
@@ -2081,6 +1848,9 @@ fn graft_session_submission(
         };
         function.bytecode.resolved_constants = resolved;
     }
+    bind_interface_defaults(vm, owned.iter().copied(), |index| {
+        stable_objects[index.raw()]
+    });
 
     let mut appended = vec![Value::NULL; next_global - existing_len];
     for (plan_index, constant) in plan.program.globals.iter().enumerate() {
@@ -2121,6 +1891,13 @@ fn graft_session_submission(
         .collect::<IndexMap<_, _>>();
     let new_interfaces = program_package
         .interfaces
+        .iter()
+        .map(|(name, index)| (name.clone(), objects[index.raw()]))
+        .collect::<IndexMap<_, _>>();
+    // Recursive aliases are pooled declarations now, so they relocate exactly
+    // like classes: resolve each index against the freshly linked image.
+    let new_type_aliases = program_package
+        .type_aliases
         .iter()
         .map(|(name, index)| (name.clone(), objects[index.raw()]))
         .collect::<IndexMap<_, _>>();
@@ -2168,6 +1945,27 @@ fn graft_session_submission(
         }
         new_impl_rules.insert(interface, pointers);
     }
+    // Every owned object now exists — including the impl rules, whose patterns
+    // carry heads — so the graft can bind and prove totality. `extra_owned`'s
+    // boxed floats carry no heads and pass through the walk untouched.
+    let bind_set: Vec<HeapPtr> = owned.iter().chain(&extra_owned).copied().collect();
+    let mut named_surfaces = Vec::new();
+    for (alias, &dep_ptr) in &dependencies {
+        dependency_named_declarations(vm, alias, dep_ptr, &mut named_surfaces);
+    }
+    // A session's earlier evals published their declarations under fully
+    // qualified names; a later eval's type positions name them the same way.
+    if let Object::Package(package) = vm.get_object(package_ptr)
+        && let Some(runtime) = package.runtime.as_ref()
+    {
+        named_surfaces.extend(
+            runtime
+                .object_names
+                .iter()
+                .map(|(name, &ptr)| (name.clone(), ptr)),
+        );
+    }
+    bind_graft_type_heads(vm, &objects, &bind_set, &named_surfaces, &reminted)?;
 
     let mut object_name_updates = IndexMap::new();
     for (name, index) in &plan.program.function_indices {
@@ -2264,9 +2062,7 @@ fn graft_session_submission(
     package.enums.extend(new_enums);
     package.interfaces.extend(new_interfaces);
     package.functions.extend(new_functions);
-    package
-        .recursive_type_aliases
-        .extend(program_package.recursive_type_aliases);
+    package.type_aliases.extend(new_type_aliases);
     for (interface, rules) in new_impl_rules {
         package
             .impl_rules
@@ -2294,12 +2090,17 @@ fn graft_session_submission(
     runtime.object_names.extend(object_name_updates);
     runtime.global_names.extend(cached_import_names);
     runtime.global_names.extend(global_name_updates);
-    // Every declaration submission is generative: its created-once Type value
-    // carries a fresh mint and points back to the Session package that owns its
-    // definitions. Overwriting a visible name updates only the newest lookup;
-    // values and functions from older submissions retain their original mint.
+    // Every declaration submission is generative: it creates fresh declarations
+    // owned by the Session package. Overwriting a visible name updates only the
+    // newest lookup; values and functions from older submissions keep pointing
+    // at the declarations they were built against.
     runtime.type_values.extend(new_type_values);
     runtime.diagnostics.clone_from(&artifact.diagnostics);
+    // The maps above now hold fresh young pointers inside a package object that
+    // may itself have been promoted long ago. Without dirtying its card, a minor
+    // collection would never rescan it and the new declarations would be
+    // collected out from under the session.
+    vm.tlab.heap().conservative_write_barrier(package_ptr);
     Ok(actions)
 }
 
@@ -2329,7 +2130,7 @@ impl BamlClassSession for PackageReflectImpl {
             interfaces: IndexMap::new(),
             impl_rules: IndexMap::new(),
             functions: IndexMap::new(),
-            recursive_type_aliases: IndexMap::new(),
+            type_aliases: IndexMap::new(),
             interface_blob: Vec::new(),
             test_init: None,
             mounted_types: IndexMap::new(),
@@ -2345,12 +2146,6 @@ impl BamlClassSession for PackageReflectImpl {
                 init: None,
                 // Session cells intentionally stay mutable between evals.
                 initialized: false,
-                // A Session's declarations are not re-spelled. It re-grafts on
-                // every submission, so a per-submission discriminator would
-                // first have to answer what a declaration's identity means
-                // across submissions. Recovery declines for them exactly as it
-                // did before, by the same mint-unique-name gate.
-                mint: None,
             })),
             session: Some(Box::new(SessionState {
                 history: IndexMap::new(),
@@ -2457,12 +2252,15 @@ fn non_callable_error(what: &str) -> VmRustFnError {
 }
 
 /// The `reflect.Arg` class type, for array/map element tags.
-fn ty_arg() -> RealizedTy {
-    RealizedTy::Class(
-        baml_type::QualifiedTypeName::from_dotted_path(ARG_FQN),
-        vec![],
-        TyAttr::default(),
-    )
+///
+/// A stdlib FQN constant resolving to a head — one of the sanctioned name
+/// boundaries; the head comes off the declaration, never from the name's hash.
+fn ty_arg(vm: &BexVm) -> RealizedTy {
+    let qtn = baml_type::QualifiedTypeName::from_dotted_path(ARG_FQN);
+    let head = vm
+        .declaration_head(&qtn)
+        .unwrap_or_else(|| unreachable!("`{ARG_FQN}` is declared by the stdlib"));
+    RealizedTy::Class(head, vec![], TyAttr::default())
 }
 
 /// Build one `reflect.Arg`. A nameless positional (a host callable from a
@@ -2475,13 +2273,12 @@ fn alloc_arg(
     name: Option<&baml_type::Name>,
     position: usize,
     ty: RealizedTy,
-    defs: &DynTypeDefs,
 ) -> Value {
     let name = match name {
         Some(n) => Value::object(vm.alloc_string(n.as_str())),
         None => Value::object(vm.alloc_string(format!("$arg{position}"))),
     };
-    let ty = alloc_type_in(vm, ty, defs);
+    let ty = Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(ty)));
     copy::Arg { name, r#type: ty }.to_value(vm)
 }
 
@@ -2499,17 +2296,13 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
     let Some(sig) = vm.callable_signature(f_val) else {
         return Err(non_callable_error("reflect.signature"));
     };
-    // A signature reconstructed off a runtime package's function names that
-    // package's classes and enums; the reported types have to carry its
-    // declarations or nothing downstream can resolve them.
-    let defs = package_defs(vm, vm.callable_runtime_package(f_val));
     let mut positional = Vec::new();
     let mut opts: IndexMap<bex_str::BexStr, Value> = IndexMap::new();
     for param in &sig.params {
         match param.mode {
             FunctionParamMode::Required => {
                 let position = positional.len();
-                let arg = alloc_arg(vm, param.name.as_ref(), position, param.ty.clone(), &defs);
+                let arg = alloc_arg(vm, param.name.as_ref(), position, param.ty.clone());
                 positional.push(arg);
             }
             FunctionParamMode::Optional => {
@@ -2518,16 +2311,18 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
                 // it by), so it is simply absent from `opts`. Placeholders
                 // are for positionals only and never enter by-name matching.
                 if let Some(name) = &param.name {
-                    let arg = alloc_arg(vm, Some(name), positional.len(), param.ty.clone(), &defs);
+                    let arg = alloc_arg(vm, Some(name), positional.len(), param.ty.clone());
                     opts.insert(bex_str::BexStr::from(name.as_str()), arg);
                 }
             }
         }
     }
-    let args = Value::object(vm.tlab.alloc_array(ty_arg(), positional));
-    let opts = Value::object(vm.tlab.alloc_map(RealizedTy::string(), ty_arg(), opts));
-    let returns = alloc_type_in(vm, sig.ret.clone(), &defs);
-    let errors = alloc_type_in(vm, sig.throws, &defs);
+    let arg_ty = ty_arg(vm);
+    let args = Value::object(vm.tlab.alloc_array(arg_ty.clone(), positional));
+    let opts = Value::object(vm.tlab.alloc_map(RealizedTy::string(), arg_ty, opts));
+    let returns =
+        Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(sig.ret.clone())));
+    let errors = Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(sig.throws)));
     let docstring = opt_string(vm, sig.docstring.as_ref());
     let name = opt_string(vm, sig.name.as_ref());
     Ok(copy::Signature {
@@ -2549,8 +2344,8 @@ fn raise_invalid_argument(
     got: RealizedTy,
 ) -> NativeCallResult {
     let argument = Value::object(vm.alloc_string(argument));
-    let expected = Value::object(vm.alloc_static_type(expected));
-    let got = Value::object(vm.alloc_static_type(got));
+    let expected = Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(expected)));
+    let got = Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(got)));
     let err = copy::InvalidArgumentError {
         argument,
         expected,

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Client | null) -> image {
+function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: <unresolved type #34575171419448> | null) -> image {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -27,7 +27,7 @@ function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Cli
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImage$build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.llm_image_outputs.GenerateImage$build_request(prompt: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -52,7 +52,7 @@ function fixtures.llm_image_outputs.GenerateImage$parse(json: string) -> image {
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImage$render_prompt(prompt: string) -> ai.Prompt {
+function fixtures.llm_image_outputs.GenerateImage$render_prompt(prompt: string) -> <unresolved type #135172864440005> {
     load_var prompt
     call user.fixtures.llm_image_outputs.GenerateImage$spec
     store_var _2
@@ -65,7 +65,7 @@ function fixtures.llm_image_outputs.GenerateImage$render_prompt(prompt: string) 
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImage$spec(prompt: string) -> ai.FunctionSpec<image> {
+function fixtures.llm_image_outputs.GenerateImage$spec(prompt: string) -> <unresolved type #25974768157144><image> {
     load_var ?1
     make_cell
     store_var ?1
@@ -105,7 +105,7 @@ function fixtures.llm_image_outputs.GenerateImage$spec(prompt: string) -> ai.Fun
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImage$stream(prompt: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<image, image> {
+function fixtures.llm_image_outputs.GenerateImage$stream(prompt: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><image, image> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -124,7 +124,7 @@ function fixtures.llm_image_outputs.GenerateImage$stream(prompt: string, client:
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.Client | null) -> image[] {
+function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: <unresolved type #34575171419448> | null) -> image[] {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -150,7 +150,7 @@ function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet$build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.llm_image_outputs.GenerateImageSet$build_request(prompt: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -175,7 +175,7 @@ function fixtures.llm_image_outputs.GenerateImageSet$parse(json: string) -> imag
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet$render_prompt(prompt: string) -> ai.Prompt {
+function fixtures.llm_image_outputs.GenerateImageSet$render_prompt(prompt: string) -> <unresolved type #135172864440005> {
     load_var prompt
     call user.fixtures.llm_image_outputs.GenerateImageSet$spec
     store_var _2
@@ -188,7 +188,7 @@ function fixtures.llm_image_outputs.GenerateImageSet$render_prompt(prompt: strin
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet$spec(prompt: string) -> ai.FunctionSpec<image[]> {
+function fixtures.llm_image_outputs.GenerateImageSet$spec(prompt: string) -> <unresolved type #25974768157144><image[]> {
     load_var ?1
     make_cell
     store_var ?1
@@ -228,7 +228,7 @@ function fixtures.llm_image_outputs.GenerateImageSet$spec(prompt: string) -> ai.
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet$stream(prompt: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<image[], image[]> {
+function fixtures.llm_image_outputs.GenerateImageSet$stream(prompt: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><image[], image[]> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -247,7 +247,7 @@ function fixtures.llm_image_outputs.GenerateImageSet$stream(prompt: string, clie
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, client: ai.Client | null) -> (image | string)[] {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, client: <unresolved type #34575171419448> | null) -> (image | string)[] {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -273,7 +273,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, 
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative$build_request(prompt: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative$build_request(prompt: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -298,7 +298,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative$parse(json: stri
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative$render_prompt(prompt: string) -> ai.Prompt {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative$render_prompt(prompt: string) -> <unresolved type #135172864440005> {
     load_var prompt
     call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec
     store_var _2
@@ -311,7 +311,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative$render_prompt(pr
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(prompt: string) -> ai.FunctionSpec<(image | string)[]> {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(prompt: string) -> <unresolved type #25974768157144><(image | string)[]> {
     load_var ?1
     make_cell
     store_var ?1
@@ -351,7 +351,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(prompt: str
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative$stream(prompt: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<(image | string)[], (image | string)[]> {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative$stream(prompt: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><(image | string)[], (image | string)[]> {
     load_var client
     load_const <omitted>
     cmp_op ==

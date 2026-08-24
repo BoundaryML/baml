@@ -66,6 +66,12 @@ class testing.TestCollector$stream {
   tests: testing.TestRegistration$stream[]
   testsets: testing.TestSetRegistration$stream[]
 }
+class testing.TestPool {
+  tokens: int[]
+}
+class testing.TestPool$stream {
+  tokens: int[]
+}
 class testing.TestRegistration {
   name: string
   body: TestBody
@@ -106,6 +112,9 @@ function testing._has_selected_descendant(prefix: string, names: string[]) -> bo
 }
 function testing._name_selected(name: string, names: string[]) -> bool  [expr] {
   { for selected in names {  } if (selected Eq name) { return true } else {  } null } false
+}
+function testing.acquire(self: ?) -> null  [expr] {
+  { while true { if let _slot: int = self.tokens.pop() { return null }; baml.sys.sleep(baml.time.Duration.from_milliseconds(10)) catch (e) { _ => null } } }
 }
 function testing.aggregate_reports(named_results: NamedChildReport[]) -> TestSetReport  [expr] {
   { let passed = 0; let failed = 0; let has_error = false; let failed_names: string[] = []; let results: ChildReport[] = []; let result_names: string[] = []; for named_result in named_results { let result = named_result.report; results.push(result); result_names.push(named_result.name); let outcome = match (result) { report: TestReport => report.outcome, report: TestSetReport => report.outcome } } if (outcome Eq "pass") { passed Add= 1 } else { failed Add= 1; let child_failed_names = match (result) { report: TestReport => [named_result.name], report: TestSetReport => {  } if (report.failed_names.length() Gt 0) {  } report.failed_names else {  } [named_result.name] }; for name in child_failed_names {  } failed_names.push(name) } if (outcome Eq "error") { has_error = true } else {  } null; let outcome: Outcome = if (has_error) {  } "error" else if (failed Eq 0) {  } "pass" else {  } "fail" } TestSetReport { outcome: outcome, passed: passed, failed: failed, total: results.length(), failed_names: failed_names, results: results, result_names: result_names }
@@ -194,29 +203,38 @@ function testing.register_test_set(self: ?, name: string, collector: TestSetBody
 function testing.register_test_set_at(self: ?, owner: string, name: string, collector: TestSetBody, runner: TestSetRunner?) -> void  [expr] {
   { let scoped = testing.TestCollector { prefix: owner, tests: self.tests, testsets: self.testsets } } scoped.register_test_set(name, collector, runner)
 }
+function testing.release(self: ?) -> null  [expr] {
+  { self.tokens.push(1) } null
+}
 function testing.run_all(self: ?) -> TestSetReport  [expr] {
-  {  } root.run_testset(root.testset_children(self), null)
+  {  } self.run_all_pooled(root.test_pool(0))
 }
-function testing.run_children_parallel(children: TestSetChild[]) -> TestSetReport  [expr] {
-  { let futures: baml.future.Future<NamedChildReport, never>[] = []; for child in children {  } futures.push(spawn { () -> { {  } NamedChildReport { name: child.name, report: child.run() } } }); let named_results = await baml.future.all_complete(futures) } root.aggregate_reports(named_results)
+function testing.run_all_pooled(self: ?, pool: testing.TestPool) -> TestSetReport  [expr] {
+  {  } root.run_testset(root.testset_children(self, pool), null, pool)
 }
-function testing.run_filtered(self: ?, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[]) -> FlatTestReport  [expr] {
-  { let selected_names = root.select_names_layered(self, profile_include, profile_exclude, cli_include, cli_exclude); let report = if (profile_include.length() Eq 0 And profile_exclude.length() Eq 0 And cli_include.length() Eq 0 And cli_exclude.length() Eq 0) {  } self.run_all() else {  } self.run_selected(selected_names) } root.flatten_with_tolerated(report, selected_names)
+function testing.run_children_parallel(children: TestSetChild[], pool: testing.TestPool) -> TestSetReport  [expr] {
+  { let futures: baml.future.Future<NamedChildReport, never>[] = []; for child in children {  } if (child.is_container) {  } futures.push(spawn { () -> { {  } NamedChildReport { name: child.name, report: child.run() } } }) else { pool.acquire() } futures.push(spawn { () -> { { let named = NamedChildReport { name: child.name, report: child.run() }; pool.release() } named } }); let named_results = await baml.future.all_complete(futures) } root.aggregate_reports(named_results)
+}
+function testing.run_filtered(self: ?, profile_include: string[], profile_exclude: string[], cli_include: string[], cli_exclude: string[], max_concurrency: int) -> FlatTestReport  [expr] {
+  { let selected_names = root.select_names_layered(self, profile_include, profile_exclude, cli_include, cli_exclude); let pool = root.test_pool(max_concurrency); let report = if (profile_include.length() Eq 0 And profile_exclude.length() Eq 0 And cli_include.length() Eq 0 And cli_exclude.length() Eq 0) {  } self.run_all_pooled(pool) else {  } self.run_selected_pooled(selected_names, pool) } root.flatten_with_tolerated(report, selected_names)
 }
 function testing.run_selected(self: ?, names: string[]) -> TestSetReport  [expr] {
-  {  } root.run_testset(root.testset_children_selected(self, names), null)
+  {  } self.run_selected_pooled(names, root.test_pool(0))
+}
+function testing.run_selected_pooled(self: ?, names: string[], pool: testing.TestPool) -> TestSetReport  [expr] {
+  {  } root.run_testset(root.testset_children_selected(self, names, pool), null, pool)
 }
 function testing.run_test(self: ?, name: string) -> TestReport  [expr] {
   { for t in self.collector.tests {  } if (t.name Eq name) { return root.run_test(t.body, t.runner) }; for k in self.expansions.keys() { let sub = self.expansions[k] } if (name.starts_with(k Add "::")) { return sub.run_test(name) }; throw "Test not found: " Add name }
 }
 function testing.run_test(body: TestBody, runner: TestRunner?) -> TestReport  [expr] {
-  { let base_run: TestReportThunk = () -> TestReport { { let start = baml.time.Instant.now(); let timeout_ms = match (baml.env.get("BAML_TEST_TIMEOUT_MS") catch (e) { _ => null }) { t: string => int.parse(t) catch (e) { _ => 300000 }, _ => 300000 }; let work: baml.future.Future<RunReport, never> = spawn { () -> { {  } { body() } RunReport { outcome: "pass", duration_ms: 0, message: null } catch_all (e) { p: baml.panics.UserPanic => {  } RunReport { outcome: "fail", duration_ms: 0, message: p.message }, p: baml.panics.AssertionFailed => {  } RunReport { outcome: "fail", duration_ms: 0, message: p.message }, baml.panics.Panic => {  } RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }, _ => {  } RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() } } } }; let timer: baml.future.Future<RunReport, never> = spawn { () -> { { baml.sys.sleep(baml.time.Duration.from_milliseconds(timeout_ms)) catch (e) { _ => null } } RunReport { outcome: "fail", duration_ms: 0, message: "test timed out af..." Add timeout_ms.to_string() Add "ms (override with..." } } }; let result = await baml.future.race([work, timer]) catch_all (e) { _ => RunReport { outcome: "fail", duration_ms: 0, message: "test task failed ..." } }; let duration = start.elapsed().to_milliseconds().to_int() catch (_) { baml.errors.InvalidArgument { message: message } => {  } baml.sys.panic("testing: test dur..." Add message) } } TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: duration, message: result.message }] } } } match (runner) { null => base_run(), r: TestRunner => { let wrapped: TestReportThunk = r(base_run) } wrapped() }
+  { let base_run: TestReportThunk = () -> TestReport { { let start = baml.time.Instant.now(); let timeout_ms = match (baml.env.get("BAML_TEST_TIMEOUT_MS") catch (e) { _ => null }) { t: string => int.parse(t) catch (e) { _ => 300000 }, _ => 300000 }; let work: baml.future.Future<RunReport, never> = spawn { () -> { {  } { body() } RunReport { outcome: "pass", duration_ms: 0, message: null } catch_all (e) { p: baml.panics.UserPanic => {  } RunReport { outcome: "fail", duration_ms: 0, message: p.message }, p: baml.panics.AssertionFailed => {  } RunReport { outcome: "fail", duration_ms: 0, message: p.message }, baml.panics.Panic => {  } RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }, _ => {  } RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() } } } }; let timer: baml.future.Future<RunReport, never> = spawn { () -> { { baml.sys.sleep(baml.time.Duration.from_milliseconds(timeout_ms)) catch (e) { _ => null } } RunReport { outcome: "fail", duration_ms: 0, message: "test timed out af..." Add timeout_ms.to_string() Add "ms (override with..." } } }; let result = await baml.future.race([work, timer]) catch_all (e) { _ => RunReport { outcome: "fail", duration_ms: 0, message: "test task failed ..." } }; let duration = start.elapsed().to_milliseconds().to_int() catch (_) { baml.errors.InvalidArgument { message: message } => {  } baml.sys.panic("testing: test dur..." Add message) } } TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: duration, message: result.message }] } } } match (runner) { null => base_run(), r: TestRunner => {  } { let wrapped: TestReportThunk = r(base_run) } wrapped() catch_all (e) { _ => TestReport { outcome: "fail", runs: [RunReport { outcome: "fail", duration_ms: 0, message: "test runner middl..." Add ctx.to_string() }] } } }
 }
 function testing.run_testset(self: ?, name: string) -> TestSetReport  [expr] {
-  { for ts in self.collector.testsets {  } if (ts.name Eq name) { return root.run_testset(root.testset_children(self.expand_testset_registry(ts)), ts.runner) }; for k in self.expansions.keys() { let sub = self.expansions[k] } if (name.starts_with(k Add "::")) { return sub.run_testset(name) }; throw "TestSet not found: " Add name }
+  { for ts in self.collector.testsets {  } if (ts.name Eq name) { let pool = root.test_pool(0); return root.run_testset(root.testset_children(self.expand_testset_registry(ts), pool), ts.runner, pool) }; for k in self.expansions.keys() { let sub = self.expansions[k] } if (name.starts_with(k Add "::")) { return sub.run_testset(name) }; throw "TestSet not found: " Add name }
 }
-function testing.run_testset(children: TestSetChild[], runner: TestSetRunner?) -> TestSetReport  [expr] {
-  {  } match (runner) { null => root.run_children_parallel(children), r: TestSetRunner => r(children) }
+function testing.run_testset(children: TestSetChild[], runner: TestSetRunner?, pool: testing.TestPool) -> TestSetReport  [expr] {
+  {  } match (runner) { null => root.run_children_parallel(children, pool), r: TestSetRunner => r(children) }
 }
 function testing.select_names(registry: testing.TestRegistry, include: string[], exclude: string[]) -> string[]  [expr] {
   {  } root.select_names_layered(registry, [], [], include, exclude)
@@ -234,26 +252,30 @@ function testing.subtree_may_be_selected(prefix: string, include: string[], excl
   { if (root.subtree_excluded(prefix, exclude)) { return false }; if (include.length() Eq 0) { return true }; for pattern in include {  } if (root.pattern_may_match_descendant(pattern, prefix)) { return true } } false
 }
 function testing.test_child(name: string, body: TestBody, runner: TestRunner?) -> TestSetChild  [expr] {
-  {  } TestSetChild { name: name, run: () -> ChildReport { {  } root.run_test(body, runner) } }
+  {  } TestSetChild { name: name, run: () -> ChildReport { {  } root.run_test(body, runner) }, is_container: false }
 }
-function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> TestSetChild  [expr] {
-  {  } TestSetChild { name: ts.name, run: () -> ChildReport { {  } root.run_testset(root.testset_children(registry.expand_testset_registry(ts)), ts.runner) catch_all (e) { baml.panics.Panic => root.expansion_error_report(ts.name), _ => root.expansion_error_report(ts.name) } } }
+function testing.test_pool(max_concurrency: int) -> testing.TestPool  [expr] {
+  { let limit = if (max_concurrency Gt 0) {  } max_concurrency else {  } 64; let tokens: int[] = []; let i = 0; while i Lt limit { tokens.push(1); i = i Add 1 } } testing.TestPool { tokens: tokens }
 }
-function testing.testset_child_selected(registry: testing.TestRegistry, ts: testing.TestSetRegistration, names: string[]) -> TestSetChild  [expr] {
-  {  } TestSetChild { name: ts.name, run: () -> ChildReport { {  } root.run_testset(root.testset_children_selected(registry.expand_testset_registry(ts), names), ts.runner) catch_all (e) { baml.panics.Panic => root.expansion_error_report(ts.name), _ => root.expansion_error_report(ts.name) } } }
+function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestSetRegistration, pool: testing.TestPool) -> TestSetChild  [expr] {
+  {  } TestSetChild { name: ts.name, is_container: true, run: () -> ChildReport { {  } root.run_testset(root.testset_children(registry.expand_testset_registry(ts), pool), ts.runner, pool) catch_all (e) { baml.panics.Panic => root.expansion_error_report(ts.name), _ => root.expansion_error_report(ts.name) } } }
 }
-function testing.testset_children(registry: testing.TestRegistry) -> TestSetChild[]  [expr] {
-  { let children: TestSetChild[] = []; for t in registry.collector.tests {  } children.push(root.test_child(t.name, t.body, t.runner)); for ts in registry.collector.testsets {  } children.push(root.testset_child(registry, ts)) } children
+function testing.testset_child_selected(registry: testing.TestRegistry, ts: testing.TestSetRegistration, names: string[], pool: testing.TestPool) -> TestSetChild  [expr] {
+  {  } TestSetChild { name: ts.name, is_container: true, run: () -> ChildReport { {  } root.run_testset(root.testset_children_selected(registry.expand_testset_registry(ts), names, pool), ts.runner, pool) catch_all (e) { baml.panics.Panic => root.expansion_error_report(ts.name), _ => root.expansion_error_report(ts.name) } } }
 }
-function testing.testset_children_selected(registry: testing.TestRegistry, names: string[]) -> TestSetChild[]  [expr] {
-  { let children: TestSetChild[] = []; for t in registry.collector.tests {  } if (root._name_selected(t.name, names)) {  } children.push(root.test_child(t.name, t.body, t.runner)) else {  } null; for ts in registry.collector.testsets {  } if (root._has_selected_descendant(ts.name, names)) {  } children.push(root.testset_child_selected(registry, ts, names)) else {  } null } children
+function testing.testset_children(registry: testing.TestRegistry, pool: testing.TestPool) -> TestSetChild[]  [expr] {
+  { let children: TestSetChild[] = []; for t in registry.collector.tests {  } children.push(root.test_child(t.name, t.body, t.runner)); for ts in registry.collector.testsets {  } children.push(root.testset_child(registry, ts, pool)) } children
+}
+function testing.testset_children_selected(registry: testing.TestRegistry, names: string[], pool: testing.TestPool) -> TestSetChild[]  [expr] {
+  { let children: TestSetChild[] = []; for t in registry.collector.tests {  } if (root._name_selected(t.name, names)) {  } children.push(root.test_child(t.name, t.body, t.runner)) else {  } null; for ts in registry.collector.testsets {  } if (root._has_selected_descendant(ts.name, names)) {  } children.push(root.testset_child_selected(registry, ts, names, pool)) else {  } null } children
 }
 
 --- captures ---
 lambda () in test_child: captures [body, runner]
-lambda () in testset_child: captures [registry, ts]
-lambda () in testset_child_selected: captures [registry, ts, names]
+lambda () in testset_child: captures [registry, ts, pool]
+lambda () in testset_child_selected: captures [registry, ts, names, pool]
 lambda () in ?: captures [child]
+lambda () in ?: captures [child, pool]
 lambda () in ?: captures [body]
 lambda () in ?: captures [timeout_ms]
 
@@ -262,7 +284,7 @@ function testing.FailFast() -> TestSetRunner  [expr] {
   { return (children) -> TestSetReport { {  } root.run_children_sequential(children, true) } }
 }
 function testing.PassRate(threshold: float) -> TestSetRunner  [expr] {
-  { if (threshold Lt 0.0 Or threshold Gt 1.0) {  } baml.sys.panic("testing.PassRate ...") else {  } null; return (children) -> TestSetReport { { let report = root.run_children_parallel(children); let outcome: Outcome = if (report.total Eq 0) {  } "pass" else if (root._int_to_float(report.passed) Div root._int_to_float(report.total) Ge threshold) {  } "pass" else {  } "fail" } TestSetReport { outcome: outcome, passed: report.passed, failed: report.failed, total: report.total, failed_names: report.failed_names, results: report.results, result_names: report.result_names } } }
+  { if (threshold Lt 0.0 Or threshold Gt 1.0) {  } baml.sys.panic("testing.PassRate ...") else {  } null; return (children) -> TestSetReport { { let report = root.run_children_parallel(children, root.test_pool(0)); let outcome: Outcome = if (report.total Eq 0) {  } "pass" else if (root._int_to_float(report.passed) Div root._int_to_float(report.total) Ge threshold) {  } "pass" else {  } "fail" } TestSetReport { outcome: outcome, passed: report.passed, failed: report.failed, total: report.total, failed_names: report.failed_names, results: report.results, result_names: report.result_names } } }
 }
 function testing.Quorum(n: int, m: int) -> TestRunner  [expr] {
   { if (n Le 0) {  } baml.sys.panic("testing.Quorum re...") else if (m Lt 0 Or m Gt n) {  } baml.sys.panic("testing.Quorum re...") else {  } null; return (run_once) -> TestReportThunk { {  } () -> TestReport { { let runs: RunReport[] = []; let passes = 0; { let i = 0; while i Lt n { let report = run_once(); for run in report.runs {  } runs.push(run) } if (report.outcome Eq "pass") { passes Add= 1 } else {  } null }; let outcome: Outcome = if (passes Ge m) {  } "pass" else {  } "fail" } TestReport { outcome: outcome, runs: runs } } } }
@@ -343,10 +365,12 @@ class testing.TestReport$stream {
 class testing.TestSetChild {
   name: string
   run: testing.ChildReportThunk
+  is_container: bool
 }
 class testing.TestSetChild$stream {
   name: string | null
   run: testing.ChildReportThunk$stream | null
+  is_container: bool | null
 }
 class testing.TestSetReport {
   outcome: testing.Outcome

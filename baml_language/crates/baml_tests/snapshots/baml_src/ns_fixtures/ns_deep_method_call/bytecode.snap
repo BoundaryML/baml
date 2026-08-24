@@ -1,27 +1,27 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.deep_method_call.B.greet(self: fixtures.deep_method_call.B) -> string {
+function fixtures.deep_method_call.B.greet(self: <unresolved type #67208514212419>) -> string {
     load_var self
     load_field .label
     return
 }
 
-function fixtures.deep_method_call.test_deep_field(a: fixtures.deep_method_call.A) -> string {
+function fixtures.deep_method_call.test_deep_field(a: <unresolved type #68308025840630>) -> string {
     load_var a
     load_field .b
     load_field .label
     return
 }
 
-function fixtures.deep_method_call.test_deep_method(a: fixtures.deep_method_call.A) -> string {
+function fixtures.deep_method_call.test_deep_method(a: <unresolved type #68308025840630>) -> string {
     load_var a
     load_field .b
     call user.fixtures.deep_method_call.B.greet
     return
 }
 
-function fixtures.deep_method_call.test_direct_method(b: fixtures.deep_method_call.B) -> string {
+function fixtures.deep_method_call.test_direct_method(b: <unresolved type #67208514212419>) -> string {
     load_var b
     call user.fixtures.deep_method_call.B.greet
     return

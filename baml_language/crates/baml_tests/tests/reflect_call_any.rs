@@ -484,7 +484,7 @@ async fn call_any_reports_unspecialized_generic_function() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "E0165|generic function `ident` cannot be extracted by name through reflection: look it up in `Package.functions()` and `specialize` it first".into()
+            "E0165|generic function `ident` cannot be extracted through reflection: its signature still mentions its own type parameters".into()
         ))
     );
 }
@@ -512,7 +512,7 @@ async fn pinned_call_any_declares_unspecialized_generic_compilation_error() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "E0165|generic function `ident` cannot be extracted by name through reflection: look it up in `Package.functions()` and `specialize` it first".into()
+            "E0165|generic function `ident` cannot be extracted through reflection: its signature still mentions its own type parameters".into()
         ))
     );
 }
@@ -852,8 +852,7 @@ async fn get_function_refuses_an_unspecialized_generic_through_any_function() {
         output.result,
         Ok(BexExternalValue::String(
             "E0165|generic function `GenericList$render_prompt` cannot be invoked through \
-             reflection until it is specialized: its body needs type arguments — look it up in \
-             `Package.functions()` and `specialize` it first"
+             reflection: its body needs type arguments"
                 .into()
         ))
     );
@@ -943,8 +942,7 @@ async fn get_function_refuses_an_unspecialized_generic_companion() {
         output.result,
         Ok(BexExternalValue::String(
             "E0165|generic function `GenericList$render_prompt` cannot be invoked through \
-             reflection until it is specialized: its body needs type arguments — look it up in \
-             `Package.functions()` and `specialize` it first"
+             reflection: its body needs type arguments"
                 .into()
         ))
     );

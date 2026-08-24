@@ -396,6 +396,11 @@ fn expand_alias_head(ty: &Ty, aliases: &FxHashMap<TypeName, Ty>) -> Ty {
 struct AliasEquivCtx<'a>(&'a FxHashMap<TypeName, Ty>);
 
 impl TypeContext for AliasEquivCtx<'_> {
+    /// A name-based context represents a declaration by its own name, so this
+    /// is the identity — no resolution step, and never `None`.
+    fn head_lookup(&self, qtn: &TypeName) -> Option<TypeName> {
+        Some(qtn.clone())
+    }
     fn alias_def(&self, name: &TypeName) -> Option<Ty> {
         self.0.get(name).cloned()
     }

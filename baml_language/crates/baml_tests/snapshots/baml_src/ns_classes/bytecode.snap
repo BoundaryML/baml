@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function classes.$init_test_ns_classes_classes(registry: testing.TestCollector) -> null {
+function classes.$init_test_ns_classes_classes(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.classes"
     load_const "class_constructor"
@@ -139,7 +139,7 @@ function classes.$init_test_ns_classes_classes(registry: testing.TestCollector) 
     return
 }
 
-function classes.MutableNumber.add(self: classes.MutableNumber, other: classes.MutableNumber) -> bool {
+function classes.MutableNumber.add(self: <unresolved type #76890822233041>, other: <unresolved type #76890822233041>) -> bool {
     load_var self
     copy 0
     load_field .value
@@ -151,7 +151,7 @@ function classes.MutableNumber.add(self: classes.MutableNumber, other: classes.M
     return
 }
 
-function classes.Number.add(self: classes.Number, other: classes.Number) -> classes.Number {
+function classes.Number.add(self: <unresolved type #73082680377683>, other: <unresolved type #73082680377683>) -> <unresolved type #73082680377683> {
     load_var self
     load_field .value
     load_var other
@@ -161,14 +161,14 @@ function classes.Number.add(self: classes.Number, other: classes.Number) -> clas
     return
 }
 
-function classes.class_constructor_fn() -> classes.Point {
+function classes.class_constructor_fn() -> <unresolved type #66250376609272> {
     load_const 1
     load_const 2
     init_instance user.classes.Point .x, .y
     return
 }
 
-function classes.class_constructor_return_directly_fn() -> classes.Point {
+function classes.class_constructor_return_directly_fn() -> <unresolved type #66250376609272> {
     load_const 1
     load_const 2
     init_instance user.classes.Point .x, .y
@@ -193,7 +193,7 @@ function classes.constructor_with_preceding_variables_fn() -> int {
     return
 }
 
-function classes.default_point() -> classes.PointXYZW {
+function classes.default_point() -> <unresolved type #30093553783220> {
     load_const 0
     load_const 0
     load_const 0
@@ -239,7 +239,7 @@ function classes.method_call_fn() -> int {
     return
 }
 
-function classes.multiple_spreads_fn() -> classes.PointXYZW {
+function classes.multiple_spreads_fn() -> <unresolved type #30093553783220> {
     call user.classes.x_one
     pop 1
     call user.classes.xy_one
@@ -359,7 +359,7 @@ function classes.nested_field_read_separate_construction_fn() -> int {
     return
 }
 
-function classes.spread_after_named_fields_fn() -> classes.PointXYZW {
+function classes.spread_after_named_fields_fn() -> <unresolved type #30093553783220> {
     call user.classes.default_point
     store_var _2
     alloc_instance user.classes.PointXYZW
@@ -368,7 +368,7 @@ function classes.spread_after_named_fields_fn() -> classes.PointXYZW {
     return
 }
 
-function classes.spread_before_named_fields_fn() -> classes.PointXYZW {
+function classes.spread_before_named_fields_fn() -> <unresolved type #30093553783220> {
     call user.classes.default_point
     store_var _2
     alloc_instance user.classes.PointXYZW
@@ -388,7 +388,7 @@ function classes.spread_does_not_break_locals_fn() -> int {
     return
 }
 
-function classes.x_one() -> classes.PointXYZW {
+function classes.x_one() -> <unresolved type #30093553783220> {
     load_const 1
     load_const 0
     load_const 0
@@ -397,7 +397,7 @@ function classes.x_one() -> classes.PointXYZW {
     return
 }
 
-function classes.xy_one() -> classes.PointXYZW {
+function classes.xy_one() -> <unresolved type #30093553783220> {
     load_const 1
     load_const 1
     load_const 0

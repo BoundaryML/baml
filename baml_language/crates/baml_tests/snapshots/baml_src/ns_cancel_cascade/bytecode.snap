@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function cancel_cascade.$init_test_ns_cancel_cascade_cancel_cascade(registry: testing.TestCollector) -> null {
+function cancel_cascade.$init_test_ns_cancel_cascade_cancel_cascade(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.cancel_cascade"
     load_const "cancel_unblocks_await_on_non_descendant"
@@ -201,7 +201,7 @@ function cancel_cascade.cancel_unblocks_await_on_non_descendant_fn() -> bool {
     return
 }
 
-function cancel_cascade.cancelled_child_future_state_is_cancelled() -> baml.future.FutureState {
+function cancel_cascade.cancelled_child_future_state_is_cancelled() -> <unresolved type #133838588634832> {
     load_var ?1
     make_cell
     store_var ?1

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/type_spec/sweep.rs
+assertion_line: 119
 expression: report
 ---
 hir_ty error-channel entries: 3

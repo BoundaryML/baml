@@ -120,12 +120,6 @@ class reflect.errors.SessionBusy$stream {
 }
 
 --- <builtin>/reflect/ns_function/function.baml ---
-class reflect.function.GenericParam {
-  name: string
-}
-class reflect.function.GenericParam$stream {
-  name: string | null
-}
 class reflect.function.Parameter {
   name: string?
   type: reflect.Type
@@ -141,12 +135,8 @@ class reflect.function.Type {
 class reflect.function.Type$stream {
 }
 function reflect.function.as_type(self: ?) -> reflect.Type  [builtin]
-function reflect.function.generic_params(self: ?) -> reflect.function.GenericParam[]  [builtin]
-function reflect.function.get(self: ?) -> F?  [builtin]
-function reflect.function.is_generic(self: ?) -> bool  [builtin]
 function reflect.function.params(self: ?) -> reflect.function.Parameter[]  [builtin]
 function reflect.function.return_type(self: ?) -> reflect.Type  [builtin]
-function reflect.function.specialize(self: ?, args: reflect.Type[]) -> reflect.function.Type  [builtin]
 
 --- <builtin>/reflect/ns_interface/interface.baml ---
 class reflect.interface.Implementation {

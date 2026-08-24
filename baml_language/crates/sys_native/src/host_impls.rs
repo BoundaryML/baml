@@ -34,7 +34,6 @@
 
 use std::sync::Arc;
 
-use baml_type::RuntimeTy;
 use bex_external_types::validate_host_return;
 use bex_heap::BexHeap;
 use bridge_ctypes::CffiHandleTableOptions;
@@ -42,7 +41,7 @@ use prost::Message as _;
 use sys_ops::io::{
     self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError,
 };
-use sys_types::{OpError, SysOp, SysOpResult, VmPanic};
+use sys_types::{OpError, SapTy as RuntimeTy, SysOp, SysOpResult, VmPanic};
 
 use crate::{NativeSysOps, host_dispatch};
 
@@ -257,11 +256,24 @@ impl io::IoNamespaceHost for NativeSysOps {
 /// recursion, enum identity, and class-name identity. Class *field types* are
 /// validated engine-side at the result-push site, where the resolved class
 /// schema is available.
+/// Project a lane type into the name-headed form the contract check reads.
+///
+/// The check compares a returned wire value against the declared type, which
+/// it can only do by name. An anonymous declaration has none, so it widens to
+/// `unknown` — the check is weaker there, not wrong, and such a type cannot
+/// reach a host as a named value anyway.
+fn expected_wire_ty(expected: &RuntimeTy) -> baml_type::RuntimeTy {
+    expected
+        .clone()
+        .try_map_heads(&mut |head: &baml_type::TaggedTypeName| head.declared().cloned().ok_or(()))
+        .unwrap_or_else(|()| baml_type::RuntimeTy::unknown())
+}
+
 fn validate_return_value(
     value: &BexExternalValue,
     expected: &RuntimeTy,
 ) -> Result<(), VmRustFnError> {
-    validate_host_return(value, expected).map_err(|err| {
+    validate_host_return(value, &expected_wire_ty(expected)).map_err(|err| {
         VmPanic::HostContractViolation {
             message: format!(
                 "host callable returned a value of the wrong type: {err} (expected {expected})"
@@ -275,9 +287,9 @@ fn validate_return_value(
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{RuntimeTy, TyAttr};
+    use baml_type::TyAttr;
     use sys_ops::io::{BexExternalValue, CallId, IoNamespaceHost as _, SysOpContext, SysOpOutput};
-    use sys_types::{OpError, SysOp, SysOpResult, VmBamlError, VmRustFnError};
+    use sys_types::{OpError, SapTy as RuntimeTy, SysOp, SysOpResult, VmBamlError, VmRustFnError};
 
     use super::*;
     use crate::host_dispatch;

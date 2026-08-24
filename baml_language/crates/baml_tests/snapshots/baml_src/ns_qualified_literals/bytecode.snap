@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function qualified_literals.$init_test_ns_qualified_literals_qualified_literals(registry: testing.TestCollector) -> null {
+function qualified_literals.$init_test_ns_qualified_literals_qualified_literals(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.qualified_literals"
     load_const "qualified struct literals parse inside array literals"
@@ -13,7 +13,7 @@ function qualified_literals.$init_test_ns_qualified_literals_qualified_literals(
     return
 }
 
-function qualified_literals.first_x(points: qualified_literals.QualPoint[]) -> int {
+function qualified_literals.first_x(points: <unresolved type #15031518682030>[]) -> int {
     load_type qualified_literals.QualPoint
     load_var points
     load_const 0

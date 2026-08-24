@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function array_length_snapshot.$init_test_ns_array_length_snapshot_array_length_snapshot(registry: testing.TestCollector) -> null {
+function array_length_snapshot.$init_test_ns_array_length_snapshot_array_length_snapshot(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.array_length_snapshot"
     load_const "length_binding_snapshots_before_mutation"

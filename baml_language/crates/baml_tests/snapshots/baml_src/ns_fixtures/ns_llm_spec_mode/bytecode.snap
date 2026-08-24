@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.llm_spec_mode.NamedTools(q: string, client: ai.Client | null) -> fixtures.llm_spec_mode.Answer {
+function fixtures.llm_spec_mode.NamedTools(q: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #131571956741653> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -27,7 +27,7 @@ function fixtures.llm_spec_mode.NamedTools(q: string, client: ai.Client | null) 
     return
 }
 
-function fixtures.llm_spec_mode.NamedTools$build_request(q: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.llm_spec_mode.NamedTools$build_request(q: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -45,14 +45,14 @@ function fixtures.llm_spec_mode.NamedTools$build_request(q: string, client: ai.C
     return
 }
 
-function fixtures.llm_spec_mode.NamedTools$parse(json: string) -> fixtures.llm_spec_mode.Answer {
+function fixtures.llm_spec_mode.NamedTools$parse(json: string) -> <unresolved type #131571956741653> {
     load_type fixtures.llm_spec_mode.Answer
     load_var json
     call baml.sap.parse
     return
 }
 
-function fixtures.llm_spec_mode.NamedTools$render_prompt(q: string) -> ai.Prompt {
+function fixtures.llm_spec_mode.NamedTools$render_prompt(q: string) -> <unresolved type #135172864440005> {
     load_var q
     call user.fixtures.llm_spec_mode.NamedTools$spec
     store_var _2
@@ -65,7 +65,7 @@ function fixtures.llm_spec_mode.NamedTools$render_prompt(q: string) -> ai.Prompt
     return
 }
 
-function fixtures.llm_spec_mode.NamedTools$spec(q: string) -> ai.FunctionSpec<fixtures.llm_spec_mode.Answer> {
+function fixtures.llm_spec_mode.NamedTools$spec(q: string) -> <unresolved type #25974768157144><<unresolved type #131571956741653>> {
     load_var ?1
     make_cell
     store_var ?1
@@ -103,7 +103,7 @@ function fixtures.llm_spec_mode.NamedTools$spec(q: string) -> ai.FunctionSpec<fi
     return
 }
 
-function fixtures.llm_spec_mode.PlainChat(q: string, client: ai.Client | null) -> string {
+function fixtures.llm_spec_mode.PlainChat(q: string, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -129,7 +129,7 @@ function fixtures.llm_spec_mode.PlainChat(q: string, client: ai.Client | null) -
     return
 }
 
-function fixtures.llm_spec_mode.PlainChat$build_request(q: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.llm_spec_mode.PlainChat$build_request(q: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -154,7 +154,7 @@ function fixtures.llm_spec_mode.PlainChat$parse(json: string) -> string {
     return
 }
 
-function fixtures.llm_spec_mode.PlainChat$render_prompt(q: string) -> ai.Prompt {
+function fixtures.llm_spec_mode.PlainChat$render_prompt(q: string) -> <unresolved type #135172864440005> {
     load_var q
     call user.fixtures.llm_spec_mode.PlainChat$spec
     store_var _2
@@ -167,7 +167,7 @@ function fixtures.llm_spec_mode.PlainChat$render_prompt(q: string) -> ai.Prompt 
     return
 }
 
-function fixtures.llm_spec_mode.PlainChat$spec(q: string) -> ai.FunctionSpec<string> {
+function fixtures.llm_spec_mode.PlainChat$spec(q: string) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -207,7 +207,7 @@ function fixtures.llm_spec_mode.PlainChat$spec(q: string) -> ai.FunctionSpec<str
     return
 }
 
-function fixtures.llm_spec_mode.PlainChat$stream(q: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function fixtures.llm_spec_mode.PlainChat$stream(q: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -226,7 +226,7 @@ function fixtures.llm_spec_mode.PlainChat$stream(q: string, client: ai.stream.St
     return
 }
 
-function fixtures.llm_spec_mode.SpecAgent(q: string, client: ai.Client | null) -> fixtures.llm_spec_mode.Answer {
+function fixtures.llm_spec_mode.SpecAgent(q: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #131571956741653> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -252,7 +252,7 @@ function fixtures.llm_spec_mode.SpecAgent(q: string, client: ai.Client | null) -
     return
 }
 
-function fixtures.llm_spec_mode.SpecAgent$build_request(q: string, client: ai.Client | null) -> baml.http.Request {
+function fixtures.llm_spec_mode.SpecAgent$build_request(q: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -270,14 +270,14 @@ function fixtures.llm_spec_mode.SpecAgent$build_request(q: string, client: ai.Cl
     return
 }
 
-function fixtures.llm_spec_mode.SpecAgent$parse(json: string) -> fixtures.llm_spec_mode.Answer {
+function fixtures.llm_spec_mode.SpecAgent$parse(json: string) -> <unresolved type #131571956741653> {
     load_type fixtures.llm_spec_mode.Answer
     load_var json
     call baml.sap.parse
     return
 }
 
-function fixtures.llm_spec_mode.SpecAgent$render_prompt(q: string) -> ai.Prompt {
+function fixtures.llm_spec_mode.SpecAgent$render_prompt(q: string) -> <unresolved type #135172864440005> {
     load_var q
     call user.fixtures.llm_spec_mode.SpecAgent$spec
     store_var _2
@@ -290,7 +290,7 @@ function fixtures.llm_spec_mode.SpecAgent$render_prompt(q: string) -> ai.Prompt 
     return
 }
 
-function fixtures.llm_spec_mode.SpecAgent$spec(q: string) -> ai.FunctionSpec<fixtures.llm_spec_mode.Answer> {
+function fixtures.llm_spec_mode.SpecAgent$spec(q: string) -> <unresolved type #25974768157144><<unresolved type #131571956741653>> {
     load_var ?1
     make_cell
     store_var ?1
@@ -335,7 +335,7 @@ function fixtures.llm_spec_mode.SpecAgent$spec(q: string) -> ai.FunctionSpec<fix
     return
 }
 
-function fixtures.llm_spec_mode.build_spec(q: string) -> ai.FunctionSpec<fixtures.llm_spec_mode.Answer> {
+function fixtures.llm_spec_mode.build_spec(q: string) -> <unresolved type #25974768157144><<unresolved type #131571956741653>> {
     load_var q
     call user.fixtures.llm_spec_mode.SpecAgent$spec
     return
@@ -348,7 +348,7 @@ function fixtures.llm_spec_mode.double_it(n: int) -> int {
     return
 }
 
-function fixtures.llm_spec_mode.more_tools() -> ai.tools.Tool[] {
+function fixtures.llm_spec_mode.more_tools() -> <unresolved type #4597005869098>[] {
     load_const user.fixtures.llm_spec_mode.double_it
     load_const "double_named"
     load_const <omitted>
