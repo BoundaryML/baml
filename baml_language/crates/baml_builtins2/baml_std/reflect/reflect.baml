@@ -187,6 +187,11 @@ class InvalidArgumentError {
   got reflect.Type
 }
 
+/// One-shot compiler output consumed by Package._finish or Session._finish.
+class CompileArtifact {
+  _inner unknown
+}
+
 /// An isolated runtime-compiled package.
 class Package {
   _inner unknown
@@ -201,13 +206,13 @@ class Package {
     Package._finish(artifact, packages)
   }
 
-  function _compile(files: map<string, string>, packages: map<string, Package>) -> Package throws reflect.errors.CompilationError {
+  function _compile(files: map<string, string>, packages: map<string, Package>) -> CompileArtifact throws reflect.errors.CompilationError {
     $rust_io_function
   }
 
   //baml:mut_vm
   //baml:may_yield
-  function _finish(artifact: Package, packages: map<string, Package>) -> Package throws unknown {
+  function _finish(artifact: CompileArtifact, packages: map<string, Package>) -> Package throws unknown {
     $rust_function
   }
 
@@ -297,13 +302,13 @@ class Session {
     }
   }
 
-  function _compile<T>(self, source: string) -> Package throws reflect.errors.CompilationError | reflect.errors.SessionBusy {
+  function _compile<T>(self, source: string) -> CompileArtifact throws reflect.errors.CompilationError | reflect.errors.SessionBusy {
     $rust_io_function
   }
 
   //baml:mut_vm
   //baml:may_yield
-  function _finish<T>(self, artifact: Package) -> T throws unknown {
+  function _finish<T>(self, artifact: CompileArtifact) -> T throws unknown {
     $rust_function
   }
 

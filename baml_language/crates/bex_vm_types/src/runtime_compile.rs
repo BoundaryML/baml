@@ -5,7 +5,7 @@
 //! compiler implementation is assembled in `bex_project`.
 
 use std::sync::{
-    Arc, Weak,
+    Arc, Mutex, Weak,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -63,11 +63,11 @@ pub struct RuntimePackageMount {
 }
 
 /// The kind of a name retained in a Session's compile-time scope.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SessionVisibleKind {
     Declaration,
     Let,
-    TypeBinding,
+    TypeBinding { type_value: String },
 }
 
 /// One source-visible name and the hygienic name used in replayed source.
@@ -75,8 +75,6 @@ pub enum SessionVisibleKind {
 pub struct SessionVisibleSymbol {
     pub internal: String,
     pub kind: SessionVisibleKind,
-    /// Backing top-level value for a scoped runtime type binding.
-    pub type_value: Option<String>,
 }
 
 /// The `eval<T>` contract, spelled for the compiler's name-headed world.
@@ -122,12 +120,20 @@ pub struct RuntimeSessionStep {
     /// Existing Session cell to update after this initializer succeeds. `None`
     /// means the generated global itself receives the value.
     pub commit_global: Option<String>,
-    /// Source-visible binding committed by this step, if it is a `let`.
-    pub binding: Option<(String, SessionVisibleSymbol)>,
-    /// Replayed source fragment to append only after this step succeeds.
-    pub replay_source: Option<String>,
-    /// Whether this step is the submission's observable final expression.
-    pub returns_value: bool,
+    pub kind: RuntimeSessionStepKind,
+}
+
+/// The two legal commit shapes of a Session initializer step.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RuntimeSessionStepKind {
+    Expression,
+    Binding {
+        /// Source-visible binding committed by this step.
+        name: String,
+        symbol: SessionVisibleSymbol,
+        /// Replayed source fragment appended only after this step succeeds.
+        replay_source: String,
+    },
 }
 
 /// Compiler-owned Session metadata retained after the fresh database drops.
@@ -138,6 +144,8 @@ pub struct RuntimeSessionCompileArtifact {
     pub declaration_source: String,
     pub declarations: IndexMap<String, SessionVisibleSymbol>,
     pub steps: Vec<RuntimeSessionStep>,
+    /// The step whose value is the submission's observable result.
+    pub result_step: Option<usize>,
     /// Current-submission initializer helpers in execution order. `helper_slot`
     /// addresses the anonymous helper-slot list retained in the pruned tail.
     pub initializers: Vec<RuntimeSessionInitializer>,
@@ -243,7 +251,7 @@ pub struct RuntimeCompileDiagnostic {
 }
 
 /// Successful compiler output retained by the runtime.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct RuntimeCompileArtifact {
     /// Relocatable user units. Builtin/dependency definitions remain imports.
     pub units: Vec<CompilationUnit>,
@@ -252,8 +260,19 @@ pub struct RuntimeCompileArtifact {
     pub interface_blob: Vec<u8>,
     /// Non-error diagnostics produced by the successful compilation.
     pub diagnostics: Vec<RuntimeCompileDiagnostic>,
-    /// Present only for `reflect.Session.eval`.
-    pub session: Option<RuntimeSessionCompileArtifact>,
-    /// S-9 permit transferred from the request to the successful artifact.
-    pub session_lease: Option<SessionEvalLease>,
+    pub kind: ArtifactKind,
 }
+
+/// Which runtime compilation door produced an artifact.
+#[derive(Debug)]
+pub enum ArtifactKind {
+    Package,
+    Session {
+        meta: RuntimeSessionCompileArtifact,
+        /// S-9 permit transferred from the request to the successful artifact.
+        lease: SessionEvalLease,
+    },
+}
+
+/// One-shot storage used by the BAML `CompileArtifact` wrapper.
+pub type RuntimeCompileArtifactSlot = Mutex<Option<RuntimeCompileArtifact>>;

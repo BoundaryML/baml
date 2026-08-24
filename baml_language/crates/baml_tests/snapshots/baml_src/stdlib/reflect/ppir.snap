@@ -221,6 +221,12 @@ class reflect.Arg$stream {
   name: string | null
   type: unknown
 }
+class reflect.CompileArtifact {
+  _inner: unknown
+}
+class reflect.CompileArtifact$stream {
+  _inner: unknown
+}
 class reflect.Diagnostic {
   code: string
   span: reflect.Span?
@@ -307,10 +313,10 @@ class reflect.WithMeta$stream {
 }
 type reflect.TypeKind = reflect.class.Type | reflect.enum.Type | reflect.union.Type | reflect.literal.Type | reflect.array.Type | reflect.map.Type | reflect.interface.Type | reflect.primitive.Type | reflect.function.Type
 type reflect.TypeKind$stream = reflect.class.Type$stream | reflect.enum.Type$stream | reflect.union.Type$stream | reflect.literal.Type$stream | reflect.array.Type$stream | reflect.map.Type$stream | reflect.interface.Type$stream | reflect.primitive.Type$stream | reflect.function.Type$stream
-function reflect._compile(files: map<string, string>, packages: map<string, reflect.Package>) -> reflect.Package  [builtin]
-function reflect._compile(self: ?, source: string) -> reflect.Package  [builtin]
-function reflect._finish(artifact: reflect.Package, packages: map<string, reflect.Package>) -> reflect.Package  [builtin]
-function reflect._finish(self: ?, artifact: reflect.Package) -> T  [builtin]
+function reflect._compile(files: map<string, string>, packages: map<string, reflect.Package>) -> reflect.CompileArtifact  [builtin]
+function reflect._compile(self: ?, source: string) -> reflect.CompileArtifact  [builtin]
+function reflect._finish(artifact: reflect.CompileArtifact, packages: map<string, reflect.Package>) -> reflect.Package  [builtin]
+function reflect._finish(self: ?, artifact: reflect.CompileArtifact) -> T  [builtin]
 function reflect._new(packages: map<string, reflect.Package>) -> reflect.Session  [builtin]
 function reflect.as_type(self: ?) -> reflect.Type  [missing]
 function reflect.attributes(self: ?) -> reflect.Meta  [expr] {

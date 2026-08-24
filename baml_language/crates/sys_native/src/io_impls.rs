@@ -34,7 +34,7 @@ impl io::IoClassReflectPackage for NativeSysOps {
         _files: indexmap::IndexMap<String, String>,
         _packages: indexmap::IndexMap<String, io::owned::reflect::Package>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::reflect::Package> {
+    ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "runtime compiler is not installed".to_string(),
         })
@@ -50,7 +50,7 @@ impl io::IoClassReflectSession for NativeSysOps {
         _source: String,
         _type_arg_0: ::sys_types::SapTy,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::reflect::Package> {
+    ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "runtime compiler is not installed".to_string(),
         })

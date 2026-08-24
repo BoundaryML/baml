@@ -985,7 +985,7 @@ impl io::IoClassReflectPackage for DefaultIoOps {
         _files: indexmap::IndexMap<String, String>,
         _packages: indexmap::IndexMap<String, io::owned::reflect::Package>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::reflect::Package> {
+    ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
         // BexEngine intercepts this operation and delegates to its injected
         // RuntimeCompiler before the provider table is consulted.
         SysOpOutput::err(VmBamlError::Unsupported {
@@ -1003,7 +1003,7 @@ impl io::IoClassReflectSession for DefaultIoOps {
         _source: String,
         _type_arg_0: ::sys_types::SapTy,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::reflect::Package> {
+    ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
         // BexEngine intercepts Session compilation for the same reason as
         // Package.compile: the concrete compiler is injected above sys_ops.
         SysOpOutput::err(VmBamlError::Unsupported {

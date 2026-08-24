@@ -16,6 +16,46 @@ function main() -> int throws unknown {
 }
 "####;
 
+#[tokio::test]
+async fn session_compile_artifact_is_consumed_once() {
+    let output = baml_test!(
+        r####"
+function main() -> bool throws unknown {
+  let session = reflect.Session.new()
+  let artifact = session._compile<int>(`1`)
+  let first = session._finish<int>(artifact)
+  let rejected = false
+  let _ = session._finish<int>(artifact) catch (_) {
+    _ => { rejected = true },
+  }
+  first == 1 && rejected
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn session_finish_refuses_package_compile_artifact() {
+    let output = baml_test!(
+        r####"
+function main() -> bool throws unknown {
+  let session = reflect.Session.new()
+  let artifact = reflect.Package._compile(
+    { "main.baml": "function ready() -> bool { true }" },
+    {},
+  )
+  let rejected = false
+  let _ = session._finish<unknown>(artifact) catch (_) {
+    _ => { rejected = true },
+  }
+  rejected
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
 const S11_LIVENESS_PROBE: &str = r#####"
 function escape_one_session_value() -> reflect.Type throws unknown {
   let dependency = reflect.Package.compile({
@@ -511,12 +551,9 @@ async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
         let Object::Package(owner) = (unsafe { owner_ptr.get() }) else {
             panic!("escaped definition owner should be a Package")
         };
-        owner_is_session = owner.session.is_some();
-        session_history = owner
-            .session
-            .as_ref()
-            .map_or(0, |state| state.history.len());
-        let runtime = owner.runtime.as_ref().expect("runtime owner image");
+        owner_is_session = owner.session().is_some();
+        session_history = owner.session().map_or(0, |state| state.history.len());
+        let runtime = owner.runtime().expect("runtime owner image");
         retained_globals = runtime.globals.len();
         retained_objects = runtime.objects.len();
         retained_dependencies = runtime.dependencies.len();
@@ -524,10 +561,9 @@ async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
             .dependencies
             .iter()
             .map(|dependency| match unsafe { dependency.get() } {
-                Object::Package(package) => package
-                    .runtime
-                    .as_ref()
-                    .map_or(0, |runtime| runtime.objects.len()),
+                Object::Package(package) => {
+                    package.runtime().map_or(0, |runtime| runtime.objects.len())
+                }
                 _ => 0,
             })
             .sum::<usize>();

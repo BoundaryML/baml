@@ -123,7 +123,7 @@ impl<'vm> ImplResolver<'vm> {
             if let Some(rules) = package.impl_rules.get(&iface_ptr) {
                 pointers.extend(rules);
             }
-            if let Some(runtime) = &package.runtime {
+            if let Some(runtime) = package.runtime() {
                 packages.extend(runtime.dependencies.iter().copied());
             }
         }

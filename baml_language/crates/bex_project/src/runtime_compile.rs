@@ -25,7 +25,8 @@ use bex_vm_types::{
     InitTail, RuntimeCompileArtifact, RuntimeCompileDiagnostic, RuntimeCompileMode,
     RuntimeCompileRequest, RuntimeDiagnosticSeverity, RuntimePackageMount,
     RuntimeSessionCompileArtifact, RuntimeSessionCompileRequest, RuntimeSessionInitializer,
-    RuntimeSessionStep, RuntimeSourceSpan, SessionVisibleKind, SessionVisibleSymbol,
+    RuntimeSessionStep, RuntimeSessionStepKind, RuntimeSourceSpan, SessionVisibleKind,
+    SessionVisibleSymbol,
     bytecode::Instruction,
     relink::{IndexOperand, visit_object_operands},
 };
@@ -869,9 +870,7 @@ fn runtime_type_binding_parts(source: &str) -> Option<(String, &str)> {
 fn runtime_type_binding_prelude(bindings: &IndexMap<String, SessionVisibleSymbol>) -> String {
     let mut prelude = String::new();
     for symbol in bindings.values() {
-        if symbol.kind == SessionVisibleKind::TypeBinding
-            && let Some(type_value) = &symbol.type_value
-        {
+        if let SessionVisibleKind::TypeBinding { type_value } = &symbol.kind {
             let _ = writeln!(
                 prelude,
                 "type {} = unreflect({type_value});",
@@ -1145,7 +1144,6 @@ fn lower_session_submission(
             let symbol = SessionVisibleSymbol {
                 internal: internal(&name),
                 kind: SessionVisibleKind::Declaration,
-                type_value: None,
             };
             declaration_name_ranges.insert(range, symbol.internal.clone());
             declarations.insert(name, symbol);
@@ -1155,7 +1153,7 @@ fn lower_session_submission(
     let mut declaration_mapping = request
         .visible
         .iter()
-        .filter(|(_, symbol)| symbol.kind != SessionVisibleKind::Let)
+        .filter(|(_, symbol)| !matches!(symbol.kind, SessionVisibleKind::Let))
         .map(|(name, symbol)| (name.clone(), symbol.internal.clone()))
         .collect::<IndexMap<_, _>>();
     declaration_mapping.extend(
@@ -1259,11 +1257,12 @@ fn lower_session_submission(
     let mut active_type_bindings = request
         .visible
         .iter()
-        .filter(|(_, symbol)| symbol.kind == SessionVisibleKind::TypeBinding)
+        .filter(|(_, symbol)| matches!(symbol.kind, SessionVisibleKind::TypeBinding { .. }))
         .map(|(name, symbol)| (name.clone(), symbol.clone()))
         .collect::<IndexMap<_, _>>();
     let mut generated = declaration_source.clone();
     let mut steps = Vec::new();
+    let mut result_step = None;
 
     for (index, element) in elements.iter().enumerate() {
         let (node, wrapped_range, has_semicolon, is_statement) = match element {
@@ -1334,8 +1333,9 @@ fn lower_session_submission(
             let source = format!("let {backing_name} = {{\n{prelude}({operand})\n}}\n");
             let symbol = SessionVisibleSymbol {
                 internal: type_name,
-                kind: SessionVisibleKind::TypeBinding,
-                type_value: Some(backing_name.clone()),
+                kind: SessionVisibleKind::TypeBinding {
+                    type_value: backing_name.clone(),
+                },
             };
             (backing_name, source, None, Some((name, symbol)))
         } else {
@@ -1350,7 +1350,6 @@ fn lower_session_submission(
                 let symbol = SessionVisibleSymbol {
                     internal: internal_name.clone(),
                     kind: SessionVisibleKind::Let,
-                    type_value: None,
                 };
                 binding = Some((name, symbol));
                 internal_name
@@ -1362,7 +1361,8 @@ fn lower_session_submission(
                 .flatten()
                 .and_then(|(target, operator, rhs)| {
                     let symbol = request.visible.get(target)?;
-                    (symbol.kind == SessionVisibleKind::Let).then_some((symbol, operator, rhs))
+                    matches!(symbol.kind, SessionVisibleKind::Let)
+                        .then_some((symbol, operator, rhs))
                 });
             let (source, commit_global) = if let Some((target, operator, rhs)) = assignment {
                 let rhs = rewrite_identifiers(
@@ -1435,39 +1435,44 @@ fn lower_session_submission(
         generated.push_str(&step_source);
         let returns_value =
             index + 1 == elements.len() && !is_outer_let && !is_statement && !has_semicolon;
+        if returns_value {
+            result_step = Some(steps.len());
+        }
+        let kind = binding
+            .clone()
+            .map_or(RuntimeSessionStepKind::Expression, |(name, symbol)| {
+                RuntimeSessionStepKind::Binding {
+                    name,
+                    symbol,
+                    replay_source: step_source.clone(),
+                }
+            });
         steps.push(RuntimeSessionStep {
             global: format!("user.{generated_name}"),
             commit_global,
-            binding: binding.clone(),
-            replay_source: binding.as_ref().map(|_| step_source),
-            returns_value,
+            kind,
         });
         if let Some((name, symbol)) = binding {
             visible_mapping.insert(name.clone(), symbol.internal.clone());
-            if symbol.kind == SessionVisibleKind::TypeBinding {
+            if matches!(symbol.kind, SessionVisibleKind::TypeBinding { .. }) {
                 active_type_bindings.insert(name, symbol);
             }
         }
     }
 
-    if !steps.iter().any(|step| step.returns_value) {
+    if result_step.is_none() {
         let generated_name = format!("__baml_session_{sequence}_result");
         let step_source = format!("let {generated_name} = null\n");
         generated.push_str(&step_source);
+        result_step = Some(steps.len());
         steps.push(RuntimeSessionStep {
             global: format!("user.{generated_name}"),
             commit_global: None,
-            binding: None,
-            replay_source: None,
-            returns_value: true,
+            kind: RuntimeSessionStepKind::Expression,
         });
     }
-    let result_global = steps
-        .iter()
-        .find(|step| step.returns_value)
-        .expect("session lowering always has a result")
-        .global
-        .clone();
+    let result_step = result_step.expect("session lowering always has a result");
+    let result_global = steps[result_step].global.clone();
     Ok(LoweredSession {
         source: generated,
         artifact: RuntimeSessionCompileArtifact {
@@ -1475,6 +1480,7 @@ fn lower_session_submission(
             declaration_source,
             declarations,
             steps,
+            result_step: Some(result_step),
             initializers: Vec::new(),
         },
         result_global,
@@ -1942,17 +1948,17 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             }
             session.artifact.initializers = initializers;
         }
-        // The public artifact still carries these as two independent `Option`s,
-        // so the pair splits here — once, at the boundary that demands it —
-        // rather than being threaded through the function as separate values.
-        let (session_artifact, session_lease) =
-            session.map_or((None, None), |s| (Some(s.artifact), Some(s.lease)));
+        let kind = session.map_or(bex_vm_types::ArtifactKind::Package, |session| {
+            bex_vm_types::ArtifactKind::Session {
+                meta: session.artifact,
+                lease: session.lease,
+            }
+        });
         Ok(RuntimeCompileArtifact {
             units,
             interface_blob,
             diagnostics,
-            session: session_artifact,
-            session_lease,
+            kind,
         })
     }
 }

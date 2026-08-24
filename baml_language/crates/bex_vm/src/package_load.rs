@@ -23,7 +23,10 @@ use baml_type::Name;
 use bex_heap::{BexHeap, Generation};
 use bex_vm_types::{
     GlobalIndex, HeapPtr, Object, ObjectIndex,
-    types::{LocalName, MethodImpl, Package, ProgramImplRule, ProgramPackage, RuntimeImplRule},
+    types::{
+        LocalName, MethodImpl, Package, PackageKind, ProgramImplRule, ProgramPackage,
+        RuntimeImplRule,
+    },
 };
 use indexmap::IndexMap;
 
@@ -427,8 +430,7 @@ fn fill_package_slots(
                 .test_init
                 .map(|index| heap.compile_time_ptr(index.into_raw())),
             mounted_types: IndexMap::new(),
-            runtime: None,
-            session: None,
+            kind: PackageKind::Static,
         };
         heap.set_compile_time_object(slots.package_slot, Object::Package(Box::new(package)));
         index
