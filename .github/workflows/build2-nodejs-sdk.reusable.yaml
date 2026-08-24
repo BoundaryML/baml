@@ -223,11 +223,13 @@ jobs:
           set -euo pipefail
           native="$(find npm -name 'baml_node.*-musl.node' -print -quit)"
           test -n "$native"
-          dynamic="$(readelf --dynamic "$native")"
-          versions="$(readelf --version-info "$native")"
-          printf '%s\n' "$dynamic"
-          if grep -q 'GLIBC_' <<<"$versions"; then
-            echo "::error::$native contains GLIBC-versioned symbols"
+          dynamic="$(readelf --wide --dynamic "$native")"
+          needed="$(grep NEEDED <<<"$dynamic")"
+          printf '%s\n' "$needed"
+          # ARM musl's libgcc_s uses GLIBC_2.0 as a compatibility symbol-version
+          # label. DT_NEEDED records the libraries the runtime actually loads.
+          if ! grep -Eq '\[libc\.so\]' <<<"$needed"; then
+            echo "::error::$native does not depend on the expected musl libc.so"
             exit 1
           fi
           glibc_sonames=(
@@ -246,7 +248,7 @@ jobs:
             'ld-linux[^]]*\.so[^]]*'
           )
           for soname in "${glibc_sonames[@]}"; do
-            if grep -Eq "\[${soname}\]" <<<"$dynamic"; then
+            if grep -Eq "\[${soname}\]" <<<"$needed"; then
               echo "::error::$native depends on glibc runtime soname matching $soname"
               exit 1
             fi

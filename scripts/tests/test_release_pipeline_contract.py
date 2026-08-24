@@ -30,6 +30,9 @@ NUGET_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-csharp-sdk.yaml"
 NODE_NPM_PUBLISHER = (
     ROOT / ".github" / "workflows" / "publish2-nodejs-sdk.yaml"
 )
+NODE_BUILDER = (
+    ROOT / ".github" / "workflows" / "build2-nodejs-sdk.reusable.yaml"
+)
 WEB_NPM_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-web-sdk.yaml"
 CSHARP_PREPARER = (
     ROOT / ".github" / "workflows" / "prepare-csharp-sdk.reusable.yaml"
@@ -703,6 +706,17 @@ class WorkflowGraphTests(unittest.TestCase):
             workflow.index("scripts/baml-language-version stamp"),
             workflow.index("cmake -S baml_language/sdks/cpp/bridge_cpp/tests"),
         )
+
+    def test_node_musl_abi_check_uses_runtime_dependencies(self) -> None:
+        workflow = NODE_BUILDER.read_text(encoding="utf-8")
+        verify = step_block(workflow, "Verify musl native addon ABI")
+
+        self.assertIn('readelf --wide --dynamic "$native"', verify)
+        self.assertIn('needed="$(grep NEEDED <<<"$dynamic")"', verify)
+        self.assertIn("'\\[libc\\.so\\]'", verify)
+        self.assertIn("'libc\\.so\\.6'", verify)
+        self.assertNotIn("readelf --version-info", verify)
+        self.assertNotIn("grep -q 'GLIBC_'", verify)
 
     def test_cargo_jobs_name_targets_and_run_pack_e2e_on_musl(self) -> None:
         workflow = CARGO_TESTS.read_text(encoding="utf-8")
