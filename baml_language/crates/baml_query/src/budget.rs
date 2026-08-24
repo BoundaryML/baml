@@ -135,7 +135,11 @@ impl BudgetTracker {
         &self.budgets
     }
 
-    /// Cancellation or wall-deadline check — call at every stage edge.
+    /// Cancellation, wall-deadline, or decoded-byte check — call at every
+    /// stage edge. Decoded bytes are counted as values are hydrated (the
+    /// bytes are already spent by then), so the budget is enforced here:
+    /// the next checkpoint refuses further hydration and terminates the
+    /// stream with `E_QUERY_BUDGET_EXCEEDED`.
     pub fn checkpoint(&self) -> Result<(), QueryError> {
         if self.cancel.is_cancelled() {
             return Err(QueryError::new(
@@ -149,6 +153,15 @@ impl BudgetTracker {
             return Err(QueryError::new(
                 QueryErrorCode::BudgetExceeded,
                 format!("wall-clock budget exceeded ({} ms)", max_wall.as_millis()),
+            ));
+        }
+        if self.decoded_bytes.load(Ordering::Relaxed) > self.budgets.max_decoded_bytes {
+            return Err(QueryError::new(
+                QueryErrorCode::BudgetExceeded,
+                format!(
+                    "decoded-byte budget exceeded ({})",
+                    self.budgets.max_decoded_bytes
+                ),
             ));
         }
         Ok(())

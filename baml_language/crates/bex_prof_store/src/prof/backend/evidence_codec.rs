@@ -11,7 +11,10 @@ use crate::{
     ids::{
         BexCallId, BexThreadId, BoundaryId, CallRef, EngineId, FunctionId, ProcessEuid, ThreadRef,
     },
-    prof::record::{CallSiteSourceSpan, FunctionEndStatus, MAX_THREAD_NAME_LEN, ThreadEndStatus},
+    prof::record::{
+        CallSiteSourceSpan, FunctionEndStatus, MAX_THREAD_NAME_LEN, ThreadEndStatus,
+        capped_name_bytes,
+    },
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -262,9 +265,13 @@ fn encode_thread_start(start: &ThreadStart) -> Vec<u8> {
         ThreadStartKind::Root => 0,
         ThreadStartKind::Spawn => 1,
     });
-    debug_assert!(start.name.len() <= MAX_THREAD_NAME_LEN);
-    let name = start.name.as_bytes();
-    let name = &name[..name.len().min(MAX_THREAD_NAME_LEN)];
+    // Producers cap the name already, but the decoder rebuilds it with
+    // `from_utf8_lossy`, which can grow it past the cap, so cap through the
+    // same boundary-safe helper rather than asserting the invariant: a name
+    // split mid-character encodes invalid UTF-8, and `decode_thread_start`
+    // would then reject the whole batch with `InvalidBits` -- discarding
+    // every other fact in the segment, not just the name.
+    let name = capped_name_bytes(&start.name);
     body.extend_from_slice(&u32::try_from(name.len()).unwrap_or(u32::MAX).to_be_bytes());
     body.extend_from_slice(name);
     body
@@ -683,6 +690,55 @@ mod tests {
                 status: ThreadEndStatus::Completed,
             }),
         ]
+    }
+
+    #[test]
+    fn an_oversized_thread_name_truncates_on_a_character_boundary() {
+        // A name whose cap offset lands mid-character: 255 ASCII bytes then
+        // a 2-byte 'é' straddling MAX_THREAD_NAME_LEN. Slicing at the raw
+        // byte offset would encode invalid UTF-8, and `decode_thread_start`
+        // would reject the whole batch with `InvalidBits` -- losing every
+        // other fact in the segment, not just the name.
+        let mut name = "a".repeat(MAX_THREAD_NAME_LEN - 1);
+        name.push('é');
+        name.push_str("trailing");
+        assert!(name.len() > MAX_THREAD_NAME_LEN);
+
+        let thread_ref = ThreadRef {
+            process_euid: ProcessEuid([1; 16]),
+            engine_id: EngineId(2),
+            thread_id: BexThreadId(3),
+        };
+        let facts = vec![
+            EvidenceFact::ThreadStart(ThreadStart {
+                thread_ref,
+                parent: None,
+                spawn_call: None,
+                spawn_site: None,
+                started_ns: 5,
+                kind: ThreadStartKind::Root,
+                name,
+            }),
+            EvidenceFact::ThreadEnd(ThreadEnd {
+                thread_ref,
+                ended_ns: 30,
+                status: ThreadEndStatus::Completed,
+            }),
+        ];
+
+        let encoded = encode_evidence_facts(&facts);
+        let decoded = decode_evidence_payload(&encoded.payload, encoded.record_count)
+            .expect("a capped name must stay decodable");
+
+        let EvidenceFact::ThreadStart(start) = &decoded[0] else {
+            panic!("expected the thread start back");
+        };
+        assert_eq!(
+            start.name,
+            "a".repeat(MAX_THREAD_NAME_LEN - 1),
+            "the straddling character is dropped whole, never split"
+        );
+        assert_eq!(decoded.len(), 2, "the rest of the batch survives");
     }
 
     #[test]

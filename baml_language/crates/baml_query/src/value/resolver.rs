@@ -152,7 +152,10 @@ impl HydrationContext {
             for (handle, resolved) in budgeted.iter().zip(resolved) {
                 if let Resolved::Value(value) = &resolved {
                     // Approximate decoded size; exact byte accounting comes
-                    // from the resolver honoring caps.
+                    // from the resolver honoring caps. The bytes are already
+                    // decoded, so this only records them — the checkpoint at
+                    // the top of the next batch is what refuses further
+                    // hydration and fails the stream.
                     let _ = self.tracker.count_decoded_bytes(approx_bytes(value));
                 }
                 local.insert(*handle, resolved.clone());
@@ -331,6 +334,36 @@ mod tests {
             ctx.resolve(b"h3"),
             Resolved::Unavailable(UnavailableReason::QueryBudgetExhausted)
         ));
+    }
+
+    #[test]
+    fn decoded_byte_budget_stops_hydration_and_fails_the_stream() {
+        let resolver = counting();
+        let mut budgets = QueryBudgets::unlimited();
+        // Small enough that one resolved value overruns it.
+        budgets.max_decoded_bytes = 1;
+        let tracker = BudgetTracker::new(budgets, CancellationToken::new());
+        let ctx = HydrationContext::new(resolver.clone(), tracker.clone(), 64);
+
+        // The first value is decoded before its bytes can be counted, so it
+        // still answers; the overrun is recorded.
+        assert!(matches!(ctx.resolve(b"h1"), Resolved::Value(_)));
+        assert!(
+            tracker.checkpoint().is_err(),
+            "the checkpoint must fail the stream once decoded bytes overrun"
+        );
+
+        // Every later handle is refused as a TYPED evaluation, and never
+        // reaches the resolver.
+        assert!(matches!(
+            ctx.resolve(b"h2"),
+            Resolved::Unavailable(UnavailableReason::QueryBudgetExhausted)
+        ));
+        assert_eq!(
+            resolver.handles.load(Ordering::Relaxed),
+            1,
+            "no hydration past the budget"
+        );
     }
 
     #[test]

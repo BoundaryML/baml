@@ -35,9 +35,23 @@ fn config(root: &Path, euid: ProcessEuid) -> ProfilerConfig {
     }
 }
 
+/// Serializes the process-global profiler registry across tests.
+///
+/// `maintain_sessions` and `flush_sessions` drain EVERY live session, not
+/// just the caller's engine, so two tests writing stores on parallel
+/// harness threads would drain each other's pending work and trip the
+/// progress assertion below. Scoping the drain per engine would be a
+/// production API change for a test-only problem -- in production these
+/// run on the single ring-consumer thread, where draining all sessions is
+/// the intent.
+static STORE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Writes one completed execution (root thread, one selected root call)
 /// into a fresh store and returns its root.
 fn write_store(root: &Path, euid: ProcessEuid, engine: u64) -> ThreadRef {
+    let _guard = STORE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let (session, diagnostic) = ProfilerSession::from_config(config(root, euid));
     assert!(diagnostic.is_none(), "store setup: {diagnostic:?}");
     let engine_id = EngineId(engine);

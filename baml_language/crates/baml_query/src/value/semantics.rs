@@ -9,7 +9,10 @@
 //!   not data.
 //! - Equality is canonical semantic equality: map/class entries compare
 //!   order-insensitively, every NaN equals the canonical NaN, and
-//!   +0.0/-0.0 stay DISTINCT (bit comparison).
+//!   +0.0/-0.0 stay DISTINCT (bit comparison). Across numeric kinds
+//!   (int/float/bigint) equality is numeric, agreeing with the ordering
+//!   rule below; `Int(0)` therefore equals `Float(-0.0)` even though
+//!   `Float(0.0)` does not.
 //! - Ordering comparisons apply to comparable scalar kinds (int/float/
 //!   bigint cross-compare numerically, strings bytewise); a cross-kind
 //!   ordering comparison is a NULL-like non-match.
@@ -135,6 +138,13 @@ pub fn semantic_eq(a: &Value, b: &Value) -> bool {
             // Canonical bigints are minimal decimal, so a small bigint and
             // an int with the same value render identically.
             y == &x.to_string()
+        }
+        // Float against an integral kind: defer to `scalar_ord` rather than
+        // enumerate the pairs, so equality and ordering cannot drift apart.
+        // NaN falls out for free -- `scalar_ord` yields `None` for it.
+        (Value::Int(_) | Value::BigInt(_), Value::Float(_))
+        | (Value::Float(_), Value::Int(_) | Value::BigInt(_)) => {
+            scalar_ord(a, b) == Some(std::cmp::Ordering::Equal)
         }
         (Value::String(x), Value::String(y)) => x == y,
         (Value::Bytes(x), Value::Bytes(y)) => x == y,
@@ -474,6 +484,38 @@ mod tests {
         assert_eq!(
             compare(CmpOp::Eq, &Value::Float(f64::NAN), &Value::Float(f64::NAN)),
             Some(true)
+        );
+    }
+
+    #[test]
+    fn equality_and_ordering_agree_across_numeric_kinds() {
+        // Every mixed numeric pair that orders equal must also compare equal:
+        // a SQL integer literal lowers to `Int`, a captured float decodes to
+        // `Float`, so `= 30` and `>= 30 AND <= 30` have to select the same rows.
+        for (a, b) in [
+            (Value::Int(30), Value::Float(30.0)),
+            (Value::BigInt("30".into()), Value::Float(30.0)),
+        ] {
+            assert_eq!(compare(CmpOp::Eq, &a, &b), Some(true), "{a:?} == {b:?}");
+            assert_eq!(compare(CmpOp::Eq, &b, &a), Some(true), "{b:?} == {a:?}");
+            assert_eq!(compare(CmpOp::NotEq, &a, &b), Some(false));
+            assert_eq!(compare(CmpOp::GtEq, &a, &b), Some(true));
+            assert_eq!(compare(CmpOp::LtEq, &a, &b), Some(true));
+        }
+        // A fractional float still differs from the integer.
+        assert_eq!(
+            compare(CmpOp::Eq, &Value::Int(30), &Value::Float(30.5)),
+            Some(false)
+        );
+        // NaN equals no number, in either direction.
+        assert_eq!(
+            compare(CmpOp::Eq, &Value::Int(30), &Value::Float(f64::NAN)),
+            Some(false)
+        );
+        // Cross-kind non-numerics stay unequal rather than becoming numeric.
+        assert_eq!(
+            compare(CmpOp::Eq, &Value::Int(30), &Value::String("30".into())),
+            Some(false)
         );
     }
 

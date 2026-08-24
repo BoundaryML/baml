@@ -245,6 +245,10 @@ impl ProfilerSession {
     }
 
     #[cfg(target_arch = "wasm32")]
+    #[allow(
+        clippy::needless_pass_by_value,
+        reason = "signature parity with the native arm, which consumes the config"
+    )]
     fn from_config_impl(
         config: ProfilerConfig,
         _platform: Option<()>,

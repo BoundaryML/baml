@@ -277,7 +277,7 @@ execution-level columns below are non-NULL only on those rows. Key
 | started_at?, ended_at? | Timestamp | via stream header |
 | end_status? | Utf8 | `completed|cancelled|errored` (`ThreadEnd`), NULL if no end fact |
 | *execution-level (root rows only):* | | |
-| stream_id | Utf8 | `process_euid` hex |
+| process_id | Utf8 | `process_euid` hex |
 | engine_id | UInt64 | `ThreadRef.engine_id` |
 | program_id?, revision_id?, source_label? | Utf8 | `EngineStarted` |
 | runtime_id? | Utf8 | `RootStarted.runtime_id` (`baml_id_1_…`, what `baml.id.current()` returned at the root) |
@@ -350,7 +350,7 @@ source_label?`. Joined from `call_path_stats`/`calls`/`errors`/`threads` through
 execution's `program_id`.
 
 **`health_v1`** — long format. Key `(execution_id, metric)`. Columns:
-`execution_id, plane (execution|cct|overflow|stream), metric (Utf8 counter
+`execution_id, plane (execution|cct|overflow|process|data), metric (Utf8 counter
 name), value UInt64, edge_kind?, reason?`. Rows: the 26
 `ExecutionHealthSnapshot` counters from `RootEnded`, the three `CounterHealth`
 flags (as 0/1), one row per overflow bucket (`calls_started`), and the
@@ -359,9 +359,9 @@ execution's `data_file_count`, and `plane = data` rows `data_state`
 `threads` itself never requires a data fold). This replaces the canon's
 `evidence_issues_v1` until the backend has a grouped issue ledger.
 
-**Internal** (`CatalogProfile::internal()` only): `processes_v1` (stream_id,
-pid, zero_unix_ns, baml_version, os_arch, alive, meta_hw, data_hw),
-`store_files_v1` (stream_id, plane, sequence, path, record_or_group_count,
+**Internal** (`CatalogProfile::internal()` only): `processes_v1` (process_id,
+os_pid, zero_unix_ns, baml_version, os_arch, alive, meta_hw, data_hw),
+`store_files_v1` (process_id, plane, sequence, path, record_or_group_count,
 payload_len, checksum_ok, decode_ok), `value_index_v1` (cid, codec, body_len,
 path) — debugging the store from SQL.
 
@@ -390,10 +390,10 @@ that idiom. Adding the view later is a one-line, fully reversible change.
 `threads(execution_id, thread_id)` ← every execution-scoped relation via
 `execution_id` (= the root thread's `thread_id`), `calls.thread_id`,
 `errors.throw_thread_id`, `threads.parent_thread_id`/`spawn_call_id`;
-`contexts(execution_id, call_path_id)` ← `calls.call_path_id`,
+`call_path_stats(execution_id, call_path_id)` ← `calls.call_path_id`,
 `errors.throw_call_path_id`; `calls(execution_id, call_id)` ←
 `calls.parent_call_id`, `errors.throw_call_id`, `errors.terminal_call_ids`,
-`threads.spawn_call_id`; `functions(program_id, function_id)` ←
+`threads.spawn_call_id`; `function_definitions(program_id, function_id)` ←
 `call_path_stats`/`calls`/`errors`/`threads` via the execution's `program_id`.
 Cross-execution grouping: `definition_key` (or `fqn`), never
 `function_id`/`call_path_id` (see G3).
@@ -446,7 +446,7 @@ pruned execution chunk (bounded parallelism, default `min(4, executions)`), stre
 `RecordBatch`es of ~8k rows. `supports_filters_pushdown` classifies:
 
 - `Exact`: `execution_id = 'x'`, `execution_id IN (...)`, `status = ...`,
-  `complete`, `stream_id = ...` — evaluated at the universe (meta planes only;
+  `complete`, `process_id = ...` — evaluated at the universe (meta planes only;
   no data segment read);
 - `InexactCandidate`: `started_at`/`ended_at` ranges, `fqn =` /
   `function_id =` (prune executions whose engine's function table lacks the
@@ -613,7 +613,8 @@ relations + internal three, pushdown classes, resolver over CAS. Gates: e2e
 store ⇒ same generation ⇒ same rows); torn-tail/running-execution read;
 corrupt data segment ⇒ `complete = false` + outcome incomplete, never a
 panic; perf: 1k executions across 50 streams × 10k contexts × 1k spans
-synthetic store — `SELECT count(*) FROM executions` < 50 ms (no data segment
+synthetic store — `SELECT count(*) FROM threads WHERE parent_thread_id IS NULL`
+< 50 ms (no data segment
 opened), `SELECT … FROM call_path_stats WHERE execution_id = ?` < 100 ms warm,
 first `RecordBatch` of a full `call_path_stats` scan < 500 ms, RSS bounded by
 `max_fold_bytes`.

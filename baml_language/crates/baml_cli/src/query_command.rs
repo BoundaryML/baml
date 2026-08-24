@@ -111,10 +111,25 @@ impl QueryArgs {
         }
     }
 
+    /// Runs the command. Every path RETURNS its exit code rather than
+    /// calling `std::process::exit`, so the telemetry guard in
+    /// `RuntimeCli::run` and the profiler flush in `main` still run.
     pub fn run(&self) -> anyhow::Result<crate::ExitCode> {
+        // Setup failures are query failures (5). Propagating them would
+        // land on the CLI-wide `Other` (4), which this command's contract
+        // spells "cancelled" -- a misleading code for a script to read.
+        match self.run_inner() {
+            Ok(code) => Ok(code),
+            Err(error) => {
+                crate::reporter::print_anyhow_error(&error);
+                Ok(crate::ExitCode::QueryFailed)
+            }
+        }
+    }
+
+    fn run_inner(&self) -> anyhow::Result<crate::ExitCode> {
         if self.schema {
-            let code = self.print_schema();
-            std::process::exit(code);
+            return Ok(self.print_schema());
         }
         let sql = match self.sql.as_deref() {
             Some("-") => {
@@ -127,7 +142,7 @@ impl QueryArgs {
             Some(sql) => sql.to_string(),
             None => {
                 eprintln!("error: provide SQL (or `-` for stdin), or use --schema");
-                std::process::exit(2);
+                return Ok(crate::ExitCode::QueryInvalid);
             }
         };
         let sql = if self.explain && !sql.trim_start().to_ascii_lowercase().starts_with("explain") {
@@ -145,11 +160,10 @@ impl QueryArgs {
             .enable_all()
             .build()
             .context("failed to start the query runtime")?;
-        let code = runtime.block_on(self.run_sql(&store_root, &sql));
-        std::process::exit(code);
+        Ok(runtime.block_on(self.run_sql(&store_root, &sql)))
     }
 
-    async fn run_sql(&self, store_root: &std::path::Path, sql: &str) -> i32 {
+    async fn run_sql(&self, store_root: &std::path::Path, sql: &str) -> crate::ExitCode {
         let mut budgets = QueryBudgets::unlimited();
         if let Some(max_rows) = self.max_rows {
             budgets.max_result_rows = max_rows;
@@ -169,7 +183,7 @@ impl QueryArgs {
             Ok(session) => session,
             Err(err) => {
                 eprintln!("error: {err}");
-                return 5;
+                return crate::ExitCode::QueryFailed;
             }
         };
         match session.execute(sql).await {
@@ -190,7 +204,7 @@ impl QueryArgs {
         }
     }
 
-    fn print_schema(&self) -> i32 {
+    fn print_schema(&self) -> crate::ExitCode {
         let profile = self.profile();
         let relations: Vec<serde_json::Value> = profile
             .relations()
@@ -241,7 +255,7 @@ impl QueryArgs {
                 "error: unknown relation {:?}",
                 self.table.as_deref().unwrap_or("")
             );
-            return 2;
+            return crate::ExitCode::QueryInvalid;
         }
         match self.format {
             QueryFormat::Table => {
@@ -296,20 +310,20 @@ impl QueryArgs {
                 );
             }
         }
-        0
+        crate::ExitCode::Success
     }
 }
 
-fn exit_code(outcome: &QueryOutcome) -> i32 {
+fn exit_code(outcome: &QueryOutcome) -> crate::ExitCode {
     match outcome.result_state {
-        ResultState::Complete => 0,
-        ResultState::Incomplete => 1,
+        ResultState::Complete => crate::ExitCode::Success,
+        ResultState::Incomplete => crate::ExitCode::QueryIncomplete,
         ResultState::Failed => match outcome.error.as_ref().map(|e| e.code.as_str()) {
-            Some("invalid_sql" | "authorization_denied") => 2,
-            _ => 5,
+            Some("invalid_sql" | "authorization_denied") => crate::ExitCode::QueryInvalid,
+            _ => crate::ExitCode::QueryFailed,
         },
-        ResultState::BudgetExhausted => 3,
-        ResultState::Cancelled => 4,
+        ResultState::BudgetExhausted => crate::ExitCode::QueryBudgetExhausted,
+        ResultState::Cancelled => crate::ExitCode::QueryCancelled,
     }
 }
 

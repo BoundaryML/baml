@@ -134,8 +134,9 @@ amendments, loom re-run on the P0 tree, e2e run.py + bench perf numbers.
 - Engine: `register_root(intent, root, program_id)`; activation publishes
   `FunctionTableV1` + `EngineStarted`; `build_program_metadata` consumes
   `Program.source_content_hash` (§2.3, golden
-  `60a583a5e76288bf796db866499c4d494c7f1a211490250d98b37b6ec5c5aebd` for the
-  formula at version 0.17.0).
+  `e98260b82b3b024bcc7d3b56fee3632a840cc8b05abf9ebcbd28882b16ef3049` for the
+  formula at version 0.17.0; every variable-length field is length-framed so
+  the version cannot be absorbed into the first path).
 - CLI: project load configures the global store root (§7.5);
   `flush_and_join(5 s)` before `main.rs`'s exit and both
   `run_command.rs` `process::exit` sites.
