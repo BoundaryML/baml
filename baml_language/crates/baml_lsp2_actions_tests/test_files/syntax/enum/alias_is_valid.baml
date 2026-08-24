@@ -1,9 +1,9 @@
 enum Test {
   A @alias("a")
   // Comment
-  @description(#"
+  @description("
     tests
-  "#)
+  ")
 
   B @alias("b")
 }

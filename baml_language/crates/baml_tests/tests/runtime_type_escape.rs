@@ -964,7 +964,7 @@ async fn applying_the_suggestion_compiles_and_runs() {
             }}).as_type()
             {bind}
             let run = ai.Agent.new(
-                client = ProbeClient {{ reply: #"{{"name":"Pixel"}}"# }},
+                client = ProbeClient {{ reply: `{{"name":"Pixel"}}` }},
             ).run(DynamicOutput@spec<{slot}>())
             reflect.class.get_field<string>(run.value, "name")
         }}

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function json_auto_derive.$init_test_ns_json_auto_derive_json_auto_derive(registry: <unresolved type #49679510787122>) -> null {
+function json_auto_derive.$init_test_ns_json_auto_derive_json_auto_derive(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.json_auto_derive"
     load_const "simple_class_to_json_roundtrip"
@@ -300,73 +300,73 @@ function json_auto_derive.$init_test_ns_json_auto_derive_json_auto_derive(regist
     return
 }
 
-function json_auto_derive.BAliasFrom.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #28566395301162> {
+function json_auto_derive.BAliasFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BAliasFrom {
     load_const 99
     init_instance user.json_auto_derive.BAliasFrom .y
     return
 }
 
-function json_auto_derive.BAliasTo.baml.ToJson.to_json(self: <unresolved type #127927514389563>) -> <unresolved type #1888633819501> {
+function json_auto_derive.BAliasTo.baml.ToJson.to_json(self: json_auto_derive.BAliasTo) -> baml.json.json {
     load_const 42
     return
 }
 
-function json_auto_derive.BArr.baml.ToJson.to_json(self: <unresolved type #27292325540905>) -> <unresolved type #1888633819501> {
+function json_auto_derive.BArr.baml.ToJson.to_json(self: json_auto_derive.BArr) -> baml.json.json {
     load_const 99
     return
 }
 
-function json_auto_derive.BMapFrom.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #3531542449652> {
+function json_auto_derive.BMapFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BMapFrom {
     load_const 0
     init_instance user.json_auto_derive.BMapFrom .v
     return
 }
 
-function json_auto_derive.BOnlyFrom.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #125749454700292> {
+function json_auto_derive.BOnlyFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOnlyFrom {
     load_const 99
     init_instance user.json_auto_derive.BOnlyFrom .y
     return
 }
 
-function json_auto_derive.BOnlyTo.baml.ToJson.to_json(self: <unresolved type #102574610686205>) -> <unresolved type #1888633819501> {
+function json_auto_derive.BOnlyTo.baml.ToJson.to_json(self: json_auto_derive.BOnlyTo) -> baml.json.json {
     load_const "[redacted]"
     return
 }
 
-function json_auto_derive.BOptFrom.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #109857383505191> {
+function json_auto_derive.BOptFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOptFrom {
     load_const 99
     init_instance user.json_auto_derive.BOptFrom .y
     return
 }
 
-function json_auto_derive.BOverride.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #120748697601194> {
+function json_auto_derive.BOverride.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOverride {
     load_const 99
     init_instance user.json_auto_derive.BOverride .y
     return
 }
 
-function json_auto_derive.BSecret.baml.ToJson.to_json(self: <unresolved type #84759386237314>) -> <unresolved type #1888633819501> {
+function json_auto_derive.BSecret.baml.ToJson.to_json(self: json_auto_derive.BSecret) -> baml.json.json {
     load_const "[secret]"
     return
 }
 
-function json_auto_derive.BStr.baml.ToJson.to_json(self: <unresolved type #86667080450989>) -> <unresolved type #1888633819501> {
+function json_auto_derive.BStr.baml.ToJson.to_json(self: json_auto_derive.BStr) -> baml.json.json {
     load_const "B"
     return
 }
 
-function json_auto_derive.BZero.baml.ToJson.to_json(self: <unresolved type #80644339159720>) -> <unresolved type #1888633819501> {
+function json_auto_derive.BZero.baml.ToJson.to_json(self: json_auto_derive.BZero) -> baml.json.json {
     load_const 0
     return
 }
 
-function json_auto_derive.BZeroFrom.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #103045719584272> {
+function json_auto_derive.BZeroFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BZeroFrom {
     load_const 0
     init_instance user.json_auto_derive.BZeroFrom .y
     return
 }
 
-function json_auto_derive.G.f(self: <unresolved type #128647264620649><#0>) -> <unresolved type #1888633819501>[] {
+function json_auto_derive.G.f(self: json_auto_derive.G<#0>) -> baml.json.json[] {
     load_type #0
     load_type baml.json.json
     load_type baml.json.JsonParseError | baml.json.JsonSerializationError
@@ -378,33 +378,33 @@ function json_auto_derive.G.f(self: <unresolved type #128647264620649><#0>) -> <
     return
 }
 
-function json_auto_derive.Secret.baml.ToJson.to_json(self: <unresolved type #44106870883600>) -> <unresolved type #1888633819501> {
+function json_auto_derive.Secret.baml.ToJson.to_json(self: json_auto_derive.Secret) -> baml.json.json {
     load_const "[redacted]"
     return
 }
 
-function json_auto_derive.SecretBoth.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #21420409122591> {
+function json_auto_derive.SecretBoth.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.SecretBoth {
     load_const "[reset]"
     init_instance user.json_auto_derive.SecretBoth .data
     return
 }
 
-function json_auto_derive.SecretBoth.baml.ToJson.to_json(self: <unresolved type #21420409122591>) -> <unresolved type #1888633819501> {
+function json_auto_derive.SecretBoth.baml.ToJson.to_json(self: json_auto_derive.SecretBoth) -> baml.json.json {
     load_const "[redacted]"
     return
 }
 
-function json_auto_derive.SecretRedact.baml.ToJson.to_json(self: <unresolved type #101369069114829>) -> <unresolved type #1888633819501> {
+function json_auto_derive.SecretRedact.baml.ToJson.to_json(self: json_auto_derive.SecretRedact) -> baml.json.json {
     load_const "[redacted]"
     return
 }
 
-function json_auto_derive.SecretRedact2.baml.ToJson.to_json(self: <unresolved type #4029279455749>) -> <unresolved type #1888633819501> {
+function json_auto_derive.SecretRedact2.baml.ToJson.to_json(self: json_auto_derive.SecretRedact2) -> baml.json.json {
     load_const "[redacted]"
     return
 }
 
-function json_auto_derive.SecretReset.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #8578400278015> {
+function json_auto_derive.SecretReset.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.SecretReset {
     load_const "[reset]"
     init_instance user.json_auto_derive.SecretReset .data
     return
@@ -502,14 +502,14 @@ function json_auto_derive.array_of_primitive_to_json_str() -> string {
     return
 }
 
-function json_auto_derive.bool_to_json_result() -> <unresolved type #1888633819501> {
+function json_auto_derive.bool_to_json_result() -> baml.json.json {
     load_type bool
     load_const true
     call baml.json.from
     return
 }
 
-function json_auto_derive.float_to_json_result() -> <unresolved type #1888633819501> {
+function json_auto_derive.float_to_json_result() -> baml.json.json {
     load_type float
     load_const 2.5
     call baml.json.from
@@ -672,7 +672,7 @@ function json_auto_derive.independent_synthesis_only_to_json_val() -> int {
     return
 }
 
-function json_auto_derive.int_to_json_result() -> <unresolved type #1888633819501> {
+function json_auto_derive.int_to_json_result() -> baml.json.json {
     load_type int
     load_const 42
     call baml.json.from
@@ -815,7 +815,7 @@ function json_auto_derive.nested_class_override_map_from_json_sum() -> int {
     return
 }
 
-function json_auto_derive.null_to_json_result() -> <unresolved type #1888633819501> {
+function json_auto_derive.null_to_json_result() -> baml.json.json {
     load_type null
     load_const null
     call baml.json.from
@@ -1044,7 +1044,7 @@ function json_auto_derive.top_level_from_json_call_primitive_val() -> int {
     return
 }
 
-function json_auto_derive.user_to_json_override_result() -> <unresolved type #1888633819501> {
+function json_auto_derive.user_to_json_override_result() -> baml.json.json {
     load_const "hunter2"
     init_instance user.json_auto_derive.Secret .value
     load_type baml.ToJson

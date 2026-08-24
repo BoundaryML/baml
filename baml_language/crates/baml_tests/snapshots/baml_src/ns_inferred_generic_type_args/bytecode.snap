@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function inferred_generic_type_args.$init_test_ns_inferred_generic_type_args_inferred_generic_type_args(registry: <unresolved type #49679510787122>) -> null {
+function inferred_generic_type_args.$init_test_ns_inferred_generic_type_args_inferred_generic_type_args(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.inferred_generic_type_args"
     load_const "showcase_lazy_cursor_pipeline"
@@ -90,7 +90,7 @@ function inferred_generic_type_args.$init_test_ns_inferred_generic_type_args_inf
     return
 }
 
-function inferred_generic_type_args.ArrBag.Bag<T>.first(self: <unresolved type #103512302795003><#0>) -> #0 {
+function inferred_generic_type_args.ArrBag.Bag<T>.first(self: inferred_generic_type_args.ArrBag<#0>) -> #0 {
     load_var self
     load_field .arr
     load_const 0
@@ -98,7 +98,7 @@ function inferred_generic_type_args.ArrBag.Bag<T>.first(self: <unresolved type #
     return
 }
 
-function inferred_generic_type_args.ArrBag.make(a: #0[]) -> <unresolved type #103512302795003><#0> {
+function inferred_generic_type_args.ArrBag.make(a: #0[]) -> inferred_generic_type_args.ArrBag<#0> {
     load_var a
     load_const 0
     load_type #0
@@ -106,7 +106,7 @@ function inferred_generic_type_args.ArrBag.make(a: #0[]) -> <unresolved type #10
     return
 }
 
-function inferred_generic_type_args.ArrIter.NextIter<T, never>.next2(self: <unresolved type #53738931256481><#0>) -> #0 | <unresolved type #58365110396918> {
+function inferred_generic_type_args.ArrIter.NextIter<T, never>.next2(self: inferred_generic_type_args.ArrIter<#0>) -> #0 | inferred_generic_type_args.IterDone {
     load_type #0
     load_var self
     load_field .arr
@@ -137,7 +137,7 @@ function inferred_generic_type_args.ArrIter.NextIter<T, never>.next2(self: <unre
     return
 }
 
-function inferred_generic_type_args.ArrIter.of(a: #0[]) -> <unresolved type #53738931256481><#0> {
+function inferred_generic_type_args.ArrIter.of(a: #0[]) -> inferred_generic_type_args.ArrIter<#0> {
     load_var a
     load_const 0
     load_type #0
@@ -145,7 +145,7 @@ function inferred_generic_type_args.ArrIter.of(a: #0[]) -> <unresolved type #537
     return
 }
 
-function inferred_generic_type_args.ArrNamed.Named<T>.first(self: <unresolved type #123448558729972><#0>) -> #0 {
+function inferred_generic_type_args.ArrNamed.Named<T>.first(self: inferred_generic_type_args.ArrNamed<#0>) -> #0 {
     load_var self
     load_field .arr
     load_const 0
@@ -153,7 +153,7 @@ function inferred_generic_type_args.ArrNamed.Named<T>.first(self: <unresolved ty
     return
 }
 
-function inferred_generic_type_args.ArrayCursor.Cursor<T>.head(self: <unresolved type #56553838742671><#0>) -> #0 {
+function inferred_generic_type_args.ArrayCursor.Cursor<T>.head(self: inferred_generic_type_args.ArrayCursor<#0>) -> #0 {
     load_var self
     load_field .arr
     load_const 0
@@ -161,7 +161,7 @@ function inferred_generic_type_args.ArrayCursor.Cursor<T>.head(self: <unresolved
     return
 }
 
-function inferred_generic_type_args.ArrayCursor.of(items: #0[]) -> <unresolved type #56553838742671><#0> {
+function inferred_generic_type_args.ArrayCursor.of(items: #0[]) -> inferred_generic_type_args.ArrayCursor<#0> {
     load_var items
     load_const 0
     load_type #0
@@ -169,24 +169,24 @@ function inferred_generic_type_args.ArrayCursor.of(items: #0[]) -> <unresolved t
     return
 }
 
-function inferred_generic_type_args.Boxed.Wrap<T>.first(self: <unresolved type #139510913573872><#0>) -> #0 {
+function inferred_generic_type_args.Boxed.Wrap<T>.first(self: inferred_generic_type_args.Boxed<#0>) -> #0 {
     load_var self
     load_field .val
     return
 }
 
-function inferred_generic_type_args.Cat.Animal.speak(self: <unresolved type #25620710346180>) -> string {
+function inferred_generic_type_args.Cat.Animal.speak(self: inferred_generic_type_args.Cat) -> string {
     load_const "meow"
     return
 }
 
-function inferred_generic_type_args.Counter.element_type(self: <unresolved type #63319422800116><#1>) -> string {
+function inferred_generic_type_args.Counter.element_type(self: inferred_generic_type_args.Counter<#1>) -> string {
     load_type #1
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function inferred_generic_type_args.Cursor.take_one(self: <unresolved type #67947321387122><#1>) -> <unresolved type #67947321387122><#1> {
+function inferred_generic_type_args.Cursor.take_one(self: inferred_generic_type_args.Cursor<#1>) -> inferred_generic_type_args.Cursor<#1> {
     load_var self
     load_type inferred_generic_type_args.Cursor<#1>
     load_const "head"
@@ -198,29 +198,29 @@ function inferred_generic_type_args.Cursor.take_one(self: <unresolved type #6794
     return
 }
 
-function inferred_generic_type_args.Dog.Animal.speak(self: <unresolved type #12425982491898><#0>) -> string {
+function inferred_generic_type_args.Dog.Animal.speak(self: inferred_generic_type_args.Dog<#0>) -> string {
     load_const "woof"
     return
 }
 
-function inferred_generic_type_args.Dog.make(v: #0) -> <unresolved type #12425982491898><#0> {
+function inferred_generic_type_args.Dog.make(v: #0) -> inferred_generic_type_args.Dog<#0> {
     load_var v
     load_type #0
     init_instance<1> user.inferred_generic_type_args.Dog .value
     return
 }
 
-function inferred_generic_type_args.EchoA.SelfEcho.tag(self: <unresolved type #116675854751592>) -> string {
+function inferred_generic_type_args.EchoA.SelfEcho.tag(self: inferred_generic_type_args.EchoA) -> string {
     load_const "a"
     return
 }
 
-function inferred_generic_type_args.EchoB.SelfEcho.tag(self: <unresolved type #119974389636225>) -> string {
+function inferred_generic_type_args.EchoB.SelfEcho.tag(self: inferred_generic_type_args.EchoB) -> string {
     load_const "b"
     return
 }
 
-function inferred_generic_type_args.IntCounter.Counter<T>.describe(self: <unresolved type #75897725140503><#0>) -> string {
+function inferred_generic_type_args.IntCounter.Counter<T>.describe(self: inferred_generic_type_args.IntCounter<#0>) -> string {
     load_type inferred_generic_type_args.IntCounter<#0>
     load_type #0
     load_var self
@@ -228,7 +228,7 @@ function inferred_generic_type_args.IntCounter.Counter<T>.describe(self: <unreso
     return
 }
 
-function inferred_generic_type_args.LoneIter.NextIter<T, never>.next2(self: <unresolved type #93221454205974><#0>) -> #0 | <unresolved type #58365110396918> {
+function inferred_generic_type_args.LoneIter.NextIter<T, never>.next2(self: inferred_generic_type_args.LoneIter<#0>) -> #0 | inferred_generic_type_args.IterDone {
     load_var self
     load_field .used
     pop_jump_if_false L0
@@ -249,13 +249,13 @@ function inferred_generic_type_args.LoneIter.NextIter<T, never>.next2(self: <unr
     return
 }
 
-function inferred_generic_type_args.Named.tname(self: <unresolved type #13195409349949><#1>) -> string {
+function inferred_generic_type_args.Named.tname(self: inferred_generic_type_args.Named<#1>) -> string {
     load_type #1
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function inferred_generic_type_args.NextIter.collect2(self: <unresolved type #6590668550891><#1, #2>) -> #1[] {
+function inferred_generic_type_args.NextIter.collect2(self: inferred_generic_type_args.NextIter<#1, #2>) -> #1[] {
     load_type #1
     alloc_array 0
     store_var out
@@ -285,35 +285,35 @@ function inferred_generic_type_args.NextIter.collect2(self: <unresolved type #65
     return
 }
 
-function inferred_generic_type_args.OneBag.Bag<T>.first(self: <unresolved type #91434380607194><#0>) -> #0 {
+function inferred_generic_type_args.OneBag.Bag<T>.first(self: inferred_generic_type_args.OneBag<#0>) -> #0 {
     load_var self
     load_field .only
     return
 }
 
-function inferred_generic_type_args.OneNamed.Named<T>.first(self: <unresolved type #63654091742553><#0>) -> #0 {
+function inferred_generic_type_args.OneNamed.Named<T>.first(self: inferred_generic_type_args.OneNamed<#0>) -> #0 {
     load_var self
     load_field .only
     return
 }
 
-function inferred_generic_type_args.PlainThing.Describable.describe(self: <unresolved type #46944121761464>) -> string {
+function inferred_generic_type_args.PlainThing.Describable.describe(self: inferred_generic_type_args.PlainThing) -> string {
     load_const "plain"
     return
 }
 
-function inferred_generic_type_args.ProbeA.TypeProbe.seen(self: <unresolved type #124137375920257>, value: #0) -> string {
+function inferred_generic_type_args.ProbeA.TypeProbe.seen(self: inferred_generic_type_args.ProbeA, value: #0) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function inferred_generic_type_args.ProbeB.TypeProbe.seen(self: <unresolved type #120838841035624>, value: #0) -> string {
+function inferred_generic_type_args.ProbeB.TypeProbe.seen(self: inferred_generic_type_args.ProbeB, value: #0) -> string {
     load_const "wrong"
     return
 }
 
-function inferred_generic_type_args.SelfEcho.nested_self_type(self: <unresolved type #136764521026931>) -> string {
+function inferred_generic_type_args.SelfEcho.nested_self_type(self: inferred_generic_type_args.SelfEcho) -> string {
     load_type #0[]
     load_var self
     load_type #0
@@ -322,13 +322,13 @@ function inferred_generic_type_args.SelfEcho.nested_self_type(self: <unresolved 
     return
 }
 
-function inferred_generic_type_args.SingleCursor.Cursor<T>.head(self: <unresolved type #88934791057518><#0>) -> #0 {
+function inferred_generic_type_args.SingleCursor.Cursor<T>.head(self: inferred_generic_type_args.SingleCursor<#0>) -> #0 {
     load_var self
     load_field .value
     return
 }
 
-function inferred_generic_type_args.SrcWrap.Wrap<T>.first(self: <unresolved type #103768645666770><#0>) -> #0 {
+function inferred_generic_type_args.SrcWrap.Wrap<T>.first(self: inferred_generic_type_args.SrcWrap<#0>) -> #0 {
     load_var self
     load_field .arr
     load_const 0
@@ -336,7 +336,7 @@ function inferred_generic_type_args.SrcWrap.Wrap<T>.first(self: <unresolved type
     return
 }
 
-function inferred_generic_type_args.SrcWrap.boxed(self: <unresolved type #103768645666770><#0>) -> <unresolved type #83253778465724><#0> {
+function inferred_generic_type_args.SrcWrap.boxed(self: inferred_generic_type_args.SrcWrap<#0>) -> inferred_generic_type_args.Wrap<#0> {
     load_var self
     load_field .arr
     load_const 0
@@ -346,12 +346,12 @@ function inferred_generic_type_args.SrcWrap.boxed(self: <unresolved type #103768
     return
 }
 
-function inferred_generic_type_args.StrCounter.Counter<T>.describe(self: <unresolved type #8231736890001><#0>) -> string {
+function inferred_generic_type_args.StrCounter.Counter<T>.describe(self: inferred_generic_type_args.StrCounter<#0>) -> string {
     load_const "str"
     return
 }
 
-function inferred_generic_type_args.TypedBox.Describable.describe(self: <unresolved type #23433746370637><#0>) -> string {
+function inferred_generic_type_args.TypedBox.Describable.describe(self: inferred_generic_type_args.TypedBox<#0>) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     return

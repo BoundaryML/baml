@@ -1,5 +1,5 @@
 // The legacy `client<llm>` options dictionary is removed. This fixture keeps
-// exercising the same value shapes — nested maps, arrays, raw strings, quoted
+// exercising the same value shapes — nested maps, arrays, backtick strings, quoted
 // keys, comments between entries — as ordinary map literals in expression
 // position.
 
@@ -15,9 +15,9 @@ function StringConfig() -> map<string, string> {
         "key2": "some random value",
         "hello": "world",
         "thing": "hello",
-        "block_string": #"hello there my frien
-                d"#,
-        "inline_raw_string": #"inline "raw" string,,"#,
+        "block_string": `hello there my frien
+                d`,
+        "inline_raw_string": `inline "raw" string,,`,
         "string key": "value with spaces",
         "stringKey": "true",
 

@@ -457,25 +457,25 @@ async fn session_interface_default_methods_are_bound_and_inherited() {
         r#####"
         function main() -> string throws unknown {
             let s = reflect.Session.new()
-            s.eval(#"interface Greeter { who: string  function greet(self) -> string { "hello" } }"#)
+            s.eval(`interface Greeter { who: string  function greet(self) -> string { "hello" } }`)
             // BUG (session hygiene, pre-existing): a top-level session `let`
             // whose initializer combines an inline map literal with a keyword
             // argument (`reflect.class.new("P", { "f": t }, implementations = [w])`)
             // fails to parse after identifier rewriting. Wrapping the same
             // expression in a session-declared function sidesteps it.
-            s.eval(#"
+            s.eval(`
                 function build() -> reflect.Type {
                     let witness = reflect.interface.implementation<Greeter>().field("who")
                     let person_t = reflect.class.new("Person", { "who": reflect.Type.of<string>() }, implementations = [witness])
                     person_t.as_type()
                 }
-            "#)
+            `)
             // BUG (session parse, pre-existing): `x.implements(...)` inside a
             // Session eval fails to parse — `implements` lexes as the keyword and
             // the session's parse wrapper does not accept it as a method name
             // after `.`, unlike the main compiler. `implemented_by` is the same
             // relation with the operands flipped, so it stands in here.
-            let is_member = s.eval<bool>(#"reflect.Type.of<Greeter>().implemented_by(build())"#)
+            let is_member = s.eval<bool>(`reflect.Type.of<Greeter>().implemented_by(build())`)
             if is_member {
                 return "witnessed"
             }

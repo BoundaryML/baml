@@ -8,7 +8,7 @@
 //
 // Invariant under test: prose is never syntax. A body whose only mention of
 // `client`/`prompt`/`tools` is inside a string literal is an expression body,
-// in every quoting form.
+// in both supported quoting forms.
 //
 // Entry functions have unique prefixes: all baml_src files compile to the same
 // `user` package.
@@ -37,10 +37,6 @@ function clsstr_backtick_client() -> string {
 
 function clsstr_backtick_interpolated() -> string {
     `prompt: ${"client"} and tools`
-}
-
-function clsstr_raw_string_client() -> string {
-    #"the client sent nothing"#
 }
 
 // An escaped quote must not end the literal early, leaving `client` exposed.
@@ -88,7 +84,6 @@ test "clsstr_string_contents_do_not_make_an_llm_function" {
     assert.equal(clsstr_quoted_bare_word(), "client");
     assert.equal(clsstr_backtick_client(), "the client sent nothing");
     assert.equal(clsstr_backtick_interpolated(), "prompt: client and tools");
-    assert.equal(clsstr_raw_string_client(), "the client sent nothing");
     assert.equal(clsstr_escaped_quotes(), "say \"client\" now");
     assert.equal(clsstr_unbalanced_brace(), "a { client and a prompt")
 }

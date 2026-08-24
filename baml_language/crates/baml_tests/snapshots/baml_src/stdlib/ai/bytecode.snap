@@ -1,7 +1,333 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function ai.Agent._attempt_turn(self: <unresolved type #66943516961492>, c: <unresolved type #34575171419448>, spec: <unresolved type #25974768157144><#0>, j: <unresolved type #67319939421542>, total: <unresolved type #50341216429523>, attempts_left: int) -> <unresolved type #127276340552691> {
+function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>) -> ai.RunResult<#0> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?6
+    make_cell
+    store_var ?6
+    load_var ?21
+    make_cell
+    store_var ?21
+    load_type #0
+    load_deref ?1
+    call ai.Agent._validated_schema_attempts
+    store_var schema_attempts
+    load_deref ?1
+    load_field .client
+    store_var_load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_deref ?2
+    load_field .default_client
+    store_var _6
+
+  L0:
+    load_var _6
+    store_var selected
+    load_type #0
+    load_deref ?2
+    call ai.Journal.new
+    store_deref ?6
+    load_type #0
+    load_deref ?1
+    load_deref ?6
+    load_const 0
+    call ai.Agent._emit_from
+    store_var seen
+    load_const 0
+    store_var steps
+    load_const 0
+    load_const 0
+    load_const null
+    load_const null
+    init_instance ai.events.Usage .input_tokens, .output_tokens, .cached_input_tokens, .reasoning_tokens
+    store_var total
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var fail_counts
+
+  L1:
+    load_var steps
+    load_deref ?1
+    load_field .max_steps
+    cmp_int_op <
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var steps
+    init_instance ai.errors.StepBudgetExceeded .steps
+    throw
+
+  L3:
+    load_type #0
+    load_deref ?1
+    load_var selected
+    load_deref ?2
+    load_deref ?6
+    load_var2 9 3
+    call ai.Agent._attempt_turn
+    store_var turn
+    load_var steps
+    load_const 1
+    add_int
+    store_var steps
+    load_type #0
+    load_deref ?1
+    load_deref ?6
+    load_var seen
+    call ai.Agent._emit_from
+    store_var seen
+    load_var turn
+    call ai.ModelTurn.tool_uses
+    store_var calls
+    load_var calls
+    container_len
+    store_var _32
+    load_var _32
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L4
+    jump L10
+
+  L4:
+    load_var turn
+    call ai.ModelTurn.terminal_text
+    store_var_load_var _101
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L5
+    load_const ""
+    store_var _101
+
+  L5:
+    load_var _101
+    store_var candidate
+    load_type #0
+    load_deref ?1
+    load_var turn
+    call ai.Agent._has_media_output
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_type #0
+    load_var candidate
+    call baml.sap.parse
+    store_var value
+    jump L8
+    load_var e
+    throw_if_panic
+    load_var selected
+    load_type ai.Client
+    load_const "id"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _115
+    load_var2 38 33
+    init_instance ai.errors.ParseFailed .provider, .raw_output
+    throw
+
+  L7:
+    load_var selected
+    load_type ai.Client
+    load_const "id"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _109
+    load_type #0
+    load_deref ?1
+    load_var2 11 36
+    call ai.Agent._media_value
+    store_var value
+
+  L8:
+    load_type #0
+    load_var value
+    call baml.json.to_json
+    jump L9
+    load_var e
+    throw_if_panic
+    load_type never
+    load_var e
+    load_const "final value serialization failed"
+    call baml.errors.UnknownError.with_message
+    throw
+
+  L9:
+    call baml.json.stringify
+    store_var _127
+    load_deref ?6
+    load_var _127
+    init_instance ai.events.FinalProduced .value_json
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    alloc_array 1
+    call ai.Journal.append_all
+    pop 1
+    load_type #0
+    load_deref ?1
+    load_deref ?6
+    load_var seen
+    call ai.Agent._emit_from
+    store_var seen
+    load_var value
+    load_deref ?6
+    load_var total
+    load_type #0
+    init_instance<1> ai.RunResult .value, .journal, .usage
+    return
+
+  L10:
+    load_deref ?6
+    call ai.Journal.entries
+    container_len
+    store_var before
+    load_type ai.content.ToolUse
+    load_type future<void, ai.errors.ToolFailedError>
+    load_type never
+    load_var calls
+    load_type #0
+    load_var2 1 2
+    load_var j
+    make_closure .<lambda(Agent.run, 0)>, captures=3, ntypeargs=1
+    call baml.Array.map
+    store_var futures
+    load_type void
+    load_type ai.errors.ToolFailedError
+    load_var futures
+    call baml.future.all
+    await
+    pop 1
+    load_type #0
+    load_deref ?1
+    load_deref ?6
+    load_var seen
+    call ai.Agent._emit_from
+    store_var seen
+    load_deref ?6
+    call ai.Journal.entries
+    store_var entries
+    load_var before
+    store_var i
+
+  L11:
+    load_var i
+    store_var _51
+    load_var entries
+    container_len
+    store_var _52
+    load_var2 18 19
+    cmp_int_op <
+    pop_jump_if_false L1
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    load_var2 16 17
+    call baml.Array.at
+    store_var _56
+    load_var _56
+    narrow_bind ai.events.ToolFailed, slot=20
+    pop_jump_if_false L13
+    load_var _56
+    store_deref ?21
+    load_type ai.content.ToolUse
+    load_type never
+    load_var calls
+    load_type #0
+    load_var f
+    make_closure .<lambda(Agent.run, 2)>, captures=1, ntypeargs=1
+    call baml.Array.find
+    store_var _62
+    load_var _62
+    narrow_bind ai.content.ToolUse, slot=22
+    pop_jump_if_false L13
+    load_var _62
+    store_var known
+    load_type string
+    load_var known
+    load_field .name
+    call baml.String.from
+    store_var _66
+    load_type string
+    load_deref ?21
+    load_field .message
+    call baml.String.from
+    store_var _69
+    load_var _66
+    load_const "|"
+    bin_op +
+    load_var _69
+    bin_op +
+    store_var key
+    load_type string
+    load_type int
+    load_var2 10 24
+    call baml.Map.get
+    store_var_load_var _74
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L12
+    load_const 0
+    store_var _74
+
+  L12:
+    load_var _74
+    load_const 1
+    add_int
+    store_var n
+    load_type string
+    load_type int
+    load_var2 10 24
+    load_var n
+    call baml.Map.set
+    pop 1
+    load_var n
+    load_const 3
+    cmp_int_op >=
+    pop_jump_if_false L13
+    jump L14
+
+  L13:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L11
+
+  L14:
+    load_var known
+    load_field .id
+    store_var _88
+    load_var known
+    load_field .name
+    store_var _89
+    load_type int
+    load_var n
+    call baml.String.from
+    store_var _93
+    load_type string
+    load_deref ?21
+    load_field .message
+    call baml.String.from
+    store_var _96
+    load_var2 29 30
+    load_const "the same tool call failed "
+    load_var _93
+    bin_op +
+    load_const " times; stopping the run: "
+    bin_op +
+    load_var _96
+    bin_op +
+    load_const null
+    init_instance ai.errors.ToolFailedError .id, .name, .message, .cause
+    throw
+}
+
+function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.FunctionSpec<#0>, j: ai.Journal, total: ai.events.Usage, attempts_left: int) -> ai.ModelTurn {
     load_var spec
     load_field .prompt_template
     store_var _9
@@ -298,7 +624,7 @@ function ai.Agent._attempt_turn(self: <unresolved type #66943516961492>, c: <unr
     throw
 }
 
-function ai.Agent._emit_from(self: <unresolved type #66943516961492>, j: <unresolved type #67319939421542>, seen: int) -> int {
+function ai.Agent._emit_from(self: ai.Agent<#0>, j: ai.Journal, seen: int) -> int {
     load_var j
     call ai.Journal.entries
     store_var entries
@@ -386,7 +712,7 @@ function ai.Agent._emit_from(self: <unresolved type #66943516961492>, j: <unreso
     jump L0
 }
 
-function ai.Agent._has_media_output(self: <unresolved type #66943516961492>, turn: <unresolved type #127276340552691>) -> bool {
+function ai.Agent._has_media_output(self: ai.Agent<#0>, turn: ai.ModelTurn) -> bool {
     load_type #0
     call ai.internal._media_shape
     store_var shape
@@ -473,7 +799,7 @@ function ai.Agent._has_media_output(self: <unresolved type #66943516961492>, tur
     return
 }
 
-function ai.Agent._media_value(self: <unresolved type #66943516961492>, turn: <unresolved type #127276340552691>, provider: string) -> #0 {
+function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider: string) -> #0 {
     load_type #0
     store_var t
     load_var t
@@ -808,7 +1134,7 @@ function ai.Agent._media_value(self: <unresolved type #66943516961492>, turn: <u
     return
 }
 
-function ai.Agent._parses(self: <unresolved type #66943516961492>, turn: <unresolved type #127276340552691>, candidate: string) -> bool {
+function ai.Agent._parses(self: ai.Agent<#0>, turn: ai.ModelTurn, candidate: string) -> bool {
     load_type #0
     load_var2 1 2
     call ai.Agent._has_media_output
@@ -837,7 +1163,7 @@ function ai.Agent._parses(self: <unresolved type #66943516961492>, turn: <unreso
     return
 }
 
-function ai.Agent._run_one_tool(self: <unresolved type #66943516961492>, tb: <unresolved type #115469379576951>, call: <unresolved type #53261710600495>, j: <unresolved type #67319939421542>) -> void {
+function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: ai.content.ToolUse, j: ai.Journal) -> void {
     load_var2 2 3
     load_field .name
     call ai.tools.Toolbox.get
@@ -967,7 +1293,7 @@ function ai.Agent._run_one_tool(self: <unresolved type #66943516961492>, tb: <un
     return
 }
 
-function ai.Agent._validated_schema_attempts(self: <unresolved type #66943516961492>) -> int {
+function ai.Agent._validated_schema_attempts(self: ai.Agent<#0>) -> int {
     load_var self
     load_field .schema_attempts
     load_const 1
@@ -986,7 +1312,7 @@ function ai.Agent._validated_schema_attempts(self: <unresolved type #66943516961
     throw
 }
 
-function ai.Agent.new(max_steps: int, schema_attempts: int, client: <unresolved type #34575171419448> | null, tool_errors: <unresolved type #23196617605653>, on_event: ((<unresolved type #4547766494970> | <unresolved type #81534061385894> | <unresolved type #22080131837795> | <unresolved type #23791317649394> | <unresolved type #136931674600763> | <unresolved type #102471150916823> | <unresolved type #50341216429523> | <unresolved type #4610312648892>) -> null throws never) | null) -> <unresolved type #66943516961492> {
+function ai.Agent.new(max_steps: int, schema_attempts: int, client: ai.Client | null, tool_errors: ai.tools.ErrorMode, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> null throws never) | null) -> ai.Agent<#0> {
     load_var max_steps
     load_const <omitted>
     cmp_op ==
@@ -1040,14 +1366,16 @@ function ai.Agent.new(max_steps: int, schema_attempts: int, client: <unresolved 
     load_const null
     cmp_op ==
     pop_jump_if_false L6
-    make_closure .<lambda(Agent.new, 0)>, 0
+    load_type #0
+    make_closure .<lambda(Agent.new, 0)>, captures=0, ntypeargs=1
     store_var _14
 
   L6:
     load_var2 1 2
     load_var2 3 4
     load_var _14
-    init_instance ai.Agent .max_steps, .schema_attempts, .client, .tool_errors, .on_event
+    load_type #0
+    init_instance<1> ai.Agent .max_steps, .schema_attempts, .client, .tool_errors, .on_event
     return
 
   L7:
@@ -1056,337 +1384,16 @@ function ai.Agent.new(max_steps: int, schema_attempts: int, client: <unresolved 
     throw
 }
 
-function ai.Agent.run(self: <unresolved type #66943516961492>, spec: <unresolved type #25974768157144><#0>) -> <unresolved type #17806212743521><#0> {
-    load_var ?1
-    make_cell
-    store_var ?1
-    load_var ?2
-    make_cell
-    store_var ?2
-    load_var ?6
-    make_cell
-    store_var ?6
-    load_var ?21
-    make_cell
-    store_var ?21
-    load_deref ?1
-    call ai.Agent._validated_schema_attempts
-    store_var schema_attempts
-    load_deref ?1
-    load_field .client
-    store_var_load_var _5
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
-    load_deref ?2
-    load_field .default_client
-    store_var _5
-
-  L0:
-    load_var _5
-    store_var selected
-    load_type #0
-    load_deref ?2
-    call ai.Journal.new
-    store_deref ?6
-    load_deref ?1
-    load_deref ?6
-    load_const 0
-    call ai.Agent._emit_from
-    store_var seen
-    load_const 0
-    store_var steps
-    load_const 0
-    load_const 0
-    load_const null
-    load_const null
-    init_instance ai.events.Usage .input_tokens, .output_tokens, .cached_input_tokens, .reasoning_tokens
-    store_var total
-    load_type string
-    load_type int
-    alloc_map 0
-    store_var fail_counts
-
-  L1:
-    load_var steps
-    load_deref ?1
-    load_field .max_steps
-    cmp_int_op <
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var steps
-    init_instance ai.errors.StepBudgetExceeded .steps
-    throw
-
-  L3:
-    load_type #0
-    load_deref ?1
-    load_var selected
-    load_deref ?2
-    load_deref ?6
-    load_var2 9 3
-    call ai.Agent._attempt_turn
-    store_var turn
-    load_var steps
-    load_const 1
-    add_int
-    store_var steps
-    load_deref ?1
-    load_deref ?6
-    load_var seen
-    call ai.Agent._emit_from
-    store_var seen
-    load_var turn
-    call ai.ModelTurn.tool_uses
-    store_var calls
-    load_var calls
-    container_len
-    store_var _29
-    load_var _29
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_false L4
-    jump L10
-
-  L4:
-    load_var turn
-    call ai.ModelTurn.terminal_text
-    store_var_load_var _97
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L5
-    load_const ""
-    store_var _97
-
-  L5:
-    load_var _97
-    store_var candidate
-    load_type #0
-    load_deref ?1
-    load_var turn
-    call ai.Agent._has_media_output
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
-    load_type #0
-    load_var candidate
-    call baml.sap.parse
-    store_var value
-    jump L8
-    load_var e
-    throw_if_panic
-    load_var selected
-    load_type ai.Client
-    load_const "id"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _111
-    load_var2 38 33
-    init_instance ai.errors.ParseFailed .provider, .raw_output
-    throw
-
-  L7:
-    load_var selected
-    load_type ai.Client
-    load_const "id"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _105
-    load_type #0
-    load_deref ?1
-    load_var2 11 36
-    call ai.Agent._media_value
-    store_var value
-
-  L8:
-    load_type #0
-    load_var value
-    call baml.json.to_json
-    jump L9
-    load_var e
-    throw_if_panic
-    load_type never
-    load_var e
-    load_const "final value serialization failed"
-    call baml.errors.UnknownError.with_message
-    throw
-
-  L9:
-    call baml.json.stringify
-    store_var _123
-    load_deref ?6
-    load_var _123
-    init_instance ai.events.FinalProduced .value_json
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
-    alloc_array 1
-    call ai.Journal.append_all
-    pop 1
-    load_deref ?1
-    load_deref ?6
-    load_var seen
-    call ai.Agent._emit_from
-    store_var seen
-    load_var value
-    load_deref ?6
-    load_var total
-    load_type #0
-    init_instance<1> ai.RunResult .value, .journal, .usage
-    return
-
-  L10:
-    load_deref ?6
-    call ai.Journal.entries
-    container_len
-    store_var before
-    load_type ai.content.ToolUse
-    load_type future<void, ai.errors.ToolFailedError>
-    load_type never
-    load_var calls
-    load_type #0
-    load_var2 1 2
-    load_var j
-    make_closure .<lambda(Agent.run, 0)>, captures=3, ntypeargs=1
-    call baml.Array.map
-    store_var futures
-    load_type void
-    load_type ai.errors.ToolFailedError
-    load_var futures
-    call baml.future.all
-    await
-    pop 1
-    load_deref ?1
-    load_deref ?6
-    load_var seen
-    call ai.Agent._emit_from
-    store_var seen
-    load_deref ?6
-    call ai.Journal.entries
-    store_var entries
-    load_var before
-    store_var i
-
-  L11:
-    load_var i
-    store_var _47
-    load_var entries
-    container_len
-    store_var _48
-    load_var2 18 19
-    cmp_int_op <
-    pop_jump_if_false L1
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
-    load_var2 16 17
-    call baml.Array.at
-    store_var _52
-    load_var _52
-    narrow_bind ai.events.ToolFailed, slot=20
-    pop_jump_if_false L13
-    load_var _52
-    store_deref ?21
-    load_type ai.content.ToolUse
-    load_type never
-    load_var calls
-    load_type #0
-    load_var f
-    make_closure .<lambda(Agent.run, 2)>, captures=1, ntypeargs=1
-    call baml.Array.find
-    store_var _58
-    load_var _58
-    narrow_bind ai.content.ToolUse, slot=22
-    pop_jump_if_false L13
-    load_var _58
-    store_var known
-    load_type string
-    load_var known
-    load_field .name
-    call baml.String.from
-    store_var _62
-    load_type string
-    load_deref ?21
-    load_field .message
-    call baml.String.from
-    store_var _65
-    load_var _62
-    load_const "|"
-    bin_op +
-    load_var _65
-    bin_op +
-    store_var key
-    load_type string
-    load_type int
-    load_var2 10 24
-    call baml.Map.get
-    store_var_load_var _70
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L12
-    load_const 0
-    store_var _70
-
-  L12:
-    load_var _70
-    load_const 1
-    add_int
-    store_var n
-    load_type string
-    load_type int
-    load_var2 10 24
-    load_var n
-    call baml.Map.set
-    pop 1
-    load_var n
-    load_const 3
-    cmp_int_op >=
-    pop_jump_if_false L13
-    jump L14
-
-  L13:
-    load_var i
-    load_const 1
-    add_int
-    store_var i
-    jump L11
-
-  L14:
-    load_var known
-    load_field .id
-    store_var _84
-    load_var known
-    load_field .name
-    store_var _85
-    load_type int
-    load_var n
-    call baml.String.from
-    store_var _89
-    load_type string
-    load_deref ?21
-    load_field .message
-    call baml.String.from
-    store_var _92
-    load_var2 29 30
-    load_const "the same tool call failed "
-    load_var _89
-    bin_op +
-    load_const " times; stopping the run: "
-    bin_op +
-    load_var _92
-    bin_op +
-    load_const null
-    init_instance ai.errors.ToolFailedError .id, .name, .message, .cause
-    throw
+function ai.Context.output_format_with(self: ai.Context, prefix: string | null, or_splitter: string | null, enum_value_prefix: string | null, hoisted_class_prefix: string | null, always_hoist_enums: bool | null, quote_class_fields: bool | null, hoist_classes: string[] | null, map_style: string | null, render_null_as: string | null) -> string {
 }
 
-function ai.Context.output_format_with(self: <unresolved type #117725101632654>, prefix: string | null, or_splitter: string | null, enum_value_prefix: string | null, hoisted_class_prefix: string | null, always_hoist_enums: bool | null, quote_class_fields: bool | null, hoist_classes: string[] | null, map_style: string | null, render_null_as: string | null) -> string {
-}
-
-function ai.FunctionSpec.arguments(self: <unresolved type #25974768157144><#0>) -> map<string, unknown> {
+function ai.FunctionSpec.arguments(self: ai.FunctionSpec<#0>) -> map<string, unknown> {
     load_var self
     load_field .args
     return
 }
 
-function ai.FunctionSpec.build_request(self: <unresolved type #25974768157144><#0>, override_client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
+function ai.FunctionSpec.build_request(self: ai.FunctionSpec<#0>, override_client: ai.Client | null) -> baml.http.Request {
     load_var override_client
     load_const <omitted>
     cmp_op ==
@@ -1434,13 +1441,13 @@ function ai.FunctionSpec.build_request(self: <unresolved type #25974768157144><#
     return
 }
 
-function ai.FunctionSpec.name(self: <unresolved type #25974768157144><#0>) -> string {
+function ai.FunctionSpec.name(self: ai.FunctionSpec<#0>) -> string {
     load_var self
     load_field .spec_name
     return
 }
 
-function ai.FunctionSpec.output_type(self: <unresolved type #25974768157144><#0>) -> reflect.Type {
+function ai.FunctionSpec.output_type(self: ai.FunctionSpec<#0>) -> reflect.Type {
     load_type #0
     store_var output_type
     load_var output_type
@@ -1450,7 +1457,7 @@ function ai.FunctionSpec.output_type(self: <unresolved type #25974768157144><#0>
     return
 }
 
-function ai.FunctionSpec.prompt(self: <unresolved type #25974768157144><#0>, output_format: string) -> <unresolved type #135172864440005> {
+function ai.FunctionSpec.prompt(self: ai.FunctionSpec<#0>, output_format: string) -> ai.Prompt {
     load_var output_format
     load_const <omitted>
     cmp_op ==
@@ -1465,13 +1472,13 @@ function ai.FunctionSpec.prompt(self: <unresolved type #25974768157144><#0>, out
     return
 }
 
-function ai.FunctionSpec.tools(self: <unresolved type #25974768157144><#0>) -> <unresolved type #115469379576951> {
+function ai.FunctionSpec.tools(self: ai.FunctionSpec<#0>) -> ai.tools.Toolbox {
     load_var self
     load_field .toolbox
     return
 }
 
-function ai.Journal.append_all(self: <unresolved type #67319939421542>, events: (<unresolved type #4547766494970> | <unresolved type #81534061385894> | <unresolved type #22080131837795> | <unresolved type #23791317649394> | <unresolved type #136931674600763> | <unresolved type #102471150916823> | <unresolved type #50341216429523> | <unresolved type #4610312648892>)[]) -> void {
+function ai.Journal.append_all(self: ai.Journal, events: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced)[]) -> void {
     load_var events
     load_type baml.iter.Iterable<Error = never, Item = ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage>
     load_const "iter"
@@ -1503,13 +1510,13 @@ function ai.Journal.append_all(self: <unresolved type #67319939421542>, events: 
     return
 }
 
-function ai.Journal.entries(self: <unresolved type #67319939421542>) -> (<unresolved type #4547766494970> | <unresolved type #81534061385894> | <unresolved type #22080131837795> | <unresolved type #23791317649394> | <unresolved type #136931674600763> | <unresolved type #102471150916823> | <unresolved type #50341216429523> | <unresolved type #4610312648892>)[] {
+function ai.Journal.entries(self: ai.Journal) -> (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced)[] {
     load_var self
     load_field .log
     return
 }
 
-function ai.Journal.new(spec: <unresolved type #25974768157144><#0>) -> <unresolved type #67319939421542> {
+function ai.Journal.new(spec: ai.FunctionSpec<#0>) -> ai.Journal {
     load_type #0
     load_var spec
     call ai.FunctionSpec.name
@@ -1526,7 +1533,7 @@ function ai.Journal.new(spec: <unresolved type #25974768157144><#0>) -> <unresol
     return
 }
 
-function ai.ModelTurn.media(self: <unresolved type #127276340552691>) -> (<unresolved type #80582473093252> | <unresolved type #35343763937051> | <unresolved type #7174237770506> | <unresolved type #113218833774991>)[] {
+function ai.ModelTurn.media(self: ai.ModelTurn) -> (baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf)[] {
     load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
     alloc_array 0
     store_var out
@@ -1566,7 +1573,7 @@ function ai.ModelTurn.media(self: <unresolved type #127276340552691>) -> (<unres
     return
 }
 
-function ai.ModelTurn.terminal_text(self: <unresolved type #127276340552691>) -> string | null {
+function ai.ModelTurn.terminal_text(self: ai.ModelTurn) -> string | null {
     load_const null
     store_var out
     load_var self
@@ -1603,7 +1610,7 @@ function ai.ModelTurn.terminal_text(self: <unresolved type #127276340552691>) ->
     return
 }
 
-function ai.ModelTurn.tool_uses(self: <unresolved type #127276340552691>) -> <unresolved type #53261710600495>[] {
+function ai.ModelTurn.tool_uses(self: ai.ModelTurn) -> ai.content.ToolUse[] {
     load_type ai.content.ToolUse
     alloc_array 0
     store_var out
@@ -1642,19 +1649,19 @@ function ai.ModelTurn.tool_uses(self: <unresolved type #127276340552691>) -> <un
     return
 }
 
-function ai.Prompt.baml.ToString.to_string(self: <unresolved type #135172864440005>) -> string {
+function ai.Prompt.baml.ToString.to_string(self: ai.Prompt) -> string {
     load_var self
     call ai.Prompt.text
     return
 }
 
-function ai.Prompt.messages(self: <unresolved type #135172864440005>) -> <unresolved type #45063328831484>[] {
+function ai.Prompt.messages(self: ai.Prompt) -> ai.PromptMessage[] {
 }
 
-function ai.Prompt.text(self: <unresolved type #135172864440005>) -> string {
+function ai.Prompt.text(self: ai.Prompt) -> string {
 }
 
-function ai.clients.Backoff.delay_ms(self: <unresolved type #119817992030335>, attempt: int, f: <unresolved type #139235867967860>) -> int {
+function ai.clients.Backoff.delay_ms(self: ai.clients.Backoff, attempt: int, f: ai.errors.Failure) -> int {
     load_var f
     store_var _5
     load_var _5
@@ -1724,7 +1731,7 @@ function ai.clients.Backoff.delay_ms(self: <unresolved type #119817992030335>, a
     return
 }
 
-function ai.clients.Backoff.new(initial_ms: int, multiplier: int, max_ms: int) -> <unresolved type #119817992030335> {
+function ai.clients.Backoff.new(initial_ms: int, multiplier: int, max_ms: int) -> ai.clients.Backoff {
     load_var initial_ms
     load_const <omitted>
     cmp_op ==
@@ -1755,7 +1762,7 @@ function ai.clients.Backoff.new(initial_ms: int, multiplier: int, max_ms: int) -
     return
 }
 
-function ai.clients.Fallback._try(self: <unresolved type #351162477795>, input: <unresolved type #66661248708833>, index: int) -> <unresolved type #127276340552691> {
+function ai.clients.Fallback._try(self: ai.clients.Fallback, input: ai.ModelTurnInput, index: int) -> ai.ModelTurn {
     load_type ai.Client
     load_var self
     load_field .members
@@ -1838,7 +1845,7 @@ function ai.clients.Fallback._try(self: <unresolved type #351162477795>, input: 
     return
 }
 
-function ai.clients.Fallback.root.Client.id(self: <unresolved type #351162477795>) -> string {
+function ai.clients.Fallback.root.Client.id(self: ai.clients.Fallback) -> string {
     load_type ai.Client
     load_var self
     load_field .members
@@ -1864,7 +1871,7 @@ function ai.clients.Fallback.root.Client.id(self: <unresolved type #351162477795
     return
 }
 
-function ai.clients.Fallback.root.Client.invoke(self: <unresolved type #351162477795>, input: <unresolved type #66661248708833>) -> <unresolved type #127276340552691> {
+function ai.clients.Fallback.root.Client.invoke(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> ai.ModelTurn {
     load_var2 1 2
     load_const 0
     call ai.clients.Fallback._try
@@ -1879,7 +1886,7 @@ function ai.clients.Fallback.root.Client.invoke(self: <unresolved type #35116247
     return
 }
 
-function ai.clients.Fallback.root.Client.render(self: <unresolved type #351162477795>, input: <unresolved type #66661248708833>) -> <unresolved type #50857447195238> {
+function ai.clients.Fallback.root.Client.render(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> baml.http.Request {
     load_type ai.Client
     load_var self
     load_field .members
@@ -1917,7 +1924,7 @@ function ai.clients.Fallback.root.Client.render(self: <unresolved type #35116247
     return
 }
 
-function ai.clients.Fallback.root.stream.StreamingClient.invoke_stream(self: <unresolved type #351162477795>, input: <unresolved type #66661248708833>) -> <unresolved type #70118551405800> {
+function ai.clients.Fallback.root.stream.StreamingClient.invoke_stream(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     load_var ?1
     make_cell
     store_var ?1
@@ -1946,7 +1953,7 @@ function ai.clients.Fallback.root.stream.StreamingClient.invoke_stream(self: <un
     return
 }
 
-function ai.clients.Retry._attempt(self: <unresolved type #32893161084417>, input: <unresolved type #66661248708833>, remaining: int) -> <unresolved type #127276340552691> {
+function ai.clients.Retry._attempt(self: ai.clients.Retry, input: ai.ModelTurnInput, remaining: int) -> ai.ModelTurn {
     load_var self
     load_field .inner
     load_var input
@@ -2029,7 +2036,7 @@ function ai.clients.Retry._attempt(self: <unresolved type #32893161084417>, inpu
     return
 }
 
-function ai.clients.Retry.new(inner: <unresolved type #34575171419448>, max_attempts: int, retry_if: ((<unresolved type #139235867967860>) -> bool throws never) | null, backoff: <unresolved type #119817992030335> | null) -> <unresolved type #32893161084417> {
+function ai.clients.Retry.new(inner: ai.Client, max_attempts: int, retry_if: ((ai.errors.Failure) -> bool throws never) | null, backoff: ai.clients.Backoff | null) -> ai.clients.Retry {
     load_var max_attempts
     load_const <omitted>
     cmp_op ==
@@ -2083,7 +2090,7 @@ function ai.clients.Retry.new(inner: <unresolved type #34575171419448>, max_atte
     return
 }
 
-function ai.clients.Retry.root.Client.id(self: <unresolved type #32893161084417>) -> string {
+function ai.clients.Retry.root.Client.id(self: ai.clients.Retry) -> string {
     load_var self
     load_field .inner
     load_type ai.Client
@@ -2094,7 +2101,7 @@ function ai.clients.Retry.root.Client.id(self: <unresolved type #32893161084417>
     return
 }
 
-function ai.clients.Retry.root.Client.invoke(self: <unresolved type #32893161084417>, input: <unresolved type #66661248708833>) -> <unresolved type #127276340552691> {
+function ai.clients.Retry.root.Client.invoke(self: ai.clients.Retry, input: ai.ModelTurnInput) -> ai.ModelTurn {
     load_var2 1 2
     load_var self
     load_field .max_attempts
@@ -2110,7 +2117,7 @@ function ai.clients.Retry.root.Client.invoke(self: <unresolved type #32893161084
     return
 }
 
-function ai.clients.Retry.root.Client.render(self: <unresolved type #32893161084417>, input: <unresolved type #66661248708833>) -> <unresolved type #50857447195238> {
+function ai.clients.Retry.root.Client.render(self: ai.clients.Retry, input: ai.ModelTurnInput) -> baml.http.Request {
     load_var self
     load_field .inner
     load_var input
@@ -2130,7 +2137,7 @@ function ai.clients.Retry.root.Client.render(self: <unresolved type #32893161084
     return
 }
 
-function ai.clients.Retry.root.stream.StreamingClient.invoke_stream(self: <unresolved type #32893161084417>, input: <unresolved type #66661248708833>) -> <unresolved type #70118551405800> {
+function ai.clients.Retry.root.stream.StreamingClient.invoke_stream(self: ai.clients.Retry, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     load_var ?1
     make_cell
     store_var ?1
@@ -2159,7 +2166,7 @@ function ai.clients.Retry.root.stream.StreamingClient.invoke_stream(self: <unres
     return
 }
 
-function ai.clients.RoundRobin.new(members: <unresolved type #34575171419448>[]) -> <unresolved type #20412973507045> {
+function ai.clients.RoundRobin.new(members: ai.Client[]) -> ai.clients.RoundRobin {
     load_var members
     container_len
     store_var _3
@@ -2184,7 +2191,7 @@ function ai.clients.RoundRobin.new(members: <unresolved type #34575171419448>[])
     throw
 }
 
-function ai.clients.RoundRobin.root.Client.id(self: <unresolved type #20412973507045>) -> string {
+function ai.clients.RoundRobin.root.Client.id(self: ai.clients.RoundRobin) -> string {
     load_type ai.Client
     load_var self
     load_field .members
@@ -2210,7 +2217,7 @@ function ai.clients.RoundRobin.root.Client.id(self: <unresolved type #2041297350
     return
 }
 
-function ai.clients.RoundRobin.root.Client.invoke(self: <unresolved type #20412973507045>, input: <unresolved type #66661248708833>) -> <unresolved type #127276340552691> {
+function ai.clients.RoundRobin.root.Client.invoke(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> ai.ModelTurn {
     load_var self
     load_field .members
     container_len
@@ -2280,7 +2287,7 @@ function ai.clients.RoundRobin.root.Client.invoke(self: <unresolved type #204129
     throw
 }
 
-function ai.clients.RoundRobin.root.Client.render(self: <unresolved type #20412973507045>, input: <unresolved type #66661248708833>) -> <unresolved type #50857447195238> {
+function ai.clients.RoundRobin.root.Client.render(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> baml.http.Request {
     load_type ai.Client
     load_var self
     load_field .members
@@ -2318,7 +2325,7 @@ function ai.clients.RoundRobin.root.Client.render(self: <unresolved type #204129
     return
 }
 
-function ai.clients.RoundRobin.root.stream.StreamingClient.invoke_stream(self: <unresolved type #20412973507045>, input: <unresolved type #66661248708833>) -> <unresolved type #70118551405800> {
+function ai.clients.RoundRobin.root.stream.StreamingClient.invoke_stream(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     load_var self
     load_field .members
     container_len
@@ -2409,7 +2416,7 @@ function ai.clients.RoundRobin.root.stream.StreamingClient.invoke_stream(self: <
     throw
 }
 
-function ai.clients.StreamRelay.close_current(self: <unresolved type #3406390075938>) -> void {
+function ai.clients.StreamRelay.close_current(self: ai.clients.StreamRelay) -> void {
     load_var self
     load_field .current
     store_var _3
@@ -2432,7 +2439,7 @@ function ai.clients.StreamRelay.close_current(self: <unresolved type #3406390075
     return
 }
 
-function ai.clients.StreamRelay.next_event(self: <unresolved type #3406390075938>) -> <unresolved type #9652056543474> | <unresolved type #59818295350253> | <unresolved type #49078800259648> | <unresolved type #96766303430383> {
+function ai.clients.StreamRelay.next_event(self: ai.clients.StreamRelay) -> ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone | ai.stream.Done {
     load_var self
     load_field .terminal_cursor
     store_var _3
@@ -2686,7 +2693,7 @@ function ai.clients.StreamRelay.next_event(self: <unresolved type #3406390075938
     return
 }
 
-function ai.clients.StreamRelay.recover(self: <unresolved type #3406390075938>, error: <unresolved type #139235867967860> | <unresolved type #136308358920907> | <unresolved type #74601415421372> | <unresolved type #36914685764984> | <unresolved type #42220037087656> | <unresolved type #59433995467168> | <unresolved type #336598637428> | <unresolved type #9662590026407> | <unresolved type #38806699051567> | <unresolved type #92755081178858> | <unresolved type #71316871800887> | <unresolved type #98454085444692> | <unresolved type #31634034957599>) -> void {
+function ai.clients.StreamRelay.recover(self: ai.clients.StreamRelay, error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> void {
     load_var error
     call ai.errors.normalize_invoke
     store_var _3
@@ -2789,7 +2796,7 @@ function ai.clients.StreamRelay.recover(self: <unresolved type #3406390075938>, 
     throw
 }
 
-function ai.clients.default_retry_judgment(f: <unresolved type #139235867967860>) -> bool {
+function ai.clients.default_retry_judgment(f: ai.errors.Failure) -> bool {
     load_var f
     store_var _2
     load_var _2
@@ -2844,7 +2851,7 @@ function ai.clients.default_retry_judgment(f: <unresolved type #139235867967860>
     return
 }
 
-function ai.clients.resolve(selector: <unresolved type #34575171419448> | string | <unresolved type #14421915625631>) -> <unresolved type #34575171419448> {
+function ai.clients.resolve(selector: ai.Client | string | baml.env.Ref) -> ai.Client {
     load_var selector
     store_var _2
     load_var _2
@@ -2924,7 +2931,7 @@ function ai.clients.resolve(selector: <unresolved type #34575171419448> | string
     return
 }
 
-function ai.content.Media.kind(self: <unresolved type #129518494483714>) -> string {
+function ai.content.Media.kind(self: ai.content.Media) -> string {
     load_var self
     load_field .media
     store_var _2
@@ -2970,7 +2977,7 @@ function ai.content.Media.kind(self: <unresolved type #129518494483714>) -> stri
     return
 }
 
-function ai.content.Media.new(value: image | audio | video | pdf, provider_id: string | null, revised_prompt: string | null) -> <unresolved type #129518494483714> {
+function ai.content.Media.new(value: image | audio | video | pdf, provider_id: string | null, revised_prompt: string | null) -> ai.content.Media {
     load_var provider_id
     load_const <omitted>
     cmp_op ==
@@ -3037,67 +3044,67 @@ function ai.content.Media.new(value: image | audio | video | pdf, provider_id: s
     return
 }
 
-function ai.errors.FinishReasonError.Failure.retry_safety(self: <unresolved type #120485533207865>) -> <unresolved type #93285308233226> {
+function ai.errors.FinishReasonError.Failure.retry_safety(self: ai.errors.FinishReasonError) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.InvalidRequest.Failure.retry_safety(self: <unresolved type #126581118001890>) -> <unresolved type #93285308233226> {
+function ai.errors.InvalidRequest.Failure.retry_safety(self: ai.errors.InvalidRequest) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.NetworkFailure.Failure.retry_safety(self: <unresolved type #52926316840454>) -> <unresolved type #93285308233226> {
+function ai.errors.NetworkFailure.Failure.retry_safety(self: ai.errors.NetworkFailure) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.ParseFailed.Failure.retry_safety(self: <unresolved type #68864135839304>) -> <unresolved type #93285308233226> {
+function ai.errors.ParseFailed.Failure.retry_safety(self: ai.errors.ParseFailed) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.PreviewUnsupported.Failure.retry_safety(self: <unresolved type #57721705785573>) -> <unresolved type #93285308233226> {
+function ai.errors.PreviewUnsupported.Failure.retry_safety(self: ai.errors.PreviewUnsupported) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.RateLimited.Failure.retry_safety(self: <unresolved type #47066266010246>) -> <unresolved type #93285308233226> {
+function ai.errors.RateLimited.Failure.retry_safety(self: ai.errors.RateLimited) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.Refused.Failure.retry_safety(self: <unresolved type #310167685022>) -> <unresolved type #93285308233226> {
+function ai.errors.Refused.Failure.retry_safety(self: ai.errors.Refused) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.StepBudgetExceeded.Failure.retry_safety(self: <unresolved type #133117612719876>) -> <unresolved type #93285308233226> {
+function ai.errors.StepBudgetExceeded.Failure.retry_safety(self: ai.errors.StepBudgetExceeded) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Unsafe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.StreamingUnsupported.Failure.retry_safety(self: <unresolved type #19600696570557>) -> <unresolved type #93285308233226> {
+function ai.errors.StreamingUnsupported.Failure.retry_safety(self: ai.errors.StreamingUnsupported) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.ToolFailedError.Failure.retry_safety(self: <unresolved type #104284695782201>) -> <unresolved type #93285308233226> {
+function ai.errors.ToolFailedError.Failure.retry_safety(self: ai.errors.ToolFailedError) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Unsafe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.classify_http(provider: string, status_code: int, body: string, headers: map<string, string> | null) -> <unresolved type #139235867967860> {
+function ai.errors.classify_http(provider: string, status_code: int, body: string, headers: map<string, string> | null) -> ai.errors.Failure {
     load_var headers
     load_const <omitted>
     cmp_op ==
@@ -3167,7 +3174,7 @@ function ai.errors.classify_http(provider: string, status_code: int, body: strin
     return
 }
 
-function ai.errors.normalize(error: <unresolved type #139235867967860> | <unresolved type #136308358920907> | <unresolved type #74601415421372> | <unresolved type #36914685764984> | <unresolved type #42220037087656> | <unresolved type #59433995467168> | <unresolved type #336598637428> | <unresolved type #9662590026407> | <unresolved type #38806699051567> | <unresolved type #92755081178858> | <unresolved type #71316871800887> | <unresolved type #98454085444692> | <unresolved type #31634034957599>) -> <unresolved type #139235867967860> | <unresolved type #136308358920907> | <unresolved type #74601415421372> | <unresolved type #36914685764984> | <unresolved type #42220037087656> {
+function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError {
     load_var error
     store_var _2
     load_var _2
@@ -3357,7 +3364,7 @@ function ai.errors.normalize(error: <unresolved type #139235867967860> | <unreso
     return
 }
 
-function ai.errors.normalize_invoke(error: <unresolved type #139235867967860> | <unresolved type #136308358920907> | <unresolved type #74601415421372> | <unresolved type #36914685764984> | <unresolved type #42220037087656> | <unresolved type #59433995467168> | <unresolved type #336598637428> | <unresolved type #9662590026407> | <unresolved type #38806699051567> | <unresolved type #92755081178858> | <unresolved type #71316871800887> | <unresolved type #98454085444692> | <unresolved type #31634034957599>) -> <unresolved type #139235867967860> | <unresolved type #136308358920907> | <unresolved type #74601415421372> | <unresolved type #36914685764984> | <unresolved type #42220037087656> {
+function ai.errors.normalize_invoke(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError {
     load_var error
     call ai.errors.normalize
     return
@@ -3366,7 +3373,7 @@ function ai.errors.normalize_invoke(error: <unresolved type #139235867967860> | 
 function ai.internal._aws_resolve_region(region: string | null, profile: string | null) -> string | null {
 }
 
-function ai.internal._aws_sign_request(request: <unresolved type #50857447195238>, service: string, region: string | null, profile: string | null, access_key_id: string | null, secret_access_key: string | null, session_token: string | null) -> <unresolved type #50857447195238> {
+function ai.internal._aws_sign_request(request: baml.http.Request, service: string, region: string | null, profile: string | null, access_key_id: string | null, secret_access_key: string | null, session_token: string | null) -> baml.http.Request {
 }
 
 function ai.internal._configured(value: string) -> string | null {
@@ -3388,7 +3395,7 @@ function ai.internal._configured(value: string) -> string | null {
     return
 }
 
-function ai.internal._flush_orphaned_calls(out: (<unresolved type #4547766494970> | <unresolved type #81534061385894> | <unresolved type #22080131837795> | <unresolved type #23791317649394> | <unresolved type #136931674600763> | <unresolved type #102471150916823> | <unresolved type #50341216429523> | <unresolved type #4610312648892>)[], pending: string[]) -> void {
+function ai.internal._flush_orphaned_calls(out: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced)[], pending: string[]) -> void {
     load_var pending
     load_type baml.iter.Iterable<Error = never, Item = string>
     load_const "iter"
@@ -3424,7 +3431,7 @@ function ai.internal._flush_orphaned_calls(out: (<unresolved type #4547766494970
     return
 }
 
-function ai.internal._from_shorthand(shorthand: string) -> <unresolved type #34575171419448> {
+function ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     load_var shorthand
     load_const "/"
     call baml.String.index_of
@@ -3894,7 +3901,7 @@ function ai.internal._int_header(headers: map<string, string>, lower: string, ca
     return
 }
 
-function ai.internal._media_all_text(items: <unresolved type #1888633819501>[]) -> bool {
+function ai.internal._media_all_text(items: baml.json.json[]) -> bool {
     load_var items
     load_type baml.iter.Iterable<Error = never, Item = int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>>
     load_const "iter"
@@ -3938,7 +3945,7 @@ function ai.internal._media_all_text(items: <unresolved type #1888633819501>[]) 
     return
 }
 
-function ai.internal._media_envelope(m: <unresolved type #129518494483714>) -> <unresolved type #1888633819501> {
+function ai.internal._media_envelope(m: ai.content.Media) -> baml.json.json {
     load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
     load_var m
     load_field .media
@@ -3960,7 +3967,7 @@ function ai.internal._media_envelope(m: <unresolved type #129518494483714>) -> <
     return
 }
 
-function ai.internal._media_join_text(items: <unresolved type #1888633819501>[]) -> <unresolved type #1888633819501> {
+function ai.internal._media_join_text(items: baml.json.json[]) -> baml.json.json {
     load_const ""
     store_var out
     load_var items
@@ -4259,7 +4266,7 @@ function ai.internal._media_mime_type(explicit: string | null, source_value: str
     return
 }
 
-function ai.internal._media_mixed_parts(turn: <unresolved type #127276340552691>) -> <unresolved type #1888633819501>[] {
+function ai.internal._media_mixed_parts(turn: ai.ModelTurn) -> baml.json.json[] {
     load_type baml.json.json
     alloc_array 0
     store_var items
@@ -4333,7 +4340,7 @@ function ai.internal._media_mixed_parts(turn: <unresolved type #127276340552691>
     return
 }
 
-function ai.internal._media_of_kind(turn: <unresolved type #127276340552691>, kind: string) -> <unresolved type #1888633819501>[] {
+function ai.internal._media_of_kind(turn: ai.ModelTurn, kind: string) -> baml.json.json[] {
     load_type baml.json.json
     alloc_array 0
     store_var out
@@ -4382,7 +4389,7 @@ function ai.internal._media_of_kind(turn: <unresolved type #127276340552691>, ki
     return
 }
 
-function ai.internal._media_reject_mixed(turn: <unresolved type #127276340552691>, kind: string, provider: string) -> void {
+function ai.internal._media_reject_mixed(turn: ai.ModelTurn, kind: string, provider: string) -> void {
     load_const 0
     store_var unexpected
     load_var turn
@@ -4643,7 +4650,7 @@ function ai.internal._media_shape(t: reflect.Type) -> string {
     return
 }
 
-function ai.internal._merge_json(base: <unresolved type #1888633819501>, patch: <unresolved type #1888633819501>) -> <unresolved type #1888633819501> {
+function ai.internal._merge_json(base: baml.json.json, patch: baml.json.json) -> baml.json.json {
     load_var patch
     store_var _3
     load_var _3
@@ -4771,7 +4778,7 @@ function ai.internal._merge_json(base: <unresolved type #1888633819501>, patch: 
     return
 }
 
-function ai.internal._proxy(conn: <unresolved type #42386875539663>, name: string) -> (map<string, unknown>) -> string throws unknown {
+function ai.internal._proxy(conn: ai.mcp.McpConnection, name: string) -> (map<string, unknown>) -> string throws unknown {
     load_var ?1
     make_cell
     store_var ?1
@@ -4905,7 +4912,7 @@ function ai.internal._redact_value_end(tail: string) -> int {
     return
 }
 
-function ai.internal._resolve_media_content(url: string | null, file: string | null, inline: string, mime: string, fetch_url: bool) -> <unresolved type #132247234100472> {
+function ai.internal._resolve_media_content(url: string | null, file: string | null, inline: string, mime: string, fetch_url: bool) -> ai.wire.ResolvedMedia {
     load_var file
     store_var _6
     load_var _6
@@ -5265,7 +5272,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     return
 }
 
-function ai.internal._resolve_media_preview_content(url: string | null, file: string | null, inline: string, mime: string) -> <unresolved type #132247234100472> {
+function ai.internal._resolve_media_preview_content(url: string | null, file: string | null, inline: string, mime: string) -> ai.wire.ResolvedMedia {
     load_var file
     store_var _5
     load_var _5
@@ -5440,7 +5447,7 @@ function ai.internal._retry_after_ms(headers: map<string, string> | null) -> int
     return
 }
 
-function ai.internal._schema_for_signature(handler: <unresolved type #56645786973401><Returns = unknown, Throws = unknown>) -> map<string, unknown> {
+function ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> map<string, unknown> {
     load_var handler
     call reflect.signature
     store_var sig
@@ -5527,7 +5534,7 @@ function ai.internal._shorthand_prefixes() -> string {
     return
 }
 
-function ai.internal._wire_blocks(content: (<unresolved type #120134966695073> | <unresolved type #106871081752458> | <unresolved type #53261710600495> | <unresolved type #129518494483714>)[], keep_reasoning: bool) -> (<unresolved type #120134966695073> | <unresolved type #106871081752458> | <unresolved type #53261710600495> | <unresolved type #129518494483714>)[] {
+function ai.internal._wire_blocks(content: (ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media)[], keep_reasoning: bool) -> (ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media)[] {
     load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
     alloc_array 0
     store_var out
@@ -5608,7 +5615,7 @@ function ai.internal._wire_blocks(content: (<unresolved type #120134966695073> |
     return
 }
 
-function ai.internal.assemble_llm_prompt(parts: string[], values: unknown[]) -> <unresolved type #135172864440005> {
+function ai.internal.assemble_llm_prompt(parts: string[], values: unknown[]) -> ai.Prompt {
     load_const -1
     store_var first_role
     load_const 0
@@ -5765,16 +5772,16 @@ function ai.internal.assemble_llm_prompt(parts: string[], values: unknown[]) -> 
     jump L0
 }
 
-function ai.internal.assemble_prompt(parts: string[], values: unknown[]) -> <unresolved type #135172864440005> {
+function ai.internal.assemble_prompt(parts: string[], values: unknown[]) -> ai.Prompt {
 }
 
-function ai.internal.build_output_format(return_type: reflect.Type) -> <unresolved type #112435430212881> {
+function ai.internal.build_output_format(return_type: reflect.Type) -> ai.OutputFormat {
 }
 
 function ai.internal.get_return_type(function_name: string) -> reflect.Type {
 }
 
-function ai.internal.make_role(name: string) -> <unresolved type #58152337932491> {
+function ai.internal.make_role(name: string) -> ai.Role {
     load_var name
     load_type string
     load_type unknown
@@ -5839,7 +5846,7 @@ function ai.internal.validate_output_type(return_type: reflect.Type) -> void {
     throw
 }
 
-function ai.mcp.McpConnection._request(self: <unresolved type #42386875539663>, method: string, params: map<string, unknown>) -> <unresolved type #1888633819501> {
+function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, params: map<string, unknown>) -> baml.json.json {
     load_var self
     load_field .next_id
     store_var id
@@ -6022,7 +6029,7 @@ function ai.mcp.McpConnection._request(self: <unresolved type #42386875539663>, 
     throw
 }
 
-function ai.mcp.McpConnection._send(self: <unresolved type #42386875539663>, line: string) -> void {
+function ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> void {
     load_type string
     load_var line
     load_const "\n"
@@ -6067,7 +6074,7 @@ function ai.mcp.McpConnection._send(self: <unresolved type #42386875539663>, lin
     return
 }
 
-function ai.mcp.McpConnection.call_tool(self: <unresolved type #42386875539663>, name: string, args: map<string, unknown>) -> string {
+function ai.mcp.McpConnection.call_tool(self: ai.mcp.McpConnection, name: string, args: map<string, unknown>) -> string {
     load_var self
     load_const "tools/call"
     load_var2 2 3
@@ -6164,7 +6171,7 @@ function ai.mcp.McpConnection.call_tool(self: <unresolved type #42386875539663>,
     throw
 }
 
-function ai.mcp.McpConnection.close(self: <unresolved type #42386875539663>) -> void {
+function ai.mcp.McpConnection.close(self: ai.mcp.McpConnection) -> void {
     load_var self
     load_field .p
     sys_op baml.sys.Process.close
@@ -6173,7 +6180,7 @@ function ai.mcp.McpConnection.close(self: <unresolved type #42386875539663>) -> 
     return
 }
 
-function ai.mcp.McpConnection.connect(name: string, command: string, args: string[], timeout_ms: int) -> <unresolved type #42386875539663> {
+function ai.mcp.McpConnection.connect(name: string, command: string, args: string[], timeout_ms: int) -> ai.mcp.McpConnection {
     load_var timeout_ms
     load_const <omitted>
     cmp_op ==
@@ -6254,7 +6261,7 @@ function ai.mcp.McpConnection.connect(name: string, command: string, args: strin
     return
 }
 
-function ai.mcp.McpConnection.tools(self: <unresolved type #42386875539663>) -> <unresolved type #4597005869098>[] {
+function ai.mcp.McpConnection.tools(self: ai.mcp.McpConnection) -> ai.tools.Tool[] {
     load_var self
     load_const "tools/list"
     load_type string
@@ -6388,7 +6395,7 @@ function ai.mcp.rpc_line(id: int | null, method: string, params: map<string, unk
     return
 }
 
-function ai.prompt(body: ((string) -> <unresolved type #58152337932491> throws never, <unresolved type #117725101632654>) -> <unresolved type #35460019031336> throws never) -> (<unresolved type #117725101632654>) -> <unresolved type #135172864440005> throws never {
+function ai.prompt(body: ((string) -> ai.Role throws never, ai.Context) -> baml.TaggedString throws never) -> (ai.Context) -> ai.Prompt throws never {
     load_var ?1
     make_cell
     store_var ?1
@@ -6397,7 +6404,7 @@ function ai.prompt(body: ((string) -> <unresolved type #58152337932491> throws n
     return
 }
 
-function ai.stream.Stream.final(self: <unresolved type #15157338033827><#0, #1>) -> #1 {
+function ai.stream.Stream.final(self: ai.stream.Stream<#0, #1>) -> #1 {
   L0:
     load_var self
     load_field ._finished
@@ -6441,7 +6448,7 @@ function ai.stream.Stream.final(self: <unresolved type #15157338033827><#0, #1>)
     jump L0
 }
 
-function ai.stream.Stream.next(self: <unresolved type #15157338033827><#0, #1>) -> #0 | <unresolved type #96766303430383> {
+function ai.stream.Stream.next(self: ai.stream.Stream<#0, #1>) -> #0 | ai.stream.Done {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -6506,7 +6513,7 @@ function ai.stream.Stream.next(self: <unresolved type #15157338033827><#0, #1>) 
     return
 }
 
-function ai.stream.TurnStream._check_terminal(self: <unresolved type #70118551405800>) -> void {
+function ai.stream.TurnStream._check_terminal(self: ai.stream.TurnStream) -> void {
     load_var self
     load_field ._require_terminal
     store_var _3
@@ -6572,7 +6579,7 @@ function ai.stream.TurnStream._check_terminal(self: <unresolved type #7011855140
     throw
 }
 
-function ai.stream.TurnStream._finish(self: <unresolved type #70118551405800>) -> void {
+function ai.stream.TurnStream._finish(self: ai.stream.TurnStream) -> void {
     load_var self
     load_const true
     store_field ._done
@@ -6598,7 +6605,7 @@ function ai.stream.TurnStream._finish(self: <unresolved type #70118551405800>) -
     return
 }
 
-function ai.stream.TurnStream.final_turn(self: <unresolved type #70118551405800>) -> <unresolved type #127276340552691> {
+function ai.stream.TurnStream.final_turn(self: ai.stream.TurnStream) -> ai.ModelTurn {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -6689,7 +6696,7 @@ function ai.stream.TurnStream.final_turn(self: <unresolved type #70118551405800>
     return
 }
 
-function ai.stream.TurnStream.from_chunks(chunks: string[]) -> <unresolved type #70118551405800> {
+function ai.stream.TurnStream.from_chunks(chunks: string[]) -> ai.stream.TurnStream {
     load_const null
     load_const null
     load_const null
@@ -6709,7 +6716,7 @@ function ai.stream.TurnStream.from_chunks(chunks: string[]) -> <unresolved type 
     return
 }
 
-function ai.stream.TurnStream.from_event_source(next_event: () -> <unresolved type #9652056543474> | <unresolved type #59818295350253> | <unresolved type #49078800259648> | <unresolved type #96766303430383> throws <unresolved type #139235867967860> | <unresolved type #136308358920907> | <unresolved type #74601415421372> | <unresolved type #36914685764984> | <unresolved type #42220037087656>) -> <unresolved type #70118551405800> {
+function ai.stream.TurnStream.from_event_source(next_event: () -> ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone | ai.stream.Done throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError) -> ai.stream.TurnStream {
     load_var next_event
     load_const null
     load_const null
@@ -6730,7 +6737,7 @@ function ai.stream.TurnStream.from_event_source(next_event: () -> <unresolved ty
     return
 }
 
-function ai.stream.TurnStream.from_sse(sse: <unresolved type #75245510125758>, decode: (string) -> (<unresolved type #9652056543474> | <unresolved type #59818295350253> | <unresolved type #49078800259648>)[] throws <unresolved type #139235867967860> | <unresolved type #136308358920907> | <unresolved type #74601415421372> | <unresolved type #36914685764984> | <unresolved type #42220037087656>, require_terminal: string | null) -> <unresolved type #70118551405800> {
+function ai.stream.TurnStream.from_sse(sse: baml.http.SseStream, decode: (string) -> (ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone)[] throws ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError, require_terminal: string | null) -> ai.stream.TurnStream {
     load_var require_terminal
     load_const <omitted>
     cmp_op ==
@@ -6758,7 +6765,7 @@ function ai.stream.TurnStream.from_sse(sse: <unresolved type #75245510125758>, d
     return
 }
 
-function ai.stream.TurnStream.next(self: <unresolved type #70118551405800>) -> string | <unresolved type #96766303430383> {
+function ai.stream.TurnStream.next(self: ai.stream.TurnStream) -> string | ai.stream.Done {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -7048,14 +7055,14 @@ function ai.stream.TurnStream.next(self: <unresolved type #70118551405800>) -> s
     return
 }
 
-function ai.stream.decode_sse_batch(batch: string) -> <unresolved type #101051470510780>[] {
+function ai.stream.decode_sse_batch(batch: string) -> ai.stream.SseEvent[] {
     load_type ai.stream.SseEvent[]
     load_var batch
     call baml.json.from_string
     return
 }
 
-function ai.stream.from_spec(spec: <unresolved type #25974768157144><#1>, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><#0, #1> {
+function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<#0, #1> {
     load_var ?10
     make_cell
     store_var ?10
@@ -7175,7 +7182,7 @@ function ai.stream.from_spec(spec: <unresolved type #25974768157144><#1>, client
     throw
 }
 
-function ai.tools.Tool.call(self: <unresolved type #4597005869098>, args: map<string, unknown>) -> string {
+function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> string {
     load_var self
     load_field .raw_handler
     store_var _4
@@ -7266,7 +7273,7 @@ function ai.tools.Tool.call(self: <unresolved type #4597005869098>, args: map<st
     return
 }
 
-function ai.tools.Toolbox.get(self: <unresolved type #115469379576951>, name: string) -> <unresolved type #4597005869098> | null {
+function ai.tools.Toolbox.get(self: ai.tools.Toolbox, name: string) -> ai.tools.Tool | null {
     load_var ?2
     make_cell
     store_var ?2
@@ -7280,7 +7287,7 @@ function ai.tools.Toolbox.get(self: <unresolved type #115469379576951>, name: st
     return
 }
 
-function ai.tools.Toolbox.is_empty(self: <unresolved type #115469379576951>) -> bool {
+function ai.tools.Toolbox.is_empty(self: ai.tools.Toolbox) -> bool {
     load_var self
     load_field .entries
     container_len
@@ -7291,13 +7298,13 @@ function ai.tools.Toolbox.is_empty(self: <unresolved type #115469379576951>) -> 
     return
 }
 
-function ai.tools.Toolbox.list(self: <unresolved type #115469379576951>) -> <unresolved type #4597005869098>[] {
+function ai.tools.Toolbox.list(self: ai.tools.Toolbox) -> ai.tools.Tool[] {
     load_var self
     load_field .entries
     return
 }
 
-function ai.tools.Toolbox.new(tools: <unresolved type #4597005869098>[]) -> <unresolved type #115469379576951> {
+function ai.tools.Toolbox.new(tools: ai.tools.Tool[]) -> ai.tools.Toolbox {
     load_type string
     alloc_array 0
     store_var names
@@ -7354,7 +7361,7 @@ function ai.tools.Toolbox.new(tools: <unresolved type #4597005869098>[]) -> <unr
     return
 }
 
-function ai.tools.raw_tool(name: string, description: string, input_schema: map<string, unknown>, handler: (map<string, unknown>) -> string throws unknown, on_error: <unresolved type #23196617605653> | null) -> <unresolved type #4597005869098> {
+function ai.tools.raw_tool(name: string, description: string, input_schema: map<string, unknown>, handler: (map<string, unknown>) -> string throws unknown, on_error: ai.tools.ErrorMode | null) -> ai.tools.Tool {
     load_var on_error
     load_const <omitted>
     cmp_op ==
@@ -7383,7 +7390,7 @@ function ai.tools.raw_tool(name: string, description: string, input_schema: map<
     throw
 }
 
-function ai.tools.tool(handler: <unresolved type #56645786973401><Returns = unknown, Throws = unknown>, name: string | null, description: string | null, on_error: <unresolved type #23196617605653> | null) -> <unresolved type #4597005869098> {
+function ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>, name: string | null, description: string | null, on_error: ai.tools.ErrorMode | null) -> ai.tools.Tool {
     load_var name
     load_const <omitted>
     cmp_op ==
@@ -7479,7 +7486,7 @@ function ai.tools.tool(handler: <unresolved type #56645786973401><Returns = unkn
     throw
 }
 
-function ai.wire.credential_sources(cred: string | <unresolved type #14421915625631> | null, canonical_env: string | null) -> string {
+function ai.wire.credential_sources(cred: string | baml.env.Ref | null, canonical_env: string | null) -> string {
     load_type string
     alloc_array 0
     store_var names
@@ -7529,7 +7536,7 @@ function ai.wire.credential_sources(cred: string | <unresolved type #14421915625
     return
 }
 
-function ai.wire.merge_request_body(base: <unresolved type #1888633819501>, overrides: <unresolved type #1888633819501> | null) -> <unresolved type #1888633819501> {
+function ai.wire.merge_request_body(base: baml.json.json, overrides: baml.json.json | null) -> baml.json.json {
     load_var overrides
     load_const null
     cmp_op ==
@@ -7568,7 +7575,7 @@ function ai.wire.render_output_format(t: reflect.Type) -> string {
     return
 }
 
-function ai.wire.resolve_credential(cred: string | <unresolved type #14421915625631> | null, env_fallback: string | null) -> string | null {
+function ai.wire.resolve_credential(cred: string | baml.env.Ref | null, env_fallback: string | null) -> string | null {
     load_var cred
     store_var _4
     load_var _4
@@ -7648,7 +7655,7 @@ function ai.wire.resolve_credential(cred: string | <unresolved type #14421915625
     return
 }
 
-function ai.wire.resolve_media(media: <unresolved type #80582473093252> | <unresolved type #35343763937051> | <unresolved type #7174237770506> | <unresolved type #113218833774991>, fetch_url: bool) -> <unresolved type #132247234100472> {
+function ai.wire.resolve_media(media: baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf, fetch_url: bool) -> ai.wire.ResolvedMedia {
     load_var media
     store_var _3
     load_var _3
@@ -7857,7 +7864,7 @@ function ai.wire.resolve_media(media: <unresolved type #80582473093252> | <unres
     return
 }
 
-function ai.wire.resolve_media_preview(media: <unresolved type #80582473093252> | <unresolved type #35343763937051> | <unresolved type #7174237770506> | <unresolved type #113218833774991>) -> <unresolved type #132247234100472> {
+function ai.wire.resolve_media_preview(media: baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf) -> ai.wire.ResolvedMedia {
     load_var media
     store_var _2
     load_var _2
@@ -8062,7 +8069,7 @@ function ai.wire.resolve_media_preview(media: <unresolved type #80582473093252> 
     return
 }
 
-function ai.wire.sanitize_for_client(j: <unresolved type #67319939421542>, client_id: string) -> <unresolved type #67319939421542> {
+function ai.wire.sanitize_for_client(j: ai.Journal, client_id: string) -> ai.Journal {
     load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
     alloc_array 0
     store_var out
@@ -8233,7 +8240,7 @@ function ai.wire.sanitize_for_client(j: <unresolved type #67319939421542>, clien
     return
 }
 
-function ai.wire.send_as(req: <unresolved type #50857447195238>, provider: string, request_timeout_ms: int | null) -> #0 {
+function ai.wire.send_as(req: baml.http.Request, provider: string, request_timeout_ms: int | null) -> #0 {
     load_var request_timeout_ms
     load_const <omitted>
     cmp_op ==

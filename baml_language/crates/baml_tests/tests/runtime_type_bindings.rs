@@ -29,7 +29,7 @@ function main() -> string throws unknown {
     throw "with_types changed the exported type"
   }
 
-  let pkg = reflect.Package.compile({ "tenant.baml": #"
+  let pkg = reflect.Package.compile({ "tenant.baml": `
 function Run(document: string) -> app.AcmePerson {
   app.AcmePerson {
     name: "Ada",
@@ -37,11 +37,11 @@ function Run(document: string) -> app.AcmePerson {
     favorite_editor: document,
   }
 }
-"# }, packages = { "app": app })
+` }, packages = { "app": app })
 
   let extract = pkg.get_function<(string) -> PersonAnchor>("root.Run")
     ?? throw "missing root.Run"
-  let person = extract(#"{"name":"Ada","email":"ada@example.com","favorite_editor":"vim"}"#)
+  let person = extract(`{"name":"Ada","email":"ada@example.com","favorite_editor":"vim"}`)
   if (reflect.Type.of_value(person) != person_t.as_type()) {
     throw "compiled wrapper did not return the mounted type"
   }
@@ -51,10 +51,10 @@ function Run(document: string) -> app.AcmePerson {
 
 const TYPE_BINDING_SOURCE: &str = r####"
 function main() -> bool throws unknown {
-  let pkg = reflect.Package.compile({ "items.baml": #"
+  let pkg = reflect.Package.compile({ "items.baml": `
 class Item { value string }
 function Items() -> Item[] { [Item { value: "bound" }] }
-  "# })
+  ` })
   let item_ct = pkg.get_class("root.Item") ?? throw "missing Item"
   let binding_evaluations: int = 0
   let operand = () -> {
@@ -309,7 +309,7 @@ async fn interface_impl_methods_keep_runtime_type_definitions() {
             type Out = unreflect(output_type)
 
             let holder = Holder<Out>.new()
-            let parsed = holder.parse_it(#"{"name":"Pixel"}"#)
+            let parsed = holder.parse_it(`{"name":"Pixel"}`)
             `${holder.describe()}|${reflect.class.get_field<string>(parsed, "name")}`
         }
         "##
@@ -341,10 +341,10 @@ async fn agent_run_parses_a_reflected_output_type() {
             type Out = unreflect(output_type)
 
             // Control: the direct SAP call has always worked.
-            let direct = baml.sap.parse<Out>(#"{{"name":"Pixel"}}"#)
+            let direct = baml.sap.parse<Out>(`{{"name":"Pixel"}}`)
 
             let run = ai.Agent.new(
-                client = ProbeClient {{ reply: #"{{"name":"Pixel"}}"# }},
+                client = ProbeClient {{ reply: `{{"name":"Pixel"}}` }},
             ).run(DynamicOutput@spec<Out>())
 
             let direct_name = reflect.class.get_field<string>(direct, "name")
@@ -565,9 +565,9 @@ async fn runtime_package_declarations_keep_definitions_and_identity() {
         }
 
         function main() -> string throws unknown {
-            let pkg = reflect.Package.compile({ "items.baml": #"
+            let pkg = reflect.Package.compile({ "items.baml": `
 class Item { value string }
-              "# })
+              ` })
             let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
             type Item = unreflect(item_type)
 
@@ -615,9 +615,9 @@ async fn static_class_slots_are_not_answered_from_a_same_named_runtime_definitio
         }
 
         function main() -> string throws unknown {
-            let pkg = reflect.Package.compile({ "items.baml": #"
+            let pkg = reflect.Package.compile({ "items.baml": `
 class Item { value string }
-              "# })
+              ` })
             let runtime_item = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
             // Binding it merges `user.Item` into this frame's overlay, which is
             // what every type materialized here from now on carries.
@@ -661,12 +661,12 @@ async fn same_named_declarations_from_two_packages_keep_separate_identities() {
         }
 
         function main() -> string throws unknown {
-            let first = reflect.Package.compile({ "a.baml": #"
+            let first = reflect.Package.compile({ "a.baml": `
 class Item { value string }
-              "# })
-            let second = reflect.Package.compile({ "b.baml": #"
+              ` })
+            let second = reflect.Package.compile({ "b.baml": `
 class Item { value string }
-              "# })
+              ` })
             let first_item = (first.get_class("root.Item") ?? throw "missing A").as_type()
             let second_item = (second.get_class("root.Item") ?? throw "missing B").as_type()
             type First = unreflect(first_item)
@@ -792,10 +792,10 @@ async fn a_package_declarations_identity_never_reaches_rendered_output() {
         function main() -> string throws unknown {
             // `next` makes `Item` recursive, which forces the LLM schema to
             // hoist it under a *name* rather than inline its shape.
-            let pkg = reflect.Package.compile({ "items.baml": #"
+            let pkg = reflect.Package.compile({ "items.baml": `
 class Item { value string, next Item? }
 function Items() -> Item[] { [Item { value: "bound", next: null }] }
-              "# })
+              ` })
             let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
             type Item = unreflect(item_type)
 
@@ -844,9 +844,9 @@ function Items() -> Item[] { [Item { value: "bound", next: null }] }
 /// the same way. Two fields, so a coercion failure is reported against the
 /// class rather than being implied onto a lone field.
 const ORIGIN_COMPILED_PACKAGE: &str = r##"
-            let pkg = reflect.Package.compile({ "items.baml": #"
+            let pkg = reflect.Package.compile({ "items.baml": `
 class Item { value string, count int }
-              "# })
+              ` })
             let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
 "##;
 
@@ -950,9 +950,9 @@ async fn a_runtime_compile_diagnostic_names_a_mounted_runtime_class() {
                 "value": reflect.Type.of<string>(),
             }).as_type()
             let app = reflect.Package.current().with_types({ "Item": item_type })
-            let compiled = reflect.Package.compile({ "wrong.baml": #"
+            let compiled = reflect.Package.compile({ "wrong.baml": `
 function Run() -> int { app.Item { value: "x" } }
-              "# }, packages = { "app": app }) catch (e) {
+              ` }, packages = { "app": app }) catch (e) {
                 reflect.errors.CompilationError => e.diagnostics[0].message,
                 _ => "not a CompilationError",
             }
@@ -982,13 +982,13 @@ async fn a_runtime_type_test_does_not_match_another_packages_same_named_class() 
     let output = baml_test!(
         r##"
         function main() -> string throws unknown {
-            let first = reflect.Package.compile({ "a.baml": #"
+            let first = reflect.Package.compile({ "a.baml": `
 class Item { value string }
 function Make() -> Item { Item { value: "a" } }
-              "# })
-            let second = reflect.Package.compile({ "b.baml": #"
+              ` })
+            let second = reflect.Package.compile({ "b.baml": `
 class Item { value string }
-              "# })
+              ` })
             type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
             type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
 
@@ -1025,12 +1025,12 @@ async fn an_output_format_schema_describes_each_packages_own_class() {
         function main() -> string throws unknown {
             // `next` makes each `Item` recursive, which forces the schema to
             // hoist it under a name rather than inline its shape.
-            let first = reflect.Package.compile({ "a.baml": #"
+            let first = reflect.Package.compile({ "a.baml": `
 class Item { alpha string, next Item? }
-              "# })
-            let second = reflect.Package.compile({ "b.baml": #"
+              ` })
+            let second = reflect.Package.compile({ "b.baml": `
 class Item { beta int, next Item? }
-              "# })
+              ` })
             type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
             type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
 

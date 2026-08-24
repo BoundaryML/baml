@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function for_loops.$init_test_ns_for_loops_for_loops(registry: <unresolved type #49679510787122>) -> null {
+function for_loops.$init_test_ns_for_loops_for_loops(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.for_loops"
     load_const "for_loop_sum"

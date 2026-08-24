@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function property_shorthand_binders.$init_test_ns_property_shorthand_binders_property_shorthand_binders(registry: <unresolved type #49679510787122>) -> null {
+function property_shorthand_binders.$init_test_ns_property_shorthand_binders_property_shorthand_binders(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.property_shorthand_binders"
     load_const "quoted_key_sees_if_let_binder"
@@ -175,7 +175,7 @@ function property_shorthand_binders.psb_quoted_catch_binder(s: string) -> string
     return
 }
 
-function property_shorthand_binders.psb_quoted_destructure(b: <unresolved type #60658527318661>) -> string {
+function property_shorthand_binders.psb_quoted_destructure(b: property_shorthand_binders.PsbBox) -> string {
     load_var b
     load_field .key
     load_const "key"
@@ -393,7 +393,7 @@ function property_shorthand_binders.psb_shorthand_closure_param(xs: string[]) ->
     return
 }
 
-function property_shorthand_binders.psb_shorthand_destructure(b: <unresolved type #60658527318661>) -> string {
+function property_shorthand_binders.psb_shorthand_destructure(b: property_shorthand_binders.PsbBox) -> string {
     load_var b
     load_field .key
     load_const "key"

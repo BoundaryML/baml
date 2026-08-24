@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function builtins.$init_test_ns_builtins_builtins(registry: <unresolved type #49679510787122>) -> null {
+function builtins.$init_test_ns_builtins_builtins(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.builtins"
     load_const "builtin_method_call"

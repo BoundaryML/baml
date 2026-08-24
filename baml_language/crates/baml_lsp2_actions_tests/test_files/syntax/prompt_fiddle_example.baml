@@ -43,8 +43,8 @@ test ImageReceiptTest {
 test StarbucksTextReceiptTest {
   functions [ExtractReceipt]
   args {
-    // use #""# for multi-line strings
-    receipt #"
+    // Quoted strings may span multiple lines.
+    receipt "
       Starbucks
       Date: 2022-01-01
       Total: $5.00 USD
@@ -55,7 +55,7 @@ test StarbucksTextReceiptTest {
       - Croissant
         - $2.50
         - 1
-    "#
+    "
   }
 }
 
@@ -93,7 +93,7 @@ function ExtractResume(resume_text: string) -> Resume {
 test Test1 {
   functions [ExtractResume]
   args {
-    resume_text #"
+    resume_text "
       John Doe
 
       Education
@@ -105,7 +105,7 @@ test Test1 {
       - Python
       - Java
       - C++
-    "#
+    "
   }
 }
 // This will be available as an enum in your Python and Typescript code.
@@ -226,9 +226,9 @@ function UseTool(user_message: string) -> WeatherAPI {
 test TestOne {
   functions [UseTool]
   args {
-    user_message #"
+    user_message "
       what's the weather in san francisco tomorrow april 23rd 2024 at 3pm?
-    "#
+    "
   }
 }
 
@@ -260,18 +260,18 @@ function ChooseOneTool(user_message: string) -> WeatherAPI2 | SendEmail {
 test TestOneFunc {
   functions [ChooseOneTool]
   args {
-    user_message #"
+    user_message "
       what's the weather in san francisco tomorrow april 23rd 2024 at 3pm?
-    "#
+    "
   }
 }
 
 test TestOneFunc2 {
   functions [ChooseOneTool]
   args {
-    user_message #"
+    user_message "
       Send an email to John Doe with the subject 'Hello' and the body 'How are you doing?'
-    "#
+    "
   }
 }
 
@@ -293,11 +293,11 @@ function ChooseNTools(user_message: string) -> (WeatherAPI2 | SendEmail)[] {
 test TestNTools {
   functions [ChooseNTools]
   args {
-    user_message #"
+    user_message "
       what's the weather in san francisco tomorrow april 23rd 2024 at 3pm?
 
       Also send an email to Mark Gonzalez with the subject 'Hello' and the body 'How are you doing?'
-    "#
+    "
   }
 }
 
@@ -324,9 +324,9 @@ test TestURLAudioInput{
 
 class ImageDescription {
   description string
-  tags string[] @description(#"
+  tags string[] @description("
     Tags that describe the image
-  "#)
+  ")
 }
 
 function DescribeImage(myImage: image) -> ImageDescription {
@@ -422,7 +422,7 @@ function ExtractResumeUsingOllama(resume_text: string) -> OResume {
 test OllamaTest1 {
   functions [ExtractResumeUsingOllama]
   args {
-    resume_text #"
+    resume_text "
       John Doe
 
       Education
@@ -434,7 +434,7 @@ test OllamaTest1 {
       - Python
       - Java
       - C++
-    "#
+    "
   }
 }
 enum OCategory {
@@ -563,7 +563,7 @@ test Test1 {
     email {
       from_address "hello@amazon.com"
       subject "Your Amazon.com order of 'Wood Dowel Rods...' has shipped!"
-      body #"
+      body "
         Hi Sam, your package will arrive:
         Thurs, April 4
         Track your package:
@@ -578,7 +578,7 @@ test Test1 {
 
         Shipment total:
         $0.00
-    "#
+    "
 
     }
   }

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function instantiation_expr.$init_test_ns_instantiation_expr_instantiation_expr(registry: <unresolved type #49679510787122>) -> null {
+function instantiation_expr.$init_test_ns_instantiation_expr_instantiation_expr(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.instantiation_expr"
     load_const "identity_int_value_runs"
@@ -90,7 +90,7 @@ function instantiation_expr.$init_test_ns_instantiation_expr_instantiation_expr(
     return
 }
 
-function instantiation_expr.GenBox.pick(self: <unresolved type #110977572071594>, x: #0) -> #0 {
+function instantiation_expr.GenBox.pick(self: instantiation_expr.GenBox, x: #0) -> #0 {
     load_var x
     return
 }
@@ -133,7 +133,7 @@ function instantiation_expr.forward_reflect() -> string {
     return
 }
 
-function instantiation_expr.from_string_value_fn() -> <unresolved type #47050383539898> {
+function instantiation_expr.from_string_value_fn() -> instantiation_expr.User {
     load_const "{\"name\":\"Ada\"}"
     load_const baml.json.from_string<...>
     call_indirect

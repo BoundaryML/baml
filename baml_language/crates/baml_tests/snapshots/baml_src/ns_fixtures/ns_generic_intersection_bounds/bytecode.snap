@@ -1,12 +1,12 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.generic_intersection_bounds.Both.Sized.size(self: <unresolved type #44497403535958>) -> int {
+function fixtures.generic_intersection_bounds.Both.Sized.size(self: fixtures.generic_intersection_bounds.Both) -> int {
     load_const 7
     return
 }
 
-function fixtures.generic_intersection_bounds.Both.Tagged.tag(self: <unresolved type #44497403535958>) -> string {
+function fixtures.generic_intersection_bounds.Both.Tagged.tag(self: fixtures.generic_intersection_bounds.Both) -> string {
     load_var self
     load_field .name
     return
@@ -19,12 +19,12 @@ function fixtures.generic_intersection_bounds.Printable$for$T.display(self: #0) 
     return
 }
 
-function fixtures.generic_intersection_bounds.Registered.Registry<Both>.put(self: <unresolved type #30759145019701>, item: <unresolved type #44497403535958>) -> void {
+function fixtures.generic_intersection_bounds.Registered.Registry<Both>.put(self: fixtures.generic_intersection_bounds.Registered, item: fixtures.generic_intersection_bounds.Both) -> void {
     load_const null
     return
 }
 
-function fixtures.generic_intersection_bounds.Registered.Registry<Both>.summarize(self: <unresolved type #30759145019701>, other: #0) -> string {
+function fixtures.generic_intersection_bounds.Registered.Registry<Both>.summarize(self: fixtures.generic_intersection_bounds.Registered, other: #0) -> string {
     load_type #0
     load_var other
     call user.fixtures.generic_intersection_bounds.describe

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function yaml.$init_test_ns_yaml_yaml(registry: <unresolved type #49679510787122>) -> null {
+function yaml.$init_test_ns_yaml_yaml(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.yaml"
     load_const "yaml_parse_scalars"
@@ -111,7 +111,7 @@ function yaml.$init_test_ns_yaml_yaml(registry: <unresolved type #49679510787122
     return
 }
 
-function yaml.YamlWrappedName.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #31265535919866> {
+function yaml.YamlWrappedName.baml.FromJson.from_json(j: baml.json.json) -> yaml.YamlWrappedName {
     load_var j
     load_const "name"
     call baml.json.field

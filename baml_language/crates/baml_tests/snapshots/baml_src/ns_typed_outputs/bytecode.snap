@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function typed_outputs.$init_test_ns_typed_outputs_typed_outputs(registry: <unresolved type #49679510787122>) -> null {
+function typed_outputs.$init_test_ns_typed_outputs_typed_outputs(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.typed_outputs"
     load_const "union_int_or_string_returns_int"
@@ -127,14 +127,14 @@ function typed_outputs.array_of_unions_main() -> (int | string)[] {
     return
 }
 
-function typed_outputs.class_with_optional_field_main() -> <unresolved type #71841513998760> {
+function typed_outputs.class_with_optional_field_main() -> typed_outputs.Person {
     load_const "Alice"
     load_const null
     init_instance user.typed_outputs.Person .name, .age
     return
 }
 
-function typed_outputs.class_with_union_field_main() -> <unresolved type #51625896722206> {
+function typed_outputs.class_with_union_field_main() -> typed_outputs.Response {
     load_const 42
     init_instance user.typed_outputs.Response .data
     return
@@ -151,13 +151,13 @@ function typed_outputs.map_with_union_values_main() -> map<string, int | string>
     return
 }
 
-function typed_outputs.optional_class_main() -> <unresolved type #58944882283492> | null {
+function typed_outputs.optional_class_main() -> typed_outputs.OutputData | null {
     load_const 42
     init_instance user.typed_outputs.OutputData .value
     return
 }
 
-function typed_outputs.optional_class_null_main() -> <unresolved type #58944882283492> | null {
+function typed_outputs.optional_class_null_main() -> typed_outputs.OutputData | null {
     load_const null
     return
 }
@@ -202,13 +202,13 @@ function typed_outputs.optional_union_value_main() -> int | string | null {
     return
 }
 
-function typed_outputs.union_classes_failure_main() -> <unresolved type #43811321287864> | <unresolved type #1927847734537> {
+function typed_outputs.union_classes_failure_main() -> typed_outputs.Success | typed_outputs.Failure {
     load_const "something went wrong"
     init_instance user.typed_outputs.Failure .error
     return
 }
 
-function typed_outputs.union_classes_success_main() -> <unresolved type #43811321287864> | <unresolved type #1927847734537> {
+function typed_outputs.union_classes_success_main() -> typed_outputs.Success | typed_outputs.Failure {
     load_const 42
     init_instance user.typed_outputs.Success .value
     return

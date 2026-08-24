@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function arrays.$init_test_ns_arrays_arrays(registry: <unresolved type #49679510787122>) -> null {
+function arrays.$init_test_ns_arrays_arrays(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.arrays"
     load_const "array_literal"
@@ -979,7 +979,7 @@ function arrays.$init_test_ns_arrays_arrays(registry: <unresolved type #49679510
     return
 }
 
-function arrays.$init_test_ns_arrays_reductions(registry: <unresolved type #49679510787122>) -> null {
+function arrays.$init_test_ns_arrays_reductions(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.arrays"
     load_const "float_mean_basic"
@@ -1040,7 +1040,7 @@ function arrays.$init_test_ns_arrays_reductions(registry: <unresolved type #4967
     return
 }
 
-function arrays.$init_test_ns_arrays_sort_comparable(registry: <unresolved type #49679510787122>) -> null {
+function arrays.$init_test_ns_arrays_sort_comparable(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.arrays"
     load_const "comparable_int_compare"
@@ -1192,7 +1192,7 @@ function arrays.$init_test_ns_arrays_sort_comparable(registry: <unresolved type 
     return
 }
 
-function arrays.$init_test_ns_arrays_sum(registry: <unresolved type #49679510787122>) -> null {
+function arrays.$init_test_ns_arrays_sum(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.arrays"
     load_const "array_sum_int_basic"
@@ -1274,7 +1274,7 @@ function arrays.$init_test_ns_arrays_sum(registry: <unresolved type #49679510787
     return
 }
 
-function arrays.ComparableFlaky.baml.Comparable.compare(self: <unresolved type #13070551092385>, other: <unresolved type #13070551092385>) -> int {
+function arrays.ComparableFlaky.baml.Comparable.compare(self: arrays.ComparableFlaky, other: arrays.ComparableFlaky) -> int {
     load_var self
     load_field .value
     store_var _4
@@ -1306,7 +1306,7 @@ function arrays.ComparableFlaky.baml.Comparable.compare(self: <unresolved type #
     return
 }
 
-function arrays.ComparableScore.baml.Comparable.compare(self: <unresolved type #121023468044398>, other: <unresolved type #121023468044398>) -> int {
+function arrays.ComparableScore.baml.Comparable.compare(self: arrays.ComparableScore, other: arrays.ComparableScore) -> int {
     load_var self
     load_field .points
     load_var other
@@ -1319,7 +1319,7 @@ function arrays.ComparableScore.baml.Comparable.compare(self: <unresolved type #
     return
 }
 
-function arrays.OutOfBodyScore.baml.Comparable.compare(self: <unresolved type #136050010065305>, other: <unresolved type #136050010065305>) -> int {
+function arrays.OutOfBodyScore.baml.Comparable.compare(self: arrays.OutOfBodyScore, other: arrays.OutOfBodyScore) -> int {
     load_var self
     load_field .points
     load_var other
@@ -1332,7 +1332,7 @@ function arrays.OutOfBodyScore.baml.Comparable.compare(self: <unresolved type #1
     return
 }
 
-function arrays.SortableItem.baml.Comparable.compare(self: <unresolved type #71944377293791>, other: <unresolved type #71944377293791>) -> int {
+function arrays.SortableItem.baml.Comparable.compare(self: arrays.SortableItem, other: arrays.SortableItem) -> int {
     load_var self
     load_field .rank
     load_var other
@@ -1431,7 +1431,7 @@ function arrays.sort_bigints(xs: bigint[]) -> bigint[] {
     return
 }
 
-function arrays.sort_flaky(xs: <unresolved type #13070551092385>[]) -> <unresolved type #13070551092385>[] {
+function arrays.sort_flaky(xs: arrays.ComparableFlaky[]) -> arrays.ComparableFlaky[] {
     load_var xs
     load_type baml.Sortable<SortError = arrays.ComparableCompareError>
     load_const "sort"
@@ -1471,7 +1471,7 @@ function arrays.sort_ints(xs: int[]) -> int[] {
     return
 }
 
-function arrays.sort_items(xs: <unresolved type #71944377293791>[]) -> <unresolved type #71944377293791>[] {
+function arrays.sort_items(xs: arrays.SortableItem[]) -> arrays.SortableItem[] {
     load_var xs
     load_type baml.Sortable<SortError = never>
     load_const "sort"

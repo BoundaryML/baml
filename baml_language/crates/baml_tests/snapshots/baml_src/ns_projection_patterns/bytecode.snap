@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function projection_patterns.$init_test_ns_projection_patterns_projection_patterns(registry: <unresolved type #49679510787122>) -> null {
+function projection_patterns.$init_test_ns_projection_patterns_projection_patterns(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.projection_patterns"
     load_const "projection_self_item_accepts_own"
@@ -132,7 +132,7 @@ function projection_patterns.$init_test_ns_projection_patterns_projection_patter
     return
 }
 
-function projection_patterns.Holder.classify(self: <unresolved type #77350627746987>, v: unknown) -> string {
+function projection_patterns.Holder.classify(self: projection_patterns.Holder, v: unknown) -> string {
     load_var v
     store_var _3
     load_var _3
@@ -151,7 +151,7 @@ function projection_patterns.Holder.classify(self: <unresolved type #77350627746
     return
 }
 
-function projection_patterns.Holder.is_item(self: <unresolved type #77350627746987>, v: unknown) -> bool {
+function projection_patterns.Holder.is_item(self: projection_patterns.Holder, v: unknown) -> bool {
     load_var v
     is_type #1
     pop_jump_if_false L0
@@ -168,12 +168,12 @@ function projection_patterns.Holder.is_item(self: <unresolved type #773506277469
     return
 }
 
-function projection_patterns.IntHolder.Holder.get(self: <unresolved type #110469579770592>) -> int {
+function projection_patterns.IntHolder.Holder.get(self: projection_patterns.IntHolder) -> int {
     load_const 7
     return
 }
 
-function projection_patterns.Labeled.is_label(self: <unresolved type #62099874967616>, v: unknown) -> bool {
+function projection_patterns.Labeled.is_label(self: projection_patterns.Labeled, v: unknown) -> bool {
     load_var v
     is_type #1
     pop_jump_if_false L0
@@ -190,23 +190,23 @@ function projection_patterns.Labeled.is_label(self: <unresolved type #6209987496
     return
 }
 
-function projection_patterns.Labeled.label_name(self: <unresolved type #62099874967616>) -> string {
+function projection_patterns.Labeled.label_name(self: projection_patterns.Labeled) -> string {
     load_type #1
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function projection_patterns.Pinned.Labeled.id(self: <unresolved type #101519996219915>) -> int {
+function projection_patterns.Pinned.Labeled.id(self: projection_patterns.Pinned) -> int {
     load_const 2
     return
 }
 
-function projection_patterns.Plain.Labeled.id(self: <unresolved type #34570346178067>) -> int {
+function projection_patterns.Plain.Labeled.id(self: projection_patterns.Plain) -> int {
     load_const 1
     return
 }
 
-function projection_patterns.StrHolder.Holder.get(self: <unresolved type #131187588024122>) -> string {
+function projection_patterns.StrHolder.Holder.get(self: projection_patterns.StrHolder) -> string {
     load_const "s"
     return
 }

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.numeric_invariance_ok.BigintFieldOk() -> <unresolved type #33873568942532> {
+function fixtures.numeric_invariance_ok.BigintFieldOk() -> fixtures.numeric_invariance_ok.BigintCounter {
     load_const 1n
     init_instance user.fixtures.numeric_invariance_ok.BigintCounter .count
     return

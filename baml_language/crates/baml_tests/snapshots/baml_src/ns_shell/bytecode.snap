@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function shell.$init_test_ns_shell_shell(registry: <unresolved type #49679510787122>) -> null {
+function shell.$init_test_ns_shell_shell(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.shell"
     load_const "shell_echo"

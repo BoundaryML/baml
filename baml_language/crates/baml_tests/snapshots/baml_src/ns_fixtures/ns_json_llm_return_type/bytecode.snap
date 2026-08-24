@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.json_llm_return_type.ExtractAny(client: <unresolved type #34575171419448> | null) -> <unresolved type #1888633819501> {
+function fixtures.json_llm_return_type.ExtractAny(client: ai.Client | null) -> baml.json.json {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -26,7 +26,7 @@ function fixtures.json_llm_return_type.ExtractAny(client: <unresolved type #3457
     return
 }
 
-function fixtures.json_llm_return_type.ExtractAny$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
+function fixtures.json_llm_return_type.ExtractAny$build_request(client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -43,14 +43,14 @@ function fixtures.json_llm_return_type.ExtractAny$build_request(client: <unresol
     return
 }
 
-function fixtures.json_llm_return_type.ExtractAny$parse(json: string) -> <unresolved type #1888633819501> {
+function fixtures.json_llm_return_type.ExtractAny$parse(json: string) -> baml.json.json {
     load_type baml.json.json
     load_var json
     call baml.sap.parse
     return
 }
 
-function fixtures.json_llm_return_type.ExtractAny$render_prompt() -> <unresolved type #135172864440005> {
+function fixtures.json_llm_return_type.ExtractAny$render_prompt() -> ai.Prompt {
     call user.fixtures.json_llm_return_type.ExtractAny$spec
     store_var _1
     load_type baml.json.json
@@ -62,7 +62,7 @@ function fixtures.json_llm_return_type.ExtractAny$render_prompt() -> <unresolved
     return
 }
 
-function fixtures.json_llm_return_type.ExtractAny$spec() -> <unresolved type #25974768157144><<unresolved type #1888633819501>> {
+function fixtures.json_llm_return_type.ExtractAny$spec() -> ai.FunctionSpec<baml.json.json> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -81,7 +81,7 @@ function fixtures.json_llm_return_type.ExtractAny$spec() -> <unresolved type #25
     return
 }
 
-function fixtures.json_llm_return_type.ExtractAny$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><<unresolved type #131267046641067> | null, <unresolved type #1888633819501>> {
+function fixtures.json_llm_return_type.ExtractAny$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<baml.json.json$stream | null, baml.json.json> {
     load_var client
     load_const <omitted>
     cmp_op ==

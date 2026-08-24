@@ -6052,27 +6052,10 @@ mod tests {
     }
 
     #[test]
-    fn parse_raw_string_single_hash() {
-        let input = "#\"raw\\ntext\"#";
-        assert_eq!(
-            parse_string_attr_value(input),
-            Some("raw\\ntext".to_string())
-        );
-    }
-
-    #[test]
-    fn parse_raw_string_double_hash() {
-        let input = "##\"has \"# inside\"##";
-        assert_eq!(
-            parse_string_attr_value(input),
-            Some("has \"# inside".to_string())
-        );
-    }
-
-    #[test]
-    fn parse_empty_raw_string() {
-        let input = "#\"\"#";
-        assert_eq!(parse_string_attr_value(input), Some(String::new()));
+    fn removed_hash_string_returns_none() {
+        assert_eq!(parse_string_attr_value("#\"raw text\"#"), None);
+        assert_eq!(parse_string_attr_value("##\"raw text\"##"), None);
+        assert_eq!(parse_string_attr_value("#\"\"#"), None);
     }
 
     #[test]
@@ -6086,12 +6069,6 @@ mod tests {
     fn parse_malformed_returns_none() {
         // Unclosed quote: just a bare "
         assert_eq!(parse_string_attr_value("\"unclosed"), None);
-        // Mismatched hashes: #"text"##  (1 opening hash, 2 closing)
-        let mismatched = "#\"text\"##";
-        assert_eq!(parse_string_attr_value(mismatched), None);
-        // Degenerate: #"# (would panic without length guard)
-        let degenerate = "#\"#";
-        assert_eq!(parse_string_attr_value(degenerate), None);
     }
 
     #[test]
@@ -6314,10 +6291,10 @@ mod tests {
     }
 
     #[test]
-    fn extract_raw_string_attr() {
+    fn removed_hash_string_attr_is_ignored() {
         let attrs = vec![mk_attr("description", &["#\"raw desc\"#"])];
         let meta = extract_schema_attrs(&attrs, None);
-        assert_eq!(meta.description, Some("raw desc".to_string()));
+        assert_eq!(meta.description, None);
     }
 
     #[test]

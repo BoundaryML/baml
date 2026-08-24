@@ -1759,12 +1759,6 @@ pub struct LlmBodyDef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RawPrompt {
-    pub text: std::string::String,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Param {
     pub name: Name,
     pub type_expr: Option<TypeExpr>,
@@ -2006,7 +2000,6 @@ impl TestArgValue {
 pub struct TemplateStringDef {
     pub name: Name,
     pub params: Vec<Param>,
-    pub body: Option<RawPrompt>,
     pub span: TextRange,
     pub name_span: TextRange,
 }

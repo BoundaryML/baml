@@ -37,10 +37,10 @@ function HeaderInExpression() -> string {
 
 function HeaderInStringLiteral() -> string {
     let x = "This string contains # Header Text"
-    let y = #"
-        Raw string with # Header
+    let y = `
+        Backtick string with # Header
         Should not be parsed
-    "#
+    `
     x + y
 }
 

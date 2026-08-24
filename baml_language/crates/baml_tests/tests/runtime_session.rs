@@ -11,26 +11,26 @@ use sys_native::SysOpsExt;
 const BASIC_SESSION: &str = r####"
 function main() -> int throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let x = 10"#)
-  s.eval<int>(#"x + 1"#)
+  s.eval(`let x = 10`)
+  s.eval<int>(`x + 1`)
 }
 "####;
 
 const S11_LIVENESS_PROBE: &str = r#####"
 function escape_one_session_value() -> reflect.Type throws unknown {
   let dependency = reflect.Package.compile({
-    "dep.baml": #"
+    "dep.baml": `
       class Mounted {
         value int
       }
-    "#,
+    `,
   })
   let s = reflect.Session.new(packages = { "dep": dependency })
-  s.eval(#"class Escaped { value string }"#)
-  s.eval(#"let first = Escaped { value: "first" }"#)
-  s.eval(#"let count = 2"#)
-  s.eval(#"let note = "history""#)
-  s.eval<reflect.Type>(#"reflect.Type.of<Escaped>()"#)
+  s.eval(`class Escaped { value string }`)
+  s.eval(`let first = Escaped { value: "first" }`)
+  s.eval(`let count = 2`)
+  s.eval(`let note = "history"`)
+  s.eval<reflect.Type>(`reflect.Type.of<Escaped>()`)
 }
 "#####;
 
@@ -41,9 +41,9 @@ function LoadNotes() -> string {
 
 function inspect() -> unknown throws unknown {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
-  s.eval(#"class Draft { title string, body string }"#)
-  s.eval(#"let draft = Draft { title: "title", body: app.LoadNotes() }"#)
-  s.eval(#"draft.body"#)
+  s.eval(`class Draft { title string, body string }`)
+  s.eval(`let draft = Draft { title: "title", body: app.LoadNotes() }`)
+  s.eval(`draft.body`)
 }
 "####;
 
@@ -94,7 +94,7 @@ function scenario_7() -> bool throws unknown {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
 
   // Submission 1: declarations hoist and execute nothing.
-  s.eval(#"
+  s.eval(`
     class Draft {
       title: string,
       body: string,
@@ -103,56 +103,56 @@ function scenario_7() -> bool throws unknown {
     function Polish(d: Draft) -> Draft {
       Draft { title: d.title, body: app.ImprovePost(d.body) }
     }
-  "#)
+  `)
 
   // Submission 2: the binding becomes visible only after its initializer.
-  s.eval(#"let draft = Draft { title: "Eval in BAML", body: app.LoadNotes() }"#)
-  let title = s.eval<string>(#"Polish(draft).title"#)
+  s.eval(`let draft = Draft { title: "Eval in BAML", body: app.LoadNotes() }`)
+  let title = s.eval<string>(`Polish(draft).title`)
 
   // Containment is a committed prefix, not rollback.
-  let _ = s.eval(#"
+  let _ = s.eval(`
     let saved = app.SaveDraft(draft.title, draft.body)
     app.ValidateOrThrow(draft.title, draft.body)
     let approved = true
-  "#) catch (e) {
+  `) catch (e) {
     reflect.errors.EvaluationError => null,
     _ => throw e,
   }
-  let saved = s.eval<string>(#"saved"#)
-  let approved_missing = s.eval<bool>(#"approved"#) catch (_) {
+  let saved = s.eval<string>(`saved`)
+  let approved_missing = s.eval<bool>(`approved`) catch (_) {
     reflect.errors.CompilationError => true,
     _ => false,
   }
 
-  let _ = s.eval(#"
+  let _ = s.eval(`
     let x = 10
     let checked = app.Validate(-1)
     let y = "hi"
-  "#) catch (e) {
+  `) catch (e) {
     reflect.errors.EvaluationError => null,
     _ => throw e,
   }
-  let x = s.eval<int>(#"x"#)
-  let y_missing = (s.eval<string>(#"y"#) == "") catch (_) {
+  let x = s.eval<int>(`x`)
+  let y_missing = (s.eval<string>(`y`) == "") catch (_) {
     reflect.errors.CompilationError => true,
     _ => false,
   }
 
   // Assignment updates the old cell; shadowing allocates a new one.
-  s.eval(#"let greeting = "hello""#)
-  s.eval(#"let shout = (name: string) -> { `${greeting}, ${name}!` }"#)
-  s.eval(#"greeting = "howdy""#)
-  let a = s.eval<string>(#"shout("Ada")"#)
-  s.eval(#"let greeting = "goodbye""#)
-  let b = s.eval<string>(#"shout("Ada")"#)
+  s.eval(`let greeting = "hello"`)
+  s.eval(``let shout = (name: string) -> { `\${greeting}, \${name}!` }``)
+  s.eval(`greeting = "howdy"`)
+  let a = s.eval<string>(`shout("Ada")`)
+  s.eval(`let greeting = "goodbye"`)
+  let b = s.eval<string>(`shout("Ada")`)
 
   // A failed compile never poisons the Session.
   let compile_failed = false
-  let _ = s.eval(#"let broken: MissingType = null"#) catch (_) {
+  let _ = s.eval(`let broken: MissingType = null`) catch (_) {
     reflect.errors.CompilationError => { compile_failed = true },
     _ => null,
   }
-  let continued = s.eval<int>(#"x + 1"#)
+  let continued = s.eval<int>(`x + 1`)
 
   title == "Eval in BAML" &&
     saved == "draft-1" &&
@@ -167,7 +167,7 @@ function scenario_7() -> bool throws unknown {
 
 function diagnostic_submission_name() -> string throws unknown {
   let s = reflect.Session.new()
-  let _ = s.eval(#"let bad: MissingType = null"#) catch (e) {
+  let _ = s.eval(`let bad: MissingType = null`) catch (e) {
     reflect.errors.CompilationError => {
       let span = e.diagnostics[0].span ?? throw "missing diagnostic span"
       return span.file ?? ""
@@ -179,7 +179,7 @@ function diagnostic_submission_name() -> string throws unknown {
 
 function package_current_is_rejected() -> bool throws unknown {
   let s = reflect.Session.new()
-  let _ = s.eval(#"reflect.Package.current()"#) catch (_) {
+  let _ = s.eval(`reflect.Package.current()`) catch (_) {
     reflect.errors.CompilationError => return true,
     _ => return false,
   }
@@ -189,15 +189,15 @@ function package_current_is_rejected() -> bool throws unknown {
 function runtime_and_failed_contracts() -> bool throws unknown {
   let s = reflect.Session.new()
   let string_t = reflect.Type.of<string>()
-  let value = s.eval<unreflect(string_t)>(#""ok""#)
-  let rejected = (s.eval<string>(#"
+  let value = s.eval<unreflect(string_t)>(`"ok"`)
+  let rejected = (s.eval<string>(`
     let should_not_exist = 7
     42
-  "#) == "") catch (_) {
+  `) == "") catch (_) {
     reflect.errors.CompilationError => true,
     _ => false,
   }
-  let missing = (s.eval<int>(#"should_not_exist"#) == 0) catch (_) {
+  let missing = (s.eval<int>(`should_not_exist`) == 0) catch (_) {
     reflect.errors.CompilationError => true,
     _ => false,
   }
@@ -206,21 +206,21 @@ function runtime_and_failed_contracts() -> bool throws unknown {
 
 function concurrent_eval_is_busy() -> bool throws unknown {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
-  let pending = spawn { s.eval<int>(#"app.Wait()"#) }
+  let pending = spawn { s.eval<int>(`app.Wait()`) }
   baml.sys.sleep(baml.time.Duration.from_milliseconds(20))
-  let busy = (s.eval<int>(#"1"#) == 0) catch (_) {
+  let busy = (s.eval<int>(`1`) == 0) catch (_) {
     reflect.errors.SessionBusy => true,
     _ => false,
   }
   let waited = await pending
-  busy && waited == 1 && s.eval<int>(#"2"#) == 2
+  busy && waited == 1 && s.eval<int>(`2`) == 2
 }
 
 function cancelled_eval_releases_lease_and_preserves_prefix() -> bool throws unknown {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
-  s.eval(#"let baseline = 40"#)
+  s.eval(`let baseline = 40`)
   let pending = spawn {
-    s.eval<int>(#"app.LongWait()"#)
+    s.eval<int>(`app.LongWait()`)
   }
   baml.sys.sleep(baml.time.Duration.from_milliseconds(20))
   pending.cancel()
@@ -229,54 +229,54 @@ function cancelled_eval_releases_lease_and_preserves_prefix() -> bool throws unk
     _ => false,
   }
 
-  cancelled && s.eval<int>(#"baseline + 2"#) == 42
+  cancelled && s.eval<int>(`baseline + 2`) == 42
 }
 
 function declaration_redefinition_keeps_earlier_resolution() -> bool throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"function Current() -> int { 1 }"#)
-  s.eval(#"let old = () -> { Current() }"#)
-  s.eval(#"function Current() -> int { 2 }"#)
-  s.eval<int>(#"old()"#) == 1 && s.eval<int>(#"Current()"#) == 2
+  s.eval(`function Current() -> int { 1 }`)
+  s.eval(`let old = () -> { Current() }`)
+  s.eval(`function Current() -> int { 2 }`)
+  s.eval<int>(`old()`) == 1 && s.eval<int>(`Current()`) == 2
 }
 
 function client_declaration_is_lazy() -> bool throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"
+  s.eval(`
     client NeverContacted = openai.ResponsesClient.new(
     model = "no-network-during-declaration",
     api_key = "unused",
     base_url = "http://127.0.0.1:1",
 );
-  "#)
-  s.eval<int>(#"1"#) == 1
+  `)
+  s.eval<int>(`1`) == 1
 }
 
 function runtime_type_binding_persists() -> bool throws unknown {
   let s = reflect.Session.new()
-  let first = s.eval<bool>(#"
+  let first = s.eval<bool>(`
     type T = unreflect(reflect.Type.of<string>());
     reflect.Type.of<T>() == reflect.Type.of<string>()
-  "#)
-  let later = s.eval<bool>(#"reflect.Type.of<T>() == reflect.Type.of<string>()"#)
-  s.eval(#"type T = unreflect(reflect.Type.of<int>());"#)
-  let rebound = s.eval<bool>(#"reflect.Type.of<T>() == reflect.Type.of<int>()"#)
+  `)
+  let later = s.eval<bool>(`reflect.Type.of<T>() == reflect.Type.of<string>()`)
+  s.eval(`type T = unreflect(reflect.Type.of<int>());`)
+  let rebound = s.eval<bool>(`reflect.Type.of<T>() == reflect.Type.of<int>()`)
   first && later && rebound
 }
 
 function session_declarations_are_generative() -> bool throws unknown {
   let left = reflect.Session.new()
   let right = reflect.Session.new()
-  left.eval(#"class SameName { value string }"#)
-  right.eval(#"class SameName { value string }"#)
-  let left_type = left.eval<reflect.Type>(#"reflect.Type.of<SameName>()"#)
-  let right_type = right.eval<reflect.Type>(#"reflect.Type.of<SameName>()"#)
+  left.eval(`class SameName { value string }`)
+  right.eval(`class SameName { value string }`)
+  let left_type = left.eval<reflect.Type>(`reflect.Type.of<SameName>()`)
+  let right_type = right.eval<reflect.Type>(`reflect.Type.of<SameName>()`)
   left_type != right_type
 }
 
 function host_dispatch_recovers_session_class_provenance() -> bool throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"
+  s.eval(`
     class SessionValue {
       value string
       implements baml.ToString {
@@ -285,8 +285,8 @@ function host_dispatch_recovers_session_class_provenance() -> bool throws unknow
         }
       }
     }
-  "#)
-  let value = s.eval<baml.ToString>(#"SessionValue { value: "from session" }"#)
+  `)
+  let value = s.eval<baml.ToString>(`SessionValue { value: "from session" }`)
   host_dispatch_session_value(value) == "from session"
 }
 
@@ -297,7 +297,7 @@ function perf_500() -> string throws unknown {
   let five_hundredth = 1n
   while (i < 500) {
     let start = baml.time.Instant.now()
-    let value = s.eval<int>(#"1"#)
+    let value = s.eval<int>(`1`)
     let elapsed = start.elapsed().to_nanoseconds()
     if (i == 9) {
       tenth = elapsed
@@ -414,16 +414,16 @@ async fn mutually_recursive_session_lets_diagnose_without_panicking() {
 function main() -> bool throws unknown {
   let s = reflect.Session.new()
   let diagnosed = false
-  let _ = s.eval(#"
+  let _ = s.eval(`
     let a = b
     let b = a
-  "#) catch (e) {
+  `) catch (e) {
     reflect.errors.CompilationError => {
       diagnosed = e.diagnostics.length() > 0
     },
     _ => null,
   }
-  diagnosed && s.eval<int>(#"1"#) == 1
+  diagnosed && s.eval<int>(`1`) == 1
 }
 "##
     );
@@ -436,9 +436,9 @@ async fn session_let_named_json_does_not_shadow_json_package_paths() {
         r##"
 function main() -> bool throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let json = "local""#)
-  let local = s.eval<string>(#"json"#)
-  let encoded = s.eval<string>(#"json.stringify(7)"#)
+  s.eval(`let json = "local"`)
+  let local = s.eval<string>(`json`)
+  let encoded = s.eval<string>(`json.stringify(7)`)
   local == "local" && encoded == "7"
 }
 "##
@@ -670,8 +670,8 @@ async fn five_hundred_evals_have_flat_latency_and_bounded_artifacts() {
 const SESSION_LET_WIDENING: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let n = 5"#)
-  let _ = s.eval<5>(#"n"#) catch (e) {
+  s.eval(`let n = 5`)
+  let _ = s.eval<5>(`n`) catch (e) {
     reflect.errors.CompilationError => return e.diagnostics[0].message,
     _ => return "wrong error",
   }
@@ -700,12 +700,12 @@ function probe(s: reflect.Session, source: string) -> string throws unknown {
 
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let n = 5"#)
-  s.eval(#"let text = "hi""#)
-  s.eval(#"let flag = true"#)
-  `${probe(s, #"n.to_string()"#)}
-${probe(s, #"text.to_string()"#)}
-${probe(s, #"flag.to_string()"#)}`
+  s.eval(`let n = 5`)
+  s.eval(`let text = "hi"`)
+  s.eval(`let flag = true`)
+  `${probe(s, `n.to_string()`)}
+${probe(s, `text.to_string()`)}
+${probe(s, `flag.to_string()`)}`
 }
 "####;
 
@@ -724,10 +724,10 @@ function probe(s: reflect.Session, source: string) -> string throws unknown {
 
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let n = 5"#)
-  s.eval(#"let flag = true"#)
-  `${probe(s, #"match (n) { 5 => "five" }"#)}
-${probe(s, #"match (flag) { true => "t", false => "f" }"#)}`
+  s.eval(`let n = 5`)
+  s.eval(`let flag = true`)
+  `${probe(s, `match (n) { 5 => "five" }`)}
+${probe(s, `match (flag) { true => "t", false => "f" }`)}`
 }
 "####;
 
@@ -737,13 +737,13 @@ ${probe(s, #"match (flag) { true => "t", false => "f" }"#)}`
 const SESSION_LET_REBINDING: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let n = 5"#)
-  s.eval(#"let text = "hi""#)
-  s.eval(#"let flag = true"#)
-  s.eval(#"n = 7"#)
-  s.eval(#"text = "there""#)
-  s.eval(#"flag = false"#)
-  s.eval<string>(#"`${n}|${text}|${flag}`"#)
+  s.eval(`let n = 5`)
+  s.eval(`let text = "hi"`)
+  s.eval(`let flag = true`)
+  s.eval(`n = 7`)
+  s.eval(`text = "there"`)
+  s.eval(`flag = false`)
+  s.eval<string>(`` `\${n}|\${text}|\${flag}` ``)
 }
 "####;
 
@@ -754,7 +754,7 @@ function main() -> string throws unknown {
 const SESSION_LET_ANNOTATION_REJECTED: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  let _ = s.eval(#"let n: int = 5"#) catch (e) {
+  let _ = s.eval(`let n: int = 5`) catch (e) {
     reflect.errors.CompilationError => return e.diagnostics[0].message,
     _ => return "wrong error",
   }
@@ -767,8 +767,8 @@ function main() -> string throws unknown {
 const SESSION_LET_NARROWING: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let n = 5"#)
-  s.eval<string>(#"if (n is 5) { "narrowed" } else { "wide" }"#)
+  s.eval(`let n = 5`)
+  s.eval<string>(`if (n is 5) { "narrowed" } else { "wide" }`)
 }
 "####;
 
@@ -784,22 +784,22 @@ function main() -> string throws unknown {
 const SESSION_BINDING_METHOD_CALLS: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"
+  s.eval(`
     class P {
       name string
       function greet(self) -> string throws never {
         "hi " + self.name
       }
     }
-  "#)
-  s.eval(#"let n = 5"#)
-  s.eval(#"let text = "hi""#)
-  s.eval(#"let v = ["a", "b"]"#)
-  s.eval(#"let m = { "k": 1, "j": 2 }"#)
-  s.eval(#"let p = P { name: "ada" }"#)
-  s.eval(#"let cls = reflect.class.new("R", { "a": reflect.Type.of<string>() })"#)
+  `)
+  s.eval(`let n = 5`)
+  s.eval(`let text = "hi"`)
+  s.eval(`let v = ["a", "b"]`)
+  s.eval(`let m = { "k": 1, "j": 2 }`)
+  s.eval(`let p = P { name: "ada" }`)
+  s.eval(`let cls = reflect.class.new("R", { "a": reflect.Type.of<string>() })`)
   s.eval<string>(
-    #"`${n.abs()}|${text.to_upper_case()}|${v.length()}|${m.length()}|${v.join("-")}|${m.keys().join("-")}|${p.greet()}|${cls.fields()[0].name}`"#
+    `` `\${n.abs()}|\${text.to_upper_case()}|\${v.length()}|\${m.length()}|\${v.join("-")}|\${m.keys().join("-")}|\${p.greet()}|\${cls.fields()[0].name}` ``
   )
 }
 "####;
@@ -809,8 +809,8 @@ function main() -> string throws unknown {
 const SESSION_BINDING_METHOD_CALL_SAME_SUBMISSION: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval<string>(#"let v = ["a", "b"]
-v.length().to_string()"#)
+  s.eval<string>(`let v = ["a", "b"]
+v.length().to_string()`)
 }
 "####;
 
@@ -819,10 +819,10 @@ v.length().to_string()"#)
 const SESSION_BINDING_FIELD_AND_INDEX: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"class Draft { title string }"#)
-  s.eval(#"let draft = Draft { title: "titled" }"#)
-  s.eval(#"let items = [7, 8]"#)
-  s.eval<string>(#"`${draft.title}|${items[0]}`"#)
+  s.eval(`class Draft { title string }`)
+  s.eval(`let draft = Draft { title: "titled" }`)
+  s.eval(`let items = [7, 8]`)
+  s.eval<string>(`` `\${draft.title}|\${items[0]}` ``)
 }
 "####;
 
@@ -999,9 +999,9 @@ function probe(s: reflect.Session, source: string) -> string throws unknown {
 const SESSION_ASSIGNMENT_AT_ANOTHER_TYPE: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let n = 5"#)
-  let refusal = probe(s, #"n = "seven""#)
-  let kept = s.eval<int>(#"n"#)
+  s.eval(`let n = 5`)
+  let refusal = probe(s, `n = "seven"`)
+  let kept = s.eval<int>(`n`)
   `${refusal}|${kept}`
 }
 "####;
@@ -1013,9 +1013,9 @@ function main() -> string throws unknown {
 const SESSION_ASSIGNMENT_CRASH_SHAPE: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let n = 5"#)
-  let refusal = probe(s, #"n = "seven""#)
-  let still_an_int = s.eval<int>(#"n.abs()"#)
+  s.eval(`let n = 5`)
+  let refusal = probe(s, `n = "seven"`)
+  let still_an_int = s.eval<int>(`n.abs()`)
   `${refusal}|${still_an_int}`
 }
 "####;
@@ -1025,9 +1025,9 @@ function main() -> string throws unknown {
 const SESSION_LET_SHADOWS_AT_A_NEW_TYPE: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let n = 5"#)
-  s.eval(#"let n = "seven""#)
-  s.eval<string>(#"n.to_upper_case()"#)
+  s.eval(`let n = 5`)
+  s.eval(`let n = "seven"`)
+  s.eval<string>(`n.to_upper_case()`)
 }
 "####;
 
@@ -1037,11 +1037,11 @@ function main() -> string throws unknown {
 const SESSION_COMPOUND_ASSIGNMENT: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let n = 5"#)
-  s.eval(#"n += 1"#)
-  let after = s.eval<int>(#"n"#)
-  s.eval(#"let n = "seven""#)
-  let refusal = probe(s, #"n += 1"#)
+  s.eval(`let n = 5`)
+  s.eval(`n += 1`)
+  let after = s.eval<int>(`n`)
+  s.eval(`let n = "seven"`)
+  let refusal = probe(s, `n += 1`)
   `${after}|${refusal}`
 }
 "####;
@@ -1052,8 +1052,8 @@ function main() -> string throws unknown {
 const SESSION_COMPOUND_WITH_A_WIDER_OPERAND: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let n = 5"#)
-  let accepted = probe(s, #"n += 1.5"#)
+  s.eval(`let n = 5`)
+  let accepted = probe(s, `n += 1.5`)
   accepted
 }
 "####;
@@ -1069,10 +1069,10 @@ function main() -> string throws unknown {
 const SESSION_ASSIGNMENT_NAME_COLLISION: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let n = 5"#)
-  s.eval(#"let target_1 = 99
-n = target_1"#)
-  let after = s.eval<int>(#"n"#)
+  s.eval(`let n = 5`)
+  s.eval(`let target_1 = 99
+n = target_1`)
+  let after = s.eval<int>(`n`)
   `${after}`
 }
 "####;
@@ -1082,11 +1082,11 @@ n = target_1"#)
 const SESSION_ASSIGNMENT_VALUE_SHAPES: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let m = { "k": 1 }"#)
-  s.eval(#"let text = "hi""#)
-  s.eval(#"m = { "k": 2 }"#)
-  s.eval(#"text = `${text} there`"#)
-  s.eval<string>(#"`${m["k"]}|${text}`"#)
+  s.eval(`let m = { "k": 1 }`)
+  s.eval(`let text = "hi"`)
+  s.eval(`m = { "k": 2 }`)
+  s.eval(``text = `\${text} there```)
+  s.eval<string>(`` `\${m["k"]}|\${text}` ``)
 }
 "####;
 
@@ -1095,11 +1095,11 @@ function main() -> string throws unknown {
 const SESSION_ASSIGNMENT_AT_THE_SAME_TYPE: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let n = 5"#)
-  s.eval(#"let text = "hi""#)
-  s.eval(#"n = n + 2"#)
-  s.eval(#"text += " there""#)
-  s.eval<string>(#"`${n}|${text}`"#)
+  s.eval(`let n = 5`)
+  s.eval(`let text = "hi"`)
+  s.eval(`n = n + 2`)
+  s.eval(`text += " there"`)
+  s.eval<string>(`` `\${n}|\${text}` ``)
 }
 "####;
 

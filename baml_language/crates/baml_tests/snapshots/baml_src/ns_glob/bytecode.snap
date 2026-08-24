@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function glob.$init_test_ns_glob_glob(registry: <unresolved type #49679510787122>) -> null {
+function glob.$init_test_ns_glob_glob(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.glob"
     load_const "glob_matches_basic"

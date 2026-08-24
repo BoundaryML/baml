@@ -1477,7 +1477,7 @@ impl LoweringContext {
                             let text = num_lit::normalize_float_literal(token.text());
                             self.alloc_expr(Expr::Literal(Literal::Float(text)), span)
                         }
-                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                        SyntaxKind::STRING_LITERAL => {
                             let text = token.text().to_string();
                             let content = strip_string_delimiters(&text);
                             self.alloc_expr(Expr::Literal(Literal::String(content)), span)
@@ -1562,9 +1562,7 @@ impl LoweringContext {
                         .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()))
                 }
             }
-            SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
-                self.lower_string_literal(node)
-            }
+            SyntaxKind::STRING_LITERAL => self.lower_string_literal(node),
             SyntaxKind::BACKTICK_STRING_LITERAL => self.lower_backtick_string_literal(node),
             SyntaxKind::BYTE_STRING_LITERAL => self.lower_byte_string_literal(node),
             SyntaxKind::ARRAY_LITERAL => self.lower_array_literal(node),
@@ -1632,9 +1630,9 @@ impl LoweringContext {
                         SyntaxKind::FLOAT_LITERAL => Some(Expr::Literal(Literal::Float(
                             num_lit::normalize_float_literal(t.text()),
                         ))),
-                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => Some(
-                            Expr::Literal(Literal::String(strip_string_delimiters(t.text()))),
-                        ),
+                        SyntaxKind::STRING_LITERAL => Some(Expr::Literal(Literal::String(
+                            strip_string_delimiters(t.text()),
+                        ))),
                         // `spawn`/`await` pass `is_ident_token` (they're
                         // valid path SEGMENTS) but here they're the keywords
                         // themselves — never a name/with expression.
@@ -2445,9 +2443,7 @@ impl LoweringContext {
                             }
                         }
                     }
-                    SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
-                        if seen_fat_arrow && body.is_none() =>
-                    {
+                    SyntaxKind::STRING_LITERAL if seen_fat_arrow && body.is_none() => {
                         body = Some(self.lower_string_literal(&child));
                     }
                     _ => {
@@ -2482,9 +2478,7 @@ impl LoweringContext {
                                 token.text_range(),
                             ));
                     }
-                    SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
-                        if seen_fat_arrow && body.is_none() =>
-                    {
+                    SyntaxKind::STRING_LITERAL if seen_fat_arrow && body.is_none() => {
                         let content = strip_string_delimiters(token.text());
                         body = Some(self.alloc_expr(
                             Expr::Literal(Literal::String(content)),
@@ -2996,9 +2990,7 @@ impl LoweringContext {
                     SyntaxKind::PATTERN => {
                         pattern = Some(self.lower_pattern(&child));
                     }
-                    SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
-                        if seen_fat_arrow && body.is_none() =>
-                    {
+                    SyntaxKind::STRING_LITERAL if seen_fat_arrow && body.is_none() => {
                         body = Some(self.lower_string_literal(&child));
                     }
                     _ if seen_fat_arrow && body.is_none() => {
@@ -3030,9 +3022,7 @@ impl LoweringContext {
                             token.text_range(),
                         ));
                     }
-                    SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
-                        if seen_fat_arrow && body.is_none() =>
-                    {
+                    SyntaxKind::STRING_LITERAL if seen_fat_arrow && body.is_none() => {
                         body = Some(self.alloc_expr(
                             Expr::Literal(Literal::String(strip_string_delimiters(token.text()))),
                             token.text_range(),
@@ -3098,7 +3088,6 @@ impl LoweringContext {
                     | SyntaxKind::BLOCK_EXPR
                     | SyntaxKind::PAREN_EXPR
                     | SyntaxKind::STRING_LITERAL
-                    | SyntaxKind::RAW_STRING_LITERAL
                     | SyntaxKind::OBJECT_LITERAL
                     | SyntaxKind::ARRAY_LITERAL
                     | SyntaxKind::MAP_LITERAL
@@ -3158,7 +3147,7 @@ impl LoweringContext {
                         token.text_range(),
                     ));
                 }
-                SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                SyntaxKind::STRING_LITERAL => {
                     return Some(self.alloc_expr(
                         Expr::Literal(Literal::String(strip_string_delimiters(token.text()))),
                         token.text_range(),
@@ -5177,8 +5166,7 @@ impl LoweringContext {
                                 ));
                             } else if !seen_colon
                                 && key_expr.is_none()
-                                && (t.kind() == SyntaxKind::STRING_LITERAL
-                                    || t.kind() == SyntaxKind::RAW_STRING_LITERAL)
+                                && t.kind() == SyntaxKind::STRING_LITERAL
                             {
                                 let content = strip_string_delimiters(t.text());
                                 let span = t.text_range();
@@ -5329,7 +5317,7 @@ impl LoweringContext {
                         let text = num_lit::normalize_float_literal(token.text());
                         return Some(self.alloc_expr(Expr::Literal(Literal::Float(text)), span));
                     }
-                    SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                    SyntaxKind::STRING_LITERAL => {
                         let content = strip_string_delimiters(token.text());
                         return Some(
                             self.alloc_expr(Expr::Literal(Literal::String(content)), span),
@@ -5481,7 +5469,6 @@ impl LoweringContext {
                         | SyntaxKind::TAGGED_TEMPLATE_EXPR
                         | SyntaxKind::PAREN_EXPR
                         | SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL
                         | SyntaxKind::BACKTICK_STRING_LITERAL
                         | SyntaxKind::BYTE_STRING_LITERAL
                         | SyntaxKind::ARRAY_LITERAL
@@ -5555,7 +5542,7 @@ impl LoweringContext {
                                 Some(self.alloc_expr(Expr::Literal(Literal::Float(text)), span));
                             break;
                         }
-                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                        SyntaxKind::STRING_LITERAL => {
                             let content = strip_string_delimiters(token.text());
                             result = Some(
                                 self.alloc_expr(Expr::Literal(Literal::String(content)), span),
@@ -6048,19 +6035,9 @@ impl LoweringContext {
     }
 }
 
-/// Strip string delimiters from raw token text, decoding escape sequences for
-/// regular quoted strings and preserving raw string contents verbatim.
+/// Strip string delimiters from raw token text, decoding escape sequences.
 fn strip_string_delimiters(text: &str) -> String {
     let text = text.trim();
-
-    let hash_count = text.bytes().take_while(|&b| b == b'#').count();
-    if hash_count > 0 {
-        let rest = &text[hash_count..];
-        let closing = format!("\"{}", &text[..hash_count]);
-        if rest.len() >= hash_count + 2 && rest.starts_with('"') && rest.ends_with(&closing) {
-            return rest[1..rest.len() - 1 - hash_count].to_string();
-        }
-    }
 
     if text.starts_with('"') && text.ends_with('"') && text.len() >= 2 {
         crate::unescape_string_literal(&text[1..text.len() - 1])

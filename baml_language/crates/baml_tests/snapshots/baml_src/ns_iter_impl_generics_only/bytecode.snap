@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function iter_impl_generics_only.$init_test_ns_iter_impl_generics_only_iter(registry: <unresolved type #49679510787122>) -> null {
+function iter_impl_generics_only.$init_test_ns_iter_impl_generics_only_iter(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.iter_impl_generics_only"
     load_const "iter_collect"

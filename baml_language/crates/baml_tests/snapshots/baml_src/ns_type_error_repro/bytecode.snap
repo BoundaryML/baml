@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function type_error_repro.$init_test_ns_type_error_repro_type_error_repro(registry: <unresolved type #49679510787122>) -> null {
+function type_error_repro.$init_test_ns_type_error_repro_type_error_repro(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.type_error_repro"
     load_const "bytecode_1d_array_write_local"
@@ -237,7 +237,7 @@ function type_error_repro.$init_test_ns_type_error_repro_type_error_repro(regist
     return
 }
 
-function type_error_repro.BoardMinimal.new() -> <unresolved type #47367922692963> {
+function type_error_repro.BoardMinimal.new() -> type_error_repro.BoardMinimal {
     load_const ""
     load_const ""
     load_const ""
@@ -259,7 +259,7 @@ function type_error_repro.BoardMinimal.new() -> <unresolved type #47367922692963
     return
 }
 
-function type_error_repro.BoardMinimal.play(self: <unresolved type #47367922692963>, player: string, row: int, col: int) -> null {
+function type_error_repro.BoardMinimal.play(self: type_error_repro.BoardMinimal, player: string, row: int, col: int) -> null {
     load_var self
     load_field .cells
     load_var row
@@ -270,7 +270,7 @@ function type_error_repro.BoardMinimal.play(self: <unresolved type #473679226929
     return
 }
 
-function type_error_repro.BoardRead.get(self: <unresolved type #108040905019140>, row: int, col: int) -> string {
+function type_error_repro.BoardRead.get(self: type_error_repro.BoardRead, row: int, col: int) -> string {
     load_var self
     load_field .cells
     load_var row
@@ -280,7 +280,7 @@ function type_error_repro.BoardRead.get(self: <unresolved type #108040905019140>
     return
 }
 
-function type_error_repro.BoardRead.new() -> <unresolved type #108040905019140> {
+function type_error_repro.BoardRead.new() -> type_error_repro.BoardRead {
     load_const ""
     load_const ""
     load_const ""
@@ -302,7 +302,7 @@ function type_error_repro.BoardRead.new() -> <unresolved type #108040905019140> 
     return
 }
 
-function type_error_repro.BoardWrite.get(self: <unresolved type #180725762623>, row: int, col: int) -> string {
+function type_error_repro.BoardWrite.get(self: type_error_repro.BoardWrite, row: int, col: int) -> string {
     load_var self
     load_field .cells
     load_var row
@@ -312,7 +312,7 @@ function type_error_repro.BoardWrite.get(self: <unresolved type #180725762623>, 
     return
 }
 
-function type_error_repro.BoardWrite.new() -> <unresolved type #180725762623> {
+function type_error_repro.BoardWrite.new() -> type_error_repro.BoardWrite {
     load_const ""
     load_const ""
     load_const ""
@@ -334,7 +334,7 @@ function type_error_repro.BoardWrite.new() -> <unresolved type #180725762623> {
     return
 }
 
-function type_error_repro.BoardWrite.play(self: <unresolved type #180725762623>, player: string, row: int, col: int) -> null {
+function type_error_repro.BoardWrite.play(self: type_error_repro.BoardWrite, player: string, row: int, col: int) -> null {
     load_var self
     load_field .cells
     load_var row
@@ -345,7 +345,7 @@ function type_error_repro.BoardWrite.play(self: <unresolved type #180725762623>,
     return
 }
 
-function type_error_repro.BytecodeContainer.set(self: <unresolved type #62888602194178>, idx: int, val: string) -> null {
+function type_error_repro.BytecodeContainer.set(self: type_error_repro.BytecodeContainer, idx: int, val: string) -> null {
     load_var self
     load_field .items
     load_var2 2 3
@@ -354,7 +354,7 @@ function type_error_repro.BytecodeContainer.set(self: <unresolved type #62888602
     return
 }
 
-function type_error_repro.BytecodeContainerRead.get(self: <unresolved type #85956085085978>, idx: int) -> string {
+function type_error_repro.BytecodeContainerRead.get(self: type_error_repro.BytecodeContainerRead, idx: int) -> string {
     load_var self
     load_field .items
     load_var idx
@@ -362,7 +362,7 @@ function type_error_repro.BytecodeContainerRead.get(self: <unresolved type #8595
     return
 }
 
-function type_error_repro.BytecodeGrid.set(self: <unresolved type #89624582477419>, row: int, col: int, val: string) -> null {
+function type_error_repro.BytecodeGrid.set(self: type_error_repro.BytecodeGrid, row: int, col: int, val: string) -> null {
     load_var self
     load_field .cells
     load_var row
@@ -373,7 +373,7 @@ function type_error_repro.BytecodeGrid.set(self: <unresolved type #8962458247741
     return
 }
 
-function type_error_repro.BytecodeScores.set(self: <unresolved type #102477967581816>, key: string, val: int) -> null {
+function type_error_repro.BytecodeScores.set(self: type_error_repro.BytecodeScores, key: string, val: int) -> null {
     load_var self
     load_field .data
     load_var2 2 3
@@ -382,7 +382,7 @@ function type_error_repro.BytecodeScores.set(self: <unresolved type #10247796758
     return
 }
 
-function type_error_repro.ContainerSelf.get(self: <unresolved type #89707266701033>, idx: int) -> string {
+function type_error_repro.ContainerSelf.get(self: type_error_repro.ContainerSelf, idx: int) -> string {
     load_var self
     load_field .items
     load_var idx
@@ -390,7 +390,7 @@ function type_error_repro.ContainerSelf.get(self: <unresolved type #897072667010
     return
 }
 
-function type_error_repro.ContainerSelf.new() -> <unresolved type #89707266701033> {
+function type_error_repro.ContainerSelf.new() -> type_error_repro.ContainerSelf {
     load_const "a"
     load_const "b"
     load_const "c"
@@ -400,7 +400,7 @@ function type_error_repro.ContainerSelf.new() -> <unresolved type #8970726670103
     return
 }
 
-function type_error_repro.ContainerSelf.set(self: <unresolved type #89707266701033>, idx: int, val: string) -> null {
+function type_error_repro.ContainerSelf.set(self: type_error_repro.ContainerSelf, idx: int, val: string) -> null {
     load_var self
     load_field .items
     load_var2 2 3
@@ -409,7 +409,7 @@ function type_error_repro.ContainerSelf.set(self: <unresolved type #897072667010
     return
 }
 
-function type_error_repro.Cube.get(self: <unresolved type #77145072916397>, x: int, y: int, z: int) -> int {
+function type_error_repro.Cube.get(self: type_error_repro.Cube, x: int, y: int, z: int) -> int {
     load_var self
     load_field .data
     load_var x
@@ -421,7 +421,7 @@ function type_error_repro.Cube.get(self: <unresolved type #77145072916397>, x: i
     return
 }
 
-function type_error_repro.Cube.new() -> <unresolved type #77145072916397> {
+function type_error_repro.Cube.new() -> type_error_repro.Cube {
     load_const 0
     load_const 0
     load_type int
@@ -448,7 +448,7 @@ function type_error_repro.Cube.new() -> <unresolved type #77145072916397> {
     return
 }
 
-function type_error_repro.Cube.set(self: <unresolved type #77145072916397>, x: int, y: int, z: int, val: int) -> null {
+function type_error_repro.Cube.set(self: type_error_repro.Cube, x: int, y: int, z: int, val: int) -> null {
     load_var self
     load_field .data
     load_var x
@@ -461,7 +461,7 @@ function type_error_repro.Cube.set(self: <unresolved type #77145072916397>, x: i
     return
 }
 
-function type_error_repro.GridSelf.get(self: <unresolved type #28064619815930>, row: int, col: int) -> string {
+function type_error_repro.GridSelf.get(self: type_error_repro.GridSelf, row: int, col: int) -> string {
     load_var self
     load_field .cells
     load_var row
@@ -471,7 +471,7 @@ function type_error_repro.GridSelf.get(self: <unresolved type #28064619815930>, 
     return
 }
 
-function type_error_repro.GridSelf.new() -> <unresolved type #28064619815930> {
+function type_error_repro.GridSelf.new() -> type_error_repro.GridSelf {
     load_const ""
     load_const ""
     load_const ""
@@ -493,7 +493,7 @@ function type_error_repro.GridSelf.new() -> <unresolved type #28064619815930> {
     return
 }
 
-function type_error_repro.GridSelf.set(self: <unresolved type #28064619815930>, row: int, col: int, val: string) -> null {
+function type_error_repro.GridSelf.set(self: type_error_repro.GridSelf, row: int, col: int, val: string) -> null {
     load_var self
     load_field .cells
     load_var row
@@ -504,7 +504,7 @@ function type_error_repro.GridSelf.set(self: <unresolved type #28064619815930>, 
     return
 }
 
-function type_error_repro.OuterItems.get(self: <unresolved type #113774714655445>, idx: int) -> string {
+function type_error_repro.OuterItems.get(self: type_error_repro.OuterItems, idx: int) -> string {
     load_var self
     load_field .inner
     load_field .items
@@ -513,7 +513,7 @@ function type_error_repro.OuterItems.get(self: <unresolved type #113774714655445
     return
 }
 
-function type_error_repro.OuterItems.new() -> <unresolved type #113774714655445> {
+function type_error_repro.OuterItems.new() -> type_error_repro.OuterItems {
     load_const "a"
     load_const "b"
     load_const "c"
@@ -524,7 +524,7 @@ function type_error_repro.OuterItems.new() -> <unresolved type #113774714655445>
     return
 }
 
-function type_error_repro.OuterItems.set(self: <unresolved type #113774714655445>, idx: int, val: string) -> null {
+function type_error_repro.OuterItems.set(self: type_error_repro.OuterItems, idx: int, val: string) -> null {
     load_var self
     load_field .inner
     load_field .items
@@ -534,7 +534,7 @@ function type_error_repro.OuterItems.set(self: <unresolved type #113774714655445
     return
 }
 
-function type_error_repro.Registry.get(self: <unresolved type #92814835997367>, key: string, idx: int) -> int {
+function type_error_repro.Registry.get(self: type_error_repro.Registry, key: string, idx: int) -> int {
     load_var self
     load_field .data
     load_var key
@@ -544,7 +544,7 @@ function type_error_repro.Registry.get(self: <unresolved type #92814835997367>, 
     return
 }
 
-function type_error_repro.Registry.new() -> <unresolved type #92814835997367> {
+function type_error_repro.Registry.new() -> type_error_repro.Registry {
     load_const 1
     load_const 2
     load_const 3
@@ -558,7 +558,7 @@ function type_error_repro.Registry.new() -> <unresolved type #92814835997367> {
     return
 }
 
-function type_error_repro.Registry.set(self: <unresolved type #92814835997367>, key: string, idx: int, val: int) -> null {
+function type_error_repro.Registry.set(self: type_error_repro.Registry, key: string, idx: int, val: int) -> null {
     load_var self
     load_field .data
     load_var key
@@ -569,7 +569,7 @@ function type_error_repro.Registry.set(self: <unresolved type #92814835997367>, 
     return
 }
 
-function type_error_repro.ScoresSelf.get(self: <unresolved type #65126835972141>, key: string) -> int {
+function type_error_repro.ScoresSelf.get(self: type_error_repro.ScoresSelf, key: string) -> int {
     load_var self
     load_field .data
     load_var key
@@ -577,7 +577,7 @@ function type_error_repro.ScoresSelf.get(self: <unresolved type #65126835972141>
     return
 }
 
-function type_error_repro.ScoresSelf.new() -> <unresolved type #65126835972141> {
+function type_error_repro.ScoresSelf.new() -> type_error_repro.ScoresSelf {
     load_type string
     load_type int
     alloc_map 0
@@ -585,7 +585,7 @@ function type_error_repro.ScoresSelf.new() -> <unresolved type #65126835972141> 
     return
 }
 
-function type_error_repro.ScoresSelf.set(self: <unresolved type #65126835972141>, key: string, val: int) -> null {
+function type_error_repro.ScoresSelf.set(self: type_error_repro.ScoresSelf, key: string, val: int) -> null {
     load_var self
     load_field .data
     load_var2 2 3
@@ -594,14 +594,14 @@ function type_error_repro.ScoresSelf.set(self: <unresolved type #65126835972141>
     return
 }
 
-function type_error_repro.Stack.new() -> <unresolved type #85187032101648> {
+function type_error_repro.Stack.new() -> type_error_repro.Stack {
     load_type int
     alloc_array 0
     init_instance user.type_error_repro.Stack .items
     return
 }
 
-function type_error_repro.Stack.peek(self: <unresolved type #85187032101648>) -> int {
+function type_error_repro.Stack.peek(self: type_error_repro.Stack) -> int {
     load_var self
     load_field .items
     load_const 0
@@ -609,7 +609,7 @@ function type_error_repro.Stack.peek(self: <unresolved type #85187032101648>) ->
     return
 }
 
-function type_error_repro.Stack.push(self: <unresolved type #85187032101648>, val: int) -> null {
+function type_error_repro.Stack.push(self: type_error_repro.Stack, val: int) -> null {
     load_type int
     load_var self
     load_field .items
@@ -832,7 +832,7 @@ function type_error_repro.bytecode_non_self_param_array_write_body() -> null {
     return
 }
 
-function type_error_repro.bytecode_set_item(c: <unresolved type #62695378096487>, idx: int, val: string) -> null {
+function type_error_repro.bytecode_set_item(c: type_error_repro.BytecodeContainerNonSelf, idx: int, val: string) -> null {
     load_var c
     load_field .items
     load_var2 2 3
@@ -1248,7 +1248,7 @@ function type_error_repro.optional_index_with_valid_index_body() -> int | null {
     return
 }
 
-function type_error_repro.set_item_non_self(c: <unresolved type #128911383769952>, idx: int, val: string) -> null {
+function type_error_repro.set_item_non_self(c: type_error_repro.ContainerNonSelf, idx: int, val: string) -> null {
     load_var c
     load_field .items
     load_var2 2 3

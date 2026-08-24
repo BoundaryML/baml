@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function spawn_semantics.$init_test_ns_spawn_semantics_spawn_semantics(registry: <unresolved type #49679510787122>) -> null {
+function spawn_semantics.$init_test_ns_spawn_semantics_spawn_semantics(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.spawn_semantics"
     load_const "multiple_awaits_on_same_future_return_cached_value"

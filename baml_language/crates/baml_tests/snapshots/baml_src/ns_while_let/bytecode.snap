@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function while_let.$init_test_ns_while_let_while_let(registry: <unresolved type #49679510787122>) -> null {
+function while_let.$init_test_ns_while_let_while_let(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.while_let"
     load_const "while_let_drains_until_pattern_fails"
@@ -125,7 +125,7 @@ function while_let.$init_test_ns_while_let_while_let(registry: <unresolved type 
     return
 }
 
-function while_let.Counter.next(self: <unresolved type #67729182886901>) -> int | null {
+function while_let.Counter.next(self: while_let.Counter) -> int | null {
     load_var self
     copy 0
     load_field .calls

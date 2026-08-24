@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function typed_inputs.$init_test_ns_typed_inputs_typed_inputs(registry: <unresolved type #49679510787122>) -> null {
+function typed_inputs.$init_test_ns_typed_inputs_typed_inputs(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.typed_inputs"
     load_const "int_input"
@@ -131,7 +131,7 @@ function typed_inputs.is_null(x: int | null) -> bool {
     return
 }
 
-function typed_inputs.magnitude_squared(p: <unresolved type #58147801309864>) -> int {
+function typed_inputs.magnitude_squared(p: typed_inputs.Point) -> int {
     load_var p
     load_field .x
     load_var p

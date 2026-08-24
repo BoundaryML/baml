@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function generic_match_rigid.$init_test_ns_generic_match_rigid_generic_match_rigid(registry: <unresolved type #49679510787122>) -> null {
+function generic_match_rigid.$init_test_ns_generic_match_rigid_generic_match_rigid(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.generic_match_rigid"
     load_const "class_generic_match_matches_realized_instantiation"
@@ -181,7 +181,7 @@ function generic_match_rigid.$init_test_ns_generic_match_rigid_generic_match_rig
     return
 }
 
-function generic_match_rigid.RigidBox.is_own(self: <unresolved type #130018130872951><#0>, other: <unresolved type #130018130872951><int> | int) -> bool {
+function generic_match_rigid.RigidBox.is_own(self: generic_match_rigid.RigidBox<#0>, other: generic_match_rigid.RigidBox<int> | int) -> bool {
     load_var other
     is_type generic_match_rigid.RigidBox<...>
     pop_jump_if_false L0
@@ -198,7 +198,7 @@ function generic_match_rigid.RigidBox.is_own(self: <unresolved type #13001813087
     return
 }
 
-function generic_match_rigid.RigidBox.match_own(self: <unresolved type #130018130872951><#0>, other: <unresolved type #130018130872951><int> | int) -> string {
+function generic_match_rigid.RigidBox.match_own(self: generic_match_rigid.RigidBox<#0>, other: generic_match_rigid.RigidBox<int> | int) -> string {
     load_var other
     store_var _3
     load_var _3
@@ -217,7 +217,7 @@ function generic_match_rigid.RigidBox.match_own(self: <unresolved type #13001813
     return
 }
 
-function generic_match_rigid.RigidTagged.RigidMarked.tag(self: <unresolved type #49320984392006>) -> string {
+function generic_match_rigid.RigidTagged.RigidMarked.tag(self: generic_match_rigid.RigidTagged) -> string {
     load_const "tagged"
     return
 }
@@ -291,7 +291,7 @@ function generic_match_rigid.fn_generic_is_value_miss_fn() -> bool {
     return
 }
 
-function generic_match_rigid.is_rigid_box(x: <unresolved type #130018130872951><int> | int) -> bool {
+function generic_match_rigid.is_rigid_box(x: generic_match_rigid.RigidBox<int> | int) -> bool {
     load_var x
     is_type generic_match_rigid.RigidBox<...>
     pop_jump_if_false L0
@@ -308,7 +308,7 @@ function generic_match_rigid.is_rigid_box(x: <unresolved type #130018130872951><
     return
 }
 
-function generic_match_rigid.pick_bounded(x: <unresolved type #49320984392006> | string) -> string {
+function generic_match_rigid.pick_bounded(x: generic_match_rigid.RigidTagged | string) -> string {
     load_var x
     store_var _2
     load_var _2
@@ -549,7 +549,7 @@ function generic_match_rigid.rigid_cell_hit_fn() -> string {
     return
 }
 
-function generic_match_rigid.rigid_cell_split(c: <unresolved type #6736272150402><int>) -> string {
+function generic_match_rigid.rigid_cell_split(c: generic_match_rigid.RigidCell<int>) -> string {
     load_var c
     is_type generic_match_rigid.RigidCell<...>
     pop_jump_if_false L0
@@ -609,7 +609,7 @@ function generic_match_rigid.rigid_row_hit_fn() -> string {
     return
 }
 
-function generic_match_rigid.rigid_row_split(r: <unresolved type #21167784666142>) -> string {
+function generic_match_rigid.rigid_row_split(r: generic_match_rigid.RigidRow) -> string {
     load_var r
     is_type generic_match_rigid.RigidRow
     pop_jump_if_false L0

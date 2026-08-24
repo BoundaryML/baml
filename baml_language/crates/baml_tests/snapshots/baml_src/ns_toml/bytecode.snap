@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function toml.$init_test_ns_toml_toml(registry: <unresolved type #49679510787122>) -> null {
+function toml.$init_test_ns_toml_toml(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.toml"
     load_const "toml_parse_scalars"

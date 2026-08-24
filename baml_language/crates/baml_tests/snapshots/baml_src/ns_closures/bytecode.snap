@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function closures.$init_test_ns_closures_closures(registry: <unresolved type #49679510787122>) -> null {
+function closures.$init_test_ns_closures_closures(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.closures"
     load_const "bound_formatter_mapper"
@@ -76,13 +76,13 @@ function closures.$init_test_ns_closures_closures(registry: <unresolved type #49
     return
 }
 
-function closures.ClsBox.unwrap(self: <unresolved type #125290312154873><#0>) -> #0 {
+function closures.ClsBox.unwrap(self: closures.ClsBox<#0>) -> #0 {
     load_var self
     load_field .value
     return
 }
 
-function closures.ClsCalculator.compute(self: <unresolved type #87694126175288>, a: int, b: int) -> int {
+function closures.ClsCalculator.compute(self: closures.ClsCalculator, a: int, b: int) -> int {
     load_var self
     load_field .op
     load_const "add"
@@ -103,7 +103,7 @@ function closures.ClsCalculator.compute(self: <unresolved type #87694126175288>,
     return
 }
 
-function closures.ClsCounter.increment(self: <unresolved type #109967214599172>) -> int {
+function closures.ClsCounter.increment(self: closures.ClsCounter) -> int {
     load_var self
     copy 0
     load_field .value
@@ -115,7 +115,7 @@ function closures.ClsCounter.increment(self: <unresolved type #109967214599172>)
     return
 }
 
-function closures.ClsEmployee.full_name(self: <unresolved type #136285641947280>) -> string {
+function closures.ClsEmployee.full_name(self: closures.ClsEmployee) -> string {
     load_var self
     load_field .first
     load_const " "
@@ -126,7 +126,7 @@ function closures.ClsEmployee.full_name(self: <unresolved type #136285641947280>
     return
 }
 
-function closures.ClsEmployee2.greet(self: <unresolved type #66756998257502>, greeting: string) -> string {
+function closures.ClsEmployee2.greet(self: closures.ClsEmployee2, greeting: string) -> string {
     load_var greeting
     load_const ", "
     bin_op +
@@ -136,7 +136,7 @@ function closures.ClsEmployee2.greet(self: <unresolved type #66756998257502>, gr
     return
 }
 
-function closures.ClsEncoder.encode(self: <unresolved type #102023321405640>, data: string) -> string {
+function closures.ClsEncoder.encode(self: closures.ClsEncoder, data: string) -> string {
     load_const "["
     load_var self
     load_field .charset
@@ -148,7 +148,7 @@ function closures.ClsEncoder.encode(self: <unresolved type #102023321405640>, da
     return
 }
 
-function closures.ClsFormatter.format(self: <unresolved type #28465322509822>, text: string) -> string {
+function closures.ClsFormatter.format(self: closures.ClsFormatter, text: string) -> string {
     load_var self
     load_field .prefix
     load_var text
@@ -156,7 +156,7 @@ function closures.ClsFormatter.format(self: <unresolved type #28465322509822>, t
     return
 }
 
-function closures.ClsRangeCheck.is_valid(self: <unresolved type #13857079681895>, n: int) -> bool {
+function closures.ClsRangeCheck.is_valid(self: closures.ClsRangeCheck, n: int) -> bool {
     load_var2 2 1
     load_field .min
     cmp_int_op >=
@@ -170,7 +170,7 @@ function closures.ClsRangeCheck.is_valid(self: <unresolved type #13857079681895>
     return
 }
 
-function closures.ClsWorker.risky(self: <unresolved type #62014738271430>, value: int) -> int {
+function closures.ClsWorker.risky(self: closures.ClsWorker, value: int) -> int {
     load_var value
     load_const 0
     cmp_int_op <

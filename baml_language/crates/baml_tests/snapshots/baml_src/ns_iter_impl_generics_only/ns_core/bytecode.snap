@@ -1,12 +1,12 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function iter_impl_generics_only.core.ArrayIterator.Iterable<T, never>.iter(self: <unresolved type #85831535545317><#0>) -> <unresolved type #17659376574868><#0, never> {
+function iter_impl_generics_only.core.ArrayIterator.Iterable<T, never>.iter(self: iter_impl_generics_only.core.ArrayIterator<#0>) -> iter_impl_generics_only.core.Iterator<#0, never> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.ArrayIterator.Iterator<T, never>.next(self: <unresolved type #85831535545317><#0>) -> #0 | <unresolved type #108022584400246> {
+function iter_impl_generics_only.core.ArrayIterator.Iterator<T, never>.next(self: iter_impl_generics_only.core.ArrayIterator<#0>) -> #0 | iter_impl_generics_only.core.Done {
     load_type #0
     load_var self
     load_field .arr
@@ -37,7 +37,7 @@ function iter_impl_generics_only.core.ArrayIterator.Iterator<T, never>.next(self
     return
 }
 
-function iter_impl_generics_only.core.ArrayIterator.new(arr: #0[]) -> <unresolved type #85831535545317><#0> {
+function iter_impl_generics_only.core.ArrayIterator.new(arr: #0[]) -> iter_impl_generics_only.core.ArrayIterator<#0> {
     load_var arr
     container_len
     store_var _3
@@ -52,12 +52,12 @@ function iter_impl_generics_only.core.ArrayIterator.new(arr: #0[]) -> <unresolve
     return
 }
 
-function iter_impl_generics_only.core.Chain.Iterable<T, E>.iter(self: <unresolved type #136410658253003><#0, #1>) -> <unresolved type #17659376574868><#0, #1> {
+function iter_impl_generics_only.core.Chain.Iterable<T, E>.iter(self: iter_impl_generics_only.core.Chain<#0, #1>) -> iter_impl_generics_only.core.Iterator<#0, #1> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Chain.Iterator<T, E>.next(self: <unresolved type #136410658253003><#0, #1>) -> #0 | <unresolved type #108022584400246> {
+function iter_impl_generics_only.core.Chain.Iterator<T, E>.next(self: iter_impl_generics_only.core.Chain<#0, #1>) -> #0 | iter_impl_generics_only.core.Done {
     load_var self
     load_field .first_done
     unary_op !
@@ -93,12 +93,12 @@ function iter_impl_generics_only.core.Chain.Iterator<T, E>.next(self: <unresolve
     return
 }
 
-function iter_impl_generics_only.core.Filter.Iterable<T, E | E2>.iter(self: <unresolved type #103792095102504><#0, #1, #2>) -> <unresolved type #17659376574868><#0, #1 | #2> {
+function iter_impl_generics_only.core.Filter.Iterable<T, E | E2>.iter(self: iter_impl_generics_only.core.Filter<#0, #1, #2>) -> iter_impl_generics_only.core.Iterator<#0, #1 | #2> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Filter.Iterator<T, E | E2>.next(self: <unresolved type #103792095102504><#0, #1, #2>) -> #0 | <unresolved type #108022584400246> {
+function iter_impl_generics_only.core.Filter.Iterator<T, E | E2>.next(self: iter_impl_generics_only.core.Filter<#0, #1, #2>) -> #0 | iter_impl_generics_only.core.Done {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -137,12 +137,12 @@ function iter_impl_generics_only.core.Filter.Iterator<T, E | E2>.next(self: <unr
     return
 }
 
-function iter_impl_generics_only.core.FilterMap.Iterable<R, E | E2>.iter(self: <unresolved type #4122610599694><#0, #1, #2, #3>) -> <unresolved type #17659376574868><#1, #2 | #3> {
+function iter_impl_generics_only.core.FilterMap.Iterable<R, E | E2>.iter(self: iter_impl_generics_only.core.FilterMap<#0, #1, #2, #3>) -> iter_impl_generics_only.core.Iterator<#1, #2 | #3> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.FilterMap.Iterator<R, E | E2>.next(self: <unresolved type #4122610599694><#0, #1, #2, #3>) -> #1 | <unresolved type #108022584400246> {
+function iter_impl_generics_only.core.FilterMap.Iterator<R, E | E2>.next(self: iter_impl_generics_only.core.FilterMap<#0, #1, #2, #3>) -> #1 | iter_impl_generics_only.core.Done {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -186,12 +186,12 @@ function iter_impl_generics_only.core.FilterMap.Iterator<R, E | E2>.next(self: <
     return
 }
 
-function iter_impl_generics_only.core.FlatMap.Iterable<R, E | E2 | E3>.iter(self: <unresolved type #23923942011053><#0, #1, #2, #3, #4>) -> <unresolved type #17659376574868><#1, #2 | #3 | #4> {
+function iter_impl_generics_only.core.FlatMap.Iterable<R, E | E2 | E3>.iter(self: iter_impl_generics_only.core.FlatMap<#0, #1, #2, #3, #4>) -> iter_impl_generics_only.core.Iterator<#1, #2 | #3 | #4> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self: <unresolved type #23923942011053><#0, #1, #2, #3, #4>) -> #1 | <unresolved type #108022584400246> {
+function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self: iter_impl_generics_only.core.FlatMap<#0, #1, #2, #3, #4>) -> #1 | iter_impl_generics_only.core.Done {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -270,12 +270,12 @@ function iter_impl_generics_only.core.FlatMap.Iterator<R, E | E2 | E3>.next(self
     unreachable
 }
 
-function iter_impl_generics_only.core.Flatten.Iterable<R, E | E3>.iter(self: <unresolved type #16229418835216><#0, #1, #2>) -> <unresolved type #17659376574868><#0, #1 | #2> {
+function iter_impl_generics_only.core.Flatten.Iterable<R, E | E3>.iter(self: iter_impl_generics_only.core.Flatten<#0, #1, #2>) -> iter_impl_generics_only.core.Iterator<#0, #1 | #2> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: <unresolved type #16229418835216><#0, #1, #2>) -> #0 | <unresolved type #108022584400246> {
+function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: iter_impl_generics_only.core.Flatten<#0, #1, #2>) -> #0 | iter_impl_generics_only.core.Done {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -352,7 +352,7 @@ function iter_impl_generics_only.core.Flatten.Iterator<R, E | E3>.next(self: <un
     unreachable
 }
 
-function iter_impl_generics_only.core.Iterator.chain(self: <unresolved type #17659376574868><#1, #2>, other: <unresolved type #17659376574868><#1, #2>) -> <unresolved type #17659376574868><#1, #2> {
+function iter_impl_generics_only.core.Iterator.chain(self: iter_impl_generics_only.core.Iterator<#1, #2>, other: iter_impl_generics_only.core.Iterator<#1, #2>) -> iter_impl_generics_only.core.Iterator<#1, #2> {
     load_var2 1 2
     load_const false
     load_type #1
@@ -361,7 +361,7 @@ function iter_impl_generics_only.core.Iterator.chain(self: <unresolved type #176
     return
 }
 
-function iter_impl_generics_only.core.Iterator.collect(self: <unresolved type #17659376574868><#1, #2>) -> #1[] {
+function iter_impl_generics_only.core.Iterator.collect(self: iter_impl_generics_only.core.Iterator<#1, #2>) -> #1[] {
     load_type #1
     alloc_array 0
     store_var r
@@ -391,7 +391,7 @@ function iter_impl_generics_only.core.Iterator.collect(self: <unresolved type #1
     return
 }
 
-function iter_impl_generics_only.core.Iterator.count(self: <unresolved type #17659376574868><#1, #2>) -> int {
+function iter_impl_generics_only.core.Iterator.count(self: iter_impl_generics_only.core.Iterator<#1, #2>) -> int {
     load_const 0
     store_var n
 
@@ -420,7 +420,7 @@ function iter_impl_generics_only.core.Iterator.count(self: <unresolved type #176
     return
 }
 
-function iter_impl_generics_only.core.Iterator.every(self: <unresolved type #17659376574868><#1, #2>, predicate: (#1) -> bool throws #3) -> bool {
+function iter_impl_generics_only.core.Iterator.every(self: iter_impl_generics_only.core.Iterator<#1, #2>, predicate: (#1) -> bool throws #3) -> bool {
   L0:
     load_const true
     pop_jump_if_false L2
@@ -449,7 +449,7 @@ function iter_impl_generics_only.core.Iterator.every(self: <unresolved type #176
     return
 }
 
-function iter_impl_generics_only.core.Iterator.filter(self: <unresolved type #17659376574868><#1, #2>, predicate: (#1) -> bool throws #3) -> <unresolved type #17659376574868><#1, #2 | #3> {
+function iter_impl_generics_only.core.Iterator.filter(self: iter_impl_generics_only.core.Iterator<#1, #2>, predicate: (#1) -> bool throws #3) -> iter_impl_generics_only.core.Iterator<#1, #2 | #3> {
     load_var2 1 2
     load_type #1
     load_type #2
@@ -458,7 +458,7 @@ function iter_impl_generics_only.core.Iterator.filter(self: <unresolved type #17
     return
 }
 
-function iter_impl_generics_only.core.Iterator.filter_map(self: <unresolved type #17659376574868><#1, #2>, fn: (#1) -> #3 | null throws #4) -> <unresolved type #17659376574868><#3, #2 | #4> {
+function iter_impl_generics_only.core.Iterator.filter_map(self: iter_impl_generics_only.core.Iterator<#1, #2>, fn: (#1) -> #3 | null throws #4) -> iter_impl_generics_only.core.Iterator<#3, #2 | #4> {
     load_var2 1 2
     load_type #1
     load_type #3
@@ -468,7 +468,7 @@ function iter_impl_generics_only.core.Iterator.filter_map(self: <unresolved type
     return
 }
 
-function iter_impl_generics_only.core.Iterator.find(self: <unresolved type #17659376574868><#1, #2>, predicate: (#1) -> bool throws #3) -> #1 | null {
+function iter_impl_generics_only.core.Iterator.find(self: iter_impl_generics_only.core.Iterator<#1, #2>, predicate: (#1) -> bool throws #3) -> #1 | null {
   L0:
     load_const true
     pop_jump_if_false L2
@@ -498,7 +498,7 @@ function iter_impl_generics_only.core.Iterator.find(self: <unresolved type #1765
     return
 }
 
-function iter_impl_generics_only.core.Iterator.flat_map(self: <unresolved type #17659376574868><#1, #2>, fn: (#1) -> <unresolved type #23158451024568><#3, #5> throws #4) -> <unresolved type #17659376574868><#3, #2 | #4 | #5> {
+function iter_impl_generics_only.core.Iterator.flat_map(self: iter_impl_generics_only.core.Iterator<#1, #2>, fn: (#1) -> iter_impl_generics_only.core.Iterable<#3, #5> throws #4) -> iter_impl_generics_only.core.Iterator<#3, #2 | #4 | #5> {
     load_var2 1 2
     alloc_instance user.iter_impl_generics_only.core.Done
     load_type #1
@@ -510,7 +510,7 @@ function iter_impl_generics_only.core.Iterator.flat_map(self: <unresolved type #
     return
 }
 
-function iter_impl_generics_only.core.Iterator.map(self: <unresolved type #17659376574868><#1, #2>, fn: (#1) -> #3 throws #4) -> <unresolved type #17659376574868><#3, #2 | #4> {
+function iter_impl_generics_only.core.Iterator.map(self: iter_impl_generics_only.core.Iterator<#1, #2>, fn: (#1) -> #3 throws #4) -> iter_impl_generics_only.core.Iterator<#3, #2 | #4> {
     load_var2 1 2
     load_type #1
     load_type #3
@@ -520,7 +520,7 @@ function iter_impl_generics_only.core.Iterator.map(self: <unresolved type #17659
     return
 }
 
-function iter_impl_generics_only.core.Iterator.peekable(self: <unresolved type #17659376574868><#1, #2>) -> <unresolved type #64705004566249><#1, #2> {
+function iter_impl_generics_only.core.Iterator.peekable(self: iter_impl_generics_only.core.Iterator<#1, #2>) -> iter_impl_generics_only.core.Peekable<#1, #2> {
     load_var self
     alloc_instance user.iter_impl_generics_only.core.Done
     load_const false
@@ -530,7 +530,7 @@ function iter_impl_generics_only.core.Iterator.peekable(self: <unresolved type #
     return
 }
 
-function iter_impl_generics_only.core.Iterator.reduce(self: <unresolved type #17659376574868><#1, #2>, fn: (#3, #1) -> #3 throws #4, initial: #3) -> #3 {
+function iter_impl_generics_only.core.Iterator.reduce(self: iter_impl_generics_only.core.Iterator<#1, #2>, fn: (#3, #1) -> #3 throws #4, initial: #3) -> #3 {
     load_var initial
     store_var acc
 
@@ -559,7 +559,7 @@ function iter_impl_generics_only.core.Iterator.reduce(self: <unresolved type #17
     return
 }
 
-function iter_impl_generics_only.core.Iterator.some(self: <unresolved type #17659376574868><#1, #2>, predicate: (#1) -> bool throws #3) -> bool {
+function iter_impl_generics_only.core.Iterator.some(self: iter_impl_generics_only.core.Iterator<#1, #2>, predicate: (#1) -> bool throws #3) -> bool {
   L0:
     load_const true
     pop_jump_if_false L2
@@ -587,7 +587,7 @@ function iter_impl_generics_only.core.Iterator.some(self: <unresolved type #1765
     return
 }
 
-function iter_impl_generics_only.core.Iterator.step_by(self: <unresolved type #17659376574868><#1, #2>, n: int) -> <unresolved type #17659376574868><#1, #2> {
+function iter_impl_generics_only.core.Iterator.step_by(self: iter_impl_generics_only.core.Iterator<#1, #2>, n: int) -> iter_impl_generics_only.core.Iterator<#1, #2> {
     load_var2 1 2
     load_const true
     load_type #1
@@ -596,12 +596,12 @@ function iter_impl_generics_only.core.Iterator.step_by(self: <unresolved type #1
     return
 }
 
-function iter_impl_generics_only.core.Map.Iterable<R, E | E2>.iter(self: <unresolved type #26507111056600><#0, #1, #2, #3>) -> <unresolved type #17659376574868><#1, #2 | #3> {
+function iter_impl_generics_only.core.Map.Iterable<R, E | E2>.iter(self: iter_impl_generics_only.core.Map<#0, #1, #2, #3>) -> iter_impl_generics_only.core.Iterator<#1, #2 | #3> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Map.Iterator<R, E | E2>.next(self: <unresolved type #26507111056600><#0, #1, #2, #3>) -> #1 | <unresolved type #108022584400246> {
+function iter_impl_generics_only.core.Map.Iterator<R, E | E2>.next(self: iter_impl_generics_only.core.Map<#0, #1, #2, #3>) -> #1 | iter_impl_generics_only.core.Done {
     load_var self
     load_field .iter
     load_type iter_impl_generics_only.core.Iterator<#0, #2>
@@ -626,25 +626,25 @@ function iter_impl_generics_only.core.Map.Iterator<R, E | E2>.next(self: <unreso
     return
 }
 
-function iter_impl_generics_only.core.OutOfBodyBox.new(value: #0) -> <unresolved type #107921579921068><#0> {
+function iter_impl_generics_only.core.OutOfBodyBox.new(value: #0) -> iter_impl_generics_only.core.OutOfBodyBox<#0> {
     load_var value
     load_type #0
     init_instance<1> user.iter_impl_generics_only.core.OutOfBodyBox .value
     return
 }
 
-function iter_impl_generics_only.core.OutOfBodyValue<T>$for$OutOfBodyBox<T>.get(self: <unresolved type #107921579921068><#0>) -> #0 {
+function iter_impl_generics_only.core.OutOfBodyValue<T>$for$OutOfBodyBox<T>.get(self: iter_impl_generics_only.core.OutOfBodyBox<#0>) -> #0 {
     load_var self
     load_field .value
     return
 }
 
-function iter_impl_generics_only.core.Peekable.Iterable<T, E>.iter(self: <unresolved type #64705004566249><#0, #1>) -> <unresolved type #17659376574868><#0, #1> {
+function iter_impl_generics_only.core.Peekable.Iterable<T, E>.iter(self: iter_impl_generics_only.core.Peekable<#0, #1>) -> iter_impl_generics_only.core.Iterator<#0, #1> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Peekable.Iterator<T, E>.next(self: <unresolved type #64705004566249><#0, #1>) -> #0 | <unresolved type #108022584400246> {
+function iter_impl_generics_only.core.Peekable.Iterator<T, E>.next(self: iter_impl_generics_only.core.Peekable<#0, #1>) -> #0 | iter_impl_generics_only.core.Done {
     load_var self
     load_field .has_buffer
     pop_jump_if_false L0
@@ -674,7 +674,7 @@ function iter_impl_generics_only.core.Peekable.Iterator<T, E>.next(self: <unreso
     return
 }
 
-function iter_impl_generics_only.core.Peekable.peek(self: <unresolved type #64705004566249><#0, #1>) -> #0 | <unresolved type #108022584400246> {
+function iter_impl_generics_only.core.Peekable.peek(self: iter_impl_generics_only.core.Peekable<#0, #1>) -> #0 | iter_impl_generics_only.core.Done {
     load_var self
     load_field .has_buffer
     pop_jump_if_false L0
@@ -703,12 +703,12 @@ function iter_impl_generics_only.core.Peekable.peek(self: <unresolved type #6470
     return
 }
 
-function iter_impl_generics_only.core.Range.Iterable<int, never>.iter(self: <unresolved type #118589693567899>) -> <unresolved type #17659376574868><int, never> {
+function iter_impl_generics_only.core.Range.Iterable<int, never>.iter(self: iter_impl_generics_only.core.Range) -> iter_impl_generics_only.core.Iterator<int, never> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Range.Iterator<int, never>.next(self: <unresolved type #118589693567899>) -> int | <unresolved type #108022584400246> {
+function iter_impl_generics_only.core.Range.Iterator<int, never>.next(self: iter_impl_generics_only.core.Range) -> int | iter_impl_generics_only.core.Done {
     load_var self
     load_field .i
     load_var self
@@ -738,7 +738,7 @@ function iter_impl_generics_only.core.Range.Iterator<int, never>.next(self: <unr
     return
 }
 
-function iter_impl_generics_only.core.Range.new(min: int, max: int, step: int) -> <unresolved type #118589693567899> {
+function iter_impl_generics_only.core.Range.new(min: int, max: int, step: int) -> iter_impl_generics_only.core.Range {
     load_var step
     load_const <omitted>
     cmp_op ==
@@ -753,12 +753,12 @@ function iter_impl_generics_only.core.Range.new(min: int, max: int, step: int) -
     return
 }
 
-function iter_impl_generics_only.core.Repeat.Iterable<T, never>.iter(self: <unresolved type #139444523084457><#0>) -> <unresolved type #17659376574868><#0, never> {
+function iter_impl_generics_only.core.Repeat.Iterable<T, never>.iter(self: iter_impl_generics_only.core.Repeat<#0>) -> iter_impl_generics_only.core.Iterator<#0, never> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.Repeat.Iterator<T, never>.next(self: <unresolved type #139444523084457><#0>) -> #0 | <unresolved type #108022584400246> {
+function iter_impl_generics_only.core.Repeat.Iterator<T, never>.next(self: iter_impl_generics_only.core.Repeat<#0>) -> #0 | iter_impl_generics_only.core.Done {
     load_var self
     load_field .count
     load_const 0
@@ -797,7 +797,7 @@ function iter_impl_generics_only.core.Repeat.Iterator<T, never>.next(self: <unre
     return
 }
 
-function iter_impl_generics_only.core.Repeat.new(value: #0, count: int) -> <unresolved type #139444523084457><#0> {
+function iter_impl_generics_only.core.Repeat.new(value: #0, count: int) -> iter_impl_generics_only.core.Repeat<#0> {
     load_var count
     load_const <omitted>
     cmp_op ==
@@ -812,12 +812,12 @@ function iter_impl_generics_only.core.Repeat.new(value: #0, count: int) -> <unre
     return
 }
 
-function iter_impl_generics_only.core.StepBy.Iterable<T, E>.iter(self: <unresolved type #97794561062249><#0, #1>) -> <unresolved type #17659376574868><#0, #1> {
+function iter_impl_generics_only.core.StepBy.Iterable<T, E>.iter(self: iter_impl_generics_only.core.StepBy<#0, #1>) -> iter_impl_generics_only.core.Iterator<#0, #1> {
     load_var self
     return
 }
 
-function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: <unresolved type #97794561062249><#0, #1>) -> #0 | <unresolved type #108022584400246> {
+function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: iter_impl_generics_only.core.StepBy<#0, #1>) -> #0 | iter_impl_generics_only.core.Done {
     load_var self
     load_field .first
     pop_jump_if_false L0
@@ -881,7 +881,7 @@ function iter_impl_generics_only.core.StepBy.Iterator<T, E>.next(self: <unresolv
     return
 }
 
-function iter_impl_generics_only.core.flatten(src: <unresolved type #17659376574868><<unresolved type #23158451024568><#0, #2>, #1>) -> <unresolved type #17659376574868><#0, #1 | #2> {
+function iter_impl_generics_only.core.flatten(src: iter_impl_generics_only.core.Iterator<iter_impl_generics_only.core.Iterable<#0, #2>, #1>) -> iter_impl_generics_only.core.Iterator<#0, #1 | #2> {
     load_var src
     alloc_instance user.iter_impl_generics_only.core.Done
     load_type #0

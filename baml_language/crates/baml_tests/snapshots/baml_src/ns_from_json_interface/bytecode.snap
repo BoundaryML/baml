@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function from_json_interface.$init_test_ns_from_json_interface_from_json_interface(registry: <unresolved type #49679510787122>) -> null {
+function from_json_interface.$init_test_ns_from_json_interface_from_json_interface(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.from_json_interface"
     load_const "to_dispatches_fromjson_override"
@@ -62,7 +62,7 @@ function from_json_interface.$init_test_ns_from_json_interface_from_json_interfa
     return
 }
 
-function from_json_interface.Inner.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #49791833528509> {
+function from_json_interface.Inner.baml.FromJson.from_json(j: baml.json.json) -> from_json_interface.Inner {
     load_var j
     load_const "wrapped"
     call baml.json.field
@@ -74,7 +74,7 @@ function from_json_interface.Inner.baml.FromJson.from_json(j: <unresolved type #
     return
 }
 
-function from_json_interface.Temp.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #64755859308541> {
+function from_json_interface.Temp.baml.FromJson.from_json(j: baml.json.json) -> from_json_interface.Temp {
     load_var j
     load_const "c"
     call baml.json.field
@@ -86,7 +86,7 @@ function from_json_interface.Temp.baml.FromJson.from_json(j: <unresolved type #1
     return
 }
 
-function from_json_interface.TempCelsius.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #138232190042699> {
+function from_json_interface.TempCelsius.baml.FromJson.from_json(j: baml.json.json) -> from_json_interface.TempCelsius {
     load_var j
     load_const "celsius"
     call baml.json.field
