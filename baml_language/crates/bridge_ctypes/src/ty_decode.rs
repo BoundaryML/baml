@@ -14,17 +14,23 @@ use baml_type::{
     Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, RuntimeFunctionParamTy,
     RuntimeInterface, RuntimeTy, TyAttr, TypeName,
 };
-use bex_project::{BexExternalAdt, BexExternalValue};
+use bex_project::{BexExternalAdt, BexExternalValue, TypeDefRef};
 use indexmap::IndexMap;
 
 use crate::{
     baml_bridge::cffi::{
-        BamlTy, BamlTyArg, BamlTyFunctionParam, BamlTyFunctionParamMode, BamlTyMediaKind,
-        BamlTyPrimitiveKind, baml_ty::Ty as TyVariant,
+        BamlTy, BamlTyArg, BamlTyDef, BamlTyFunctionParam, BamlTyFunctionParamMode,
+        BamlTyMediaKind, BamlTyMetadata, BamlTyPrimitiveKind, baml_ty::Ty as TyVariant,
         baml_ty_literal::Literal as TyLiteralVariant,
     },
     error::CtypesError,
 };
+
+#[derive(Debug, Default)]
+pub struct DecodedTypeArgs {
+    pub type_args: IndexMap<String, RuntimeTy>,
+    pub type_defs: IndexMap<String, bex_project::PortableTypeDef>,
+}
 
 /// Decode `CallFunctionArgs.type_args` (a list of named `BamlTyArg`s) into a
 /// `TypeVar name -> concrete RuntimeTy` map, preserving wire order (the map's
@@ -33,19 +39,142 @@ use crate::{
 /// [`proto_ty_to_runtime_ty`]'s rollout-safe default. A repeated `type_var`
 /// keeps the last binding. The engine resolves the names against the callee's
 /// generic params when seeding the entry frame.
-pub fn proto_ty_args_to_named(
-    type_args: &[BamlTyArg],
-) -> Result<IndexMap<String, RuntimeTy>, CtypesError> {
-    type_args
-        .iter()
-        .map(|arg| {
+pub fn proto_ty_args_to_named(type_args: &[BamlTyArg]) -> Result<DecodedTypeArgs, CtypesError> {
+    let mut decoded = DecodedTypeArgs::default();
+    for arg in type_args {
+        if let Some(definition) = arg.type_definition.as_ref() {
+            let definition = proto_ty_def_to_portable(definition)?;
+            decoded
+                .type_args
+                .insert(arg.type_var.clone(), definition.root.clone());
+            decoded.type_defs.insert(arg.type_var.clone(), definition);
+        } else {
             let ty = match arg.type_value.as_ref() {
                 Some(ty) => proto_ty_to_runtime_ty(ty)?,
                 None => RuntimeTy::unknown(),
             };
-            Ok((arg.type_var.clone(), ty))
-        })
-        .collect()
+            decoded.type_args.insert(arg.type_var.clone(), ty);
+        }
+    }
+    Ok(decoded)
+}
+
+pub fn proto_ty_def_to_portable(
+    definition: &BamlTyDef,
+) -> Result<bex_project::PortableTypeDef, CtypesError> {
+    use bex_project::{
+        DynWitnessDef, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
+        PortableEnumVariantDef, PortableMetadata, PortableTypeDef,
+    };
+    let metadata = |value: Option<&BamlTyMetadata>| {
+        let value = value.cloned().unwrap_or_default();
+        PortableMetadata {
+            description: value.description,
+            alias: value.alias,
+            docstring: value.docstring,
+            other: value.other.into_iter().collect(),
+        }
+    };
+    Ok(PortableTypeDef {
+        root: match definition.root.as_ref() {
+            Some(root) => proto_ty_to_runtime_ty(root)?,
+            None => RuntimeTy::unknown(),
+        },
+        classes: definition
+            .classes
+            .iter()
+            .map(|class| {
+                Ok(PortableClassDef {
+                    name: TypeName::from_dotted_path(&class.name),
+                    fields: class
+                        .fields
+                        .iter()
+                        .map(|field| {
+                            Ok(PortableClassFieldDef {
+                                name: field.name.clone(),
+                                ty: match field.ty.as_ref() {
+                                    Some(ty) => proto_ty_to_runtime_ty(ty)?,
+                                    None => RuntimeTy::unknown(),
+                                },
+                                metadata: metadata(field.metadata.as_ref()),
+                                skip: field.skip,
+                            })
+                        })
+                        .collect::<Result<Vec<_>, CtypesError>>()?,
+                    metadata: metadata(class.metadata.as_ref()),
+                    generic_param_count: usize::try_from(class.generic_param_count)
+                        .unwrap_or(usize::MAX),
+                })
+            })
+            .collect::<Result<Vec<_>, CtypesError>>()?,
+        enums: definition
+            .enums
+            .iter()
+            .map(|enm| PortableEnumDef {
+                name: TypeName::from_dotted_path(&enm.name),
+                variants: enm
+                    .variants
+                    .iter()
+                    .map(|variant| PortableEnumVariantDef {
+                        name: variant.name.clone(),
+                        metadata: metadata(variant.metadata.as_ref()),
+                        skip: variant.skip,
+                    })
+                    .collect(),
+                metadata: metadata(enm.metadata.as_ref()),
+            })
+            .collect(),
+        witnesses: definition
+            .witnesses
+            .iter()
+            .map(|witness| {
+                let realized = |ty: &BamlTy, position: &str| {
+                    let runtime = proto_ty_to_runtime_ty(ty)?;
+                    baml_type::RealizedTy::try_from(runtime).map_err(|error| {
+                        CtypesError::InternalError(format!(
+                            "host type definition witness {position} is not realized: {error}"
+                        ))
+                    })
+                };
+                Ok(DynWitnessDef {
+                    interface: TypeName::from_dotted_path(&witness.interface),
+                    interface_args: witness
+                        .interface_args
+                        .iter()
+                        .map(|ty| realized(ty, "interface argument"))
+                        .collect::<Result<Vec<_>, _>>()?,
+                    associated_types: witness
+                        .associated_types
+                        .iter()
+                        .map(|binding| {
+                            Ok((
+                                Name::new(&binding.name),
+                                realized(
+                                    binding.ty.as_ref().ok_or_else(|| {
+                                        CtypesError::InternalError(
+                                            "host type definition witness associated type is missing its type"
+                                                .to_string(),
+                                        )
+                                    })?,
+                                    "associated type",
+                                )?,
+                            ))
+                        })
+                        .collect::<Result<Vec<_>, CtypesError>>()?,
+                    field_links: witness
+                        .field_links
+                        .iter()
+                        .map(|link| {
+                            (
+                                Name::new(&link.interface_field),
+                                Name::new(&link.class_field),
+                            )
+                        })
+                        .collect(),
+                })
+            })
+            .collect::<Result<Vec<_>, CtypesError>>()?,
+    })
 }
 
 /// Convert a wire `BamlTy` into a `RuntimeTy`. A `BamlTy` with no variant set decodes
@@ -180,9 +309,32 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
 
 /// Decode a wire `BamlTy` into a `type`-valued external value (for
 /// `InboundValue.ty_value`).
+///
+/// The wire carries names, and the engine's lane carries identities — but for
+/// a *compiled* declaration the identity is content-addressed from exactly
+/// that name, so this recovers the tag emit assigned rather than inventing
+/// one. A name no declaration bears yields a tag nothing matches, which fails
+/// at the lookup instead of binding to the wrong declaration.
+///
+/// A runtime-created declaration cannot arrive this way at all: its identity
+/// is a counter mint that no name reproduces. It has to cross as a handle, and
+/// that is the gap `BamlTypeHead` closes.
 pub fn proto_ty_to_external(ty: &BamlTy) -> Result<BexExternalValue, CtypesError> {
-    Ok(BexExternalValue::Adt(BexExternalAdt::Type(
-        proto_ty_to_runtime_ty(ty)?,
+    let named = proto_ty_to_runtime_ty(ty)?;
+    let lane = named
+        .try_map_heads(&mut |name: &baml_type::TypeName| {
+            Ok::<_, std::convert::Infallible>(baml_type::TaggedTypeName::new(
+                baml_type::typetag::TypeTag::of_head(&name.render_dotted(false)),
+                baml_type::DeclarationName::Declared(name.clone()),
+            ))
+        })
+        .unwrap_or_else(|never| match never {});
+    Ok(BexExternalValue::Adt(BexExternalAdt::Type(lane)))
+}
+
+pub fn proto_ty_def_to_external(ty: &BamlTyDef) -> Result<BexExternalValue, CtypesError> {
+    Ok(BexExternalValue::Adt(BexExternalAdt::TypeDef(
+        TypeDefRef::Portable(proto_ty_def_to_portable(ty)?),
     )))
 }
 
@@ -304,6 +456,44 @@ fn parse_decimal_bigint_literal_with_limits(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn portable_type_definition_round_trips_without_identity() {
+        use bex_project::{
+            PortableClassDef, PortableClassFieldDef, PortableMetadata, PortableTypeDef,
+        };
+        let name = TypeName::local(Name::new("Row"));
+        let metadata = PortableMetadata {
+            description: Some("row description".into()),
+            alias: None,
+            docstring: Some("docs".into()),
+            other: IndexMap::from([("x".into(), "y".into())]),
+        };
+        let definition = PortableTypeDef {
+            root: RuntimeTy::Class(name.clone(), Vec::new(), TyAttr::default()),
+            classes: vec![PortableClassDef {
+                name,
+                fields: vec![PortableClassFieldDef {
+                    name: "value".into(),
+                    ty: RuntimeTy::int(),
+                    metadata: metadata.clone(),
+                    skip: false,
+                }],
+                metadata,
+                generic_param_count: 0,
+            }],
+            enums: Vec::new(),
+            witnesses: vec![bex_project::DynWitnessDef {
+                interface: TypeName::from_dotted_path("user.RowLike"),
+                interface_args: vec![baml_type::RealizedTy::string()],
+                associated_types: vec![(Name::new("Item"), baml_type::RealizedTy::int())],
+                field_links: vec![(Name::new("item"), Name::new("value"))],
+            }],
+        };
+        let wire = crate::ty_encode::portable_type_def_to_proto(&definition);
+        let decoded = proto_ty_def_to_portable(&wire).expect("portable definition decodes");
+        assert_eq!(decoded, definition);
+    }
 
     #[test]
     fn oversized_bigint_literal_is_rejected_before_parse_without_echoing_input() {

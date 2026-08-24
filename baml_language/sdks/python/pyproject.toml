@@ -1,6 +1,6 @@
 [project]
 name = "baml_bridge"
-version = "0.15.0"
+version = "0.17.0"
 description = "BAML python bindings (new system, bex_engine)"
 authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
 license = "Apache-2.0"
@@ -39,7 +39,7 @@ dev = [
 ]
 
 [build-system]
-requires = ["maturin>=1.9.4,<2.0"]
+requires = ["maturin>=1.10,<2.0"]
 build-backend = "maturin"
 
 
@@ -48,6 +48,9 @@ python-source = "src"
 manifest-path = "rust/bridge_python/Cargo.toml"
 module-name = "baml_bridge.baml_py"
 include = [{ path = "src/baml_bridge/py.typed", format = ["sdist", "wheel"] }]
+# `editable-profile` affects only PEP 660 editable builds such as `uv sync`;
+# it does not affect `maturin build` or the release workflow.
+editable-profile = "dev"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

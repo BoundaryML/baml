@@ -1,20 +1,16 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 42520
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0096
 
   × this body may throw through callback `handler`, but declared throws is `never`. The callback type does not say what it can throw. If `handler` is an infallible host callback, annotate it with
   │ `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws.
-    ╭─[function_type_throws.baml:31:10]
+    ╭─[function_type_throws.baml:31:35]
  31 │   return (value: int) -> string { handler(value) }
-    ·          ─────────────────────────────────────────
+    ·                                   ───────
     ╰────
-  ╰─▶   ☞ this call forwards whatever callback `handler` throws
-         ╭─[function_type_throws.baml:1:1]
-       1 │ // Function types outside immediate callback-parameter position must declare
-         · ▲
-         ╰────
 
   [type] E0001
 
@@ -67,6 +63,15 @@ source: crates/baml_tests/src/generated_tests.rs
    ·            ╰── `void` not allowed here
    ╰────
 
+  [type] E0001
+
+  × mismatched types
+   ╭─[void_type_position_errors.baml:8:17]
+ 8 │   let x: void = 1;
+   ·                 ┬
+   ·                 ╰── expected `void`, found `1`
+   ╰────
+
   [hir] E0110
 
   × `void` can only be used as a function return type, not as a let binding annotation
@@ -74,6 +79,18 @@ source: crates/baml_tests/src/generated_tests.rs
  10 │   let y: void = {
     ·          ──┬─
     ·            ╰── `void` not allowed here
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[void_type_position_errors.baml:10:17]
+ 10 │ ╭─▶   let y: void = {
+ 11 │ │       // this should still be an error
+ 12 │ │       let z: int = "string";
+ 13 │ │       z
+ 14 │ ├─▶   };
+    · ╰──── expected `void`, found `int`
     ╰────
 
   [type] E0001

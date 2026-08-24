@@ -117,6 +117,45 @@ Other subtypes:
 
 In nearly all contexts, we can thus simplify types and maintain equivalence: `1 | int == int | 1 == int`, `anything | unknown == unknown`, `true | false == bool`, `Side.Left | Side.Right == Side` (enum), etc. The only exceptions are places like LLM function return types where the order affects the parsing. However, this should only matter in this one location based on explicit declaration for the SAP parser, and can still be treated the same for in-language type algebra.
 
+## Type Aliases and Recursive Types
+
+Type aliases are transparent (structural, not nominal): `type X = T` makes `X` the very same type as `T` in every context. The alias name is a spelling device, never an identity. Non-recursive aliases are expanded during lowering; only recursive aliases survive as named references, and the name still carries no identity of its own.
+
+### Equirecursive identity
+
+Recursive aliases are equirecursive μ-types over regular trees: a recursive alias denotes the unique regular tree obtained by unfolding its definition, and two types are the same type if and only if their trees are equal under the type algebra. Alias names, unfolding depth, and spelling never contribute identity:
+
+```baml
+type A = int | A[]
+type B = int | B[]
+// A and B are the same type: mutual subtypes, interchangeable everywhere.
+// So are `A`, `int | A[]`, and `int | (int | A[])[]` (partial unfoldings),
+// and mutually recursive definitions that unfold to the same tree.
+```
+
+### Values and membership
+
+BAML values are finite object graphs and may be self-referential (`let a: A = []; a.push(a);` is valid for `type A = A[]`). Membership checking never recurses over a value: every value carries (can trivially reconstruct) its concrete run-time type — for example, a list holds its element type as metadata, and writes into it are statically checked against that element type — so a value `v` is a member of type `T` if and only if `v`'s concrete type is a subtype of `T`. All recursion in the system lives in the type-level subtyping relation, which is decided coinductively over regular trees.
+
+### Productivity
+
+Because values can be self-referential, membership is not a well-founded judgment and subtyping over recursive types is coinductive. Coinductive derivations must be productive: every cycle in a derivation must pass through a type constructor. A self-supporting cycle ("`t <: A` because `t <: A`", reachable through an unguarded recursive union member) proves nothing. Consequently, an unguarded recursive union member contributes nothing to its type, and a fully unguarded cycle is uninhabited:
+
+```baml
+type A = A | A[]   // the same type as `type L = L[]`: the unguarded `A` member is vacuous
+type B = B         // denotes `never` (and is a compile error, E0068)
+```
+
+(The E0068 cycle check is per-SCC — a cycle group needs at least one list/map edge — so types like `A` above are legal; the algebra gives them the productive semantics.)
+
+### Equivalence and canonical forms
+
+Two types are **equivalent** if and only if they are mutual subtypes — they denote the same set of values. The canonical type algebra decides equivalence by structural equality of canonical forms, and for the algebra's rules these provably coincide with mutual subtyping (canonical forms are unique representatives of the equirecursive equivalence class).
+
+Two deliberate carve-outs qualify the "if and only if" (both are compiler devices, not value-set semantics): the error-recovery sentinel types are bidirectionally *compatible* with everything to suppress diagnostic cascades but equivalent only to themselves, and a fact set containing a mutual `requires` cycle between distinct interfaces would make them mutual subtypes while remaining nominally distinct — such cycles are rejected at declaration (E0118), so the case arises only for artificially constructed fact sets.
+
+`normalize` renders the canonical form back as surface syntax, with the following contract: the output is idempotent (`normalize(normalize(t)) == normalize(t)`), always equivalent to its input, and head-exposed (the root of a recursive alias is unfolded once; nested recursion stays folded as an alias name). Because surface syntax spells recursion via alias names, the rendering is canonical only up to the naming of recursion back-references: `normalize(A)` and `normalize(B)` above are equivalent but each spells back-references with its own name. Canonical *identity* is the equivalence judgment, not syntactic equality of rendered output.
+
 ## Pattern Matching
 
 Pattern matching ([BEP-015](https://beps.boundaryml.com/beps/15)) on types falls naturally out of BAML's subset-based subtyping system. For any given value, BAML can determine whether a value is a member of a given type. A `match` expression with type-pattern arms can be thought of as checking each arm in order to see if the value is a member of the type-set (though various optimizations allow us to implement this more efficiently in many cases).
@@ -185,18 +224,18 @@ Internally, when we call the specialized function `foo<int>(123)`, the bound typ
 This is best illustrated by BAML's runtime reflection:
 
 ```baml
-function asdf<T>() -> type {
-	reflect.type_of<T>() // `type_of` basically takes the type-parameter and returns it as a value
+function asdf<T>() -> reflect.Type {
+	reflect.Type.of<T>() // `Type.of` takes the type parameter and returns it as a value
 }
 
 ////////
 
 asdf<int>() // should return type `int`
-// we passed type-parameter `int` into `asdf`, which passed it into `reflect.type_of`, which returned it as a value.
+// we passed type parameter `int` into `asdf`, which passed it into `reflect.Type.of`, which returned it as a value.
 ```
 
 **How does this actually get run under the hood?**
-For the function call `foo<int>(123)`, the run time `foo` function effectively receive two parameters: type `T=int` and value `a=123`. The compiler has ensured that the bounds for each are correct.
+For the function call `foo<int>(123)`, the run time `foo` function effectively receives two parameters: type argument `T=int` and value `a=123`. The compiler has ensured that the bounds for each are correct.
 
 - The constructor for `Box` is called, with type parameter `T -> int` (inferred and filled in by the compiler) and value `a -> 123`.
 - The value is assigned to `out`.
@@ -332,7 +371,22 @@ function foo/*<E>*/(arg: () -> void /* throws E */) -> void /* throws E */ {
 }
 ```
 
-5. Otherwise, the `throws` clause MUST be declared.
+   - An **optional** callback argument is a callback slot too, so it opens the
+     same way: `arg: (() -> void)?` (and its longhand `(() -> void) | null`)
+     gets the same implicit effect parameter, instantiated per call site.
+     Passing `null` leaves it unconstrained, which defaults to `never`.
+
+```baml
+function bar/*<E>*/(arg: (() -> void /* throws E */)? = null) -> void /* throws E */ {
+	if (arg != null) { arg() }
+}
+```
+
+5. Otherwise, the `throws` clause MUST be declared. In particular, a function
+   type nested any deeper than an argument's callback root — a list element, a
+   map value, a class field, an alias body, a returned function type, or a
+   callback's own parameter — is a stored/structural position with no single
+   call site to instantiate an effect against, and must declare its `throws`.
 
 As previously noted, BAML function declarations may include generics. However, all function calls and function-values must have their type parameters specified — or unambiguously inferable from context — to enable monomorphization at call-time:
 

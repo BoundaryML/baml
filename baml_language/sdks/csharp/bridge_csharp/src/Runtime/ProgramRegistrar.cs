@@ -11,7 +11,10 @@ internal static class ProgramRegistrar
     private static ProgramNativeState? registeredState;
     private static ExceptionDispatchInfo? initializationFailure;
 
-    internal static ProgramNativeState Register(ReadOnlySpan<byte> bytecode, string fingerprint)
+    internal static ProgramNativeState Register(
+        ReadOnlySpan<byte> bytecode,
+        string fingerprint,
+        string? embeddedBamlToml)
     {
         lock (Sync)
         {
@@ -32,7 +35,7 @@ internal static class ProgramRegistrar
             try
             {
                 NativeApi api = NativeApi.Instance;
-                api.InitializeRuntime(bytecode);
+                api.InitializeRuntime(bytecode, embeddedBamlToml);
                 registeredState = new ProgramNativeState(api, fingerprint);
                 return registeredState;
             }

@@ -1,3 +1,5 @@
+// biome-ignore-all lint/style/noParameterAssign: Preserve the existing JSON-RPC normalization flow in this legacy worker.
+// biome-ignore-all lint/suspicious/noExplicitAny: Preserve the existing recursive wire-value conversion in this legacy worker.
 /**
  * BAML Worker for the marketing-site playground.
  *
@@ -16,15 +18,15 @@
 
 import initWasm, {
   BamlWasmRuntime,
+  getBuildTime,
   type LspResponse,
   type PlaygroundNotification,
   start as setupLogger,
-  getBuildTime,
 } from '@b/bridge_wasm';
 
 import type {
-  WorkerOutMessage,
   WorkerInMessage,
+  WorkerOutMessage,
   PlaygroundNotification as WorkerPlaygroundNotification,
 } from '@b/pkg-playground';
 
@@ -93,10 +95,10 @@ function runtimeForCommand(
 ): BamlWasmRuntime | null {
   if (runtime) return runtime;
   postOut({
-    type: 'commandError',
-    requestId,
     code,
     message: 'WASM runtime is not initialized.',
+    requestId,
+    type: 'commandError',
   });
   return null;
 }
@@ -117,7 +119,7 @@ function resolveEnv(variable: string): Promise<string | undefined> {
   return new Promise<string | undefined>((resolve) => {
     const id = nextEnvReqId++;
     pendingEnvResolvers.set(id, resolve);
-    postOut({ type: 'envVarRequest', id, variable });
+    postOut({ id, type: 'envVarRequest', variable });
   });
 }
 
@@ -146,30 +148,30 @@ async function loggingFetch(
   } catch {}
 
   postOut({
-    type: 'fetchLogNew',
     callId,
     entry: {
-      id: logId,
-      timestamp: Date.now(),
-      method,
-      url,
-      requestHeaders: parsedHeaders,
-      requestBody: body,
-      status: null,
-      responseBody: null,
-      error: null,
       durationMs: null,
+      error: null,
+      id: logId,
+      method,
+      requestBody: body,
+      requestHeaders: parsedHeaders,
+      responseBody: null,
       responseHeaders: null,
+      status: null,
+      timestamp: Date.now(),
+      url,
     },
+    type: 'fetchLogNew',
   });
 
   const start = performance.now();
 
   try {
     const response = await fetch(url, {
-      method,
-      headers: parsedHeaders,
       body: method !== 'GET' && method !== 'HEAD' ? body : undefined,
+      headers: parsedHeaders,
+      method,
     });
 
     const elapsed = Math.round(performance.now() - start);
@@ -181,46 +183,46 @@ async function loggingFetch(
     const bodyText = response.text();
 
     postOut({
-      type: 'fetchLogUpdate',
       logId,
-      patch: { status: response.status, durationMs: elapsed, responseHeaders },
+      patch: { durationMs: elapsed, responseHeaders, status: response.status },
+      type: 'fetchLogUpdate',
     });
 
     bodyText.then(
       (text) =>
         postOut({
-          type: 'fetchLogUpdate',
           logId,
           patch: { responseBody: text },
+          type: 'fetchLogUpdate',
         }),
       (err) =>
         postOut({
-          type: 'fetchLogUpdate',
           logId,
           patch: { error: `Body read error: ${err}` },
+          type: 'fetchLogUpdate',
         }),
     );
 
     return {
-      status: response.status,
-      headersJson: JSON.stringify(responseHeaders),
-      url: response.url,
       bodyPromise: bodyText,
+      headersJson: JSON.stringify(responseHeaders),
+      status: response.status,
+      url: response.url,
     };
   } catch (err) {
     const elapsed = Math.round(performance.now() - start);
     const msg = err instanceof Error ? err.message : String(err);
     postOut({
-      type: 'fetchLogUpdate',
       logId,
-      patch: { status: 0, error: msg, durationMs: elapsed },
+      patch: { durationMs: elapsed, error: msg, status: 0 },
+      type: 'fetchLogUpdate',
     });
 
     return {
-      status: 0,
-      headersJson: '{}',
-      url,
       bodyPromise: Promise.resolve(''),
+      headersJson: '{}',
+      status: 0,
+      url,
     };
   }
 }
@@ -257,15 +259,18 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
   switch (notification.type) {
     case 'controlFlowGraphResult':
       postOut({
-        type: 'controlFlowGraphResult',
         functionName: notification.functionName,
         graph: notification.graph ?? null,
+        type: 'controlFlowGraphResult',
+        ...(notification.requestId !== undefined
+          ? { requestId: notification.requestId }
+          : {}),
       });
       break;
     case 'cursorContext':
       postOut({
-        type: 'cursorContext',
         context: notification.context,
+        type: 'cursorContext',
       });
       break;
     // RunStore protocol: the runtime owns run state and pushes snapshots +
@@ -275,73 +280,73 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
     // narrower worker-protocol types (runtime values are always valid).
     case 'runStarted':
       postOut({
-        type: 'runStarted',
         requestId: notification.requestId,
         run: notification.run,
+        type: 'runStarted',
       } as WorkerOutMessage);
       break;
     case 'runPatch':
       postOut({
-        type: 'runPatch',
         patch: notification.patch,
+        type: 'runPatch',
       } as WorkerOutMessage);
       break;
     case 'runSnapshot':
       postOut({
-        type: 'runSnapshot',
-        requestId: notification.requestId,
         boundaryId: notification.boundaryId,
+        requestId: notification.requestId,
         snapshot: notification.snapshot,
+        type: 'runSnapshot',
       } as WorkerOutMessage);
       break;
     case 'runList':
       postOut({
-        type: 'runList',
         requestId: notification.requestId,
         runs: notification.runs,
+        type: 'runList',
       } as WorkerOutMessage);
       break;
     case 'historyList':
       postOut({
-        type: 'historyList',
         requestId: notification.requestId,
         runs: notification.runs,
+        type: 'historyList',
       } as WorkerOutMessage);
       break;
     case 'valueBody':
       postOut({
-        type: 'valueBody',
-        requestId: notification.requestId,
-        boundaryId: notification.boundaryId,
-        valueRefId: notification.valueRefId,
-        codec: notification.codec,
         availability: notification.availability,
         bodyBase64: notification.bodyBase64,
+        boundaryId: notification.boundaryId,
+        codec: notification.codec,
         diagnostic: notification.diagnostic,
+        requestId: notification.requestId,
+        type: 'valueBody',
+        valueRefId: notification.valueRefId,
       } as WorkerOutMessage);
       break;
     case 'runCursorExpired':
       postOut({
-        type: 'runCursorExpired',
-        requestId: notification.requestId,
-        subscriptionId: notification.subscriptionId,
         boundaryId: notification.boundaryId,
         reason: notification.reason,
+        requestId: notification.requestId,
+        subscriptionId: notification.subscriptionId,
+        type: 'runCursorExpired',
       } as WorkerOutMessage);
       break;
     case 'commandAck':
       postOut({
-        type: 'commandAck',
-        requestId: notification.requestId,
         outcome: notification.outcome,
+        requestId: notification.requestId,
+        type: 'commandAck',
       });
       break;
     case 'commandError':
       postOut({
-        type: 'commandError',
-        requestId: notification.requestId,
         code: notification.code,
         message: notification.message,
+        requestId: notification.requestId,
+        type: 'commandError',
       });
       break;
     case 'profileArtifactChunk':
@@ -349,8 +354,8 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
       break;
     default:
       postOut({
-        type: 'playgroundNotification',
         notification: notification as unknown as WorkerPlaygroundNotification,
+        type: 'playgroundNotification',
       });
       // Auto-collect tests once per project so the Tests tree populates
       // without the user having to click the refresh wrench. Deferred via
@@ -402,12 +407,12 @@ self.onmessage = async (event: MessageEvent) => {
 
     vfs.onChange = (change) => {
       if ('deleted' in change && change.deleted) {
-        postOut({ type: 'vfsFileDeleted', path: change.path });
+        postOut({ path: change.path, type: 'vfsFileDeleted' });
       } else {
         postOut({
-          type: 'vfsFileChanged',
-          path: change.path,
           content: change.content,
+          path: change.path,
+          type: 'vfsFileChanged',
         });
       }
     };
@@ -424,11 +429,14 @@ self.onmessage = async (event: MessageEvent) => {
 
     runtime = BamlWasmRuntime.create(
       {
-        fetch: loggingFetch,
         env: resolveEnv,
-        input: () => notSupported('read_input'),
         exec: async () => notSupported('exec'),
-        shell: async () => notSupported('shell'),
+        fetch: loggingFetch,
+        // Throwing (vs a silent no-op) lets the runtime complete the host
+        // call with an error instead of hanging the VM on it forever.
+        host_dispatch: () => notSupported('host functions'),
+        input: () => notSupported('read_input'),
+        lsp_make_request: () => {},
         lsp_send_notification: (n: unknown) => {
           // The marketing playground ignores LSP notifications, but custom
           // editors (the learn2 Monaco) want positioned diagnostics. Forward
@@ -438,7 +446,7 @@ self.onmessage = async (event: MessageEvent) => {
             params?: unknown;
           };
           if (note?.method === 'textDocument/publishDiagnostics') {
-            self.postMessage({ type: 'lspDiagnostics', params: note.params });
+            self.postMessage({ params: note.params, type: 'lspDiagnostics' });
           }
         },
         lsp_send_response: (response: LspResponse) => {
@@ -449,53 +457,50 @@ self.onmessage = async (event: MessageEvent) => {
             resolver(response);
           }
         },
-        lsp_make_request: () => {},
         playground_send_notification: (
           notification: PlaygroundNotification,
         ) => {
           notification = mapsToRecordsDeep(notification);
           onPlaygroundNotification(notification);
         },
-        // Throwing (vs a silent no-op) lets the runtime complete the host
-        // call with an error instead of hanging the VM on it forever.
-        host_dispatch: () => notSupported('host functions'),
+        shell: async () => notSupported('shell'),
       },
       vfs.wasmVfs,
     );
 
     // Drive the LSP handshake the runtime expects, without a real LSP client.
     await sendLspRequest('initialize', {
-      processId: null,
-      rootUri: `file://${rootPath}`,
       // Declare the client capabilities a real LSP client (VSCode /
       // monaco-languageclient) sends — the runtime tailors completion / inlay
       // hints / hover to these, and omitting them yields empty/degraded results.
       capabilities: {
         textDocument: {
-          synchronization: { dynamicRegistration: true, didSave: true },
+          codeLens: { dynamicRegistration: true },
           completion: {
-            dynamicRegistration: true,
-            contextSupport: true,
             completionItem: {
-              snippetSupport: true,
               documentationFormat: ['markdown', 'plaintext'],
               resolveSupport: { properties: ['documentation', 'detail'] },
+              snippetSupport: true,
             },
+            contextSupport: true,
+            dynamicRegistration: true,
           },
           hover: {
-            dynamicRegistration: true,
             contentFormat: ['markdown', 'plaintext'],
+            dynamicRegistration: true,
           },
           inlayHint: { dynamicRegistration: true },
-          codeLens: { dynamicRegistration: true },
           publishDiagnostics: { relatedInformation: true },
+          synchronization: { didSave: true, dynamicRegistration: true },
         },
         workspace: {
-          inlayHint: { refreshSupport: true },
           codeLens: { refreshSupport: true },
+          inlayHint: { refreshSupport: true },
         },
       },
-      workspaceFolders: [{ uri: `file://${rootPath}`, name: 'workspace' }],
+      processId: null,
+      rootUri: `file://${rootPath}`,
+      workspaceFolders: [{ name: 'workspace', uri: `file://${rootPath}` }],
     });
     runtime.handleLspNotification({ method: 'initialized', params: {} });
 
@@ -504,10 +509,10 @@ self.onmessage = async (event: MessageEvent) => {
         method: 'textDocument/didOpen',
         params: {
           textDocument: {
-            uri: fileUri(rel),
             languageId: 'baml',
-            version: nextDocVersion++,
             text: content,
+            uri: fileUri(rel),
+            version: nextDocVersion++,
           },
         },
       });
@@ -542,10 +547,10 @@ self.onmessage = async (event: MessageEvent) => {
         method: 'textDocument/didOpen',
         params: {
           textDocument: {
-            uri: fileUri(rel),
             languageId: 'baml',
-            version: nextDocVersion++,
             text: content,
+            uri: fileUri(rel),
+            version: nextDocVersion++,
           },
         },
       });
@@ -562,13 +567,13 @@ self.onmessage = async (event: MessageEvent) => {
         textDocument: { uri },
       });
       self.postMessage({
-        type: 'codeLensResult',
-        reqId,
-        uri,
         lenses: resp.result ?? [],
+        reqId,
+        type: 'codeLensResult',
+        uri,
       });
     } catch {
-      self.postMessage({ type: 'codeLensResult', reqId, uri, lenses: [] });
+      self.postMessage({ lenses: [], reqId, type: 'codeLensResult', uri });
     }
     return;
   }
@@ -579,12 +584,12 @@ self.onmessage = async (event: MessageEvent) => {
     try {
       const resp = await sendLspRequest(data.method, data.params);
       self.postMessage({
-        type: 'lspResult',
         reqId,
         result: resp.result ?? null,
+        type: 'lspResult',
       });
     } catch {
-      self.postMessage({ type: 'lspResult', reqId, result: null });
+      self.postMessage({ reqId, result: null, type: 'lspResult' });
     }
     return;
   }
@@ -600,13 +605,18 @@ self.onmessage = async (event: MessageEvent) => {
       const rt = runtimeForCommand(msg.requestId, 'wasmRuntimeNotReady');
       if (!rt) return;
       try {
-        rt.startRun(msg.requestId, msg.project, msg.functionName, msg.argsBytes);
+        rt.startRun(
+          msg.requestId,
+          msg.project,
+          msg.functionName,
+          msg.argsBytes,
+        );
       } catch (e) {
         postOut({
-          type: 'commandError',
-          requestId: msg.requestId,
           code: 'wasmStartRunFailed',
           message: e instanceof Error ? e.message : String(e),
+          requestId: msg.requestId,
+          type: 'commandError',
         });
       }
       return;
@@ -626,10 +636,10 @@ self.onmessage = async (event: MessageEvent) => {
         );
       } catch (e) {
         postOut({
-          type: 'commandError',
-          requestId: msg.requestId,
           code: 'wasmStartPreviewRunFailed',
           message: e instanceof Error ? e.message : String(e),
+          requestId: msg.requestId,
+          type: 'commandError',
         });
       }
       return;
@@ -647,10 +657,10 @@ self.onmessage = async (event: MessageEvent) => {
         );
       } catch (e) {
         postOut({
-          type: 'commandError',
-          requestId: msg.requestId,
           code: 'wasmStartTestRunFailed',
           message: e instanceof Error ? e.message : String(e),
+          requestId: msg.requestId,
+          type: 'commandError',
         });
       }
       return;
@@ -663,10 +673,10 @@ self.onmessage = async (event: MessageEvent) => {
         rt.cancelRun(msg.requestId, msg.boundaryId);
       } catch (e) {
         postOut({
-          type: 'commandError',
-          requestId: msg.requestId,
           code: 'wasmCancelRunFailed',
           message: e instanceof Error ? e.message : String(e),
+          requestId: msg.requestId,
+          type: 'commandError',
         });
       }
       return;
@@ -679,10 +689,10 @@ self.onmessage = async (event: MessageEvent) => {
         rt.respondToInput(msg.requestId, msg.boundaryId, msg.inputRequestId);
       } catch (e) {
         postOut({
-          type: 'commandError',
-          requestId: msg.requestId,
           code: 'wasmRespondToInputFailed',
           message: e instanceof Error ? e.message : String(e),
+          requestId: msg.requestId,
+          type: 'commandError',
         });
       }
       return;
@@ -713,10 +723,10 @@ self.onmessage = async (event: MessageEvent) => {
         }
       } catch (e) {
         postOut({
-          type: 'commandError',
-          requestId: msg.requestId,
           code: 'wasmRespondToEnvFailed',
           message: e instanceof Error ? e.message : String(e),
+          requestId: msg.requestId,
+          type: 'commandError',
         });
       }
       return;
@@ -729,10 +739,10 @@ self.onmessage = async (event: MessageEvent) => {
         rt.listRuns(msg.requestId, msg.filter);
       } catch (e) {
         postOut({
-          type: 'commandError',
-          requestId: msg.requestId,
           code: 'wasmListRunsFailed',
           message: e instanceof Error ? e.message : String(e),
+          requestId: msg.requestId,
+          type: 'commandError',
         });
       }
       return;
@@ -745,10 +755,10 @@ self.onmessage = async (event: MessageEvent) => {
         rt.snapshot(msg.requestId, msg.boundaryId);
       } catch (e) {
         postOut({
-          type: 'commandError',
-          requestId: msg.requestId,
           code: 'wasmSnapshotFailed',
           message: e instanceof Error ? e.message : String(e),
+          requestId: msg.requestId,
+          type: 'commandError',
         });
       }
       return;
@@ -766,10 +776,10 @@ self.onmessage = async (event: MessageEvent) => {
         );
       } catch (e) {
         postOut({
-          type: 'commandError',
-          requestId: msg.requestId,
           code: 'wasmSubscribeFailed',
           message: e instanceof Error ? e.message : String(e),
+          requestId: msg.requestId,
+          type: 'commandError',
         });
       }
       return;
@@ -782,10 +792,10 @@ self.onmessage = async (event: MessageEvent) => {
         rt.unsubscribe(msg.requestId, msg.subscriptionId);
       } catch (e) {
         postOut({
-          type: 'commandError',
-          requestId: msg.requestId,
           code: 'wasmUnsubscribeFailed',
           message: e instanceof Error ? e.message : String(e),
+          requestId: msg.requestId,
+          type: 'commandError',
         });
       }
       return;
@@ -818,8 +828,8 @@ self.onmessage = async (event: MessageEvent) => {
         runtime?.handleLspNotification({
           method: 'textDocument/didChange',
           params: {
-            textDocument: { uri: fileUri(rel), version },
             contentChanges: [{ text: content }],
+            textDocument: { uri: fileUri(rel), version },
           },
         });
       }
@@ -840,7 +850,11 @@ self.onmessage = async (event: MessageEvent) => {
       return;
 
     case 'requestControlFlowGraph':
-      runtime?.requestControlFlowGraph(msg.project, msg.functionName);
+      runtime?.requestControlFlowGraph(
+        msg.project,
+        msg.functionName,
+        msg.requestId,
+      );
       return;
 
     case 'cursorPosition':
@@ -862,10 +876,10 @@ self.onmessage = async (event: MessageEvent) => {
         rt.listHistory(msg.requestId, msg.filter);
       } catch (e) {
         postOut({
-          type: 'commandError',
-          requestId: msg.requestId,
           code: 'wasmListHistoryFailed',
           message: e instanceof Error ? e.message : String(e),
+          requestId: msg.requestId,
+          type: 'commandError',
         });
       }
       return;
@@ -878,10 +892,10 @@ self.onmessage = async (event: MessageEvent) => {
         rt.openHistory(msg.requestId, msg.boundaryId);
       } catch (e) {
         postOut({
-          type: 'commandError',
-          requestId: msg.requestId,
           code: 'wasmOpenHistoryFailed',
           message: e instanceof Error ? e.message : String(e),
+          requestId: msg.requestId,
+          type: 'commandError',
         });
       }
       return;
@@ -894,10 +908,10 @@ self.onmessage = async (event: MessageEvent) => {
         rt.readValue(msg.requestId, msg.boundaryId, msg.valueRef);
       } catch (e) {
         postOut({
-          type: 'commandError',
-          requestId: msg.requestId,
           code: 'wasmReadValueFailed',
           message: e instanceof Error ? e.message : String(e),
+          requestId: msg.requestId,
+          type: 'commandError',
         });
       }
       return;

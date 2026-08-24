@@ -23,7 +23,7 @@ function for_loops_sum(xs: int[]) -> int {
 }
 
 test "for_loop_sum" {
-    assert.is_true(baml.deep_equals(for_loops_sum([1, 2, 3, 4]), 10))
+    assert.equal(for_loops_sum([1, 2, 3, 4]), 10)
 }
 
 // ── for_loop_with_break ───────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ function for_loops_for_with_break(xs: int[]) -> int {
 }
 
 test "for_loop_with_break" {
-    assert.is_true(baml.deep_equals(for_loops_for_with_break([3, 4, 11, 100]), 7))
+    assert.equal(for_loops_for_with_break([3, 4, 11, 100]), 7)
 }
 
 // ── for_loop_with_continue ────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ function for_loops_for_with_continue(xs: int[]) -> int {
 }
 
 test "for_loop_with_continue" {
-    assert.is_true(baml.deep_equals(for_loops_for_with_continue([5, 20, 6]), 11))
+    assert.equal(for_loops_for_with_continue([5, 20, 6]), 11)
 }
 
 // ── for_loop_nested ───────────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ function for_loops_nested_for(arr_a: int[], arr_b: int[]) -> int {
 }
 
 test "for_loop_nested" {
-    assert.is_true(baml.deep_equals(for_loops_nested_for([1, 2], [3, 4]), 21))
+    assert.equal(for_loops_nested_for([1, 2], [3, 4]), 21)
 }
 
 // ── c_for_sum_to_ten ──────────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ function for_loops_c_for_sum_to_ten() -> int {
 }
 
 test "c_for_sum_to_ten" {
-    assert.is_true(baml.deep_equals(for_loops_c_for_sum_to_ten(), 55))
+    assert.equal(for_loops_c_for_sum_to_ten(), 55)
 }
 
 // ── c_for_with_break_continue ────────────────────────────────────────────────
@@ -122,7 +122,7 @@ test "c_for_sum_to_ten" {
 // }
 //
 // test "c_for_with_break_continue" {
-//     assert.is_true(baml.deep_equals(c_for_with_break_continue(), 55))
+//     assert.equal(c_for_with_break_continue(), 55)
 // }
 
 // ── c_for_only_condition ──────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ test "c_for_sum_to_ten" {
 // }
 //
 // test "c_for_only_condition" {
-//     assert.is_true(baml.deep_equals(c_for_only_condition(), 0))
+//     assert.equal(c_for_only_condition(), 0)
 // }
 
 // ── c_for_endless_break ───────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ test "c_for_sum_to_ten" {
 // }
 //
 // test "c_for_endless_break" {
-//     assert.is_true(baml.deep_equals(c_for_endless_break(), 0))
+//     assert.equal(c_for_endless_break(), 0)
 // }
 
 // ── for_loop_over_let_variable ────────────────────────────────────────────────
@@ -176,7 +176,7 @@ function for_loops_sum_let_var() -> int {
 }
 
 test "for_loop_over_let_variable" {
-    assert.is_true(baml.deep_equals(for_loops_sum_let_var(), 6))
+    assert.equal(for_loops_sum_let_var(), 6)
 }
 
 // ── for_loop_over_let_variable_no_parens ──────────────────────────────────────
@@ -193,7 +193,7 @@ function for_loops_sum_let_var_no_parens() -> int {
 }
 
 test "for_loop_over_let_variable_no_parens" {
-    assert.is_true(baml.deep_equals(for_loops_sum_let_var_no_parens(), 60))
+    assert.equal(for_loops_sum_let_var_no_parens(), 60)
 }
 
 // ── for_loop_final_if_without_semicolon_can_return ────────────────────────────
@@ -209,7 +209,7 @@ function for_loops_first_even(xs: int[]) -> int {
 }
 
 test "for_loop_final_if_without_semicolon_can_return" {
-    assert.is_true(baml.deep_equals(for_loops_first_even([1, 3, 4, 7]), 4))
+    assert.equal(for_loops_first_even([1, 3, 4, 7]), 4)
 }
 
 // ── for_loop_final_if_else_without_semicolon_can_mutate ──────────────────────
@@ -229,7 +229,7 @@ function for_loops_render(xs: string[]) -> string {
 }
 
 test "for_loop_final_if_else_without_semicolon_can_mutate" {
-    assert.is_true(baml.deep_equals(for_loops_render(["x", "", "o"]), "x.o"))
+    assert.equal(for_loops_render(["x", "", "o"]), "x.o")
 }
 
 // ── nested_for_loop_final_if_without_semicolon_can_return ────────────────────
@@ -247,5 +247,113 @@ function for_loops_has_empty_cell(grid: string[][]) -> bool {
 }
 
 test "nested_for_loop_final_if_without_semicolon_can_return" {
-    assert.is_true(baml.deep_equals(for_loops_has_empty_cell([["x", "o"], ["", "x"]]), true))
+    assert.is_true(for_loops_has_empty_cell([["x", "o"], ["", "x"]]))
+}
+
+// ── for_loop_joined_map_arm (B-1576) ─────────────────────────────────────────
+//
+// Regression: an `if`/`else` binding whose arms are a plain array and an
+// `Array.map` lambda joins while the map's element var is still unsolved,
+// so the binding records a syntactic union of lists. The for-loop's element
+// demand must judge the canonical spelling once forcing grounds it; 0.17.0
+// aborted here (an `Error` element with zero diagnostics reached runtime
+// lowering) while 0.16.0 compiled. Sum in the body so the element must be
+// `int`, not a leftover projection.
+
+function for_loops_joined_map_arm(xs: int[], b: bool) -> int {
+    let ys = if (b) {
+        [0]
+    } else {
+        xs.map((x: int) -> int {
+            x + 1
+        })
+    };
+    let n = 0;
+
+    for (let y in ys) {
+        n = n + y;
+    }
+
+    n
+}
+
+test "for_loop_joined_map_arm_plain_branch" {
+    assert.equal(for_loops_joined_map_arm([1, 2, 3], true), 0)
+}
+
+test "for_loop_joined_map_arm_map_branch" {
+    assert.equal(for_loops_joined_map_arm([1, 2, 3], false), 9)
+}
+
+// Arm order flipped: the map arm joins first, the ground arm second.
+
+function for_loops_joined_map_arm_first(xs: int[], b: bool) -> int {
+    let ys = if (b) {
+        xs.map((x: int) -> int {
+            x + 1
+        })
+    } else {
+        [0]
+    };
+    let n = 0;
+
+    for (let y in ys) {
+        n = n + y;
+    }
+
+    n
+}
+
+test "for_loop_joined_map_arm_first" {
+    assert.equal(for_loops_joined_map_arm_first([1, 2, 3], true), 9)
+}
+
+// Both arms are map lambdas: two element vars join, neither ground.
+
+function for_loops_joined_both_map_arms(xs: int[], b: bool) -> int {
+    let ys = if (b) {
+        xs.map((x: int) -> int {
+            x * 2
+        })
+    } else {
+        xs.map((x: int) -> int {
+            x + 1
+        })
+    };
+    let n = 0;
+
+    for (let y in ys) {
+        n = n + y;
+    }
+
+    n
+}
+
+test "for_loop_joined_both_map_arms" {
+    assert.equal(for_loops_joined_both_map_arms([1, 2, 3], true), 12)
+}
+
+// ── for_loop_generic_iterable_bound (B-1576) ─────────────────────────────────
+//
+// The same abort hit every `for` over a `T extends baml.iter.Iterable`
+// collection: the element is the rigid projection `(T as Iterable).Item`,
+// which the runtime carries for per-receiver dispatch - it must not be
+// erased to an error for being irreducible at compile time.
+
+function for_loops_count_bounded<T extends baml.iter.Iterable>(c: T) -> int {
+    let n = 0;
+
+    for (let y in c) {
+        n = n + 1;
+    }
+
+    n
+}
+
+test "for_loop_generic_iterable_bound_over_list" {
+    assert.equal(for_loops_count_bounded([5, 6, 7]), 3)
+}
+
+test "for_loop_generic_iterable_bound_over_string" {
+    assert.equal(for_loops_count_bounded("abc"), 3)
 }

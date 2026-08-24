@@ -1,0 +1,15 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+9..12 'inc': throws never
+41..50 '{\n    x\n}': int
+47..48 'x': int
+61..62 'g': throws never
+72..218 '{\n   ...int\n}': int
+78..113 'let c:... never': (x: int) -> int throws never
+85..113 '(x: in... never': (x: int) -> int throws never
+116..119 'inc': (x: int) -> int throws never
+199..200 'c': (x: int) -> int throws never
+199..203 'c(1)': int
+201..202 '1': 1

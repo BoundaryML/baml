@@ -12,8 +12,8 @@ function ElseDoesNotSeeBinding(r: Ok | Err) -> string {
 //- diagnostics
 // E0003
 //
-//   × unresolved name: `o`
+//   × unresolved name: `o.value`
 //    ╭─[let_else_let_else_else_no_bindings.baml:7:31]
 //  7 │   let o: Ok = r else { return o.value; };
-//    ·                               ─
+//    ·                               ───────
 //    ╰────

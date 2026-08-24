@@ -94,6 +94,77 @@ pub fn display_user_functions_with_options(program: &Program, show_auto_derive: 
     display_program(&functions, BytecodeFormat::Textual)
 }
 
+/// Build the pool into an (unsealed) heap and bind every head, so rendered
+/// metadata reflects what the runtime shows: the loader always binds before
+/// anything can display a type, and an unbound head renders as its tag
+/// (`<unresolved type #…>`).
+///
+/// Float constants are boxed into the pool first, exactly as the engine's
+/// load path does — `resolve_function_constants` (inside the heap build)
+/// refuses a raw `ConstValue::Float`.
+pub fn bound_pool(program: &Program) -> bex_heap::BexHeap {
+    let mut objects = program.objects.0.clone();
+    for index in 0..objects.len() {
+        let Object::Function(function) = &objects[index] else {
+            continue;
+        };
+        let floats: Vec<(usize, f64)> = function
+            .bytecode
+            .constants
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, constant)| match constant {
+                bex_vm_types::ConstValue::Float(value) => Some((slot, *value)),
+                _ => None,
+            })
+            .collect();
+        for (slot, value) in floats {
+            let boxed = objects.len();
+            objects.push(Object::Float(value));
+            let Object::Function(function) = &mut objects[index] else {
+                unreachable!("the object at `index` was a function above");
+            };
+            function.bytecode.constants[slot] =
+                bex_vm_types::ConstValue::Object(bex_vm_types::ObjectIndex::from_raw(boxed));
+        }
+    }
+    let mut heap = bex_heap::BexHeap::build_unsealed_default(objects);
+    heap.bind_type_heads();
+    heap
+}
+
+/// Read the function at pool index `idx` out of a heap built by
+/// [`bound_pool`], or `None` if the slot holds something else.
+pub fn bound_function(heap: &bex_heap::BexHeap, idx: usize) -> Option<&Function> {
+    let ptr = heap.compile_time_ptr(idx);
+    // SAFETY: `ptr` indexes the pool the heap was built from, and the returned
+    // borrow is tied to `heap`, which owns that pool for the borrow's lifetime.
+    match unsafe { ptr.get() } {
+        Object::Function(f) => Some(&**f),
+        _ => None,
+    }
+}
+
+/// [`display_user_functions`] over a [`bound_pool`], so type positions in the
+/// rendered bytecode show declaration names instead of raw head tags.
+pub fn display_user_functions_bound(program: &Program) -> String {
+    let heap = bound_pool(program);
+    let mut functions: Vec<(String, &Function)> = program
+        .function_indices
+        .iter()
+        .filter_map(|(name, idx)| {
+            let f = bound_function(&heap, *idx)?;
+            if !f.origin.is_user_callable() {
+                return None;
+            }
+            let display_name = name.strip_prefix("user.").unwrap_or(name).to_owned();
+            Some((display_name, f))
+        })
+        .collect();
+    functions.sort_by(|(a, _), (b, _)| a.cmp(b));
+    display_program(&functions, BytecodeFormat::Textual)
+}
+
 /// Resolve a user-provided entry name to the fully-qualified name used in the program.
 ///
 /// Compiler2 qualifies function names with their package (e.g. `"user.main"`).
@@ -229,8 +300,13 @@ pub async fn run_compiled(
     let positional_args = resolve_args(&program, entry, args);
 
     // Create engine and execute.
-    let engine = BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new())
-        .expect("Failed to create BexEngine");
+    let engine = BexEngine::new_with_runtime_compiler(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        Vec::new(),
+        bex_project::runtime_compiler(),
+    )
+    .expect("Failed to create BexEngine");
     let engine = Arc::new(engine);
 
     let result = engine

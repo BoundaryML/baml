@@ -1,12 +1,12 @@
 // Mix of LLM and expression functions in one file
 function LLMAnalyze(text: string) -> Analysis {
-  client GPT4
-  prompt #"
+  client: GPT4
+  prompt: `
     Analyze the following text:
-    {{ text }}
+    ${text}
     
     Return an Analysis object with sentiment and keywords.
-  "#
+  `
 }
 
 class Analysis {
@@ -29,13 +29,13 @@ function ProcessAnalysis(analysis: Analysis) -> string {
 }
 
 function ChainedProcess(input: string) -> string {
-  client GPT4
-  prompt #"
+  client: GPT4
+  prompt: `
     Process this through multiple steps:
-    1. {{ input }}
+    1. ${input}
     2. Transform it
     3. Return result
-  "#
+  `
 }
 
 function SimpleCalc(a: int, b: int) -> int {

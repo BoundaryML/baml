@@ -28,206 +28,240 @@
 ///     * `bigint.parse(s)` where `s` carries more decimal digits than the
 ///       cap permits.
 class Bigint {
-  // ─── Comparisons / clamping ───────────────────────────────────────────────
+    // ─── Comparisons / clamping ───────────────────────────────────────────────
 
-  /// Returns the absolute value of `self`.
-  /// # Examples
-  /// ```
-  /// (-7n).abs()         // 7n
-  /// (3n).abs()          // 3n
-  /// (0n).abs()          // 0n
-  /// ```
-  function abs(self) -> bigint throws never {
-    $rust_function
-  }
-
-  /// Returns the smaller of `self` and `other`.
-  ///
-  /// # Examples
-  /// ```
-  /// (3n).min(5n)   // 3n
-  /// (3n).min(3)   // 3n (note we cast up from `int` to `bigint` here)
-  /// (-2n).min(0n)  // -2n
-  /// ```
-  function min(self, other: bigint) -> bigint throws never {
-    $rust_function
-  }
-
-  /// Returns the larger of `self` and `other`.
-  ///
-  /// # Examples
-  /// ```
-  /// (3n).max(5n)   // 5n
-  /// (3n).max(3)   // 3n (note we cast up from `int` to `bigint` here)
-  /// (-2n).max(0n)  // 0n
-  /// ```
-  function max(self, other: bigint) -> bigint throws never {
-    $rust_function
-  }
-
-  /// Clamps `self` into the range `[min, max]`.
-  ///
-  /// Equivalent to `self.min(max).max(min)`. Callers should pass `min <= max`;
-  /// if `min > max` the result is always `min` (the lower-clamp wins because
-  /// it runs after the upper-clamp).
-  ///
-  /// # Examples
-  /// ```
-  /// (5n).clamp(0n, 10n)    // 5n
-  /// (-3n).clamp(0, 10)   // 0n (note we cast up from `int` to `bigint` here)
-  /// (15n).clamp(0n, 10n)   // 10n
-  /// ```
-  function clamp(self, min: bigint, max: bigint) -> bigint throws never {
-    $rust_function
-  }
-
-  // ─── Math ─────────────────────────────────────────────────────────────────
-
-  /// Returns the integer square root of `self` — that is, the largest `bigint`
-  /// `r` such that `r * r <= self`.
-  ///
-  /// Throws `InvalidArgument` if `self` is negative.
-  ///
-  /// # Examples
-  /// ```
-  /// (10n).isqrt()   // 3n
-  /// (16n).isqrt()   // 4n
-  /// (0n).isqrt()    // 0n
-  /// (-1n).isqrt()   // throws
-  /// ```
-  function isqrt(self) -> bigint throws root.errors.InvalidArgument {
-    $rust_function
-  }
-
-  /// Returns `self ** exp`.
-  ///
-  /// `0 ** 0` returns `1`, by convention.
-  ///
-  /// If `exp` is negative the result is `0`, since the mathematical value
-  /// `self ** -n = 1 / self ** n` is in `(-1, 1)` for `|self| > 1` and rounds
-  /// to zero. (For `self == 1` or `self == -1` the value is `±1` which rounds
-  /// to itself; this implementation still returns `0` for negative exponents
-  /// uniformly.)
-  ///
-  /// # Examples
-  /// ```
-  /// (2n).pow(10n)      // 1024n
-  /// (2n).pow(0n)       // 1n
-  /// (0n).pow(0n)       // 1n   (convention)
-  /// (2n).pow(-1n)      // 0n
-  /// (10n).pow(100n)    // a very large number
-  /// (-2n).pow(3n)      // -8n
-  /// ```
-  // Raises `baml.panics.AllocFailure` (a panic, not a catchable `throws`) when
-  // the estimated result exceeds `MAX_BIGINT_BITS`.
-  //baml:fallible
-  function pow(self, exp: bigint) -> bigint throws never {
-    $rust_function
-  }
-
-  /// Returns the integer logarithm of `self` in the given `base`, rounded
-  /// down — i.e. the largest `n` such that `base ** n <= self`.
-  ///
-  /// Throws `InvalidArgument` if `self <= 0` or `base < 2`.
-  ///
-  /// # Examples
-  /// ```
-  /// (1000n).ilog(10n)   // 3n
-  /// (1024n).ilog(2n)    // 10n
-  /// (1n).ilog(10n)      // 0n
-  /// (0n).ilog(10n)      // throws
-  /// (10n).ilog(1n)      // throws
-  /// ```
-  function ilog(self, base: bigint) -> bigint throws root.errors.InvalidArgument {
-    $rust_function
-  }
-
-  // ─── Parsing ──────────────────────────────────────────────────────────────
-
-  /// Parses `text` as a base-ten signed integer.
-  ///
-  /// Accepts an optional leading `+` or `-` sign followed by one or more
-  /// ASCII digits. No surrounding whitespace, no underscore separators,
-  /// no hex / octal / binary prefix (`0x` / `0o` / `0b`), no Unicode digits,
-  /// no scientific notation. Callers needing those should preprocess the
-  /// string.
-  ///
-  /// Throws `ParseError` if `text` is empty or contains a non-digit character.
-  ///
-  /// # Examples
-  /// ```
-  /// bigint.parse("42")       // 42n
-  /// bigint.parse("-7")       // -7n
-  /// bigint.parse("+0")       // 0n
-  /// bigint.parse("")         // throws — empty
-  /// bigint.parse("12a")      // throws — non-digit
-  /// bigint.parse("0x2a")     // throws — hex prefix not accepted
-  /// bigint.parse("1_000")    // throws — underscores not accepted
-  /// bigint.parse(" 5 ")      // throws — whitespace not allowed; trim first
-  /// bigint.parse("99999999999999999999")  // 99999999999999999999n
-  /// ```
-  function parse(text: string) -> bigint throws root.errors.ParseError {
-    $rust_function
-  }
-
-  /// Returns a uniformly distributed random integer in the half-open range
-  /// `[lower, upper)`, drawn from `rng`.
-  ///
-  /// Throws `InvalidArgument` if `lower >= upper` (the range would be empty).
-  /// `rng` defaults to `random.SystemRandom`, the host's cryptographic entropy
-  /// source; pass a seeded generator to make the draw reproducible.
-  ///
-  /// The range is unbounded, so each attempt takes as many bytes from `rng` as
-  /// the range is wide. The result is unbiased, which costs rejection sampling:
-  /// the number of attempts is unbounded in the worst case, though each is
-  /// accepted with probability at least one half.
-  ///
-  /// # Examples
-  /// ```
-  /// bigint.random(0n, 10n)         // some value in {0, 1, ..., 9}
-  /// bigint.random(-5n, 5n)         // some value in {-5, -4, ..., 4}
-  /// bigint.random(0n, 1n)          // always 0  (single-element range)
-  /// bigint.random(5n, 5n)          // throws — empty range
-  /// bigint.random(10n, 0n)         // throws — lower > upper
-  ///
-  /// // Reproducible: the same seed replays the same values.
-  /// let rng = baml.random.Xoshiro256PlusPlus.new(seed = my_seed);
-  /// bigint.random(0n, 10n, rng = rng)
-  /// ```
-  function random(lower: bigint, upper: bigint, rng: root.random.Rng = root.random.SystemRandom.get()) -> bigint throws root.errors.InvalidArgument {
-    if (lower >= upper) {
-      throw root.errors.InvalidArgument {
-        message: "bigint.random: lower (" + string.from(lower) + ") must be less than upper (" + string.from(upper) + ")"
-      };
+    /// Returns the absolute value of `self`.
+    /// # Examples
+    /// ```
+    /// (-7n).abs()         // 7n
+    /// (3n).abs()          // 3n
+    /// (0n).abs()          // 0n
+    /// ```
+    function abs(self) -> bigint throws never {
+        $rust_function
     }
-    // How many bytes an attempt needs depends only on the range, so resolve it
-    // once rather than per draw.
-    let width = bigint._random_byte_count(lower, upper);
-    let r = bigint._random_in_range(rng.random(width), lower, upper);
-    while (r == upper) {
-      r = bigint._random_in_range(rng.random(width), lower, upper);
+
+    /// Returns the smaller of `self` and `other`.
+    ///
+    /// # Examples
+    /// ```
+    /// (3n).min(5n)   // 3n
+    /// (3n).min(3)   // 3n (note we cast up from `int` to `bigint` here)
+    /// (-2n).min(0n)  // -2n
+    /// ```
+    function min(self, other: bigint) -> bigint throws never {
+        $rust_function
     }
-    r
-  }
 
-  /// Internal: the number of random bytes one `_random_in_range` attempt needs
-  /// for `[lower, upper)`. Zero when the range holds a single value.
-  ///
-  /// Callers must check `lower < upper` first.
-  function _random_byte_count(lower: bigint, upper: bigint) -> int throws never {
-    $rust_function
-  }
+    /// Returns the larger of `self` and `other`.
+    ///
+    /// # Examples
+    /// ```
+    /// (3n).max(5n)   // 5n
+    /// (3n).max(3)   // 3n (note we cast up from `int` to `bigint` here)
+    /// (-2n).max(0n)  // 0n
+    /// ```
+    function max(self, other: bigint) -> bigint throws never {
+        $rust_function
+    }
 
-  /// Internal: maps the bytes of one draw onto `[lower, upper)`.
-  ///
-  /// Returns `upper` to mean "this draw landed in the biased tail — draw
-  /// again". That is unambiguous because the range is half-open, so `upper` is
-  /// never itself a valid result. A draw shorter than `_random_byte_count`
-  /// asked for is rejected the same way, rather than quietly narrowing the
-  /// distribution.
-  ///
-  /// Callers must check `lower < upper` first.
-  function _random_in_range(draw: uint8array, lower: bigint, upper: bigint) -> bigint throws never {
-    $rust_function
-  }
+    /// Clamps `self` into the range `[min, max]`.
+    ///
+    /// Equivalent to `self.min(max).max(min)`. Callers should pass `min <= max`;
+    /// if `min > max` the result is always `min` (the lower-clamp wins because
+    /// it runs after the upper-clamp).
+    ///
+    /// # Examples
+    /// ```
+    /// (5n).clamp(0n, 10n)    // 5n
+    /// (-3n).clamp(0, 10)   // 0n (note we cast up from `int` to `bigint` here)
+    /// (15n).clamp(0n, 10n)   // 10n
+    /// ```
+    function clamp(self, min: bigint, max: bigint) -> bigint throws never {
+        $rust_function
+    }
+
+    // ─── Math ─────────────────────────────────────────────────────────────────
+
+    /// Returns the integer square root of `self` — that is, the largest `bigint`
+    /// `r` such that `r * r <= self`.
+    ///
+    /// Throws `InvalidArgument` if `self` is negative.
+    ///
+    /// # Examples
+    /// ```
+    /// (10n).isqrt()   // 3n
+    /// (16n).isqrt()   // 4n
+    /// (0n).isqrt()    // 0n
+    /// (-1n).isqrt()   // throws
+    /// ```
+    function isqrt(self) -> bigint throws root.errors.InvalidArgument {
+        $rust_function
+    }
+
+    /// Returns `self ** exp`.
+    ///
+    /// `0 ** 0` returns `1`, by convention.
+    ///
+    /// If `exp` is negative the result is `0`, since the mathematical value
+    /// `self ** -n = 1 / self ** n` is in `(-1, 1)` for `|self| > 1` and rounds
+    /// to zero. (For `self == 1` or `self == -1` the value is `±1` which rounds
+    /// to itself; this implementation still returns `0` for negative exponents
+    /// uniformly.)
+    ///
+    /// # Examples
+    /// ```
+    /// (2n).pow(10n)      // 1024n
+    /// (2n).pow(0n)       // 1n
+    /// (0n).pow(0n)       // 1n   (convention)
+    /// (2n).pow(-1n)      // 0n
+    /// (10n).pow(100n)    // a very large number
+    /// (-2n).pow(3n)      // -8n
+    /// ```
+    // Raises `baml.panics.AllocFailure` (a panic, not a catchable `throws`) when
+    // the estimated result exceeds `MAX_BIGINT_BITS`.
+    //baml:fallible
+    function pow(self, exp: bigint) -> bigint throws never {
+        $rust_function
+    }
+
+    /// Returns the integer logarithm of `self` in the given `base`, rounded
+    /// down — i.e. the largest `n` such that `base ** n <= self`.
+    ///
+    /// Throws `InvalidArgument` if `self <= 0` or `base < 2`.
+    ///
+    /// # Examples
+    /// ```
+    /// (1000n).ilog(10n)   // 3n
+    /// (1024n).ilog(2n)    // 10n
+    /// (1n).ilog(10n)      // 0n
+    /// (0n).ilog(10n)      // throws
+    /// (10n).ilog(1n)      // throws
+    /// ```
+    function ilog(self, base: bigint) -> bigint throws root.errors.InvalidArgument {
+        $rust_function
+    }
+
+    // ─── Conversions ──────────────────────────────────────────────────────────
+
+    /// Narrows `self` to a fixed-width `int`.
+    ///
+    /// Throws `InvalidArgument` if `self` is outside `int`'s range. BAML integers
+    /// are 63-bit signed, so that range (`int.min_value()` ..= `int.max_value()`)
+    /// is narrower than a machine 64-bit integer's.
+    ///
+    /// The opposite direction needs no conversion: an `int` widens to `bigint`
+    /// wherever a `bigint` is expected, and `0n + value` forces it explicitly.
+    ///
+    /// # Examples
+    /// ```
+    /// (42n).to_int()                          // 42
+    /// (-7n).to_int()                          // -7
+    /// (4611686018427387903n).to_int()         // int.max_value()
+    /// (4611686018427387904n).to_int()         // throws — one past int.max_value()
+    /// (10n).pow(30n).to_int()                 // throws
+    /// ```
+    function to_int(self) -> int throws root.errors.InvalidArgument {
+        $rust_function
+    }
+
+    // ─── Parsing ──────────────────────────────────────────────────────────────
+
+    /// Parses `text` as a base-ten signed integer.
+    ///
+    /// Accepts an optional leading `+` or `-` sign followed by one or more
+    /// ASCII digits. No surrounding whitespace, no underscore separators,
+    /// no hex / octal / binary prefix (`0x` / `0o` / `0b`), no Unicode digits,
+    /// no scientific notation. Callers needing those should preprocess the
+    /// string.
+    ///
+    /// Throws `ParseError` if `text` is empty or contains a non-digit character.
+    ///
+    /// # Examples
+    /// ```
+    /// bigint.parse("42")       // 42n
+    /// bigint.parse("-7")       // -7n
+    /// bigint.parse("+0")       // 0n
+    /// bigint.parse("")         // throws — empty
+    /// bigint.parse("12a")      // throws — non-digit
+    /// bigint.parse("0x2a")     // throws — hex prefix not accepted
+    /// bigint.parse("1_000")    // throws — underscores not accepted
+    /// bigint.parse(" 5 ")      // throws — whitespace not allowed; trim first
+    /// bigint.parse("99999999999999999999")  // 99999999999999999999n
+    /// ```
+    function parse(text: string) -> bigint throws root.errors.ParseError {
+        $rust_function
+    }
+
+    /// Returns a uniformly distributed random integer in the half-open range
+    /// `[lower, upper)`, drawn from `rng`.
+    ///
+    /// Throws `InvalidArgument` if `lower >= upper` (the range would be empty).
+    /// `rng` defaults to `random.SystemRandom`, the host's cryptographic entropy
+    /// source; pass a seeded generator to make the draw reproducible.
+    ///
+    /// Each attempt consumes enough bytes to represent every zero-based offset
+    /// in the range. For example, `[0n, 256n)` consumes one byte per attempt.
+    /// The result is unbiased, which costs rejection sampling: the number of
+    /// attempts is unbounded in the worst case, though each is accepted with
+    /// probability at least one half.
+    ///
+    /// # Examples
+    /// ```
+    /// bigint.random(0n, 10n)         // some value in {0, 1, ..., 9}
+    /// bigint.random(-5n, 5n)         // some value in {-5, -4, ..., 4}
+    /// bigint.random(0n, 1n)          // always 0  (single-element range)
+    /// bigint.random(5n, 5n)          // throws — empty range
+    /// bigint.random(10n, 0n)         // throws — lower > upper
+    ///
+    /// // Reproducible: the same seed replays the same values.
+    /// let rng = baml.random.Xoshiro256PlusPlus.new(seed = my_seed);
+    /// bigint.random(0n, 10n, rng = rng)
+    /// ```
+    function random(
+        lower: bigint,
+        upper: bigint,
+        rng: root.random.Rng = root.random.SystemRandom.get(),
+    ) -> bigint throws root.errors.InvalidArgument {
+        if (lower >= upper) {
+            throw root.errors.InvalidArgument {
+                message: "bigint.random: lower (" + string.from(lower) + ") must be less than upper (" + string.from(upper) + ")"
+            };
+        }
+        // How many bytes an attempt needs depends only on the range, so resolve it
+        // once rather than per draw.
+        let width = bigint._random_byte_count(lower, upper);
+        let r = bigint._random_in_range(rng.random(width), lower, upper);
+        while (r == upper) {
+            r = bigint._random_in_range(rng.random(width), lower, upper);
+        }
+        r
+    }
+
+    /// Internal: the number of random bytes one `_random_in_range` attempt needs
+    /// for `[lower, upper)`. Zero when the range holds a single value.
+    ///
+    /// Returns `0` for an invalid range as a defensive fallback. Public callers
+    /// reject invalid ranges before invoking this helper.
+    function _random_byte_count(lower: bigint, upper: bigint) -> int throws never {
+        $rust_function
+    }
+
+    /// Internal: maps the bytes of one draw onto `[lower, upper)`.
+    ///
+    /// Returns `upper` to mean "this draw landed in the biased tail; draw
+    /// again". That is unambiguous because the range is half-open, so `upper` is
+    /// never itself a valid result. A draw shorter than `_random_byte_count`
+    /// asked for is rejected the same way, rather than quietly narrowing the
+    /// distribution.
+    ///
+    /// Returns `upper` for an invalid range as a defensive fallback. Public
+    /// callers reject invalid ranges before invoking this helper.
+    function _random_in_range(
+        draw: uint8array,
+        lower: bigint,
+        upper: bigint,
+    ) -> bigint throws never {
+        $rust_function
+    }
 }

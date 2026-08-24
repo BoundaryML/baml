@@ -66,9 +66,12 @@ pub(crate) trait PullSink {
     /// proved the `baml_type::typetag` constant `tag` a sound substitute for
     /// the structural check, so the test is the tag comparison itself.
     fn is_type_tag(&mut self, tag: i64) -> Result<(), Self::Error>;
+    fn runtime_is_type(&mut self) -> Result<(), Self::Error>;
     /// Materialize an `Object::Type` from a `TyTemplate` constant.
     /// Emits `Instruction::LoadType(const_idx)` in the bytecode emitter.
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error>;
+    /// Reify the package statically selected at this call site.
+    fn load_current_package(&mut self, package: &str) -> Result<(), Self::Error>;
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error>;
 
     /// Same as `make_closure` but with an additional `ntypeargs` count for
@@ -435,6 +438,14 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             walk_operand_pull(sink, operand)?;
             sink.is_type_tag(*tag)
         }
+        Rvalue::RuntimeIsType {
+            operand,
+            type_value,
+        } => {
+            walk_operand_pull(sink, operand)?;
+            walk_operand_pull(sink, type_value)?;
+            sink.runtime_is_type()
+        }
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
@@ -456,6 +467,14 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
         Rvalue::MakeVirtualBoundMethod { .. } => {
             // Handled specially in emit_rvalue_pull before this function is called.
             unreachable!("MakeVirtualBoundMethod must be handled in emit_rvalue_pull")
+        }
+        Rvalue::MakeVirtualFunction { .. } => {
+            // Handled specially in emit_rvalue_pull before this function is called.
+            unreachable!("MakeVirtualFunction must be handled in emit_rvalue_pull")
+        }
+        Rvalue::VirtualFieldAccess { .. } => {
+            // Handled specially in emit_rvalue_pull before this function is called.
+            unreachable!("VirtualFieldAccess must be handled in emit_rvalue_pull")
         }
         Rvalue::MakeGenericFunction {
             item,
@@ -482,5 +501,6 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             sink.make_generic_function_from_value(type_arg_templates.len())
         }
         Rvalue::LoadType(template) => sink.load_type(template),
+        Rvalue::CurrentPackage(package) => sink.load_current_package(package),
     }
 }

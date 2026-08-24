@@ -46,6 +46,8 @@ pub(crate) struct Api {
     /// Returns a status buffer: empty on success, otherwise a UTF-8 error
     /// message. Read it with [`Api::take_status`].
     pub(crate) initialize_runtime_from_bytecode: unsafe extern "C" fn(*const u8, usize) -> Buffer,
+    pub(crate) initialize_runtime_from_bytecode_with_metadata:
+        unsafe extern "C" fn(*const u8, usize, *const c_char) -> Buffer,
     pub(crate) register_callback: unsafe extern "C" fn(CallbackFn),
     pub(crate) new_function_call: unsafe extern "C" fn() -> u64,
     pub(crate) call_function: unsafe extern "C" fn(*const u8, usize, u32),
@@ -164,6 +166,20 @@ struct BamlApiV1 {
     register_unhandled_spawn_error_callback:
         Option<unsafe extern "C" fn(extern "C" fn(*const c_char, usize, i32))>,
     shutdown_runtime: Option<unsafe extern "C" fn() -> Buffer>,
+    initialize_runtime_from_bytecode_with_metadata:
+        Option<unsafe extern "C" fn(*const u8, usize, *const c_char) -> Buffer>,
+}
+
+#[repr(C)]
+struct BamlBridgeInfoV1 {
+    struct_size: usize,
+    language: u32,
+    sdk_version: *const u8,
+    sdk_version_len: usize,
+    bridge_runtime_name: *const u8,
+    bridge_runtime_name_len: usize,
+    bridge_runtime_version: *const u8,
+    bridge_runtime_version_len: usize,
 }
 
 fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
@@ -230,6 +246,11 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
         "initialize_runtime_from_bytecode",
         &path,
     )?;
+    let initialize_runtime_from_bytecode_with_metadata = required_slot(
+        table.initialize_runtime_from_bytecode_with_metadata,
+        "initialize_runtime_from_bytecode_with_metadata",
+        &path,
+    )?;
     let free_buffer = required_slot(table.free_buffer, "free_buffer", &path)?;
     let register_callback = required_slot(table.register_callback, "register_callback", &path)?;
     let call_function = required_slot(table.call_function, "call_function", &path)?;
@@ -255,7 +276,7 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     required_slot(table.media_file, "media_file", &path)?;
     required_slot(table.media_base64, "media_base64", &path)?;
     required_slot(table.media_mime_type, "media_mime_type", &path)?;
-    required_slot(table.register_bridge, "register_bridge", &path)?;
+    let register_bridge = required_slot(table.register_bridge, "register_bridge", &path)?;
     required_slot(
         table.register_unhandled_spawn_error_callback,
         "register_unhandled_spawn_error_callback",
@@ -267,6 +288,7 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
         // Not part of BamlApiV1 (a legacy direct export); resolved directly.
         create_baml_runtime: sym(&library, b"create_baml_runtime\0")?,
         initialize_runtime_from_bytecode,
+        initialize_runtime_from_bytecode_with_metadata,
         register_callback,
         new_function_call,
         call_function,
@@ -291,6 +313,24 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
             path.display()
         )));
     }
+
+    let runtime_name = crate::version::BRIDGE_RUNTIME_NAME.as_bytes();
+    let runtime_version = crate::get_bridge_runtime_version().as_bytes();
+    let toolchain_version = crate::get_toolchain_version().as_bytes();
+    let bridge_info = BamlBridgeInfoV1 {
+        struct_size: std::mem::size_of::<BamlBridgeInfoV1>(),
+        language: 4,
+        sdk_version: toolchain_version.as_ptr(),
+        sdk_version_len: toolchain_version.len(),
+        bridge_runtime_name: runtime_name.as_ptr(),
+        bridge_runtime_name_len: runtime_name.len(),
+        bridge_runtime_version: runtime_version.as_ptr(),
+        bridge_runtime_version_len: runtime_version.len(),
+    };
+    #[expect(unsafe_code)]
+    let registration = unsafe { register_bridge((&raw const bridge_info).cast()) };
+    api.take_status(registration)
+        .map_err(LoaderError::VersionMismatch)?;
 
     log::info(&format!("BAML (v{loaded_version}) loaded"));
     log::debug(&format!("Library path: {}", path.display()));

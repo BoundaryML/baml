@@ -513,7 +513,10 @@ fn lower_from_type_name_with_generic_args(
         // The wildcard `_` is an inference hole, not a named type. Any stray
         // generic args on it (`_<...>`, nonsensical) are dropped.
         "_" => TypeExprKind::Infer { attrs: vec![] },
-        "type" => TypeExprKind::Type { attrs: vec![] },
+        // `reflect.Type` is the source spelling of the runtime metatype. Keep
+        // the dedicated AST node so the VM representation remains a compiler
+        // primitive rather than an ordinary class instance.
+        "reflect.Type" => TypeExprKind::Type { attrs: vec![] },
         "$rust_type" => TypeExprKind::Rust { attrs: vec![] },
         "image" => TypeExprKind::Media {
             kind: baml_base::MediaKind::Image,
@@ -674,7 +677,7 @@ pub(crate) fn check_throws_wildcard(
 ///   * the expression-context type positions — a call turbofish, an object
 ///     construction, a generic-apply value, an upcast target — handled during
 ///     inference (see the expression-context `_` hole policy in
-///     `baml_compiler2_tir`'s `builder.rs`).
+///     the retired TIR builder).
 ///
 /// Emits `WildcardTypeNotAllowed` for every occurrence at any depth.
 pub(crate) fn check_wildcard_type(

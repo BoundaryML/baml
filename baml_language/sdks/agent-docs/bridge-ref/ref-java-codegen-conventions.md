@@ -217,18 +217,19 @@ rules digest, not the rationale log).
   `final_async()`, but `final` is a Java reserved word — the getter is
   **`get_final`** (an explicit OWNER override of the `$`-escape default, i.e.
   NOT `final$()`). `next()` returns "partial or finished-sentinel" as
-  `Object` + `instanceof StreamFinished` (Python's `isinstance` duck-typing;
+  `Object` + `instanceof Done` (Python's sentinel duck-typing;
   a sealed `StreamItem<T>` stays a possible future refinement — deferred, not
-  blocking). The finished sentinel is **`baml_sdk.baml.stream.StreamFinished`**,
+  blocking). The finished sentinel is **`baml_sdk.ai.stream.Done`**,
   **runtime-owned like the media classes** (its body ships in `baml-bridge`; the
-  emitter's `RUNTIME_OWNED_FQNS` skips generating a base `StreamFinished.java`)
-  and **registered in the typemap under its BAML FQN** (`baml.stream.StreamFinished`)
-  by a `TypeRegistry` static block, so a `class_value(baml.stream.StreamFinished,
-  {})` decodes to it. Exhaustion follows Python: `next()` returns partial values
-  until it returns a `StreamFinished` VALUE — no `null`, no exception. On the
-  wire a `BamlStream` is a bare `handle_value(ADT_TAGGED_HEAP_HANDLE)` (encode
-  clones the receiver key per the drain contract; decode reifies via
-  `BamlStream.fromHandle`).
+  emitter's `RUNTIME_OWNED_FQNS` skips generating a base `Done.java`) and
+  **registered in the typemap under its BAML FQN** (`ai.stream.Done`) by a
+  `TypeRegistry` static block, so a `class_value(ai.stream.Done, {})` decodes to
+  it. Exhaustion follows Python: `next()` returns partial values until it
+  returns a `Done` VALUE — no `null`, no exception. On the wire a `BamlStream`
+  is a bare `handle_value(ADT_TAGGED_HEAP_HANDLE)` whose outbound `ty` carries
+  the concrete stream class FQN. Decode retains that identity and derives
+  `<FQN>.next` / `<FQN>.final`; encode clones the receiver key per the drain
+  contract.
 - **`$stream` partial-model packaging** **[decided]** (owner, 2026-07-17;
   `BamlStream` itself untouched — this is only where host-constructible
   partial-model classes live): in-package `$`-preserved companions —

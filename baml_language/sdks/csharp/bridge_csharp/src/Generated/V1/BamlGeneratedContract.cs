@@ -24,18 +24,24 @@ public static partial class BamlGeneratedContract
         string requiredBridgeVersion,
         BamlGeneratedRegistry registry)
     {
-        RequireCompatibility(
+        return RegisterProgram(
             contractVersion,
-            generatedVersion,
-            requiredBridgeVersion);
+            bytecode,
+            fingerprint,
+            embeddedBamlToml: null,
+            registry);
+    }
+
+    public static BamlGeneratedProgram RegisterProgram(
+        int contractVersion,
+        ReadOnlyMemory<byte> bytecode,
+        string fingerprint,
+        string? embeddedBamlToml,
+        BamlGeneratedRegistry registry)
+    {
+        RequireContractVersion(contractVersion);
 
         ArgumentNullException.ThrowIfNull(registry);
-        if (bytecode.IsEmpty)
-        {
-            throw new BamlProgramIntegrityException(
-                "Generated BAML bytecode must not be empty.");
-        }
-
         if (!IsLowercaseSha256(fingerprint))
         {
             throw new BamlProgramIntegrityException(
@@ -49,29 +55,9 @@ public static partial class BamlGeneratedContract
                 "Generated BAML bytecode does not match its fingerprint.");
         }
 
-        ProgramNativeState nativeState = ProgramRegistrar.Register(bytecode.Span, fingerprint);
+        ProgramNativeState nativeState =
+            ProgramRegistrar.Register(bytecode.Span, fingerprint, embeddedBamlToml);
         return new BamlGeneratedProgram(registry, nativeState);
-    }
-
-    private static void RequireCompatibility(
-        int contractVersion,
-        string generatedVersion,
-        string requiredBridgeVersion)
-    {
-        RequireContractVersion(contractVersion);
-        if (!StringComparer.Ordinal.Equals(generatedVersion, RuntimeIdentity.PackageVersion))
-        {
-            throw new BamlVersionMismatchException(
-                $"Generated client version {generatedVersion} is incompatible with Baml.Bridge {RuntimeIdentity.PackageVersion}.");
-        }
-
-        if (!StringComparer.Ordinal.Equals(
-                requiredBridgeVersion,
-                RuntimeIdentity.RequiredBridgeVersion))
-        {
-            throw new BamlVersionMismatchException(
-                $"Generated bridge requirement {requiredBridgeVersion} is incompatible with Baml.Bridge {RuntimeIdentity.RequiredBridgeVersion}.");
-        }
     }
 
     private static void RequireContractVersion(int requestedVersion)

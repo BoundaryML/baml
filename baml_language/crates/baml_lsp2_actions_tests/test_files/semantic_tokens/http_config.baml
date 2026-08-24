@@ -1,106 +1,58 @@
-// Valid HTTP configuration for regular clients
-client<llm> ValidHttpClient {
-  provider openai
-  options {
-    model "gpt-4"
-    http {
-      connect_timeout_ms 5000
-      request_timeout_ms 30000
-    }
-  }
-}
+// Constructed client values (the old client<llm> http config blocks are gone)
+client ValidHttpClient = openai.ResponsesClient.new(
+  model = "gpt-4",
+  base_url = "http://localhost:8080",
+);
 
-// Valid streaming timeouts
-client<llm> ValidStreamingClient {
-  provider anthropic
-  options {
-    model "claude-3"
-    http {
-      time_to_first_token_timeout_ms 15000
-      idle_timeout_ms 10000
-    }
-  }
-}
+client ValidStreamingClient = anthropic.AnthropicClient.new(model = "claude-3");
 
-// Valid zero timeout (infinite)
-client<llm> InfiniteTimeoutClient {
-  provider openai
-  options {
-    model "gpt-4"
-    http {
-      request_timeout_ms 0
-    }
-  }
-}
+client InfiniteTimeoutClient = openai.ResponsesClient.new(model = "gpt-4");
 
-// Valid composite client with total timeout
-client<llm> ValidFallbackClient {
-  provider fallback
-  options {
-    strategy [ValidHttpClient, ValidStreamingClient]
-    http {
-      total_timeout_ms 60000
-    }
-  }
-}
+// Composite reliability client built from the two above
+client ValidFallbackClient = ai.clients.Fallback { members: [ValidHttpClient, ValidStreamingClient] };
 
 //----
 //- diagnostics
 // <no-diagnostics-expected>
 //
 //- semantic_tokens
-// http_config.baml:1:1 (comment) len=47 "// Valid HTTP configuration for regular clients"
+// http_config.baml:1:1 (comment) len=78 "// Constructed client values (the old client<llm> http config blocks are gone)"
 // http_config.baml:2:1 (keyword) len=6 "client"
-// http_config.baml:2:7 (operator) len=1 "<"
-// http_config.baml:2:8 (type) len=3 "llm"
-// http_config.baml:2:11 (operator) len=1 ">"
-// http_config.baml:2:13 (struct) [declaration] len=15 "ValidHttpClient"
-// http_config.baml:3:3 (property) len=8 "provider"
-// http_config.baml:4:3 (property) len=7 "options"
-// http_config.baml:5:5 (property) len=5 "model"
-// http_config.baml:5:11 (string) len=7 "\"gpt-4\""
-// http_config.baml:6:5 (property) len=4 "http"
-// http_config.baml:7:7 (property) len=18 "connect_timeout_ms"
-// http_config.baml:7:26 (number) len=4 "5000"
-// http_config.baml:8:7 (property) len=18 "request_timeout_ms"
-// http_config.baml:8:26 (number) len=5 "30000"
-// http_config.baml:13:1 (comment) len=27 "// Valid streaming timeouts"
-// http_config.baml:14:1 (keyword) len=6 "client"
-// http_config.baml:14:7 (operator) len=1 "<"
-// http_config.baml:14:8 (type) len=3 "llm"
-// http_config.baml:14:11 (operator) len=1 ">"
-// http_config.baml:14:13 (struct) [declaration] len=20 "ValidStreamingClient"
-// http_config.baml:15:3 (property) len=8 "provider"
-// http_config.baml:16:3 (property) len=7 "options"
-// http_config.baml:17:5 (property) len=5 "model"
-// http_config.baml:17:11 (string) len=10 "\"claude-3\""
-// http_config.baml:18:5 (property) len=4 "http"
-// http_config.baml:19:7 (property) len=30 "time_to_first_token_timeout_ms"
-// http_config.baml:19:38 (number) len=5 "15000"
-// http_config.baml:20:7 (property) len=15 "idle_timeout_ms"
-// http_config.baml:20:23 (number) len=5 "10000"
-// http_config.baml:25:1 (comment) len=32 "// Valid zero timeout (infinite)"
-// http_config.baml:26:1 (keyword) len=6 "client"
-// http_config.baml:26:7 (operator) len=1 "<"
-// http_config.baml:26:8 (type) len=3 "llm"
-// http_config.baml:26:11 (operator) len=1 ">"
-// http_config.baml:26:13 (struct) [declaration] len=21 "InfiniteTimeoutClient"
-// http_config.baml:27:3 (property) len=8 "provider"
-// http_config.baml:28:3 (property) len=7 "options"
-// http_config.baml:29:5 (property) len=5 "model"
-// http_config.baml:29:11 (string) len=7 "\"gpt-4\""
-// http_config.baml:30:5 (property) len=4 "http"
-// http_config.baml:31:7 (property) len=18 "request_timeout_ms"
-// http_config.baml:31:26 (number) len=1 "0"
-// http_config.baml:36:1 (comment) len=44 "// Valid composite client with total timeout"
-// http_config.baml:37:1 (keyword) len=6 "client"
-// http_config.baml:37:7 (operator) len=1 "<"
-// http_config.baml:37:8 (type) len=3 "llm"
-// http_config.baml:37:11 (operator) len=1 ">"
-// http_config.baml:37:13 (struct) [declaration] len=19 "ValidFallbackClient"
-// http_config.baml:38:3 (property) len=8 "provider"
-// http_config.baml:39:3 (property) len=7 "options"
-// http_config.baml:40:5 (property) len=8 "strategy"
-// http_config.baml:41:5 (property) len=4 "http"
-// http_config.baml:42:7 (property) len=16 "total_timeout_ms"
-// http_config.baml:42:24 (number) len=5 "60000"
+// http_config.baml:2:24 (operator) len=1 "="
+// http_config.baml:2:26 (namespace) [defaultLibrary] len=6 "openai"
+// http_config.baml:2:32 (namespace) [defaultLibrary] len=1 "."
+// http_config.baml:2:33 (class) [defaultLibrary] len=15 "ResponsesClient"
+// http_config.baml:2:49 (method) len=3 "new"
+// http_config.baml:3:3 (parameter) len=5 "model"
+// http_config.baml:3:9 (operator) len=1 "="
+// http_config.baml:3:11 (string) len=7 "\"gpt-4\""
+// http_config.baml:4:3 (parameter) len=8 "base_url"
+// http_config.baml:4:12 (operator) len=1 "="
+// http_config.baml:4:14 (string) len=23 "\"http://localhost:8080\""
+// http_config.baml:7:1 (keyword) len=6 "client"
+// http_config.baml:7:29 (operator) len=1 "="
+// http_config.baml:7:31 (namespace) [defaultLibrary] len=9 "anthropic"
+// http_config.baml:7:40 (namespace) [defaultLibrary] len=1 "."
+// http_config.baml:7:41 (class) [defaultLibrary] len=15 "AnthropicClient"
+// http_config.baml:7:57 (method) len=3 "new"
+// http_config.baml:7:61 (parameter) len=5 "model"
+// http_config.baml:7:67 (operator) len=1 "="
+// http_config.baml:7:69 (string) len=10 "\"claude-3\""
+// http_config.baml:9:1 (keyword) len=6 "client"
+// http_config.baml:9:30 (operator) len=1 "="
+// http_config.baml:9:32 (namespace) [defaultLibrary] len=6 "openai"
+// http_config.baml:9:38 (namespace) [defaultLibrary] len=1 "."
+// http_config.baml:9:39 (class) [defaultLibrary] len=15 "ResponsesClient"
+// http_config.baml:9:55 (method) len=3 "new"
+// http_config.baml:9:59 (parameter) len=5 "model"
+// http_config.baml:9:65 (operator) len=1 "="
+// http_config.baml:9:67 (string) len=7 "\"gpt-4\""
+// http_config.baml:11:1 (comment) len=56 "// Composite reliability client built from the two above"
+// http_config.baml:12:1 (keyword) len=6 "client"
+// http_config.baml:12:28 (operator) len=1 "="
+// http_config.baml:12:30 (class) len=2 "ai"
+// http_config.baml:12:32 (namespace) [defaultLibrary] len=1 "."
+// http_config.baml:12:40 (namespace) [defaultLibrary] len=1 "."
+// http_config.baml:12:52 (property) len=7 "members"
+// http_config.baml:12:62 (variable) len=15 "ValidHttpClient"
+// http_config.baml:12:79 (variable) len=20 "ValidStreamingClient"

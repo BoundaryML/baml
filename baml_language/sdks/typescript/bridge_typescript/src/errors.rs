@@ -66,6 +66,7 @@ pub fn bridge_error_to_napi(err: bridge_cffi::error::BridgeError) -> napi::Error
             Status::GenericFailure,
             format!("BamlError: BamlClientError: Internal error: {msg}"),
         ),
+        BridgeError::Startup(message) => napi::Error::new(Status::GenericFailure, message),
     }
 }
 

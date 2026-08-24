@@ -62,14 +62,12 @@ describe("llm_functions — factory + companion bindings", () => {
   });
 
   it("main_lorem_extract_resume_companion_bindings_exist", () => {
-    expect(typeof lorem.ExtractResume$build_request).toBe("function");
-    expect(typeof lorem.ExtractResume$build_request_async).toBe("function");
+    // The single-path companion set: $build_request* and $parse_stream
+    // went away with the legacy LLM path.
     expect(typeof lorem.ExtractResume$render_prompt).toBe("function");
     expect(typeof lorem.ExtractResume$render_prompt_async).toBe("function");
     expect(typeof lorem.ExtractResume$parse).toBe("function");
     expect(typeof lorem.ExtractResume$parse_async).toBe("function");
-    expect(typeof lorem.ExtractResume$parse_stream).toBe("function");
-    expect(typeof lorem.ExtractResume$parse_stream_async).toBe("function");
   });
 
   it("main_lorem_streaming_extract_sync_plus_async_factories_are_callable", () => {
@@ -78,14 +76,12 @@ describe("llm_functions — factory + companion bindings", () => {
   });
 
   it("main_lorem_streaming_extract_companion_bindings_exist", () => {
-    expect(typeof lorem.StreamingExtract$build_request).toBe("function");
-    expect(typeof lorem.StreamingExtract$build_request_async).toBe("function");
+    // The single-path companion set: $build_request* and $parse_stream
+    // went away with the legacy LLM path.
     expect(typeof lorem.StreamingExtract$render_prompt).toBe("function");
     expect(typeof lorem.StreamingExtract$render_prompt_async).toBe("function");
     expect(typeof lorem.StreamingExtract$parse).toBe("function");
     expect(typeof lorem.StreamingExtract$parse_async).toBe("function");
-    expect(typeof lorem.StreamingExtract$parse_stream).toBe("function");
-    expect(typeof lorem.StreamingExtract$parse_stream_async).toBe("function");
   });
 
   it("main_ipsum_classify_sentiment_sync_plus_async_factories_are_callable", () => {

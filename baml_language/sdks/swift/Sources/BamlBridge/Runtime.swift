@@ -77,53 +77,77 @@ public final class BamlRuntime: @unchecked Sendable {
         String(decoding: BamlApi.takeBuffer(BamlApi.version()), as: UTF8.self)
     }
 
+    public static func toolchainVersion() -> String {
+        BamlBridgeIdentity.toolchainVersion
+    }
+
+    public static func bridgeRuntimeVersion() -> String {
+        BamlBridgeIdentity.bridgeRuntimeVersion
+    }
+
     /// Load compiled BAML bytecode into the (process-global) native
     /// runtime, register this bridge's identity, and register the
     /// completion callback. Idempotent; generated SDK roots call this
     /// from their `_initialized` once.
     ///
-    /// `sdkVersion` is the canonical BAML product version stamped into
-    /// the generated SDK at codegen time; `register_bridge` requires an
-    /// exact match with the native library's version, so a generated SDK
-    /// can never silently run against a different runtime release.
-    public func initialize(bytecode: Data, sdkVersion: String? = nil) {
+    /// `sdkVersion` remains as a compatibility argument for older generated
+    /// SDKs. Registration uses the bridge's stamped toolchain and package
+    /// identities, while new generated SDKs provide `embeddedBamlToml`.
+    public func initialize(
+        bytecode: Data,
+        sdkVersion: String? = nil,
+        embeddedBamlToml: String? = nil
+    ) {
         lock.lock()
         defer { lock.unlock() }
         guard !initialized else { return }
 
-        if let sdkVersion {
-            let versionBytes = Array(sdkVersion.utf8)
-            let registerError = versionBytes.withUnsafeBufferPointer { buf -> BamlBuffer in
+        _ = sdkVersion
+        let versionBytes = Array(BamlBridgeIdentity.toolchainVersion.utf8)
+        let nameBytes = Array(BamlBridgeIdentity.runtimeName.utf8)
+        let runtimeVersionBytes = Array(BamlBridgeIdentity.bridgeRuntimeVersion.utf8)
+        let registerError = versionBytes.withUnsafeBufferPointer { versionBuffer -> BamlBuffer in
+            nameBytes.withUnsafeBufferPointer { nameBuffer in
+                runtimeVersionBytes.withUnsafeBufferPointer { runtimeVersionBuffer in
                 var info = BamlBridgeInfoV1(
                     struct_size: MemoryLayout<BamlBridgeInfoV1>.size,
                     language: BAML_BRIDGE_LANGUAGE_SWIFT.rawValue,
-                    sdk_version: buf.baseAddress,
-                    sdk_version_len: buf.count
+                    sdk_version: versionBuffer.baseAddress,
+                    sdk_version_len: versionBuffer.count,
+                    bridge_runtime_name: nameBuffer.baseAddress,
+                    bridge_runtime_name_len: nameBuffer.count,
+                    bridge_runtime_version: runtimeVersionBuffer.baseAddress,
+                    bridge_runtime_version_len: runtimeVersionBuffer.count
                 )
                 return BamlApi.registerBridge(&info)
             }
-            let message = String(decoding: BamlApi.takeBuffer(registerError), as: UTF8.self)
-            if !message.isEmpty {
-                // A version mismatch means the generated SDK and the
-                // linked native library came from different releases —
-                // misconfiguration, not a runtime condition.
-                fatalError("BAML bridge registration failed: \(message)")
             }
+        }
+        let message = String(decoding: BamlApi.takeBuffer(registerError), as: UTF8.self)
+        if !message.isEmpty {
+            fatalError(message)
         }
 
         BamlApi.registerUnhandledSpawnErrorCallback(bamlGlobalUnhandledSpawnError)
 
         let errorBuffer = bytecode.withUnsafeBytes { buf -> BamlBuffer in
-            BamlApi.initializeRuntimeFromBytecode(
-                buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                buf.count
-            )
+            if let embeddedBamlToml {
+                return embeddedBamlToml.withCString { manifest in
+                    BamlApi.initializeRuntimeFromBytecodeWithMetadata(
+                        buf.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                        buf.count,
+                        manifest
+                    )
+                }
+            }
+            return BamlApi.initializeRuntimeFromBytecode(
+                buf.baseAddress?.assumingMemoryBound(to: UInt8.self), buf.count)
         }
         let initError = String(decoding: BamlApi.takeBuffer(errorBuffer), as: UTF8.self)
         if !initError.isEmpty {
             // Init failure is unrecoverable misconfiguration (corrupt
             // inlined bytecode), not a runtime condition.
-            fatalError("BAML runtime initialization failed: \(initError)")
+            fatalError(initError)
         }
 
         BamlApi.registerCallback(bamlGlobalCompletion)
@@ -159,7 +183,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     /// Undecoded ok-value variants — for callers that interpret the
     /// wire value themselves (BamlStream's next(), which must
-    /// distinguish the StreamFinished sentinel from a partial).
+    /// distinguish the `ai.stream.Done` sentinel from a partial).
     public func callRawSync(
         _ fqn: String,
         args: [(String, (any BamlEncodable)?)]

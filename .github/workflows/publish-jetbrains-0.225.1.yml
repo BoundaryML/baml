@@ -1,0 +1,330 @@
+name: Publish JetBrains 0.225.1 (one-off)
+
+run-name: Replace JetBrains update ${{ inputs.rejected_update_id }} with ${{ inputs.version }} on ${{ inputs.channel }} from ${{ inputs.expected_source_sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact recovery version; this workflow intentionally permits only 0.225.1
+        required: true
+        default: 0.225.1
+        type: string
+      channel:
+        description: JetBrains Marketplace channel
+        required: true
+        default: default
+        type: choice
+        options:
+          - default
+      expected_source_sha:
+        description: Full canary commit SHA that must be checked out and published
+        required: true
+        type: string
+      rejected_update_id:
+        description: Exact rejected JetBrains Marketplace update ID to replace
+        required: true
+        type: string
+      confirmation:
+        description: Type "publish com.boundaryml.jetbrains_ext 0.225.1 to default"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jetbrains-marketplace-0.225.1-production
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+    working-directory: jetbrains
+
+jobs:
+  publish:
+    name: Build, verify, and submit to Marketplace
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: release
+    env:
+      PLUGIN_ID: com.boundaryml.jetbrains_ext
+      MARKETPLACE_PLUGIN_ID: "27455"
+      REJECTED_UPDATE_ID: ${{ inputs.rejected_update_id }}
+      VERSION: ${{ inputs.version }}
+      CHANNEL: ${{ inputs.channel }}
+      EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - name: Checkout one-off release tag
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Guard one-off production dispatch
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          expected_confirmation="publish ${PLUGIN_ID} 0.225.1 to default"
+          # Keep this dotless so it cannot match release.yml's *.* version-tag trigger.
+          expected_ref="jetbrains-republish-02251"
+          actual_sha="$(git rev-parse HEAD)"
+
+          if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != "${expected_ref}" ]]; then
+            echo "::error::Dispatch this workflow from the exact ${expected_ref} tag only; got ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+          if [[ "${VERSION}" != "0.225.1" ]]; then
+            echo "::error::This recovery workflow permits only version 0.225.1; got ${VERSION}."
+            exit 1
+          fi
+          if [[ "${CHANNEL}" != "default" ]]; then
+            echo "::error::This recovery workflow permits only the production default channel; got ${CHANNEL}."
+            exit 1
+          fi
+          if [[ ! "${REJECTED_UPDATE_ID}" =~ ^[0-9]+$ ]]; then
+            echo "::error::Rejected Marketplace update ID must contain only decimal digits; got ${REJECTED_UPDATE_ID}."
+            exit 1
+          fi
+          if [[ ! "${EXPECTED_SOURCE_SHA}" =~ ^[0-9a-f]{40}$ || "${actual_sha}" != "${EXPECTED_SOURCE_SHA}" ]]; then
+            echo "::error::Checked-out SHA ${actual_sha} does not equal expected full SHA ${EXPECTED_SOURCE_SHA}."
+            exit 1
+          fi
+          if [[ "${CONFIRMATION}" != "${expected_confirmation}" ]]; then
+            echo "::error::Confirmation did not exactly match: ${expected_confirmation}"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor f6c01b1d23a6a1f30cc9bef25aa6d7a499a1b287 HEAD; then
+            echo "::error::The checked-out revision does not contain the TextMate fix merged by PR #4381."
+            exit 1
+          fi
+
+          canary_comparison="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${EXPECTED_SOURCE_SHA}...canary")"
+          comparison_status="$(jq -r '.status // ""' <<<"${canary_comparison}")"
+          merge_base_sha="$(jq -r '.merge_base_commit.sha // ""' <<<"${canary_comparison}")"
+          if [[ "${merge_base_sha}" != "${EXPECTED_SOURCE_SHA}" || ( "${comparison_status}" != "ahead" && "${comparison_status}" != "identical" ) ]]; then
+            echo "::error::Expected source ${EXPECTED_SOURCE_SHA} is not on canary; comparison status=${comparison_status}, merge base=${merge_base_sha}."
+            exit 1
+          fi
+
+          echo "Publishing ${PLUGIN_ID} ${VERSION} to ${CHANNEL} from ${actual_sha}."
+
+      - name: Refuse an existing Marketplace version
+        run: |
+          set -euo pipefail
+
+          update_url="https://plugins.jetbrains.com/api/updates/${REJECTED_UPDATE_ID}"
+          update_file="$(mktemp)"
+          update_status="$(curl --retry 3 --retry-all-errors --silent --show-error --output "${update_file}" --write-out '%{http_code}' "${update_url}")"
+          if [[ "${update_status}" == "200" ]]; then
+            if ! jq -e --argjson update_id "${REJECTED_UPDATE_ID}" --argjson plugin_id "${MARKETPLACE_PLUGIN_ID}" --arg version "${VERSION}" '.id == $update_id and .pluginId == $plugin_id and .version == $version and .approve == false and .listed == false and .downloads == 0' "${update_file}" >/dev/null; then
+              echo "::error::Marketplace update ${REJECTED_UPDATE_ID} is not the expected rejected, unlisted, unused ${VERSION} update."
+              jq '{id, pluginId, version, approve, listed, hidden, downloads}' "${update_file}"
+              exit 1
+            fi
+            echo "Found rejected Marketplace update ${REJECTED_UPDATE_ID}; it will be replaced only after the corrected artifact passes verification."
+          elif [[ "${update_status}" == "404" ]]; then
+            echo "Rejected Marketplace update ${REJECTED_UPDATE_ID} was already removed by an earlier failed replacement attempt."
+          else
+            echo "::error::Could not inspect Marketplace update ${REJECTED_UPDATE_ID}; HTTP ${update_status}."
+            cat "${update_file}"
+            exit 1
+          fi
+
+          download_url="https://plugins.jetbrains.com/plugin/download?pluginId=${PLUGIN_ID}&version=${VERSION}"
+          http_status="$(curl --retry 3 --retry-all-errors --silent --show-error --output /dev/null --write-out '%{http_code}' "${download_url}")"
+          if [[ "${update_status}" == "200" && "${http_status}" != "301" ]]; then
+            echo "::error::Expected the rejected update download endpoint to return HTTP 301; got ${http_status}."
+            exit 1
+          fi
+          if [[ "${update_status}" == "404" && "${http_status}" != "404" ]]; then
+            echo "::error::Marketplace update metadata is absent but the exact-version download endpoint returned HTTP ${http_status}."
+            exit 1
+          fi
+
+          approved_versions="$(curl --retry 3 --retry-all-errors --fail --silent --show-error "https://plugins.jetbrains.com/api/plugins/${MARKETPLACE_PLUGIN_ID}/updates?channel=&size=100")"
+          if jq -e --arg version "${VERSION}" '.[] | select(.version == $version)' <<<"${approved_versions}" >/dev/null; then
+            echo "::error::Marketplace stable feed already contains version ${VERSION}; refusing a duplicate upload."
+            exit 1
+          fi
+          jq -r '.[0] | "Current approved stable version: \(.version) (update \(.id))"' <<<"${approved_versions}"
+
+      - name: Set up Java
+        uses: ./.github/actions/setup-java
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build plugin artifact
+        run: ./gradlew --no-daemon --stacktrace clean buildPlugin -PpluginVersion="${VERSION}"
+
+      - name: Run TextMate descriptor regression test
+        run: ./gradlew --no-daemon --stacktrace test --tests 'com.boundaryml.jetbrains_ext.BamlPluginTest.testTextMateDescriptorUsesSupportedHandoff' -PpluginVersion="${VERSION}"
+
+      - name: Verify plugin project and archive structure
+        run: ./gradlew --no-daemon --stacktrace verifyPluginProjectConfiguration verifyPluginStructure -PpluginVersion="${VERSION}"
+
+      - name: Verify Marketplace compatibility boundaries
+        run: ./gradlew --no-daemon --stacktrace verifyPlugin -PpluginVersion="${VERSION}" -PverifyMarketplaceBoundary=true
+
+      - name: Inspect exact distribution
+        id: distribution
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          artifacts=(build/distributions/*.zip)
+          if [[ "${#artifacts[@]}" -ne 1 ]]; then
+            echo "::error::Expected exactly one plugin ZIP, found ${#artifacts[@]}."
+            printf '%s\n' "${artifacts[@]:-}"
+            exit 1
+          fi
+          artifact="${artifacts[0]}"
+          expected_name="BAML v0 Playground-${VERSION}.zip"
+          if [[ "$(basename "${artifact}")" != "${expected_name}" ]]; then
+            echo "::error::Expected ${expected_name}, found $(basename "${artifact}")."
+            exit 1
+          fi
+
+          inspection_dir="$(mktemp -d)"
+          unzip -q "${artifact}" -d "${inspection_dir}"
+          plugin_jar=""
+          while IFS= read -r candidate; do
+            if unzip -Z1 "${candidate}" | grep -qx 'META-INF/plugin.xml'; then
+              plugin_jar="${candidate}"
+              break
+            fi
+          done < <(find "${inspection_dir}" -type f -path '*/lib/*.jar' | sort)
+          if [[ -z "${plugin_jar}" ]]; then
+            echo "::error::Could not locate the plugin JAR containing META-INF/plugin.xml."
+            exit 1
+          fi
+
+          descriptor="$(unzip -p "${plugin_jar}" META-INF/plugin.xml)"
+          grep -q "<id>${PLUGIN_ID}</id>" <<<"${descriptor}"
+          grep -q "<version>${VERSION}</version>" <<<"${descriptor}"
+          grep -Fq '<idea-version since-build="242" until-build="261.*"' <<<"${descriptor}"
+          grep -q 'textmate.bundleProvider' <<<"${descriptor}"
+          if grep -Eq 'org\.jetbrains\.plugins\.textmate\..*(implementation|implementationClass)|(implementation|implementationClass).*org\.jetbrains\.plugins\.textmate\.' <<<"${descriptor}"; then
+            echo "::error::Packaged descriptor directly registers a TextMate implementation class."
+            exit 1
+          fi
+
+          javap -classpath "${plugin_jar}" com.boundaryml.jetbrains_ext.BamlFileType | tee build/BamlFileType.javap.txt
+          grep -q 'org.jetbrains.plugins.textmate.TextMateBackedFileType' build/BamlFileType.javap.txt
+          javap -classpath "${plugin_jar}" -c -p com.boundaryml.jetbrains_ext.BamlLanguageServerService | tee build/BamlLanguageServerService.javap.txt
+          grep -q 'com/intellij/ide/plugins/PluginManager.getPluginByClass' build/BamlLanguageServerService.javap.txt
+          if grep -q 'PluginManagerCore' build/BamlLanguageServerService.javap.txt; then
+            echo "::error::Packaged bytecode still references the internal PluginManagerCore API."
+            exit 1
+          fi
+          unzip -Z1 "${artifact}" | sort > build/distribution-contents.txt
+          sha256sum "${artifact}" | tee build/distribution.sha256
+          echo "artifact=${artifact}" >> "${GITHUB_OUTPUT}"
+          echo "sha256=$(sha256sum "${artifact}" | cut -d ' ' -f 1)" >> "${GITHUB_OUTPUT}"
+
+      - name: Retain plugin artifact and verification diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: jetbrains-0.225.1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            jetbrains/build/distributions/*.zip
+            jetbrains/build/distribution.sha256
+            jetbrains/build/distribution-contents.txt
+            jetbrains/build/BamlFileType.javap.txt
+            jetbrains/build/BamlLanguageServerService.javap.txt
+            jetbrains/build/reports/pluginVerifier/**
+            jetbrains/build/reports/pluginStructure/**
+            jetbrains/build/reports/tests/**
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Remove the rejected Marketplace update
+        env:
+          INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${INTELLIJ_PLATFORM_PUBLISH_TOKEN:-}" ]]; then
+            echo "::error::SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN is empty or unavailable."
+            exit 1
+          fi
+
+          update_url="https://plugins.jetbrains.com/api/updates/${REJECTED_UPDATE_ID}"
+          update_file="$(mktemp)"
+          update_status="$(curl --retry 3 --retry-all-errors --silent --show-error --output "${update_file}" --write-out '%{http_code}' "${update_url}")"
+          if [[ "${update_status}" == "200" ]]; then
+            if ! jq -e --argjson update_id "${REJECTED_UPDATE_ID}" --argjson plugin_id "${MARKETPLACE_PLUGIN_ID}" --arg version "${VERSION}" '.id == $update_id and .pluginId == $plugin_id and .version == $version and .approve == false and .listed == false and .downloads == 0' "${update_file}" >/dev/null; then
+              echo "::error::Refusing to remove Marketplace update ${REJECTED_UPDATE_ID}; its identity or state changed after preflight."
+              jq '{id, pluginId, version, approve, listed, hidden, downloads}' "${update_file}"
+              exit 1
+            fi
+            delete_status="$(curl --retry 3 --retry-all-errors --silent --show-error --output build/marketplace-delete-response.json --write-out '%{http_code}' --request DELETE --header "Authorization: Bearer ${INTELLIJ_PLATFORM_PUBLISH_TOKEN}" "${update_url}")"
+            if [[ "${delete_status}" != "200" && "${delete_status}" != "204" && "${delete_status}" != "404" ]]; then
+              echo "::error::Marketplace rejected deletion of update ${REJECTED_UPDATE_ID}; HTTP ${delete_status}."
+              cat build/marketplace-delete-response.json
+              exit 1
+            fi
+            echo "Rejected Marketplace update ${REJECTED_UPDATE_ID} is absent or was removed."
+          elif [[ "${update_status}" != "404" ]]; then
+            echo "::error::Could not re-check Marketplace update ${REJECTED_UPDATE_ID}; HTTP ${update_status}."
+            cat "${update_file}"
+            exit 1
+          fi
+
+          download_url="https://plugins.jetbrains.com/plugin/download?pluginId=${PLUGIN_ID}&version=${VERSION}"
+          for attempt in {1..12}; do
+            update_status="$(curl --retry 3 --retry-all-errors --silent --show-error --output /dev/null --write-out '%{http_code}' "${update_url}")"
+            download_status="$(curl --retry 3 --retry-all-errors --silent --show-error --output /dev/null --write-out '%{http_code}' "${download_url}")"
+            if [[ "${update_status}" == "404" && "${download_status}" == "404" ]]; then
+              echo "Marketplace confirms that rejected update ${REJECTED_UPDATE_ID} is absent."
+              exit 0
+            fi
+            echo "Waiting for rejected update removal (attempt ${attempt}/12): metadata=${update_status}, download=${download_status}."
+            sleep 5
+          done
+          echo "::error::Marketplace did not confirm removal of rejected update ${REJECTED_UPDATE_ID}."
+          exit 1
+
+      - name: Submit verified artifact to JetBrains Marketplace
+        env:
+          INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${INTELLIJ_PLATFORM_PUBLISH_TOKEN:-}" ]]; then
+            echo "::error::SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN is empty or unavailable."
+            exit 1
+          fi
+          before_sha="$(sha256sum "${{ steps.distribution.outputs.artifact }}" | cut -d ' ' -f 1)"
+          if [[ "${before_sha}" != "${{ steps.distribution.outputs.sha256 }}" ]]; then
+            echo "::error::Distribution changed after verification; refusing upload."
+            exit 1
+          fi
+          ./gradlew --no-daemon --stacktrace publishPlugin -PpluginVersion="${VERSION}"
+
+      - name: Report initial Marketplace acceptance state
+        run: |
+          download_url="https://plugins.jetbrains.com/plugin/download?pluginId=${PLUGIN_ID}&version=${VERSION}"
+          http_status="$(curl --retry 3 --retry-all-errors --silent --show-error --output /dev/null --write-out '%{http_code}' "${download_url}" || true)"
+          if approved_versions="$(curl --retry 3 --retry-all-errors --fail --silent --show-error "https://plugins.jetbrains.com/api/plugins/${MARKETPLACE_PLUGIN_ID}/updates?channel=&size=100")" && jq -e --arg version "${VERSION}" '.[] | select(.version == $version and .approve == true and .listed == true and .hidden == false)' <<<"${approved_versions}" >/dev/null; then
+            marketplace_state="approved and publicly listed"
+          else
+            marketplace_state="authenticated upload completed; awaiting Marketplace approval/public indexing"
+            echo "::notice::Version ${VERSION} was uploaded, but is not yet approved/listed. The public exact-version probe currently returns HTTP ${http_status:-unknown}. GitHub success is not publication acceptance."
+          fi
+
+          {
+            echo "## JetBrains Marketplace submission"
+            echo
+            echo "- Plugin: \`${PLUGIN_ID}\`"
+            echo "- Version/channel: \`${VERSION}\` / \`${CHANNEL}\`"
+            echo "- Source: \`${GITHUB_SHA}\`"
+            echo "- Artifact SHA-256: \`${{ steps.distribution.outputs.sha256 }}\`"
+            echo "- State at workflow completion: ${marketplace_state}"
+            echo "- Public stable feed: https://plugins.jetbrains.com/plugins/list?pluginId=${PLUGIN_ID}"
+            echo "- Exact-version download probe: ${download_url}"
+          } >> "${GITHUB_STEP_SUMMARY}"

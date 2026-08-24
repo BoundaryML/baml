@@ -4,8 +4,8 @@ function Bar {
 }
 
 function Bar(a: string, b: int | bool) -> int {
-  client Bar
-  prompt #"fa"#
+  client: Bar
+  prompt: `fa`
 }
 
 // error: The function "Bar" cannot be re-defined because a function with that name already exists.
@@ -69,14 +69,4 @@ function Bar(a: string, b: int | bool) -> int {
 //  1 │ function Bar {
 //    ·              ┬
 //    ·              ╰── old-style function syntax; use `function Name(params...) -> ReturnType { ... }`
-//    ╰────
-// E0001
-//
-//   × mismatched types
-//    ╭─[functions_v2_duplicate_names.baml:6:47]
-//  6 │ ╭─▶ function Bar(a: string, b: int | bool) -> int {
-//  7 │ │     client Bar
-//  8 │ │     prompt #"fa"#
-//  9 │ ├─▶ }
-//    · ╰──── expected `baml.llm.Client`, found `() -> unknown throws never`
 //    ╰────

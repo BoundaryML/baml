@@ -1,181 +1,74 @@
-//! Runs all BAML tests in `crates/baml_tests/baml_src/`.
+//! Executes all BAML tests in `crates/baml_tests/baml_src/` via `baml_cli`.
 //!
-//! Also snapshots the entire project's bytecode grouped by namespace.
+//! Compiler-phase and bytecode snapshots for the same corpus live in the
+//! single-compile pass in `src/corpus.rs`.
 
-use std::{
-    collections::BTreeMap,
-    path::{Component, Path, PathBuf},
-};
+/// The CLI's compile workload is allocation-dominated; its binary installs
+/// mimalloc for exactly this reason (see `baml_cli/src/main.rs`). The CLI now
+/// runs in-process here, so this test binary installs the same allocator to
+/// keep the corpus compile at the binary's speed.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-use bex_vm::debug::{BytecodeFormat, display_program};
-use bex_vm_types::{Function, FunctionOrigin, Object, Program};
-
-const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/baml_src");
-
-fn baml_src_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src")
-}
-
-/// Read every `*.baml` file under `baml_src/`, returning `(relative_path, content)`
-/// pairs sorted by path so the compiled program is deterministic.
-fn read_baml_src_files() -> Vec<(String, String)> {
-    let root = baml_src_dir();
-    let mut files = Vec::new();
-    collect_baml_files(&root, &root, &mut files);
-    files.sort_by(|a, b| a.0.cmp(&b.0));
-    files
-}
-
-fn collect_baml_files(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
-    for entry in std::fs::read_dir(dir).expect("read_dir baml_src") {
-        let path = entry.expect("dir entry").path();
-        if path.is_dir() {
-            // Skip hidden dirs (e.g. a stray `.baml/cache` a CLI run may have
-            // left behind); the corpus is only the checked-in `.baml` sources.
-            if path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| n.starts_with('.'))
-            {
-                continue;
-            }
-            collect_baml_files(root, &path, out);
-        } else if path.extension().and_then(|e| e.to_str()) == Some("baml") {
-            let rel = path
-                .strip_prefix(root)
-                .expect("strip baml_src prefix")
-                .to_string_lossy()
-                .replace('\\', "/");
-            // Normalize line endings so snapshots match across platforms.
-            let content = std::fs::read_to_string(&path)
-                .expect("read .baml file")
-                .replace("\r\n", "\n");
-            out.push((rel, content));
-        }
-    }
-}
-
-/// Compile the whole baml_src project. Panics (via `compile_multi_file`) if the
-/// project has any diagnostic errors.
-fn compile_baml_src() -> Program {
-    let files = read_baml_src_files();
-    assert!(!files.is_empty(), "no .baml files found in baml_src/");
-    let refs: Vec<(&str, &str)> = files
-        .iter()
-        .map(|(path, content)| (path.as_str(), content.as_str()))
-        .collect();
-    baml_project::testing::compile_multi_file(&refs)
-}
-
-/// Strip the `ns_` prefix from a directory segment if it names a valid namespace
-/// (BAML identifier: starts with a letter or `_`, rest alphanumeric or `_`),
-/// matching the compiler's `file_package` rule. Returns `None` otherwise.
-fn extract_ns_name(component: &str) -> Option<&str> {
-    let ns = component.strip_prefix("ns_")?;
-    let mut chars = ns.chars();
-    let valid = chars
-        .next()
-        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
-    valid.then_some(ns)
-}
-
-/// Namespace key for a source file: the dotted chain of `ns_`-prefixed directory
-/// segments, e.g. `ns_assignments/assignments.baml` -> `assignments` and
-/// `ns_a/b/ns_c/x.baml` -> `a.c`. Functions with no source file (synthesized,
-/// e.g. the global `$init_test`) or no namespace -> `_root`.
-fn namespace_key(source_file: &str) -> String {
-    if source_file.is_empty() {
-        return "_root".to_string();
-    }
-    let parts: Vec<&str> = Path::new(source_file)
-        .parent()
-        .map(|parent| {
-            parent
-                .components()
-                .filter_map(|c| match c {
-                    Component::Normal(s) => s.to_str().and_then(extract_ns_name),
-                    _ => None,
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    if parts.is_empty() {
-        "_root".to_string()
-    } else {
-        parts.join(".")
-    }
-}
-
-/// Snapshot each namespace's bytecode separately so a change shows up in just
-/// that namespace's `.snap`.
-#[test]
-fn bytecode() {
-    let program = compile_baml_src();
-
-    // Group user (non-stdlib, non-auto-derived) functions by their namespace.
-    let mut by_namespace: BTreeMap<String, Vec<(String, &Function)>> = BTreeMap::new();
-    for (name, idx) in &program.function_indices {
-        if name.starts_with("baml.")
-            || name.starts_with("testing.")
-            || name.starts_with("assert.")
-            || name.starts_with("log.")
-            || name.starts_with("env.")
-        {
-            continue;
-        }
-        let Some(Object::Function(func)) = program.objects.get(*idx) else {
-            continue;
-        };
-        if func.origin == FunctionOrigin::AutoDerive {
-            continue;
-        }
-        // Strip the leading "user." package prefix for display.
-        let display_name = name.strip_prefix("user.").unwrap_or(name).to_owned();
-        by_namespace
-            .entry(namespace_key(&func.source_file))
-            .or_default()
-            .push((display_name, &**func));
-    }
-
-    for (key, mut funcs) in by_namespace {
-        funcs.sort_by(|(a, _), (b, _)| a.cmp(b));
-        let output = display_program(&funcs, BytecodeFormat::Textual);
-        insta::with_settings!({
-            snapshot_path => SNAPSHOT_PATH,
-            omit_expression => true,
-            prepend_module_to_snapshot => false,
-        }, {
-            insta::assert_snapshot!(key.as_str(), output);
-        });
-    }
-}
-
-/// Execute `baml test`
+/// Execute `baml test` in-process via [`baml_cli::run_cli`].
+///
+/// In-process rather than a subprocess so the CLI is built once, as part of
+/// this test binary's own dependency graph — `cargo run -p baml_cli` re-
+/// resolves features for `baml_cli` alone and rebuilds its whole dependency
+/// chain inside the test (15+ minutes cold), serialized against every other
+/// test that shells out to cargo.
 #[test]
 fn baml_test() {
-    // Isolate the CLI's bytecode cache and home per run. Without this, the CLI
-    // writes `<project>/.baml/cache` straight into the source tree that the
-    // `bytecode`/`emit_determinism`/`link_units_oracle` tests scan
-    // concurrently, and successive runs share (and can corrupt) that cache.
-    let tmp = tempfile::tempdir().expect("tempdir for corpus cache");
-    let home = tmp.path().join("home");
-    std::fs::create_dir_all(&home).unwrap();
-    std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
-    let status = std::process::Command::new("cargo")
-        .args([
-            "run",
-            "-p",
-            "baml_cli",
-            "--",
-            "test",
-            "--from",
-            concat!(env!("CARGO_MANIFEST_DIR"), "/baml_src"),
-        ])
-        .env("BAML_CLI_ALLOW_DIRECT", "1")
-        .env("BAML_HOME", &home)
-        .env("BAML_CACHE_DIR", tmp.path().join("cache"))
-        .status()
-        .expect("baml_cli test should not fail");
-    assert!(status.success());
+    // The CLI's bytecode cache lives under the cargo target dir — outside the
+    // source tree that the `corpus_snapshots`/`emit_determinism`/
+    // `link_units_oracle` tests scan (the default would be
+    // `baml_src/.baml/cache`) — and stays warm across runs, so an unchanged
+    // corpus recompiles nothing. The cache is content-addressed with the
+    // compiler fingerprint in the key, so staleness is a miss, never a wrong
+    // hit.
+    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("crates/baml_tests sits two levels under the workspace root")
+        .to_path_buf();
+    let target_dir = std::env::var_os("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .map(|dir| {
+            if dir.is_absolute() {
+                dir
+            } else {
+                workspace_root.join(dir)
+            }
+        })
+        .unwrap_or_else(|| workspace_root.join("target"));
+    // SAFETY: `set_var` races with *any* concurrent environment access, so
+    // the obligation is single-threadedness, not merely "no other writers".
+    // This is the only `#[test]` in this binary (the Prompt Fiddle check runs
+    // inside it, on this same thread, below), so no other test thread exists
+    // to call `getenv` while this writes.
+    unsafe {
+        std::env::set_var("BAML_CACHE_DIR", target_dir.join("baml-corpus-cache"));
+    }
+
+    // Folded into this test rather than a sibling `#[test]` so the `set_var`
+    // above stays sound: libtest would run a sibling concurrently on another
+    // thread, and its compiler stack reads the environment.
+    //
+    // This cross-workspace include is intentionally cursed: Prompt Fiddle owns
+    // the demo, while this existing test binary checks it without a second
+    // compiler build.
+    let demo = include_str!("../../../../typescript2/app-promptfiddle/src/playground/default.baml");
+    baml_project::testing::compile_multi_file(&[("baml_src/main.baml", demo)]);
+
+    let argv = vec![
+        "baml".to_string(),
+        "test".to_string(),
+        "--from".to_string(),
+        concat!(env!("CARGO_MANIFEST_DIR"), "/baml_src").to_string(),
+    ];
+    let code = baml_cli::run_cli(argv).expect("baml test should not error");
+    assert!(
+        matches!(code, baml_cli::ExitCode::Success),
+        "baml test exited with {code:?}"
+    );
 }

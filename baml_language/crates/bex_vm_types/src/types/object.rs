@@ -7,7 +7,8 @@ use crate::{
     ArrayContainer, BoundMethod, Class, CollectorRef, Enum, Function, GenericFunction, HostClosure,
     Instance, MapContainer, Uint8ArrayContainer, UnscheduledFuture, Value, Variant,
     types::{
-        Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package, RuntimeImplRule,
+        Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package,
+        RuntimeImplRule, TypeAliasDef,
     },
 };
 
@@ -42,6 +43,11 @@ pub enum Object {
     /// Enum object.
     Enum(Box<Enum>),
 
+    /// Type-alias object. A declaration, not a value — only recursive aliases
+    /// reach the runtime, and they exist so a nominal reference can point at the
+    /// indirection rather than expand it away.
+    TypeAlias(Box<TypeAliasDef>),
+
     /// Enum value object.
     Variant(Variant),
 
@@ -58,7 +64,7 @@ pub enum Object {
     /// compile time so identical instantiations share one object
     /// (pointer-stable `foo<int> === foo<int>`). When called, the VM resolves
     /// `function` via the global table and seeds `frame.type_args` from
-    /// `type_args`, so type-reifying bodies (`reflect.type_of<T>`, json natives)
+    /// `type_args`, so type-reifying bodies (`reflect.Type.of<T>`, json natives)
     /// work through the value.
     GenericFunction(GenericFunction),
 
@@ -121,8 +127,11 @@ pub enum Object {
     /// Collector object (opaque handle to `bex_events::Collector`).
     Collector(CollectorRef),
 
-    /// A type descriptor value — wraps a `baml_type::RealizedTy`.
-    Type(Box<baml_type::RealizedTy>),
+    /// A type descriptor value — wraps a [`crate::types::TypeValue`]. The
+    /// described type is the whole of it: `==` is type equivalence, so a GC
+    /// copy, a `baml.deep_copy`, and a wire round trip all denote the same
+    /// type by construction.
+    Type(Box<crate::types::TypeValue>),
 
     #[cfg(feature = "heap_debug")]
     Sentinel(crate::types::SentinelKind),
@@ -173,6 +182,7 @@ enum ObjectWire {
     Class(Box<Class>),
     Instance(Instance),
     Enum(Box<Enum>),
+    TypeAlias(Box<TypeAliasDef>),
     Variant(Variant),
     Closure(Closure),
     BoundMethod(BoundMethod),
@@ -191,10 +201,10 @@ enum ObjectWire {
         num_bigint::BigInt,
     ),
     Uint8Array(Vec<u8>),
-    Array(Box<baml_type::RealizedTy>, Vec<Value>),
+    Array(Box<crate::RealizedTy>, Vec<Value>),
     Map(
-        Box<baml_type::RealizedTy>,
-        Box<baml_type::RealizedTy>,
+        Box<crate::RealizedTy>,
+        Box<crate::RealizedTy>,
         IndexMap<String, Value>,
     ),
     Float(f64),
@@ -205,7 +215,13 @@ enum ObjectWire {
     // enum's size. Borsh treats `Box<T>` transparently, so the wire form is
     // unchanged.
     UnscheduledFuture(Box<UnscheduledFuture>),
-    Type(Box<baml_type::RealizedTy>),
+    /// Carries the described type, which is the whole of a `type` value: two
+    /// `type` values are the same type exactly when their payloads are
+    /// equivalent, so a round trip through this form is lossless. No compiled
+    /// `Program` bakes an `Object::Type` into its object pool today
+    /// (`ConstValue::Type` templates materialize through the VM's `LoadType`),
+    /// so this round trip is exercised only by unit/link tooling.
+    Type(Box<crate::RealizedTy>),
 }
 
 impl BorshSerialize for Object {
@@ -218,6 +234,7 @@ impl BorshSerialize for Object {
             Self::Class(v) => ObjectWire::Class(v.clone()),
             Self::Instance(v) => ObjectWire::Instance(v.clone()),
             Self::Enum(v) => ObjectWire::Enum(v.clone()),
+            Self::TypeAlias(v) => ObjectWire::TypeAlias(v.clone()),
             Self::Variant(v) => ObjectWire::Variant(v.clone()),
             Self::Closure(v) => ObjectWire::Closure(v.clone()),
             Self::BoundMethod(v) => ObjectWire::BoundMethod(v.clone()),
@@ -238,7 +255,7 @@ impl BorshSerialize for Object {
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
             Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture(v.clone()),
-            Self::Type(v) => ObjectWire::Type(v.clone()),
+            Self::Type(v) => ObjectWire::Type(Box::new(v.ty.clone())),
             Self::RustData(_) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -280,6 +297,7 @@ impl BorshDeserialize for Object {
             ObjectWire::Class(v) => Self::Class(v),
             ObjectWire::Instance(v) => Self::Instance(v),
             ObjectWire::Enum(v) => Self::Enum(v),
+            ObjectWire::TypeAlias(v) => Self::TypeAlias(v),
             ObjectWire::Variant(v) => Self::Variant(v),
             ObjectWire::Closure(v) => Self::Closure(v),
             ObjectWire::BoundMethod(v) => Self::BoundMethod(v),
@@ -305,7 +323,7 @@ impl BorshDeserialize for Object {
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
             ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
-            ObjectWire::Type(v) => Self::Type(v),
+            ObjectWire::Type(v) => Self::Type(Box::new(crate::types::TypeValue::new(*v))),
         })
     }
 }
@@ -320,6 +338,7 @@ impl std::fmt::Display for Object {
             Object::Class(class) => class.fmt(f),
             Object::Instance(instance) => instance.fmt(f),
             Object::Enum(enm) => enm.fmt(f),
+            Object::TypeAlias(alias) => alias.fmt(f),
             Object::Variant(value) => value.fmt(f),
             Object::Closure(closure) => {
                 let captures_len = closure.captures.len();
@@ -349,7 +368,7 @@ impl std::fmt::Display for Object {
             ),
             Object::RustData(_) => write!(f, "<rust_data>"),
             Object::Collector(_) => write!(f, "<collector>"),
-            Object::Type(ty) => write!(f, "<type: {ty}>"),
+            Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),
             Object::UnscheduledFuture(_) => write!(f, "<unscheduled: spawn>"),
             Object::Float(v) => write!(f, "{v}"),
@@ -379,6 +398,7 @@ pub enum ObjectType {
     String,
     Bigint,
     Enum,
+    TypeAlias,
     Variant,
     Future(FutureType),
     UnscheduledFuture,
@@ -404,6 +424,7 @@ impl ObjectType {
             Object::Class(_) => Self::Class,
             Object::Instance(_) => Self::Instance,
             Object::Enum(_) => Self::Enum,
+            Object::TypeAlias(_) => Self::TypeAlias,
             Object::Variant(_) => Self::Enum,
             Object::String(_) => Self::String,
             Object::Bigint(_) => Self::Bigint,
@@ -450,6 +471,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Cell => write!(f, "cell"),
             ObjectType::Class => write!(f, "class"),
             ObjectType::Enum => write!(f, "enum"),
+            ObjectType::TypeAlias => write!(f, "type_alias"),
             ObjectType::Variant => write!(f, "variant"),
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
             ObjectType::UnscheduledFuture => write!(f, "unscheduled_future"),
@@ -461,5 +483,33 @@ impl std::fmt::Display for ObjectType {
             ObjectType::RustData => write!(f, "rust_data"),
             ObjectType::Float => write!(f, "float"),
         }
+    }
+}
+
+#[cfg(test)]
+mod type_wire_tests {
+    use borsh::BorshDeserialize;
+
+    use super::*;
+    use crate::types::TypeValue;
+
+    #[test]
+    fn type_wire_round_trips_the_described_type() {
+        let ty = crate::RealizedTy::list(crate::RealizedTy::string());
+        let object = Object::Type(Box::new(TypeValue::new(ty.clone())));
+
+        let encoded_object = borsh::to_vec(&object).expect("type object serializes");
+        let encoded_legacy_shape =
+            borsh::to_vec(&ObjectWire::Type(Box::new(ty.clone()))).expect("wire proxy serializes");
+        assert_eq!(
+            encoded_object, encoded_legacy_shape,
+            "an Object::Type encodes exactly as its described type"
+        );
+
+        let decoded = Object::try_from_slice(&encoded_object).expect("type object deserializes");
+        let Object::Type(type_value) = decoded else {
+            panic!("decoded object should be a type")
+        };
+        assert_eq!(type_value.ty, ty);
     }
 }

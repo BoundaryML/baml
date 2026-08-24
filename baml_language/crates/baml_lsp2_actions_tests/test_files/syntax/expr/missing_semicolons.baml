@@ -164,13 +164,21 @@ function MissingReturnExpression() -> int {
 
 //----
 //- diagnostics
-// E0029
+// E0010
 //
-//   × missing return expression
+//   × top-level `let` bindings are not supported
+//      ╭─[expr_missing_semicolons.baml:107:1]
+//  107 │ let topLevel = 1  // ERROR: needs semicolon
+//      · ────────┬───────
+//      ·         ╰── move this binding into a function body
+//      ╰────
+// E0001
+//
+//   × mismatched types
 //      ╭─[expr_missing_semicolons.baml:160:43]
 //  160 │ ╭─▶ function MissingReturnExpression() -> int {
 //  161 │ │       let x = 42;  // This is a statement, not a return expression
 //  162 │ │       // ERROR: missing return expression
 //  163 │ ├─▶ }
-//      · ╰──── expected return value of type `int`
+//      · ╰──── expected `int`, found `void`
 //      ╰────

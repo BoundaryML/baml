@@ -1,7 +1,7 @@
 // Tests for the `int` builtin class (BEP-043).
 //
 // Converted from crates/baml_tests/tests/ints.rs. Each Rust test becomes a
-// `test` block with the `main()` body inlined. Results use `baml.deep_equals`
+// `test` block with the `main()` body inlined. Results use `assert.equal`
 // for structural comparison.
 //
 // Pure expressions (no locals) are asserted inline. Tests that use a local
@@ -17,15 +17,15 @@
 // ─── abs ──────────────────────────────────────────────────────────────────────
 
 test "int_abs_positive" {
-    assert.is_true(baml.deep_equals((3).abs(), 3))
+    assert.equal((3).abs(), 3)
 }
 
 test "int_abs_negative" {
-    assert.is_true(baml.deep_equals((-7).abs(), 7))
+    assert.equal((-7).abs(), 7)
 }
 
 test "int_abs_zero" {
-    assert.is_true(baml.deep_equals((0).abs(), 0))
+    assert.equal((0).abs(), 0)
 }
 
 // int.min_value() is -2^62; its abs() is 2^62 which exceeds int.max_value().
@@ -39,103 +39,103 @@ test "int_abs_min_value_throws" {
 }
 
 test "int_abs_near_min_value_succeeds" {
-    assert.is_true(baml.deep_equals((-4611686018427387903).abs(), 4611686018427387903))
+    assert.equal((-4611686018427387903).abs(), 4611686018427387903)
 }
 
 // ─── min / max ────────────────────────────────────────────────────────────────
 
 test "int_min_basic" {
-    assert.is_true(baml.deep_equals((3).min(5), 3))
+    assert.equal((3).min(5), 3)
 }
 
 test "int_min_other_smaller" {
-    assert.is_true(baml.deep_equals((5).min(3), 3))
+    assert.equal((5).min(3), 3)
 }
 
 test "int_min_equal" {
-    assert.is_true(baml.deep_equals((3).min(3), 3))
+    assert.equal((3).min(3), 3)
 }
 
 test "int_min_negative" {
-    assert.is_true(baml.deep_equals((-2).min(0), -2))
+    assert.equal((-2).min(0), -2)
 }
 
 test "int_max_basic" {
-    assert.is_true(baml.deep_equals((3).max(5), 5))
+    assert.equal((3).max(5), 5)
 }
 
 test "int_max_other_smaller" {
-    assert.is_true(baml.deep_equals((5).max(3), 5))
+    assert.equal((5).max(3), 5)
 }
 
 test "int_max_negative" {
-    assert.is_true(baml.deep_equals((-5).max(-2), -2))
+    assert.equal((-5).max(-2), -2)
 }
 
 // ─── clamp ────────────────────────────────────────────────────────────────────
 
 test "int_clamp_in_range" {
-    assert.is_true(baml.deep_equals((5).clamp(0, 10), 5))
+    assert.equal((5).clamp(0, 10), 5)
 }
 
 test "int_clamp_below_min" {
-    assert.is_true(baml.deep_equals((-3).clamp(0, 10), 0))
+    assert.equal((-3).clamp(0, 10), 0)
 }
 
 test "int_clamp_above_max" {
-    assert.is_true(baml.deep_equals((15).clamp(0, 10), 10))
+    assert.equal((15).clamp(0, 10), 10)
 }
 
 test "int_clamp_at_min_boundary" {
-    assert.is_true(baml.deep_equals((0).clamp(0, 10), 0))
+    assert.equal((0).clamp(0, 10), 0)
 }
 
 test "int_clamp_at_max_boundary" {
-    assert.is_true(baml.deep_equals((10).clamp(0, 10), 10))
+    assert.equal((10).clamp(0, 10), 10)
 }
 
 // ─── max_value / min_value ────────────────────────────────────────────────────
 
 test "int_max_value_returns_i63_max" {
-    assert.is_true(baml.deep_equals(int.max_value(), 4611686018427387903))
+    assert.equal(int.max_value(), 4611686018427387903)
 }
 
 test "int_min_value_returns_i63_min" {
-    assert.is_true(baml.deep_equals(int.min_value(), -4611686018427387904))
+    assert.equal(int.min_value(), -4611686018427387904)
 }
 
 test "int_max_min_inverse" {
-    assert.is_true(baml.deep_equals(int.max_value() > int.min_value(), true))
+    assert.is_true(int.max_value() > int.min_value())
 }
 
 // ─── parse ────────────────────────────────────────────────────────────────────
 
 test "int_parse_basic" {
-    assert.is_true(baml.deep_equals(int.parse("42"), 42))
+    assert.equal(int.parse("42"), 42)
 }
 
 test "int_parse_zero" {
-    assert.is_true(baml.deep_equals(int.parse("0"), 0))
+    assert.equal(int.parse("0"), 0)
 }
 
 test "int_parse_negative" {
-    assert.is_true(baml.deep_equals(int.parse("-7"), -7))
+    assert.equal(int.parse("-7"), -7)
 }
 
 test "int_parse_explicit_plus_sign" {
-    assert.is_true(baml.deep_equals(int.parse("+42"), 42))
+    assert.equal(int.parse("+42"), 42)
 }
 
 test "int_parse_max_value" {
-    assert.is_true(baml.deep_equals(int.parse("4611686018427387903"), 4611686018427387903))
+    assert.equal(int.parse("4611686018427387903"), 4611686018427387903)
 }
 
 test "int_parse_min_value" {
-    assert.is_true(baml.deep_equals(int.parse("-4611686018427387904"), -4611686018427387904))
+    assert.equal(int.parse("-4611686018427387904"), -4611686018427387904)
 }
 
 test "int_parse_leading_zeros_ok" {
-    assert.is_true(baml.deep_equals(int.parse("007"), 7))
+    assert.equal(int.parse("007"), 7)
 }
 
 test "int_parse_empty_throws" {
@@ -211,7 +211,7 @@ test "int_parse_underscore_throws" {
 }
 
 test "int_parse_round_trip_via_to_string" {
-    assert.is_true(baml.deep_equals(int.parse("100") + int.parse("23"), 123))
+    assert.equal(int.parse("100") + int.parse("23"), 123)
 }
 
 // ─── random ───────────────────────────────────────────────────────────────────
@@ -229,9 +229,21 @@ function int_random_in_range_and_covers_endpoints() -> bool {
     let i = 0;
     while (i < 1000) {
         let r = int.random(0, 10);
-        if (r < 0 || r >= 10) { ok = false } else { null }
-        if (r == 0) { saw_lo = true } else { null }
-        if (r == 9) { saw_hi = true } else { null }
+        if (r < 0 || r >= 10) {
+            ok = false
+        } else {
+            null
+        }
+        if (r == 0) {
+            saw_lo = true
+        } else {
+            null
+        }
+        if (r == 9) {
+            saw_hi = true
+        } else {
+            null
+        }
         i = i + 1
     }
     ok && saw_lo && saw_hi
@@ -247,7 +259,11 @@ function int_random_negative_range() -> bool {
     let i = 0;
     while (i < 200) {
         let r = int.random(-5, 5);
-        if (r < -5 || r >= 5) { ok = false } else { null }
+        if (r < -5 || r >= 5) {
+            ok = false
+        } else {
+            null
+        }
         i = i + 1
     }
     ok
@@ -264,7 +280,11 @@ function int_random_single_element_range() -> bool {
     let i = 0;
     while (i < 50) {
         let r = int.random(0, 1);
-        if (r != 0) { ok = false } else { null }
+        if (r != 0) {
+            ok = false
+        } else {
+            null
+        }
         i = i + 1
     }
     ok
@@ -274,16 +294,15 @@ test "int_random_single_element_range" {
     assert.is_true(int_random_single_element_range())
 }
 
-// int_random_full_range_returns_some_int: one call spanning the full i63 range.
-// Just verifying the call succeeds and the result is a finite int (always true
-// once it returns without throwing).
-function int_random_full_range_returns_some_int() -> bool {
+// One call spanning the widest representable half-open int range. Just verify
+// that the call succeeds and excludes the upper endpoint.
+function int_random_widest_range_returns_some_int() -> bool {
     let r = int.random(int.min_value(), int.max_value());
-    r >= int.min_value() && r <= int.max_value()
+    r >= int.min_value() && r < int.max_value()
 }
 
-test "int_random_full_range_returns_some_int" {
-    assert.is_true(int_random_full_range_returns_some_int())
+test "int_random_widest_range_returns_some_int" {
+    assert.is_true(int_random_widest_range_returns_some_int())
 }
 
 // int_random_distinct_values_in_wide_range: 100 samples from [0, 1000).
@@ -296,8 +315,16 @@ function int_random_distinct_values_in_wide_range() -> bool {
     let i = 0;
     while (i < 100) {
         let r = int.random(0, 1000);
-        if (r < min_seen) { min_seen = r } else { null }
-        if (r > max_seen) { max_seen = r } else { null }
+        if (r < min_seen) {
+            min_seen = r
+        } else {
+            null
+        }
+        if (r > max_seen) {
+            max_seen = r
+        } else {
+            null
+        }
         i = i + 1
     }
     (max_seen - min_seen) >= 500
@@ -307,7 +334,7 @@ test "int_random_distinct_values_in_wide_range" {
     assert.is_true(int_random_distinct_values_in_wide_range())
 }
 
-// ─── random: the `rng` parameter ──────────────────────────────────────────────
+// random: the `rng` parameter
 
 function int_random_seed() -> uint8array {
     // BUG: a byte-string literal in tail position is not recognized as the
@@ -318,8 +345,29 @@ function int_random_seed() -> uint8array {
     seed
 }
 
+class FixedBytesRng {
+    draw: uint8array,
+
+    implements baml.random.Rng {
+        function random(self, bytes: int) -> uint8array {
+            self.draw
+        }
+    }
+}
+
+test "random_int_maps_all_i63_bits" {
+    let all_ones = FixedBytesRng { draw: b"\xff\xff\xff\xff\xff\xff\xff\xff" };
+    let all_zeros = FixedBytesRng { draw: b"\x00\x00\x00\x00\x00\x00\x00\x00" };
+    let sign_only = FixedBytesRng { draw: b"\x40\x00\x00\x00\x00\x00\x00\x00" };
+    let max = FixedBytesRng { draw: b"\x3f\xff\xff\xff\xff\xff\xff\xff" };
+    assert.equal(all_ones.random_int(), -1);
+    assert.equal(all_zeros.random_int(), 0);
+    assert.equal(sign_only.random_int(), int.min_value());
+    assert.equal(max.random_int(), int.max_value())
+}
+
 // int_random_seeded_is_reproducible: two generators on the same seed must walk
-// the same 50 values. This is the point of the parameter — the default
+// the same 50 values. This is the point of the parameter; the default
 // SystemRandom cannot be replayed.
 function int_random_seeded_is_reproducible() -> bool {
     let a = baml.random.Xoshiro256PlusPlus.new(seed = int_random_seed());
@@ -329,7 +377,11 @@ function int_random_seeded_is_reproducible() -> bool {
     while (i < 50) {
         let x = int.random(0, 1000000, rng = a);
         let y = int.random(0, 1000000, rng = b);
-        if (x != y || x < 0 || x >= 1000000) { ok = false } else { null }
+        if (x != y || x < 0 || x >= 1000000) {
+            ok = false
+        } else {
+            null
+        }
         i = i + 1
     }
     ok
@@ -339,47 +391,61 @@ test "int_random_seeded_is_reproducible" {
     assert.is_true(int_random_seeded_is_reproducible())
 }
 
-// int_random_rejection_boundary: [0, 5) needs 3 bits, so 3 of the 8 maskable
-// draws are rejected and redrawn. 500 samples must all land in range and must
-// cover every one of the 5 values — P(missing one) = (4/5)^500 ≈ 4e-49. A
-// biased implementation folding rejects back in (`% 5`) would still pass the
-// coverage check, so this is a range/liveness guard, not a uniformity proof.
-function int_random_rejection_boundary() -> bool {
-    // One generator for the whole loop — re-seeding per draw would replay the
-    // same value 500 times.
-    let rng = baml.random.ChaCha20.new(seed = int_random_seed());
-    let seen: bool[] = [false, false, false, false, false];
-    let ok = true;
-    let i = 0;
-    while (i < 500) {
-        let r = int.random(0, 5, rng = rng);
-        if (r < 0 || r >= 5) { ok = false } else { seen[r] = true }
-        i = i + 1
+class RejectionThenAcceptedRng {
+    calls: int,
+
+    implements baml.random.Rng {
+        function random(self, bytes: int) -> uint8array {
+            let empty = b"";
+            empty
+        }
+
+        function random_int(self) -> int {
+            self.calls += 1;
+            if (self.calls == 1) {
+                // The maximum draw is in the three-value rejection tail for
+                // [0, 5).
+                int.max_value()
+            } else {
+                // This maps to 4 after rebiasing from the signed i63 domain.
+                int.min_value() + 4
+            }
+        }
     }
-    ok && seen[0] && seen[1] && seen[2] && seen[3] && seen[4]
 }
 
 test "int_random_rejection_boundary" {
-    assert.is_true(int_random_rejection_boundary())
+    let rng = RejectionThenAcceptedRng { calls: 0 };
+    assert.equal(int.random(0, 5, rng = rng), 4);
+    assert.equal(rng.calls, 2)
 }
 
-// int_random_seeded_full_range: the widest range takes the domain-rejection
+test "int_random_internal_invalid_range_returns_sentinel" {
+    assert.equal(int._random_in_range(0, 5, 5), 5);
+    assert.equal(int._random_in_range(0, 10, 5), 5)
+}
+
+// The widest range takes the domain-rejection
 // path, which never computes the (unrepresentable) count. Drive it from a
 // seeded generator so a hang here is reproducible rather than a flake.
-function int_random_seeded_full_range() -> bool {
+function int_random_seeded_widest_range() -> bool {
     let rng = baml.random.Xoshiro256PlusPlus.new(seed = int_random_seed());
     let ok = true;
     let i = 0;
     while (i < 100) {
         let r = int.random(int.min_value(), int.max_value(), rng = rng);
-        if (r < int.min_value() || r >= int.max_value()) { ok = false } else { null }
+        if (r < int.min_value() || r >= int.max_value()) {
+            ok = false
+        } else {
+            null
+        }
         i = i + 1
     }
     ok
 }
 
-test "int_random_seeded_full_range" {
-    assert.is_true(int_random_seeded_full_range())
+test "int_random_seeded_widest_range" {
+    assert.is_true(int_random_seeded_widest_range())
 }
 
 // Throw tests (deterministic — included regardless of randomness skip).
@@ -405,27 +471,27 @@ test "int_random_lower_greater_than_upper_throws" {
 // ─── isqrt ────────────────────────────────────────────────────────────────────
 
 test "int_isqrt_perfect_square" {
-    assert.is_true(baml.deep_equals((16).isqrt(), 4))
+    assert.equal((16).isqrt(), 4)
 }
 
 test "int_isqrt_non_square_rounds_down" {
-    assert.is_true(baml.deep_equals((10).isqrt(), 3))
+    assert.equal((10).isqrt(), 3)
 }
 
 test "int_isqrt_zero" {
-    assert.is_true(baml.deep_equals((0).isqrt(), 0))
+    assert.equal((0).isqrt(), 0)
 }
 
 test "int_isqrt_one" {
-    assert.is_true(baml.deep_equals((1).isqrt(), 1))
+    assert.equal((1).isqrt(), 1)
 }
 
 test "int_isqrt_large" {
-    assert.is_true(baml.deep_equals((1000000000000).isqrt(), 1000000))
+    assert.equal((1000000000000).isqrt(), 1000000)
 }
 
 test "int_isqrt_max_value" {
-    assert.is_true(baml.deep_equals(int.max_value().isqrt(), 2147483647))
+    assert.equal(int.max_value().isqrt(), 2147483647)
 }
 
 test "int_isqrt_negative_throws" {
@@ -449,81 +515,81 @@ test "int_isqrt_min_value_throws" {
 // ─── pow ──────────────────────────────────────────────────────────────────────
 
 test "int_pow_basic" {
-    assert.is_true(baml.deep_equals((2).pow(10), 1024))
+    assert.equal((2).pow(10), 1024)
 }
 
 test "int_pow_zero_exponent" {
-    assert.is_true(baml.deep_equals((5).pow(0), 1))
+    assert.equal((5).pow(0), 1)
 }
 
 test "int_pow_zero_to_zero_is_one" {
-    assert.is_true(baml.deep_equals((0).pow(0), 1))
+    assert.equal((0).pow(0), 1)
 }
 
 test "int_pow_zero_to_positive_is_zero" {
-    assert.is_true(baml.deep_equals((0).pow(5), 0))
+    assert.equal((0).pow(5), 0)
 }
 
 test "int_pow_negative_exponent_returns_zero" {
-    assert.is_true(baml.deep_equals((2).pow(-1), 0))
+    assert.equal((2).pow(-1), 0)
 }
 
 test "int_pow_negative_base_odd_exp" {
-    assert.is_true(baml.deep_equals((-2).pow(3), -8))
+    assert.equal((-2).pow(3), -8)
 }
 
 test "int_pow_negative_base_even_exp" {
-    assert.is_true(baml.deep_equals((-2).pow(4), 16))
+    assert.equal((-2).pow(4), 16)
 }
 
 test "int_pow_one_anything" {
-    assert.is_true(baml.deep_equals((1).pow(1000000), 1))
+    assert.equal((1).pow(1000000), 1)
 }
 
 test "int_pow_negative_one_even" {
-    assert.is_true(baml.deep_equals((-1).pow(1000000), 1))
+    assert.equal((-1).pow(1000000), 1)
 }
 
 test "int_pow_negative_one_odd" {
-    assert.is_true(baml.deep_equals((-1).pow(1000001), -1))
+    assert.equal((-1).pow(1000001), -1)
 }
 
 // 2^33 = 8589934592, even — result should be 1.
 test "int_pow_negative_one_huge_even_exp" {
-    assert.is_true(baml.deep_equals((-1).pow(8589934592), 1))
+    assert.equal((-1).pow(8589934592), 1)
 }
 
 // Overflow: (10)^100 → saturates to int.max_value().
 test "int_pow_overflow_positive_saturates" {
-    assert.is_true(baml.deep_equals((10).pow(100), 4611686018427387903))
+    assert.equal((10).pow(100), 4611686018427387903)
 }
 
 // Overflow: (-10)^99 → saturates to int.min_value().
 test "int_pow_overflow_negative_odd_saturates_to_min" {
-    assert.is_true(baml.deep_equals((-10).pow(99), -4611686018427387904))
+    assert.equal((-10).pow(99), -4611686018427387904)
 }
 
 // Overflow: (-10)^100 → saturates to int.max_value().
 test "int_pow_overflow_negative_even_saturates_to_max" {
-    assert.is_true(baml.deep_equals((-10).pow(100), 4611686018427387903))
+    assert.equal((-10).pow(100), 4611686018427387903)
 }
 
 // ─── ilog ─────────────────────────────────────────────────────────────────────
 
 test "int_ilog_base_10" {
-    assert.is_true(baml.deep_equals((1000).ilog(10), 3))
+    assert.equal((1000).ilog(10), 3)
 }
 
 test "int_ilog_base_2_power_of_two" {
-    assert.is_true(baml.deep_equals((1024).ilog(2), 10))
+    assert.equal((1024).ilog(2), 10)
 }
 
 test "int_ilog_rounds_down" {
-    assert.is_true(baml.deep_equals((999).ilog(10), 2))
+    assert.equal((999).ilog(10), 2)
 }
 
 test "int_ilog_one_is_zero" {
-    assert.is_true(baml.deep_equals((1).ilog(10), 0))
+    assert.equal((1).ilog(10), 0)
 }
 
 test "int_ilog_self_zero_throws" {
@@ -574,74 +640,74 @@ test "int_ilog_base_negative_throws" {
 // ─── Bit operations ───────────────────────────────────────────────────────────
 
 test "int_leading_zeros_zero" {
-    assert.is_true(baml.deep_equals((0).leading_zeros(), 64))
+    assert.equal((0).leading_zeros(), 64)
 }
 
 test "int_leading_zeros_one" {
-    assert.is_true(baml.deep_equals((1).leading_zeros(), 63))
+    assert.equal((1).leading_zeros(), 63)
 }
 
 test "int_leading_zeros_negative_one_is_zero" {
-    assert.is_true(baml.deep_equals((-1).leading_zeros(), 0))
+    assert.equal((-1).leading_zeros(), 0)
 }
 
 // 2^32 = 4294967296: 31 leading zeros (bit 32 set out of 64).
 test "int_leading_zeros_large_power_of_two" {
-    assert.is_true(baml.deep_equals((4294967296).leading_zeros(), 31))
+    assert.equal((4294967296).leading_zeros(), 31)
 }
 
 test "int_leading_ones_zero" {
-    assert.is_true(baml.deep_equals((0).leading_ones(), 0))
+    assert.equal((0).leading_ones(), 0)
 }
 
 test "int_leading_ones_negative_one" {
-    assert.is_true(baml.deep_equals((-1).leading_ones(), 64))
+    assert.equal((-1).leading_ones(), 64)
 }
 
 test "int_trailing_zeros_zero" {
-    assert.is_true(baml.deep_equals((0).trailing_zeros(), 64))
+    assert.equal((0).trailing_zeros(), 64)
 }
 
 test "int_trailing_zeros_one" {
-    assert.is_true(baml.deep_equals((1).trailing_zeros(), 0))
+    assert.equal((1).trailing_zeros(), 0)
 }
 
 // 8 = 0b1000 → three trailing zeros.
 test "int_trailing_zeros_eight" {
-    assert.is_true(baml.deep_equals((8).trailing_zeros(), 3))
+    assert.equal((8).trailing_zeros(), 3)
 }
 
 test "int_trailing_ones_zero" {
-    assert.is_true(baml.deep_equals((0).trailing_ones(), 0))
+    assert.equal((0).trailing_ones(), 0)
 }
 
 // 7 = 0b111.
 test "int_trailing_ones_seven" {
-    assert.is_true(baml.deep_equals((7).trailing_ones(), 3))
+    assert.equal((7).trailing_ones(), 3)
 }
 
 test "int_trailing_ones_negative_one" {
-    assert.is_true(baml.deep_equals((-1).trailing_ones(), 64))
+    assert.equal((-1).trailing_ones(), 64)
 }
 
 test "int_count_zeros_of_zero" {
-    assert.is_true(baml.deep_equals((0).count_zeros(), 64))
+    assert.equal((0).count_zeros(), 64)
 }
 
 test "int_count_zeros_of_negative_one" {
-    assert.is_true(baml.deep_equals((-1).count_zeros(), 0))
+    assert.equal((-1).count_zeros(), 0)
 }
 
 test "int_count_ones_of_zero" {
-    assert.is_true(baml.deep_equals((0).count_ones(), 0))
+    assert.equal((0).count_ones(), 0)
 }
 
 test "int_count_ones_of_seven" {
-    assert.is_true(baml.deep_equals((7).count_ones(), 3))
+    assert.equal((7).count_ones(), 3)
 }
 
 test "int_count_ones_of_negative_one" {
-    assert.is_true(baml.deep_equals((-1).count_ones(), 64))
+    assert.equal((-1).count_ones(), 64)
 }
 
 // For any 64-bit integer, count_zeros + count_ones must equal 64.
@@ -652,7 +718,7 @@ function count_zeros_plus_ones(n: int) -> int {
 
 test "int_count_zeros_plus_count_ones_equals_64" {
     // 51966 = 0xCAFE — arbitrary mixed bit pattern
-    assert.is_true(baml.deep_equals(count_zeros_plus_ones(51966), 64))
+    assert.equal(count_zeros_plus_ones(51966), 64)
 }
 
 // ─── Operator overflow & boundary arithmetic ────────────────────────────────
@@ -662,26 +728,34 @@ test "int_count_zeros_plus_count_ones_equals_64" {
 // Valid arithmetic right up to the boundary must NOT spuriously throw. Helpers
 // take runtime args so the ops aren't constant-folded — they run through the
 // VM's checked AddInt/SubInt/MulInt opcodes.
-function int_add_(a: int, b: int) -> int { a + b }
-function int_sub_(a: int, b: int) -> int { a - b }
-function int_mul_(a: int, b: int) -> int { a * b }
+function int_add_(a: int, b: int) -> int {
+    a + b
+}
+
+function int_sub_(a: int, b: int) -> int {
+    a - b
+}
+
+function int_mul_(a: int, b: int) -> int {
+    a * b
+}
 
 test "int_add_at_max_boundary_no_overflow" {
     // (MAX - 1) + 1 == MAX
-    assert.is_true(baml.deep_equals(int_add_(int.max_value() - 1, 1), int.max_value()))
+    assert.equal(int_add_(int.max_value() - 1, 1), int.max_value())
 }
 
 test "int_sub_at_min_boundary_no_overflow" {
     // (MIN + 1) - 1 == MIN
-    assert.is_true(baml.deep_equals(int_sub_(int.min_value() + 1, 1), int.min_value()))
+    assert.equal(int_sub_(int.min_value() + 1, 1), int.min_value())
 }
 
 test "int_mul_max_by_one_no_overflow" {
-    assert.is_true(baml.deep_equals(int_mul_(int.max_value(), 1), int.max_value()))
+    assert.equal(int_mul_(int.max_value(), 1), int.max_value())
 }
 
 test "int_mul_min_by_one_no_overflow" {
-    assert.is_true(baml.deep_equals(int_mul_(int.min_value(), 1), int.min_value()))
+    assert.equal(int_mul_(int.min_value(), 1), int.min_value())
 }
 
 // ─── regression: bare-literal method receiver (B-614) ─────────────────────────
@@ -692,11 +766,11 @@ test "int_mul_min_by_one_no_overflow" {
 // the literal itself. Kept at the end of the file so the test registry stays
 // append-only.
 test "int_abs_bare_literal" {
-    assert.is_true(baml.deep_equals(3.abs(), 3))
+    assert.equal(3.abs(), 3)
 }
 
 test "int_to_string_bare_literal" {
-    assert.is_true(baml.deep_equals(7.to_string(), "7"))
+    assert.equal(7.to_string(), "7")
 }
 
 // ─── literal bases and underscore separators ─────────────────────────────────
@@ -706,78 +780,77 @@ test "int_to_string_bare_literal" {
 // diagnostic_errors/invalid_numeric_literals project.
 
 test "int_hex_literal" {
-    assert.is_true(baml.deep_equals(0xFF, 255))
+    assert.equal(0xFF, 255)
 }
 
 test "int_hex_lowercase_digits" {
-    assert.is_true(baml.deep_equals(0xcafe, 51966))
+    assert.equal(0xcafe, 51966)
 }
 
 test "int_hex_mixed_case_digits" {
-    assert.is_true(baml.deep_equals(0xCaFe, 51966))
+    assert.equal(0xCaFe, 51966)
 }
 
 test "int_octal_literal" {
-    assert.is_true(baml.deep_equals(0o755, 493))
+    assert.equal(0o755, 493)
 }
 
 test "int_binary_literal" {
-    assert.is_true(baml.deep_equals(0b1010, 10))
+    assert.equal(0b1010, 10)
 }
 
 test "int_prefixed_zero" {
-    assert.is_true(baml.deep_equals(0x0, 0))
-    assert.is_true(baml.deep_equals(0o0, 0))
-    assert.is_true(baml.deep_equals(0b0, 0))
+    assert.equal(0x0, 0);
+    assert.equal(0o0, 0);
+    assert.equal(0b0, 0)
 }
 
 test "int_negative_prefixed" {
-    assert.is_true(baml.deep_equals(-0xFF, -255))
-    assert.is_true(baml.deep_equals(-0b1010, -10))
-    assert.is_true(baml.deep_equals(-0o755, -493))
+    assert.equal(-0xFF, -255);
+    assert.equal(-0b1010, -10);
+    assert.equal(-0o755, -493)
 }
 
 test "int_underscore_separators" {
-    assert.is_true(baml.deep_equals(1_000_000, 1000000))
+    assert.equal(1_000_000, 1000000)
 }
 
 test "int_trailing_underscore" {
-    assert.is_true(baml.deep_equals(1_, 1))
+    assert.equal(1_, 1)
 }
 
 test "int_hex_underscores" {
-    assert.is_true(baml.deep_equals(0xFF_FF, 65535))
+    assert.equal(0xFF_FF, 65535)
 }
 
 test "int_binary_underscores" {
-    assert.is_true(baml.deep_equals(0b10_10, 10))
+    assert.equal(0b10_10, 10)
 }
 
 test "int_octal_underscores" {
-    assert.is_true(baml.deep_equals(0o7_5_5, 493))
+    assert.equal(0o7_5_5, 493)
 }
 
 test "int_underscore_after_prefix" {
-    assert.is_true(baml.deep_equals(0x_F, 15))
+    assert.equal(0x_F, 15)
 }
 
 // int.max_value() is 2^62 - 1: the full positive i63 range is reachable in
-// hex. The int-typed expression goes first so `deep_equals` infers T = int
-// rather than the literal type of the hex constant.
+// hex.
 test "int_hex_max_value" {
-    assert.is_true(baml.deep_equals(int.max_value(), 0x3FFF_FFFF_FFFF_FFFF))
+    assert.equal(int.max_value(), 0x3FFF_FFFF_FFFF_FFFF)
 }
 
 // Bitwise ops read naturally with hex/binary operands (previously the bit
 // patterns had to be spelled in decimal).
 test "int_hex_bitwise" {
-    assert.is_true(baml.deep_equals(0xCAFE & 0xFF, 0xFE))
-    assert.is_true(baml.deep_equals(0b1100 | 0b0011, 0b1111))
-    assert.is_true(baml.deep_equals(0b1100 ^ 0b1010, 0b0110))
+    assert.equal(0xCAFE & 0xFF, 0xFE);
+    assert.equal(0b1100 | 0b0011, 0b1111);
+    assert.equal(0b1100 ^ 0b1010, 0b0110)
 }
 
 // Maximal munch: a method call on a bare prefixed literal must not absorb
 // the dot (`0xFF.to_string()` is INTEGER_LITERAL DOT WORD).
 test "int_hex_bare_literal_method" {
-    assert.is_true(baml.deep_equals(0xFF.to_string(), "255"))
+    assert.equal(0xFF.to_string(), "255")
 }

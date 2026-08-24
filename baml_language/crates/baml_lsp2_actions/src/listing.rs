@@ -5,7 +5,7 @@ use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
     package::{PackageId, PackageItems, package_items},
 };
-use baml_compiler2_tir::ty::Package;
+use baml_type::{BuiltinTypeName, Package};
 
 use crate::Db;
 
@@ -124,6 +124,29 @@ pub fn resolve_target<'db>(
     }
 
     None
+}
+
+/// Resolve a lowercase builtin type spelling, optionally followed by a member,
+/// to its definition in the `baml` package.
+///
+/// Intrinsic types (`void`, `never`, `unknown`) intentionally return `None`
+/// because they have language-reference topics rather than addressable stdlib
+/// definitions.
+pub fn resolve_builtin_type_target<'db>(
+    db: &'db dyn Db,
+    name: &str,
+) -> Option<ResolvedTarget<'db>> {
+    let (alias, member_path) = name.split_once('.').unwrap_or((name, ""));
+    let builtin = BuiltinTypeName::from_alias(alias)?;
+    let definition_path = builtin.builtin_definition_path()?;
+    let mut target = definition_path.join(".");
+    if !member_path.is_empty() {
+        target.push('.');
+        target.push_str(member_path);
+    }
+
+    let package = PackageId::new(db, Name::new(baml_base::BAML_PACKAGE));
+    resolve_target(db, package, &target)
 }
 
 /// Check if the given namespace path exists in the package (either as an exact

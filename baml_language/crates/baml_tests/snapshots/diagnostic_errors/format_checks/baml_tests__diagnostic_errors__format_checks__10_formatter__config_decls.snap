@@ -361,34 +361,11 @@ retry_policy TriviaRetryBlock { /* 6 open brace trailing */
 // ===== Test declaration =====
 function TestTarget() -> string {
     client: BasicClient
-    prompt: #"Hello"#
+    prompt: `Hello`
 }
 
 test BasicTest {
     functions: [TestTarget],
-    args: {},
-}
-
-// ===== Test with type builder =====
-test TypeBuilderTest {
-    functions: [TestTarget],
-    type_builder {
-        class InnerClass {
-            b: int,
-        }
-        dynamic class DynamicInner {
-            c: string,
-        }
-        enum InnerEnum {
-            X,
-            Y,
-        }
-        dynamic enum DynamicInnerEnum {
-            P,
-            Q,
-        }
-        type InnerAlias = string | int;
-    },
     args: {},
 }
 
@@ -415,93 +392,6 @@ test TriviaTestBlock { /* 6 open brace trailing */
     }, /* 16 args close brace trailing */
     /* 17 close brace leading */
 } /* 18 close brace trailing */
-
-// ===== Test with type builder containing long/complex types =====
-test LongTypeBuilderTest {
-    functions: [TestTarget],
-    type_builder {
-        class VeryLongClassNameThatExceedsTheLineLimitWhenCombinedWithTheTypeBuilderIndentation {
-            extremely_long_field_name_for_testing_wrapping: int,
-            another_very_long_field_name: string,
-        }
-        enum VeryLongEnumNameThatAlsoExceedsTheLineLimitWhenCombinedWithTheTypeBuilderIndentation {
-            VeryLongVariantNameThatExceedsLimit,
-            AnotherVeryLongVariantName,
-        }
-        type VeryLongTypeAliasNameThatExceedsLimit = int
-            | string
-            | bool
-            | float
-            | null
-            | int[]
-            | string[];
-    },
-    args: {},
-}
-
-// ===== Trivia on test with type builder (line comments) =====
-// 1 test leading
-test TriviaTypeBuilderTest { // 6 open brace trailing
-    // 7 functions leading
-    functions: [TestTarget], // 10 value trailing
-    // 11 type_builder leading
-    type_builder { // 14 tb open brace trailing
-        // 15 class leading
-        class TbInnerClass { // 20 class brace trailing
-            // 21 field leading
-            field_name: int, // 24 type trailing
-            // 25 class close leading
-        } // 26 class close trailing
-        // 27 enum leading
-        enum TbInnerEnum { // 32 enum brace trailing
-            // 33 variant leading
-            X, // 34 variant trailing
-            // 35 enum close leading
-        } // 36 enum close trailing
-        // 37 type alias leading
-        type TbAlias = string; // 44 rhs trailing
-        // 45 tb close leading
-    }, // 46 tb close trailing
-    // 47 args leading
-    args: { // 50 args brace trailing
-        // 51 args close leading
-    }, // 52 args close trailing
-    // 53 close leading
-} // 54 close trailing
-
-///////////////////
-
-// ===== Trivia on test with type builder (block comments) =====
-/* 1 test leading */
-test TriviaTypeBuilderTestBlock { /* 6 open brace trailing */
-    /* 7 functions leading */
-    functions: /* 9 value leading */[TestTarget], /* 10 value trailing */
-    /* 11 type_builder leading */
-    type_builder { /* 14 tb open brace trailing */
-        /* 15 class leading */
-        class TbInnerClassBlock { /* 20 class brace trailing */
-            /* 21 field leading */
-            field_name: /* 22 field name trailing *//* 23 type leading */int, /* 24 type trailing */
-            /* 25 class close leading */
-        } /* 26 class close trailing */
-        /* 27 enum leading */
-        enum TbInnerEnumBlock { /* 32 enum brace trailing */
-            /* 33 variant leading */
-            X/* 34 variant trailing */, /* 34 variant trailing */
-            /* 35 enum close leading */
-        } /* 36 enum close trailing */
-        /* 37 type alias leading */
-        type TbAliasBlock = /* 42 equals trailing *//* 43 rhs leading */string; /* 44 rhs trailing */
-        /* 45 tb close leading */
-    }, /* 46 tb close trailing */
-    /* 47 args leading */
-    args: /* 49 args brace leading */{ /* 50 args brace trailing */
-        /* 51 args close leading */
-    }, /* 52 args close trailing */
-    /* 53 close leading */
-} /* 54 close trailing */
-
-///////////////////
 
 // ===== Short names =====
 client<llm> C {

@@ -1,0 +1,16 @@
+function non_exhaustive(t: reflect.Type) -> string {
+  match (t.kind()) {
+    reflect.class.Type => "class",
+    reflect.enum.Type => "enum",
+    reflect.union.Type => "union",
+    reflect.literal.Type => "literal",
+    reflect.array.Type => "array",
+    reflect.map.Type => "map",
+    reflect.interface.Type => "interface",
+    reflect.primitive.Type => "primitive"
+  }
+}
+
+function kinds_are_not_constructible() -> reflect.class.Type {
+  reflect.class.Type {}
+}

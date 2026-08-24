@@ -157,38 +157,12 @@ pub enum DiagnosticId {
     TestFieldAttribute,
     UnknownFunctionInTest,
 
-    // Type builder diagnostics (E0040-E0043)
-    TypeBuilderInNonTestContext,
-    DuplicateTypeBuilderBlock,
-    IncompleteDynamicDefinition,
-    TypeBuilderSyntaxError,
-
     // Reserved prefix diagnostics
     ReservedStreamPrefix,
 
     // Cycle detection diagnostics (E0068-E0069)
     AliasCycle,
     ClassCycle,
-
-    // Jinja template diagnostics (E0070-E0086)
-    JinjaUnresolvedVariable,
-    JinjaFunctionReferenceWithoutCall,
-    JinjaInvalidFilter,
-    JinjaInvalidType,
-    JinjaPropertyNotDefined,
-    JinjaEnumValuePropertyAccess,
-    JinjaEnumStringComparison,
-    JinjaPropertyNotFoundInUnion,
-    JinjaPropertyTypeMismatchInUnion,
-    JinjaNonClassInUnion,
-    JinjaWrongArgCount,
-    JinjaMissingArg,
-    JinjaUnknownArg,
-    JinjaWrongArgType,
-    JinjaParseError,
-    JinjaUnsupportedFeature,
-    JinjaInvalidSyntax,
-    JinjaInvalidTest,
 
     // Catch binding errors (E0093)
     InvalidCatchBindingType,
@@ -200,8 +174,9 @@ pub enum DiagnosticId {
     // VIR lowering errors (E0089)
     LoweringError,
 
-    // Removed feature errors (E0098)
-    InstanceofRemoved,
+    // Removed feature errors (E0098) — shared by all removed-syntax
+    // diagnostics (`instanceof`, legacy BEP-066 TypeBuilder syntax, ...).
+    RemovedFeature,
 
     // Namespace diagnostics (E0099)
     NamespaceShadow,
@@ -278,6 +253,7 @@ pub enum DiagnosticId {
     /// `return`/`break`/`continue` inside a `defer` body that would escape the
     /// defer (BEP-042). Only `throw` may leave a defer.
     DeferControlFlowEscape,
+
     /// An out-of-body `implement<P..> I<args..> for T` violates the orphan rule
     /// (BEP-044, Rust's RFC 2451 "covered" rule): the interface is foreign and no
     /// type local to this package appears in `[T, args..]` before any uncovered
@@ -360,6 +336,12 @@ pub enum DiagnosticId {
     /// (an existential), never as a bound.
     BuiltinInterfaceNotABound,
 
+    // Mounted packages (BEP-066 mounted-package linking, E0158)
+    /// A call whose callee resolves into a MOUNTED (source-less) dependency
+    /// package. References type from the mounted interface; callables without
+    /// a loc-free bytecode link contract report this diagnostic.
+    MountedPackageCallUnsupported,
+
     // Projection bases (E0156)
     /// The dotted projection shorthand (`Base.Member`) was written with the
     /// interface itself as the base (`Iterator.Element`). A projection's base
@@ -367,6 +349,49 @@ pub enum DiagnosticId {
     /// the interface explicitly takes a qualified projection
     /// (`(Base as Iterator).Element`). Rust's E0223 analog.
     InterfaceProjectionBase,
+
+    // Reflection render diagnostics (BEP-066, E0159+).
+    /// An enum definition reached an LLM schema boundary without any values.
+    /// Empty enums are legal declarations/constructions, but have no output
+    /// representation and therefore fail at render time (BEP-066 R-4).
+    EmptyEnumAtRender,
+
+    /// A runtime reflection union constructor received no members. Static
+    /// source cannot spell this defect, so BEP-066 reserves a surface code.
+    RuntimeEmptyUnion,
+
+    /// An interface-typed occurrence reached an LLM output schema renderer.
+    OpenInterfaceAtRender,
+
+    /// Two non-equivalent definitions with the same displayed qualified name
+    /// reached one LLM render/parse context.
+    ConflictingTypeDefinitionAtRender,
+    /// A top-level declaration ($init) can reach a yielding io sysop.
+    InitIoNotAllowed,
+
+    /// A non-data type reached an LLM output schema renderer. These types are
+    /// valid in BAML's type system but have no output-format representation.
+    NonDataTypeAtRender,
+    /// Reflection attempted to extract or dynamically invoke a generic
+    /// callable without a complete runtime type-argument frame.
+    UnspecializedReflectedGeneric,
+    /// A class literal named one of the builtin companion carriers
+    /// (`baml.Int`, `baml.Map`, …). They exist to hang methods on a builtin
+    /// type, never to be instantiated.
+    CannotConstructBuiltinCompanion,
+    /// A condition whose static type decides the branch (always truthy /
+    /// always falsy) - B-1563 truthiness.
+    ConditionAlwaysConstant,
+    /// An inline `unreflect(value)` type argument would escape its call: the
+    /// runtime type parameter is rigid for that one call, but the expression's
+    /// published type still mentions it. The lexical `type T = unreflect(v)`
+    /// binding is the spelling that outlives the call.
+    RuntimeTypeMustBeNamed,
+    /// `reflect.function.Type.specialize` was given type arguments the
+    /// callable cannot accept: the wrong number of them, one that fails a
+    /// declared interface bound, or any at all for a callable with nothing
+    /// left to bind.
+    ReflectSpecializationFailed,
 }
 
 impl DiagnosticId {
@@ -467,35 +492,9 @@ impl DiagnosticId {
             DiagnosticId::TestFieldAttribute => "E0036",
             DiagnosticId::UnknownFunctionInTest => "E0088",
 
-            // Type builder diagnostics
-            DiagnosticId::TypeBuilderInNonTestContext => "E0040",
-            DiagnosticId::DuplicateTypeBuilderBlock => "E0041",
-            DiagnosticId::IncompleteDynamicDefinition => "E0042",
-            DiagnosticId::TypeBuilderSyntaxError => "E0043",
-
             // Cycle detection diagnostics
             DiagnosticId::AliasCycle => "E0068",
             DiagnosticId::ClassCycle => "E0069",
-
-            // Jinja template diagnostics
-            DiagnosticId::JinjaUnresolvedVariable => "E0070",
-            DiagnosticId::JinjaFunctionReferenceWithoutCall => "E0071",
-            DiagnosticId::JinjaInvalidFilter => "E0072",
-            DiagnosticId::JinjaInvalidType => "E0073",
-            DiagnosticId::JinjaPropertyNotDefined => "E0074",
-            DiagnosticId::JinjaEnumValuePropertyAccess => "E0075",
-            DiagnosticId::JinjaEnumStringComparison => "E0076",
-            DiagnosticId::JinjaPropertyNotFoundInUnion => "E0077",
-            DiagnosticId::JinjaPropertyTypeMismatchInUnion => "E0078",
-            DiagnosticId::JinjaNonClassInUnion => "E0079",
-            DiagnosticId::JinjaWrongArgCount => "E0080",
-            DiagnosticId::JinjaMissingArg => "E0081",
-            DiagnosticId::JinjaUnknownArg => "E0082",
-            DiagnosticId::JinjaWrongArgType => "E0083",
-            DiagnosticId::JinjaParseError => "E0084",
-            DiagnosticId::JinjaUnsupportedFeature => "E0085",
-            DiagnosticId::JinjaInvalidSyntax => "E0086",
-            DiagnosticId::JinjaInvalidTest => "E0087",
 
             // Reserved prefix errors
             DiagnosticId::ReservedStreamPrefix => "E0100",
@@ -511,7 +510,7 @@ impl DiagnosticId {
             DiagnosticId::LoweringError => "E0089",
 
             // Removed feature errors
-            DiagnosticId::InstanceofRemoved => "E0098",
+            DiagnosticId::RemovedFeature => "E0098",
 
             DiagnosticId::NamespaceShadow => "E0099",
 
@@ -567,6 +566,12 @@ impl DiagnosticId {
             DiagnosticId::ToJsonMustImplementInterface => "E0142",
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
             DiagnosticId::CleanupMagicMethodSignature => "E0144",
+            DiagnosticId::RuntimeEmptyUnion => "E0160",
+            DiagnosticId::OpenInterfaceAtRender => "E0161",
+            DiagnosticId::ConflictingTypeDefinitionAtRender => "E0162",
+            DiagnosticId::InitIoNotAllowed => "E0163",
+            DiagnosticId::NonDataTypeAtRender => "E0164",
+            DiagnosticId::ConditionAlwaysConstant => "E0167",
             DiagnosticId::GenericBoundNotInterface => "E0145",
             DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 
@@ -588,6 +593,14 @@ impl DiagnosticId {
             DiagnosticId::BuiltinInterfaceNotImplementable => "E0153",
             DiagnosticId::BuiltinInterfaceNotABound => "E0154",
             DiagnosticId::InterfaceProjectionBase => "E0156",
+            DiagnosticId::MountedPackageCallUnsupported => "E0158",
+            DiagnosticId::EmptyEnumAtRender => "E0159",
+            // E0164 is owned by the non-data output-format diagnostic in #4470.
+            DiagnosticId::UnspecializedReflectedGeneric => "E0165",
+            DiagnosticId::CannotConstructBuiltinCompanion => "E0166",
+            // E0167 is owned by the always-constant-condition lint in #4498.
+            DiagnosticId::RuntimeTypeMustBeNamed => "E0168",
+            DiagnosticId::ReflectSpecializationFailed => "E0169",
         }
     }
 }
@@ -870,7 +883,7 @@ mod tests {
             DiagnosticId::UnexpectedToken,
             DiagnosticId::DuplicateName,
             DiagnosticId::LoweringError,
-            DiagnosticId::InstanceofRemoved,
+            DiagnosticId::RemovedFeature,
             DiagnosticId::NamespaceShadow,
         ];
 

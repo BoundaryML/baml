@@ -109,7 +109,8 @@ The `build-java-sdk` / `publish-maven` jobs slot into
 
 1. **Version** — `-PbamlVersion`. Maven has no dist-tags, so:
    - canary → plain version, e.g. `0.15.0`;
-   - nightly → suffixed version, e.g. `0.15.0-nightly.YYYYMMDD`.
+   - nightly → suffixed version, e.g. `0.15.0-nightly.YYYYMMDD.a`, where the
+     trailing letter distinguishes repeat cuts for the same night.
 2. **Per-platform native builds** — one publish invocation per target in the
    8-target matrix, each passing that platform's
    `-PbamlNativePlatform=<os>-<arch>` and `-PbamlNativeLib=<built cdylib>`. The

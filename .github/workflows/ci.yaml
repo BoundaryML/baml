@@ -83,6 +83,7 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/**' \
+            ':typescript2/app-promptfiddle/src/playground/default.baml' \
             ':scripts/baml-language-version' \
             ':scripts/baml-wrapper-version' \
             ':scripts/baml-release-manifests' \
@@ -90,6 +91,7 @@ jobs:
             ':scripts/baml-release-platforms' \
             ':scripts/baml_release_platforms.py' \
             ':scripts/baml-bridge-cffi-hygiene' \
+            ':scripts/tests/**' \
             ':release/platforms.json' \
             ':scripts/install.sh' \
             ':scripts/install.ps1' \
@@ -97,6 +99,7 @@ jobs:
             ':tools/pkg_boundaryml_com/**' \
             ':.github/workflows/ci.yaml' \
             ':.github/workflows/release-baml-language.yml' \
+            ':.github/workflows/nightly-release.yml' \
             ':.github/workflows/build2-bridge-cffi.reusable.yaml' \
             ':.github/workflows/build2-python-sdk.reusable.yaml' \
             ':.github/workflows/build2-nodejs-sdk.reusable.yaml' \
@@ -304,6 +307,7 @@ jobs:
             ':.github/workflows/build2-bridge-cffi.reusable.yaml' \
             ':.github/actions/setup-rust/**' \
             ':scripts/baml-bridge-cffi-hygiene' \
+            ':scripts/tests/**' \
             ':release/platforms.json' \
             ':baml_language/Cargo.toml' \
             ':baml_language/Cargo.lock' \
@@ -452,14 +456,14 @@ jobs:
       # prek hooks invoke cargo (from rustup), mise tasks that shell out
       # to cargo, and python scripts that begin with `#!/usr/bin/env -S
       # uv run --script` (e.g. validate-markdown). We don't
-      # need go/ruby/node/etc here, just the prek binary itself + a
-      # python/uv pair for the hook scripts.
+      # need go/ruby/etc here, just the prek binary, a python/uv pair
+      # for hook scripts, node for the grammar check, and clang-format.
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
           # Temporarily omit Hawk while its CI check is disabled.
-          # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv"
-          install_args: "cargo:prek python uv"
+          # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv node clang-format"
+          install_args: "cargo:prek python uv node clang-format"
 
       - name: "Cache prek"
         uses: actions/cache@v5
@@ -544,8 +548,11 @@ jobs:
             baml_language/sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj)"
           rust_crate="$(sed -n 's/^version = "\(.*\)"$/\1/p' \
             baml_language/sdks/rust/bridge_rust/Cargo.toml)"
+          go_toolchain="$(sed -n \
+            's/^const ToolchainVersion = "\(.*\)"$/\1/p' \
+            baml_language/sdks/go/baml_go/version.go)"
           go_runtime="$(sed -n \
-            's/^const DefaultRuntimeVersion = "\(.*\)"$/\1/p' \
+            's/^const BridgeRuntimeVersion = "\(.*\)"$/\1/p' \
             baml_language/sdks/go/baml_go/version.go)"
           vsix="$(jq -r .version typescript2/app-vscode-ext/package.json)"
           test "$node_npm" = "$nightly"
@@ -556,13 +563,15 @@ jobs:
           test "$gradle_plugin" = "$nightly"
           test "$swiftpm" = "$nightly"
           test "$rust_crate" = "$nightly"
-          test "$go_runtime" = "$nightly"
+          test "$go_toolchain" = "$nightly"
+          test "$go_runtime" = "v$nightly"
           test "$vsix" = "$nightly"
           for shipping_version in \
             "$node_npm" "$web_npm" "$csharp_nuget" "$maven" \
-            "$gradle_plugin" "$swiftpm" "$rust_crate" "$go_runtime" "$vsix"; do
+            "$gradle_plugin" "$swiftpm" "$rust_crate" "$go_toolchain" "$vsix"; do
             test "$shipping_version" != "$canary"
           done
+          test "$go_runtime" != "v$canary"
 
   # Call reusable workflows
   bridge-cffi-release:
@@ -793,9 +802,11 @@ jobs:
       # Miri checks the raw-pointer/UnsafeCell discipline of the same
       # scenarios on real threads. Leaked rings are by design (&'static
       # lifetime model); isolation is off for park_timeout/sleep in the
-      # stress tests.
-      - name: "Miri (bex_events::prof)"
-        run: 'cargo +nightly miri test -p bex_events --lib prof::'
+      # stress tests. Scoped to the ring/registry modules: the durable
+      # store under `prof::backend` needs `statvfs`/`flock` (foreign
+      # functions Miri cannot run) and its tests are plain std tests.
+      - name: "Miri (bex_events::prof ring)"
+        run: 'cargo +nightly miri test -p bex_events --lib -- prof::concurrency_tests:: prof::ring:: prof::record:: prof::config::'
         working-directory: baml_language
         env:
           MIRIFLAGS: "-Zmiri-ignore-leaks -Zmiri-disable-isolation"
@@ -1268,15 +1279,26 @@ jobs:
           echo "::error::One or more CI jobs failed!"
           exit 1
 
-  # Entry point for the release: a green push to canary hands off to
-  # release-baml-language.yml. The release deliberately has no `workflow_run`
-  # trigger -- crates.io refuses to mint a Trusted Publishing token for
-  # `workflow_run` (and `pull_request_target`) runs, so a `workflow_run` release
-  # can never publish baml_bridge.
+  # Release entry point for pushes to canary. Two things happen here:
+  #
+  #   1. Every green canary commit gets its immutable `baml-language-source-<sha>`
+  #      tag. That tag is the ref every production release run is dispatched at,
+  #      and the release re-checks it before publishing, so it must exist for any
+  #      commit a release could later be cut from -- including commits the
+  #      scheduled nightly picks up hours or days later.
+  #   2. A CANARY release is dispatched, but only when this push bumps
+  #      [release].canary_version in baml_language/release.toml. Everything else
+  #      ships through nightly-release.yml, which cuts one nightly a night at
+  #      midnight Seattle time instead of one per merge.
+  #
+  # The release deliberately has no `workflow_run` trigger -- crates.io refuses
+  # to mint a Trusted Publishing token for `workflow_run` (and
+  # `pull_request_target`) runs, so a `workflow_run` release can never publish
+  # baml_bridge.
   #
   # Same required-gate set as ci-failure-alert above; keep the two lists in sync.
   dispatch-release:
-    name: "Dispatch BAML Language Release"
+    name: "Tag Release Source & Dispatch Canary Cut"
     runs-on: ubuntu-latest
     needs:
       - prek
@@ -1302,6 +1324,8 @@ jobs:
       actions: write
       contents: write
     steps:
+      # Tagging comes first, and needs no checkout: it is what makes a commit
+      # releasable days later, so a clone flake must not be able to stop it.
       - name: Create immutable release workflow ref
         id: release-workflow-ref
         env:
@@ -1335,7 +1359,77 @@ jobs:
           echo "ref=$release_ref" >> "$GITHUB_OUTPUT"
           echo "Release workflow ref: $release_ref ($ref_sha)"
 
-      - name: Dispatch release for this commit
+      - uses: useblacksmith/checkout@v1
+        with:
+          # HEAD^ is all the canary-cut check below needs. canary is
+          # squash-merge-only with linear history required, so every push is a
+          # single commit and HEAD^ is the whole push.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Decide whether this push cuts a canary release
+        id: canary-cut
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # A canary cut is *requested* by bumping [release].canary_version in
+          # baml_language/release.toml, and is skipped when that version is
+          # already released so a re-run cannot cut it twice. This is the only
+          # push-triggered release; nightly-release.yml owns everything else.
+          if ! git rev-parse HEAD^ >/dev/null 2>&1; then
+            echo "cut=false" >> "$GITHUB_OUTPUT"
+            echo "No parent commit to diff against; leaving this commit to the nightly."
+            exit 0
+          fi
+          if git diff --quiet HEAD^ HEAD -- baml_language/release.toml; then
+            echo "cut=false" >> "$GITHUB_OUTPUT"
+            echo "release.toml unchanged; the nightly schedule owns this commit."
+            exit 0
+          fi
+          canary_version="$(scripts/baml-language-version compute --channel canary)"
+          # The file changing is only a necessary condition -- compare the parsed
+          # value, since an edit to anything else in release.toml is not a
+          # release request. Point the tool's own parser at a tree holding the
+          # parent's file rather than re-implementing TOML parsing in shell.
+          previous_root="$(mktemp -d)"
+          trap 'rm -rf "$previous_root"' EXIT
+          mkdir -p "$previous_root/baml_language"
+          previous_version=""
+          if git show "HEAD^:baml_language/release.toml" \
+            > "$previous_root/baml_language/release.toml" 2>/dev/null; then
+            previous_version="$(BAML_LANGUAGE_VERSION_ROOT="$previous_root" \
+              scripts/baml-language-version show)"
+          fi
+          if [[ "$canary_version" == "$previous_version" ]]; then
+            echo "cut=false" >> "$GITHUB_OUTPUT"
+            echo "[release].canary_version is unchanged at $canary_version; the nightly schedule owns this commit."
+            exit 0
+          fi
+          # Ask for the release by name and read the STATUS: `gh release view`
+          # exits non-zero for a network or auth error just as it does for "not
+          # found", and treating those alike would re-cut a published version.
+          status="$(gh api -i "repos/$GH_REPO/releases/tags/baml-language-$canary_version" \
+            --silent 2>/dev/null | head -1 | awk '{print $2}' || true)"
+          case "$status" in
+            200)
+              echo "cut=false" >> "$GITHUB_OUTPUT"
+              echo "baml-language-$canary_version is already released; not cutting it again."
+              exit 0
+              ;;
+            404)
+              ;;
+            *)
+              echo "::error::could not determine whether baml-language-$canary_version is released (HTTP ${status:-none})"
+              exit 1
+              ;;
+          esac
+          echo "cut=true" >> "$GITHUB_OUTPUT"
+          echo "release.toml bumped to an unreleased version; cutting canary $canary_version."
+
+      - name: Dispatch canary release for this commit
+        if: ${{ steps.canary-cut.outputs.cut == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_WORKFLOW_REF: ${{ steps.release-workflow-ref.outputs.ref }}
@@ -1346,7 +1440,7 @@ jobs:
           gh workflow run release-baml-language.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref "$RELEASE_WORKFLOW_REF" \
-            -f channel=auto \
+            -f channel=canary \
             -f dry_run=false \
             -f source_sha="$GITHUB_SHA" \
             -f source_ci_run_id="$GITHUB_RUN_ID"

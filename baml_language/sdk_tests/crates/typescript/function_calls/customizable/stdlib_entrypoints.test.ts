@@ -3,7 +3,7 @@
 // host), not only from inside BAML. Each gets its sync + `_async` binding.
 import "./baml_sdk/index.js";
 import { describe, it, expect } from "vitest";
-import { now_ms, now_ms_async } from "./baml_sdk/baml/sys/index.js";
+import { argv, argv_async } from "./baml_sdk/baml/sys/index.js";
 import { exists, exists_async } from "./baml_sdk/baml/fs/index.js";
 import { isTestRuntime } from "./test_runtime.js";
 
@@ -24,13 +24,14 @@ function generatedSdkFile(relPath: string): string | null {
 }
 
 describe("function_calls — portable stdlib entry points", () => {
-  // `baml.sys.now_ms() -> int` is a native `$rust_function`
+  // `baml.sys.argv() -> string[]` is a native `$rust_function`
   // (FunctionKind::Native). Calling it as an entry point should run the native
-  // and return a positive millisecond timestamp, not reject with
-  // `NotInvokableAsEntry`.
-  it("stdlib_entrypoints_native_baml_sys_now_ms_is_callable_as_an_entry_point", async () => {
-    expect(now_ms()).toBeGreaterThan(0);
-    expect(await now_ms_async()).toBeGreaterThan(0);
+  // and return the argument array, not reject with `NotInvokableAsEntry`. The
+  // fixture host passes no program arguments, so the array is legitimately
+  // empty — the shape is what this asserts.
+  it("stdlib_entrypoints_native_baml_sys_argv_is_callable_as_an_entry_point", async () => {
+    expect(Array.isArray(argv())).toBe(true);
+    expect(Array.isArray(await argv_async())).toBe(true);
   });
 });
 

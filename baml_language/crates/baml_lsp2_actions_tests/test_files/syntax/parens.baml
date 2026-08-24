@@ -211,23 +211,15 @@ function foo() -> int {
 //     ╭─[parens.baml:25:8]
 //  25 │    for ;; { }
 //     ·        ┬
-//     ·        ╰── expected `'let'`, found `';'`
+//     ·        ╰── expected `'('`, found `';'`
 //     ╰────
 // E0010
 //
 //   × unexpected token
-//     ╭─[parens.baml:25:9]
-//  25 │    for ;; { }
-//     ·         ┬
-//     ·         ╰── expected `in`, found `';'`
-//     ╰────
-// E0010
-//
-//   × unexpected token
-//     ╭─[parens.baml:29:4]
-//  29 │    for ;;) {}
-//     ·    ─┬─
-//     ·     ╰── expected `')'`, found `for`
+//     ╭─[parens.baml:27:12]
+//  27 │    for (;; {}
+//     ·            ┬
+//     ·            ╰── expected `')'`, found `'{'`
 //     ╰────
 // E0010
 //
@@ -235,23 +227,7 @@ function foo() -> int {
 //     ╭─[parens.baml:29:8]
 //  29 │    for ;;) {}
 //     ·        ┬
-//     ·        ╰── expected `'let'`, found `';'`
-//     ╰────
-// E0010
-//
-//   × unexpected token
-//     ╭─[parens.baml:29:9]
-//  29 │    for ;;) {}
-//     ·         ┬
-//     ·         ╰── expected `in`, found `';'`
-//     ╰────
-// E0010
-//
-//   × unexpected token
-//     ╭─[parens.baml:29:10]
-//  29 │    for ;;) {}
-//     ·          ┬
-//     ·          ╰── expected `block after for expression`, found `')'`
+//     ·        ╰── expected `'('`, found `';'`
 //     ╰────
 // E0010
 //
@@ -267,31 +243,7 @@ function foo() -> int {
 //     ╭─[parens.baml:39:8]
 //  39 │    for ;;i += x) {}
 //     ·        ┬
-//     ·        ╰── expected `'let'`, found `';'`
-//     ╰────
-// E0010
-//
-//   × unexpected token
-//     ╭─[parens.baml:39:9]
-//  39 │    for ;;i += x) {}
-//     ·         ┬
-//     ·         ╰── expected `in`, found `';'`
-//     ╰────
-// E0010
-//
-//   × unexpected token
-//     ╭─[parens.baml:39:10]
-//  39 │    for ;;i += x) {}
-//     ·          ┬
-//     ·          ╰── expected `block after for expression`, found `identifier`
-//     ╰────
-// E0010
-//
-//   × unexpected token
-//     ╭─[parens.baml:39:16]
-//  39 │    for ;;i += x) {}
-//     ·                ┬
-//     ·                ╰── expected `expression`, found `')'`
+//     ·        ╰── expected `'('`, found `';'`
 //     ╰────
 // E0010
 //
@@ -299,23 +251,7 @@ function foo() -> int {
 //     ╭─[parens.baml:41:8]
 //  41 │    for ;;i += x {}
 //     ·        ┬
-//     ·        ╰── expected `'let'`, found `';'`
-//     ╰────
-// E0010
-//
-//   × unexpected token
-//     ╭─[parens.baml:41:9]
-//  41 │    for ;;i += x {}
-//     ·         ┬
-//     ·         ╰── expected `in`, found `';'`
-//     ╰────
-// E0010
-//
-//   × unexpected token
-//     ╭─[parens.baml:41:10]
-//  41 │    for ;;i += x {}
-//     ·          ┬
-//     ·          ╰── expected `block after for expression`, found `identifier`
+//     ·        ╰── expected `'('`, found `';'`
 //     ╰────
 // E0010
 //
@@ -331,31 +267,7 @@ function foo() -> int {
 //     ╭─[parens.baml:49:8]
 //  49 │    for ;;i = x) {}
 //     ·        ┬
-//     ·        ╰── expected `'let'`, found `';'`
-//     ╰────
-// E0010
-//
-//   × unexpected token
-//     ╭─[parens.baml:49:9]
-//  49 │    for ;;i = x) {}
-//     ·         ┬
-//     ·         ╰── expected `in`, found `';'`
-//     ╰────
-// E0010
-//
-//   × unexpected token
-//     ╭─[parens.baml:49:10]
-//  49 │    for ;;i = x) {}
-//     ·          ┬
-//     ·          ╰── expected `block after for expression`, found `identifier`
-//     ╰────
-// E0010
-//
-//   × unexpected token
-//     ╭─[parens.baml:49:15]
-//  49 │    for ;;i = x) {}
-//     ·               ┬
-//     ·               ╰── expected `expression`, found `')'`
+//     ·        ╰── expected `'('`, found `';'`
 //     ╰────
 // E0010
 //
@@ -363,23 +275,7 @@ function foo() -> int {
 //     ╭─[parens.baml:51:8]
 //  51 │    for ;;i = x {}
 //     ·        ┬
-//     ·        ╰── expected `'let'`, found `';'`
-//     ╰────
-// E0010
-//
-//   × unexpected token
-//     ╭─[parens.baml:51:9]
-//  51 │    for ;;i = x {}
-//     ·         ┬
-//     ·         ╰── expected `in`, found `';'`
-//     ╰────
-// E0010
-//
-//   × unexpected token
-//     ╭─[parens.baml:51:10]
-//  51 │    for ;;i = x {}
-//     ·          ┬
-//     ·          ╰── expected `block after for expression`, found `identifier`
+//     ·        ╰── expected `'('`, found `';'`
 //     ╰────
 // E0010
 //
@@ -416,6 +312,22 @@ function foo() -> int {
 // E0010
 //
 //   × assignment is not allowed in expression position; assignment is a statement
+//     ╭─[parens.baml:39:10]
+//  39 │    for ;;i += x) {}
+//     ·          ───┬──
+//     ·             ╰── assignment not allowed here
+//     ╰────
+// E0010
+//
+//   × assignment is not allowed in expression position; assignment is a statement
+//     ╭─[parens.baml:41:10]
+//  41 │    for ;;i += x {}
+//     ·          ───┬──
+//     ·             ╰── assignment not allowed here
+//     ╰────
+// E0010
+//
+//   × assignment is not allowed in expression position; assignment is a statement
 //     ╭─[parens.baml:45:11]
 //  45 │    for (;;i = x) {}
 //     ·           ──┬──
@@ -428,4 +340,20 @@ function foo() -> int {
 //  47 │    for (;;i = x {}
 //     ·           ────┬───
 //     ·               ╰── assignment not allowed here
+//     ╰────
+// E0010
+//
+//   × assignment is not allowed in expression position; assignment is a statement
+//     ╭─[parens.baml:49:10]
+//  49 │    for ;;i = x) {}
+//     ·          ──┬──
+//     ·            ╰── assignment not allowed here
+//     ╰────
+// E0010
+//
+//   × assignment is not allowed in expression position; assignment is a statement
+//     ╭─[parens.baml:51:10]
+//  51 │    for ;;i = x {}
+//     ·          ──┬──
+//     ·            ╰── assignment not allowed here
 //     ╰────

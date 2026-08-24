@@ -19,4 +19,19 @@ client<llm> InvalidFieldName {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client InvalidFieldName = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   │ ai.RoundRobin)
+//    ╭─[client_http_config_invalid_fields.baml:1:1]
+//  1 │ ╭─▶ client<llm> InvalidFieldName {
+//  2 │ │     provider openai
+//  3 │ │     options {
+//  4 │ │       model "gpt-4"
+//  5 │ │       http {
+//  6 │ │         conect_timeout_ms 5000  // Typo in field name
+//  7 │ │       }
+//  8 │ │     }
+//  9 │ ├─▶ }
+//    · ╰──── replace with `client Name = <expr>;`
+//    ╰────

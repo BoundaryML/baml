@@ -41,22 +41,22 @@ function BindingDoesNotLeakIntoElse(r: Ok | Err) -> string {
 //- diagnostics
 // E0003
 //
-//   × unresolved name: `o`
+//   × unresolved name: `o.value`
 //     ╭─[if_let_if_let_binding_scope.baml:15:3]
 //  15 │   o.value
-//     ·   ─
+//     ·   ───────
 //     ╰────
 // E0003
 //
-//   × unresolved name: `o`
+//   × unresolved name: `o.value`
 //     ╭─[if_let_if_let_binding_scope.baml:27:3]
 //  27 │   o.value
-//     ·   ─
+//     ·   ───────
 //     ╰────
 // E0003
 //
-//   × unresolved name: `o`
+//   × unresolved name: `o.value`
 //     ╭─[if_let_if_let_binding_scope.baml:36:5]
 //  36 │     o.value
-//     ·     ─
+//     ·     ───────
 //     ╰────

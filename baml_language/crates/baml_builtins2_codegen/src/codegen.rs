@@ -141,7 +141,7 @@ fn build_class_namespace_tree<'a>(
 /// - `baml.Array.length` → class `Array` at root, method `length`
 /// - `baml.media.Pdf.url` → namespace `media`, class `Pdf`, method `url`
 /// - `baml.deep_copy` → root free function
-/// - `baml.sys.now_ms` → namespace `sys`, free function `now_ms`
+/// - `baml.sys.argv` → namespace `sys`, free function `argv`
 fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin], package: &str) -> NamespaceNode<'a> {
     let mut root = NamespaceNode::new();
     let prefix = format!("{package}.");
@@ -178,7 +178,7 @@ fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin], package: &str) -> Nam
         let entry = BuiltinEntry {
             builtin: b,
             baml_method_name,
-            rust_method_name: camel_to_snake(segments[last_idx]),
+            rust_method_name: rust_method_name(segments[last_idx]),
         };
 
         let node = root.get_or_create_namespace(&ns_segments);
@@ -191,6 +191,18 @@ fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin], package: &str) -> Nam
     }
 
     root
+}
+
+/// Produce a legal identifier that is also safe to concatenate into generated
+/// glue names. Raw identifiers (`r#type`) are legal method names but cannot be
+/// embedded in `__glue_{name}`, so Rust keywords use a trailing underscore.
+fn rust_method_name(name: &str) -> String {
+    let name = camel_to_snake(name);
+    if syn::parse_str::<syn::Ident>(&name).is_ok() {
+        name
+    } else {
+        format!("{name}_")
+    }
 }
 
 // ============================================================================
@@ -215,7 +227,8 @@ fn emit_view_namespace_contents(out: &mut String, node: &ClassNamespaceNode, dep
 
     // Emit sub-namespace modules
     for (ns_name, sub_node) in &node.sub_namespaces {
-        writeln!(out, "{indent}pub mod {ns_name} {{").unwrap();
+        let rust_ns_name = rust_field_ident(ns_name);
+        writeln!(out, "{indent}pub mod {rust_ns_name} {{").unwrap();
         write!(out, "{indent}    use super::super::*;\n\n").unwrap();
         emit_view_namespace_contents(out, sub_node, depth + 1);
         writeln!(out, "{indent}}}\n").unwrap();
@@ -437,7 +450,11 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
             }
             // Generic, Named, Media, Null — fallback to a copied Value.
             _ => {
-                writeln!(out, "{inner}pub fn {field_name}(&self) -> Value {{").unwrap();
+                writeln!(
+                    out,
+                    "{inner}pub fn {field_name}(&self) -> bex_vm_types::Value {{"
+                )
+                .unwrap();
                 writeln!(out, "{inner2}self.instance.load_field({})", field.index).unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
@@ -486,7 +503,7 @@ fn view_optional_type_and_expr(
             ),
         ),
         _ => (
-            "Option<Value>".to_string(),
+            "Option<bex_vm_types::Value>".to_string(),
             format!("self.instance.load_field({field_index})"),
         ),
     }
@@ -514,7 +531,8 @@ fn emit_copy_namespace_contents(out: &mut String, node: &ClassNamespaceNode, dep
     }
 
     for (ns_name, sub_node) in &node.sub_namespaces {
-        writeln!(out, "{indent}pub mod {ns_name} {{").unwrap();
+        let rust_ns_name = rust_field_ident(ns_name);
+        writeln!(out, "{indent}pub mod {rust_ns_name} {{").unwrap();
         writeln!(out, "{indent}    use super::super::*;").unwrap();
         writeln!(out, "{indent}    use std::sync::Arc;").unwrap();
         write!(out, "{indent}    use std::any::Any;\n\n").unwrap();
@@ -547,7 +565,7 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     writeln!(out, "{indent}impl {class_name} {{").unwrap();
     writeln!(
         out,
-        "{inner}pub fn to_value(self, vm: &mut BexVm) -> Value {{"
+        "{inner}pub fn to_value(self, vm: &mut BexVm) -> bex_vm_types::Value {{"
     )
     .unwrap();
     writeln!(out, "{inner2}let class_ptr = vm.resolve_class({fqn:?});").unwrap();
@@ -565,7 +583,7 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     // Build the fields vec
     write!(
         out,
-        "{inner2}Value::object(vm.alloc_instance(class_ptr, vec!["
+        "{inner2}bex_vm_types::Value::object(vm.alloc_instance(class_ptr, vec!["
     )
     .unwrap();
     for (i, field) in def.fields.iter().enumerate() {
@@ -596,23 +614,25 @@ fn copy_field_type(ty: &BamlType) -> String {
         | BamlType::Optional(_)
         | BamlType::Generic(_)
         | BamlType::Named(_)
-        | BamlType::Media(_) => "Value".to_string(),
+        | BamlType::Media(_) => "bex_vm_types::Value".to_string(),
     }
 }
 
 /// Generate the expression to convert a copy struct field to a Value.
 fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
     match ty {
-        BamlType::RustType => format!("Value::object(vm.alloc_rust_data(self.{field_name}))"),
+        BamlType::RustType => {
+            format!("bex_vm_types::Value::object(vm.alloc_rust_data(self.{field_name}))")
+        }
         // `to_value` has no error channel (`fn to_value(self, vm) -> Value`),
         // so an out-of-i63 native i64 reaches this path only when caller-side
         // Rust constructed a struct field that violates the i63 BAML
         // contract. Fail loudly in *both* debug and release rather than
         // truncating silently via `Value::int`'s `debug_assert`.
         BamlType::Int => format!(
-            "Value::try_int(self.{field_name}).unwrap_or_else(|| panic!(\
+            "bex_vm_types::Value::try_int(self.{field_name}).unwrap_or_else(|| panic!(\
                 \"`{field_name}: int` is outside BAML int range [{{}}, {{}}], got {{}}\", \
-                Value::INT_MIN, Value::INT_MAX, self.{field_name}))"
+                bex_vm_types::Value::INT_MIN, bex_vm_types::Value::INT_MAX, self.{field_name}))"
         ),
         // Bigints are always heap-allocated, and allocation is fallible (the
         // value may exceed `MAX_BIGINT_BITS`). `to_value` has no error channel,
@@ -624,9 +644,11 @@ fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
             "vm.try_alloc_bigint(self.{field_name}).unwrap_or_else(|p| panic!(\
                 \"failed to allocate bigint field `{field_name}`: {{p}}\"))"
         ),
-        BamlType::Float => format!("Value::object(vm.alloc_float(self.{field_name}))"),
-        BamlType::Bool => format!("Value::bool(self.{field_name})"),
-        BamlType::Null => "Value::NULL".to_string(),
+        BamlType::Float => {
+            format!("bex_vm_types::Value::object(vm.alloc_float(self.{field_name}))")
+        }
+        BamlType::Bool => format!("bex_vm_types::Value::bool(self.{field_name})"),
+        BamlType::Null => "bex_vm_types::Value::NULL".to_string(),
         // String, List, Map, Optional, Generic, Named, Media — already a Value
         _ => format!("self.{field_name}"),
     }
@@ -646,6 +668,10 @@ fn to_pascal_case(s: &str) -> String {
             result
         }
     }
+}
+
+fn namespace_pascal_case(path: &str) -> String {
+    path.split('.').map(to_pascal_case).collect()
 }
 
 /// Replace characters that are illegal in Rust identifiers with `_`. Synthetic
@@ -670,7 +696,7 @@ fn class_trait_name(namespace_prefix: &str, class_name: &str) -> String {
     if namespace_prefix.is_empty() {
         format!("BamlClass{class_name}")
     } else {
-        let ns_pascal = to_pascal_case(namespace_prefix);
+        let ns_pascal = namespace_pascal_case(namespace_prefix);
         format!("BamlClass{ns_pascal}{class_name}")
     }
 }
@@ -680,7 +706,10 @@ fn class_dispatch_name(namespace_prefix: &str, class_name: &str) -> String {
     if namespace_prefix.is_empty() {
         format!("__dispatch_{class_lower}")
     } else {
-        format!("__dispatch_{namespace_prefix}_{class_lower}")
+        format!(
+            "__dispatch_{}_{class_lower}",
+            sanitize_ident(&namespace_prefix.replace('.', "_"))
+        )
     }
 }
 
@@ -691,12 +720,12 @@ fn package_trait_name(package: &str) -> String {
 }
 
 fn namespace_trait_name(name: &str) -> String {
-    let pascal = to_pascal_case(name);
+    let pascal = namespace_pascal_case(name);
     format!("BamlNamespace{pascal}")
 }
 
 fn namespace_dispatch_name(name: &str) -> String {
-    format!("__dispatch_{name}")
+    format!("__dispatch_{}", sanitize_ident(&name.replace('.', "_")))
 }
 
 // ============================================================================
@@ -755,8 +784,13 @@ fn emit_subtree_traits(out: &mut String, node: &NamespaceNode, namespace_prefix:
     }
 
     for (ns_name, sub_node) in &node.sub_namespaces {
-        emit_subtree_traits(out, sub_node, ns_name);
-        emit_namespace_trait(out, ns_name, sub_node);
+        let child_prefix = if namespace_prefix.is_empty() {
+            ns_name.clone()
+        } else {
+            format!("{namespace_prefix}.{ns_name}")
+        };
+        emit_subtree_traits(out, sub_node, &child_prefix);
+        emit_namespace_trait(out, &child_prefix, sub_node);
     }
 }
 
@@ -809,16 +843,18 @@ fn emit_class_trait(
 // Namespace trait emission
 // ============================================================================
 
-fn emit_namespace_trait(out: &mut String, ns_name: &str, node: &NamespaceNode) {
-    let trait_name = namespace_trait_name(ns_name);
-    let dispatch_name = namespace_dispatch_name(ns_name);
+fn emit_namespace_trait(out: &mut String, namespace_prefix: &str, node: &NamespaceNode) {
+    let trait_name = namespace_trait_name(namespace_prefix);
+    let dispatch_name = namespace_dispatch_name(namespace_prefix);
 
     let mut supertraits: Vec<String> = Vec::new();
     for class_name in node.classes.keys() {
-        supertraits.push(class_trait_name(ns_name, class_name));
+        supertraits.push(class_trait_name(namespace_prefix, class_name));
     }
     for sub_ns in node.sub_namespaces.keys() {
-        supertraits.push(namespace_trait_name(sub_ns));
+        supertraits.push(namespace_trait_name(&format!(
+            "{namespace_prefix}.{sub_ns}"
+        )));
     }
 
     if supertraits.is_empty() {
@@ -851,7 +887,7 @@ fn emit_namespace_trait(out: &mut String, ns_name: &str, node: &NamespaceNode) {
         out.push_str("        match rest.split_once('.') {\n");
 
         for class_name in node.classes.keys() {
-            let child_dispatch = class_dispatch_name(ns_name, class_name);
+            let child_dispatch = class_dispatch_name(namespace_prefix, class_name);
             writeln!(
                 out,
                 "            Some(({class_name:?}, method)) => Self::{child_dispatch}(method),"
@@ -860,7 +896,7 @@ fn emit_namespace_trait(out: &mut String, ns_name: &str, node: &NamespaceNode) {
         }
 
         for sub_ns in node.sub_namespaces.keys() {
-            let child_dispatch = namespace_dispatch_name(sub_ns);
+            let child_dispatch = namespace_dispatch_name(&format!("{namespace_prefix}.{sub_ns}"));
             writeln!(
                 out,
                 "            Some(({sub_ns:?}, rest)) => Self::{child_dispatch}(rest),",
@@ -1133,7 +1169,11 @@ fn clean_param_list(b: &NativeBuiltin) -> String {
         ));
     }
     for p in &b.params {
-        parts.push(format!("{}: {}", p.name, baml_type_to_input(&p.ty, false)));
+        parts.push(format!(
+            "{}: {}",
+            rust_field_ident(&p.name),
+            baml_type_to_input(&p.ty, false)
+        ));
     }
 
     parts.join(", ")
@@ -1376,7 +1416,7 @@ fn emit_arg_extractions_indented(
                 let arg_idx = i;
                 emit_single_extraction_indented(
                     out,
-                    &p.name,
+                    &rust_field_ident(&p.name).to_string(),
                     arg_idx,
                     &p.ty,
                     indent,
@@ -1389,7 +1429,7 @@ fn emit_arg_extractions_indented(
                 let arg_idx = i + 1;
                 emit_single_extraction_indented(
                     out,
-                    &p.name,
+                    &rust_field_ident(&p.name).to_string(),
                     arg_idx,
                     &p.ty,
                     indent,
@@ -1420,7 +1460,7 @@ fn emit_arg_extractions_indented(
                 let arg_idx = i + 1;
                 emit_single_extraction_indented(
                     out,
-                    &p.name,
+                    &rust_field_ident(&p.name).to_string(),
                     arg_idx,
                     &p.ty,
                     indent,
@@ -1433,7 +1473,7 @@ fn emit_arg_extractions_indented(
         for (i, p) in b.params.iter().enumerate() {
             emit_single_extraction_indented(
                 out,
-                &p.name,
+                &rust_field_ident(&p.name).to_string(),
                 i,
                 &p.ty,
                 indent,
@@ -1694,7 +1734,11 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: boo
             BamlType::List(_) | BamlType::Map(_, _) | BamlType::Uint8Array => arraymap_is_ref,
             _ => is_ref,
         };
-        args.push(call_arg_for_type(&p.name, &p.ty, p_is_ref));
+        args.push(call_arg_for_type(
+            &rust_field_ident(&p.name).to_string(),
+            &p.ty,
+            p_is_ref,
+        ));
     }
 
     args.join(", ")
@@ -2077,7 +2121,7 @@ fn baml_type_to_output(ty: &BamlType) -> String {
 // ============================================================================
 
 fn receiver_param_name(recv: &Receiver) -> String {
-    recv.class_name.to_lowercase()
+    rust_field_ident(&recv.class_name.to_lowercase()).to_string()
 }
 
 /// Path to the generated `view::` struct for an instance-backed receiver, e.g.
@@ -2086,11 +2130,13 @@ fn receiver_view_path(recv: &Receiver) -> String {
     if recv.namespace.is_empty() {
         format!("view::{}", recv.class_name)
     } else {
-        format!(
-            "view::{}::{}",
-            recv.namespace.replace('.', "::"),
-            recv.class_name
-        )
+        let namespace = recv
+            .namespace
+            .split('.')
+            .map(|segment| rust_field_ident(segment).to_string())
+            .collect::<Vec<_>>()
+            .join("::");
+        format!("view::{}::{}", namespace, recv.class_name)
     }
 }
 
@@ -2220,7 +2266,7 @@ fn media_kind_expr(class_name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::extract::extract_native_builtins;
+    use crate::extract::{extract_native_builtins, extract_native_builtins_for};
 
     #[test]
     fn test_camel_to_snake() {
@@ -2302,6 +2348,10 @@ mod tests {
     fn test_bare_method_names_on_class_traits() {
         let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
+        let (reflect_builtins, _reflect_io_builtins, reflect_class_defs) =
+            extract_native_builtins_for("reflect").unwrap();
+        let reflect_output =
+            generate_native_trait_for("reflect", &reflect_builtins, &reflect_class_defs);
 
         assert!(
             output.contains("fn length(array: ArrayView<'_>) -> i64;"),
@@ -2314,6 +2364,14 @@ mod tests {
         assert!(
             output.contains("fn trunc(float: f64) -> f64;"),
             "BamlClassFloat should have bare `trunc` method:\n{output}"
+        );
+        assert!(
+            reflect_output.contains("fn type_(vm: &mut BexVm"),
+            "Rust-keyword BAML methods should use a concatenation-safe identifier:\n{reflect_output}"
+        );
+        assert!(
+            reflect_output.contains("fn __glue_type_(vm: &mut BexVm"),
+            "keyword method glue should use the same escaped stem:\n{reflect_output}"
         );
     }
 
@@ -2387,10 +2445,6 @@ mod tests {
             output.contains("fn deep_copy(vm: &mut BexVm, value: &Value) -> Value;"),
             "BamlPackageBaml should have deep_copy:\n{output}"
         );
-        assert!(
-            output.contains("fn deep_equals(vm: &BexVm, a: &Value, b: &Value) -> bool;"),
-            "BamlPackageBaml should have deep_equals with &BexVm:\n{output}"
-        );
     }
 
     #[test]
@@ -2417,7 +2471,10 @@ mod tests {
             let rest = b.path.strip_prefix("baml.").unwrap_or(&b.path);
             let segments: Vec<&str> = rest.split('.').collect();
             let baml_name = segments.last().unwrap();
-            let name = camel_to_snake(baml_name);
+            // Audit the identifier the generator actually emits. Rust keywords
+            // such as `Builder.type` are escaped with a trailing underscore so
+            // they can also be embedded in `__glue_{name}`.
+            let name = rust_method_name(baml_name);
             let has_mut_receiver = b
                 .receiver
                 .as_ref()
@@ -2545,7 +2602,7 @@ mod tests {
         );
         // to_value method
         assert!(
-            output.contains("fn to_value(self, vm: &mut BexVm) -> Value"),
+            output.contains("fn to_value(self, vm: &mut BexVm) -> bex_vm_types::Value"),
             "copy struct should have to_value method:\n{output}"
         );
     }

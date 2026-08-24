@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.catch_arm_return.may_throw(x: int) -> int  [expr] {
+  { if (x Eq 0) { throw "boom" } } x
+}
+function user.fixtures.catch_arm_return.via_catch(x: int) -> int  [expr] {
+  {  } may_throw(x) catch (e) { _ => return Neg 1 }
+}
+function user.fixtures.catch_arm_return.via_match(x: int) -> int  [expr] {
+  {  } match (x) { 0 => return Neg 1, _ => x }
+}

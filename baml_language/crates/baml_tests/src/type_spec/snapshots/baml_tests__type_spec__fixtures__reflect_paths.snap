@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+281..282 'f': throws never
+308..382 '{\n   ...  s\n}': string
+314..319 'let s': string
+322..337 'reflect.Type.of': () -> reflect.Type throws never
+322..344 'reflec...int>()': reflect.Type
+322..354 'reflec...string': (self: reflect.Type) -> string throws never
+322..356 'reflec...ring()': string
+379..380 's': string

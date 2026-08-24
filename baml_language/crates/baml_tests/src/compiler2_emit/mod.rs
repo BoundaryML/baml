@@ -324,8 +324,8 @@ fn optional_defaults_emit_snapshot() {
 //
 // Note: `set_synthetic_items_for_file` was removed from the DB trait as part of
 // the compiler2 migration (Phase 2). These tests now use actual BAML source
-// declarations (clients, retry_policy) which produce `Item::Let` bindings and
-// exercise the same let-binding infrastructure.
+// declarations (`client Name = <expr>;`) which produce `Item::Let` bindings
+// and exercise the same let-binding infrastructure.
 
 /// Verify that a client declaration:
 /// - Produces a let binding with a global slot (appears in `let_global_indices`)
@@ -337,10 +337,7 @@ fn let_binding_global_slot_and_init_function() {
     db.add_file(
         "test.baml",
         r#"
-        client<llm> MyClient {
-          provider openai
-          options { model "gpt-4" }
-        }
+        client MyClient = openai.ResponsesClient.new(model = "gpt-4");
         function f() -> string { return "x"; }
         "#,
     );
@@ -454,14 +451,8 @@ fn multiple_let_bindings_with_valid_dependencies() {
     db.add_file(
         "test.baml",
         r#"
-        client<llm> ClientA {
-          provider openai
-          options { model "gpt-4" }
-        }
-        client<llm> ClientB {
-          provider openai
-          options { model "gpt-3.5-turbo" }
-        }
+        client ClientA = openai.ResponsesClient.new(model = "gpt-4");
+        client ClientB = openai.ResponsesClient.new(model = "gpt-3.5-turbo");
         function f() -> string { return "x"; }
         "#,
     );
@@ -493,4 +484,178 @@ fn multiple_let_bindings_with_valid_dependencies() {
         program.function_indices.contains_key("$init"),
         "expected '$init' in function_indices"
     );
+}
+
+/// `InterfaceDef::fields` is the interface's field *index space*: every
+/// implementation's `RuntimeImplRule::field_links` is baked parallel to it, and a
+/// virtual field access carries a position into it. So the list must hold every
+/// declared field, in declaration order, with nothing dropped.
+///
+/// The regression this pins: a field whose type mentions `Self` or an associated
+/// type (`key: Self.Key`) used to fail runtime lowering and be silently filtered
+/// out, shifting every later field's index.
+#[test]
+fn interface_field_index_space_keeps_every_declared_field() {
+    let mut db = make_db();
+    db.add_file(
+        "test.baml",
+        r#"
+interface Shelf {
+  type Key
+
+  label: string
+  key: Self.Key
+  count: int
+}
+
+class Book {
+  label: string
+  key: string
+  count: int
+
+  implements Shelf {
+    type Key = string
+  }
+}
+
+function main() -> int { 0 }
+"#,
+    );
+    let program = compile(&db);
+
+    let iface = (*program.objects)
+        .iter()
+        .find_map(|obj| match obj {
+            bex_vm_types::Object::Interface(i) if i.name.name().as_str() == "Shelf" => Some(i),
+            _ => None,
+        })
+        .expect("Shelf interface object should be emitted");
+
+    let names: Vec<&str> = iface.fields.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["label", "key", "count"],
+        "every declared field must keep its declared position",
+    );
+
+    // The `Self.Key` field stays symbolic — a declaration has no implementor, so it
+    // is resolved against the receiver's impl at run time rather than erased here.
+    assert!(
+        matches!(
+            iface.fields[1].ty,
+            baml_type::RuntimeTy::AssociatedTypeProjection { .. }
+        ),
+        "`key: Self.Key` should stay an associated-type projection, got {:?}",
+        iface.fields[1].ty,
+    );
+    assert!(
+        matches!(iface.fields[2].ty, baml_type::RuntimeTy::Int { .. }),
+        "field after the projection must keep its own type, got {:?}",
+        iface.fields[2].ty,
+    );
+}
+
+/// `RuntimeImplRule::field_links` is the interface-field-index → class-slot table a
+/// virtual field access indexes. It must be ordered by the *interface's* field
+/// declarations — not by the class's field order, and not by the order the
+/// `field as class_field` links happen to be written.
+#[test]
+fn impl_rule_field_links_are_ordered_by_the_interface() {
+    let mut db = make_db();
+    db.add_file(
+        "test.baml",
+        r#"
+interface Shelf {
+  label: string
+  count: int
+}
+
+class Book {
+  // Deliberately declared in a different order than `Shelf` lists them, and
+  // with an unrelated field first, so a table built from the class's layout or
+  // from the link order would disagree with one built from the interface's.
+  isbn: string
+  count: int
+  title: string
+
+  implements Shelf {
+    count as count
+    label as title
+  }
+}
+
+function main() -> int { 0 }
+"#,
+    );
+    let program = compile(&db);
+
+    let class = (*program.objects)
+        .iter()
+        .find_map(|obj| match obj {
+            bex_vm_types::Object::Class(c) if c.name.item_name().as_str() == "Book" => Some(c),
+            _ => None,
+        })
+        .expect("Book class object should be emitted");
+    let slot = |name: &str| {
+        class
+            .fields
+            .iter()
+            .position(|f| f.name == name)
+            .unwrap_or_else(|| panic!("Book should have a `{name}` field"))
+    };
+
+    let rules: Vec<_> = program
+        .packages
+        .values()
+        .flat_map(|pkg| pkg.impl_rules.values().flatten())
+        .filter(|rule| !rule.field_links.is_empty())
+        .collect();
+    assert_eq!(
+        rules.len(),
+        1,
+        "expected exactly one field-bearing impl rule"
+    );
+
+    // Positional over `Shelf`'s declarations: index 0 is `label` (linked to
+    // `title`), index 1 is `count` (same-named).
+    assert_eq!(
+        rules[0].field_links.as_ref(),
+        [slot("title") as u32, slot("count") as u32],
+        "field_links must be indexed by the interface's field order",
+    );
+}
+
+/// The same-name default is applied at bake time, so an `implements` block that
+/// writes no links at all still produces a complete table.
+#[test]
+fn impl_rule_field_links_fill_the_same_name_default() {
+    let mut db = make_db();
+    db.add_file(
+        "test.baml",
+        r#"
+interface Named {
+  name: string
+}
+
+class Person {
+  age: int
+  name: string
+
+  implements Named {}
+}
+
+function main() -> int { 0 }
+"#,
+    );
+    let program = compile(&db);
+
+    let rule = program
+        .packages
+        .values()
+        .flat_map(|pkg| pkg.impl_rules.values().flatten())
+        .find(|rule| !rule.field_links.is_empty())
+        .expect("expected a field-bearing impl rule");
+    // `name` is `Person`'s second field, so an unlinked interface field must still
+    // resolve to slot 1 rather than defaulting to 0.
+    assert_eq!(rule.field_links.as_ref(), [1]);
 }

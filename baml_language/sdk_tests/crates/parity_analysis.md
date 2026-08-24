@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 680. IDs with complete required parity: 22. Required gaps: 4565.
+Distinct exact test IDs: 683. IDs with complete required parity: 38. Required gaps: 4457.
 
-Baseline ratchet: UNCHANGED. Required gaps: 4565 (baseline: 4565). Present declarations: 2003 (baseline: 2003). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: UNCHANGED. Required gaps: 4457 (baseline: 4457). Present declarations: 2068 (baseline: 2068). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 292 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 303 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 292 / 292 | 100.0% |
-| typescript_node | 111 / 292 | 38.0% |
-| typescript_web_chromium | 104 / 292 | 35.6% |
-| typescript_web_cloudflare_workers | 104 / 292 | 35.6% |
-| cpp | 123 / 292 | 42.1% |
-| csharp | 0 / 292 | 0.0% |
-| rust | 222 / 292 | 76.0% |
-| go | 1 / 292 | 0.3% |
-| java | 291 / 292 | 99.7% |
-| swift | 183 / 292 | 62.7% |
+| python_pydantic2 | 303 / 303 | 100.0% |
+| typescript_node | 124 / 303 | 40.9% |
+| typescript_web_chromium | 117 / 303 | 38.6% |
+| typescript_web_cloudflare_workers | 117 / 303 | 38.6% |
+| cpp | 128 / 303 | 42.2% |
+| csharp | 0 / 303 | 0.0% |
+| rust | 224 / 303 | 73.9% |
+| go | 13 / 303 | 4.3% |
+| java | 293 / 303 | 96.7% |
+| swift | 185 / 303 | 61.1% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -42,6 +42,9 @@ Parity is the share of the 292 test IDs declared in `python_pydantic2` that are 
 | docstrings_etc/main_undocumented_field_listed_as_bare_name_under_attributes | y | - | - | - | y | - | y | - | y | - | all |  |
 | docstrings_etc/no_inline_field_or_variant_doc_artifacts | - | - | - | - | - | - | - | y | - | - | all |  |
 | docstrings_etc/undocumented_field_has_no_doc_artifact | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/baml_closure_decodes_multiple_args_and_structured_return_values | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers this canonical behavior in its native integration harness |
+| function_calls/baml_closure_is_a_native_callable_with_host_language_arguments | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers this canonical behavior in its native integration harness |
+| function_calls/baml_closure_is_reusable_and_retains_mutable_captures | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers this canonical behavior in its native integration harness |
 | function_calls/baml_error_carries_baml_trace | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/baml_time_class_and_field_wire_names_are_exact | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/baml_time_constructors_and_parsers_return_lossless_internal_values | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -285,6 +288,7 @@ Parity is the share of the 292 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_throwing_callable_round_trips_original_host_exception | - | - | - | - | y | - | - | - | - | y | all |  |
 | function_calls/host_callables_throwing_callable_round_trips_original_python_exception | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/host_callables_two_arg_callable_unpacks_positional_args | y | y | y | y | y | - | y | - | y | y | all |  |
+| function_calls/host_supplied_json_supports_typed_narrowing | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# declares no function_calls suite (its native coverage is Rust-wrapped integration tests) |
 | function_calls/instance_method_cancellation_returns_exact_context_error | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_method_media_receiver_default_and_ownership_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_method_optional_arguments | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -292,6 +296,7 @@ Parity is the share of the 292 test IDs declared in `python_pydantic2` that are 
 | function_calls/instance_methods_on_classes_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_never_method_has_error_only_signature_and_returns_panic | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/invalid_function_arguments_surface_baml_error | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/json_returned_from_host_callback_supports_typed_narrowing | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# declares no function_calls suite (its native coverage is Rust-wrapped integration tests) |
 | function_calls/main_hello_world_returns_literal | y | - | - | - | y | - | y | - | y | y | all |  |
 | function_calls/main_returns_the_literal_async | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/main_returns_the_literal_sync | - | y | y | y | - | - | - | - | - | - | all |  |
@@ -346,8 +351,8 @@ Parity is the share of the 292 test IDs declared in `python_pydantic2` that are 
 | function_calls/static_method_media_json_type_and_rust_type_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/static_method_required_default_and_structured_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/stdlib_entrypoints_compiler_intrinsics_are_not_emitted_as_entry_points | y | y | - | - | y | - | y | - | y | y | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
-| function_calls/stdlib_entrypoints_native_baml_sys_now_ms_is_callable_as_an_entry_point | - | y | y | y | - | - | - | - | - | - | all |  |
-| function_calls/stdlib_entrypoints_native_now_ms_callable_as_entry_point | y | - | - | - | y | - | y | - | y | y | all |  |
+| function_calls/stdlib_entrypoints_native_argv_callable_as_entry_point | y | - | - | - | y | - | y | - | y | y | all |  |
+| function_calls/stdlib_entrypoints_native_baml_sys_argv_is_callable_as_an_entry_point | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/stdlib_entrypoints_sysop_fs_exists_callable_as_entry_point | y | y | - | - | y | - | y | - | y | y | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/stdlib_error_surfaces_as_go_error | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/sync_call_returns_null | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -365,11 +370,21 @@ Parity is the share of the 292 test IDs declared in `python_pydantic2` that are 
 | function_calls/web_sysops_supports_sync_and_async_baml_fs_read_through_node_fs_read_file_sync | - | - | - | y | - | - | - | - | - | - | python_pydantic2, typescript_web_cloudflare_workers, cpp, csharp, rust, go, java, swift |  |
 | function_calls/web_sysops_trampolines_baml_http_fetch_to_global_fetch_and_buffers_the_response | - | - | y | y | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, csharp, rust, go, java, swift |  |
 | function_calls/web_sysops_trampolines_baml_http_send_with_method_headers_and_body | - | - | y | y | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, csharp, rust, go, java, swift |  |
+| host_reflect/compiled_package_returns_class_graph | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
+| host_reflect/generated_class_subclasses_resolve_to_declared_type | y | y | y | y | - | - | - | - | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | Python and TypeScript have generated-class subclass tokens; Go has no subclass construct |
+| host_reflect/host_handles_expose_composition_only | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
+| host_reflect/known_type_tokens_compose_and_reject_unknowns | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
+| host_reflect/reflection_compile_errors_are_typed | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
+| host_reflect/runtime_class_definition_preserves_nested_metadata | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
+| host_reflect/runtime_enum_definition_decodes_alias | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
+| host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
+| integration/baml_closure_decodes_multiple_args_and_structured_return_values | - | - | - | - | - | y | - | - | - | - | csharp | C# canonical coverage executes through its native integration harness |
+| integration/baml_closure_is_a_native_callable_with_host_language_arguments | - | - | - | - | - | y | - | - | - | - | csharp | C# canonical coverage executes through its native integration harness |
+| integration/baml_closure_is_reusable_and_retains_mutable_captures | - | - | - | - | - | y | - | - | - | - | csharp | C# canonical coverage executes through its native integration harness |
 | integration/canonical_documentation_consumer_compiles_and_executes | - | - | - | - | - | y | - | - | - | - | csharp | validates the C#-specific documentation consumer |
 | integration/checked_in_union_runtime_source_matches_generator | - | - | - | - | - | y | - | - | - | - | csharp | validates C#-specific generated union runtime source |
 | integration/generated_baml_clients_are_not_tracked | - | - | - | - | - | y | - | - | - | - | csharp | validates C#-specific generated-client repository hygiene |
 | integration/phase10_executes_generated_native_stream_and_request_failure | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
-| integration/phase11_executes_generated_native_host_callbacks | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/phase12_executes_native_typed_resource_apis_lifetimes_and_state | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/phase13_executes_native_primitive_and_nullable_edges | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/phase14_executes_native_stdlib_structural_roundtrips | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
@@ -380,18 +395,8 @@ Parity is the share of the 292 test IDs declared in `python_pydantic2` that are 
 | integration/phase7_executes_typed_failures_cancellation_and_exit | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/phase9_executes_media_in_both_directions | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/primitive_slice_executes_sync_and_async | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
-| llm_functions/build_request_accepts_explicit_client_option | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/build_request_honors_cancellation | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/build_request_stream_accepts_explicit_client_option | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/build_request_stream_honors_cancellation | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/build_request_stream_returns_runtime_error_for_invalid_client | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/build_request_stream_sets_streaming_flag | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/classify_sentiment_build_request_includes_anthropic_api_key | - | - | - | - | - | - | - | y | - | - | all |  |
-| llm_functions/extract_resume_build_request_includes_open_aiapi_key | - | - | - | - | - | - | - | y | - | - | all |  |
 | llm_functions/main_baml_sdk_lorem_and_baml_sdk_ipsum_are_reachable | - | y | y | y | - | - | - | - | - | - | all |  |
-| llm_functions/main_classify_sentiment_build_request_includes_anthropic_api_key | y | - | - | - | - | - | y | - | y | y | all |  |
 | llm_functions/main_classify_sentiment_factory_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
-| llm_functions/main_extract_resume_build_request_includes_openai_api_key | y | - | - | - | - | - | y | - | y | y | all |  |
 | llm_functions/main_extract_resume_companion_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_extract_resume_factory_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_ipsum_classify_sentiment_sync_plus_async_factories_are_callable | - | y | y | y | - | - | - | - | - | - | all |  |
@@ -410,11 +415,9 @@ Parity is the share of the 292 test IDs declared in `python_pydantic2` that are 
 | llm_functions/main_replay_server_namespace_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_root_imports_cleanly | y | y | y | y | - | - | y | - | y | - | all |  |
 | llm_functions/main_stream_types_lorem_leaf_present | y | - | - | - | - | - | y | - | y | - | all |  |
-| llm_functions/main_streaming_extract_build_request_includes_openai_api_key | y | - | - | - | - | - | y | - | y | y | all |  |
 | llm_functions/main_streaming_extract_companion_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_streaming_extract_factory_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_types_and_bindings_reachable | - | - | - | - | - | - | - | - | - | y | all |  |
-| llm_functions/parse_companion_accepts_explicit_client_option | - | - | - | - | - | - | - | y | - | - | all |  |
 | llm_functions/parse_companion_honors_cancellation | - | - | - | - | - | - | - | y | - | - | all |  |
 | llm_functions/parse_companion_returns_closed_enum | - | - | - | - | - | - | - | y | - | - | all |  |
 | llm_functions/parse_companion_returns_runtime_error_for_invalid_output | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -431,7 +434,6 @@ Parity is the share of the 292 test IDs declared in `python_pydantic2` that are 
 | llm_functions/streaming_e2e_stream_doc | y | - | - | - | - | - | y | - | y | y | all |  |
 | llm_functions/streaming_e2e_stream_doc_async | y | - | - | - | - | - | y | - | y | y | all |  |
 | llm_functions/streaming_e2e_stream_doc_collect_in_baml | y | - | - | - | - | - | y | - | y | y | all |  |
-| llm_functions/streaming_extract_build_request_includes_open_aiapi_key | - | - | - | - | - | - | - | y | - | - | all |  |
 | package_edges/compile_cross_package_types_compile | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/alias_container_composition_and_defaults | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/alias_package_scope_collisions_compile_and_run | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -688,6 +690,7 @@ Parity is the share of the 292 test IDs declared in `python_pydantic2` that are 
 | type_shapes/symbol_collisions_round_trip_foo_bar | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/symbol_collisions_round_trip_ipsum | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/transparent_alias_functions_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
+| type_shapes/type_alias_declared_before_classes_is_importable | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python-specific generated type alias ordering |
 | type_shapes/typemap_is_installed_during_root_module_evaluation | - | y | y | y | - | - | - | - | - | - | all |  |
 | type_shapes/typemap_keeps_generated_stream_companions_distinct_from_runtime_owned_bases | - | y | y | y | - | - | - | - | - | - | all |  |
 | type_shapes/typemap_preserves_user_enum_generic_and_companion_mappings | - | y | y | y | - | - | - | - | - | - | all |  |

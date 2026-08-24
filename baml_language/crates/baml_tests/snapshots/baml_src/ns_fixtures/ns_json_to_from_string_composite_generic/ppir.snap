@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.json_to_from_string_composite_generic.Container {
+  item: T
+}
+class user.fixtures.json_to_from_string_composite_generic.Container$stream {
+  item: T | null
+}
+class user.fixtures.json_to_from_string_composite_generic.User {
+  name: string
+}
+class user.fixtures.json_to_from_string_composite_generic.User$stream {
+  name: string | null
+}
+function user.fixtures.json_to_from_string_composite_generic.decode_container(s: string) -> user.fixtures.json_to_from_string_composite_generic.Container<user.fixtures.json_to_from_string_composite_generic.User>  [expr] {
+  {  } baml.json.from_string(s)
+}

@@ -41,7 +41,8 @@ pub(crate) fn bridge_error(error: &bridge_cffi::BridgeError) -> JsValue {
         | BridgeError::FunctionNotFound { .. }
         | BridgeError::NotImplemented(_)
         | BridgeError::DuplicateCallId(_)
-        | BridgeError::Internal(_) => CLIENT,
+        | BridgeError::Internal(_)
+        | BridgeError::Startup(_) => CLIENT,
     };
     setup_error(code, error.to_string())
 }

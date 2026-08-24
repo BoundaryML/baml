@@ -1,0 +1,88 @@
+# ix preview copy of .github/workflows/wasm-pack-tests.reusable.yaml -
+# the same job pointed at the ix runner pool (runs-on label and the
+# warm-seed checkout). It runs side by side with the original
+# via ix-ci.yml, is never a required check, and changes nothing about
+# how the original runs. Promote or delete after the trial; do not
+# evolve both copies.
+name: WASM Pack Tests (Reusable)
+
+on:
+  workflow_call: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-wasm-pack-tests
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  wasm-pack-test:
+    name: "wasm-pack test"
+    # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Keep the warm seed's ignored files (target/, node_modules);
+          # tracked files still hard-reset to the SHA. No-op on hosted runners.
+          clean: false
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
+      - name: "Install Rust toolchain"
+        run: |
+          set -euo pipefail
+          rustup show
+          # `rustup target add wasm32` fetches a small (~20MB) std component that
+          # normally installs in seconds. A multi-minute duration means a stalled
+          # download (rustup has no idle timeout), which otherwise burns the whole
+          # 20-min job timeout and dequeues the PR from the merge queue. Cap each
+          # attempt well above the normal time and retry on a fresh connection;
+          # surface a genuine outage after 3 tries instead of hanging.
+          for attempt in 1 2 3; do
+            if timeout 300 rustup target add wasm32-unknown-unknown; then
+              break
+            fi
+            echo "::warning::rustup target add wasm32 attempt $attempt stalled/failed; retrying" >&2
+            [ "$attempt" = 3 ] && { echo "::error::rustup target add wasm32 failed after 3 attempts"; exit 1; }
+            sleep 5
+          done
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across similar Linux WASM jobs for better hit rates
+          shared-key: "linux-wasm"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      # `sys_llm` (this job's original wasm-pack test target) was deleted when
+      # the provider clients went native-BAML; no crate carries wasm-gated
+      # tests today. Until one does, this gate builds the wasm bridge — the
+      # check that catches wasm-only dependency breakage (e.g. a missing
+      # `getrandom/js` feature), which is what this job's failures actually
+      # meant in practice.
+      # NOTE: if you add a crate with wasm-gated tests, restore a
+      # `wasm-pack test --node crates/<crate>` step here.
+      - name: "Check wasm build (bridge_wasm)"
+        run: cargo check -p bridge_wasm --target wasm32-unknown-unknown
+        working-directory: baml_language

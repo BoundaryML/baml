@@ -81,7 +81,7 @@ static const char *baml_open_library(const char *path) {
 		dlclose(handle);
 		return baml_loader_error;
 	}
-	const size_t required_size = offsetof(BamlApiV1, shutdown_runtime) + sizeof(api->shutdown_runtime);
+	const size_t required_size = offsetof(BamlApiV1, initialize_runtime_from_bytecode_with_metadata) + sizeof(api->initialize_runtime_from_bytecode_with_metadata);
 	if (api->struct_size < required_size) {
 		snprintf(baml_loader_error, sizeof(baml_loader_error), "truncated BAML ABI v1 table: got %zu bytes, need at least %zu", api->struct_size, required_size);
 		dlclose(handle);
@@ -100,7 +100,8 @@ static const char *baml_open_library(const char *path) {
 		api->media_base64 == NULL || api->media_mime_type == NULL ||
 		api->register_bridge == NULL ||
 		api->register_unhandled_spawn_error_callback == NULL ||
-		api->shutdown_runtime == NULL) {
+		api->shutdown_runtime == NULL ||
+		api->initialize_runtime_from_bytecode_with_metadata == NULL) {
 		snprintf(baml_loader_error, sizeof(baml_loader_error), "BAML ABI v1 table contains a NULL required function");
 		dlclose(handle);
 		return baml_loader_error;
@@ -120,17 +121,24 @@ static void baml_close_library_after_load_failure(void) {
 }
 
 static BamlBuffer baml_version(void) { return baml_api->version(); }
-static BamlBuffer baml_register_go_bridge(const uint8_t *sdk_version, size_t length) {
+static BamlBuffer baml_register_go_bridge(const uint8_t *runtime_name, size_t runtime_name_length, const uint8_t *sdk_version, size_t length, const uint8_t *runtime_version, size_t runtime_version_length) {
 	const BamlBridgeInfoV1 info = {
 		.struct_size = sizeof(BamlBridgeInfoV1),
 		.language = BAML_BRIDGE_LANGUAGE_GO,
 		.sdk_version = sdk_version,
 		.sdk_version_len = length,
+		.bridge_runtime_name = runtime_name,
+		.bridge_runtime_name_len = runtime_name_length,
+		.bridge_runtime_version = runtime_version,
+		.bridge_runtime_version_len = runtime_version_length,
 	};
 	return baml_api->register_bridge(&info);
 }
 static BamlBuffer baml_initialize(const uint8_t *bytecode, size_t length) {
 	return baml_api->initialize_runtime_from_bytecode(bytecode, length);
+}
+static BamlBuffer baml_initialize_with_metadata(const uint8_t *bytecode, size_t length, const char *baml_toml) {
+	return baml_api->initialize_runtime_from_bytecode_with_metadata(bytecode, length, baml_toml);
 }
 static void baml_free_buffer(BamlBuffer buffer) { baml_api->free_buffer(buffer); }
 static void baml_register_go_callback(void) {
@@ -195,13 +203,23 @@ func nativeOpen(path string) (string, error) {
 
 func nativeCloseAfterLoadFailure() { C.baml_close_library_after_load_failure() }
 
-func nativeRegisterBridge(sdkVersion string) error {
+func nativeRegisterBridge(runtimeName string, sdkVersion string, runtimeVersion string) error {
+	nameBytes := []byte(runtimeName)
 	bytes := []byte(sdkVersion)
+	runtimeBytes := []byte(runtimeVersion)
+	var namePointer *C.uint8_t
 	var pointer *C.uint8_t
+	var runtimePointer *C.uint8_t
+	if len(nameBytes) != 0 {
+		namePointer = (*C.uint8_t)(unsafe.Pointer(&nameBytes[0]))
+	}
 	if len(bytes) != 0 {
 		pointer = (*C.uint8_t)(unsafe.Pointer(&bytes[0]))
 	}
-	buffer := C.baml_register_go_bridge(pointer, C.size_t(len(bytes)))
+	if len(runtimeBytes) != 0 {
+		runtimePointer = (*C.uint8_t)(unsafe.Pointer(&runtimeBytes[0]))
+	}
+	buffer := C.baml_register_go_bridge(namePointer, C.size_t(len(nameBytes)), pointer, C.size_t(len(bytes)), runtimePointer, C.size_t(len(runtimeBytes)))
 	defer C.baml_free_buffer(buffer)
 	if buffer.len == 0 {
 		return nil
@@ -210,18 +228,25 @@ func nativeRegisterBridge(sdkVersion string) error {
 	return fmt.Errorf("%s", message)
 }
 
-func nativeInitialize(bytecode []byte) error {
+func nativeInitialize(bytecode []byte, embeddedBamlToml string) error {
 	var pointer *C.uint8_t
 	if len(bytecode) != 0 {
 		pointer = (*C.uint8_t)(unsafe.Pointer(&bytecode[0]))
 	}
-	buffer := C.baml_initialize(pointer, C.size_t(len(bytecode)))
+	var buffer C.BamlBuffer
+	if embeddedBamlToml == "" {
+		buffer = C.baml_initialize(pointer, C.size_t(len(bytecode)))
+	} else {
+		manifest := C.CString(embeddedBamlToml)
+		defer C.free(unsafe.Pointer(manifest))
+		buffer = C.baml_initialize_with_metadata(pointer, C.size_t(len(bytecode)), manifest)
+	}
 	defer C.baml_free_buffer(buffer)
 	if buffer.len == 0 {
 		return nil
 	}
 	message := C.GoBytes(unsafe.Pointer(buffer.ptr), C.int(buffer.len))
-	return fmt.Errorf("initialize BAML runtime: %s", message)
+	return fmt.Errorf("%s", message)
 }
 
 func nativeRegisterUnhandledSpawnErrorCallback() {

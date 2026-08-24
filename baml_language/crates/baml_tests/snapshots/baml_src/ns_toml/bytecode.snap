@@ -1,0 +1,74 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function toml.$init_test_ns_toml_toml(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.toml"
+    load_const "toml_parse_scalars"
+    make_closure .<lambda($init_test_ns_toml_toml, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.toml"
+    load_const "toml_parse_datetime"
+    make_closure .<lambda($init_test_ns_toml_toml, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.toml"
+    load_const "toml_four_datetime_kinds"
+    make_closure .<lambda($init_test_ns_toml_toml, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.toml"
+    load_const "toml_parse_array"
+    make_closure .<lambda($init_test_ns_toml_toml, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.toml"
+    load_const "toml_parse_nested_table"
+    make_closure .<lambda($init_test_ns_toml_toml, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.toml"
+    load_const "toml_parse_invalid_throws"
+    make_closure .<lambda($init_test_ns_toml_toml, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.toml"
+    load_const "toml_item_from_json_rejects_null"
+    make_closure .<lambda($init_test_ns_toml_toml, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.toml"
+    load_const "toml_item_to_json_array_with_datetime"
+    make_closure .<lambda($init_test_ns_toml_toml, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function toml.toml_item_to_json_array() -> string {
+    load_const "2020-01-01T00:00:00Z"
+    call baml.time.ZonedDateTime.parse
+    load_const 7
+    load_type baml.toml.Item
+    alloc_array 2
+    call baml.toml.item_to_json
+    call baml.json.stringify
+    return
+}

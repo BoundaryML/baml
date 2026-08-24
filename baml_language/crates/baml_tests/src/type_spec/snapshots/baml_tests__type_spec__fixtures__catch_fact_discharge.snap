@@ -1,0 +1,70 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+463..471 'cf_risky': throws user.CfNet | user.CfParse
+510..607 '{\n   ..." }\n}': never
+516..574 'if (x ...n    }': void
+520..521 'x': int
+520..525 'x > 0': bool
+524..525 '0': 0
+527..574 '{\n   ...n    }': never
+543..568 'CfNet ...own" }': user.CfNet
+560..566 '"down"': "down"
+585..605 'CfPars... "k" }': user.CfParse
+600..603 '"k"': "k"
+742..752 'cf_partial': throws user.CfParse
+783..896 '{\n   ...  n\n}': int
+789..794 'let n': int
+797..805 'cf_risky': (x: int) -> int throws user.CfNet | user.CfParse
+797..808 'cf_risky(x)': int
+797..887 'cf_ris...n    }': int
+806..807 'x': int
+816..817 'e': user.CfNet | user.CfParse
+843..857 'let net: CfNet': user.CfNet
+852..857 'CfNet': user.CfNet
+861..879 'net.me...length': (self: baml.String) -> int throws never
+861..881 'net.me...ngth()': int
+893..894 'n': int
+1016..1024 'cf_shout': throws never
+1056..1132 '{\n   ..." }\n}': "non-positive" | "positive"
+1062..1067 'let y': int
+1070..1071 'x': int
+1070..1075 'x + 1': int
+1074..1075 '1': 1
+1081..1130 'if (y ...ive" }': "non-positive" | "positive"
+1085..1086 'y': int
+1085..1090 'y > 0': bool
+1089..1090 '0': 0
+1092..1106 '{ "positive" }': "positive"
+1094..1104 '"positive"': "positive"
+1112..1130 '{ "non...ive" }': "non-positive"
+1114..1128 '"non-positive"': "non-positive"
+1143..1157 'cf_panic_catch': throws never
+1189..1318 '{\n   ...  r\n}': string
+1195..1200 'let r': string
+1203..1211 'cf_shout': (x: int) -> string throws never
+1203..1214 'cf_shout(x)': string
+1203..1309 'cf_sho...n    }': string
+1212..1213 'x': int
+1222..1223 'e': never
+1252..1288 'let er...erflow': baml.panics.IntegerOverflow
+1261..1288 'baml.p...erflow': baml.panics.IntegerOverflow
+1292..1303 'err.message': string
+1315..1316 'r': string
+1501..1518 'cf_emp...ldcard': throws never
+1541..1683 '{\n   ...  n\n}': int
+1547..1552 'let n': int
+1555..1641 '{\n   ...n    }': int
+1555..1674 '{\n   ...n    }': int
+1579..1584 'let f': (x: int) -> int throws never
+1587..1621 '(x: in... { x }': (x: int) -> int throws never
+1616..1621 '{ x }': int
+1618..1619 'x': int
+1631..1632 'f': (x: int) -> int throws never
+1631..1635 'f(7)': int
+1633..1634 '7': 7
+1649..1650 'x': never
+1662..1663 '_': never
+1667..1668 'x': never
+1680..1681 'n': int

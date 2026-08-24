@@ -249,6 +249,187 @@ async fn exec_with_timeout() {
     assert!(output.result.is_err());
 }
 
+// === start_process() streaming tests ===
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_yields_stdout_before_exit() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "printf 'first\n'; while :; do :; done"],
+                    baml.sys.ProcessOptions { timeout_ms: 2000 },
+                );
+                defer { process.close() }
+
+                let first = match (process.stdout.next()) {
+                    let line: string => line,
+                    baml.iter.Done => "",
+                };
+                process.kill();
+                let exit = process.wait();
+                first == "first" && !exit.ok()
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_iterates_lines_and_final_unterminated_line() {
+    let output = baml_test!(
+        r#"
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "printf 'one\ntwo'"],
+                    null,
+                );
+                defer { process.close() }
+
+                let lines = process.stdout.collect();
+                let exit = process.wait();
+                if (!exit.ok()) {
+                    return "bad exit";
+                }
+                lines.join("|")
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("one|two".to_string().into()))
+    );
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_supports_incremental_stdin() {
+    let output = baml_test!(
+        r#"
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "cat",
+                    [],
+                    baml.sys.ProcessOptions { keep_stdin_open: true },
+                );
+                defer { process.close() }
+
+                process.write_stdin("one\n");
+                let one = process.stdout._next() ?? "";
+                process.write_stdin("two\n");
+                let two = process.stdout._next() ?? "";
+                process.close_stdin();
+                let exit = process.wait();
+                if (!exit.ok()) {
+                    return "bad exit";
+                }
+                one + "|" + two
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("one|two".to_string().into()))
+    );
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_stdout_read_honors_process_timeout() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "while :; do :; done"],
+                    baml.sys.ProcessOptions { timeout_ms: 25 },
+                );
+                defer { process.close() }
+
+                process.stdout.next() catch (e) {
+                    let timeout: baml.errors.Timeout => { return true; },
+                    _ => { return false; },
+                };
+                false
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn claude_code_client_preserves_process_wait_timeout() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let temp = tempfile::tempdir().expect("tempdir for Claude Code timeout probe");
+    let script = temp.path().join("claude-code-timeout-probe.sh");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\nprintf '%s\\n' '{\"type\":\"result\"}'\nexec 1>&-\nwhile :; do :; done\n",
+    )
+    .expect("write Claude Code timeout probe");
+    let mut permissions = std::fs::metadata(&script)
+        .expect("stat Claude Code timeout probe")
+        .permissions();
+    permissions.set_mode(0o700);
+    std::fs::set_permissions(&script, permissions)
+        .expect("make Claude Code timeout probe executable");
+
+    let executable = script.to_string_lossy().into_owned();
+    let output = baml_test! {
+        baml: r#"
+            function TimeoutProviderSpec() -> string {
+                client: "openai/gpt-4o-mini"
+                prompt: `Return one string. ${ctx.output_format}`
+            }
+
+            function timeout_provider_input() -> ai.ModelTurnInput {
+                let spec = TimeoutProviderSpec@spec();
+                ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal.new(spec),
+                    toolbox: spec.tools(),
+                    output_type: spec.output_type(),
+                }
+            }
+
+            function main(executable: string) -> string {
+                let cl = claude_code.ClaudeCodeClient.new(
+                    model = "offline-timeout-probe",
+                    executable = executable,
+                    timeout_ms = 25,
+                );
+                let _ = cl.invoke(timeout_provider_input()) catch_all (e) {
+                    let timeout: baml.errors.Timeout => {
+                        return `Timeout:${timeout.message}:${timeout.duration_ms ?? -1}`;
+                    },
+                    _ => { return `unexpected:${e.to_string()}`; },
+                };
+                "accepted"
+            }
+        "#,
+        args: {
+            "executable" => BexExternalValue::String(executable.into()),
+        },
+    };
+
+    let Ok(BexExternalValue::String(result)) = output.result else {
+        panic!("expected a string timeout result, got {:?}", output.result);
+    };
+    assert!(result.starts_with("Timeout:"), "{result}");
+    assert!(result.contains("timed out after 25ms"), "{result}");
+    assert!(result.ends_with(":25"), "{result}");
+}
+
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
 async fn shell_with_options() {
@@ -283,6 +464,27 @@ async fn shell_with_options() {
     if let Ok(BexExternalValue::String(stdout)) = &output.result {
         assert!(stdout.trim().to_lowercase().contains("temp"));
     }
+}
+
+// === pid() tests ===
+
+/// `baml.sys.pid` reports the ID of the process running the VM, not of any
+/// child it spawns. The test harness runs the engine in-process, so the only
+/// correct answer is this test binary's own PID.
+#[tokio::test]
+async fn pid_is_the_host_process() {
+    let output = baml_test!(
+        r#"
+            function main() -> int {
+                baml.sys.pid()
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::Int(i64::from(std::process::id())))
+    );
 }
 
 // === stdout / stderr as uint8array field tests ===

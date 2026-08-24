@@ -69,6 +69,8 @@ export interface ParamSchema {
    *  from a nullable type, which appears as `{ type: 'optional' }` in
    *  `schema`. */
   hasDefault: boolean;
+  /** Exact, unevaluated source text for the declared default expression. */
+  defaultExpression?: string;
   schema: FieldSchema;
 }
 
@@ -121,6 +123,14 @@ export interface FunctionInfo {
   name: string;
   kind: FunctionKind;
   origin: FunctionOrigin;
+  /** Source-like declaration including parameters, return type, and throws. */
+  signature?: string;
+  /** One-based source position of the function name. */
+  sourcePosition?: {
+    file: string;
+    line: number;
+    column: number;
+  };
   capabilities?: LlmCapabilities;
   /** Parameter schemas for the args form. `undefined` = no schema available
    *  (old WASM binary or extraction skipped) → raw-JSON-only mode; `[]` = the
@@ -144,6 +154,8 @@ export function previewTestKey(
 
 export interface ProjectUpdate {
   isBexCurrent: boolean;
+  /** Generation of the installed engine backing this update. Omitted by older runtimes. */
+  generation?: number;
   functions: FunctionInfo[];
   /** Omitted by older runtimes; the UI treats that as no previewable tests. */
   tests?: TestInfo[];
@@ -168,6 +180,7 @@ export type PlaygroundNotification =
       type: 'controlFlowGraphResult';
       functionName: string;
       graph: ControlFlowGraph | null;
+      requestId?: number;
     }
   | { type: 'cursorContext'; context: CursorContext }
   | {
@@ -331,7 +344,11 @@ export type RunTarget =
   | { kind: 'function'; functionName: string }
   | { kind: 'test'; generation: number; testName: string }
   | { kind: 'preview'; parentFunctionName: string; helper: string }
-  | { kind: 'companion'; parentBoundaryId: BoundaryId | null; functionName: string }
+  | {
+      kind: 'companion';
+      parentBoundaryId: BoundaryId | null;
+      functionName: string;
+    }
   | { kind: 'internal'; name: string };
 
 export type RunVisibility =
@@ -394,7 +411,13 @@ export interface CallNode {
   parentId: string | null;
   functionId: number;
   functionName: string | null;
-  functionOrigin: 'user' | 'builtin' | 'companion' | 'internal' | 'unknown' | null;
+  functionOrigin:
+    | 'user'
+    | 'builtin'
+    | 'companion'
+    | 'internal'
+    | 'unknown'
+    | null;
   calleeSource: RunSourceLocation | null;
   callSiteSource: RunSourceLocation | null;
   startedAtNs: string | null;
@@ -495,6 +518,14 @@ export interface PayloadEvent {
         message: string;
         source: RunSourceLocation | null;
         valueRef: ValueRef | null;
+      }
+    | {
+        // A chunk written by baml.io.print/println/eprint/eprintln. `print`
+        // carries no trailing newline, so consecutive chunks on one stream
+        // must be concatenated rather than rendered one row each.
+        type: 'output';
+        stream: 'stdout' | 'stderr';
+        text: string;
       }
     | {
         type: 'capturedValue';
@@ -625,7 +656,12 @@ export type WebSocketOutMessage =
   | { type: 'commandError'; requestId: number; code: string; message: string }
   | { type: 'runList'; requestId: number; runs: RunSummary[] }
   | { type: 'historyList'; requestId: number; runs: RunSummary[] }
-  | { type: 'runSnapshot'; requestId?: number; boundaryId: BoundaryId; snapshot: Run }
+  | {
+      type: 'runSnapshot';
+      requestId?: number;
+      boundaryId: BoundaryId;
+      snapshot: Run;
+    }
   | ({ type: 'valueBody' } & ValueBodyResponse)
   | {
       type: 'runCursorExpired';
@@ -668,6 +704,7 @@ export type WebSocketOutMessage =
       type: 'controlFlowGraphResult';
       functionName: string;
       graph: ControlFlowGraph | null;
+      requestId?: number;
     }
   | { type: 'cursorContext'; context: CursorContext };
 
@@ -758,7 +795,12 @@ export type WebSocketInMessage =
       incarnation?: number;
     }
   | { type: 'requestCollectTests'; project: string }
-  | { type: 'requestControlFlowGraph'; project: string; functionName: string }
+  | {
+      type: 'requestControlFlowGraph';
+      project: string;
+      functionName: string;
+      requestId?: number;
+    }
   | { type: 'cursorPosition'; file: string; line: number; column: number };
 
 // ---------------------------------------------------------------------------
@@ -766,7 +808,7 @@ export type WebSocketInMessage =
 // ---------------------------------------------------------------------------
 
 export type WorkerOutMessage =
-  | { type: 'ready' }
+  | { type: 'ready'; version?: string; commit?: string }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | ProfileArtifactChunkMessage
   | { type: 'diagnostics'; entries: DiagnosticEntry[] }
@@ -780,7 +822,12 @@ export type WorkerOutMessage =
   | { type: 'commandError'; requestId: number; code: string; message: string }
   | { type: 'runList'; requestId: number; runs: RunSummary[] }
   | { type: 'historyList'; requestId: number; runs: RunSummary[] }
-  | { type: 'runSnapshot'; requestId?: number; boundaryId: BoundaryId; snapshot: Run }
+  | {
+      type: 'runSnapshot';
+      requestId?: number;
+      boundaryId: BoundaryId;
+      snapshot: Run;
+    }
   | ({ type: 'valueBody' } & ValueBodyResponse)
   | {
       type: 'runCursorExpired';
@@ -809,6 +856,7 @@ export type WorkerOutMessage =
       type: 'controlFlowGraphResult';
       functionName: string;
       graph: ControlFlowGraph | null;
+      requestId?: number;
     }
   | { type: 'cursorContext'; context: CursorContext }
   | { type: 'logDecorations'; decorations: LogDecoration[] }
@@ -902,7 +950,12 @@ export type WorkerInMessage =
       project: string;
       incarnation?: number;
     }
-  | { type: 'requestControlFlowGraph'; project: string; functionName: string }
+  | {
+      type: 'requestControlFlowGraph';
+      project: string;
+      functionName: string;
+      requestId?: number;
+    }
   | { type: 'cursorPosition'; file: string; line: number; column: number }
   | { type: 'requestCollectTests'; project: string }
   | {

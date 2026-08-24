@@ -1,0 +1,1965 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function is_operator.$init_test_ns_is_operator_is_operator(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_type_match_true"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_type_match_false"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_pattern_disjoint_from_scrutinee_type_returns_false"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_with_not"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_else_narrows_nested_optional_member"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_null_pattern_on_null"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_null_pattern_on_non_null"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_wildcard_pattern_is_always_true"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_wildcard_on_null_is_true"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_string_literal_pattern_match"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_string_literal_pattern_mismatch"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_bool_literal_pattern_true"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_bool_literal_pattern_false"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_int_literal_pattern_zero"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_int_literal_pattern_mismatch"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_enum_variant_pattern_match"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_enum_variant_pattern_mismatch"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_class_destructure_pattern_match"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_array_type_pattern"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_array_type_pattern_mismatch"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_or_pattern"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_or_pattern_first_alternative"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_or_pattern_none_match"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_or_pattern_with_literals"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_or_pattern_parenthesised_alternatives"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_bare_binding_pattern_matches"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_typed_binding_pattern_matches"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_typed_binding_pattern_mismatch"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_with_call_scrutinee"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_with_field_access_scrutinee"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_with_optional_chain_scrutinee"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_with_parenthesised_arithmetic_scrutinee"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_chained_with_and"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_chained_with_or"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_compared_with_eq_binds_tighter"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_chained_on_itself"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_chained_on_itself_without_parens_is_left_associative"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 36)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_chained_on_itself_without_parens_negative_outer"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 37)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_in_if_condition"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 38)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_inside_array_literal"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 39)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_inside_lambda_body"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 40)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_as_return_value"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 41)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_in_match_guard"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 42)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_in_let_initializer"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 43)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_inside_while_condition"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 44)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_evaluates_scrutinee_exactly_once"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 45)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "narrowing_then_branch_picks_pattern_type"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 46)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "narrowing_then_branch_picks_or_pattern_type"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 47)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "narrowing_else_branch_runs_for_non_matching_value"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 48)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "narrowing_else_branch_subtracts_matched_type"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 49)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "narrowing_else_branch_subtracts_or_pattern"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 50)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "narrowing_else_branch_with_class_types"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 51)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "narrowing_else_branch_with_literal_pattern_keeps_original"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 52)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "narrowing_negation_subtracts_in_then_branch"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 53)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "narrowing_through_negation"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 54)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "narrowing_works_on_function_parameter"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 55)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "narrowing_picks_class_type_in_then_branch"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 56)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "narrowing_persists_across_multiple_uses_in_then"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 57)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "narrowing_skipped_for_non_path_scrutinee"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 58)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "narrowing_with_early_return"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 59)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.is_operator"
+    load_const "is_chained_negation_and_or"
+    make_closure .<lambda($init_test_ns_is_operator_is_operator, 60)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function is_operator.describe_int_string_bool(v: int | string | bool) -> string {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L9
+
+  L3:
+    load_var v
+    is_type bool
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_const false
+    jump L6
+
+  L5:
+    load_const true
+
+  L6:
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_const "got string"
+    jump L10
+
+  L8:
+    load_const "got bool"
+    jump L10
+
+  L9:
+    load_const "got int"
+
+  L10:
+    return
+}
+
+function is_operator.describe_success_failure(v: is_operator.Success | is_operator.Failure) -> string {
+    load_var v
+    is_type is_operator.Success
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var v
+    load_field .0
+    jump L5
+
+  L4:
+    load_var v
+    load_field .0
+
+  L5:
+    return
+}
+
+function is_operator.describe_success_or_failed(v: is_operator.Success | is_operator.Failure) -> string {
+    load_var v
+    is_type is_operator.Success
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "failed"
+    jump L5
+
+  L4:
+    load_var v
+    load_field .0
+
+  L5:
+    return
+}
+
+function is_operator.get_value() -> int | string {
+    load_const 42
+    return
+}
+
+function is_operator.is_array_type_pattern_fn() -> bool {
+    load_const 1
+    load_const 2
+    load_const 3
+    load_type int
+    alloc_array 3
+    is_type int[]
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_array_type_pattern_mismatch_fn() -> bool {
+    load_const 1
+    is_type int[]
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_as_return_value_fn() -> bool {
+    load_const 7
+    call user.is_operator.is_int_param
+    return
+}
+
+function is_operator.is_bare_binding_pattern_matches_fn() -> bool {
+    load_const true
+    return
+}
+
+function is_operator.is_bool_literal_pattern_false_fn() -> bool {
+    load_const true
+    is_type false
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_bool_literal_pattern_true_fn() -> bool {
+    load_const true
+    is_type true
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_chained_negation_and_or_fn() -> bool {
+    load_const "x"
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    unary_op !
+    jump_if_false L3
+    jump L6
+
+  L3:
+    pop 1
+    load_const 2
+    is_type int
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_const false
+    jump L6
+
+  L5:
+    load_const true
+
+  L6:
+    return
+}
+
+function is_operator.is_chained_on_itself_fn() -> bool {
+    load_const 1
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    is_type bool
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const false
+    jump L5
+
+  L4:
+    load_const true
+
+  L5:
+    return
+}
+
+function is_operator.is_chained_on_itself_without_parens_is_left_associative_fn() -> bool {
+    load_const 1
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    is_type bool
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const false
+    jump L5
+
+  L4:
+    load_const true
+
+  L5:
+    return
+}
+
+function is_operator.is_chained_on_itself_without_parens_negative_outer_fn() -> bool {
+    load_const 1
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    is_type bool
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const false
+    jump L5
+
+  L4:
+    load_const true
+
+  L5:
+    return
+}
+
+function is_operator.is_chained_with_and_fn() -> bool {
+    load_const 1
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    jump_if_false L5
+    pop 1
+    load_const 2
+    is_type int
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const false
+    jump L5
+
+  L4:
+    load_const true
+
+  L5:
+    return
+}
+
+function is_operator.is_chained_with_or_fn() -> bool {
+    load_const "x"
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    jump_if_false L3
+    jump L6
+
+  L3:
+    pop 1
+    load_const 2
+    is_type int
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_const false
+    jump L6
+
+  L5:
+    load_const true
+
+  L6:
+    return
+}
+
+function is_operator.is_class_destructure_pattern_match_fn() -> bool {
+    load_const "Ada"
+    load_const 36
+    init_instance user.is_operator.User .name, .age
+    is_type is_operator.User
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_compared_with_eq_binds_tighter_fn() -> bool {
+    load_const 1
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    load_const true
+    cmp_op ==
+    return
+}
+
+function is_operator.is_else_narrows_nested_optional_member_fn() -> int {
+    load_const 7
+    is_type string
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_const 7
+    is_type null
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const false
+    jump L3
+
+  L2:
+    load_const true
+
+  L3:
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_const 7
+    load_const 1
+    add_int
+    jump L6
+
+  L5:
+    load_const -1
+
+  L6:
+    return
+}
+
+function is_operator.is_enum_variant_pattern_match_fn() -> bool {
+    load_const user.is_operator.Status.Active
+    alloc_variant user.is_operator.Status
+    load_const user.is_operator.Status.Active
+    alloc_variant user.is_operator.Status
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_enum_variant_pattern_mismatch_fn() -> bool {
+    load_const user.is_operator.Status.Inactive
+    alloc_variant user.is_operator.Status
+    load_const user.is_operator.Status.Active
+    alloc_variant user.is_operator.Status
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_evaluates_scrutinee_exactly_once_fn() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 0
+    store_deref ?1
+    load_var count
+    make_closure .<lambda(is_evaluates_scrutinee_exactly_once_fn, 0)>, 1
+    call_indirect
+    store_var _3
+    load_var _3
+    is_type int
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_var _3
+    is_type string
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _3
+    is_type bool
+    pop_jump_if_false L2
+
+  L2:
+    load_deref ?1
+    return
+}
+
+function is_operator.is_in_if_condition_fn() -> string {
+    load_const 7
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "text"
+    jump L5
+
+  L4:
+    load_const "number"
+
+  L5:
+    return
+}
+
+function is_operator.is_in_let_initializer_fn() -> bool {
+    load_const 7
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_in_match_guard_fn() -> int {
+    load_const 5
+    store_var _2
+    load_var _2
+    narrow_bind int, slot=1
+    pop_jump_if_false L3
+    load_var _2
+    store_var_load_var n
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 0
+    jump L5
+
+  L4:
+    load_var n
+    load_const 1
+    add_int
+
+  L5:
+    return
+}
+
+function is_operator.is_inside_array_literal_fn() -> bool[] {
+    load_const 1
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    store_var _2
+    jump L2
+
+  L1:
+    load_const true
+    store_var _2
+
+  L2:
+    load_const 1
+    is_type string
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const false
+    store_var _4
+    jump L5
+
+  L4:
+    load_const true
+    store_var _4
+
+  L5:
+    load_var2 1 2
+    load_type bool
+    alloc_array 2
+    return
+}
+
+function is_operator.is_inside_lambda_body_fn() -> bool {
+    load_const 42
+    make_closure .<lambda(is_inside_lambda_body_fn, 0)>, 0
+    call_indirect
+    return
+}
+
+function is_operator.is_inside_while_condition_fn() -> int {
+    load_const 0
+    store_var count
+    load_const 0
+    store_var v
+
+  L0:
+    load_var v
+    is_type int
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const false
+    jump L3
+
+  L2:
+    load_const true
+
+  L3:
+    jump_if_false L4
+    pop 1
+    load_var count
+    load_const 3
+    cmp_int_op <
+
+  L4:
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var count
+    return
+
+  L6:
+    load_var count
+    load_const 1
+    add_int
+    store_var_load_var count
+    load_const 3
+    cmp_int_op ==
+    pop_jump_if_false L0
+    load_const "done"
+    store_var v
+    jump L0
+}
+
+function is_operator.is_int_literal_pattern_mismatch_fn() -> bool {
+    load_const 5
+    is_type 0
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_int_literal_pattern_zero_fn() -> bool {
+    load_const 0
+    is_type 0
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_int_param(v: int | string) -> bool {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_null_pattern_on_non_null_fn() -> bool {
+    load_const 7
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_null_pattern_on_null_fn() -> bool {
+    load_const null
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_or_pattern_first_alternative_fn() -> bool {
+    load_const 7
+    is_type int
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_const 7
+    is_type bool
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const false
+    jump L3
+
+  L2:
+    load_const true
+
+  L3:
+    return
+}
+
+function is_operator.is_or_pattern_fn() -> bool {
+    load_const true
+    is_type int
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_const true
+    is_type bool
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const false
+    jump L3
+
+  L2:
+    load_const true
+
+  L3:
+    return
+}
+
+function is_operator.is_or_pattern_none_match_fn() -> bool {
+    load_const "x"
+    is_type int
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_const "x"
+    is_type bool
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const false
+    jump L3
+
+  L2:
+    load_const true
+
+  L3:
+    return
+}
+
+function is_operator.is_or_pattern_parenthesised_alternatives_fn() -> bool {
+    load_const 1
+    is_type int
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_const 1
+    is_type string
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const false
+    jump L3
+
+  L2:
+    load_const true
+
+  L3:
+    return
+}
+
+function is_operator.is_or_pattern_with_literals_fn() -> bool {
+    load_const 2
+    is_type 1
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_const 2
+    is_type 2
+    pop_jump_if_false L1
+    jump L3
+
+  L1:
+    load_const 2
+    is_type 3
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const false
+    jump L4
+
+  L3:
+    load_const true
+
+  L4:
+    return
+}
+
+function is_operator.is_pattern_disjoint_from_scrutinee_type_returns_false_fn() -> bool {
+    load_const 42
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_string_literal_pattern_match_fn() -> bool {
+    load_const "hello"
+    is_type "hello"
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_string_literal_pattern_mismatch_fn() -> bool {
+    load_const "world"
+    is_type "hello"
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_type_match_false_fn() -> bool {
+    load_const "hi"
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_type_match_true_fn() -> bool {
+    load_const 42
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_typed_binding_pattern_matches_fn() -> bool {
+    load_const 7
+    store_var _2
+    load_var _2
+    narrow_bind int, slot=1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_typed_binding_pattern_mismatch_fn() -> bool {
+    load_const "hi"
+    store_var _2
+    load_var _2
+    narrow_bind int, slot=1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_wildcard_on_null_is_true_fn() -> bool {
+    load_const true
+    return
+}
+
+function is_operator.is_wildcard_pattern_is_always_true_fn() -> bool {
+    load_const true
+    return
+}
+
+function is_operator.is_with_call_scrutinee_fn() -> bool {
+    call user.is_operator.get_value
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_with_field_access_scrutinee_fn() -> bool {
+    load_const 7
+    init_instance user.is_operator.Wrap .value
+    load_field .value
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.is_with_not_fn() -> bool {
+    load_const "hi"
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    unary_op !
+    return
+}
+
+function is_operator.is_with_optional_chain_scrutinee_fn() -> bool {
+    load_const null
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    load_field .0
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const false
+    jump L5
+
+  L4:
+    load_const true
+
+  L5:
+    return
+}
+
+function is_operator.is_with_parenthesised_arithmetic_scrutinee_fn() -> bool {
+    load_const 3
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function is_operator.narrowing_else_branch_runs_for_non_matching_value_fn() -> string {
+    load_const "hi"
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "text"
+    jump L5
+
+  L4:
+    load_const "number"
+
+  L5:
+    return
+}
+
+function is_operator.narrowing_else_branch_subtracts_matched_type_fn() -> int {
+    load_const "hi"
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "hi"
+    call baml.String.length
+    jump L5
+
+  L4:
+    load_const 0
+
+  L5:
+    return
+}
+
+function is_operator.narrowing_else_branch_subtracts_or_pattern_fn() -> int {
+    load_const "hello"
+    is_type int
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_const "hello"
+    is_type bool
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const false
+    jump L3
+
+  L2:
+    load_const true
+
+  L3:
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_const "hello"
+    call baml.String.length
+    jump L6
+
+  L5:
+    load_const 0
+
+  L6:
+    return
+}
+
+function is_operator.narrowing_else_branch_with_class_types_fn() -> string {
+    load_const "oops"
+    init_instance user.is_operator.Failure .reason
+    call user.is_operator.describe_success_failure
+    return
+}
+
+function is_operator.narrowing_else_branch_with_literal_pattern_keeps_original_fn() -> int {
+    load_const 5
+    is_type 0
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 5
+    load_const 1
+    add_int
+    jump L5
+
+  L4:
+    load_const 0
+
+  L5:
+    return
+}
+
+function is_operator.narrowing_negation_subtracts_in_then_branch_fn() -> int {
+    load_const "abc"
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    unary_op !
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 0
+    jump L5
+
+  L4:
+    load_const "abc"
+    call baml.String.length
+
+  L5:
+    return
+}
+
+function is_operator.narrowing_persists_across_multiple_uses_in_then_fn() -> int {
+    load_const 4
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 0
+    jump L5
+
+  L4:
+    load_const 4
+    load_const 1
+    add_int
+    load_const 4
+    load_const 2
+    add_int
+    add_int
+
+  L5:
+    return
+}
+
+function is_operator.narrowing_picks_class_type_in_then_branch_fn() -> string {
+    load_const "ok"
+    init_instance user.is_operator.Success .data
+    call user.is_operator.describe_success_or_failed
+    return
+}
+
+function is_operator.narrowing_skipped_for_non_path_scrutinee_fn() -> string {
+    load_const 7
+    init_instance user.is_operator.Wrap .value
+    load_field .value
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const "text"
+    jump L5
+
+  L4:
+    load_const "int"
+
+  L5:
+    return
+}
+
+function is_operator.narrowing_then_branch_picks_or_pattern_type_fn() -> string {
+    load_const true
+    call user.is_operator.describe_int_string_bool
+    return
+}
+
+function is_operator.narrowing_then_branch_picks_pattern_type_fn() -> int {
+    load_const 7
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 0
+    jump L5
+
+  L4:
+    load_const 7
+    load_const 1
+    add_int
+
+  L5:
+    return
+}
+
+function is_operator.narrowing_through_negation_fn() -> int {
+    load_const 5
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    unary_op !
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 5
+    load_const 100
+    add_int
+    jump L5
+
+  L4:
+    load_const 0
+
+  L5:
+    return
+}
+
+function is_operator.narrowing_with_early_return_fn() -> int {
+    load_const 7
+    is_type string
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L9
+
+  L3:
+    load_const 7
+    is_type int
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_const false
+    jump L6
+
+  L5:
+    load_const true
+
+  L6:
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_const -1
+    jump L10
+
+  L8:
+    load_const 7
+    load_const 2
+    mul_int
+    jump L10
+
+  L9:
+    load_const 0
+
+  L10:
+    return
+}
+
+function is_operator.narrowing_works_on_function_parameter_fn() -> int {
+    load_const 7
+    call user.is_operator.process
+    return
+}
+
+function is_operator.process(v: int | string) -> int {
+    load_var v
+    is_type int
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const 0
+    jump L5
+
+  L4:
+    load_var v
+    load_const 3
+    bin_op *
+
+  L5:
+    return
+}

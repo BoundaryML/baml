@@ -10,19 +10,17 @@
 //! [`EqualsDriver`] dispatches a class's or enum's custom `Equals.eq` when it has
 //! one, falling back to structural / variant-identity comparison otherwise.)
 //!
-//! Floats compare by IEEE rules (so `NaN != NaN`), matching the `==` operator
-//! and deliberately *unlike* `baml.deep_equals`, whose NaN-equal convention is
-//! a test-helper nicety rather than the language's equality.
+//! Floats compare by IEEE rules (so `NaN != NaN`), matching the `==` operator.
 
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
 
-use baml_type::{Name, RealizedTy, TyAttr, TypeName, normalize::TypeContext};
+use baml_type::{Name, TyAttr, TypeName, normalize::TypeContext};
 use bex_str::BexStr;
 use bex_vm_types::{
-    HeapPtr, ValueKind,
+    HeapPtr, RealizedTy, ValueKind,
     errors::VmInternalError,
     types::{LockedContainer, LockedReadGuard, Object, Type, Value},
 };
@@ -217,12 +215,17 @@ fn dispatch_op(
     iface_args: &[RealizedTy],
 ) -> NativeCallResult {
     let op_qtn = TypeName::new(Name::new("baml"), vec![Name::new("ops")], Name::new(iface));
+    // A stdlib FQN constant is one of the three places a name legitimately
+    // becomes a head; it resolves once, off the declaration.
+    let Some(op_head) = vm.declaration_head(&op_qtn) else {
+        return NativeCallResult::from(unresolved_op(iface, method));
+    };
     let Some(self_ty) = vm.value_concrete_ty(args[0]) else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };
-    let resolver = resolve::ImplResolver::new(vm);
+    let resolver = resolve::ImplResolver::for_value(vm, args[0]);
     let Some((rule, bound_args)) =
-        resolver.resolve_implements_rule(&self_ty.into(), &op_qtn, iface_args)
+        resolver.resolve_implements_rule(&self_ty.into(), op_head, iface_args)
     else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };
@@ -497,8 +500,8 @@ impl EqualsDriver {
                 }
                 // Dispatch to the enum's custom `Equals.eq` if it has one (`baml.ops.Equals`
                 // applies to enums too), else compare by variant identity.
-                if let Some((callee, type_args)) =
-                    value_concrete_ty(vm, pa).and_then(|ty| resolve_equals_eq(vm, &ty))
+                if let Some((callee, type_args)) = value_concrete_ty(vm, pa)
+                    .and_then(|ty| resolve_equals_eq(vm, Value::object(pa), &ty))
                 {
                     return Cmp::Yield {
                         callee,
@@ -526,8 +529,8 @@ impl EqualsDriver {
                 }
                 // Same concrete type: dispatch to the class's custom `Equals.eq` if it has
                 // one, else compare structurally (field by field).
-                if let Some((callee, type_args)) =
-                    value_concrete_ty(vm, pa).and_then(|ty| resolve_equals_eq(vm, &ty))
+                if let Some((callee, type_args)) = value_concrete_ty(vm, pa)
+                    .and_then(|ty| resolve_equals_eq(vm, Value::object(pa), &ty))
                 {
                     return Cmp::Yield {
                         callee,
@@ -547,9 +550,11 @@ impl EqualsDriver {
                 step(x.function == y.function && x.receiver == y.receiver)
             }
             (Object::BoundMethod(_), _) => Cmp::NotEqual,
-            (Object::GenericFunction(x), Object::GenericFunction(y)) => {
-                step(x.function == y.function && x.type_args == y.type_args)
-            }
+            (Object::GenericFunction(x), Object::GenericFunction(y)) => step(
+                x.function == y.function
+                    && x.type_args == y.type_args
+                    && x.runtime_package == y.runtime_package,
+            ),
             (Object::GenericFunction(_), _) => Cmp::NotEqual,
             (Object::HostClosure(x), Object::HostClosure(y)) => {
                 step(Arc::ptr_eq(&x.handle, &y.handle))
@@ -560,17 +565,11 @@ impl EqualsDriver {
             (Object::Collector(x), Object::Collector(y)) => step(Arc::ptr_eq(&x.0, &y.0)),
             (Object::Collector(_), _) => Cmp::NotEqual,
 
-            // Two `type` values are equal when they denote the same type. Compare
-            // through the *full* program context (`vm` as the `TypeContext`), not derived
-            // `==` nor the resolver's fact-opaque equivalence: this is user-facing type
-            // equality, so it must see nominal facts. Union member order is non-canonical
-            // (`type_of<int | string>` ≡ `type_of<string | int>`), and an
-            // interface-membership union absorbs (`type_of<Shape | Sq>` ≡ `type_of<Shape>`
-            // when `Sq` implements `Shape`). Using `vm` here is safe — this is a *client*
-            // of the resolver, not on its re-entrant path, so the membership lookup this
-            // may trigger bottoms out in the resolver's fact-opaque internals without
-            // looping.
-            (Object::Type(x), Object::Type(y)) => step(vm.equivalent(x.as_ty(), y.as_ty())),
+            // A `type` value denotes a type and nothing more: two are equal
+            // exactly when they are mutual subtypes, decided against the
+            // program's facts (TYPE_SYSTEM.md, "Equivalence and canonical
+            // forms") — the same relation `==` on `type` uses.
+            (Object::Type(x), Object::Type(y)) => step(vm.equivalent(x.ty.as_ty(), y.ty.as_ty())),
             (Object::Type(_), _) => Cmp::NotEqual,
 
             // `Sentinel` (heap_debug builds only) is an internal freed/uninit
@@ -587,6 +586,7 @@ impl EqualsDriver {
             | (Object::Closure(_), Object::Closure(_))
             | (Object::Class(_), Object::Class(_))
             | (Object::Enum(_), Object::Enum(_))
+            | (Object::TypeAlias(_), Object::TypeAlias(_))
             | (Object::UnscheduledFuture(_), Object::UnscheduledFuture(_))
             | (Object::RustData(_), Object::RustData(_)) => step(pa == pb),
             (
@@ -597,6 +597,7 @@ impl EqualsDriver {
                 | Object::Closure(_)
                 | Object::Class(_)
                 | Object::Enum(_)
+                | Object::TypeAlias(_)
                 | Object::UnscheduledFuture(_)
                 | Object::RustData(_),
                 _,
@@ -667,7 +668,7 @@ fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
             let (class_ptr, type_args) = (inst.class, inst.class_type_args.to_vec());
             match vm.get_object(class_ptr) {
                 Object::Class(class) => Some(RealizedTy::Class(
-                    class.name.clone(),
+                    bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
                     type_args,
                     TyAttr::default(),
                 )),
@@ -675,7 +676,10 @@ fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
             }
         }
         Object::Variant(v) => match vm.get_object(v.enm) {
-            Object::Enum(e) => Some(RealizedTy::Enum(e.name.clone(), TyAttr::default())),
+            Object::Enum(e) => Some(RealizedTy::Enum(
+                bex_vm_types::TypeHead::new(v.enm, e.type_tag),
+                TyAttr::default(),
+            )),
             _ => None,
         },
         _ => None,
@@ -686,12 +690,17 @@ fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
 /// `None` when the type has no `Equals` impl (→ the structural/identity fallback). The
 /// concrete type carries any `class_type_args`, so a generic/blanket impl
 /// (`implement<T> Equals for Box<T>`) resolves at the right `T`.
-fn resolve_equals_eq(vm: &BexVm, concrete: &RealizedTy) -> Option<(HeapPtr, Vec<RealizedTy>)> {
+fn resolve_equals_eq(
+    vm: &BexVm,
+    value: Value,
+    concrete: &RealizedTy,
+) -> Option<(HeapPtr, Vec<RealizedTy>)> {
     // `Equals` is non-generic — no interface args to select on; off the resolved
     // rule, `eq` is the concrete method (the impl's own, or the merged default),
     // invoked with its frame realized against the impl's bound type args.
-    let resolver = resolve::ImplResolver::new(vm);
-    let (rule, bound_args) = resolver.resolve_implements_rule(concrete, &equals_qtn(), &[])?;
+    let equals_head = vm.declaration_head(&equals_qtn())?;
+    let resolver = resolve::ImplResolver::for_value(vm, value);
+    let (rule, bound_args) = resolver.resolve_implements_rule(concrete, equals_head, &[])?;
     let method = rule.methods.get("eq")?;
     // `fqn` is the resolved callee's heap pointer (the impl method or merged
     // default), baked at emit time — invoke it directly.

@@ -50,7 +50,7 @@ use std::collections::BTreeSet;
 use baml_codegen_types::{Class, CodegenFunctionParamMode, Enum, Function, Ty};
 
 use crate::{
-    routing::java_identifier,
+    routing::{java_identifier, java_method_identifier},
     translate_ty::{CallbackInterface, TranslateCtx, TyPosition, UnionSink, translate_ty},
 };
 
@@ -447,10 +447,15 @@ pub(crate) fn render_class(
     out.push_str("    }\n");
 
     // PreserveCase accessors — the nullable ones carry `@Nullable` on their
-    // return type (the primary Kotlin-visible nullness signal).
+    // return type (the primary Kotlin-visible nullness signal). The ACCESSOR
+    // name goes through `java_method_identifier`: a field named `wait` is a
+    // legal field but `wait()` cannot override `java.lang.Object`'s final
+    // `wait()`, so the accessor becomes `wait$()` while the field it reads
+    // keeps its own name.
     for (f_ident, f_ty) in &display_fields {
+        let accessor = java_method_identifier(f_ident);
         out.push_str(&format!(
-            "\n    public {f_ty} {f_ident}() {{\n        return this.{f_ident};\n    }}\n"
+            "\n    public {f_ty} {accessor}() {{\n        return this.{f_ident};\n    }}\n"
         ));
     }
 
@@ -478,7 +483,7 @@ pub(crate) fn render_class(
         .static_methods
         .iter()
         .chain(&class.instance_methods)
-        .map(|m| java_identifier(m.name.as_str()))
+        .map(|m| java_method_identifier(m.name.as_str()))
         .collect();
 
     // Static and instance method bindings. Static methods (like free
@@ -783,7 +788,7 @@ fn render_callable_pair(
     } else {
         None
     };
-    let ident = java_identifier(function.name.as_str());
+    let ident = java_method_identifier(function.name.as_str());
     // The `_async` sibling name, escaped past a user callable that already
     // claims `{ident}_async` (see [`async_sibling_ident`]).
     let async_ident = async_sibling_ident(&ident, sibling_idents);
@@ -832,7 +837,13 @@ fn render_callable_pair(
         let value = java_identifier(a.name.as_str());
         let mut type_vars = Vec::new();
         crate::translate_ty::collect_type_vars(&a.ty, &mut type_vars);
-        let encoded = if type_vars.is_empty() && needs_inbound_descriptor(&a.ty, ctx) {
+        let encoded = if !type_vars.is_empty() {
+            value
+        } else if let Some(expr) = typed_callable_expr(&a.ty, &value, pool, ctx) {
+            // A callable argument carries its declared param/return descriptors
+            // so the dispatch path can honor the generated signature.
+            expr
+        } else if needs_inbound_descriptor(&a.ty, ctx) {
             match crate::translate_ty::descriptor_expr_opt(&a.ty, ctx.aliases) {
                 Some(expr) => format!(
                     "new baml_bridge.BamlTypedValue({value}, {})",
@@ -1359,7 +1370,13 @@ fn render_optional_configurator(
         let setter = java_identifier(wire);
         let mut type_vars = Vec::new();
         crate::translate_ty::collect_type_vars(&a.ty, &mut type_vars);
-        let stored = if type_vars.is_empty() && needs_inbound_descriptor(&a.ty, ctx) {
+        let stored = if !type_vars.is_empty() {
+            "v".to_string()
+        } else if let Some(expr) = typed_callable_expr(&a.ty, "v", pool, ctx) {
+            // An optional callable argument carries its declared param/return
+            // descriptors, same as the required-arg path.
+            expr
+        } else if needs_inbound_descriptor(&a.ty, ctx) {
             match crate::translate_ty::descriptor_expr_opt(&a.ty, ctx.aliases) {
                 Some(expr) => format!("new baml_bridge.BamlTypedValue(v, {})", pool.intern(expr)),
                 None => "v".to_string(),
@@ -1376,6 +1393,86 @@ fn render_optional_configurator(
         "\n    /**\n     * Configurator for the optional arguments of {{@code {ident}}}. Each\n     * fluent setter records one optional; only touched optionals reach the\n     * engine (untouched ⇒ BAML default, touched-with-{{@code null}} ⇒\n     * explicit BAML {{@code null}}).\n     */\n    public static final class {ident}$Opts{gu} {{\n        private final java.util.LinkedHashMap<java.lang.String, java.lang.Object> $values = new java.util.LinkedHashMap<>();\n        private final java.util.LinkedHashSet<java.lang.String> $touched = new java.util.LinkedHashSet<>();\n{setters}\n        java.lang.String[] $names(java.lang.String[] base) {{\n            java.lang.String[] out = java.util.Arrays.copyOf(base, base.length + this.$touched.size());\n            int i$ = base.length;\n            for (java.lang.String n$ : this.$touched) {{\n                out[i$++] = n$;\n            }}\n            return out;\n        }}\n\n        java.lang.Object[] $args(java.lang.Object[] base) {{\n            java.lang.Object[] out = java.util.Arrays.copyOf(base, base.length + this.$touched.size());\n            int i$ = base.length;\n            for (java.lang.String n$ : this.$touched) {{\n                out[i$++] = this.$values.get(n$);\n            }}\n            return out;\n        }}\n    }}\n"
     ));
     out
+}
+
+/// When `ty` (through non-recursive aliases) is a callable type, render the
+/// `baml_bridge.BamlTypedCallable` carrier wrapping `value` with the callable's
+/// declared parameter / return decode descriptors, so the bridge honors the
+/// generated signature on the dispatch path: each argument BAML passes back
+/// decodes against its declared parameter descriptor (a `baml.json.json`
+/// parameter materializes as the generated sealed union, not the raw wire
+/// value) and the returned value encodes against the declared return
+/// descriptor. Returns `None` when `ty` is not a callable or when every slot is
+/// wire-driven (the raw callable is then registered exactly as before).
+fn typed_callable_expr(
+    ty: &Ty,
+    value: &str,
+    pool: &mut DescriptorPool,
+    ctx: &TranslateCtx<'_>,
+) -> Option<String> {
+    let mut resolved = ty;
+    loop {
+        match resolved {
+            Ty::TypeAlias(name, _) => match ctx.aliases.get(name) {
+                Some((inner, false)) => resolved = inner,
+                _ => return None,
+            },
+            Ty::Function { .. } => break,
+            _ => return None,
+        }
+    }
+    let Ty::Function { params, ret, .. } = resolved else {
+        return None;
+    };
+    let mut any = false;
+    let desc_of = |ty: &Ty, pool: &mut DescriptorPool, any: &mut bool| {
+        match crate::translate_ty::descriptor_expr_opt(ty, ctx.aliases) {
+            Some(expr) => {
+                *any = true;
+                pool.intern(expr)
+            }
+            None => "null".to_string(),
+        }
+    };
+    let mut positional: Vec<String> = Vec::new();
+    let mut optional_names: Vec<String> = Vec::new();
+    let mut optional_descs: Vec<String> = Vec::new();
+    for (i, p) in params.iter().enumerate() {
+        let desc = desc_of(&p.ty, pool, &mut any);
+        match p.mode {
+            CodegenFunctionParamMode::Optional => {
+                // The wire key mirrors `translate_callable`'s optional-bag
+                // naming (`opt{i}` fallback indexes over ALL params).
+                let wire = p
+                    .name
+                    .as_ref()
+                    .map_or_else(|| format!("opt{i}"), |n| n.as_str().to_string());
+                optional_names.push(format!("{wire:?}"));
+                optional_descs.push(desc);
+            }
+            CodegenFunctionParamMode::Required => positional.push(desc),
+        }
+    }
+    let ret_desc = desc_of(ret, pool, &mut any);
+    if !any {
+        return None;
+    }
+    let positional_lit = if positional.iter().all(|d| d == "null") {
+        "null".to_string()
+    } else {
+        format!("new baml_bridge.BamlType[] {{{}}}", positional.join(", "))
+    };
+    if optional_names.is_empty() {
+        Some(format!(
+            "new baml_bridge.BamlTypedCallable({value}, {positional_lit}, {ret_desc})"
+        ))
+    } else {
+        Some(format!(
+            "new baml_bridge.BamlTypedCallable({value}, {positional_lit}, new java.lang.String[] {{{}}}, new baml_bridge.BamlType[] {{{}}}, {ret_desc})",
+            optional_names.join(", "),
+            optional_descs.join(", ")
+        ))
+    }
 }
 
 fn needs_inbound_descriptor(ty: &Ty, ctx: &TranslateCtx<'_>) -> bool {

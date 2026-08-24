@@ -60,6 +60,10 @@ int main(void) {
   PRINT_OFFSET(BamlBridgeInfoV1, language);
   PRINT_OFFSET(BamlBridgeInfoV1, sdk_version);
   PRINT_OFFSET(BamlBridgeInfoV1, sdk_version_len);
+  PRINT_OFFSET(BamlBridgeInfoV1, bridge_runtime_name);
+  PRINT_OFFSET(BamlBridgeInfoV1, bridge_runtime_name_len);
+  PRINT_OFFSET(BamlBridgeInfoV1, bridge_runtime_version);
+  PRINT_OFFSET(BamlBridgeInfoV1, bridge_runtime_version_len);
   PRINT_SIZE(BamlApiV1);
   PRINT_ALIGN(BamlApiV1);
   PRINT_OFFSET(BamlApiV1, abi_version);
@@ -86,5 +90,6 @@ int main(void) {
   PRINT_OFFSET(BamlApiV1, register_bridge);
   PRINT_OFFSET(BamlApiV1, register_unhandled_spawn_error_callback);
   PRINT_OFFSET(BamlApiV1, shutdown_runtime);
+  PRINT_OFFSET(BamlApiV1, initialize_runtime_from_bytecode_with_metadata);
   return 0;
 }

@@ -614,16 +614,16 @@ class RfiStringSource {
 
 function rfi_main() -> int {
     let score = 0
-    if reflect.type_of<RfiIntSource>().implements(reflect.type_of<RfiSource<Item = int>>()) {
+    if reflect.Type.of<RfiIntSource>().implements(reflect.Type.of<RfiSource<Item = int>>()) {
         score = score + 1
     }
-    if reflect.type_of<RfiIntSource>().implements(reflect.type_of<RfiSource<Item = string>>()) {
+    if reflect.Type.of<RfiIntSource>().implements(reflect.Type.of<RfiSource<Item = string>>()) {
         score = score + 10
     }
-    if reflect.type_of<RfiStringSource>().implements(reflect.type_of<RfiSource<Item = string>>()) {
+    if reflect.Type.of<RfiStringSource>().implements(reflect.Type.of<RfiSource<Item = string>>()) {
         score = score + 100
     }
-    if reflect.type_of<RfiStringSource>().implements(reflect.type_of<RfiSource<Item = int>>()) {
+    if reflect.Type.of<RfiStringSource>().implements(reflect.Type.of<RfiSource<Item = int>>()) {
         score = score + 1000
     }
     return score
@@ -633,52 +633,12 @@ test "reflection_implements_respects_associated_type_bindings" {
     assert.equal(rfi_main(), 101)
 }
 
-// ─── reflection_implementors_respects_associated_type_bindings ───────────────
-
-interface RfmSource {
-    type Item
-}
-
-class RfmIntSource {
-    implements RfmSource {
-        type Item = int
-    }
-}
-
-class RfmStringSource {
-    implements RfmSource {
-        type Item = string
-    }
-}
-
-function rfm_main() -> int {
-    let int_impls = reflect.type_of<RfmSource<Item = int>>().implementors()
-    let string_impls = reflect.type_of<RfmSource<Item = string>>().implementors()
-    let score = 0
-    score = score + int_impls.length()
-    if int_impls.length() > 0 && int_impls[0] == reflect.type_of<RfmIntSource>() {
-        score = score + 10
-    }
-    score = score + (string_impls.length() * 100)
-    if string_impls.length() > 0 && string_impls[0] == reflect.type_of<RfmStringSource>() {
-        score = score + 1000
-    }
-    return score
-}
-
-test "reflection_implementors_respects_associated_type_bindings" {
-    assert.equal(rfm_main(), 1111)
-}
-
 // ─── reflection_resolves_generic_class_associated_type_binding ───────────────
 //
 // A generic class's `type Item = T` binding resolves precisely at the
 // instantiation: `RfgBox<int>` *is* `RfgSource<Item = int>` (consistent with
 // runtime dispatch and with how Rust resolves the projection), but it is
-// *not* `RfgSource<Item = string>`. `implementors()`, however, cannot
-// enumerate generic instantiations, so it lists the generic base `RfgBox`
-// for *any* specific `RfgSource<Item = …>` request (it can't pin the
-// instantiation).
+// *not* `RfgSource<Item = string>`.
 
 interface RfgSource {
     type Item
@@ -693,9 +653,9 @@ class RfgBox<T> {
 }
 
 function rfg_main() -> int {
-    let box_int = reflect.type_of<RfgBox<int>>()
-    let int_source = reflect.type_of<RfgSource<Item = int>>()
-    let string_source = reflect.type_of<RfgSource<Item = string>>()
+    let box_int = reflect.Type.of<RfgBox<int>>()
+    let int_source = reflect.Type.of<RfgSource<Item = int>>()
+    let string_source = reflect.Type.of<RfgSource<Item = string>>()
 
     let score = 0
     if box_int.implements(int_source) {
@@ -707,18 +667,13 @@ function rfg_main() -> int {
     if string_source.implemented_by(box_int) {
         score = score + 100
     }
-    if string_source.implementors().length() > 0 {
-        score = score + 1000
-    }
     return score
 }
 
 // `RfgBox<int>.implements(RfgSource<Item = int>)` holds (+1); the two
-// `Item = string` membership checks are correctly false; and `implementors()`
-// lists the generic base `RfgBox` for the `RfgSource<Item = string>` request
-// (+1000) since it can't pin the instantiation.
+// `Item = string` membership checks are correctly false.
 test "reflection_resolves_generic_class_associated_type_binding" {
-    assert.equal(rfg_main(), 1001)
+    assert.equal(rfg_main(), 1)
 }
 
 // ─── reflection_respects_generic_interface_impl_bound ────────────────────────
@@ -750,10 +705,10 @@ implement<T extends RgbSource<Item = int>> RgbIntSourced for T {}
 
 function rgb_main() -> int {
     let score = 0
-    if reflect.type_of<RgbIntSource>().implements(reflect.type_of<RgbIntSourced>()) {
+    if reflect.Type.of<RgbIntSource>().implements(reflect.Type.of<RgbIntSourced>()) {
         score = score + 1
     }
-    if reflect.type_of<RgbStrSource>().implements(reflect.type_of<RgbIntSourced>()) {
+    if reflect.Type.of<RgbStrSource>().implements(reflect.Type.of<RgbIntSourced>()) {
         score = score + 10
     }
     return score
@@ -783,10 +738,10 @@ implement<T extends RpaContainer<int>> RpaNeedsIntContainer for T {}
 
 function rpa_main() -> int {
     let score = 0
-    if reflect.type_of<RpaIntBox>().implements(reflect.type_of<RpaNeedsIntContainer>()) {
+    if reflect.Type.of<RpaIntBox>().implements(reflect.Type.of<RpaNeedsIntContainer>()) {
         score = score + 1
     }
-    if reflect.type_of<RpaStrBox>().implements(reflect.type_of<RpaNeedsIntContainer>()) {
+    if reflect.Type.of<RpaStrBox>().implements(reflect.Type.of<RpaNeedsIntContainer>()) {
         score = score + 10
     }
     return score
@@ -811,10 +766,10 @@ implements RltDebuggable for int {
 
 function rlt_main() -> int {
     let score = 0
-    if reflect.type_of<1>().implements(reflect.type_of<RltDebuggable>()) {
+    if reflect.Type.of<1>().implements(reflect.Type.of<RltDebuggable>()) {
         score = score + 1
     }
-    if reflect.type_of<int>().implements(reflect.type_of<RltDebuggable>()) {
+    if reflect.Type.of<int>().implements(reflect.Type.of<RltDebuggable>()) {
         score = score + 10
     }
     return score
@@ -839,10 +794,10 @@ implements RevNamed for RevColor {
 
 function rev_main() -> int {
     let score = 0
-    if reflect.type_of<RevColor.Red>().implements(reflect.type_of<RevNamed>()) {
+    if reflect.Type.of<RevColor.Red>().implements(reflect.Type.of<RevNamed>()) {
         score = score + 1
     }
-    if reflect.type_of<RevColor>().implements(reflect.type_of<RevNamed>()) {
+    if reflect.Type.of<RevColor>().implements(reflect.Type.of<RevNamed>()) {
         score = score + 10
     }
     return score

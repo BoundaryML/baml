@@ -1,7 +1,7 @@
-use baml_type::RuntimeTy;
 use borsh::{BorshDeserialize, BorshSerialize};
+use indexmap::IndexMap;
 
-use crate::{AtomicValueSlot, CleanupLatch, HeapPtr, Value};
+use crate::{AtomicValueSlot, CleanupLatch, HeapPtr, RuntimeTy, Value, types::TypeValue};
 
 /// A field within a runtime class, carrying type and schema metadata.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
@@ -17,18 +17,28 @@ pub struct ClassField {
     ///
     /// Populated by emit using the enclosing class's `generic_params`.  For
     /// non-generic classes this is a fully-realized template (no `TypeArgRef`).
-    pub field_template: baml_type::TyTemplate,
+    pub field_template: crate::TyTemplate,
     pub description: Option<String>,
     pub alias: Option<String>,
+    pub docstring: Option<String>,
+    pub other: IndexMap<String, String>,
     pub skip: bool,
+
+    /// The exact `type` operand a runtime-constructed field was built from, so
+    /// reflection reads back the definitions it carried, not just its shape.
+    #[borsh(skip)]
+    pub runtime_type: Option<TypeValue>,
 }
 
 /// Runtime class representation.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Class {
-    /// Type identity: carries short name, module path, and display name.
-    /// Use `name.display_name` for the display string (e.g. "baml.llm.OrchestrationStep" or "Person").
-    pub name: baml_type::TypeName,
+    /// How this declaration is named: package-qualified for a compiled class,
+    /// a bare item name for a runtime-created one. Display and boundary
+    /// spelling only — identity is `type_tag` and the declaration object
+    /// itself. Use `name.display_name()` for the display string (e.g.
+    /// "ai.PromptMessage" or "Person").
+    pub name: crate::DeclarationName,
 
     /// Class fields with type and schema metadata.
     pub fields: Vec<ClassField>,
@@ -39,9 +49,14 @@ pub struct Class {
     /// Class-level serialization alias.
     pub alias: Option<String>,
 
-    /// Type tag for this class, used by `TypeTag` instruction for jump table dispatch.
-    /// Assigned during codegen as `CLASS_BASE + class_index`.
-    pub type_tag: i64,
+    /// Class-level source documentation and custom annotations.
+    pub docstring: Option<String>,
+    pub other: IndexMap<String, String>,
+
+    /// This class's head identity, content-addressed from its fully-qualified
+    /// name at emit time. Both the `TypeTag` instruction's jump-table dispatch
+    /// value and the identity a `TypeHead` referring to this class compares by.
+    pub type_tag: baml_type::typetag::TypeTag,
 
     /// Class-level type attribute (e.g., from @@stream.done).
     pub ty_attr: baml_type::TyAttr,
@@ -59,6 +74,13 @@ pub struct Class {
     /// generic params (which Gate A must demand) from the inherited class params
     /// (bound by the receiver, never by name). Set at emit time.
     pub generic_param_count: usize,
+
+    /// The runtime package that owns this declaration, or null for a
+    /// compile-time one. A GC edge: reaching the class keeps its package — and
+    /// so its globals and dependencies — alive. Mirrors `InterfaceDef::owner`
+    /// and `TypeAliasDef::owner`.
+    #[borsh(skip)]
+    pub owner: HeapPtr,
 }
 
 impl std::fmt::Display for Class {
@@ -80,7 +102,7 @@ pub struct Instance {
     /// Boxed (immutable after construction) rather than a `Vec` so `Instance`
     /// stays within `Object`'s 64-byte budget once the `cleaned` latch is added
     /// — matching the existing `Box<[RuntimeTy]>` convention for type-arg lists.
-    pub class_type_args: Box<[baml_type::RealizedTy]>,
+    pub class_type_args: Box<[crate::RealizedTy]>,
 
     /// Fields are accessed by index. No string lookups. Each slot is atomic so
     /// racing field reads/writes across `spawn` fibers cannot become a Rust
@@ -97,7 +119,7 @@ pub struct Instance {
 impl Instance {
     pub fn new(
         class: HeapPtr,
-        class_type_args: Box<[baml_type::RealizedTy]>,
+        class_type_args: Box<[crate::RealizedTy]>,
         fields: Vec<Value>,
     ) -> Self {
         Self {

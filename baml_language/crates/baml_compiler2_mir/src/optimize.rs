@@ -185,6 +185,9 @@ fn rewrite_catch_region_blocks(regions: &mut Vec<CatchRegion>, map: &[Option<Blo
             .iter()
             .filter_map(|b| map[b.0])
             .collect();
+        // Same for the protected body blocks (a removed block was unreachable
+        // and had nothing to protect).
+        region.body_blocks = region.body_blocks.iter().filter_map(|b| map[b.0]).collect();
         true
     });
 }
@@ -305,6 +308,10 @@ fn merge_passthrough_blocks(body: &mut MirFunctionBody) {
                 *b = new_b;
             }
         }
+        // A redirected passthrough block is empty (no instructions to
+        // protect), and remapping it to its target would wrongly extend the
+        // protected range over the target's instructions — drop it instead.
+        region.body_blocks.retain(|b| !resolved.contains_key(b));
     }
 
     // Step 5: entry block redirect (shouldn't happen since we excluded it, but be safe)
@@ -387,19 +394,34 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
             crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
                 scan_operand(operand, set);
             }
+            crate::Rvalue::RuntimeIsType {
+                operand,
+                type_value,
+            } => {
+                scan_operand(operand, set);
+                scan_operand(type_value, set);
+            }
             crate::Rvalue::MakeClosure { captures, .. } => {
                 for cap in captures {
                     scan_operand(cap, set);
                 }
             }
+            crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+                for arg in type_args {
+                    scan_operand(arg, set);
+                }
+            }
             crate::Rvalue::MakeBoundMethod { receiver, .. }
-            | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
+            | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. }
+            | crate::Rvalue::VirtualFieldAccess { receiver, .. } => {
                 scan_operand(receiver, set);
             }
             crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
                 scan_operand(value, set);
             }
-            crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+            crate::Rvalue::LoadType(_)
+            | crate::Rvalue::CurrentPackage(_)
+            | crate::Rvalue::MakeGenericFunction { .. } => {
                 // LoadType takes no local operands.
             }
         }
@@ -409,12 +431,33 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
 
     for block in &body.blocks {
         for stmt in &block.statements {
-            if let crate::StatementKind::Assign {
-                destination, value, ..
-            } = &stmt.kind
-            {
-                scan_place(destination, &mut set);
-                scan_rvalue(value, &mut set);
+            match &stmt.kind {
+                crate::StatementKind::Assign { destination, value } => {
+                    scan_place(destination, &mut set);
+                    scan_rvalue(value, &mut set);
+                }
+                crate::StatementKind::VirtualFieldStore {
+                    receiver, value, ..
+                } => {
+                    scan_operand(receiver, &mut set);
+                    scan_operand(value, &mut set);
+                }
+                crate::StatementKind::Intrinsic { args, .. } => {
+                    for arg in args {
+                        scan_operand(arg, &mut set);
+                    }
+                }
+                crate::StatementKind::Drop(p) => scan_place(p, &mut set),
+                // Exhaustive for the same reason the substitution walk is: a
+                // projected operand missed here lets copy propagation pick a
+                // constant for a local that `apply_subst_to_place_locals` then
+                // declines to write into the `Local`-typed position, while the
+                // defining assignment is dropped regardless — leaving the
+                // projection pointing at a local nothing defines.
+                crate::StatementKind::FreshCell(_)
+                | crate::StatementKind::VizEnter(_)
+                | crate::StatementKind::VizExit(_)
+                | crate::StatementKind::Nop => {}
             }
         }
         if let Some(term) = &block.terminator {
@@ -661,19 +704,34 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
             count_in_operand(operand, uses);
         }
+        crate::Rvalue::RuntimeIsType {
+            operand,
+            type_value,
+        } => {
+            count_in_operand(operand, uses);
+            count_in_operand(type_value, uses);
+        }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 count_in_operand(cap, uses);
             }
         }
+        crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+            for arg in type_args {
+                count_in_operand(arg, uses);
+            }
+        }
         crate::Rvalue::MakeBoundMethod { receiver, .. }
-        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
+        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. }
+        | crate::Rvalue::VirtualFieldAccess { receiver, .. } => {
             count_in_operand(receiver, uses);
         }
         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
             count_in_operand(value, uses);
         }
-        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+        crate::Rvalue::LoadType(_)
+        | crate::Rvalue::CurrentPackage(_)
+        | crate::Rvalue::MakeGenericFunction { .. } => {
             // No local operands.
         }
     }
@@ -690,6 +748,12 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
                 count_in_place(destination, uses);
             }
             count_in_rvalue(value, uses);
+        }
+        crate::StatementKind::VirtualFieldStore {
+            receiver, value, ..
+        } => {
+            count_in_operand(receiver, uses);
+            count_in_operand(value, uses);
         }
         crate::StatementKind::Drop(p) => count_in_place(p, uses),
         crate::StatementKind::FreshCell(l) => {
@@ -1015,19 +1079,34 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
         crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
             apply_subst_to_operand(operand, subst);
         }
+        crate::Rvalue::RuntimeIsType {
+            operand,
+            type_value,
+        } => {
+            apply_subst_to_operand(operand, subst);
+            apply_subst_to_operand(type_value, subst);
+        }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 apply_subst_to_operand(cap, subst);
             }
         }
+        crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+            for arg in type_args {
+                apply_subst_to_operand(arg, subst);
+            }
+        }
         crate::Rvalue::MakeBoundMethod { receiver, .. }
-        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
+        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. }
+        | crate::Rvalue::VirtualFieldAccess { receiver, .. } => {
             apply_subst_to_operand(receiver, subst);
         }
         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
             apply_subst_to_operand(value, subst);
         }
-        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+        crate::Rvalue::LoadType(_)
+        | crate::Rvalue::CurrentPackage(_)
+        | crate::Rvalue::MakeGenericFunction { .. } => {
             // No local operands — nothing to substitute.
         }
     }
@@ -1043,7 +1122,21 @@ fn apply_subst_to_statement(stmt: &mut crate::Statement, subst: &HashMap<Local, 
                 apply_subst_to_operand(arg, subst);
             }
         }
-        _ => {}
+        crate::StatementKind::VirtualFieldStore {
+            receiver, value, ..
+        } => {
+            apply_subst_to_operand(receiver, subst);
+            apply_subst_to_operand(value, subst);
+        }
+        // Deliberately exhaustive over operand-carrying kinds: a statement whose
+        // operands are missed here keeps referring to a local that copy
+        // propagation has already retired, and the emitter then loads a slot
+        // nothing ever stored to.
+        crate::StatementKind::Drop(_)
+        | crate::StatementKind::VizEnter(_)
+        | crate::StatementKind::VizExit(_)
+        | crate::StatementKind::FreshCell(_)
+        | crate::StatementKind::Nop => {}
     }
 }
 
@@ -1296,19 +1389,34 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
             remap_operand(operand, map);
         }
+        crate::Rvalue::RuntimeIsType {
+            operand,
+            type_value,
+        } => {
+            remap_operand(operand, map);
+            remap_operand(type_value, map);
+        }
         crate::Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 remap_operand(cap, map);
             }
         }
+        crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+            for arg in type_args {
+                remap_operand(arg, map);
+            }
+        }
         crate::Rvalue::MakeBoundMethod { receiver, .. }
-        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
+        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. }
+        | crate::Rvalue::VirtualFieldAccess { receiver, .. } => {
             remap_operand(receiver, map);
         }
         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
             remap_operand(value, map);
         }
-        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+        crate::Rvalue::LoadType(_)
+        | crate::Rvalue::CurrentPackage(_)
+        | crate::Rvalue::MakeGenericFunction { .. } => {
             // No local operands — nothing to remap.
         }
     }
@@ -1319,6 +1427,12 @@ fn rewrite_locals_in_statement(stmt: &mut crate::Statement, map: &[Option<Local>
         crate::StatementKind::Assign { destination, value } => {
             remap_place(destination, map);
             remap_rvalue(value, map);
+        }
+        crate::StatementKind::VirtualFieldStore {
+            receiver, value, ..
+        } => {
+            remap_operand(receiver, map);
+            remap_operand(value, map);
         }
         crate::StatementKind::Drop(p) => remap_place(p, map),
         crate::StatementKind::FreshCell(l) => remap_local(l, map),
@@ -1561,26 +1675,57 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                         | crate::Rvalue::IsTypeTag { operand, .. } => {
                             check_operand(operand, &blk);
                         }
+                        crate::Rvalue::RuntimeIsType {
+                            operand,
+                            type_value,
+                        } => {
+                            check_operand(operand, &blk);
+                            check_operand(type_value, &blk);
+                        }
                         crate::Rvalue::MakeClosure { captures, .. } => {
                             for cap in captures {
                                 check_operand(cap, &blk);
                             }
                         }
+                        crate::Rvalue::MakeVirtualFunction { type_args, .. } => {
+                            for arg in type_args {
+                                check_operand(arg, &blk);
+                            }
+                        }
                         crate::Rvalue::MakeBoundMethod { receiver, .. }
-                        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
+                        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. }
+                        | crate::Rvalue::VirtualFieldAccess { receiver, .. } => {
                             check_operand(receiver, &blk);
                         }
                         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
                             check_operand(value, &blk);
                         }
-                        crate::Rvalue::LoadType(_) | crate::Rvalue::MakeGenericFunction { .. } => {
+                        crate::Rvalue::LoadType(_)
+                        | crate::Rvalue::CurrentPackage(_)
+                        | crate::Rvalue::MakeGenericFunction { .. } => {
                             // LoadType takes no local operands — nothing to check.
                         }
                     }
                 }
+                crate::StatementKind::VirtualFieldStore {
+                    receiver, value, ..
+                } => {
+                    check_operand(receiver, &blk);
+                    check_operand(value, &blk);
+                }
+                crate::StatementKind::Intrinsic { args, .. } => {
+                    for arg in args {
+                        check_operand(arg, &blk);
+                    }
+                }
                 crate::StatementKind::Drop(p) => check_place(p, &blk),
                 crate::StatementKind::FreshCell(l) => check_local(*l, &blk),
-                _ => {}
+                // Exhaustive rather than wildcarded: an operand-carrying
+                // statement kind that skips this check loses the one cheap
+                // tripwire for a reference to a retired local.
+                crate::StatementKind::VizEnter(_)
+                | crate::StatementKind::VizExit(_)
+                | crate::StatementKind::Nop => {}
             }
         }
     }
@@ -1729,6 +1874,12 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
             "dangling handler {:?} in catch_region[{i}] of MIR function {name}",
             region.handler,
         );
+        for b in &region.body_blocks {
+            assert!(
+                b.0 < num_blocks,
+                "dangling body block {b:?} in catch_region[{i}] of MIR function {name}",
+            );
+        }
         assert!(
             region.error_local.0 < num_locals,
             "dangling error_local {} in catch_region[{i}] of MIR function {name}",

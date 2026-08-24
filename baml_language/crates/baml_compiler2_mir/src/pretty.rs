@@ -157,6 +157,18 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
             write_rvalue(f, value)?;
             write!(f, ";")
         }
+        StatementKind::VirtualFieldStore {
+            iface,
+            receiver,
+            field_index,
+            field,
+            value,
+        } => {
+            write_operand(f, receiver)?;
+            write!(f, ".{field}#{field_index} as {iface} = ")?;
+            write_operand(f, value)?;
+            write!(f, ";")
+        }
         StatementKind::Drop(place) => {
             write!(f, "drop({place});")
         }
@@ -175,6 +187,7 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
                 IntrinsicOp::Log(LogLevel::Debug) => "log_debug",
                 IntrinsicOp::Log(LogLevel::Warn) => "log_warn",
                 IntrinsicOp::Log(LogLevel::Error) => "log_error",
+                IntrinsicOp::BindType(slot) => return write!(f, "bind_type({slot}, {args:?});"),
             };
             write!(f, "intrinsic {op_str}(")?;
             for (i, arg) in args.iter().enumerate() {
@@ -254,9 +267,11 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             args,
             ntypeargs,
             runtime_id,
+            runtime_type_check,
             destination,
             target,
             unwind,
+            ..
         } => {
             write!(f, "{destination} = call ")?;
             write_operand(f, callee)?;
@@ -280,6 +295,9 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                 wrote_arg = true;
             }
             write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
+            if *runtime_type_check {
+                write!(f, "; runtime_type_check")?;
+            }
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -292,9 +310,11 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             args,
             ntypeargs,
             runtime_id,
+            runtime_type_check,
             destination,
             target,
             unwind,
+            ..
         } => {
             write!(f, "{destination} = virtual_call {method} as {iface}")?;
             if *ntypeargs > 0 {
@@ -317,6 +337,9 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                 wrote_arg = true;
             }
             write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
+            if *runtime_type_check {
+                write!(f, "; runtime_type_check")?;
+            }
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -448,6 +471,15 @@ fn write_runtime_id_arg(
 fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
     match rvalue {
         Rvalue::Use(operand) => write_operand(f, operand),
+        Rvalue::VirtualFieldAccess {
+            iface,
+            receiver,
+            field_index,
+            field,
+        } => {
+            write_operand(f, receiver)?;
+            write!(f, ".{field}#{field_index} as {iface}")
+        }
         Rvalue::BinaryOp { op, left, right } => {
             write_operand(f, left)?;
             write!(f, " {op} ")?;
@@ -536,6 +568,16 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write_operand(f, operand)?;
             write!(f, ", {})", type_tag_name(*tag))
         }
+        Rvalue::RuntimeIsType {
+            operand,
+            type_value,
+        } => {
+            write!(f, "runtime_is_type(")?;
+            write_operand(f, operand)?;
+            write!(f, ", ")?;
+            write_operand(f, type_value)?;
+            write!(f, ")")
+        }
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
@@ -573,8 +615,30 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write_operand(f, receiver)?;
             write!(f, ")")
         }
+        Rvalue::MakeVirtualFunction {
+            self_ty,
+            iface,
+            method,
+            type_args,
+        } => {
+            write!(f, "make_virtual_function ({self_ty} as {iface:?}).{method}")?;
+            if !type_args.is_empty() {
+                write!(f, "<")?;
+                for (index, arg) in type_args.iter().enumerate() {
+                    if index > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write_operand(f, arg)?;
+                }
+                write!(f, ">")?;
+            }
+            Ok(())
+        }
         Rvalue::LoadType(template) => {
             write!(f, "load_type({template})")
+        }
+        Rvalue::CurrentPackage(package) => {
+            write!(f, "current_package({package})")
         }
         Rvalue::MakeGenericFunction {
             item,
@@ -681,6 +745,7 @@ mod tests {
             callee: local_copy(1),
             args: Vec::new(),
             ntypeargs: 0,
+            runtime_type_check: false,
             runtime_id: Some(local_copy(9)),
             destination: Place::local(Local(0)),
             target: BlockId(1),
@@ -696,10 +761,15 @@ mod tests {
     #[test]
     fn virtual_call_runtime_id_without_visible_args_has_no_leading_comma() {
         let terminator = Terminator::VirtualCall {
-            iface: baml_type::TyTemplate::TypeArgRef(0),
+            iface: baml_type::TyTemplateInterface::new(
+                baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
+                Vec::new(),
+                Vec::new(),
+            ),
             method: "eq".to_string(),
             args: Vec::new(),
             ntypeargs: 0,
+            runtime_type_check: false,
             runtime_id: Some(local_copy(9)),
             destination: Place::local(Local(0)),
             target: BlockId(1),
@@ -708,7 +778,7 @@ mod tests {
 
         assert_eq!(
             render_terminator(&terminator),
-            "_0 = virtual_call eq as #0($id = copy _9) -> [bb1];"
+            "_0 = virtual_call eq as baml.ops.Equals($id = copy _9) -> [bb1];"
         );
     }
 

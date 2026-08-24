@@ -86,6 +86,9 @@ reason = "Use thiserror for proper error types in library crates."
 [[namespaces]]
 name = "baml"
 approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "lsp2", "type"]
+# The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
+# the same shape), not a prefix + word.
+approved_suffixes = ["compiler2_hir_ty"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["bex_project"]
 # The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring
@@ -96,8 +99,11 @@ name_exceptions = { "bridge_rust" = "baml_bridge" }
 [[namespaces.dependency_rules]]
 pattern = "baml_compiler*"
 allowed_prefixes = ["compiler", "compiler2"]
-allowed_crates = ["baml_db", "baml_project", "bridge_cffi", "baml_type", "baml_lsp2_actions", "baml_builtins2_codegen"]
-reason = "Use baml_db or baml_project to access compiler interfaces."
+# `baml_surface` is the semantic-surface API boundary over the compiler
+# (handles + export IR); it wraps compiler queries so downstream consumers
+# don't have to be on this list.
+allowed_crates = ["baml_db", "baml_project", "bridge_cffi", "baml_type", "baml_lsp2_actions", "baml_builtins2_codegen", "baml_surface"]
+reason = "Use baml_db, baml_project, or baml_surface to access compiler interfaces."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_*"
@@ -126,7 +132,7 @@ name_exceptions = { "tools_stow" = "cargo-stow", "tools_size_gate" = "cargo-size
 # package names that cannot collide with the real crates.
 [[namespaces]]
 name = "forked_aws"
-name_exceptions = { "aws-bedrock" = "forked_aws_bedrock", "aws-config" = "forked_aws_config", "aws-sigv4" = "forked_aws_sigv4" }
+name_exceptions = { "aws-config" = "forked_aws_config", "aws-sigv4" = "forked_aws_sigv4" }
 
 # forked Google crates follow the same package-name convention.
 [[namespaces]]

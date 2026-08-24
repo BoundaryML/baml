@@ -22,5 +22,11 @@ workflow_scratch_files/
 sdks/java/**/.gradle/
 sdks/java/**/build/
 
-# .bamlprof artifacts (profiling is default-on; BAML_PROFILE=0 opts out)
+# Local segmented profiling data; legacy files remain operator-owned.
 **/.baml/profiles/
+**/.baml/profiles-v1/
+**/.baml/profiles-v1.lock
+_plan/
+
+# Per-installation telemetry state, generated at runtime.
+telemetry.toml

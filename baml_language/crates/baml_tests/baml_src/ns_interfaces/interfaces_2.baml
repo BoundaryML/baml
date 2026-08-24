@@ -174,9 +174,8 @@ implements<T> UrrsPrintable for UrrsBox<T> {
     function display(self) -> string { return "box" }
 }
 function urrs_main() -> bool {
-    let impls = reflect.type_of<UrrsPrintable>().implementors()
-    return reflect.type_of<UrrsBox<int>>().implements(reflect.type_of<UrrsPrintable>())
-        && impls.length() == 1
+    return reflect.Type.of<UrrsBox<int>>().implements(reflect.Type.of<UrrsPrintable>())
+        && reflect.Type.of<UrrsBox<string>>().implements(reflect.Type.of<UrrsPrintable>())
 }
 test "unified_rule_reflection_sees_generic_class_implementor_once" {
     assert.is_true(urrs_main())
@@ -270,13 +269,13 @@ implements<T extends F2riNamed> F2riPrintable for T {
     function display(self) -> string { return self.name }
 }
 function f2ri_main() -> bool {
-    return reflect.type_of<F2riPerson>().implements(reflect.type_of<F2riPrintable>())
+    return reflect.Type.of<F2riPerson>().implements(reflect.Type.of<F2riPrintable>())
 }
 test "form2_reflect_implements_returns_true" {
     assert.is_true(f2ri_main())
 }
 
-// form2_reflect_implementors_includes_satisfying_classes
+// form2_reflect_membership_includes_satisfying_classes
 interface F2rsNamed {
     name: string
 }
@@ -295,12 +294,11 @@ implements<T extends F2rsNamed> F2rsPrintable for T {
     function display(self) -> string { return self.name }
 }
 function f2rs_main() -> bool {
-    let printable = reflect.type_of<F2rsPrintable>()
-    return printable.implemented_by(reflect.type_of<F2rsPerson>())
-        && printable.implemented_by(reflect.type_of<F2rsTeam>())
-        && printable.implementors().length() == 2
+    let printable = reflect.Type.of<F2rsPrintable>()
+    return printable.implemented_by(reflect.Type.of<F2rsPerson>())
+        && printable.implemented_by(reflect.Type.of<F2rsTeam>())
 }
-test "form2_reflect_implementors_includes_satisfying_classes" {
+test "form2_reflect_membership_includes_satisfying_classes" {
     assert.is_true(f2rs_main())
 }
 
@@ -313,12 +311,12 @@ implements<T> BirrPrintable<T> for BirrContainer<T> {}
 function birr_main() -> bool {
     let int_printable: BirrPrintable<int> = BirrContainer<int> { value: 1 }
     let string_printable: BirrPrintable<string> = BirrContainer<string> { value: "two" }
-    return reflect.type_of<BirrContainer<int>>().implements(reflect.type_of<BirrPrintable<int>>())
-        && reflect.type_of<BirrContainer<string>>().implements(reflect.type_of<BirrPrintable<string>>())
-        && reflect.type_of<BirrPrintable<int>>().implemented_by(reflect.type_of<BirrContainer<int>>())
-        && reflect.type_of<BirrPrintable<string>>().implemented_by(reflect.type_of<BirrContainer<string>>())
-        && reflect.type_of<BirrPrintable<int>>().implementors().length() == 1
-        && reflect.type_of<BirrPrintable<string>>().implementors().length() == 1
+    return reflect.Type.of<BirrContainer<int>>().implements(reflect.Type.of<BirrPrintable<int>>())
+        && reflect.Type.of<BirrContainer<string>>().implements(reflect.Type.of<BirrPrintable<string>>())
+        && reflect.Type.of<BirrPrintable<int>>().implemented_by(reflect.Type.of<BirrContainer<int>>())
+        && reflect.Type.of<BirrPrintable<string>>().implemented_by(reflect.Type.of<BirrContainer<string>>())
+        && !reflect.Type.of<BirrPrintable<int>>().implemented_by(reflect.Type.of<BirrContainer<string>>())
+        && !reflect.Type.of<BirrPrintable<string>>().implemented_by(reflect.Type.of<BirrContainer<int>>())
 }
 test "blanket_interface_rule_reflection_includes_concrete_container_implementors" {
     assert.is_true(birr_main())
@@ -865,7 +863,7 @@ class Fz34IntBox {
 function fz34_main() -> bool {
     // IntBox only implements Box<int>, NOT Box<string>, so this is false —
     // `implements` respects the generic type argument.
-    return reflect.type_of<Fz34IntBox>().implements(reflect.type_of<Fz34Box<string>>())
+    return reflect.Type.of<Fz34IntBox>().implements(reflect.Type.of<Fz34Box<string>>())
 }
 test "fuzz_bug34_reflect_implements_respects_generic_type_args" {
     assert.is_true(fz34_main() == false)
@@ -883,47 +881,10 @@ class Fz35IntBox {
 function fz35_main() -> bool {
     // Box<string>.implemented_by(IntBox) is false — IntBox only implements
     // Box<int>, and `implemented_by` respects the type argument.
-    return reflect.type_of<Fz35Box<string>>().implemented_by(reflect.type_of<Fz35IntBox>())
+    return reflect.Type.of<Fz35Box<string>>().implemented_by(reflect.Type.of<Fz35IntBox>())
 }
 test "fuzz_bug35_reflect_implemented_by_respects_generic_type_args" {
     assert.is_true(fz35_main() == false)
-}
-
-// fuzz_bug36_reflect_implementors_respects_generic_type_args
-interface Fz36Box<T> {
-    function get(self) -> T throws never
-}
-class Fz36IntBox {
-    implements Fz36Box<int> {
-        function get(self) -> int { return 1 }
-    }
-}
-class Fz36StringBox {
-    implements Fz36Box<string> {
-        function get(self) -> string { return "hello" }
-    }
-}
-function fz36_main() -> int {
-    // Box<int>.implementors() returns just [IntBox] (length 1) — the type
-    // argument filters out StringBox (which implements Box<string>).
-    return reflect.type_of<Fz36Box<int>>().implementors().length()
-}
-test "fuzz_bug36_reflect_implementors_respects_generic_type_args" {
-    assert.equal(fz36_main(), 1)
-}
-
-// fuzz_bug37_reflect_implementors_deterministic_order
-interface Fz37I {}
-class Fz37A { implements Fz37I {} }
-class Fz37B { implements Fz37I {} }
-class Fz37C { implements Fz37I {} }
-function fz37_main() -> string {
-    let impls = reflect.type_of<Fz37I>().implementors()
-    // Lexicographic by name: A,B,C
-    return impls[0].to_string() + "," + impls[1].to_string() + "," + impls[2].to_string()
-}
-test "fuzz_bug37_reflect_implementors_deterministic_order" {
-    assert.equal(fz37_main(), "interfaces.Fz37A,interfaces.Fz37B,interfaces.Fz37C")
 }
 
 // fuzz_bug38_throw_subtype_of_declared_throws_interface_is_allowed

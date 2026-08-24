@@ -58,13 +58,13 @@ feed="$work/feed"
 consumer="$work/consumer"
 packages="$work/packages"
 publish="$work/publish"
-mkdir -p "$feed" "$consumer/baml_client" "$packages" "$publish"
+mkdir -p "$feed" "$consumer/baml_sdk" "$packages" "$publish"
 cp "$package" "$feed/baml-bridge.$version.nupkg"
 
 if [[ -z "$generated_source_root" ]]; then
   (cd "$language_root" && cargo run --quiet -p baml_cli -- \
     generate --from "$fixture")
-  generated_source_root="$fixture/baml_client"
+  generated_source_root="$fixture/baml_sdk"
 else
   generated_source_root="$(cd "$generated_source_root" && pwd -P)"
 fi
@@ -75,7 +75,7 @@ cp "$test_dir/NuGet.Config" "$consumer/"
 cp "$test_dir/Program.cs" "$consumer/"
 while IFS= read -r source; do
   relative="${source#"$generated_source_root/"}"
-  destination="$consumer/baml_client/$relative"
+  destination="$consumer/baml_sdk/$relative"
   mkdir -p "$(dirname "$destination")"
   cp "$source" "$destination"
 done < <(find "$generated_source_root" -type f -name '*.g.cs' | LC_ALL=C sort)
@@ -91,7 +91,7 @@ list_generated_sources() {
 
 diff -u \
   <(list_generated_sources "$generated_source_root") \
-  <(list_generated_sources "$consumer/baml_client")
+  <(list_generated_sources "$consumer/baml_sdk")
 if find "$consumer" -type f \
   \( -name '*.proto' -o -name '*.baml' -o -name '*.toml' -o -name '*.bin' \) \
   | grep -q .; then

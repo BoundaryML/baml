@@ -23,6 +23,7 @@ members = [
   "sdk_tests/crates/cpp",
   "sdk_tests/crates/csharp",
   "sdk_tests/crates/python_pydantic2",
+  "sdk_tests/crates/ruby_sorbet",
   # Swift sdk-tests: build.rs codegen soft-fails into build_diagnostics
   # (sdkgen_swift is early); the swift toolchain tests themselves are
   # macOS-only and setup.sh (xcframework assembly) is bound in
@@ -93,7 +94,7 @@ baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
 baml_compiler2_ppir = { path = "crates/baml_compiler2_ppir" }
-baml_compiler2_tir = { path = "crates/baml_compiler2_tir" }
+baml_compiler2_hir_ty = { path = "crates/baml_compiler2_hir_ty" }
 baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
 baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
@@ -104,13 +105,12 @@ baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 bex_cache = { path = "crates/bex_cache", default-features = false }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
+sys_auth = { path = "crates/sys_auth" }
 sys_glob = { path = "crates/sys_glob" }
-sys_jinja = { path = "crates/sys_jinja" }
-sys_jinja_types = { path = "crates/sys_jinja_types" }
-sys_llm = { path = "crates/sys_llm", default-features = false }
 sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native", default-features = false }
+baml_path = { path = "crates/baml_path" }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
 baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
@@ -118,6 +118,7 @@ baml_lsp2_actions_tests = { path = "crates/baml_lsp2_actions_tests" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_project = { path = "crates/baml_project" }
 baml_release = { path = "crates/baml_release" }
+baml_surface = { path = "crates/baml_surface" }
 baml_tests = { path = "crates/baml_tests" }
 baml_version = { path = "crates/baml_version" }
 bex_vm = { path = "crates/bex_vm" }
@@ -128,22 +129,13 @@ bex_sap = { path = "crates/bex_sap" }
 bridge_ctypes = { path = "crates/bridge_ctypes", default-features = false }
 bridge_cffi = { path = "crates/bridge_cffi", default-features = false }
 sys_wasm = { path = "crates/sys_wasm" }
+baml_cli = { path = "crates/baml_cli" }
 baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
 darwin-kperf-events = "0.1.0"
 
-# External dependency for sys_llm jinja module
-minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", default-features = false, features = [
-  "macros",
-  "builtins",
-  "debug",
-  "preserve_order",
-  "serde",
-  "unstable_machinery",
-] }
-minijinja-contrib = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", features = [ "pycompat" ] }
 baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies
@@ -158,7 +150,6 @@ askama = { version = "0.14.0" }
 # call sites import them unchanged; the `package` is the `forked_*` crate.
 aws-config = { path = "forks/aws-config", package = "forked_aws_config" }
 aws-sigv4 = { path = "forks/aws-sigv4", package = "forked_aws_sigv4" }
-aws-bedrock = { path = "forks/aws-bedrock", package = "forked_aws_bedrock" }
 google-cloud-auth = { path = "forks/google-cloud-auth", package = "forked_google_cloud_auth" }
 axum = { version = "0.8.4", default-features = false, features = [ "http1", "matched-path", "original-uri", "query", "tokio", "ws" ] }
 bitflags = "2"
@@ -171,6 +162,7 @@ bitflags = "2"
 # HeapPtr) that need to refuse or proxy their on-disk form.
 borsh = { version = "1.5", features = [ "derive", "indexmap" ] }
 bytes = "1"
+bytesize = "2.4.2"
 cargo_metadata = { version = "0.23.1" }
 cbindgen = "=0.29.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
@@ -186,6 +178,9 @@ ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
 divan = { package = "codspeed-divan-compat", version = "*" }
 eframe = "0.33.3"
+# Union-find with snapshot/rollback for hir_ty's InferenceTable - the same
+# crate rustc and rust-analyzer build their inference tables on.
+ena = "0.14"
 flate2 = { version = "1" }
 fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
@@ -197,13 +192,13 @@ hyper = { version = "1", features = [ "server", "http1", "http2" ] }
 hyper-util = { version = "0.1", features = [ "server", "server-auto", "tokio" ] }
 indexmap = { version = "2.13", features = [ "serde" ] }
 indicatif = "0.18"
-infer = "0.16.0"
 insta = { version = "1.34", features = [ "yaml", "redactions" ] }
+similar = "2"
 jiff = { version = "0.2" }
 la-arena = { version = "0.3" }
 libc = "0.2.169"
 libloading = "0.8"
-libsui = { version = "0.14" }
+libsui = { version = "0.16.4" }
 log = "0.4.20"
 logos = { version = "0.15" }
 # Concurrency model checker for the profiling ring (bex_events::prof). Only a
@@ -213,10 +208,6 @@ loom = { version = "0.7" }
 lsp-server = "0.7.6"
 lsp-types = "0.95.0"
 notify = "7.0"
-# Pinned to the exact version libsui depends on so `baml pack`'s ELF note
-# writer (crates/baml_cli/src/pack_elf.rs) and libsui's reader share one
-# `object` build. See pack_elf.rs for why we don't use `libsui::Elf::append`.
-object = { version = "=0.36.3", default-features = false, features = [ "build", "read_core", "elf", "std" ] }
 once_cell = "1.19"
 ouroboros = "0.18.5"
 parking_lot = { version = "0.12" }
@@ -234,6 +225,7 @@ regex = { version = "1.10.2" }
 # gitignore-aware directory walking (workspace project discovery in the LSP)
 ignore = { version = "0.4" }
 base64 = "0.22"
+mime_guess = "2"
 bytecount = "0.6"
 reqwest = { version = "0.13.1", default-features = false, features = [
   "stream",
@@ -252,6 +244,7 @@ salsa = { version = "0.26", default-features = false, features = [
 serde = { version = "1.0.197", features = [ "derive" ] }
 serde-wasm-bindgen = "0.6"
 serde_json = { version = "1.0.113", features = [ "arbitrary_precision", "preserve_order" ] }
+semver = { version = "1" }
 # The maintained fork of the archived serde_yaml, published by the YAML org;
 # package-renamed so `use serde_yaml::` imports stay unchanged.
 serde_yaml = { package = "yaml_serde", version = "0.10" }
@@ -281,8 +274,7 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
 ] }
 unicode-normalization = "0.1.25"
 ureq = { version = "3", default-features = false, features = [ "rustls", "gzip" ] }
-url = "2.5.2"
-uuid = { version = "1", features = [ "v4" ] }
+uuid = { version = "1", features = [ "serde", "v4" ] }
 walkdir = { version = "2.4" }
 tsify = { version = "0.5", features = [ "js" ] }
 wasm-bindgen = "0.2"
@@ -320,6 +312,25 @@ rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
 # does not build under MSVC (sha2-asm ships GAS `.S` sources), so it must not
 # be turned on here unconditionally.
 sha2 = { version = "0.10", features = [ "oid" ] }
+# `baml.crypto`'s AEAD ciphers. `getrandom` is off (it is on by default): keys
+# and nonces come from a caller-supplied `baml.random.Rng`, never from the
+# crate's own entropy source, so the VM keeps building for
+# `wasm32-unknown-unknown` without a JS shim. `zeroize` is on (it is off by
+# default) so the per-message subkeys AES-GCM-SIV derives are wiped after use.
+aes-gcm-siv = { version = "0.12", default-features = false, features = [
+  "aes",
+  "alloc",
+  "zeroize",
+] }
+# The other `baml.crypto` AEAD family. Same `aead` 0.6 generation as
+# `aes-gcm-siv` above, which is what lets both share one set of seal/open
+# helpers. `getrandom` off and `zeroize` on for the same reasons; the
+# `reduced-round` ChaCha8/ChaCha12 variants stay off, since they trade security
+# margin for speed and no RFC covers them.
+chacha20poly1305 = { version = "0.11", default-features = false, features = [
+  "alloc",
+  "zeroize",
+] }
 
 [workspace.lints.rust]
 unsafe_code = "warn"
@@ -395,6 +406,22 @@ panic = "abort"
 # decrease codegen-units in some cases.
 [profile.release.package.salsa]
 codegen-units = 1
+
+# Fast test runs: release-grade codegen for our own crates without the
+# release profile's ship-oriented costs — fat LTO and codegen-units=1 make
+# the BUILD dwarf the test-time win, and panic=abort breaks should_panic
+# tests. Debug assertions and overflow checks stay ON: the corpus and the
+# lowering tripwires (debug_assert) are load-bearing for correctness runs.
+# Usage: cargo nextest run --cargo-profile fasttest ...
+[profile.fasttest]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+panic = "unwind"
+opt-level = 2
+strip = false
+debug-assertions = true
+overflow-checks = true
 
 [profile.dev.package.insta]
 opt-level = 3

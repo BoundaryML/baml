@@ -104,6 +104,63 @@ fn pack_e2e_root_main() {
     assert!(String::from_utf8_lossy(&out.stdout).contains("hi, Ada"));
 }
 
+/// The packed envelope carries the root's enriched `PackageInterface`, and the
+/// standalone host carries the transient runtime compiler. No source files are
+/// available after packing: this is the end-to-end exit criterion for lexical
+/// `Package.current()` plus alias-mounted `Package.compile`.
+#[test]
+fn pack_e2e_current_package_compiles_and_runs_skill() {
+    let built = common::ensure_built();
+    let source = r####"
+class AgentState {
+  goal string
+  history string[]
+}
+
+interface AgentAction {
+  summary string
+}
+
+function Plan(state: AgentState) -> string {
+  "packed plan: " + state.goal
+}
+
+function main() -> string throws unknown {
+  let skill = reflect.Package.compile(
+    { "skill.baml": #"
+class PlanThenAct {
+  summary string
+  steps string[]
+  implements app.AgentAction {}
+}
+
+function Run(state: app.AgentState) -> PlanThenAct {
+  PlanThenAct { summary: app.Plan(state), steps: [] }
+}
+"# },
+    packages = { "app": reflect.Package.current() },
+  )
+  let run = skill.get_function<(AgentState) -> AgentAction>("root.Run")
+    ?? throw "missing root.Run"
+  run(AgentState { goal: "binary", history: [] }).summary
+}
+"####;
+    let (_tmp, bin) = pack_project(built, source, &["main"]);
+    let out = run(&bin, &[]);
+    assert!(
+        out.status.success(),
+        "packed runtime-compile binary exited {:?}; stdout:\n{}\nstderr:\n{}",
+        out.status.code(),
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("packed plan: binary"),
+        "unexpected packed output: {}",
+        String::from_utf8_lossy(&out.stdout),
+    );
+}
+
 /// `baml pack` keeps packaging progress, but should not emit the compile
 /// file-count status pair reserved for `check` and `generate`.
 #[test]
@@ -118,6 +175,9 @@ fn pack_e2e_omits_compile_file_status() {
 
     let output = Command::new(&built.baml_cli)
         .env("BAML_CLI_ALLOW_DIRECT", "1")
+        // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
+        // cannot flip `--output-preset auto` to `agent` and hide progress lines.
+        .env("BAML_OUTPUT_PRESET", "human")
         .env("BAML_CACHE_DIR", common::shared_cache_dir())
         .arg("pack")
         .arg("--from")
@@ -239,11 +299,11 @@ fn pack_e2e_sys_exit_propagates_to_shell() {
     let built = common::ensure_built();
     let (_tmp, bin) = pack_project(
         built,
-        "function main() -> string {\n  baml.sys.exit(7)\n  \"never\"\n}\n",
+        "function main() -> never {\n  baml.sys.exit(42)\n}\n",
         &["main"],
     );
     let out = run(&bin, &[]);
-    assert_eq!(out.status.code(), Some(7));
+    assert_eq!(out.status.code(), Some(42));
 }
 
 /// Pack a **manifest-less** `baml_src/`-only project (no `baml.toml`) and

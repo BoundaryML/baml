@@ -18,19 +18,13 @@ function getProfile(req: int) -> bool throws Errors {
 
 //----
 //- diagnostics
-// E0063
-//
-//   ⚠ unreachable arm
-//     ╭─[hover_catch_rethrow.baml:10:28]
-//  10 │     AuthenticationError => { throw e }
-//     ·                            ───────────
-//     ╰────
 // E0097
 //
-//   ⚠ extraneous throws declaration: AuthenticationError, AuthorizationError
-//     ╭─[hover_catch_rethrow.baml:15:46]
-//  15 │ function getProfile(req: int) -> bool throws Errors {
-//     ·                                              ──────
+//   ⚠ extraneous throws declaration: Errors
+//     ╭─[hover_catch_rethrow.baml:15:53]
+//  15 │ ╭─▶ function getProfile(req: int) -> bool throws Errors {
+//  16 │ │     return true
+//  17 │ ╰─▶ }
 //     ╰────
 //
 //- on_hover expressions

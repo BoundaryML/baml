@@ -9,7 +9,7 @@ use std::fmt;
 use baml_base::Name;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::PrimitiveType;
+use crate::{BuiltinTypeName, PrimitiveType};
 
 /// Which package a type is defined in. `Local` is the user's own (implicit
 /// root) package — the "current" package for everything a user writes;
@@ -242,18 +242,18 @@ impl QualifiedTypeName {
     /// such as `baml.json.JsonObject`).
     ///
     /// This is the single collapse rule used by the describe/hover canonical
-    /// type printer; it must stay in sync with
-    /// [`PrimitiveType::builtin_class_path`].
+    /// type printer and delegates to [`BuiltinTypeName`]'s registry.
     pub fn builtin_alias(&self) -> Option<&'static str> {
-        // `json` is the `baml.json.json` type alias, not a `PrimitiveType`.
-        if self.package().as_str() == "baml"
-            && self.namespace.len() == 1
-            && self.namespace[0].as_str() == "json"
-            && self.name.as_str() == "json"
-        {
-            return Some("json");
+        if self.package().as_str() != "baml" {
+            return None;
         }
-        self.builtin_primitive().map(|p| p.alias())
+        let path: Vec<&str> = self
+            .namespace
+            .iter()
+            .map(Name::as_str)
+            .chain(std::iter::once(self.name.as_str()))
+            .collect();
+        BuiltinTypeName::from_builtin_definition_path(&path).map(BuiltinTypeName::alias)
     }
 }
 
@@ -292,23 +292,11 @@ mod alias_tests {
 
     #[test]
     fn primitive_alias_class_path_roundtrips() {
-        for p in [
-            PrimitiveType::Int,
-            PrimitiveType::Bigint,
-            PrimitiveType::Float,
-            PrimitiveType::String,
-            PrimitiveType::Bool,
-            PrimitiveType::Null,
-            PrimitiveType::Uint8Array,
-            PrimitiveType::Image,
-            PrimitiveType::Audio,
-            PrimitiveType::Video,
-            PrimitiveType::Pdf,
-        ] {
+        for p in PrimitiveType::ALL {
             let path = p.builtin_class_path();
             assert_eq!(
                 PrimitiveType::from_builtin_class_path(path),
-                Some(p.clone()),
+                Some(p),
                 "round-trip failed for {p:?} via {path:?}"
             );
             // The alias matches the Display spelling.

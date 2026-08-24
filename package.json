@@ -22,9 +22,6 @@
     "lint:ws": "pnpm dlx sherif@latest",
     "postinstall.skip": "pnpm lint:ws",
     "setup-dev": "./scripts/setup-dev.sh",
-    "format": "biome check",
-    "format:ci": "biome ci",
-    "format:fix": "biome check --write",
     "docker-build": "bash build-docker.sh",
     "test": "turbo run test",
     "integ-tests": "pnpm run generate && turbo run integ-tests",
@@ -33,7 +30,6 @@
   },
   "devDependencies": {
     "@infisical/cli": "0.41.89",
-    "@biomejs/biome": "1.9.4",
     "@types/node": "24.0.3",
     "turbo": "2.5.4",
     "typescript": "5.8.3",

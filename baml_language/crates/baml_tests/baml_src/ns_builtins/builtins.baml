@@ -39,11 +39,11 @@ function builtins_float_to_string_concat() -> string {
 }
 
 test "builtin_method_call" {
-    assert.is_true(baml.deep_equals([1, 2, 3].length(), 3))
+    assert.equal([1, 2, 3].length(), 3)
 }
 
 test "bind_method_call" {
-    assert.is_true(baml.deep_equals(builtins_bind_method_call(), 3))
+    assert.equal(builtins_bind_method_call(), 3)
 }
 
 // Helper: constructs and stringifies a person — moved out of the test block

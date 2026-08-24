@@ -18,6 +18,7 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
+baml_compiler_lexer = { workspace = true }
 borsh = { workspace = true }
 miette = { workspace = true }
 owo-colors = { workspace = true }

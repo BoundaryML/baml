@@ -48,10 +48,9 @@ pub use ffi::{
     },
     objects::flush_events,
     runtime::{
-        BamlBridgeInfoV1, BridgeInfo, BridgeLanguage, create_baml_runtime, destroy_baml_runtime,
-        ensure_version_compatible,
+        BamlBridgeInfoV1, create_baml_runtime, destroy_baml_runtime,
         initialize_runtime_from_bytecode as initialize_runtime_from_bytecode_ffi,
-        invoke_runtime_cli, register_bridge, register_bridge_ffi, registered_bridge,
+        initialize_runtime_from_bytecode_with_metadata, invoke_runtime_cli, register_bridge_ffi,
         shutdown_runtime as shutdown_runtime_ffi, version,
     },
     unhandled_spawn::register_unhandled_spawn_error_callback,
@@ -160,7 +159,9 @@ fn call_function_inner(encoded_args: *const u8, length: usize, id: u32) -> Resul
     }
     let type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
-    let call_ctx = function_call_context_builder(call_id).with_type_args(type_args);
+    let call_ctx = function_call_context_builder(call_id)
+        .with_type_args(type_args.type_args)
+        .with_type_defs(type_args.type_defs);
 
     get_tokio_runtime()?.spawn(async move {
         let encoded = AssertUnwindSafe(async move {

@@ -429,12 +429,37 @@ fn render_builtin_namespace_env() {
     insta::assert_snapshot!(output);
 }
 
-/// `baml describe baml.llm` — list items in the `llm` sub-namespace.
+/// `baml describe reflect` routes through the ordinary root-package path.
 #[test]
-fn render_builtin_namespace_llm() {
+fn render_reflect_package_listing() {
     let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
-    let ns_path = vec![baml_db::Name::new("llm")];
+    let output = describe_via_dispatch(&db, "reflect");
+    assert!(output.contains("reflect.Type"), "{output}");
+    assert!(output.contains("reflect.Package"), "{output}");
+    assert!(!output.contains("baml.reflect"), "{output}");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn describe_reflect_type_and_intrinsic() {
+    let db = simple_project();
+    let type_output = describe_via_dispatch(&db, "reflect.Type");
+    assert!(type_output.contains("class Type"), "{type_output}");
+    let intrinsic_output = describe_via_dispatch(&db, "reflect.Type.of");
+    assert!(
+        intrinsic_output.contains("function of<T>() -> reflect.Type"),
+        "{intrinsic_output}"
+    );
+}
+
+/// `baml describe ai.internal` — list items in the `ai.internal` namespace,
+/// the home of the package-private helpers and the prompt-rendering plumbing
+/// (there is deliberately no `baml.prompt` namespace).
+#[test]
+fn render_builtin_namespace_ai_internal() {
+    let db = simple_project();
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("ai"));
+    let ns_path = vec![baml_db::Name::new("internal")];
     let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
@@ -894,7 +919,7 @@ fn describe_builtin_method_drill_in_via_class_name() {
     let cases = [
         (
             "Array.reduce",
-            "function reduce(self, reducer: (A, T) -> A throws E, initial: A) -> A throws E",
+            "function reduce<A, E>(self, reducer: (A, T) -> A throws E, initial: A) -> A throws E",
         ),
         (
             "String.split",
@@ -1031,7 +1056,10 @@ fn render_describe_methods_respect_budget() {
         "generous budgets should still show full method details:\n{full}"
     );
 
-    assert_eq!(assert_reported_budget_is_minimum(&db, &descs[0], 5), 97);
+    // A characterization value: it tracks `baml.String`'s rendered size, so a
+    // stdlib surface change moves it. What the test pins is the *property* the
+    // helper checks — the hinted budget is minimal and renders everything.
+    assert_eq!(assert_reported_budget_is_minimum(&db, &descs[0], 5), 101);
 }
 
 #[test]
@@ -1228,6 +1256,25 @@ fn dispatch_language_topic_resolves_to_keyword() {
             "`{name}` should resolve to a keyword topic"
         );
     }
+}
+
+#[test]
+fn dispatch_schema_attributes_and_intrinsic_types_resolve_to_topics() {
+    let db = simple_project();
+    for name in ["alias", "description", "skip", "void", "never", "unknown"] {
+        assert!(
+            matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
+            "`baml describe {name}` should resolve to a shared language topic"
+        );
+    }
+}
+
+#[test]
+fn render_schema_attribute_topic() {
+    let output = capture_keyword("alias");
+    assert!(output.contains("Overrides the serialized and parsed name"));
+    assert!(output.contains(r#"@alias("name")"#));
+    assert!(output.contains(r#"@@alias("name")"#));
 }
 
 #[test]

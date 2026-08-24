@@ -57,7 +57,3 @@ RID set from the validated platform contract, and `publish2-csharp-sdk.yaml`
 publishes that exact verified package. On a repair rerun, the publisher removes
 only NuGet's repository signature from the comparison model and skips an
 identical existing package; a product-owned content mismatch remains fatal.
-`release/csharp-package-size-policy.json` records the reviewed compressed
-package and per-native baselines from the first eight-target release evidence;
-package assembly enforces their regression budgets independently from the
-NuGet registry-safety ceiling.

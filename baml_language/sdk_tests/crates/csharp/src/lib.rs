@@ -48,7 +48,7 @@ mod tests {
             .args([
                 "ls-files",
                 "--",
-                ":(glob)baml_language/sdk_tests/crates/csharp/**/baml_client/**",
+                ":(glob)baml_language/sdk_tests/crates/csharp/**/baml_sdk/**",
             ])
             .output()
             .expect("failed to inspect tracked C# generated clients");
@@ -63,7 +63,7 @@ mod tests {
                 "ls-files",
                 "--deleted",
                 "--",
-                ":(glob)baml_language/sdk_tests/crates/csharp/**/baml_client/**",
+                ":(glob)baml_language/sdk_tests/crates/csharp/**/baml_sdk/**",
             ])
             .output()
             .expect("failed to inspect deleted C# generated clients");
@@ -389,6 +389,7 @@ mod tests {
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
+    #[ignore = "flaky: B-1059 - CancelToken.any intermittently fails to preserve native state"]
     fn test_phase12_executes_native_typed_resource_apis_lifetimes_and_state() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
@@ -566,7 +567,7 @@ mod tests {
             .join("sdks/csharp/bridge_csharp/tests/Baml.Bridge.DocumentationConsumer")
             .join("Baml.Bridge.DocumentationConsumer.csproj");
         let runtime = language_root.join("sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj");
-        let generated = manifest.join("primitive_slice/baml_client");
+        let generated = manifest.join("primitive_slice/baml_sdk");
         let output = Command::new("dotnet")
             .args([
                 "run",

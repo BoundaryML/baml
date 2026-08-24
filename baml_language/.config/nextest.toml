@@ -21,6 +21,7 @@ rust-sdk-fixture = { max-threads = 2 }
 java-gradle-serial = { max-threads = 1 }
 # C# fixtures share the bridge project's MSBuild obj directory.
 csharp-sdk-fixture = { max-threads = 1 }
+typescript-web-workers = { max-threads = 1 }
 
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_rust)'
@@ -29,6 +30,10 @@ test-group = 'rust-sdk-fixture'
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_csharp)'
 test-group = 'csharp-sdk-fixture'
+
+[[profile.default.overrides]]
+filter = 'package(=sdk_test_typescript_web) & test(/::vitest_workers$/)'
+test-group = 'typescript-web-workers'
 
 # Node TypeScript tests build only the native bridge and Node fixture packages.
 [scripts.setup.typescript_pnpm_unix]
@@ -114,6 +119,27 @@ filter = 'package(=baml_bridge)'
 platform = { host = 'cfg(windows)' }
 setup = 'rust_bridge_engine_win'
 
+# `pack_e2e` needs the `baml-pack-host` executable from another Cargo package.
+# Build it once before nextest fans the individual cases out into separate
+# processes. The setup scripts mark matching tests through NEXTEST_ENV, so the
+# test helper validates the prebuilt sibling instead of recursively invoking
+# Cargo once per case. Plain `cargo test` retains its one-process fallback.
+[scripts.setup.baml_pack_host_unix]
+command = './crates/baml_cli/tests/build-pack-host.sh'
+
+[scripts.setup.baml_pack_host_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './crates/baml_cli/tests/build-pack-host.ps1']
+
+[[profile.default.scripts]]
+filter = 'binary(=pack_e2e)'
+platform = { host = 'cfg(unix)' }
+setup = 'baml_pack_host_unix'
+
+[[profile.default.scripts]]
+filter = 'binary(=pack_e2e)'
+platform = { host = 'cfg(windows)' }
+setup = 'baml_pack_host_win'
+
 # java tests need the shared Gradle home staged (and, once the Java
 # bridge lands, the native bridge library built + per-fixture Gradle
 # dependency resolution warmed). fire only when a java sdk-test is
@@ -195,6 +221,25 @@ setup = 'go_bridge_unix'
 filter = 'package(=sdk_test_go)'
 platform = { host = 'cfg(windows)' }
 setup = 'go_bridge_win'
+
+# Ruby bridge tests use the same SDK-test lanes as the generated clients will.
+# Setup builds bridge_cffi, compiles the malformed-library and foreign-thread
+# fixtures, emits real function_calls bytecode, and installs the locked ffi gem.
+[scripts.setup.ruby_sorbet_bridge_unix]
+command = './sdk_tests/crates/ruby_sorbet/setup.sh'
+
+[scripts.setup.ruby_sorbet_bridge_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/ruby_sorbet/setup.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_ruby_sorbet)'
+platform = { host = 'cfg(unix)' }
+setup = 'ruby_sorbet_bridge_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_ruby_sorbet)'
+platform = { host = 'cfg(windows)' }
+setup = 'ruby_sorbet_bridge_win'
 
 # cpp tests link the dev-profile bridge_cffi cdylib; build it once. fire only
 # when a cpp sdk-test is selected. setup.sh / setup.ps1 are byte-for-byte

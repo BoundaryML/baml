@@ -200,7 +200,17 @@ fn to_curl_command(
     env_vars: &std::collections::HashMap<String, String>,
     expose_secrets: bool,
 ) -> String {
-    let mut curl_command = format!("curl -X {method} '{url}'");
+    let is_multipart = headers
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.starts_with("multipart/form-data"));
+    let mut curl_command = if is_multipart {
+        let scrubbed_body = scrub_binary_body(&body, env_vars, expose_secrets);
+        let encoded_body = escape_single_quotes(&BASE64_STANDARD.encode(scrubbed_body));
+        format!("printf %s {encoded_body} | base64 --decode | curl -X {method} '{url}'")
+    } else {
+        format!("curl -X {method} '{url}'")
+    };
 
     // Prepare headers, scrubbing if secrets should not be exposed
     for (key, value) in headers.iter() {
@@ -212,20 +222,61 @@ fn to_curl_command(
         curl_command.push_str(&header);
     }
 
-    // Body: pretty print JSON if possible, then scrub if secrets shouldn't be exposed
-    let body_json = String::from_utf8_lossy(&body).to_string();
-    let mut pretty_body_json = match serde_json::from_str::<serde_json::Value>(&body_json) {
-        Ok(json_value) => serde_json::to_string_pretty(&json_value).unwrap_or(body_json),
-        Err(_) => body_json,
-    };
+    if is_multipart {
+        curl_command.push_str(" --data-binary @-");
+    } else {
+        // Body: pretty print JSON if possible, then scrub if secrets shouldn't be exposed
+        let body_json = String::from_utf8_lossy(&body).to_string();
+        let mut pretty_body_json = match serde_json::from_str::<serde_json::Value>(&body_json) {
+            Ok(json_value) => serde_json::to_string_pretty(&json_value).unwrap_or(body_json),
+            Err(_) => body_json,
+        };
 
-    pretty_body_json =
-        crate::redaction::scrub_body_string(&pretty_body_json, env_vars, expose_secrets);
-    let fully_escaped_body_json = escape_single_quotes(&pretty_body_json);
-    let body_part = format!(" -d {fully_escaped_body_json}");
-    curl_command.push_str(&body_part);
+        pretty_body_json =
+            crate::redaction::scrub_body_string(&pretty_body_json, env_vars, expose_secrets);
+        let fully_escaped_body_json = escape_single_quotes(&pretty_body_json);
+        let body_part = format!(" -d {fully_escaped_body_json}");
+        curl_command.push_str(&body_part);
+    }
 
     curl_command
+}
+
+fn scrub_binary_body(
+    body: &[u8],
+    env_vars: &HashMap<String, String>,
+    expose_secrets: bool,
+) -> Vec<u8> {
+    if expose_secrets {
+        return body.to_vec();
+    }
+
+    let mut secrets = env_vars
+        .iter()
+        .filter(|(_, value)| !value.is_empty())
+        .collect::<Vec<_>>();
+    secrets.sort_by(|(left_key, left_value), (right_key, right_value)| {
+        right_value
+            .len()
+            .cmp(&left_value.len())
+            .then_with(|| left_key.cmp(right_key))
+    });
+
+    let mut scrubbed = Vec::with_capacity(body.len());
+    let mut offset = 0;
+    while offset < body.len() {
+        if let Some((key, value)) = secrets
+            .iter()
+            .find(|(_, value)| body[offset..].starts_with(value.as_bytes()))
+        {
+            scrubbed.extend_from_slice(format!("${key}").as_bytes());
+            offset += value.len();
+        } else {
+            scrubbed.push(body[offset]);
+            offset += 1;
+        }
+    }
+    scrubbed
 }
 
 impl<'ir, T> WithPrompt<'ir> for T
@@ -872,6 +923,80 @@ mod tests_scrub {
         assert_eq!(
             scrubbed.get("api_key").and_then(|v| v.as_str()),
             Some("$REDACTED")
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests_curl {
+    use std::collections::HashMap;
+
+    use base64::{prelude::BASE64_STANDARD, Engine};
+    use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
+
+    use super::{scrub_binary_body, to_curl_command};
+
+    #[test]
+    fn multipart_curl_preserves_binary_body() {
+        let body = b"--boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n\r\n\x00\xffaudio\r\n--boundary--\r\n".to_vec();
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            CONTENT_TYPE,
+            HeaderValue::from_static("multipart/form-data; boundary=boundary"),
+        );
+
+        let curl = to_curl_command(
+            "https://api.openai.com/v1/audio/transcriptions",
+            "POST",
+            &headers,
+            body.clone(),
+            &HashMap::new(),
+            true,
+        );
+
+        assert!(curl.starts_with(&format!(
+            "printf %s {} | base64 --decode | curl",
+            BASE64_STANDARD.encode(body)
+        )));
+        assert!(curl.contains(" --data-binary @-"));
+        assert!(curl.contains("content-type: multipart/form-data; boundary=boundary"));
+    }
+
+    #[test]
+    fn multipart_curl_scrubs_secrets_without_corrupting_binary() {
+        let body = b"\x00\xffsecret-value\x00".to_vec();
+        let headers = HeaderMap::from_iter([(
+            CONTENT_TYPE,
+            HeaderValue::from_static("multipart/form-data; boundary=boundary"),
+        )]);
+        let env_vars = HashMap::from([(
+            "TRANSCRIPTION_PROMPT".to_string(),
+            "secret-value".to_string(),
+        )]);
+
+        let curl = to_curl_command(
+            "https://api.openai.com/v1/audio/transcriptions",
+            "POST",
+            &headers,
+            body,
+            &env_vars,
+            false,
+        );
+
+        assert!(curl.contains(&BASE64_STANDARD.encode(b"\x00\xff$TRANSCRIPTION_PROMPT\x00")));
+        assert!(!curl.contains(&BASE64_STANDARD.encode(b"\x00\xffsecret-value\x00")));
+    }
+
+    #[test]
+    fn multipart_scrubbing_prefers_the_longest_overlapping_secret() {
+        let env_vars = HashMap::from([
+            ("SHORT".to_string(), "abc".to_string()),
+            ("LONG".to_string(), "abcdef".to_string()),
+        ]);
+
+        assert_eq!(
+            scrub_binary_body(b"before abcdef after", &env_vars, false),
+            b"before $LONG after"
         );
     }
 }

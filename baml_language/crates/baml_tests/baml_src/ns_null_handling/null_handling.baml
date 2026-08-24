@@ -4,9 +4,7 @@
 //
 // All test bodies use helper functions with parameters (the Rust tests do the
 // same, to prevent the compiler from narrowing nullable types at compile time).
-// Results are declared as optional types, so `assert.equal` is used instead of
-// `assert.is_true(baml.deep_equals(...))` — deep_equals's generic T won't unify
-// a `T?` value against a bare literal.
+// Results are declared as optional types.
 
 class NhProfile {
     name string
@@ -129,7 +127,7 @@ function nh_run_null_coalesce_lazy_non_null() -> int {
 }
 
 test "null_coalesce_lazy_rhs_skips_side_effects" {
-    assert.is_true(baml.deep_equals(nh_run_null_coalesce_lazy_non_null(), 420))
+    assert.equal(nh_run_null_coalesce_lazy_non_null(), 420)
 }
 
 function nh_null_coalesce_null_lhs(value: int?) -> int {
@@ -145,7 +143,29 @@ function nh_run_null_coalesce_null_lhs() -> int {
 }
 
 test "null_coalesce_null_lhs_evaluates_rhs" {
-    assert.is_true(baml.deep_equals(nh_run_null_coalesce_null_lhs(), 11))
+    assert.equal(nh_run_null_coalesce_null_lhs(), 11)
+}
+
+function nh_null_coalesce_self_local(input: int?) -> int {
+    let value = 7;
+    value = input ?? value;
+    value
+}
+
+test "null_coalesce_rhs_reads_old_local_destination" {
+    assert.equal(nh_null_coalesce_self_local(null), 7);
+    assert.equal(nh_null_coalesce_self_local(42), 42)
+}
+
+function nh_null_coalesce_self_field(input: int?) -> int {
+    let node = NhNode { value: 9, next: null, children: null, labels: null };
+    node.value = input ?? node.value;
+    node.value
+}
+
+test "null_coalesce_rhs_reads_old_field_destination" {
+    assert.equal(nh_null_coalesce_self_field(null), 9);
+    assert.equal(nh_null_coalesce_self_field(42), 42)
 }
 
 // ============================================================================

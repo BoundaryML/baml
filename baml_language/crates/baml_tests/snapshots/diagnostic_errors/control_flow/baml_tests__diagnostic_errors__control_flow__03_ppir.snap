@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 41988
 ---
 === PPIR ===
 function user.ElseIfChain(x: int) -> string  [expr] {
@@ -12,26 +11,23 @@ function user.Headers() -> string  [expr] {
 function user.IfElseWithHeaders(flag: bool) -> string  [expr] {
   { // [1] Check flag } if (flag) { // [1] True branch } "yes" else { // [1] False branch } "no"
 }
-function user.LlmFunction(input: string, client: baml.llm.Client = TestClient) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LlmFunction", map { "input": input })
+function user.LlmFunction(input: string, client: ai.Client? = null) -> string  [llm] {
+  ai.Agent.new(client = client).run(LlmFunction$spec(input)).value
 }
-function user.LlmFunction$build_request(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
-  baml.llm.build_request(client, "LlmFunction", map { "input": input })
+function user.LlmFunction$build_request(input: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
+  LlmFunction$spec(input).build_request(override_client = client)
 }
-function user.LlmFunction$build_request_stream(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
-  baml.llm.build_request_stream(client, "LlmFunction", map { "input": input })
+function user.LlmFunction$parse(json: string) -> string  [expr] {
+  baml.sap.parse(json)
 }
-function user.LlmFunction$parse(json: string, client: baml.llm.Client = TestClient) -> string  [expr] {
-  baml.llm.parse(json)
+function user.LlmFunction$render_prompt(input: string) -> ai.Prompt  [expr] {
+  LlmFunction$spec(input).prompt(output_format = ai.wire.render_output_format(reflect.Type.of()))
 }
-function user.LlmFunction$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
-  client.__make_stream(sse)
+function user.LlmFunction$spec(input: string) -> ai.FunctionSpec<string>  [expr] {
+  ai.FunctionSpec { spec_name: "LlmFunction", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Echo: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(TestClient) }
 }
-function user.LlmFunction$render_prompt(input: string, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
-  baml.llm.render_prompt(client, "LlmFunction", map { "input": input })
-}
-function user.LlmFunction$stream(input: string, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string>  [expr] {
-  baml.llm.stream_llm_function(client, "LlmFunction", map { "input": input })
+function user.LlmFunction$stream(input: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(LlmFunction$spec(input), client = client)
 }
 function user.MatchExpression(x: int) -> string  [expr] {
   {  } match (x) { 1 => { // [1] One } "one", 2 => { // [1] Two } "two", _ => { // [1] Default } "other" }
@@ -42,9 +38,9 @@ function user.NestedControlFlow(x: int) -> string  [expr] {
 function user.SimpleFunction() -> int  [expr] {
   {  } 42
 }
-function user.TestClient$new(lenient: bool) -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
-}
 function user.WhileWithHeaders() -> int  [expr] {
   { // [1] Initialize; let count = 0; // [1] Loop; while count Lt 10 { // [1] Iteration; count Add= 1 }; // [1] Done } count
 }
+
+--- captures ---
+lambda ( __spec_output_format) in LlmFunction$spec: captures [input]

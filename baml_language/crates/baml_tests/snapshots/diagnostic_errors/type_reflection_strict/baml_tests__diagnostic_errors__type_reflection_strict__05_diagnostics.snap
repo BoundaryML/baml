@@ -6,24 +6,24 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × mismatched types
     ╭─[reflect_intrinsic_errors.baml:12:18]
- 12 │     let x: int = reflect.type_of<User>();
+ 12 │     let x: int = reflect.Type.of<User>();
     ·                  ───────────┬───────────
-    ·                             ╰── expected `int`, found `type`
+    ·                             ╰── expected `int`, found `reflect.Type`
     ╰────
 
   [type] E0002
 
   × unresolved type: NonExistent
-    ╭─[reflect_intrinsic_errors.baml:18:5]
- 18 │     reflect.type_of<NonExistent>()
-    ·     ──────────────────────────────
+    ╭─[reflect_intrinsic_errors.baml:18:21]
+ 18 │     reflect.Type.of<NonExistent>()
+    ·                     ───────────
     ╰────
 
   [type] E0005
 
-  × function `type_of` expects 1 type argument(s), got 2
+  × function `of` expects 1 type argument(s), got 2
     ╭─[reflect_intrinsic_errors.baml:25:5]
- 25 │     reflect.type_of<int, string>()
+ 25 │     reflect.Type.of<int, string>()
     ·     ──────────────────────────────
     ╰────
 
@@ -31,9 +31,9 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × mismatched types
    ╭─[strict_normalization.baml:8:18]
- 8 │     let x: int = baml.llm.get_return_type(function_name);
-   ·                  ───────────────────┬───────────────────
-   ·                                     ╰── expected `int`, found `type`
+ 8 │     let x: int = ai.internal.get_return_type(function_name);
+   ·                  ─────────────────────┬────────────────────
+   ·                                       ╰── expected `int`, found `reflect.Type`
    ╰────
 
   [type] E0001
@@ -42,5 +42,5 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[strict_normalization.baml:15:12]
  15 │     return t;
     ·            ┬
-    ·            ╰── expected `string`, found `type`
+    ·            ╰── expected `string`, found `reflect.Type`
     ╰────

@@ -19,9 +19,19 @@ use clap::Args;
 
 use crate::reporter::Reporter;
 
-/// `baml init` — scaffold a new project under the given directory
+/// Scaffold a new BAML project under the given directory
 /// (default `.`). Refuses to clobber an existing `baml.toml`.
+///
+/// Creates `baml.toml` and `baml_src/main.baml`. The destination directory may
+/// already exist, but it must not already contain a BAML manifest.
 #[derive(Args, Clone, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Initialize the current directory:
+    baml init
+
+  Initialize a directory with an explicit project name:
+    baml init ./my-project --name my_project")]
 pub struct InitArgs {
     /// Directory to initialize. Defaults to the current directory.
     #[arg(value_name = "PATH", default_value = ".")]
@@ -29,7 +39,7 @@ pub struct InitArgs {
 
     /// Project name written to `baml.toml`'s `[package].name`. Defaults
     /// to the basename of `<PATH>` (or `baml-project` for `.`).
-    #[arg(long)]
+    #[arg(long, help_heading = "Project options")]
     pub name: Option<String>,
 }
 
@@ -57,10 +67,20 @@ impl InitArgs {
     }
 }
 
-/// `baml new <PATH>` — create a fresh directory at `<PATH>` and
+/// Create a fresh directory at `<PATH>` and
 /// scaffold a project inside. Refuses to run if `<PATH>` already exists,
 /// the same way `cargo new` does.
+///
+/// Creates the destination directory, `baml.toml`, and
+/// `baml_src/main.baml`. Use `baml init` when the directory already exists.
 #[derive(Args, Clone, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Create a project directory:
+    baml new ./my-project
+
+  Set an explicit project name:
+    baml new ./my-project --name my_project")]
 pub struct NewArgs {
     /// Directory to create. Errors if it already exists.
     #[arg(value_name = "PATH")]
@@ -68,7 +88,7 @@ pub struct NewArgs {
 
     /// Project name written to `baml.toml`'s `[package].name`. Defaults
     /// to the basename of `<PATH>`.
-    #[arg(long)]
+    #[arg(long, help_heading = "Project options")]
     pub name: Option<String>,
 }
 

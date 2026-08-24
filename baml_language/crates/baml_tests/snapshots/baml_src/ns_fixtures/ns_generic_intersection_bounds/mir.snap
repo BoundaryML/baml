@@ -1,0 +1,353 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.generic_intersection_bounds.Sized.size(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.Tagged.tag(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.Both.Sized.size(self: fixtures.generic_intersection_bounds.Both) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.generic_intersection_bounds.Both // self // param
+
+    bb0: {
+        _0 = const 7_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.Both.Tagged.tag(self: fixtures.generic_intersection_bounds.Both) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.generic_intersection_bounds.Both // self // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.describe(item: T) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: T // item // param
+    let _2: string
+    let _3: string
+    let _4: string
+    let _5: int
+    let _6: reflect.Type
+
+    bb0: {
+        _3 = copy _1.name#0 as fixtures.generic_intersection_bounds.Named;
+        _2 = copy _3 + const ":";
+        _5 = virtual_call size as fixtures.generic_intersection_bounds.Sized(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _6 = load_type(int);
+        _4 = call const fn baml.String.from<copy _6>(copy _5) -> [bb2];
+    }
+
+    bb2: {
+        _0 = copy _2 + copy _4;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.label_of(item: T) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: T // item // param
+
+    bb0: {
+        _0 = virtual_call tag as fixtures.generic_intersection_bounds.Tagged<Label = string>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.shout(text: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // text // param
+
+    bb0: {
+        _0 = copy _1 + const "!";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.field_into_call_arg(item: T) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: T // item // param
+    let _2: string // out
+    let _3: string
+
+    bb0: {
+        _3 = copy _1.name#0 as fixtures.generic_intersection_bounds.Named;
+        _2 = call const fn user.fixtures.generic_intersection_bounds.shout(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _0 = copy _2;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.field_into_switch(item: T) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: T // item // param
+    let _2: string
+    let _3: bool
+
+    bb0: {
+        _2 = copy _1.name#0 as fixtures.generic_intersection_bounds.Named;
+        _3 = is_type(copy _2, "a");
+        branch copy _3 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const 0_i64;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = const 1_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.Registry.put(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.Registry.summarize(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.Printable.display(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.Printable$for$T.display(self: T) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: T // self // param
+    let _2: reflect.Type
+
+    bb0: {
+        _2 = load_type(#0);
+        _0 = call const fn user.fixtures.generic_intersection_bounds.describe<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.Registered.Registry<Both>.put(self: fixtures.generic_intersection_bounds.Registered, item: fixtures.generic_intersection_bounds.Both) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: fixtures.generic_intersection_bounds.Registered // self // param
+    let _2: fixtures.generic_intersection_bounds.Both // item // param
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.Registered.Registry<Both>.summarize(self: fixtures.generic_intersection_bounds.Registered, other: U) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.generic_intersection_bounds.Registered // self // param
+    let _2: U // other // param
+    let _3: reflect.Type
+
+    bb0: {
+        _3 = load_type(#0);
+        _0 = call const fn user.fixtures.generic_intersection_bounds.describe<copy _3>(copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.generic_intersection_bounds.main() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.generic_intersection_bounds.Both // both
+    let _2: fixtures.generic_intersection_bounds.Holder<fixtures.generic_intersection_bounds.Both> // holder
+    let _3: fixtures.generic_intersection_bounds.Both
+    let _4: fixtures.generic_intersection_bounds.Printable // printable
+    let _5: fixtures.generic_intersection_bounds.Registered // registry
+    let _6: fixtures.generic_intersection_bounds.Both[]
+    let _7: fixtures.generic_intersection_bounds.Both
+    let _8: string
+    let _9: string
+    let _10: string
+    let _11: string
+    let _12: string
+    let _13: string
+    let _14: string
+    let _15: string
+    let _16: string
+    let _17: string
+    let _18: string
+    let _19: string
+    let _20: fixtures.generic_intersection_bounds.Both
+    let _21: reflect.Type
+    let _22: string
+    let _23: fixtures.generic_intersection_bounds.Both
+    let _24: reflect.Type
+    let _25: string
+    let _26: int
+    let _27: fixtures.generic_intersection_bounds.Both
+    let _28: reflect.Type
+    let _29: reflect.Type
+    let _30: string
+    let _31: fixtures.generic_intersection_bounds.Both
+    let _32: reflect.Type
+    let _33: string
+    let _34: string
+    let _35: string
+    let _36: fixtures.generic_intersection_bounds.Both
+    let _37: reflect.Type
+
+    bb0: {
+        _1 = user.fixtures.generic_intersection_bounds.Both { const "b" };
+        _3 = copy _1;
+        _2 = user.fixtures.generic_intersection_bounds.Holder<fixtures.generic_intersection_bounds.Both> { copy _3 };
+        _4 = copy _1;
+        _7 = copy _1;
+        _6 = [copy _7]: fixtures.generic_intersection_bounds.Both[];
+        _5 = user.fixtures.generic_intersection_bounds.Registered { copy _6 };
+        _20 = copy _1;
+        _21 = load_type(fixtures.generic_intersection_bounds.Both);
+        _19 = call const fn user.fixtures.generic_intersection_bounds.describe<copy _21>(copy _20) -> [bb1];
+    }
+
+    bb1: {
+        _18 = copy _19 + const "/";
+        _23 = copy _1;
+        _24 = load_type(fixtures.generic_intersection_bounds.Both);
+        _22 = call const fn user.fixtures.generic_intersection_bounds.field_into_call_arg<copy _24>(copy _23) -> [bb2];
+    }
+
+    bb2: {
+        _17 = copy _18 + copy _22;
+        _16 = copy _17 + const "/";
+        _27 = copy _1;
+        _28 = load_type(fixtures.generic_intersection_bounds.Both);
+        _26 = call const fn user.fixtures.generic_intersection_bounds.field_into_switch<copy _28>(copy _27) -> [bb3];
+    }
+
+    bb3: {
+        _29 = load_type(int);
+        _25 = call const fn baml.String.from<copy _29>(copy _26) -> [bb4];
+    }
+
+    bb4: {
+        _15 = copy _16 + copy _25;
+        _14 = copy _15 + const "/";
+        _31 = copy _1;
+        _32 = load_type(fixtures.generic_intersection_bounds.Both);
+        _30 = call const fn user.fixtures.generic_intersection_bounds.label_of<copy _32>(copy _31) -> [bb5];
+    }
+
+    bb5: {
+        _13 = copy _14 + copy _30;
+        _12 = copy _13 + const "/";
+        _33 = copy _2.0.0;
+        _11 = copy _12 + copy _33;
+        _10 = copy _11 + const "/";
+        _34 = virtual_call display as fixtures.generic_intersection_bounds.Printable(copy _4) -> [bb6];
+    }
+
+    bb6: {
+        _9 = copy _10 + copy _34;
+        _8 = copy _9 + const "/";
+        _36 = copy _1;
+        _37 = load_type(fixtures.generic_intersection_bounds.Both);
+        _35 = virtual_call summarize as fixtures.generic_intersection_bounds.Registry<fixtures.generic_intersection_bounds.Both><copy _37>(copy _5, copy _36) -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _8 + copy _35;
+        goto -> bb8;
+    }
+
+    bb8: {
+        return;
+    }
+}

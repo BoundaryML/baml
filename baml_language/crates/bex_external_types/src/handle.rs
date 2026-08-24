@@ -47,9 +47,12 @@ pub struct Handle {
     pub(crate) inner: Arc<HandleInner>,
 }
 
+/// Two handles are the same handle when they name the same slot **of the same
+/// heap**. A slab key is only meaningful relative to the heap that issued it,
+/// so comparing keys alone would equate unrelated objects across engines.
 impl PartialEq for Handle {
     fn eq(&self, other: &Self) -> bool {
-        self.slab_key() == other.slab_key()
+        self.slab_key() == other.slab_key() && self.same_heap_as(other)
     }
 }
 
@@ -91,11 +94,58 @@ impl Handle {
         }
     }
 
+    /// Rebuild a handle from shared inner state.
+    ///
+    /// The heap's one-key-per-object index hands back the `Arc` behind a live
+    /// handle rather than minting a second key; sharing it is what counts the
+    /// new reference, so the object is released only once the last holder
+    /// drops.
+    #[must_use]
+    pub fn from_inner(inner: Arc<HandleInner>) -> Self {
+        Self { inner }
+    }
+
+    /// A weak reference to this handle's inner state.
+    ///
+    /// For the heap's reverse index, which must observe a handle without
+    /// keeping it alive: holding it strongly would prevent the very drop that
+    /// releases the slab key.
+    #[must_use]
+    pub fn downgrade_inner(&self) -> std::sync::Weak<HandleInner> {
+        Arc::downgrade(&self.inner)
+    }
+
     /// Get the slab key for this handle.
     ///
     /// This is primarily for internal use by `bex_heap`.
     pub fn slab_key(&self) -> usize {
         self.inner.slab_key
+    }
+
+    /// Whether this handle was issued by `heap`.
+    ///
+    /// A slab key indexes one heap's handle table; the same key names an
+    /// unrelated live object in any other engine. Resolving a foreign handle
+    /// would therefore hand back an arbitrary object rather than failing, so
+    /// every inbound resolution checks provenance first. Compares the heap
+    /// reference by address — identity, not equality.
+    #[must_use]
+    pub fn is_of_heap(&self, heap: &Arc<dyn WeakHeapRef>) -> bool {
+        self.inner
+            .heap
+            .as_ref()
+            .is_some_and(|own| Arc::ptr_eq(own, heap))
+    }
+
+    /// Whether both handles were issued by the same heap. A detached handle
+    /// (test-only, no heap) matches only another detached one.
+    #[must_use]
+    pub fn same_heap_as(&self, other: &Self) -> bool {
+        match (&self.inner.heap, &other.inner.heap) {
+            (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        }
     }
 }
 

@@ -16,8 +16,8 @@ class Plain {
 //- diagnostics
 // E0003
 //
-//   × unresolved name: `default`
+//   × unresolved name: `default.log`
 //     ╭─[interface_error_default_outside_implements.baml:11:12]
 //  11 │     return default.log("hi")
-//     ·            ───────
+//     ·            ───────────
 //     ╰────

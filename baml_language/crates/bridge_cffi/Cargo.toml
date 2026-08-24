@@ -21,17 +21,19 @@ rustls = [ "sys_native/rustls" ]
 bundle-http = [ "sys_native/bundle-http" ]
 
 [dependencies]
+baml_version = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_ops = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
 prost = { workspace = true }
+semver = { workspace = true }
 thiserror = { workspace = true }
+toml = { workspace = true }
 vfs = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-baml_version = { workspace = true }
 bex_events = { workspace = true }
 sys_native = { workspace = true }
 sys_types = { workspace = true }

@@ -36,14 +36,11 @@ testset "integration" {
   test "creates_order" { assert.is_true(true) }
 }
 
-client<llm> TestClient {
-  provider openai
-  options { model "gpt-4o-mini" }
-}
+client TestClient = openai.ResponsesClient.new(model = "gpt-4o-mini");
 
 function Summarize(input: string) -> string {
-  client TestClient
-  prompt #"{{ input }}"#
+  client: TestClient
+  prompt: `${input}`
 }
 
 test BasicTest {
@@ -68,6 +65,9 @@ fn run_with_env(dir: &Path, args: &[&str], env: Option<(&str, &str)>) -> std::pr
         .args(args)
         .current_dir(dir)
         .env("BAML_CLI_ALLOW_DIRECT", "1")
+        // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
+        // cannot flip `--output-preset auto` to `agent` and hide progress lines.
+        .env("BAML_OUTPUT_PRESET", "human")
         .env("BAML_HOME", home)
         .env("BAML_CACHE_DIR", dir.join(".baml-cache"));
     if let Some((name, value)) = env {

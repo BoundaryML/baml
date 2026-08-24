@@ -161,13 +161,33 @@ pub fn external_to_outbound(
             }))
         }
 
-        // A reflected BAML type returned as a value (`reflect.type_of<T>()`)
+        // A reflected BAML type returned as a value (`reflect.Type.of<T>()`)
         // crosses the boundary as a first-class `Ty`, sharing the inbound
         // representation. Must precede the opaque-ADT catch-all, which would
         // otherwise box it into a handle.
-        BexExternalValue::Adt(BexExternalAdt::Type(rt)) => Some(BamlValueVariant::TyValue(
-            crate::ty_encode::runtime_ty_to_proto_ty(rt),
-        )),
+        // A lane type crossing out: the wire spells heads by name, so a
+        // declared one converts and an anonymous one cannot. Anonymous heads
+        // are dropped to `unknown` rather than given a fabricated spelling
+        // that would resolve to a *different*, compiled declaration on the way
+        // back in. Carrying them faithfully is what `BamlTypeHead` is for.
+        BexExternalValue::Adt(BexExternalAdt::Type(rt)) => {
+            let named = rt
+                .clone()
+                .try_map_heads(&mut |head: &baml_type::TaggedTypeName| {
+                    head.declared().cloned().ok_or(())
+                })
+                .unwrap_or_else(|()| baml_type::RuntimeTy::unknown());
+            Some(BamlValueVariant::TyValue(
+                crate::ty_encode::runtime_ty_to_proto_ty(&named),
+            ))
+        }
+        // A live handle is an engine capability, not data: only the portable
+        // definitions cross a process (BEP-066 H-4).
+        BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => {
+            Some(BamlValueVariant::TyDefValue(
+                crate::ty_encode::portable_type_def_to_proto(definition.def()),
+            ))
+        }
 
         // All opaque types → insert into handle table, encode as BamlOutboundHandle.
         BexExternalValue::Handle(_)
@@ -311,9 +331,29 @@ pub(crate) fn artifact_safe_external_to_outbound(
                 "host-owned rust data",
             ))
         }
-        BexExternalValue::Adt(BexExternalAdt::Type(rt)) => Some(BamlValueVariant::TyValue(
-            crate::ty_encode::runtime_ty_to_proto_ty(rt),
-        )),
+        // A lane type crossing out: the wire spells heads by name, so a
+        // declared one converts and an anonymous one cannot. Anonymous heads
+        // are dropped to `unknown` rather than given a fabricated spelling
+        // that would resolve to a *different*, compiled declaration on the way
+        // back in. Carrying them faithfully is what `BamlTypeHead` is for.
+        BexExternalValue::Adt(BexExternalAdt::Type(rt)) => {
+            let named = rt
+                .clone()
+                .try_map_heads(&mut |head: &baml_type::TaggedTypeName| {
+                    head.declared().cloned().ok_or(())
+                })
+                .unwrap_or_else(|()| baml_type::RuntimeTy::unknown());
+            Some(BamlValueVariant::TyValue(
+                crate::ty_encode::runtime_ty_to_proto_ty(&named),
+            ))
+        }
+        // A live handle is an engine capability, not data: only the portable
+        // definitions cross a process (BEP-066 H-4).
+        BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => {
+            Some(BamlValueVariant::TyDefValue(
+                crate::ty_encode::portable_type_def_to_proto(definition.def()),
+            ))
+        }
         BexExternalValue::HostValue(arc) => Some(artifact_safe_omission(
             "hostOwnedValue",
             match arc.kind {
@@ -525,7 +565,7 @@ pub fn build_to_host_call(
 mod tests {
     use std::sync::Arc;
 
-    use baml_type::{Freshness, Literal, TyAttr};
+    use baml_type::{Freshness, Literal, Name, TyAttr, TypeName};
     use bex_project::{
         BexExternalAdt, BexExternalValue, HostValueArc, HostValueKind, MediaContent, MediaValue,
         PromptAst, PromptAstSimple,
@@ -596,8 +636,8 @@ mod tests {
         let options = CffiHandleTableOptions::for_in_process();
         let encoded = extract_union(external_to_outbound(&value, &options).unwrap());
 
-        // RuntimeTy::optional preserves [inner, null] order.
         assert_eq!(encoded.selected_option_index, Some(1));
+        assert!(encoded.is_optional);
     }
 
     #[test]
@@ -640,6 +680,44 @@ mod tests {
         let encoded = extract_union(
             external_to_outbound(&value, &CffiHandleTableOptions::for_in_process()).unwrap(),
         );
+        assert_eq!(encoded.selected_option_index, Some(0));
+    }
+
+    #[test]
+    fn outbound_union_encodes_selected_interface_arm() {
+        let interface_name = TypeName::from_dotted_path("user.Failure");
+        let declared = RuntimeTy::Interface(
+            interface_name.clone(),
+            vec![RuntimeTy::string()],
+            vec![
+                (Name::new("Cause"), RuntimeTy::string()),
+                (Name::new("Code"), RuntimeTy::int()),
+            ],
+            TyAttr::default(),
+        );
+        let selected = RuntimeTy::Interface(
+            interface_name,
+            vec![RuntimeTy::string()],
+            vec![
+                (Name::new("Code"), RuntimeTy::int()),
+                (Name::new("Cause"), RuntimeTy::string()),
+            ],
+            TyAttr::default(),
+        );
+        let value = BexExternalValue::union(
+            BexExternalValue::Instance {
+                class_name: "baml.errors.HostCallable".to_string(),
+                fields: IndexMap::new(),
+                type_args: Vec::new(),
+            },
+            [declared, RuntimeTy::string()],
+            selected,
+        );
+
+        let encoded = extract_union(
+            external_to_outbound(&value, &CffiHandleTableOptions::for_in_process()).unwrap(),
+        );
+
         assert_eq!(encoded.selected_option_index, Some(0));
     }
 

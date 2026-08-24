@@ -111,16 +111,16 @@ function BreakContinue() -> int {
 // E0003
 //
 //   × unresolved name: `i`
-//     ╭─[loops_c_for.baml:22:8]
-//  22 │         s += i;
-//     ·              ─
+//     ╭─[loops_c_for.baml:21:18]
+//  21 │     for (; i <= 10; i += 1) {
+//     ·                     ─
 //     ╰────
 // E0003
 //
 //   × unresolved name: `i`
-//     ╭─[loops_c_for.baml:21:18]
-//  21 │     for (; i <= 10; i += 1) {
-//     ·                     ─
+//     ╭─[loops_c_for.baml:22:8]
+//  22 │         s += i;
+//     ·              ─
 //     ╰────
 // E0003
 //
@@ -132,7 +132,7 @@ function BreakContinue() -> int {
 // E0146
 //
 //   ⚠ unreachable code: 1 statement(s) after diverging statement
-//     ╭─[loops_c_for.baml:52:3]
-//  52 │         break;
-//     ·         ──────
+//     ╭─[loops_c_for.baml:53:3]
+//  53 │         continue;
+//     ·         ─────────
 //     ╰────

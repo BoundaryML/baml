@@ -1,0 +1,31 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.reflect_shadowing.reflect {
+  label: string
+}
+class user.fixtures.reflect_shadowing.reflect$stream {
+  label: string | null
+}
+function user.fixtures.reflect_shadowing.$init_test_ns_fixtures_ns_reflect_shadowing_main(registry: testing.TestCollector) -> ?  [expr] {
+  { registry.register_test_at("root.fixtures.ref...", "user class shadow...", () -> void { {  } assert.equal(user_class_shadows_package(), "user-shadow") }, null); registry.register_test_at("root.fixtures.ref...", "unbound user meth...", () -> void { {  } assert.equal(unbound_user_method(), "user-x") }, null); registry.register_test_at("root.fixtures.ref...", "local shadows the...", () -> void { {  } assert.equal(local_shadows_package(), 2) }, null); registry.register_test_at("root.fixtures.ref...", "package name stil...", () -> void { {  } assert.equal(package_still_reachable(), "string") }, null) } null
+}
+function user.fixtures.reflect_shadowing.describe(self: ?) -> string  [expr] {
+  { return "user-" Add self.label }
+}
+function user.fixtures.reflect_shadowing.helper(q: string) -> string  [expr] {
+  { return q Add "!" }
+}
+function user.fixtures.reflect_shadowing.local_shadows_package() -> int  [expr] {
+  { let reflect = 1; return reflect Add 1 }
+}
+function user.fixtures.reflect_shadowing.package_still_reachable() -> string  [expr] {
+  { let f: baml.AnyFunction = helper; let sig = reflect.signature(f); return sig.returns.to_string() }
+}
+function user.fixtures.reflect_shadowing.unbound_user_method() -> string  [expr] {
+  { let m = reflect.describe; return m(user.fixtures.reflect_shadowing.reflect { label: "x" }) }
+}
+function user.fixtures.reflect_shadowing.user_class_shadows_package() -> string  [expr] {
+  { let r = user.fixtures.reflect_shadowing.reflect { label: "shadow" }; return r.describe() }
+}

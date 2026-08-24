@@ -1,0 +1,37 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.json_alias_basic.Wrapper {
+  data: baml.json.json
+}
+class user.fixtures.json_alias_basic.Wrapper$stream {
+  data: baml.json.json$stream | null
+}
+function user.fixtures.json_alias_basic.MakeWrapper() -> user.fixtures.json_alias_basic.Wrapper  [expr] {
+  {  } user.fixtures.json_alias_basic.Wrapper { data: null }
+}
+function user.fixtures.json_alias_basic.MatchJson(j: baml.json.json) -> string  [expr] {
+  {  } match (j) { null => "null", b: bool => "bool", i: int => "int", f: float => "float", s: string => "string", arr: baml.json.json[] => "array", obj: map<string, baml.json.json> => "map" }
+}
+function user.fixtures.json_alias_basic.ReturnArray() -> baml.json.json  [expr] {
+  {  } [1, 2, 3]
+}
+function user.fixtures.json_alias_basic.ReturnBool() -> baml.json.json  [expr] {
+  {  } true
+}
+function user.fixtures.json_alias_basic.ReturnFloat() -> baml.json.json  [expr] {
+  {  } 3.14
+}
+function user.fixtures.json_alias_basic.ReturnInt() -> baml.json.json  [expr] {
+  {  } 42
+}
+function user.fixtures.json_alias_basic.ReturnMap() -> baml.json.json  [expr] {
+  {  } map { "key": "value" }
+}
+function user.fixtures.json_alias_basic.ReturnNull() -> baml.json.json  [expr] {
+  {  } null
+}
+function user.fixtures.json_alias_basic.ReturnString() -> baml.json.json  [expr] {
+  {  } "hello"
+}

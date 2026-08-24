@@ -3,7 +3,7 @@ use bex_vm_types::Value;
 use super::{BamlClassInt, PackageBamlImpl};
 use crate::errors::{VmBamlError, VmRustFnError};
 
-/// Number of distinct values a full-range `int` draw can take — the size of the
+/// Number of distinct values a full-range `int` draw can take: the size of the
 /// whole `int` domain. `2^63` today; `2^64` if `int` ever widens to a full i64.
 ///
 /// This is why the reduction below is 128-bit rather than 64-bit: at the i64
@@ -117,6 +117,9 @@ impl BamlClassInt for PackageBamlImpl {
     }
 
     fn _random_in_range(draw: i64, lower: i64, upper: i64) -> i64 {
+        if lower >= upper {
+            return upper;
+        }
         debug_assert!(
             lower < upper,
             "int._random_in_range: an empty range is the caller's to reject"
@@ -131,7 +134,7 @@ impl BamlClassInt for PackageBamlImpl {
 
         // The largest multiple of `range` that fits in the draw space. Draws at
         // or above it form the tail that would over-represent small offsets, so
-        // they are rejected rather than folded back in — that rejection is what
+        // they are rejected rather than folded back in. That rejection is what
         // makes the result exactly unbiased rather than merely close. `range`
         // is at most `INT_DOMAIN_SPAN - 1`, so `zone` is never zero and at most
         // half the draws are rejected; for the common case of a range far below

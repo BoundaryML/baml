@@ -14,10 +14,10 @@
 class User { name string  age int }
 
 test "to_string_simple_class" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         baml.json.to_string<User>(User { name: "Ada", age: 30 }),
-        "{\"name\":\"Ada\",\"age\":30}"
-    ))
+        "{\"name\":\"Ada\",\"age\":30}",
+    )
 }
 
 function from_string_simple_class_name() -> string {
@@ -26,7 +26,7 @@ function from_string_simple_class_name() -> string {
 }
 
 test "from_string_simple_class" {
-    assert.is_true(baml.deep_equals(from_string_simple_class_name(), "Ada"))
+    assert.equal(from_string_simple_class_name(), "Ada")
 }
 
 function from_string_infers_simple_class_name() -> string {
@@ -35,7 +35,7 @@ function from_string_infers_simple_class_name() -> string {
 }
 
 test "from_string_infers_simple_class" {
-    assert.is_true(baml.deep_equals(from_string_infers_simple_class_name(), "Ada"))
+    assert.equal(from_string_infers_simple_class_name(), "Ada")
 }
 
 function to_string_infers_simple_class() -> string {
@@ -43,10 +43,7 @@ function to_string_infers_simple_class() -> string {
 }
 
 test "to_string_infers_simple_class" {
-    assert.is_true(baml.deep_equals(
-        to_string_infers_simple_class(),
-        "{\"name\":\"Ada\",\"age\":30}"
-    ))
+    assert.equal(to_string_infers_simple_class(), "{\"name\":\"Ada\",\"age\":30}")
 }
 
 function roundtrip_simple_age() -> int {
@@ -57,7 +54,7 @@ function roundtrip_simple_age() -> int {
 }
 
 test "roundtrip_simple" {
-    assert.is_true(baml.deep_equals(roundtrip_simple_age(), 30))
+    assert.equal(roundtrip_simple_age(), 30)
 }
 
 // ─── Composite generic ─────────────────────────────────────────────────────────
@@ -72,7 +69,7 @@ function composite_generic_roundtrip_name() -> string {
 }
 
 test "composite_generic_roundtrip" {
-    assert.is_true(baml.deep_equals(composite_generic_roundtrip_name(), "Ada"))
+    assert.equal(composite_generic_roundtrip_name(), "Ada")
 }
 
 // ─── Generic forwarding (mirrors reflect_type_of_generic.rs) ─────────────────
@@ -87,7 +84,7 @@ function generic_forwarding_user_name() -> string {
 }
 
 test "generic_forwarding_user" {
-    assert.is_true(baml.deep_equals(generic_forwarding_user_name(), "Ada"))
+    assert.equal(generic_forwarding_user_name(), "Ada")
 }
 
 function generic_forwarding_composite_name() -> string {
@@ -96,7 +93,7 @@ function generic_forwarding_composite_name() -> string {
 }
 
 test "generic_forwarding_composite" {
-    assert.is_true(baml.deep_equals(generic_forwarding_composite_name(), "Ada"))
+    assert.equal(generic_forwarding_composite_name(), "Ada")
 }
 
 // ─── Three-level forwarding ───────────────────────────────────────────────────
@@ -119,7 +116,7 @@ function three_level_name() -> string {
 }
 
 test "three_level_forwarding" {
-    assert.is_true(baml.deep_equals(three_level_name(), "Ada"))
+    assert.equal(three_level_name(), "Ada")
 }
 
 // ─── Closure captures type-arg ────────────────────────────────────────────────
@@ -135,7 +132,7 @@ function closure_captures_type_arg_name() -> string {
 }
 
 test "closure_captures_type_arg" {
-    assert.is_true(baml.deep_equals(closure_captures_type_arg_name(), "Ada"))
+    assert.equal(closure_captures_type_arg_name(), "Ada")
 }
 
 // ─── Enum round-trip ──────────────────────────────────────────────────────────
@@ -143,7 +140,7 @@ test "closure_captures_type_arg" {
 enum Color { Red Blue }
 
 test "enum_variant_to_string" {
-    assert.is_true(baml.deep_equals(baml.json.to_string<Color>(Color.Red), "\"Red\""))
+    assert.equal(baml.json.to_string<Color>(Color.Red), "\"Red\"")
 }
 
 function enum_variant_from_string_name() -> string {
@@ -155,7 +152,7 @@ function enum_variant_from_string_name() -> string {
 }
 
 test "enum_variant_from_string" {
-    assert.is_true(baml.deep_equals(enum_variant_from_string_name(), "Blue"))
+    assert.equal(enum_variant_from_string_name(), "Blue")
 }
 
 // ─── Optional field round-trip ────────────────────────────────────────────────
@@ -163,17 +160,14 @@ test "enum_variant_from_string" {
 class Profile { nickname string? }
 
 test "optional_field_present" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         baml.json.to_string<Profile>(Profile { nickname: "ada" }),
-        "{\"nickname\":\"ada\"}"
-    ))
+        "{\"nickname\":\"ada\"}",
+    )
 }
 
 test "optional_field_null" {
-    assert.is_true(baml.deep_equals(
-        baml.json.to_string<Profile>(Profile { nickname: null }),
-        "{\"nickname\":null}"
-    ))
+    assert.equal(baml.json.to_string<Profile>(Profile { nickname: null }), "{\"nickname\":null}")
 }
 
 function optional_field_decode_missing_is_null() -> bool {
@@ -203,7 +197,7 @@ function recursive_class_roundtrip_value() -> int {
 }
 
 test "recursive_class_roundtrip" {
-    assert.is_true(baml.deep_equals(recursive_class_roundtrip_value(), 4))
+    assert.equal(recursive_class_roundtrip_value(), 4)
 }
 
 // ─── Error paths ──────────────────────────────────────────────────────────────
@@ -278,10 +272,10 @@ test "enum_variant_roundtrip" {
 class ProfileMedia { avatar image }
 
 test "media_field_to_string" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         baml.json.to_string<ProfileMedia>(ProfileMedia { avatar: image.from_url("https://example.com/a.png", "image/png") }),
-        "{\"avatar\":{\"kind\":\"image\",\"source\":\"url\",\"value\":\"https://example.com/a.png\",\"mime\":\"image/png\"}}"
-    ))
+        "{\"avatar\":{\"kind\":\"image\",\"source\":\"url\",\"value\":\"https://example.com/a.png\",\"mime\":\"image/png\"}}",
+    )
 }
 
 function media_field_roundtrip_str() -> string {
@@ -292,10 +286,10 @@ function media_field_roundtrip_str() -> string {
 }
 
 test "media_field_roundtrip" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         media_field_roundtrip_str(),
-        "{\"avatar\":{\"kind\":\"image\",\"source\":\"url\",\"value\":\"https://example.com/a.png\",\"mime\":\"image/png\"}}"
-    ))
+        "{\"avatar\":{\"kind\":\"image\",\"source\":\"url\",\"value\":\"https://example.com/a.png\",\"mime\":\"image/png\"}}",
+    )
 }
 
 // ─── Field-level attributes ──────────────────────────────────────────────────
@@ -303,10 +297,10 @@ test "media_field_roundtrip" {
 class ProfileAlias { display_name string @alias("displayName") }
 
 test "alias_field_uses_raw_name_in_json" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         baml.json.to_string<ProfileAlias>(ProfileAlias { display_name: "Ada" }),
-        "{\"display_name\":\"Ada\"}"
-    ))
+        "{\"display_name\":\"Ada\"}",
+    )
 }
 
 function alias_field_decodes_raw_name_val() -> string {
@@ -315,7 +309,7 @@ function alias_field_decodes_raw_name_val() -> string {
 }
 
 test "alias_field_decodes_raw_name" {
-    assert.is_true(baml.deep_equals(alias_field_decodes_raw_name_val(), "Ada"))
+    assert.equal(alias_field_decodes_raw_name_val(), "Ada")
 }
 
 class ProfileSkip {
@@ -326,10 +320,10 @@ class ProfileSkip {
 class Bad { x uint8array }
 
 test "skip_field_still_emitted_in_json" {
-    assert.is_true(baml.deep_equals(
+    assert.equal(
         baml.json.to_string<ProfileSkip>(ProfileSkip { name: "Ada", internal_id: "secret" }),
-        "{\"name\":\"Ada\",\"internal_id\":\"secret\"}"
-    ))
+        "{\"name\":\"Ada\",\"internal_id\":\"secret\"}",
+    )
 }
 
 // ─── json passthrough via TypeAlias ──────────────────────────────────────────
@@ -355,7 +349,7 @@ function from_string_json_passthrough_object_len() -> int {
 }
 
 test "from_string_json_passthrough_object" {
-    assert.is_true(baml.deep_equals(from_string_json_passthrough_object_len(), 1))
+    assert.equal(from_string_json_passthrough_object_len(), 1)
 }
 
 function to_string_json_passthrough_str() -> string {
@@ -364,5 +358,5 @@ function to_string_json_passthrough_str() -> string {
 }
 
 test "to_string_json_passthrough" {
-    assert.is_true(baml.deep_equals(to_string_json_passthrough_str(), "[1,2,3]"))
+    assert.equal(to_string_json_passthrough_str(), "[1,2,3]")
 }

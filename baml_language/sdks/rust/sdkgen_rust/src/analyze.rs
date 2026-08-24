@@ -86,8 +86,8 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             Symbol::Function(_) => {}
         }
     }
-    classes.sort_by(|(a, _), (b, _)| a.cmp(b));
-    aliases.sort_by(|(a, _), (b, _)| a.cmp(b));
+    classes.sort_by_key(|(name, _)| *name);
+    aliases.sort_by_key(|(name, _)| *name);
 
     // Per-class field requirements: either a list of nominal types the
     // fields reference, or the reason the class is structurally
@@ -352,7 +352,7 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
         Ty::Function { .. } => Err("unsupported type: function".to_string()),
         Ty::Future(..) => Err("unsupported type: future handle".to_string()),
         Ty::Interface(..) => Err("unsupported type: interface".to_string()),
-        Ty::Type { .. } => Err("unsupported type: type metatype".to_string()),
+        Ty::Type { .. } => Err("unsupported type: reflect.Type metatype".to_string()),
         Ty::Resource { .. } => Err("unsupported type: resource handle".to_string()),
         Ty::PromptAst { .. } => Err("unsupported type: prompt AST".to_string()),
         Ty::Never { .. } => Err("unsupported type: never".to_string()),

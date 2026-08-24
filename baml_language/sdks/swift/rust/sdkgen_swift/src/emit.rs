@@ -294,7 +294,7 @@ pub(crate) fn render_callable(
     // to `_`: `classify$stream` → `classify_stream`, `$build_request`
     // → `_build_request`, `$parse$stream` → `_parse_stream`. The wire
     // FQN keeps the `$` names verbatim. A `$stream` companion is an
-    // ordinary function whose return type is `baml.llm.Stream<P, F>`
+    // ordinary function whose return type is `ai.stream.Stream<P, F>`
     // (→ BamlStream) — no special streaming emission exists.
     let bare: String = raw_name.replace('$', "_");
     let bare = bare.as_str();

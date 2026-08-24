@@ -431,6 +431,36 @@ enum PlaygroundOpenTarget {
     Browser,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PlaygroundExitSeverity {
+    Info,
+    Error,
+}
+
+fn playground_exit_severity(error: &anyhow::Error) -> PlaygroundExitSeverity {
+    if error
+        .downcast_ref::<playground_server::PlaygroundNotConfigured>()
+        .is_some()
+    {
+        PlaygroundExitSeverity::Info
+    } else {
+        PlaygroundExitSeverity::Error
+    }
+}
+
+fn log_playground_exit(error: &anyhow::Error) {
+    match playground_exit_severity(error) {
+        PlaygroundExitSeverity::Info => {
+            tracing::info!(
+                "Playground not configured; running without playground support: {error}"
+            );
+        }
+        PlaygroundExitSeverity::Error => {
+            tracing::error!("Playground server exited: {error}");
+        }
+    }
+}
+
 fn run_server_inner(
     playground_open_target: PlaygroundOpenTarget,
     workspace_roots: Vec<PathBuf>,
@@ -466,9 +496,6 @@ fn run_server_inner(
             max_terminal_runs: Some(100),
             ..Default::default()
         },
-    ));
-    let _profile_observer = bex_events::run::register_profile_observer(Arc::new(
-        playground_runs::RunStoreProfileObserver::new(run_store.clone(), broadcast_tx.clone()),
     ));
     let session_store = Arc::new(PlaygroundSessionStore::default());
     let env_state = Arc::new(PlaygroundEnvState::new(
@@ -580,10 +607,6 @@ fn run_server_inner(
         spawner,
     );
     let bex: Arc<dyn bex_project::BexLsp> = Arc::new(bex);
-    run_store.set_graph_runtime_overlay_span_provider(Arc::new(
-        playground_runs::ProjectGraphRuntimeOverlaySpanProvider::new(bex.clone()),
-    ));
-
     let has_explicit_workspace_roots = !workspace_roots.is_empty();
     let explicit_projects = if has_explicit_workspace_roots {
         bex.initialize_workspace_roots(workspace_roots.clone())?
@@ -683,7 +706,7 @@ fn run_server_inner(
             )
             .await
             {
-                tracing::error!("Playground server exited: {e}");
+                log_playground_exit(&e);
             }
         });
     } else if matches!(playground_open_target, PlaygroundOpenTarget::Browser) {
@@ -991,6 +1014,21 @@ mod tests {
     }
 
     #[test]
+    fn missing_playground_configuration_is_not_an_error_exit() {
+        let unconfigured = anyhow::Error::new(playground_server::PlaygroundNotConfigured);
+        assert_eq!(
+            playground_exit_severity(&unconfigured),
+            PlaygroundExitSeverity::Info
+        );
+
+        let real_failure = anyhow::anyhow!("playground listener failed");
+        assert_eq!(
+            playground_exit_severity(&real_failure),
+            PlaygroundExitSeverity::Error
+        );
+    }
+
+    #[test]
     fn stdio_parser_distinguishes_parse_and_invalid_request() {
         let mut malformed = std::io::Cursor::new(framed("{"));
         assert!(matches!(
@@ -1179,7 +1217,7 @@ mod tests {
             "baml_src/main.baml"
         )));
         assert!(!watches_standalone_workspace_file(Path::new(
-            ".baml/profiles/run.bamlprof"
+            ".baml/profiles-v1/runs/run.meta"
         )));
         assert!(should_skip_poll_dir(Path::new(".baml")));
         assert!(should_skip_poll_dir(Path::new("target")));

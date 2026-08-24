@@ -206,6 +206,27 @@ impl MirBuilder {
         self.push_statement(StatementKind::Assign { destination, value }, Some(span));
     }
 
+    /// Emit an open-world interface-field store.
+    pub(crate) fn virtual_field_store(
+        &mut self,
+        iface: baml_type::TyTemplateInterface,
+        receiver: Operand,
+        field_index: u32,
+        field: baml_base::Name,
+        value: Operand,
+    ) {
+        self.push_statement(
+            StatementKind::VirtualFieldStore {
+                iface,
+                receiver,
+                field_index,
+                field,
+                value,
+            },
+            None,
+        );
+    }
+
     /// Emit a drop statement.
     pub(crate) fn drop(&mut self, place: Place) {
         self.push_statement(StatementKind::Drop(place), None);
@@ -363,6 +384,32 @@ impl MirBuilder {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
+        self.call_with_runtime_type_check(
+            callee,
+            args,
+            ntypeargs,
+            false,
+            runtime_id,
+            destination,
+            target,
+            unwind,
+        );
+    }
+
+    /// Emit a call whose explicit type arguments may require the M-5/M-6
+    /// runtime gate.
+    #[expect(clippy::too_many_arguments)]
+    pub(crate) fn call_with_runtime_type_check(
+        &mut self,
+        callee: Operand,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        runtime_type_check: bool,
+        runtime_id: Option<Operand>,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
         debug_assert!(
             matches!(destination, Place::Local(_)),
             "Call destination must be a local place"
@@ -371,6 +418,7 @@ impl MirBuilder {
             callee,
             args,
             ntypeargs,
+            runtime_type_check,
             runtime_id,
             destination,
             target,
@@ -385,7 +433,7 @@ impl MirBuilder {
     #[expect(clippy::too_many_arguments)]
     pub(crate) fn virtual_call(
         &mut self,
-        iface: baml_type::TyTemplate,
+        iface: baml_type::TyTemplateInterface,
         method: String,
         args: Vec<Operand>,
         ntypeargs: usize,
@@ -410,10 +458,38 @@ impl MirBuilder {
     #[expect(clippy::too_many_arguments)]
     pub(crate) fn virtual_call_with_runtime_id(
         &mut self,
-        iface: baml_type::TyTemplate,
+        iface: baml_type::TyTemplateInterface,
         method: String,
         args: Vec<Operand>,
         ntypeargs: usize,
+        runtime_id: Option<Operand>,
+        destination: Place,
+        target: BlockId,
+        unwind: Option<BlockId>,
+    ) {
+        self.virtual_call_with_runtime_type_check(
+            iface,
+            method,
+            args,
+            ntypeargs,
+            false,
+            runtime_id,
+            destination,
+            target,
+            unwind,
+        );
+    }
+
+    /// Emit a virtual call whose explicit type arguments may require the
+    /// M-5/M-6 runtime gate.
+    #[expect(clippy::too_many_arguments)]
+    pub(crate) fn virtual_call_with_runtime_type_check(
+        &mut self,
+        iface: baml_type::TyTemplateInterface,
+        method: String,
+        args: Vec<Operand>,
+        ntypeargs: usize,
+        runtime_type_check: bool,
         runtime_id: Option<Operand>,
         destination: Place,
         target: BlockId,
@@ -432,6 +508,7 @@ impl MirBuilder {
             method,
             args,
             ntypeargs,
+            runtime_type_check,
             runtime_id,
             destination,
             target,

@@ -3,6 +3,9 @@
 # Supports glob patterns (*, **)
 # Only long-term informational .md files should be listed here
 
+# Release history
+CHANGELOG.md
+
 # Test documentation
 crates/baml_tests/BENCHMARKS.md
 crates/baml_tests/benches/incremental/*/description.md

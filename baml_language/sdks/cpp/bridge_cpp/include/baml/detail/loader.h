@@ -322,7 +322,8 @@ inline const loaded_api& load_api() {
         table->media_mime_type == nullptr ||
         table->register_bridge == nullptr ||
         table->register_unhandled_spawn_error_callback == nullptr ||
-        table->shutdown_runtime == nullptr) {
+        table->shutdown_runtime == nullptr ||
+        table->initialize_runtime_from_bytecode_with_metadata == nullptr) {
       throw runtime_error(
           "BAML_RUNTIME_ABI_MISMATCH",
           "runtime ABI table contains a null required operation");
@@ -343,16 +344,26 @@ inline const BamlApiV1& api() { return *load_api().table; }
 // runtime; the contract-required first semantic operation. Idempotent.
 // A non-empty diagnostic from the runtime (version mismatch, conflicting
 // registration) throws with the runtime's shared message preserved.
-inline void ensure_registered(const char* sdk_version) {
+inline void ensure_registered(const char* toolchain_version,
+                              const char* bridge_runtime_name,
+                              const char* bridge_runtime_version) {
   static std::once_flag flag;
-  std::call_once(flag, [sdk_version] {
+  std::call_once(flag, [toolchain_version, bridge_runtime_name,
+                        bridge_runtime_version] {
     const BamlApiV1& table = api();
-    const std::string version(sdk_version);
+    const std::string version(toolchain_version);
+    const std::string name(bridge_runtime_name);
+    const std::string runtime_version(bridge_runtime_version);
     BamlBridgeInfoV1 info;
     info.struct_size = sizeof(BamlBridgeInfoV1);
     info.language = BAML_BRIDGE_LANGUAGE_CPP;
     info.sdk_version = reinterpret_cast<const uint8_t*>(version.data());
     info.sdk_version_len = version.size();
+    info.bridge_runtime_name = reinterpret_cast<const uint8_t*>(name.data());
+    info.bridge_runtime_name_len = name.size();
+    info.bridge_runtime_version =
+        reinterpret_cast<const uint8_t*>(runtime_version.data());
+    info.bridge_runtime_version_len = runtime_version.size();
     BamlBuffer diagnostic = table.register_bridge(&info);
     if (diagnostic.ptr != nullptr && diagnostic.len != 0) {
       std::string message(reinterpret_cast<const char*>(diagnostic.ptr),

@@ -6,53 +6,73 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import { baml_bridge } from './proto/baml_cffi.js';
-/**
- * The bottom type (BAML `never`). Pass as a `$types` binding to bind a TypeVar
- * to `never`, mirroring Python's `_types={"T": Never}`.
- */
+/** The bottom type (BAML `never`). */
 export declare const Never: unique symbol;
-/** Unambiguous primitive spellings. JS has a single `number`, so `int` and
- * `float` are distinguished by an explicit token rather than a constructor. */
 export type BamlPrimitiveToken = 'int' | 'float' | 'string' | 'bool' | 'null' | 'bytes' | 'bigint';
-/** A constructor for a codegen-emitted BAML class (`Box`, `Resume`, …). */
+/** A constructor for a codegen-emitted BAML class. */
 export type BamlClassCtor = new (...args: never[]) => unknown;
+/** A codegen-emitted erased interface token. */
+export type BamlInterfaceToken = {
+    readonly __baml_interface_fqn__: string;
+};
 /**
- * A runtime spelling of a BAML type, used as a `$types` binding for a TypeVar.
- *
- * - `undefined` / `null` → the unknown/top type (an unbound wildcard).
- * - {@link Never} → the bottom type.
- * - a primitive token (`'int'`, `'string'`, …) → that primitive.
- * - a codegen class constructor (`Box`) → that class with no concrete args.
- * - `{ class, args }` → a parameterized generic class (`Box<int>`).
- * - `{ list }` / `{ map }` / `{ optional }` / `{ union }` → the container shape.
+ * A runtime spelling of a statically-known BAML type. TypeScript erases its
+ * type grammar, so recursive containers use small data constructors and
+ * generated classes/enums are passed as their emitted runtime values.
  */
-export type BamlType = BamlPrimitiveToken | typeof Never | BamlClassCtor | {
+export type BamlTypeToken = BamlPrimitiveToken | StringConstructor | BooleanConstructor | BigIntConstructor | Uint8ArrayConstructor | typeof Never | BamlClassCtor | BamlInterfaceToken | Record<string, string> | {
     class: BamlClassCtor;
-    args?: BamlType[];
+    args?: BamlTypeToken[];
 } | {
-    list: BamlType;
+    list: BamlTypeToken;
 } | {
-    map: [BamlType, BamlType];
+    map: [BamlTypeToken, BamlTypeToken];
 } | {
-    optional: BamlType;
+    optional: BamlTypeToken;
 } | {
-    union: BamlType[];
-} | null | undefined;
+    union: BamlTypeToken[];
+};
+export interface BamlTypeMetadata {
+    alias?: string;
+    description?: string;
+    docstring?: string;
+    other?: Record<string, string>;
+}
+/** Internal row consumed by the generated `reflect.class.new` binding. */
+export declare class BamlTypeMetadataRow {
+    readonly ty: BamlType;
+    readonly alias: string | null;
+    readonly description: string | null;
+    readonly docstring: string | null;
+    readonly other: Record<string, string>;
+    constructor(ty: BamlType, alias: string | null, description: string | null, docstring: string | null, other?: Record<string, string>);
+}
 /**
- * Lower a {@link BamlType} token to a wire `BamlTy` (an `IBamlTy` plain object the
- * protobufjs `fromObject` path accepts). Mirrors `_fill_wire_ty`: an
- * unrecognized or absent token leaves the unknown/top type, which binds
- * nothing.
+ * Opaque, process-local handle for a reflected BAML definition. Only the
+ * composing operations required by H-11 are public. Each wire occurrence
+ * carries a copied definition graph; JavaScript identity is never type
+ * identity.
  */
-export declare function lowerTypeToWireTy(token: BamlType): baml_bridge.cffi.v1.IBamlTy;
-/**
- * Decode a wire `Ty` (baml_type.proto) back to a {@link BamlType} token — the
- * exact inverse of {@link lowerTypeToWireTy}, used to repopulate a generic
- * instance's `$types` field on decode. Mirrors the engine's
- * `ty_encode::runtime_ty_to_proto_ty` and Python's `_ty_to_python_type`.
- * Positions with no concrete JS binding (a structural union, an enum, a type
- * variable, an opaque/runtime-only type) decode to `undefined`, i.e. an unbound
- * wildcard.
- */
-export declare function outboundTyToBamlType(ty: baml_bridge.cffi.v1.IBamlTy | null | undefined): BamlType;
+export declare class BamlType {
+    #private;
+    private constructor();
+    /** @internal Bridge/codegen hook; not a host inspection surface. */
+    static _fromWire(definition: baml_bridge.cffi.v1.IBamlTyDef): BamlType;
+    /** @internal Bridge hook returning a fresh protobuf graph. */
+    _wireCopy(): baml_bridge.cffi.v1.BamlTyDef;
+    static from(token: BamlType | BamlTypeToken): BamlType;
+    meta(options?: BamlTypeMetadata): BamlTypeMetadataRow;
+    array(): BamlType;
+    optional(): BamlType;
+    toJSON(): never;
+    toString(): string;
+}
+/** Runtime member installed as generated `reflect.Type`. */
+export declare const reflectType: Readonly<{
+    of(token: BamlType | BamlTypeToken): BamlType;
+}>;
+/** Lower a statically-known token to a sparse wire `BamlTy`. */
+export declare function lowerTypeToWireTy(token: BamlTypeToken): baml_bridge.cffi.v1.IBamlTy;
+/** Decode the sparse value-level type channel on generated class instances. */
+export declare function outboundTyToBamlTypeToken(ty: baml_bridge.cffi.v1.IBamlTy | null | undefined): BamlTypeToken | undefined;
 //# sourceMappingURL=wire_ty.d.ts.map

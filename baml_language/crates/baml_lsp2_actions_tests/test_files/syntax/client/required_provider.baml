@@ -17,4 +17,15 @@ client<llm> MyClient {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   │ ai.RoundRobin)
+//    ╭─[client_required_provider.baml:1:1]
+//  1 │ ╭─▶ client<llm> MyClient {
+//  2 │ │     options {
+//  3 │ │       max_tokens 100
+//  4 │ │     }
+//  5 │ ├─▶ }
+//    · ╰──── replace with `client Name = <expr>;`
+//    ╰────

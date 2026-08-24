@@ -2,7 +2,7 @@
 //!
 //! Modeled after ruff's `ty_ide` crate: regular functions (not Salsa queries)
 //! that take `&dyn Db` and return domain types. Internally they call Salsa
-//! queries from `baml_compiler2_hir` and `baml_compiler2_tir` for cached data.
+//! queries from `baml_compiler2_hir` and `baml_compiler2_hir_ty` for cached data.
 //!
 //! ## Phase 1
 //!
@@ -75,12 +75,12 @@ mod usages_at_tests;
 
 /// Database trait for `baml_lsp2_actions` queries.
 ///
-/// Extends `baml_compiler2_tir::Db`, which itself extends
+/// Extends `baml_compiler2_ppir::Db`, which itself extends
 /// `baml_compiler2_hir::Db` and `baml_workspace::Db`. This crate can add
 /// Salsa-tracked queries (e.g. `file_outline` in Phase 2) that require a `Db`
 /// implementor to also satisfy the compiler2 trait chain.
 #[salsa::db]
-pub trait Db: baml_compiler2_tir::Db {}
+pub trait Db: baml_compiler2_ppir::Db {}
 
 // ── Public API re-exports ─────────────────────────────────────────────────────
 
@@ -90,7 +90,7 @@ pub use annotations::{AnnotationKind, InlineAnnotation, file_annotations};
 // depend on `baml_compiler2_hir` directly just for type conversions.
 pub use baml_compiler2_hir::contributions::DefinitionKind;
 pub use check::check_file;
-pub use completions::{Completion, CompletionKind, completions_at};
+pub use completions::{Completion, CompletionInsertTextFormat, CompletionKind, completions_at};
 pub use definition::{Location, definition_at};
 pub use describe::{
     DepRef, RefSite, SymbolDescription, describe, describe_by_definition, describe_item_member,
@@ -99,7 +99,7 @@ pub use env_vars::all_env_var_names;
 pub use fixes::{Fix, FixKind, fixes_at};
 pub use listing::{
     ListingEntry, ResolvedTarget, list_namespace_items, list_package_items, non_user_package_names,
-    resolve_target,
+    resolve_builtin_type_target, resolve_target,
 };
 pub use outline::{OutlineItem, file_outline};
 pub use search::{SymbolInfo, search_symbols};
@@ -108,4 +108,9 @@ pub use tokens::{
     semantic_highlight_style, semantic_tokens,
 };
 pub use type_info::{FunctionParamInfo, TypeInfo, type_at};
+// Editor primitive: cursor-position token lookup. First-class API — callers
+// (e.g. `baml_project`'s playground cursor context) must not depend on the
+// `utils` module's internals, which are otherwise private to this crate's
+// feature implementations.
 pub use usages::usages_at;
+pub use utils::find_token_at_offset;

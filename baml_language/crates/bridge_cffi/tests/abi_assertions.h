@@ -50,6 +50,11 @@ BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_PYTHON == 2, "language discriminant drif
 BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_GO == 3, "language discriminant drifted");
 BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_RUST == 4, "language discriminant drifted");
 BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_C_SHARP == 5, "language discriminant drifted");
+BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_CPP == 6, "language discriminant drifted");
+BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_JAVA == 7, "language discriminant drifted");
+BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_SWIFT == 8, "language discriminant drifted");
+BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_WEB == 9, "language discriminant drifted");
+BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_RUBY == 10, "language discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_UNSPECIFIED == 0, "media discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_IMAGE == 1, "media discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_AUDIO == 2, "media discriminant drifted");
@@ -88,6 +93,22 @@ BAML_STATIC_ASSERT(
     offsetof(BamlBridgeInfoV1, sdk_version_len) >=
         offsetof(BamlBridgeInfoV1, sdk_version) + sizeof(((BamlBridgeInfoV1 *)0)->sdk_version),
     "version length must follow pointer");
+BAML_STATIC_ASSERT(
+    offsetof(BamlBridgeInfoV1, bridge_runtime_name) >=
+        offsetof(BamlBridgeInfoV1, sdk_version_len) + sizeof(((BamlBridgeInfoV1 *)0)->sdk_version_len),
+    "runtime name must follow toolchain version");
+BAML_STATIC_ASSERT(
+    offsetof(BamlBridgeInfoV1, bridge_runtime_name_len) >=
+        offsetof(BamlBridgeInfoV1, bridge_runtime_name) + sizeof(((BamlBridgeInfoV1 *)0)->bridge_runtime_name),
+    "runtime name length must follow pointer");
+BAML_STATIC_ASSERT(
+    offsetof(BamlBridgeInfoV1, bridge_runtime_version) >=
+        offsetof(BamlBridgeInfoV1, bridge_runtime_name_len) + sizeof(((BamlBridgeInfoV1 *)0)->bridge_runtime_name_len),
+    "runtime version must follow runtime name");
+BAML_STATIC_ASSERT(
+    offsetof(BamlBridgeInfoV1, bridge_runtime_version_len) >=
+        offsetof(BamlBridgeInfoV1, bridge_runtime_version) + sizeof(((BamlBridgeInfoV1 *)0)->bridge_runtime_version),
+    "runtime version length must follow pointer");
 
 BAML_STATIC_ASSERT(offsetof(BamlApiV1, abi_version) == 0, "ABI version must be first");
 BAML_ASSERT_AFTER(abi_version, struct_size);
@@ -113,6 +134,7 @@ BAML_ASSERT_AFTER(media_base64, media_mime_type);
 BAML_ASSERT_AFTER(media_mime_type, register_bridge);
 BAML_ASSERT_AFTER(register_bridge, register_unhandled_spawn_error_callback);
 BAML_ASSERT_AFTER(register_unhandled_spawn_error_callback, shutdown_runtime);
+BAML_ASSERT_AFTER(shutdown_runtime, initialize_runtime_from_bytecode_with_metadata);
 BAML_STATIC_ASSERT(
     BAML_API_V1_MIN_SIZE == offsetof(BamlApiV1, register_unhandled_spawn_error_callback),
     "the appended lifecycle fields must follow the original V1 prefix");
@@ -140,5 +162,7 @@ BAML_ASSERT_FIELD_TYPE(register_bridge, BamlRegisterBridgeFn)
 BAML_ASSERT_FIELD_TYPE(register_unhandled_spawn_error_callback,
                        BamlRegisterUnhandledSpawnErrorCallbackFn)
 BAML_ASSERT_FIELD_TYPE(shutdown_runtime, BamlShutdownRuntimeFn)
+BAML_ASSERT_FIELD_TYPE(initialize_runtime_from_bytecode_with_metadata,
+                       BamlInitializeRuntimeFromBytecodeWithMetadataFn)
 
 #endif /* BAML_CFFI_TEST_ABI_ASSERTIONS_H */

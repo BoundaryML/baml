@@ -61,10 +61,14 @@ type pendingCall struct {
 // serialized program. Generated projects normally call this through their
 // internal bootstrap package exactly once.
 func Initialize(bytecode []byte) error {
+	return InitializeWithMetadata(bytecode, "")
+}
+
+func InitializeWithMetadata(bytecode []byte, embeddedBamlToml string) error {
 	if err := ensureNativeRuntime(context.Background()); err != nil {
 		return err
 	}
-	return nativeInitialize(bytecode)
+	return nativeInitialize(bytecode, embeddedBamlToml)
 }
 
 func ensureNativeRuntime(ctx context.Context) error {
@@ -87,7 +91,7 @@ func ensureNativeRuntime(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := nativeRegisterBridge(requiredRuntimeVersion()); err != nil {
+	if err := nativeRegisterBridge(BridgeRuntimeName, GetToolchainVersion(), GetBridgeRuntimeVersion()); err != nil {
 		nativeCloseAfterLoadFailure()
 		return err
 	}
@@ -267,8 +271,13 @@ func Bool(value bool) Input {
 // Type encodes a reflected BAML type value. The descriptor remains opaque to
 // callers and is validated before it crosses the ABI.
 func Type(value BAMLType) Input {
-	if err := validateBAMLType(value.value, 0); err != nil {
+	if err := validateBAMLTypeValue(value); err != nil {
 		return InvalidInput("invalid BAML type value: " + err.Error())
+	}
+	if value.definition != nil {
+		return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_TyDefValue{
+			TyDefValue: proto.Clone(value.definition).(*cffi.BamlTyDef),
+		}}}
 	}
 	return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_TyValue{TyValue: value.value}}}
 }
@@ -302,6 +311,51 @@ func Call(ctx context.Context, function string, args map[string]Input) (Value, e
 type TypeArgument struct {
 	Name string
 	Type BAMLType
+}
+
+type callOptions struct {
+	arguments map[string]Input
+	typeArgs  []TypeArgument
+}
+
+// CallOption is shared by every generated callable option type. WithTypeArg
+// therefore composes with ordinary defaulted arguments and nil options remain
+// valid Go values.
+type CallOption func(*callOptions)
+
+// WithTypeArg explicitly binds one named BAML type parameter. A later binding
+// of the same name replaces the generated Go-instantiation default in place.
+func WithTypeArg(name string, value BAMLType) CallOption {
+	return func(options *callOptions) {
+		for index := range options.typeArgs {
+			if options.typeArgs[index].Name == name {
+				options.typeArgs[index].Type = value
+				return
+			}
+		}
+		options.typeArgs = append(options.typeArgs, TypeArgument{Name: name, Type: value})
+	}
+}
+
+// WithArgument is the generator hook used by ordinary optional BAML
+// parameters. Public generated setters retain their type-safe signatures.
+func WithArgument(name string, value Input) CallOption {
+	return func(options *callOptions) { options.arguments[name] = value }
+}
+
+// ApplyCallOptions mutates arguments and returns an independent ordered type
+// binding slice. The engine remains authoritative for unknown parameter names.
+func ApplyCallOptions(arguments map[string]Input, defaults []TypeArgument, values ...CallOption) []TypeArgument {
+	options := callOptions{
+		arguments: arguments,
+		typeArgs:  append([]TypeArgument(nil), defaults...),
+	}
+	for _, value := range values {
+		if value != nil {
+			value(&options)
+		}
+	}
+	return options.typeArgs
 }
 
 // CallWithTypeArgs invokes a generic BAML callable with explicit, named type
@@ -506,14 +560,17 @@ func encodeCallForDispatchWithTargetAndTypeArgs(
 		if _, duplicate := seenTypeArgs[binding.Name]; duplicate {
 			return nil, nil, fmt.Errorf("duplicate type argument %q", binding.Name)
 		}
-		if err := validateBAMLType(binding.Type.value, 0); err != nil {
+		if err := validateBAMLTypeValue(binding.Type); err != nil {
 			return nil, nil, fmt.Errorf("type argument %q: %w", binding.Name, err)
 		}
 		seenTypeArgs[binding.Name] = struct{}{}
-		encodedTypeArgs = append(encodedTypeArgs, &cffi.BamlTyArg{
-			TypeVar:   binding.Name,
-			TypeValue: binding.Type.value,
-		})
+		encoded := &cffi.BamlTyArg{TypeVar: binding.Name}
+		if binding.Type.definition != nil {
+			encoded.TypeDefinition = proto.Clone(binding.Type.definition).(*cffi.BamlTyDef)
+		} else {
+			encoded.TypeValue = proto.Clone(binding.Type.value).(*cffi.BamlTy)
+		}
+		encodedTypeArgs = append(encodedTypeArgs, encoded)
 	}
 
 	callArgs := &cffi.CallFunctionArgs{
@@ -589,26 +646,95 @@ func processExitCode(code int64) int {
 	return int(code)
 }
 
-// outboundFailure intentionally returns a plain Go error. The current Go SDK
-// does not expose a structured BAML error hierarchy, but retaining the thrown
-// class name, conventional message field, and BAML trace in Error() keeps the
-// string contract useful and distinguishes errors from non-exit panics.
+// BamlError is the structured base payload for an ordinary BAML throw. The
+// three BEP-066 reflection channels below are distinct concrete Go errors;
+// other BAML classes remain BamlError values with their exact class identity.
+type BamlError struct {
+	Kind      string
+	ClassName string
+	Message   string
+	Trace     []string
+	Value     any
+}
+
+func (failure *BamlError) Error() string { return renderBamlError(failure) }
+
+type Diagnostic struct {
+	Code    string
+	Message string
+	Span    any
+}
+
+type CompilationError struct {
+	BamlError
+	Diagnostics []Diagnostic
+}
+
+func (failure *CompilationError) Error() string { return renderBamlError(&failure.BamlError) }
+
+type EvaluationError struct{ BamlError }
+
+func (failure *EvaluationError) Error() string { return renderBamlError(&failure.BamlError) }
+
+type SessionBusy struct{ BamlError }
+
+func (failure *SessionBusy) Error() string { return renderBamlError(&failure.BamlError) }
+
 func outboundFailure(kind string, value *cffi.BamlOutboundValue, trace []string) error {
 	className, message := outboundFailureIdentity(value)
 	if className == "" {
 		className = "baml." + kind
 	}
-
-	var rendered strings.Builder
-	fmt.Fprintf(&rendered, "BAML %s: %s", kind, className)
-	if message != "" {
-		fmt.Fprintf(&rendered, ": %s", message)
+	decoded, _ := decodeDynamicValue(Value{value: value}, "error", 0)
+	base := BamlError{
+		Kind: kind, ClassName: className, Message: message,
+		Trace: append([]string(nil), trace...), Value: decoded,
 	}
-	for _, line := range trace {
+	switch className {
+	case "reflect.errors.CompilationError":
+		return &CompilationError{BamlError: base, Diagnostics: decodeDiagnostics(decoded)}
+	case "reflect.errors.EvaluationError":
+		return &EvaluationError{BamlError: base}
+	case "reflect.errors.SessionBusy":
+		return &SessionBusy{BamlError: base}
+	default:
+		return &base
+	}
+}
+
+func renderBamlError(failure *BamlError) string {
+	var rendered strings.Builder
+	fmt.Fprintf(&rendered, "BAML %s: %s", failure.Kind, failure.ClassName)
+	if failure.Message != "" {
+		fmt.Fprintf(&rendered, ": %s", failure.Message)
+	}
+	for _, line := range failure.Trace {
 		rendered.WriteString("\n    ")
 		rendered.WriteString(line)
 	}
-	return errors.New(rendered.String())
+	return rendered.String()
+}
+
+func decodeDiagnostics(value any) []Diagnostic {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	rows, ok := object["diagnostics"].([]any)
+	if !ok {
+		return nil
+	}
+	diagnostics := make([]Diagnostic, 0, len(rows))
+	for _, row := range rows {
+		fields, ok := row.(map[string]any)
+		if !ok {
+			continue
+		}
+		code, _ := fields["code"].(string)
+		message, _ := fields["message"].(string)
+		diagnostics = append(diagnostics, Diagnostic{Code: code, Message: message, Span: fields["span"]})
+	}
+	return diagnostics
 }
 
 func outboundFailureIdentity(value *cffi.BamlOutboundValue) (string, string) {

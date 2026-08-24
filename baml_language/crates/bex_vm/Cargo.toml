@@ -19,12 +19,15 @@ workspace = true
 
 [dependencies]
 baml_builtins2 = { workspace = true }
+baml_compiler_diagnostics = { workspace = true }
 baml_type = { workspace = true }
 bex_events = { workspace = true }
 bex_heap = { workspace = true }
 bex_str = { workspace = true }
 bex_vm_types = { workspace = true }
+aes-gcm-siv = { workspace = true }
 base64 = { workspace = true }
+chacha20poly1305 = { workspace = true }
 console = { workspace = true }
 getrandom = { workspace = true }
 indexmap = { workspace = true }
@@ -36,19 +39,25 @@ rand_xoshiro = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
+sha2 = { workspace = true }
 smallvec = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true, features = [ "macros" ] }
 tokio-util = { workspace = true }
 toml = { workspace = true }
-web-time = { workspace = true }
 
 # Native-only: tokio runtime so CancelToken.any can `tokio::spawn` its watcher.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = [ "rt", "macros" ] }
 
 # WASM-only: wasm-bindgen-futures for spawning the watcher.
+# `getrandom/js` is required for the `getrandom::getrandom` calls in
+# `package_baml/{bigint,float,id}.rs` to build for wasm at all (getrandom 0.2
+# hard-errors on wasm*-unknown-unknown otherwise). The feature used to arrive
+# by unification through `sys_llm`; that crate is gone, so enable it on the
+# crate that actually calls getrandom.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { workspace = true, features = [ "js" ] }
 wasm-bindgen-futures = { workspace = true }
 
 [build-dependencies]

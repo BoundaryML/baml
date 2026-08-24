@@ -42,4 +42,7 @@ pub enum BridgeError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("{0}")]
+    Startup(String),
 }

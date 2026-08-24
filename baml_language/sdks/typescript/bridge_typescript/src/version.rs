@@ -1,0 +1,3 @@
+pub(crate) const BRIDGE_RUNTIME_NAME: &str = "@boundaryml/baml-bridge";
+pub(crate) const TOOLCHAIN_VERSION: &str = "0.17.0";
+pub(crate) const BRIDGE_RUNTIME_VERSION: &str = "0.17.0";

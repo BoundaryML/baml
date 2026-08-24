@@ -8,16 +8,16 @@ class IterShadow {
   }
 }
 
-function iter_collect() -> int[] throws unknown {
+function iter_collect() -> int[] {
   let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([5, 6, 7]);
   it.collect()
 }
 
 test "iter_collect" {
-  assert.is_true(baml.deep_equals(iter_collect(), [5, 6, 7]))
+  assert.equal(iter_collect(), [5, 6, 7])
 }
 
-function iter_reduce() -> int throws unknown {
+function iter_reduce() -> int {
   let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3, 4]);
   it.reduce((a: int, x: int) -> int { a + x }, 0)
 }
@@ -26,7 +26,7 @@ test "iter_reduce" {
   assert.equal(iter_reduce(), 10)
 }
 
-function iter_count() -> int throws unknown {
+function iter_count() -> int {
   let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([9, 9, 9]);
   it.count()
 }
@@ -35,7 +35,7 @@ test "iter_count" {
   assert.equal(iter_count(), 3)
 }
 
-function iter_some_every_find() -> bool throws unknown {
+function iter_some_every_find() -> bool {
   let some_large = baml.iter.ArrayIterator.new([1, 2, 3]).some((x: int) -> bool { x > 2 });
   let every_small = baml.iter.ArrayIterator.new([1, 2, 3]).every((x: int) -> bool { x < 4 });
   let found = baml.iter.ArrayIterator.new([1, 2, 3, 4]).find((x: int) -> bool { x % 2 == 0 });
@@ -46,12 +46,12 @@ test "iter_some_every_find" {
   assert.is_true(iter_some_every_find())
 }
 
-function iter_range() -> int[] throws unknown {
+function iter_range() -> int[] {
   baml.iter.Range.new(0, 5).collect()
 }
 
 test "iter_range" {
-  assert.is_true(baml.deep_equals(iter_range(), [0, 1, 2, 3, 4]))
+  assert.equal(iter_range(), [0, 1, 2, 3, 4])
 }
 
 function iter_for_in_range() -> int[] {
@@ -63,7 +63,7 @@ function iter_for_in_range() -> int[] {
 }
 
 test "iter_for_in_range" {
-  assert.is_true(baml.deep_equals(iter_for_in_range(), [1, 2, 3]))
+  assert.equal(iter_for_in_range(), [1, 2, 3])
 }
 
 function iter_for_in_array_iterator() -> int[] {
@@ -75,7 +75,7 @@ function iter_for_in_array_iterator() -> int[] {
 }
 
 test "iter_for_in_array_iterator" {
-  assert.is_true(baml.deep_equals(iter_for_in_array_iterator(), [2, 4, 6]))
+  assert.equal(iter_for_in_array_iterator(), [2, 4, 6])
 }
 
 function iter_for_in_array_literal() -> int[] {
@@ -87,7 +87,7 @@ function iter_for_in_array_literal() -> int[] {
 }
 
 test "iter_for_in_array_literal" {
-  assert.is_true(baml.deep_equals(iter_for_in_array_literal(), [10, 12]))
+  assert.equal(iter_for_in_array_literal(), [10, 12])
 }
 
 function iter_for_in_array_of_classes() -> int {
@@ -131,16 +131,16 @@ function iter_array_for_each() -> int[] {
 }
 
 test "iter_array_for_each" {
-  assert.is_true(baml.deep_equals(iter_array_for_each(), [3, 6, 9]))
+  assert.equal(iter_array_for_each(), [3, 6, 9])
 }
 
-function iter_array_first_native_methods() -> bool throws unknown {
+function iter_array_first_native_methods() -> bool {
   let mapped = [1, 2, 3].map((x: int) -> int { x * 2 });
   let flat_mapped = [1, 2].flat_map((x: int) -> int[] { [x, x + 10] });
   let reduced = [1, 2, 3, 4].reduce((acc: int, x: int) -> int { acc + x }, 0);
 
-  baml.deep_equals(mapped, [2, 4, 6]) &&
-    baml.deep_equals(flat_mapped, [1, 11, 2, 12]) &&
+  mapped == [2, 4, 6] &&
+    flat_mapped == [1, 11, 2, 12] &&
     reduced == 10
 }
 
@@ -148,7 +148,7 @@ test "iter_array_first_native_methods" {
   assert.is_true(iter_array_first_native_methods())
 }
 
-function iter_array_eager_filter_map_without_collect() -> int[] throws unknown {
+function iter_array_eager_filter_map_without_collect() -> int[] {
   [1, 2, 3, 4].filter((x: int) -> bool {
     x % 2 == 0
   }).map((x: int) -> int {
@@ -157,10 +157,10 @@ function iter_array_eager_filter_map_without_collect() -> int[] throws unknown {
 }
 
 test "iter_array_eager_filter_map_without_collect" {
-  assert.is_true(baml.deep_equals(iter_array_eager_filter_map_without_collect(), [12, 14]))
+  assert.equal(iter_array_eager_filter_map_without_collect(), [12, 14])
 }
 
-function iter_array_iter_lazy_over_source_details() -> int[] throws unknown {
+function iter_array_iter_lazy_over_source_details() -> int[] {
   let xs = [1, 2];
   let seen = 0;
   let it = xs.iter().filter((x: int) -> bool {
@@ -177,10 +177,10 @@ function iter_array_iter_lazy_over_source_details() -> int[] throws unknown {
 }
 
 test "iter_array_iter_lazy_over_source" {
-  assert.is_true(baml.deep_equals(iter_array_iter_lazy_over_source_details(), [3, 2, 1, 3]))
+  assert.equal(iter_array_iter_lazy_over_source_details(), [3, 2, 1, 3])
 }
 
-function iter_for_loop_sees_push_during_iteration() -> int[] throws unknown {
+function iter_for_loop_sees_push_during_iteration() -> int[] {
   let xs = [1, 2];
   let visited: int[] = [];
   for (let x in xs) {
@@ -193,10 +193,10 @@ function iter_for_loop_sees_push_during_iteration() -> int[] throws unknown {
 }
 
 test "iter_for_loop_sees_push_during_iteration" {
-  assert.is_true(baml.deep_equals(iter_for_loop_sees_push_during_iteration(), [1, 2, 3]))
+  assert.equal(iter_for_loop_sees_push_during_iteration(), [1, 2, 3])
 }
 
-function iter_for_loop_pop_during_iteration() -> int[] throws unknown {
+function iter_for_loop_pop_during_iteration() -> int[] {
   let xs = [1, 2, 3, 4];
   let visited: int[] = [];
   for (let x in xs) {
@@ -207,10 +207,10 @@ function iter_for_loop_pop_during_iteration() -> int[] throws unknown {
 }
 
 test "iter_for_loop_pop_during_iteration" {
-  assert.is_true(baml.deep_equals(iter_for_loop_pop_during_iteration(), [1, 2]))
+  assert.equal(iter_for_loop_pop_during_iteration(), [1, 2])
 }
 
-function iter_array_eager_filter_map() -> int[] throws unknown {
+function iter_array_eager_filter_map() -> int[] {
   [1, 2, 3, 4].filter_map((x: int) -> int? {
     if (x % 2 == 0) {
       x * 10
@@ -221,10 +221,10 @@ function iter_array_eager_filter_map() -> int[] throws unknown {
 }
 
 test "iter_array_eager_filter_map" {
-  assert.is_true(baml.deep_equals(iter_array_eager_filter_map(), [20, 40]))
+  assert.equal(iter_array_eager_filter_map(), [20, 40])
 }
 
-function iter_array_nullable_elements_details() -> int[] throws unknown {
+function iter_array_nullable_elements_details() -> int[] {
   let xs: int?[] = [1, null, 3];
   let visited = 0;
   let nulls = 0;
@@ -244,10 +244,10 @@ function iter_array_nullable_elements_details() -> int[] throws unknown {
 }
 
 test "iter_array_nullable_elements" {
-  assert.is_true(baml.deep_equals(iter_array_nullable_elements_details(), [3, 1, 4, 3]))
+  assert.equal(iter_array_nullable_elements_details(), [3, 1, 4, 3])
 }
 
-function iter_array_lazy_filter_map_collect() -> int[] throws unknown {
+function iter_array_lazy_filter_map_collect() -> int[] {
   [1, 2, 3, 4].iter().filter((x: int) -> bool {
     x % 2 == 0
   }).map((x: int) -> int {
@@ -256,10 +256,10 @@ function iter_array_lazy_filter_map_collect() -> int[] throws unknown {
 }
 
 test "iter_array_lazy_filter_map_collect" {
-  assert.is_true(baml.deep_equals(iter_array_lazy_filter_map_collect(), [12, 14]))
+  assert.equal(iter_array_lazy_filter_map_collect(), [12, 14])
 }
 
-function iter_array_first_adapter_defaults() -> bool throws unknown {
+function iter_array_first_adapter_defaults() -> bool {
   let mapped = baml.iter.ArrayIterator.new([1, 2, 3, 4]).filter((x: int) -> bool {
     x % 2 == 0
   }).map((x: int) -> int {
@@ -285,10 +285,10 @@ function iter_array_first_adapter_defaults() -> bool throws unknown {
     visited.push(x * 3);
   });
 
-  baml.deep_equals(mapped, [20, 40]) &&
-    baml.deep_equals(flattened, [1, 11, 2, 12]) &&
+  mapped == [20, 40] &&
+    flattened == [1, 11, 2, 12] &&
     reduced == 9 &&
-    baml.deep_equals(visited, [3, 9])
+    visited == [3, 9]
 }
 
 test "iter_array_first_adapter_defaults" {
@@ -297,24 +297,24 @@ test "iter_array_first_adapter_defaults" {
 
 function iter_array_collect_count() -> bool {
   let xs = [4, 5, 6];
-  baml.deep_equals(xs.iter().collect(), [4, 5, 6]) && xs.iter().count() == 3
+  xs.iter().collect() == [4, 5, 6] && xs.iter().count() == 3
 }
 
 test "iter_array_collect_count" {
   assert.is_true(iter_array_collect_count())
 }
 
-function iter_array_filter_step_by() -> int[] throws unknown {
+function iter_array_filter_step_by() -> int[] {
   baml.iter.ArrayIterator.new([1, 2, 3, 4, 5, 6]).filter((x: int) -> bool {
     x % 2 == 0
   }).step_by(2).collect()
 }
 
 test "iter_array_filter_step_by" {
-  assert.is_true(baml.deep_equals(iter_array_filter_step_by(), [2, 6]))
+  assert.equal(iter_array_filter_step_by(), [2, 6])
 }
 
-function iter_array_filter_map_fluent() -> int[] throws unknown {
+function iter_array_filter_map_fluent() -> int[] {
   [1, 2, 3, 4].iter().filter_map((x: int) -> int? {
     if (x % 2 == 0) {
       x * 10
@@ -325,18 +325,18 @@ function iter_array_filter_map_fluent() -> int[] throws unknown {
 }
 
 test "iter_array_filter_map_fluent" {
-  assert.is_true(baml.deep_equals(iter_array_filter_map_fluent(), [20, 40]))
+  assert.equal(iter_array_filter_map_fluent(), [20, 40])
 }
 
-function iter_array_chain_fluent() -> int[] throws unknown {
+function iter_array_chain_fluent() -> int[] {
   [1, 2].iter().chain([3, 4]).collect()
 }
 
 test "iter_array_chain_fluent" {
-  assert.is_true(baml.deep_equals(iter_array_chain_fluent(), [1, 2, 3, 4]))
+  assert.equal(iter_array_chain_fluent(), [1, 2, 3, 4])
 }
 
-function iter_array_peekable_fluent() -> int[] throws unknown {
+function iter_array_peekable_fluent() -> int[] {
   let p = [8, 9].iter().peekable();
   let out: int[] = [];
   match (p.peek()) {
@@ -355,7 +355,7 @@ function iter_array_peekable_fluent() -> int[] throws unknown {
 }
 
 test "iter_array_peekable_fluent" {
-  assert.is_true(baml.deep_equals(iter_array_peekable_fluent(), [8, 8, 9]))
+  assert.equal(iter_array_peekable_fluent(), [8, 8, 9])
 }
 
 function iter_array_as_iterable_param_inner(xs: baml.iter.Iterable<Item = int, Error = never>) -> int[] throws never {
@@ -367,7 +367,7 @@ function iter_array_as_iterable_param() -> int[] throws never {
 }
 
 test "iter_array_as_iterable_param" {
-  assert.is_true(baml.deep_equals(iter_array_as_iterable_param(), [10, 20, 30]))
+  assert.equal(iter_array_as_iterable_param(), [10, 20, 30])
 }
 
 function iter_shadowed_param_method(source: baml.iter.Iterable<Item = int, Error = never>) -> string {
@@ -389,7 +389,7 @@ function iter_shadowed_param_for_in(source: baml.iter.Iterable<Item = int, Error
 }
 
 test "iter_shadowed_param_for_in" {
-  assert.is_true(baml.deep_equals(iter_shadowed_param_for_in([1, 2, 3]), ["a", "b"]))
+  assert.equal(iter_shadowed_param_for_in([1, 2, 3]), ["a", "b"])
 }
 
 function iter_for_in_repeat() -> int[] {
@@ -401,45 +401,45 @@ function iter_for_in_repeat() -> int[] {
 }
 
 test "iter_for_in_repeat" {
-  assert.is_true(baml.deep_equals(iter_for_in_repeat(), [7, 7]))
+  assert.equal(iter_for_in_repeat(), [7, 7])
 }
 
-function iter_chain() -> int[] throws unknown {
+function iter_chain() -> int[] {
   let a: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2]);
   let b: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([3, 4]);
   a.chain(b).collect()
 }
 
 test "iter_chain" {
-  assert.is_true(baml.deep_equals(iter_chain(), [1, 2, 3, 4]))
+  assert.equal(iter_chain(), [1, 2, 3, 4])
 }
 
-function iter_repeat() -> int[] throws unknown {
+function iter_repeat() -> int[] {
   baml.iter.Repeat<int> { value: 7, count: 3 }.collect()
 }
 
 test "iter_repeat" {
-  assert.is_true(baml.deep_equals(iter_repeat(), [7, 7, 7]))
+  assert.equal(iter_repeat(), [7, 7, 7])
 }
 
-function iter_map() -> int[] throws unknown {
+function iter_map() -> int[] {
   let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3]);
   it.map((x: int) -> int { x * 2 }).collect()
 }
 
 test "iter_map" {
-  assert.is_true(baml.deep_equals(iter_map(), [2, 4, 6]))
+  assert.equal(iter_map(), [2, 4, 6])
 }
 
-function iter_map_implicit_source() -> int[] throws unknown {
+function iter_map_implicit_source() -> int[] {
   baml.iter.ArrayIterator.new([1, 2, 3]).map((x: int) -> int { x * 2 }).collect()
 }
 
 test "iter_map_implicit_source" {
-  assert.is_true(baml.deep_equals(iter_map_implicit_source(), [2, 4, 6]))
+  assert.equal(iter_map_implicit_source(), [2, 4, 6])
 }
 
-function iter_explicit_map_coerces_to_iterator() -> int[] throws unknown {
+function iter_explicit_map_coerces_to_iterator() -> int[] {
   let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3]);
   let mapped: baml.iter.Iterator<Item = int, Error = never> = baml.iter.Map<int, int, never, never> {
     source: it,
@@ -449,27 +449,27 @@ function iter_explicit_map_coerces_to_iterator() -> int[] throws unknown {
 }
 
 test "iter_explicit_map_coerces_to_iterator" {
-  assert.is_true(baml.deep_equals(iter_explicit_map_coerces_to_iterator(), [3, 6, 9]))
+  assert.equal(iter_explicit_map_coerces_to_iterator(), [3, 6, 9])
 }
 
-function iter_filter() -> int[] throws unknown {
+function iter_filter() -> int[] {
   let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3, 4]);
   it.filter((x: int) -> bool { x % 2 == 0 }).collect()
 }
 
 test "iter_filter" {
-  assert.is_true(baml.deep_equals(iter_filter(), [2, 4]))
+  assert.equal(iter_filter(), [2, 4])
 }
 
-function iter_filter_implicit_source() -> int[] throws unknown {
+function iter_filter_implicit_source() -> int[] {
   baml.iter.ArrayIterator.new([1, 2, 3, 4]).filter((x: int) -> bool { x % 2 == 0 }).collect()
 }
 
 test "iter_filter_implicit_source" {
-  assert.is_true(baml.deep_equals(iter_filter_implicit_source(), [2, 4]))
+  assert.equal(iter_filter_implicit_source(), [2, 4])
 }
 
-function iter_filter_map() -> int[] throws unknown {
+function iter_filter_map() -> int[] {
   let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2, 3, 4]);
   it.filter_map((x: int) -> int? {
     if (x % 2 == 0) {
@@ -481,10 +481,10 @@ function iter_filter_map() -> int[] throws unknown {
 }
 
 test "iter_filter_map" {
-  assert.is_true(baml.deep_equals(iter_filter_map(), [20, 40]))
+  assert.equal(iter_filter_map(), [20, 40])
 }
 
-function iter_filter_map_implicit_source() -> int[] throws unknown {
+function iter_filter_map_implicit_source() -> int[] {
   baml.iter.ArrayIterator.new([1, 2, 3, 4]).filter_map((x: int) -> int? {
     if (x % 2 == 0) {
       x * 10
@@ -495,10 +495,10 @@ function iter_filter_map_implicit_source() -> int[] throws unknown {
 }
 
 test "iter_filter_map_implicit_source" {
-  assert.is_true(baml.deep_equals(iter_filter_map_implicit_source(), [20, 40]))
+  assert.equal(iter_filter_map_implicit_source(), [20, 40])
 }
 
-function iter_flat_map() -> int[] throws unknown {
+function iter_flat_map() -> int[] {
   let it: baml.iter.Iterator<Item = int, Error = never> = baml.iter.ArrayIterator.new([1, 2]);
   it.flat_map((x: int) -> baml.iter.Iterable<Item = int, Error = never> {
     baml.iter.ArrayIterator.new([x, x + 10])
@@ -506,20 +506,20 @@ function iter_flat_map() -> int[] throws unknown {
 }
 
 test "iter_flat_map" {
-  assert.is_true(baml.deep_equals(iter_flat_map(), [1, 11, 2, 12]))
+  assert.equal(iter_flat_map(), [1, 11, 2, 12])
 }
 
-function iter_flat_map_implicit_source() -> int[] throws unknown {
+function iter_flat_map_implicit_source() -> int[] {
   baml.iter.ArrayIterator.new([1, 2]).flat_map((x: int) -> baml.iter.Iterable<Item = int, Error = never> {
     baml.iter.ArrayIterator.new([x, x + 10])
   }).collect()
 }
 
 test "iter_flat_map_implicit_source" {
-  assert.is_true(baml.deep_equals(iter_flat_map_implicit_source(), [1, 11, 2, 12]))
+  assert.equal(iter_flat_map_implicit_source(), [1, 11, 2, 12])
 }
 
-function iter_flatten() -> int[] throws unknown {
+function iter_flatten() -> int[] {
   // `flatten`'s element type parameter (`I extends Iterable<…>`) must be a
   // concrete implementor, so the elements are typed `ArrayIterator<int>` rather
   // than the abstract `Iterable<…>` existential.
@@ -532,10 +532,10 @@ function iter_flatten() -> int[] throws unknown {
 }
 
 test "iter_flatten" {
-  assert.is_true(baml.deep_equals(iter_flatten(), [1, 2, 3, 4]))
+  assert.equal(iter_flatten(), [1, 2, 3, 4])
 }
 
-function iter_peekable() -> int[] throws unknown {
+function iter_peekable() -> int[] {
   let p = baml.iter.ArrayIterator.new([4, 5]).peekable();
   let out: int[] = [];
   match (p.peek()) {
@@ -558,21 +558,318 @@ function iter_peekable() -> int[] throws unknown {
 }
 
 test "iter_peekable" {
-  assert.is_true(baml.deep_equals(iter_peekable(), [4, 4, 5, 99]))
+  assert.equal(iter_peekable(), [4, 4, 5, 99])
 }
 
-function iter_step_by() -> int[] throws unknown {
+function iter_step_by() -> int[] {
   baml.iter.Range.new(0, 6).step_by(2).collect()
 }
 
 test "iter_step_by" {
-  assert.is_true(baml.deep_equals(iter_step_by(), [0, 2, 4]))
+  assert.equal(iter_step_by(), [0, 2, 4])
 }
 
-function iter_array_iter() -> int[] throws unknown {
+function iter_array_iter() -> int[] {
   [1, 2, 3].iter().collect()
 }
 
 test "iter_array_iter" {
-  assert.is_true(baml.deep_equals(iter_array_iter(), [1, 2, 3]))
+  assert.equal(iter_array_iter(), [1, 2, 3])
+}
+
+// --- bounding adapters: take / skip / take_while / skip_while ---
+
+// The motivating case: `Repeat.new(v)` defaults to `count = -1` and repeats
+// forever. Before `take` existed there was no way to make it finite, so
+// `collect()` on it could never terminate.
+function iter_take_bounds_infinite_repeat() -> int[] throws unknown {
+  baml.iter.Repeat.new(0).take(5).collect()
+}
+
+test "iter_take_bounds_infinite_repeat" {
+  assert.equal(iter_take_bounds_infinite_repeat(), [0, 0, 0, 0, 0])
+}
+
+function iter_take_stops_early() -> int[] throws unknown {
+  baml.iter.Range.new(0, 10).take(3).collect()
+}
+
+test "iter_take_stops_early" {
+  assert.equal(iter_take_stops_early(), [0, 1, 2])
+}
+
+function iter_take_more_than_available() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([1, 2]).take(5).collect()
+}
+
+test "iter_take_more_than_available" {
+  assert.equal(iter_take_more_than_available(), [1, 2])
+}
+
+function iter_take_zero() -> int[] throws unknown {
+  baml.iter.Range.new(0, 10).take(0).collect()
+}
+
+test "iter_take_zero" {
+  assert.equal(iter_take_zero(), [])
+}
+
+function iter_skip() -> int[] throws unknown {
+  baml.iter.Range.new(0, 5).skip(2).collect()
+}
+
+test "iter_skip" {
+  assert.equal(iter_skip(), [2, 3, 4])
+}
+
+function iter_skip_past_end() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([1, 2]).skip(5).collect()
+}
+
+test "iter_skip_past_end" {
+  assert.equal(iter_skip_past_end(), [])
+}
+
+function iter_skip_zero() -> int[] throws unknown {
+  baml.iter.Range.new(0, 3).skip(0).collect()
+}
+
+test "iter_skip_zero" {
+  assert.equal(iter_skip_zero(), [0, 1, 2])
+}
+
+function iter_skip_then_take() -> int[] throws unknown {
+  baml.iter.Range.new(0, 100).skip(3).take(4).collect()
+}
+
+test "iter_skip_then_take" {
+  assert.equal(iter_skip_then_take(), [3, 4, 5, 6])
+}
+
+function iter_take_while() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([1, 2, 3, 4, 1]).take_while((x: int) -> bool { x < 3 }).collect()
+}
+
+test "iter_take_while" {
+  assert.equal(iter_take_while(), [1, 2])
+}
+
+// `take_while` stops at the first false; it does not filter later elements.
+function iter_take_while_stops_not_filters() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([2, 4, 5, 6, 8]).take_while((x: int) -> bool { x % 2 == 0 }).collect()
+}
+
+test "iter_take_while_stops_not_filters" {
+  assert.equal(iter_take_while_stops_not_filters(), [2, 4])
+}
+
+function iter_take_while_none_match() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([5, 6]).take_while((x: int) -> bool { x < 0 }).collect()
+}
+
+test "iter_take_while_none_match" {
+  assert.equal(iter_take_while_none_match(), [])
+}
+
+function iter_take_while_bounds_infinite() -> int[] throws unknown {
+  baml.iter.Range.new(0, 1000000).take_while((x: int) -> bool { x < 4 }).collect()
+}
+
+test "iter_take_while_bounds_infinite" {
+  assert.equal(iter_take_while_bounds_infinite(), [0, 1, 2, 3])
+}
+
+function iter_skip_while() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([1, 2, 3, 1, 2]).skip_while((x: int) -> bool { x < 3 }).collect()
+}
+
+test "iter_skip_while" {
+  assert.equal(iter_skip_while(), [3, 1, 2])
+}
+
+function iter_skip_while_all_match() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([1, 2]).skip_while((x: int) -> bool { x < 10 }).collect()
+}
+
+test "iter_skip_while_all_match" {
+  assert.equal(iter_skip_while_all_match(), [])
+}
+
+function iter_skip_while_none_match() -> int[] throws unknown {
+  baml.iter.ArrayIterator.new([5, 1, 2]).skip_while((x: int) -> bool { x < 0 }).collect()
+}
+
+test "iter_skip_while_none_match" {
+  assert.equal(iter_skip_while_none_match(), [5, 1, 2])
+}
+
+// --- quota accounting on non-item results (see PR #4510 review) ---
+//
+// `take(n)`/`skip(n)` must only spend quota when the source actually yields an
+// item. Two ways a source can return without yielding: it throws, or it reports
+// Done. Both used to consume a slot.
+
+// Throws once at `fail_at`, then behaves normally when retried. The throw
+// happens before `pos` advances, so a retry re-reads the same position.
+class FlakyIterator {
+  values: int[],
+  pos: int,
+  fail_at: int,
+
+  function new(values: int[], fail_at: int) -> FlakyIterator throws never {
+    FlakyIterator { values: values, pos: 0, fail_at: fail_at }
+  }
+
+  implements baml.iter.Iterable {
+    type Item = int
+    type Error = baml.errors.InvalidArgument
+
+    function iter(self) -> baml.iter.Iterator<Item = int, Error = baml.errors.InvalidArgument> throws never {
+      self
+    }
+  }
+
+  implements baml.iter.Iterator {
+    type Item = int
+    type Error = baml.errors.InvalidArgument
+
+    function next(self) -> int | baml.iter.Done throws baml.errors.InvalidArgument {
+      if (self.pos == self.fail_at) {
+        self.fail_at = -1;
+        throw baml.errors.InvalidArgument { message: "flaky" }
+      }
+      if (self.pos >= self.values.length()) {
+        return baml.iter.Done {  };
+      }
+      let item = self.values[self.pos];
+      self.pos += 1;
+      return item;
+    }
+  }
+}
+
+// Reports Done once at `done_at`, then keeps yielding if pulled again — a
+// deliberately non-fused source, to check the adapters stop on their own.
+class ResumableIterator {
+  values: int[],
+  pos: int,
+  done_at: int,
+
+  function new(values: int[], done_at: int) -> ResumableIterator throws never {
+    ResumableIterator { values: values, pos: 0, done_at: done_at }
+  }
+
+  implements baml.iter.Iterable {
+    type Item = int
+    type Error = never
+
+    function iter(self) -> baml.iter.Iterator<Item = int, Error = never> throws never {
+      self
+    }
+  }
+
+  implements baml.iter.Iterator {
+    type Item = int
+    type Error = never
+
+    function next(self) -> int | baml.iter.Done throws never {
+      if (self.pos == self.done_at) {
+        self.done_at = -1;
+        return baml.iter.Done {  };
+      }
+      if (self.pos >= self.values.length()) {
+        return baml.iter.Done {  };
+      }
+      let item = self.values[self.pos];
+      self.pos += 1;
+      return item;
+    }
+  }
+}
+
+// take(3) over a source that throws after the first item. Retrying must still
+// deliver three items — the failed pull must not have spent a slot.
+function iter_take_quota_survives_source_error() -> int[] throws unknown {
+  let t = FlakyIterator.new([1, 2, 3, 4, 5], 1).take(3);
+  let out: int[] = [];
+  match (t.next()) {
+    baml.iter.Done => {},
+    let x: int => out.push(x),
+  }
+  {
+    t.next();
+    null
+  } catch (e) {
+    baml.errors.InvalidArgument => null
+  }
+  while (true) {
+    match (t.next()) {
+      baml.iter.Done => { break; },
+      let x: int => out.push(x),
+    }
+  }
+  out
+}
+
+test "iter_take_quota_survives_source_error" {
+  assert.equal(iter_take_quota_survives_source_error(), [1, 2, 3])
+}
+
+// skip(3) over a source that throws during the skipping phase. The failed pull
+// must not count as a skipped element.
+function iter_skip_quota_survives_source_error() -> int[] throws unknown {
+  let s = FlakyIterator.new([1, 2, 3, 4, 5], 1).skip(3);
+  let out: int[] = [];
+  {
+    s.next();
+    null
+  } catch (e) {
+    baml.errors.InvalidArgument => null
+  }
+  while (true) {
+    match (s.next()) {
+      baml.iter.Done => { break; },
+      let x: int => out.push(x),
+    }
+  }
+  out
+}
+
+test "iter_skip_quota_survives_source_error" {
+  assert.equal(iter_skip_quota_survives_source_error(), [4, 5])
+}
+
+// Once the source reports Done, take() must stay Done rather than pulling
+// again. -1 marks a Done result.
+function iter_take_stays_done_after_source_done() -> int[] throws unknown {
+  let t = ResumableIterator.new([1, 2, 3, 4, 5], 1).take(3);
+  let out: int[] = [];
+  for (let i in baml.iter.Range.new(0, 3)) {
+    match (t.next()) {
+      baml.iter.Done => out.push(-1),
+      let x: int => out.push(x),
+    }
+  }
+  out
+}
+
+test "iter_take_stays_done_after_source_done" {
+  assert.equal(iter_take_stays_done_after_source_done(), [1, -1, -1])
+}
+
+// skip() must not re-enter its skipping phase after the source reported Done.
+function iter_skip_does_not_respend_quota_after_done() -> int[] throws unknown {
+  let s = ResumableIterator.new([1, 2, 3, 4, 5], 1).skip(3);
+  let out: int[] = [];
+  for (let i in baml.iter.Range.new(0, 2)) {
+    match (s.next()) {
+      baml.iter.Done => out.push(-1),
+      let x: int => out.push(x),
+    }
+  }
+  out
+}
+
+test "iter_skip_does_not_respend_quota_after_done" {
+  assert.equal(iter_skip_does_not_respend_quota_after_done(), [-1, 2])
 }

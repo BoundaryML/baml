@@ -197,7 +197,7 @@ class Repeat<T> {
 }
 
 interface OutOfBodyValue<T> {
-  function get(self) -> T throws unknown
+  function get(self) -> T throws never
 }
 
 class OutOfBodyBox<T> {
@@ -209,7 +209,7 @@ class OutOfBodyBox<T> {
 }
 
 implements<T> OutOfBodyValue<T> for OutOfBodyBox<T> {
-  function get(self) -> T throws unknown {
+  function get(self) -> T {
     self.value
   }
 }
@@ -1158,7 +1158,7 @@ class Chain<T, E> {
 // interfaces_iter_core.baml:200:16 (parameter) [declaration] len=4 "self"
 // interfaces_iter_core.baml:200:25 (type) len=1 "T"
 // interfaces_iter_core.baml:200:27 (keyword) len=6 "throws"
-// interfaces_iter_core.baml:200:34 (type) [defaultLibrary] len=7 "unknown"
+// interfaces_iter_core.baml:200:34 (type) [defaultLibrary] len=5 "never"
 // interfaces_iter_core.baml:203:1 (keyword) len=5 "class"
 // interfaces_iter_core.baml:203:7 (class) [declaration] len=12 "OutOfBodyBox"
 // interfaces_iter_core.baml:203:19 (operator) len=1 "<"
@@ -1199,8 +1199,6 @@ class Chain<T, E> {
 // interfaces_iter_core.baml:212:12 (method) [declaration] len=3 "get"
 // interfaces_iter_core.baml:212:16 (parameter) [declaration] len=4 "self"
 // interfaces_iter_core.baml:212:25 (type) len=1 "T"
-// interfaces_iter_core.baml:212:27 (keyword) len=6 "throws"
-// interfaces_iter_core.baml:212:34 (type) [defaultLibrary] len=7 "unknown"
 // interfaces_iter_core.baml:213:5 (parameter) len=4 "self"
 // interfaces_iter_core.baml:213:10 (property) len=5 "value"
 // interfaces_iter_core.baml:217:1 (keyword) len=5 "class"

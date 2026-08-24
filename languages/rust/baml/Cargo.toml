@@ -8,7 +8,7 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-description = "BAML runtime for Rust - type-safe LLM function calls"
+description = "BAML v0 — Rust runtime for baml_client"
 readme = "README.md"
 keywords = ["baml", "boundaryml", "boundary", "llm", "programming-language"]
 categories = ["development-tools", "web-programming"]

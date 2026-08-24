@@ -134,6 +134,7 @@ reqwest = { version = "0.12.12", default-features = false, features = [
   "charset",
   "http2",
   "json",
+  "multipart",
   "rustls-tls",
   "stream",
 ] }
@@ -189,7 +190,7 @@ tsify = { version = "0.5.6", features = ["js"] }
 
 
 [workspace.package]
-version = "0.223.0"
+version = "0.226.1"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"

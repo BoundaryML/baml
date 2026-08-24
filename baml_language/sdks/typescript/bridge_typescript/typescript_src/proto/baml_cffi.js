@@ -60,6 +60,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @property {Uint8Array|null} [uint8arrayValue] InboundValue uint8arrayValue
                  * @property {string|null} [bigintValue] InboundValue bigintValue
                  * @property {baml_bridge.cffi.v1.IBamlTy|null} [tyValue] InboundValue tyValue
+                 * @property {baml_bridge.cffi.v1.IBamlTyDef|null} [tyDefValue] InboundValue tyDefValue
                  */
 
                 /**
@@ -181,17 +182,25 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  */
                 InboundValue.prototype.tyValue = null;
 
+                /**
+                 * InboundValue tyDefValue.
+                 * @member {baml_bridge.cffi.v1.IBamlTyDef|null|undefined} tyDefValue
+                 * @memberof baml_bridge.cffi.v1.InboundValue
+                 * @instance
+                 */
+                InboundValue.prototype.tyDefValue = null;
+
                 // OneOf field names bound to virtual getters and setters
                 let $oneOfFields;
 
                 /**
                  * InboundValue value.
-                 * @member {"stringValue"|"intValue"|"floatValue"|"boolValue"|"listValue"|"mapValue"|"classValue"|"enumValue"|"handle"|"uint8arrayValue"|"bigintValue"|"tyValue"|undefined} value
+                 * @member {"stringValue"|"intValue"|"floatValue"|"boolValue"|"listValue"|"mapValue"|"classValue"|"enumValue"|"handle"|"uint8arrayValue"|"bigintValue"|"tyValue"|"tyDefValue"|undefined} value
                  * @memberof baml_bridge.cffi.v1.InboundValue
                  * @instance
                  */
                 Object.defineProperty(InboundValue.prototype, "value", {
-                    get: $util.oneOfGetter($oneOfFields = ["stringValue", "intValue", "floatValue", "boolValue", "listValue", "mapValue", "classValue", "enumValue", "handle", "uint8arrayValue", "bigintValue", "tyValue"]),
+                    get: $util.oneOfGetter($oneOfFields = ["stringValue", "intValue", "floatValue", "boolValue", "listValue", "mapValue", "classValue", "enumValue", "handle", "uint8arrayValue", "bigintValue", "tyValue", "tyDefValue"]),
                     set: $util.oneOfSetter($oneOfFields)
                 });
 
@@ -249,6 +258,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         writer.uint32(/* id 12, wireType 2 =*/98).string(message.bigintValue);
                     if (message.tyValue != null && Object.hasOwnProperty.call(message, "tyValue"))
                         $root.baml_bridge.cffi.v1.BamlTy.encode(message.tyValue, writer.uint32(/* id 13, wireType 2 =*/106).fork(), q + 1).ldelim();
+                    if (message.tyDefValue != null && Object.hasOwnProperty.call(message, "tyDefValue"))
+                        $root.baml_bridge.cffi.v1.BamlTyDef.encode(message.tyDefValue, writer.uint32(/* id 14, wireType 2 =*/114).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -262,7 +273,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 InboundValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -339,6 +350,10 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             }
                         case 13: {
                                 message.tyValue = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 14: {
+                                message.tyDefValue = $root.baml_bridge.cffi.v1.BamlTyDef.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
@@ -486,6 +501,16 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 return "tyValue." + error;
                         }
                     }
+                    if (message.tyDefValue != null && message.hasOwnProperty("tyDefValue")) {
+                        if (properties.value === 1)
+                            return "value: multiple values";
+                        properties.value = 1;
+                        {
+                            let error = $root.baml_bridge.cffi.v1.BamlTyDef.verify(message.tyDefValue, long + 1);
+                            if (error)
+                                return "tyDefValue." + error;
+                        }
+                    }
                     return null;
                 };
 
@@ -563,6 +588,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         if (!$util.isObject(object.tyValue))
                             throw TypeError(".baml_bridge.cffi.v1.InboundValue.tyValue: object expected");
                         message.tyValue = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.tyValue, long + 1);
+                    }
+                    if (object.tyDefValue != null) {
+                        if (!$util.isObject(object.tyDefValue))
+                            throw TypeError(".baml_bridge.cffi.v1.InboundValue.tyDefValue: object expected");
+                        message.tyDefValue = $root.baml_bridge.cffi.v1.BamlTyDef.fromObject(object.tyDefValue, long + 1);
                     }
                     return message;
                 };
@@ -652,6 +682,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         object.tyValue = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.tyValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "tyValue";
+                    }
+                    if (message.tyDefValue != null && message.hasOwnProperty("tyDefValue")) {
+                        object.tyDefValue = $root.baml_bridge.cffi.v1.BamlTyDef.toObject(message.tyDefValue, options, q + 1);
+                        if (options.oneofs)
+                            object.value = "tyDefValue";
                     }
                     return object;
                 };
@@ -762,7 +797,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 InboundListValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -1010,7 +1045,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 InboundMapValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -1314,7 +1349,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 InboundMapEntry.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -1637,7 +1672,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 InboundClassValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -1894,7 +1929,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 InboundEnumValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -2067,6 +2102,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @interface IBamlTyArg
                  * @property {string|null} [typeVar] BamlTyArg typeVar
                  * @property {baml_bridge.cffi.v1.IBamlTy|null} [typeValue] BamlTyArg typeValue
+                 * @property {baml_bridge.cffi.v1.IBamlTyDef|null} [typeDefinition] BamlTyArg typeDefinition
                  */
 
                 /**
@@ -2101,6 +2137,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 BamlTyArg.prototype.typeValue = null;
 
                 /**
+                 * BamlTyArg typeDefinition.
+                 * @member {baml_bridge.cffi.v1.IBamlTyDef|null|undefined} typeDefinition
+                 * @memberof baml_bridge.cffi.v1.BamlTyArg
+                 * @instance
+                 */
+                BamlTyArg.prototype.typeDefinition = null;
+
+                /**
                  * Creates a new BamlTyArg instance using the specified properties.
                  * @function create
                  * @memberof baml_bridge.cffi.v1.BamlTyArg
@@ -2132,6 +2176,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         writer.uint32(/* id 1, wireType 2 =*/10).string(message.typeVar);
                     if (message.typeValue != null && Object.hasOwnProperty.call(message, "typeValue"))
                         $root.baml_bridge.cffi.v1.BamlTy.encode(message.typeValue, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                    if (message.typeDefinition != null && Object.hasOwnProperty.call(message, "typeDefinition"))
+                        $root.baml_bridge.cffi.v1.BamlTyDef.encode(message.typeDefinition, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -2145,7 +2191,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyArg.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -2178,6 +2224,10 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             }
                         case 2: {
                                 message.typeValue = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 3: {
+                                message.typeDefinition = $root.baml_bridge.cffi.v1.BamlTyDef.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
@@ -2227,6 +2277,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         if (error)
                             return "typeValue." + error;
                     }
+                    if (message.typeDefinition != null && message.hasOwnProperty("typeDefinition")) {
+                        let error = $root.baml_bridge.cffi.v1.BamlTyDef.verify(message.typeDefinition, long + 1);
+                        if (error)
+                            return "typeDefinition." + error;
+                    }
                     return null;
                 };
 
@@ -2255,6 +2310,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             throw TypeError(".baml_bridge.cffi.v1.BamlTyArg.typeValue: object expected");
                         message.typeValue = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.typeValue, long + 1);
                     }
+                    if (object.typeDefinition != null) {
+                        if (!$util.isObject(object.typeDefinition))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlTyArg.typeDefinition: object expected");
+                        message.typeDefinition = $root.baml_bridge.cffi.v1.BamlTyDef.fromObject(object.typeDefinition, long + 1);
+                    }
                     return message;
                 };
 
@@ -2278,11 +2338,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     if (options.defaults) {
                         object.typeVar = "";
                         object.typeValue = null;
+                        object.typeDefinition = null;
                     }
                     if (message.typeVar != null && message.hasOwnProperty("typeVar"))
                         object.typeVar = message.typeVar;
                     if (message.typeValue != null && message.hasOwnProperty("typeValue"))
                         object.typeValue = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.typeValue, options, q + 1);
+                    if (message.typeDefinition != null && message.hasOwnProperty("typeDefinition"))
+                        object.typeDefinition = $root.baml_bridge.cffi.v1.BamlTyDef.toObject(message.typeDefinition, options, q + 1);
                     return object;
                 };
 
@@ -2452,7 +2515,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 CallFunctionArgs.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -2820,7 +2883,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 CallAck.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -3102,7 +3165,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlHandle.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -3698,7 +3761,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTy.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -4388,6 +4451,2568 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 return BamlTy;
             })();
 
+            v1.BamlTyDef = (function() {
+
+                /**
+                 * Properties of a BamlTyDef.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface IBamlTyDef
+                 * @property {baml_bridge.cffi.v1.IBamlTy|null} [root] BamlTyDef root
+                 * @property {Array.<baml_bridge.cffi.v1.IBamlClassDef>|null} [classes] BamlTyDef classes
+                 * @property {Array.<baml_bridge.cffi.v1.IBamlEnumDef>|null} [enums] BamlTyDef enums
+                 * @property {Array.<baml_bridge.cffi.v1.IBamlWitnessDef>|null} [witnesses] BamlTyDef witnesses
+                 */
+
+                /**
+                 * Constructs a new BamlTyDef.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a BamlTyDef.
+                 * @implements IBamlTyDef
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.IBamlTyDef=} [properties] Properties to set
+                 */
+                function BamlTyDef(properties) {
+                    this.classes = [];
+                    this.enums = [];
+                    this.witnesses = [];
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlTyDef root.
+                 * @member {baml_bridge.cffi.v1.IBamlTy|null|undefined} root
+                 * @memberof baml_bridge.cffi.v1.BamlTyDef
+                 * @instance
+                 */
+                BamlTyDef.prototype.root = null;
+
+                /**
+                 * BamlTyDef classes.
+                 * @member {Array.<baml_bridge.cffi.v1.IBamlClassDef>} classes
+                 * @memberof baml_bridge.cffi.v1.BamlTyDef
+                 * @instance
+                 */
+                BamlTyDef.prototype.classes = $util.emptyArray;
+
+                /**
+                 * BamlTyDef enums.
+                 * @member {Array.<baml_bridge.cffi.v1.IBamlEnumDef>} enums
+                 * @memberof baml_bridge.cffi.v1.BamlTyDef
+                 * @instance
+                 */
+                BamlTyDef.prototype.enums = $util.emptyArray;
+
+                /**
+                 * BamlTyDef witnesses.
+                 * @member {Array.<baml_bridge.cffi.v1.IBamlWitnessDef>} witnesses
+                 * @memberof baml_bridge.cffi.v1.BamlTyDef
+                 * @instance
+                 */
+                BamlTyDef.prototype.witnesses = $util.emptyArray;
+
+                /**
+                 * Creates a new BamlTyDef instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.BamlTyDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlTyDef=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.BamlTyDef} BamlTyDef instance
+                 */
+                BamlTyDef.create = function create(properties) {
+                    return new BamlTyDef(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlTyDef message. Does not implicitly {@link baml_bridge.cffi.v1.BamlTyDef.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.BamlTyDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlTyDef} message BamlTyDef message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlTyDef.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.root != null && Object.hasOwnProperty.call(message, "root"))
+                        $root.baml_bridge.cffi.v1.BamlTy.encode(message.root, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                    if (message.classes != null && message.classes.length)
+                        for (let i = 0; i < message.classes.length; ++i)
+                            $root.baml_bridge.cffi.v1.BamlClassDef.encode(message.classes[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                    if (message.enums != null && message.enums.length)
+                        for (let i = 0; i < message.enums.length; ++i)
+                            $root.baml_bridge.cffi.v1.BamlEnumDef.encode(message.enums[i], writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                    if (message.witnesses != null && message.witnesses.length)
+                        for (let i = 0; i < message.witnesses.length; ++i)
+                            $root.baml_bridge.cffi.v1.BamlWitnessDef.encode(message.witnesses[i], writer.uint32(/* id 4, wireType 2 =*/34).fork(), q + 1).ldelim();
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlTyDef message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlTyDef.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlTyDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlTyDef} message BamlTyDef message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlTyDef.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlTyDef message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.BamlTyDef
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.BamlTyDef} BamlTyDef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlTyDef.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.BamlTyDef();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.root = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 2: {
+                                if (!(message.classes && message.classes.length))
+                                    message.classes = [];
+                                message.classes.push($root.baml_bridge.cffi.v1.BamlClassDef.decode(reader, reader.uint32(), undefined, long + 1));
+                                break;
+                            }
+                        case 3: {
+                                if (!(message.enums && message.enums.length))
+                                    message.enums = [];
+                                message.enums.push($root.baml_bridge.cffi.v1.BamlEnumDef.decode(reader, reader.uint32(), undefined, long + 1));
+                                break;
+                            }
+                        case 4: {
+                                if (!(message.witnesses && message.witnesses.length))
+                                    message.witnesses = [];
+                                message.witnesses.push($root.baml_bridge.cffi.v1.BamlWitnessDef.decode(reader, reader.uint32(), undefined, long + 1));
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlTyDef message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlTyDef
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.BamlTyDef} BamlTyDef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlTyDef.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlTyDef message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.BamlTyDef
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlTyDef.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    if (message.root != null && message.hasOwnProperty("root")) {
+                        let error = $root.baml_bridge.cffi.v1.BamlTy.verify(message.root, long + 1);
+                        if (error)
+                            return "root." + error;
+                    }
+                    if (message.classes != null && message.hasOwnProperty("classes")) {
+                        if (!Array.isArray(message.classes))
+                            return "classes: array expected";
+                        for (let i = 0; i < message.classes.length; ++i) {
+                            let error = $root.baml_bridge.cffi.v1.BamlClassDef.verify(message.classes[i], long + 1);
+                            if (error)
+                                return "classes." + error;
+                        }
+                    }
+                    if (message.enums != null && message.hasOwnProperty("enums")) {
+                        if (!Array.isArray(message.enums))
+                            return "enums: array expected";
+                        for (let i = 0; i < message.enums.length; ++i) {
+                            let error = $root.baml_bridge.cffi.v1.BamlEnumDef.verify(message.enums[i], long + 1);
+                            if (error)
+                                return "enums." + error;
+                        }
+                    }
+                    if (message.witnesses != null && message.hasOwnProperty("witnesses")) {
+                        if (!Array.isArray(message.witnesses))
+                            return "witnesses: array expected";
+                        for (let i = 0; i < message.witnesses.length; ++i) {
+                            let error = $root.baml_bridge.cffi.v1.BamlWitnessDef.verify(message.witnesses[i], long + 1);
+                            if (error)
+                                return "witnesses." + error;
+                        }
+                    }
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlTyDef message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.BamlTyDef
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.BamlTyDef} BamlTyDef
+                 */
+                BamlTyDef.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.BamlTyDef)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.BamlTyDef: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.BamlTyDef();
+                    if (object.root != null) {
+                        if (!$util.isObject(object.root))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlTyDef.root: object expected");
+                        message.root = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.root, long + 1);
+                    }
+                    if (object.classes) {
+                        if (!Array.isArray(object.classes))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlTyDef.classes: array expected");
+                        message.classes = [];
+                        for (let i = 0; i < object.classes.length; ++i) {
+                            if (!$util.isObject(object.classes[i]))
+                                throw TypeError(".baml_bridge.cffi.v1.BamlTyDef.classes: object expected");
+                            message.classes[i] = $root.baml_bridge.cffi.v1.BamlClassDef.fromObject(object.classes[i], long + 1);
+                        }
+                    }
+                    if (object.enums) {
+                        if (!Array.isArray(object.enums))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlTyDef.enums: array expected");
+                        message.enums = [];
+                        for (let i = 0; i < object.enums.length; ++i) {
+                            if (!$util.isObject(object.enums[i]))
+                                throw TypeError(".baml_bridge.cffi.v1.BamlTyDef.enums: object expected");
+                            message.enums[i] = $root.baml_bridge.cffi.v1.BamlEnumDef.fromObject(object.enums[i], long + 1);
+                        }
+                    }
+                    if (object.witnesses) {
+                        if (!Array.isArray(object.witnesses))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlTyDef.witnesses: array expected");
+                        message.witnesses = [];
+                        for (let i = 0; i < object.witnesses.length; ++i) {
+                            if (!$util.isObject(object.witnesses[i]))
+                                throw TypeError(".baml_bridge.cffi.v1.BamlTyDef.witnesses: object expected");
+                            message.witnesses[i] = $root.baml_bridge.cffi.v1.BamlWitnessDef.fromObject(object.witnesses[i], long + 1);
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlTyDef message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.BamlTyDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.BamlTyDef} message BamlTyDef
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlTyDef.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.arrays || options.defaults) {
+                        object.classes = [];
+                        object.enums = [];
+                        object.witnesses = [];
+                    }
+                    if (options.defaults)
+                        object.root = null;
+                    if (message.root != null && message.hasOwnProperty("root"))
+                        object.root = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.root, options, q + 1);
+                    if (message.classes && message.classes.length) {
+                        object.classes = [];
+                        for (let j = 0; j < message.classes.length; ++j)
+                            object.classes[j] = $root.baml_bridge.cffi.v1.BamlClassDef.toObject(message.classes[j], options, q + 1);
+                    }
+                    if (message.enums && message.enums.length) {
+                        object.enums = [];
+                        for (let j = 0; j < message.enums.length; ++j)
+                            object.enums[j] = $root.baml_bridge.cffi.v1.BamlEnumDef.toObject(message.enums[j], options, q + 1);
+                    }
+                    if (message.witnesses && message.witnesses.length) {
+                        object.witnesses = [];
+                        for (let j = 0; j < message.witnesses.length; ++j)
+                            object.witnesses[j] = $root.baml_bridge.cffi.v1.BamlWitnessDef.toObject(message.witnesses[j], options, q + 1);
+                    }
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlTyDef to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.BamlTyDef
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlTyDef.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlTyDef
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.BamlTyDef
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlTyDef.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.BamlTyDef";
+                };
+
+                return BamlTyDef;
+            })();
+
+            v1.BamlWitnessDef = (function() {
+
+                /**
+                 * Properties of a BamlWitnessDef.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface IBamlWitnessDef
+                 * @property {string|null} ["interface"] BamlWitnessDef interface
+                 * @property {Array.<baml_bridge.cffi.v1.IBamlTy>|null} [interfaceArgs] BamlWitnessDef interfaceArgs
+                 * @property {Array.<baml_bridge.cffi.v1.IBamlTyAssociatedBinding>|null} [associatedTypes] BamlWitnessDef associatedTypes
+                 * @property {Array.<baml_bridge.cffi.v1.IBamlWitnessFieldLink>|null} [fieldLinks] BamlWitnessDef fieldLinks
+                 */
+
+                /**
+                 * Constructs a new BamlWitnessDef.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a BamlWitnessDef.
+                 * @implements IBamlWitnessDef
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.IBamlWitnessDef=} [properties] Properties to set
+                 */
+                function BamlWitnessDef(properties) {
+                    this.interfaceArgs = [];
+                    this.associatedTypes = [];
+                    this.fieldLinks = [];
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlWitnessDef interface.
+                 * @member {string} interface
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessDef
+                 * @instance
+                 */
+                BamlWitnessDef.prototype["interface"] = "";
+
+                /**
+                 * BamlWitnessDef interfaceArgs.
+                 * @member {Array.<baml_bridge.cffi.v1.IBamlTy>} interfaceArgs
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessDef
+                 * @instance
+                 */
+                BamlWitnessDef.prototype.interfaceArgs = $util.emptyArray;
+
+                /**
+                 * BamlWitnessDef associatedTypes.
+                 * @member {Array.<baml_bridge.cffi.v1.IBamlTyAssociatedBinding>} associatedTypes
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessDef
+                 * @instance
+                 */
+                BamlWitnessDef.prototype.associatedTypes = $util.emptyArray;
+
+                /**
+                 * BamlWitnessDef fieldLinks.
+                 * @member {Array.<baml_bridge.cffi.v1.IBamlWitnessFieldLink>} fieldLinks
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessDef
+                 * @instance
+                 */
+                BamlWitnessDef.prototype.fieldLinks = $util.emptyArray;
+
+                /**
+                 * Creates a new BamlWitnessDef instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlWitnessDef=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.BamlWitnessDef} BamlWitnessDef instance
+                 */
+                BamlWitnessDef.create = function create(properties) {
+                    return new BamlWitnessDef(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlWitnessDef message. Does not implicitly {@link baml_bridge.cffi.v1.BamlWitnessDef.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlWitnessDef} message BamlWitnessDef message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlWitnessDef.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message["interface"] != null && Object.hasOwnProperty.call(message, "interface"))
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message["interface"]);
+                    if (message.interfaceArgs != null && message.interfaceArgs.length)
+                        for (let i = 0; i < message.interfaceArgs.length; ++i)
+                            $root.baml_bridge.cffi.v1.BamlTy.encode(message.interfaceArgs[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                    if (message.associatedTypes != null && message.associatedTypes.length)
+                        for (let i = 0; i < message.associatedTypes.length; ++i)
+                            $root.baml_bridge.cffi.v1.BamlTyAssociatedBinding.encode(message.associatedTypes[i], writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                    if (message.fieldLinks != null && message.fieldLinks.length)
+                        for (let i = 0; i < message.fieldLinks.length; ++i)
+                            $root.baml_bridge.cffi.v1.BamlWitnessFieldLink.encode(message.fieldLinks[i], writer.uint32(/* id 4, wireType 2 =*/34).fork(), q + 1).ldelim();
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlWitnessDef message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlWitnessDef.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlWitnessDef} message BamlWitnessDef message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlWitnessDef.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlWitnessDef message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessDef
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.BamlWitnessDef} BamlWitnessDef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlWitnessDef.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.BamlWitnessDef();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message["interface"] = reader.string();
+                                break;
+                            }
+                        case 2: {
+                                if (!(message.interfaceArgs && message.interfaceArgs.length))
+                                    message.interfaceArgs = [];
+                                message.interfaceArgs.push($root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1));
+                                break;
+                            }
+                        case 3: {
+                                if (!(message.associatedTypes && message.associatedTypes.length))
+                                    message.associatedTypes = [];
+                                message.associatedTypes.push($root.baml_bridge.cffi.v1.BamlTyAssociatedBinding.decode(reader, reader.uint32(), undefined, long + 1));
+                                break;
+                            }
+                        case 4: {
+                                if (!(message.fieldLinks && message.fieldLinks.length))
+                                    message.fieldLinks = [];
+                                message.fieldLinks.push($root.baml_bridge.cffi.v1.BamlWitnessFieldLink.decode(reader, reader.uint32(), undefined, long + 1));
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlWitnessDef message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessDef
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.BamlWitnessDef} BamlWitnessDef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlWitnessDef.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlWitnessDef message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessDef
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlWitnessDef.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    if (message["interface"] != null && message.hasOwnProperty("interface"))
+                        if (!$util.isString(message["interface"]))
+                            return "interface: string expected";
+                    if (message.interfaceArgs != null && message.hasOwnProperty("interfaceArgs")) {
+                        if (!Array.isArray(message.interfaceArgs))
+                            return "interfaceArgs: array expected";
+                        for (let i = 0; i < message.interfaceArgs.length; ++i) {
+                            let error = $root.baml_bridge.cffi.v1.BamlTy.verify(message.interfaceArgs[i], long + 1);
+                            if (error)
+                                return "interfaceArgs." + error;
+                        }
+                    }
+                    if (message.associatedTypes != null && message.hasOwnProperty("associatedTypes")) {
+                        if (!Array.isArray(message.associatedTypes))
+                            return "associatedTypes: array expected";
+                        for (let i = 0; i < message.associatedTypes.length; ++i) {
+                            let error = $root.baml_bridge.cffi.v1.BamlTyAssociatedBinding.verify(message.associatedTypes[i], long + 1);
+                            if (error)
+                                return "associatedTypes." + error;
+                        }
+                    }
+                    if (message.fieldLinks != null && message.hasOwnProperty("fieldLinks")) {
+                        if (!Array.isArray(message.fieldLinks))
+                            return "fieldLinks: array expected";
+                        for (let i = 0; i < message.fieldLinks.length; ++i) {
+                            let error = $root.baml_bridge.cffi.v1.BamlWitnessFieldLink.verify(message.fieldLinks[i], long + 1);
+                            if (error)
+                                return "fieldLinks." + error;
+                        }
+                    }
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlWitnessDef message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessDef
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.BamlWitnessDef} BamlWitnessDef
+                 */
+                BamlWitnessDef.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.BamlWitnessDef)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.BamlWitnessDef: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.BamlWitnessDef();
+                    if (object["interface"] != null)
+                        message["interface"] = String(object["interface"]);
+                    if (object.interfaceArgs) {
+                        if (!Array.isArray(object.interfaceArgs))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlWitnessDef.interfaceArgs: array expected");
+                        message.interfaceArgs = [];
+                        for (let i = 0; i < object.interfaceArgs.length; ++i) {
+                            if (!$util.isObject(object.interfaceArgs[i]))
+                                throw TypeError(".baml_bridge.cffi.v1.BamlWitnessDef.interfaceArgs: object expected");
+                            message.interfaceArgs[i] = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.interfaceArgs[i], long + 1);
+                        }
+                    }
+                    if (object.associatedTypes) {
+                        if (!Array.isArray(object.associatedTypes))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlWitnessDef.associatedTypes: array expected");
+                        message.associatedTypes = [];
+                        for (let i = 0; i < object.associatedTypes.length; ++i) {
+                            if (!$util.isObject(object.associatedTypes[i]))
+                                throw TypeError(".baml_bridge.cffi.v1.BamlWitnessDef.associatedTypes: object expected");
+                            message.associatedTypes[i] = $root.baml_bridge.cffi.v1.BamlTyAssociatedBinding.fromObject(object.associatedTypes[i], long + 1);
+                        }
+                    }
+                    if (object.fieldLinks) {
+                        if (!Array.isArray(object.fieldLinks))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlWitnessDef.fieldLinks: array expected");
+                        message.fieldLinks = [];
+                        for (let i = 0; i < object.fieldLinks.length; ++i) {
+                            if (!$util.isObject(object.fieldLinks[i]))
+                                throw TypeError(".baml_bridge.cffi.v1.BamlWitnessDef.fieldLinks: object expected");
+                            message.fieldLinks[i] = $root.baml_bridge.cffi.v1.BamlWitnessFieldLink.fromObject(object.fieldLinks[i], long + 1);
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlWitnessDef message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.BamlWitnessDef} message BamlWitnessDef
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlWitnessDef.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.arrays || options.defaults) {
+                        object.interfaceArgs = [];
+                        object.associatedTypes = [];
+                        object.fieldLinks = [];
+                    }
+                    if (options.defaults)
+                        object["interface"] = "";
+                    if (message["interface"] != null && message.hasOwnProperty("interface"))
+                        object["interface"] = message["interface"];
+                    if (message.interfaceArgs && message.interfaceArgs.length) {
+                        object.interfaceArgs = [];
+                        for (let j = 0; j < message.interfaceArgs.length; ++j)
+                            object.interfaceArgs[j] = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.interfaceArgs[j], options, q + 1);
+                    }
+                    if (message.associatedTypes && message.associatedTypes.length) {
+                        object.associatedTypes = [];
+                        for (let j = 0; j < message.associatedTypes.length; ++j)
+                            object.associatedTypes[j] = $root.baml_bridge.cffi.v1.BamlTyAssociatedBinding.toObject(message.associatedTypes[j], options, q + 1);
+                    }
+                    if (message.fieldLinks && message.fieldLinks.length) {
+                        object.fieldLinks = [];
+                        for (let j = 0; j < message.fieldLinks.length; ++j)
+                            object.fieldLinks[j] = $root.baml_bridge.cffi.v1.BamlWitnessFieldLink.toObject(message.fieldLinks[j], options, q + 1);
+                    }
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlWitnessDef to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessDef
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlWitnessDef.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlWitnessDef
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessDef
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlWitnessDef.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.BamlWitnessDef";
+                };
+
+                return BamlWitnessDef;
+            })();
+
+            v1.BamlWitnessFieldLink = (function() {
+
+                /**
+                 * Properties of a BamlWitnessFieldLink.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface IBamlWitnessFieldLink
+                 * @property {string|null} [interfaceField] BamlWitnessFieldLink interfaceField
+                 * @property {string|null} [classField] BamlWitnessFieldLink classField
+                 */
+
+                /**
+                 * Constructs a new BamlWitnessFieldLink.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a BamlWitnessFieldLink.
+                 * @implements IBamlWitnessFieldLink
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.IBamlWitnessFieldLink=} [properties] Properties to set
+                 */
+                function BamlWitnessFieldLink(properties) {
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlWitnessFieldLink interfaceField.
+                 * @member {string} interfaceField
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessFieldLink
+                 * @instance
+                 */
+                BamlWitnessFieldLink.prototype.interfaceField = "";
+
+                /**
+                 * BamlWitnessFieldLink classField.
+                 * @member {string} classField
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessFieldLink
+                 * @instance
+                 */
+                BamlWitnessFieldLink.prototype.classField = "";
+
+                /**
+                 * Creates a new BamlWitnessFieldLink instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessFieldLink
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlWitnessFieldLink=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.BamlWitnessFieldLink} BamlWitnessFieldLink instance
+                 */
+                BamlWitnessFieldLink.create = function create(properties) {
+                    return new BamlWitnessFieldLink(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlWitnessFieldLink message. Does not implicitly {@link baml_bridge.cffi.v1.BamlWitnessFieldLink.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessFieldLink
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlWitnessFieldLink} message BamlWitnessFieldLink message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlWitnessFieldLink.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.interfaceField != null && Object.hasOwnProperty.call(message, "interfaceField"))
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.interfaceField);
+                    if (message.classField != null && Object.hasOwnProperty.call(message, "classField"))
+                        writer.uint32(/* id 2, wireType 2 =*/18).string(message.classField);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlWitnessFieldLink message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlWitnessFieldLink.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessFieldLink
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlWitnessFieldLink} message BamlWitnessFieldLink message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlWitnessFieldLink.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlWitnessFieldLink message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessFieldLink
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.BamlWitnessFieldLink} BamlWitnessFieldLink
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlWitnessFieldLink.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.BamlWitnessFieldLink();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.interfaceField = reader.string();
+                                break;
+                            }
+                        case 2: {
+                                message.classField = reader.string();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlWitnessFieldLink message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessFieldLink
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.BamlWitnessFieldLink} BamlWitnessFieldLink
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlWitnessFieldLink.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlWitnessFieldLink message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessFieldLink
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlWitnessFieldLink.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    if (message.interfaceField != null && message.hasOwnProperty("interfaceField"))
+                        if (!$util.isString(message.interfaceField))
+                            return "interfaceField: string expected";
+                    if (message.classField != null && message.hasOwnProperty("classField"))
+                        if (!$util.isString(message.classField))
+                            return "classField: string expected";
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlWitnessFieldLink message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessFieldLink
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.BamlWitnessFieldLink} BamlWitnessFieldLink
+                 */
+                BamlWitnessFieldLink.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.BamlWitnessFieldLink)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.BamlWitnessFieldLink: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.BamlWitnessFieldLink();
+                    if (object.interfaceField != null)
+                        message.interfaceField = String(object.interfaceField);
+                    if (object.classField != null)
+                        message.classField = String(object.classField);
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlWitnessFieldLink message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessFieldLink
+                 * @static
+                 * @param {baml_bridge.cffi.v1.BamlWitnessFieldLink} message BamlWitnessFieldLink
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlWitnessFieldLink.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.defaults) {
+                        object.interfaceField = "";
+                        object.classField = "";
+                    }
+                    if (message.interfaceField != null && message.hasOwnProperty("interfaceField"))
+                        object.interfaceField = message.interfaceField;
+                    if (message.classField != null && message.hasOwnProperty("classField"))
+                        object.classField = message.classField;
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlWitnessFieldLink to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessFieldLink
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlWitnessFieldLink.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlWitnessFieldLink
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.BamlWitnessFieldLink
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlWitnessFieldLink.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.BamlWitnessFieldLink";
+                };
+
+                return BamlWitnessFieldLink;
+            })();
+
+            v1.BamlTyMetadata = (function() {
+
+                /**
+                 * Properties of a BamlTyMetadata.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface IBamlTyMetadata
+                 * @property {string|null} [description] BamlTyMetadata description
+                 * @property {string|null} [alias] BamlTyMetadata alias
+                 * @property {string|null} [docstring] BamlTyMetadata docstring
+                 * @property {Object.<string,string>|null} [other] BamlTyMetadata other
+                 */
+
+                /**
+                 * Constructs a new BamlTyMetadata.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a BamlTyMetadata.
+                 * @implements IBamlTyMetadata
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.IBamlTyMetadata=} [properties] Properties to set
+                 */
+                function BamlTyMetadata(properties) {
+                    this.other = {};
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlTyMetadata description.
+                 * @member {string|null|undefined} description
+                 * @memberof baml_bridge.cffi.v1.BamlTyMetadata
+                 * @instance
+                 */
+                BamlTyMetadata.prototype.description = null;
+
+                /**
+                 * BamlTyMetadata alias.
+                 * @member {string|null|undefined} alias
+                 * @memberof baml_bridge.cffi.v1.BamlTyMetadata
+                 * @instance
+                 */
+                BamlTyMetadata.prototype.alias = null;
+
+                /**
+                 * BamlTyMetadata docstring.
+                 * @member {string|null|undefined} docstring
+                 * @memberof baml_bridge.cffi.v1.BamlTyMetadata
+                 * @instance
+                 */
+                BamlTyMetadata.prototype.docstring = null;
+
+                /**
+                 * BamlTyMetadata other.
+                 * @member {Object.<string,string>} other
+                 * @memberof baml_bridge.cffi.v1.BamlTyMetadata
+                 * @instance
+                 */
+                BamlTyMetadata.prototype.other = $util.emptyObject;
+
+                // OneOf field names bound to virtual getters and setters
+                let $oneOfFields;
+
+                // Virtual OneOf for proto3 optional field
+                Object.defineProperty(BamlTyMetadata.prototype, "_description", {
+                    get: $util.oneOfGetter($oneOfFields = ["description"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                // Virtual OneOf for proto3 optional field
+                Object.defineProperty(BamlTyMetadata.prototype, "_alias", {
+                    get: $util.oneOfGetter($oneOfFields = ["alias"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                // Virtual OneOf for proto3 optional field
+                Object.defineProperty(BamlTyMetadata.prototype, "_docstring", {
+                    get: $util.oneOfGetter($oneOfFields = ["docstring"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                /**
+                 * Creates a new BamlTyMetadata instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.BamlTyMetadata
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlTyMetadata=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.BamlTyMetadata} BamlTyMetadata instance
+                 */
+                BamlTyMetadata.create = function create(properties) {
+                    return new BamlTyMetadata(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlTyMetadata message. Does not implicitly {@link baml_bridge.cffi.v1.BamlTyMetadata.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.BamlTyMetadata
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlTyMetadata} message BamlTyMetadata message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlTyMetadata.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.description != null && Object.hasOwnProperty.call(message, "description"))
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.description);
+                    if (message.alias != null && Object.hasOwnProperty.call(message, "alias"))
+                        writer.uint32(/* id 2, wireType 2 =*/18).string(message.alias);
+                    if (message.docstring != null && Object.hasOwnProperty.call(message, "docstring"))
+                        writer.uint32(/* id 3, wireType 2 =*/26).string(message.docstring);
+                    if (message.other != null && Object.hasOwnProperty.call(message, "other"))
+                        for (let keys = Object.keys(message.other), i = 0; i < keys.length; ++i)
+                            writer.uint32(/* id 4, wireType 2 =*/34).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 2 =*/18).string(message.other[keys[i]]).ldelim();
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlTyMetadata message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlTyMetadata.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlTyMetadata
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlTyMetadata} message BamlTyMetadata message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlTyMetadata.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlTyMetadata message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.BamlTyMetadata
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.BamlTyMetadata} BamlTyMetadata
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlTyMetadata.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.BamlTyMetadata(), key, value;
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.description = reader.string();
+                                break;
+                            }
+                        case 2: {
+                                message.alias = reader.string();
+                                break;
+                            }
+                        case 3: {
+                                message.docstring = reader.string();
+                                break;
+                            }
+                        case 4: {
+                                if (message.other === $util.emptyObject)
+                                    message.other = {};
+                                let end2 = reader.uint32() + reader.pos;
+                                key = "";
+                                value = "";
+                                while (reader.pos < end2) {
+                                    let tag2 = reader.uint32();
+                                    switch (tag2 >>> 3) {
+                                    case 1:
+                                        key = reader.string();
+                                        break;
+                                    case 2:
+                                        value = reader.string();
+                                        break;
+                                    default:
+                                        reader.skipType(tag2 & 7, long);
+                                        break;
+                                    }
+                                }
+                                if (key === "__proto__")
+                                    $util.makeProp(message.other, key);
+                                message.other[key] = value;
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlTyMetadata message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlTyMetadata
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.BamlTyMetadata} BamlTyMetadata
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlTyMetadata.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlTyMetadata message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.BamlTyMetadata
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlTyMetadata.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    let properties = {};
+                    if (message.description != null && message.hasOwnProperty("description")) {
+                        properties._description = 1;
+                        if (!$util.isString(message.description))
+                            return "description: string expected";
+                    }
+                    if (message.alias != null && message.hasOwnProperty("alias")) {
+                        properties._alias = 1;
+                        if (!$util.isString(message.alias))
+                            return "alias: string expected";
+                    }
+                    if (message.docstring != null && message.hasOwnProperty("docstring")) {
+                        properties._docstring = 1;
+                        if (!$util.isString(message.docstring))
+                            return "docstring: string expected";
+                    }
+                    if (message.other != null && message.hasOwnProperty("other")) {
+                        if (!$util.isObject(message.other))
+                            return "other: object expected";
+                        let key = Object.keys(message.other);
+                        for (let i = 0; i < key.length; ++i)
+                            if (!$util.isString(message.other[key[i]]))
+                                return "other: string{k:string} expected";
+                    }
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlTyMetadata message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.BamlTyMetadata
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.BamlTyMetadata} BamlTyMetadata
+                 */
+                BamlTyMetadata.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.BamlTyMetadata)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.BamlTyMetadata: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.BamlTyMetadata();
+                    if (object.description != null)
+                        message.description = String(object.description);
+                    if (object.alias != null)
+                        message.alias = String(object.alias);
+                    if (object.docstring != null)
+                        message.docstring = String(object.docstring);
+                    if (object.other) {
+                        if (!$util.isObject(object.other))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlTyMetadata.other: object expected");
+                        message.other = {};
+                        for (let keys = Object.keys(object.other), i = 0; i < keys.length; ++i) {
+                            if (keys[i] === "__proto__")
+                                $util.makeProp(message.other, keys[i]);
+                            message.other[keys[i]] = String(object.other[keys[i]]);
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlTyMetadata message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.BamlTyMetadata
+                 * @static
+                 * @param {baml_bridge.cffi.v1.BamlTyMetadata} message BamlTyMetadata
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlTyMetadata.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.objects || options.defaults)
+                        object.other = {};
+                    if (message.description != null && message.hasOwnProperty("description")) {
+                        object.description = message.description;
+                        if (options.oneofs)
+                            object._description = "description";
+                    }
+                    if (message.alias != null && message.hasOwnProperty("alias")) {
+                        object.alias = message.alias;
+                        if (options.oneofs)
+                            object._alias = "alias";
+                    }
+                    if (message.docstring != null && message.hasOwnProperty("docstring")) {
+                        object.docstring = message.docstring;
+                        if (options.oneofs)
+                            object._docstring = "docstring";
+                    }
+                    let keys2;
+                    if (message.other && (keys2 = Object.keys(message.other)).length) {
+                        object.other = {};
+                        for (let j = 0; j < keys2.length; ++j) {
+                            if (keys2[j] === "__proto__")
+                                $util.makeProp(object.other, keys2[j]);
+                            object.other[keys2[j]] = message.other[keys2[j]];
+                        }
+                    }
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlTyMetadata to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.BamlTyMetadata
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlTyMetadata.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlTyMetadata
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.BamlTyMetadata
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlTyMetadata.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.BamlTyMetadata";
+                };
+
+                return BamlTyMetadata;
+            })();
+
+            v1.BamlClassDef = (function() {
+
+                /**
+                 * Properties of a BamlClassDef.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface IBamlClassDef
+                 * @property {string|null} [name] BamlClassDef name
+                 * @property {Array.<baml_bridge.cffi.v1.IBamlClassFieldDef>|null} [fields] BamlClassDef fields
+                 * @property {baml_bridge.cffi.v1.IBamlTyMetadata|null} [metadata] BamlClassDef metadata
+                 * @property {number|null} [genericParamCount] BamlClassDef genericParamCount
+                 */
+
+                /**
+                 * Constructs a new BamlClassDef.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a BamlClassDef.
+                 * @implements IBamlClassDef
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.IBamlClassDef=} [properties] Properties to set
+                 */
+                function BamlClassDef(properties) {
+                    this.fields = [];
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlClassDef name.
+                 * @member {string} name
+                 * @memberof baml_bridge.cffi.v1.BamlClassDef
+                 * @instance
+                 */
+                BamlClassDef.prototype.name = "";
+
+                /**
+                 * BamlClassDef fields.
+                 * @member {Array.<baml_bridge.cffi.v1.IBamlClassFieldDef>} fields
+                 * @memberof baml_bridge.cffi.v1.BamlClassDef
+                 * @instance
+                 */
+                BamlClassDef.prototype.fields = $util.emptyArray;
+
+                /**
+                 * BamlClassDef metadata.
+                 * @member {baml_bridge.cffi.v1.IBamlTyMetadata|null|undefined} metadata
+                 * @memberof baml_bridge.cffi.v1.BamlClassDef
+                 * @instance
+                 */
+                BamlClassDef.prototype.metadata = null;
+
+                /**
+                 * BamlClassDef genericParamCount.
+                 * @member {number} genericParamCount
+                 * @memberof baml_bridge.cffi.v1.BamlClassDef
+                 * @instance
+                 */
+                BamlClassDef.prototype.genericParamCount = 0;
+
+                /**
+                 * Creates a new BamlClassDef instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.BamlClassDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlClassDef=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.BamlClassDef} BamlClassDef instance
+                 */
+                BamlClassDef.create = function create(properties) {
+                    return new BamlClassDef(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlClassDef message. Does not implicitly {@link baml_bridge.cffi.v1.BamlClassDef.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.BamlClassDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlClassDef} message BamlClassDef message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlClassDef.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+                    if (message.fields != null && message.fields.length)
+                        for (let i = 0; i < message.fields.length; ++i)
+                            $root.baml_bridge.cffi.v1.BamlClassFieldDef.encode(message.fields[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                    if (message.metadata != null && Object.hasOwnProperty.call(message, "metadata"))
+                        $root.baml_bridge.cffi.v1.BamlTyMetadata.encode(message.metadata, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                    if (message.genericParamCount != null && Object.hasOwnProperty.call(message, "genericParamCount"))
+                        writer.uint32(/* id 4, wireType 0 =*/32).uint32(message.genericParamCount);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlClassDef message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlClassDef.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlClassDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlClassDef} message BamlClassDef message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlClassDef.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlClassDef message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.BamlClassDef
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.BamlClassDef} BamlClassDef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlClassDef.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.BamlClassDef();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.name = reader.string();
+                                break;
+                            }
+                        case 2: {
+                                if (!(message.fields && message.fields.length))
+                                    message.fields = [];
+                                message.fields.push($root.baml_bridge.cffi.v1.BamlClassFieldDef.decode(reader, reader.uint32(), undefined, long + 1));
+                                break;
+                            }
+                        case 3: {
+                                message.metadata = $root.baml_bridge.cffi.v1.BamlTyMetadata.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 4: {
+                                message.genericParamCount = reader.uint32();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlClassDef message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlClassDef
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.BamlClassDef} BamlClassDef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlClassDef.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlClassDef message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.BamlClassDef
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlClassDef.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    if (message.name != null && message.hasOwnProperty("name"))
+                        if (!$util.isString(message.name))
+                            return "name: string expected";
+                    if (message.fields != null && message.hasOwnProperty("fields")) {
+                        if (!Array.isArray(message.fields))
+                            return "fields: array expected";
+                        for (let i = 0; i < message.fields.length; ++i) {
+                            let error = $root.baml_bridge.cffi.v1.BamlClassFieldDef.verify(message.fields[i], long + 1);
+                            if (error)
+                                return "fields." + error;
+                        }
+                    }
+                    if (message.metadata != null && message.hasOwnProperty("metadata")) {
+                        let error = $root.baml_bridge.cffi.v1.BamlTyMetadata.verify(message.metadata, long + 1);
+                        if (error)
+                            return "metadata." + error;
+                    }
+                    if (message.genericParamCount != null && message.hasOwnProperty("genericParamCount"))
+                        if (!$util.isInteger(message.genericParamCount))
+                            return "genericParamCount: integer expected";
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlClassDef message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.BamlClassDef
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.BamlClassDef} BamlClassDef
+                 */
+                BamlClassDef.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.BamlClassDef)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.BamlClassDef: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.BamlClassDef();
+                    if (object.name != null)
+                        message.name = String(object.name);
+                    if (object.fields) {
+                        if (!Array.isArray(object.fields))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlClassDef.fields: array expected");
+                        message.fields = [];
+                        for (let i = 0; i < object.fields.length; ++i) {
+                            if (!$util.isObject(object.fields[i]))
+                                throw TypeError(".baml_bridge.cffi.v1.BamlClassDef.fields: object expected");
+                            message.fields[i] = $root.baml_bridge.cffi.v1.BamlClassFieldDef.fromObject(object.fields[i], long + 1);
+                        }
+                    }
+                    if (object.metadata != null) {
+                        if (!$util.isObject(object.metadata))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlClassDef.metadata: object expected");
+                        message.metadata = $root.baml_bridge.cffi.v1.BamlTyMetadata.fromObject(object.metadata, long + 1);
+                    }
+                    if (object.genericParamCount != null)
+                        message.genericParamCount = object.genericParamCount >>> 0;
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlClassDef message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.BamlClassDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.BamlClassDef} message BamlClassDef
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlClassDef.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.arrays || options.defaults)
+                        object.fields = [];
+                    if (options.defaults) {
+                        object.name = "";
+                        object.metadata = null;
+                        object.genericParamCount = 0;
+                    }
+                    if (message.name != null && message.hasOwnProperty("name"))
+                        object.name = message.name;
+                    if (message.fields && message.fields.length) {
+                        object.fields = [];
+                        for (let j = 0; j < message.fields.length; ++j)
+                            object.fields[j] = $root.baml_bridge.cffi.v1.BamlClassFieldDef.toObject(message.fields[j], options, q + 1);
+                    }
+                    if (message.metadata != null && message.hasOwnProperty("metadata"))
+                        object.metadata = $root.baml_bridge.cffi.v1.BamlTyMetadata.toObject(message.metadata, options, q + 1);
+                    if (message.genericParamCount != null && message.hasOwnProperty("genericParamCount"))
+                        object.genericParamCount = message.genericParamCount;
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlClassDef to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.BamlClassDef
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlClassDef.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlClassDef
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.BamlClassDef
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlClassDef.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.BamlClassDef";
+                };
+
+                return BamlClassDef;
+            })();
+
+            v1.BamlClassFieldDef = (function() {
+
+                /**
+                 * Properties of a BamlClassFieldDef.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface IBamlClassFieldDef
+                 * @property {string|null} [name] BamlClassFieldDef name
+                 * @property {baml_bridge.cffi.v1.IBamlTy|null} [ty] BamlClassFieldDef ty
+                 * @property {baml_bridge.cffi.v1.IBamlTyMetadata|null} [metadata] BamlClassFieldDef metadata
+                 * @property {boolean|null} [skip] BamlClassFieldDef skip
+                 */
+
+                /**
+                 * Constructs a new BamlClassFieldDef.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a BamlClassFieldDef.
+                 * @implements IBamlClassFieldDef
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.IBamlClassFieldDef=} [properties] Properties to set
+                 */
+                function BamlClassFieldDef(properties) {
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlClassFieldDef name.
+                 * @member {string} name
+                 * @memberof baml_bridge.cffi.v1.BamlClassFieldDef
+                 * @instance
+                 */
+                BamlClassFieldDef.prototype.name = "";
+
+                /**
+                 * BamlClassFieldDef ty.
+                 * @member {baml_bridge.cffi.v1.IBamlTy|null|undefined} ty
+                 * @memberof baml_bridge.cffi.v1.BamlClassFieldDef
+                 * @instance
+                 */
+                BamlClassFieldDef.prototype.ty = null;
+
+                /**
+                 * BamlClassFieldDef metadata.
+                 * @member {baml_bridge.cffi.v1.IBamlTyMetadata|null|undefined} metadata
+                 * @memberof baml_bridge.cffi.v1.BamlClassFieldDef
+                 * @instance
+                 */
+                BamlClassFieldDef.prototype.metadata = null;
+
+                /**
+                 * BamlClassFieldDef skip.
+                 * @member {boolean} skip
+                 * @memberof baml_bridge.cffi.v1.BamlClassFieldDef
+                 * @instance
+                 */
+                BamlClassFieldDef.prototype.skip = false;
+
+                /**
+                 * Creates a new BamlClassFieldDef instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.BamlClassFieldDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlClassFieldDef=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.BamlClassFieldDef} BamlClassFieldDef instance
+                 */
+                BamlClassFieldDef.create = function create(properties) {
+                    return new BamlClassFieldDef(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlClassFieldDef message. Does not implicitly {@link baml_bridge.cffi.v1.BamlClassFieldDef.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.BamlClassFieldDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlClassFieldDef} message BamlClassFieldDef message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlClassFieldDef.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+                    if (message.ty != null && Object.hasOwnProperty.call(message, "ty"))
+                        $root.baml_bridge.cffi.v1.BamlTy.encode(message.ty, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                    if (message.metadata != null && Object.hasOwnProperty.call(message, "metadata"))
+                        $root.baml_bridge.cffi.v1.BamlTyMetadata.encode(message.metadata, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                    if (message.skip != null && Object.hasOwnProperty.call(message, "skip"))
+                        writer.uint32(/* id 4, wireType 0 =*/32).bool(message.skip);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlClassFieldDef message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlClassFieldDef.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlClassFieldDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlClassFieldDef} message BamlClassFieldDef message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlClassFieldDef.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlClassFieldDef message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.BamlClassFieldDef
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.BamlClassFieldDef} BamlClassFieldDef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlClassFieldDef.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.BamlClassFieldDef();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.name = reader.string();
+                                break;
+                            }
+                        case 2: {
+                                message.ty = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 3: {
+                                message.metadata = $root.baml_bridge.cffi.v1.BamlTyMetadata.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 4: {
+                                message.skip = reader.bool();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlClassFieldDef message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlClassFieldDef
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.BamlClassFieldDef} BamlClassFieldDef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlClassFieldDef.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlClassFieldDef message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.BamlClassFieldDef
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlClassFieldDef.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    if (message.name != null && message.hasOwnProperty("name"))
+                        if (!$util.isString(message.name))
+                            return "name: string expected";
+                    if (message.ty != null && message.hasOwnProperty("ty")) {
+                        let error = $root.baml_bridge.cffi.v1.BamlTy.verify(message.ty, long + 1);
+                        if (error)
+                            return "ty." + error;
+                    }
+                    if (message.metadata != null && message.hasOwnProperty("metadata")) {
+                        let error = $root.baml_bridge.cffi.v1.BamlTyMetadata.verify(message.metadata, long + 1);
+                        if (error)
+                            return "metadata." + error;
+                    }
+                    if (message.skip != null && message.hasOwnProperty("skip"))
+                        if (typeof message.skip !== "boolean")
+                            return "skip: boolean expected";
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlClassFieldDef message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.BamlClassFieldDef
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.BamlClassFieldDef} BamlClassFieldDef
+                 */
+                BamlClassFieldDef.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.BamlClassFieldDef)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.BamlClassFieldDef: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.BamlClassFieldDef();
+                    if (object.name != null)
+                        message.name = String(object.name);
+                    if (object.ty != null) {
+                        if (!$util.isObject(object.ty))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlClassFieldDef.ty: object expected");
+                        message.ty = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.ty, long + 1);
+                    }
+                    if (object.metadata != null) {
+                        if (!$util.isObject(object.metadata))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlClassFieldDef.metadata: object expected");
+                        message.metadata = $root.baml_bridge.cffi.v1.BamlTyMetadata.fromObject(object.metadata, long + 1);
+                    }
+                    if (object.skip != null)
+                        message.skip = Boolean(object.skip);
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlClassFieldDef message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.BamlClassFieldDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.BamlClassFieldDef} message BamlClassFieldDef
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlClassFieldDef.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.defaults) {
+                        object.name = "";
+                        object.ty = null;
+                        object.metadata = null;
+                        object.skip = false;
+                    }
+                    if (message.name != null && message.hasOwnProperty("name"))
+                        object.name = message.name;
+                    if (message.ty != null && message.hasOwnProperty("ty"))
+                        object.ty = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.ty, options, q + 1);
+                    if (message.metadata != null && message.hasOwnProperty("metadata"))
+                        object.metadata = $root.baml_bridge.cffi.v1.BamlTyMetadata.toObject(message.metadata, options, q + 1);
+                    if (message.skip != null && message.hasOwnProperty("skip"))
+                        object.skip = message.skip;
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlClassFieldDef to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.BamlClassFieldDef
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlClassFieldDef.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlClassFieldDef
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.BamlClassFieldDef
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlClassFieldDef.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.BamlClassFieldDef";
+                };
+
+                return BamlClassFieldDef;
+            })();
+
+            v1.BamlEnumDef = (function() {
+
+                /**
+                 * Properties of a BamlEnumDef.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface IBamlEnumDef
+                 * @property {string|null} [name] BamlEnumDef name
+                 * @property {Array.<baml_bridge.cffi.v1.IBamlEnumVariantDef>|null} [variants] BamlEnumDef variants
+                 * @property {baml_bridge.cffi.v1.IBamlTyMetadata|null} [metadata] BamlEnumDef metadata
+                 */
+
+                /**
+                 * Constructs a new BamlEnumDef.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a BamlEnumDef.
+                 * @implements IBamlEnumDef
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.IBamlEnumDef=} [properties] Properties to set
+                 */
+                function BamlEnumDef(properties) {
+                    this.variants = [];
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlEnumDef name.
+                 * @member {string} name
+                 * @memberof baml_bridge.cffi.v1.BamlEnumDef
+                 * @instance
+                 */
+                BamlEnumDef.prototype.name = "";
+
+                /**
+                 * BamlEnumDef variants.
+                 * @member {Array.<baml_bridge.cffi.v1.IBamlEnumVariantDef>} variants
+                 * @memberof baml_bridge.cffi.v1.BamlEnumDef
+                 * @instance
+                 */
+                BamlEnumDef.prototype.variants = $util.emptyArray;
+
+                /**
+                 * BamlEnumDef metadata.
+                 * @member {baml_bridge.cffi.v1.IBamlTyMetadata|null|undefined} metadata
+                 * @memberof baml_bridge.cffi.v1.BamlEnumDef
+                 * @instance
+                 */
+                BamlEnumDef.prototype.metadata = null;
+
+                /**
+                 * Creates a new BamlEnumDef instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.BamlEnumDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlEnumDef=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.BamlEnumDef} BamlEnumDef instance
+                 */
+                BamlEnumDef.create = function create(properties) {
+                    return new BamlEnumDef(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlEnumDef message. Does not implicitly {@link baml_bridge.cffi.v1.BamlEnumDef.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.BamlEnumDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlEnumDef} message BamlEnumDef message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlEnumDef.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+                    if (message.variants != null && message.variants.length)
+                        for (let i = 0; i < message.variants.length; ++i)
+                            $root.baml_bridge.cffi.v1.BamlEnumVariantDef.encode(message.variants[i], writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                    if (message.metadata != null && Object.hasOwnProperty.call(message, "metadata"))
+                        $root.baml_bridge.cffi.v1.BamlTyMetadata.encode(message.metadata, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlEnumDef message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlEnumDef.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlEnumDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlEnumDef} message BamlEnumDef message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlEnumDef.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlEnumDef message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.BamlEnumDef
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.BamlEnumDef} BamlEnumDef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlEnumDef.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.BamlEnumDef();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.name = reader.string();
+                                break;
+                            }
+                        case 2: {
+                                if (!(message.variants && message.variants.length))
+                                    message.variants = [];
+                                message.variants.push($root.baml_bridge.cffi.v1.BamlEnumVariantDef.decode(reader, reader.uint32(), undefined, long + 1));
+                                break;
+                            }
+                        case 3: {
+                                message.metadata = $root.baml_bridge.cffi.v1.BamlTyMetadata.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlEnumDef message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlEnumDef
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.BamlEnumDef} BamlEnumDef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlEnumDef.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlEnumDef message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.BamlEnumDef
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlEnumDef.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    if (message.name != null && message.hasOwnProperty("name"))
+                        if (!$util.isString(message.name))
+                            return "name: string expected";
+                    if (message.variants != null && message.hasOwnProperty("variants")) {
+                        if (!Array.isArray(message.variants))
+                            return "variants: array expected";
+                        for (let i = 0; i < message.variants.length; ++i) {
+                            let error = $root.baml_bridge.cffi.v1.BamlEnumVariantDef.verify(message.variants[i], long + 1);
+                            if (error)
+                                return "variants." + error;
+                        }
+                    }
+                    if (message.metadata != null && message.hasOwnProperty("metadata")) {
+                        let error = $root.baml_bridge.cffi.v1.BamlTyMetadata.verify(message.metadata, long + 1);
+                        if (error)
+                            return "metadata." + error;
+                    }
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlEnumDef message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.BamlEnumDef
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.BamlEnumDef} BamlEnumDef
+                 */
+                BamlEnumDef.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.BamlEnumDef)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.BamlEnumDef: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.BamlEnumDef();
+                    if (object.name != null)
+                        message.name = String(object.name);
+                    if (object.variants) {
+                        if (!Array.isArray(object.variants))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlEnumDef.variants: array expected");
+                        message.variants = [];
+                        for (let i = 0; i < object.variants.length; ++i) {
+                            if (!$util.isObject(object.variants[i]))
+                                throw TypeError(".baml_bridge.cffi.v1.BamlEnumDef.variants: object expected");
+                            message.variants[i] = $root.baml_bridge.cffi.v1.BamlEnumVariantDef.fromObject(object.variants[i], long + 1);
+                        }
+                    }
+                    if (object.metadata != null) {
+                        if (!$util.isObject(object.metadata))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlEnumDef.metadata: object expected");
+                        message.metadata = $root.baml_bridge.cffi.v1.BamlTyMetadata.fromObject(object.metadata, long + 1);
+                    }
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlEnumDef message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.BamlEnumDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.BamlEnumDef} message BamlEnumDef
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlEnumDef.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.arrays || options.defaults)
+                        object.variants = [];
+                    if (options.defaults) {
+                        object.name = "";
+                        object.metadata = null;
+                    }
+                    if (message.name != null && message.hasOwnProperty("name"))
+                        object.name = message.name;
+                    if (message.variants && message.variants.length) {
+                        object.variants = [];
+                        for (let j = 0; j < message.variants.length; ++j)
+                            object.variants[j] = $root.baml_bridge.cffi.v1.BamlEnumVariantDef.toObject(message.variants[j], options, q + 1);
+                    }
+                    if (message.metadata != null && message.hasOwnProperty("metadata"))
+                        object.metadata = $root.baml_bridge.cffi.v1.BamlTyMetadata.toObject(message.metadata, options, q + 1);
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlEnumDef to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.BamlEnumDef
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlEnumDef.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlEnumDef
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.BamlEnumDef
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlEnumDef.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.BamlEnumDef";
+                };
+
+                return BamlEnumDef;
+            })();
+
+            v1.BamlEnumVariantDef = (function() {
+
+                /**
+                 * Properties of a BamlEnumVariantDef.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface IBamlEnumVariantDef
+                 * @property {string|null} [name] BamlEnumVariantDef name
+                 * @property {baml_bridge.cffi.v1.IBamlTyMetadata|null} [metadata] BamlEnumVariantDef metadata
+                 * @property {boolean|null} [skip] BamlEnumVariantDef skip
+                 */
+
+                /**
+                 * Constructs a new BamlEnumVariantDef.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a BamlEnumVariantDef.
+                 * @implements IBamlEnumVariantDef
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.IBamlEnumVariantDef=} [properties] Properties to set
+                 */
+                function BamlEnumVariantDef(properties) {
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * BamlEnumVariantDef name.
+                 * @member {string} name
+                 * @memberof baml_bridge.cffi.v1.BamlEnumVariantDef
+                 * @instance
+                 */
+                BamlEnumVariantDef.prototype.name = "";
+
+                /**
+                 * BamlEnumVariantDef metadata.
+                 * @member {baml_bridge.cffi.v1.IBamlTyMetadata|null|undefined} metadata
+                 * @memberof baml_bridge.cffi.v1.BamlEnumVariantDef
+                 * @instance
+                 */
+                BamlEnumVariantDef.prototype.metadata = null;
+
+                /**
+                 * BamlEnumVariantDef skip.
+                 * @member {boolean} skip
+                 * @memberof baml_bridge.cffi.v1.BamlEnumVariantDef
+                 * @instance
+                 */
+                BamlEnumVariantDef.prototype.skip = false;
+
+                /**
+                 * Creates a new BamlEnumVariantDef instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.BamlEnumVariantDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlEnumVariantDef=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.BamlEnumVariantDef} BamlEnumVariantDef instance
+                 */
+                BamlEnumVariantDef.create = function create(properties) {
+                    return new BamlEnumVariantDef(properties);
+                };
+
+                /**
+                 * Encodes the specified BamlEnumVariantDef message. Does not implicitly {@link baml_bridge.cffi.v1.BamlEnumVariantDef.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.BamlEnumVariantDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlEnumVariantDef} message BamlEnumVariantDef message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlEnumVariantDef.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+                    if (message.metadata != null && Object.hasOwnProperty.call(message, "metadata"))
+                        $root.baml_bridge.cffi.v1.BamlTyMetadata.encode(message.metadata, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                    if (message.skip != null && Object.hasOwnProperty.call(message, "skip"))
+                        writer.uint32(/* id 3, wireType 0 =*/24).bool(message.skip);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified BamlEnumVariantDef message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlEnumVariantDef.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlEnumVariantDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IBamlEnumVariantDef} message BamlEnumVariantDef message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                BamlEnumVariantDef.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a BamlEnumVariantDef message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.BamlEnumVariantDef
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.BamlEnumVariantDef} BamlEnumVariantDef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlEnumVariantDef.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.BamlEnumVariantDef();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.name = reader.string();
+                                break;
+                            }
+                        case 2: {
+                                message.metadata = $root.baml_bridge.cffi.v1.BamlTyMetadata.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 3: {
+                                message.skip = reader.bool();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a BamlEnumVariantDef message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.BamlEnumVariantDef
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.BamlEnumVariantDef} BamlEnumVariantDef
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                BamlEnumVariantDef.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a BamlEnumVariantDef message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.BamlEnumVariantDef
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                BamlEnumVariantDef.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    if (message.name != null && message.hasOwnProperty("name"))
+                        if (!$util.isString(message.name))
+                            return "name: string expected";
+                    if (message.metadata != null && message.hasOwnProperty("metadata")) {
+                        let error = $root.baml_bridge.cffi.v1.BamlTyMetadata.verify(message.metadata, long + 1);
+                        if (error)
+                            return "metadata." + error;
+                    }
+                    if (message.skip != null && message.hasOwnProperty("skip"))
+                        if (typeof message.skip !== "boolean")
+                            return "skip: boolean expected";
+                    return null;
+                };
+
+                /**
+                 * Creates a BamlEnumVariantDef message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.BamlEnumVariantDef
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.BamlEnumVariantDef} BamlEnumVariantDef
+                 */
+                BamlEnumVariantDef.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.BamlEnumVariantDef)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.BamlEnumVariantDef: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.BamlEnumVariantDef();
+                    if (object.name != null)
+                        message.name = String(object.name);
+                    if (object.metadata != null) {
+                        if (!$util.isObject(object.metadata))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlEnumVariantDef.metadata: object expected");
+                        message.metadata = $root.baml_bridge.cffi.v1.BamlTyMetadata.fromObject(object.metadata, long + 1);
+                    }
+                    if (object.skip != null)
+                        message.skip = Boolean(object.skip);
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a BamlEnumVariantDef message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.BamlEnumVariantDef
+                 * @static
+                 * @param {baml_bridge.cffi.v1.BamlEnumVariantDef} message BamlEnumVariantDef
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                BamlEnumVariantDef.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.defaults) {
+                        object.name = "";
+                        object.metadata = null;
+                        object.skip = false;
+                    }
+                    if (message.name != null && message.hasOwnProperty("name"))
+                        object.name = message.name;
+                    if (message.metadata != null && message.hasOwnProperty("metadata"))
+                        object.metadata = $root.baml_bridge.cffi.v1.BamlTyMetadata.toObject(message.metadata, options, q + 1);
+                    if (message.skip != null && message.hasOwnProperty("skip"))
+                        object.skip = message.skip;
+                    return object;
+                };
+
+                /**
+                 * Converts this BamlEnumVariantDef to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.BamlEnumVariantDef
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                BamlEnumVariantDef.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for BamlEnumVariantDef
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.BamlEnumVariantDef
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                BamlEnumVariantDef.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.BamlEnumVariantDef";
+                };
+
+                return BamlEnumVariantDef;
+            })();
+
             /**
              * BamlTyPrimitiveKind enum.
              * @name baml_bridge.cffi.v1.BamlTyPrimitiveKind
@@ -4489,7 +7114,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyPrimitive.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -4778,7 +7403,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyClass.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -5050,7 +7675,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyTypeAlias.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -5309,7 +7934,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyEnum.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -5536,7 +8161,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyList.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -5779,7 +8404,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyMap.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -6029,7 +8654,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyOptional.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -6263,7 +8888,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyUnion.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -6498,7 +9123,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyUnknown.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -6762,7 +9387,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyLiteral.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -7099,7 +9724,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyMedia.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -7391,7 +10016,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyInterface.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -7693,7 +10318,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyAssociatedBinding.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -7949,7 +10574,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyEnumVariant.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -8236,7 +10861,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyFunctionParam.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -8559,7 +11184,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyFunction.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -8879,7 +11504,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyFuture.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -9118,7 +11743,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyRustType.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -9313,7 +11938,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyMetaType.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -9508,7 +12133,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyResource.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -9703,7 +12328,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyPromptAst.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -9898,7 +12523,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyVoid.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -10115,7 +12740,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyTypeVar.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -10377,7 +13002,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyAssociatedTypeProjection.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -10628,7 +13253,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyNever.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -10870,7 +13495,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlOutboundResult.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -11168,7 +13793,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlOutboundError.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -11462,7 +14087,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlOutboundPanic.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -11710,6 +14335,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @property {Uint8Array|null} [uint8arrayValue] BamlOutboundValue uint8arrayValue
                  * @property {string|null} [bigintValue] BamlOutboundValue bigintValue
                  * @property {baml_bridge.cffi.v1.IBamlTy|null} [tyValue] BamlOutboundValue tyValue
+                 * @property {baml_bridge.cffi.v1.IBamlTyDef|null} [tyDefValue] BamlOutboundValue tyDefValue
                  */
 
                 /**
@@ -11863,17 +14489,25 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  */
                 BamlOutboundValue.prototype.tyValue = null;
 
+                /**
+                 * BamlOutboundValue tyDefValue.
+                 * @member {baml_bridge.cffi.v1.IBamlTyDef|null|undefined} tyDefValue
+                 * @memberof baml_bridge.cffi.v1.BamlOutboundValue
+                 * @instance
+                 */
+                BamlOutboundValue.prototype.tyDefValue = null;
+
                 // OneOf field names bound to virtual getters and setters
                 let $oneOfFields;
 
                 /**
                  * BamlOutboundValue value.
-                 * @member {"nullValue"|"stringValue"|"intValue"|"floatValue"|"boolValue"|"classValue"|"enumValue"|"literalValue"|"listValue"|"mapValue"|"unionVariantValue"|"handleValue"|"mediaValue"|"promptAstValue"|"uint8arrayValue"|"bigintValue"|"tyValue"|undefined} value
+                 * @member {"nullValue"|"stringValue"|"intValue"|"floatValue"|"boolValue"|"classValue"|"enumValue"|"literalValue"|"listValue"|"mapValue"|"unionVariantValue"|"handleValue"|"mediaValue"|"promptAstValue"|"uint8arrayValue"|"bigintValue"|"tyValue"|"tyDefValue"|undefined} value
                  * @memberof baml_bridge.cffi.v1.BamlOutboundValue
                  * @instance
                  */
                 Object.defineProperty(BamlOutboundValue.prototype, "value", {
-                    get: $util.oneOfGetter($oneOfFields = ["nullValue", "stringValue", "intValue", "floatValue", "boolValue", "classValue", "enumValue", "literalValue", "listValue", "mapValue", "unionVariantValue", "handleValue", "mediaValue", "promptAstValue", "uint8arrayValue", "bigintValue", "tyValue"]),
+                    get: $util.oneOfGetter($oneOfFields = ["nullValue", "stringValue", "intValue", "floatValue", "boolValue", "classValue", "enumValue", "literalValue", "listValue", "mapValue", "unionVariantValue", "handleValue", "mediaValue", "promptAstValue", "uint8arrayValue", "bigintValue", "tyValue", "tyDefValue"]),
                     set: $util.oneOfSetter($oneOfFields)
                 });
 
@@ -11939,6 +14573,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         writer.uint32(/* id 20, wireType 2 =*/162).string(message.bigintValue);
                     if (message.tyValue != null && Object.hasOwnProperty.call(message, "tyValue"))
                         $root.baml_bridge.cffi.v1.BamlTy.encode(message.tyValue, writer.uint32(/* id 21, wireType 2 =*/170).fork(), q + 1).ldelim();
+                    if (message.tyDefValue != null && Object.hasOwnProperty.call(message, "tyDefValue"))
+                        $root.baml_bridge.cffi.v1.BamlTyDef.encode(message.tyDefValue, writer.uint32(/* id 22, wireType 2 =*/178).fork(), q + 1).ldelim();
                     return writer;
                 };
 
@@ -11952,7 +14588,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlOutboundValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -12045,6 +14681,10 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             }
                         case 21: {
                                 message.tyValue = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 22: {
+                                message.tyDefValue = $root.baml_bridge.cffi.v1.BamlTyDef.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         default:
@@ -12237,6 +14877,16 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 return "tyValue." + error;
                         }
                     }
+                    if (message.tyDefValue != null && message.hasOwnProperty("tyDefValue")) {
+                        if (properties.value === 1)
+                            return "value: multiple values";
+                        properties.value = 1;
+                        {
+                            let error = $root.baml_bridge.cffi.v1.BamlTyDef.verify(message.tyDefValue, long + 1);
+                            if (error)
+                                return "tyDefValue." + error;
+                        }
+                    }
                     return null;
                 };
 
@@ -12334,6 +14984,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         if (!$util.isObject(object.tyValue))
                             throw TypeError(".baml_bridge.cffi.v1.BamlOutboundValue.tyValue: object expected");
                         message.tyValue = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.tyValue, long + 1);
+                    }
+                    if (object.tyDefValue != null) {
+                        if (!$util.isObject(object.tyDefValue))
+                            throw TypeError(".baml_bridge.cffi.v1.BamlOutboundValue.tyDefValue: object expected");
+                        message.tyDefValue = $root.baml_bridge.cffi.v1.BamlTyDef.fromObject(object.tyDefValue, long + 1);
                     }
                     return message;
                 };
@@ -12444,6 +15099,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         object.tyValue = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.tyValue, options, q + 1);
                         if (options.oneofs)
                             object.value = "tyValue";
+                    }
+                    if (message.tyDefValue != null && message.hasOwnProperty("tyDefValue")) {
+                        object.tyDefValue = $root.baml_bridge.cffi.v1.BamlTyDef.toObject(message.tyDefValue, options, q + 1);
+                        if (options.oneofs)
+                            object.value = "tyDefValue";
                     }
                     return object;
                 };
@@ -12574,7 +15234,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlOutboundHandle.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -12920,7 +15580,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValueNull.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -13139,7 +15799,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValueList.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -13414,7 +16074,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlOutboundMapEntry.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -13683,7 +16343,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValueMap.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -13991,7 +16651,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValueClass.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -14304,7 +16964,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValueEnum.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -14631,7 +17291,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValueUnionVariant.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -15032,7 +17692,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValueMedia.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -15403,7 +18063,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValuePromptAst.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -15710,7 +18370,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValuePromptAstMessage.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -15969,7 +18629,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValuePromptAstMultiple.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -16251,7 +18911,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValuePromptAstSimple.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -16532,7 +19192,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValuePromptAstSimpleMultiple.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -16780,7 +19440,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlToHostCall.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -17048,7 +19708,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlToHostArg.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**
@@ -17363,7 +20023,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlLiteralValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+                    return this.encode(message, writer).ldelim();
                 };
 
                 /**

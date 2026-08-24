@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import sys
+import zoneinfo
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,10 +29,23 @@ VSIX_PACKAGE = ROOT / "typescript2" / "app-vscode-ext" / "package.json"
 NODE_PACKAGE = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript" / "package.json"
 NODE_NATIVE_JS = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript" / "dist" / "native.js"
 WEB_PACKAGE = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript_web" / "package.json"
+NODE_VERSION_RS = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript" / "src" / "version.rs"
+WEB_VERSION_RS = ROOT / "baml_language" / "sdks" / "typescript" / "bridge_typescript_web" / "src" / "version.rs"
 NPM_PACKAGES = (NODE_PACKAGE, WEB_PACKAGE)
 GO_RUNTIME_VERSION = ROOT / "baml_language" / "sdks" / "go" / "baml_go" / "version.go"
 RUST_BRIDGE_VERSION_RS = ROOT / "baml_language" / "sdks" / "rust" / "bridge_rust" / "src" / "version.rs"
 RUST_BRIDGE_CARGO_TOML = ROOT / "baml_language" / "sdks" / "rust" / "bridge_rust" / "Cargo.toml"
+RUBY_BRIDGE_VERSION = (
+    ROOT
+    / "baml_language"
+    / "sdks"
+    / "ruby"
+    / "bridge_ruby"
+    / "lib"
+    / "baml"
+    / "bridge"
+    / "version.rb"
+)
 WRAPPER_CARGO_TOML = ROOT / "baml_language" / "crates" / "baml" / "Cargo.toml"
 CSHARP_PROJECT = (
     ROOT
@@ -42,6 +56,10 @@ CSHARP_PROJECT = (
     / "src"
     / "Baml.Bridge.csproj"
 )
+CSHARP_RUNTIME_IDENTITY = ROOT / "baml_language" / "sdks" / "csharp" / "bridge_csharp" / "src" / "RuntimeIdentity.cs"
+JAVA_VERSION = ROOT / "baml_language" / "sdks" / "java" / "baml_bridge" / "src" / "main" / "java" / "baml_bridge" / "BamlVersion.java"
+SWIFT_RUNTIME_IDENTITY = ROOT / "baml_language" / "sdks" / "swift" / "Sources" / "BamlBridge" / "RuntimeIdentity.swift"
+CPP_VERSION = ROOT / "baml_language" / "sdks" / "cpp" / "bridge_cpp" / "include" / "baml" / "version.h"
 JAVA_BRIDGE_BUILD = ROOT / "baml_language" / "sdks" / "java" / "baml_bridge" / "build.gradle.kts"
 JAVA_KOTLIN_BUILD = (
     ROOT
@@ -83,6 +101,7 @@ PLAN_REGISTRIES = (
     "maven",
     "gradle_plugin",
     "swiftpm",
+    "go",
 )
 
 
@@ -157,6 +176,10 @@ class ReleasePlan:
     @property
     def swiftpm_version(self) -> str:
         return self.registry_versions["swiftpm"]
+
+    @property
+    def go_version(self) -> str:
+        return self.registry_versions["go"]
 
 
 def fail(message: str, code: int = 1) -> None:
@@ -273,13 +296,47 @@ def previous_release_toml() -> str | None:
     return None
 
 
-def today_utc() -> str:
-    override = os.environ.get("BAML_LANGUAGE_VERSION_DATE")
+SEATTLE = "America/Los_Angeles"
+
+# Determinism knobs for fixture builds. No release path sets either one.
+NIGHTLY_DATE_ENV = "BAML_LANGUAGE_VERSION_DATE"
+NIGHTLY_LETTER_ENV = "BAML_LANGUAGE_VERSION_NIGHTLY_LETTER"
+
+
+def night_for(moment: dt.datetime) -> str:
+    """The Seattle day a nightly cut made at `moment` is named for.
+
+    A nightly closes out a day, and .github/workflows/nightly-release.yml cuts it
+    in the midnight hour that follows, so the cut is named for the day that just
+    ended. Deriving that from the local *date* rather than the local time keeps
+    the answer stable however late the cut runs: a release that is dispatched at
+    00:05 and only reaches its plan step at 02:30 still names the same night.
+
+    Cuts are ordered by this date and then by letter, so the pair rises
+    monotonically as long as cuts happen in time order.
+    """
+    if moment.tzinfo is None:
+        fail("night_for requires a timezone-aware moment")
+    # ZoneInfo is built lazily: only version computation needs the tz database,
+    # while `stamp` runs on every build runner, including Windows.
+    local_date = moment.astimezone(zoneinfo.ZoneInfo(SEATTLE)).date()
+    return (local_date - dt.timedelta(days=1)).strftime("%Y%m%d")
+
+
+def nightly_date() -> str:
+    override = os.environ.get(NIGHTLY_DATE_ENV)
     if override:
-        if not re.fullmatch(r"\d{8}", override):
-            fail("BAML_LANGUAGE_VERSION_DATE must be YYYYMMDD")
+        # `\d` would accept non-ASCII digits, and an 8-digit string is not
+        # necessarily a date; this value ends up in irreversible registry
+        # publishes, so require a real one.
+        if not re.fullmatch(r"[0-9]{8}", override):
+            fail(f"{NIGHTLY_DATE_ENV} must be YYYYMMDD")
+        try:
+            dt.datetime.strptime(override, "%Y%m%d")
+        except ValueError:
+            fail(f"{NIGHTLY_DATE_ENV} {override!r} is not a real date")
         return override
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d")
+    return night_for(dt.datetime.now(dt.timezone.utc))
 
 
 def command_output(command: list[str]) -> str | None:
@@ -296,6 +353,15 @@ def command_output(command: list[str]) -> str | None:
 
 
 def release_tags() -> list[str]:
+    """Every release tag, or a hard failure -- never a silent empty list.
+
+    The nightly letter is allocated by looking for the tags a night already has,
+    so "the lookup failed" and "this night has no tags yet" must not collapse
+    into the same answer: doing so restarts lettering at `a` and re-mints an
+    already-published version, whose release assets the toolchain publisher then
+    overwrites. `command_output` returns None on failure and "" on success with
+    no output, which is exactly the distinction needed here.
+    """
     output = command_output(
         [
             "gh",
@@ -311,26 +377,57 @@ def release_tags() -> list[str]:
             ".[].tagName",
         ]
     )
-    if output:
-        return [line.strip() for line in output.splitlines() if line.strip()]
-
-    output = command_output(["git", "ls-remote", "--tags", "https://github.com/BoundaryML/baml.git"])
-    if output:
-        tags: list[str] = []
-        for line in output.splitlines():
-            ref = line.rsplit("/", 1)[-1].removesuffix("^{}")
-            if ref:
-                tags.append(ref)
+    if output is None:
+        output = command_output(
+            ["git", "ls-remote", "--tags", "https://github.com/BoundaryML/baml.git"]
+        )
+        if output is None:
+            fail(
+                "could not list release tags (`gh release list` and `git ls-remote` "
+                "both failed); refusing to compute a version that could collide "
+                "with a published release"
+            )
+        tags = [
+            ref
+            for line in output.splitlines()
+            if (ref := line.rsplit("/", 1)[-1].removesuffix("^{}"))
+        ]
+        if not tags:
+            # Reached only because `gh` already failed. An empty answer from the
+            # fallback is far likelier to be a second symptom than a repository
+            # with no tags, and reading it as "no tags yet" is precisely the
+            # collapse this function exists to prevent.
+            fail(
+                "`git ls-remote --tags` returned no tags; refusing to compute a "
+                "version that could collide with a published release"
+            )
         return tags
 
-    return []
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def newest_nightly_stamp(base: Version, tags: list[str]) -> tuple[str, str] | None:
+    """The (night, letter) of the newest nightly already published for `base`.
+
+    Nightlies sort by night and then by letter, so this pair is exactly what a
+    newly planned cut has to beat.
+    """
+    prefix = f"baml-language-{base}-nightly."
+    stamps = []
+    for tag in tags:
+        if not tag.startswith(prefix):
+            continue
+        night, _, letter = tag.removeprefix(prefix).partition(".")
+        if re.fullmatch(r"[0-9]{8}", night) and SHA_RE.fullmatch(letter):
+            stamps.append((night, letter))
+    return max(stamps, default=None)
 
 
 def next_nightly_letter(base: Version, date: str, tags: list[str] | None = None) -> str:
-    override = os.environ.get("BAML_LANGUAGE_VERSION_NIGHTLY_LETTER")
+    override = os.environ.get(NIGHTLY_LETTER_ENV)
     if override:
         if SHA_RE.fullmatch(override) is None:
-            fail("BAML_LANGUAGE_VERSION_NIGHTLY_LETTER must be one lowercase letter")
+            fail(f"{NIGHTLY_LETTER_ENV} must be one lowercase letter")
         return override
     prefix = f"baml-language-{base}-nightly.{date}."
     used = sorted(
@@ -344,7 +441,7 @@ def next_nightly_letter(base: Version, date: str, tags: list[str] | None = None)
     max_index = max(ord(letter) - ord("a") for letter in used)
     if max_index >= 25:
         fail(
-            f"26 nightly builds today for base {base}; wait for the next UTC day or cut a new canary release by bumping baml_language/release.toml [release].canary_version.",
+            f"26 nightly builds for base {base} on this night; wait for the next Seattle day or cut a new canary release by bumping baml_language/release.toml [release].canary_version.",
             code=2,
         )
     return chr(ord("a") + max_index + 1)
@@ -356,8 +453,25 @@ def compute_version(channel: str) -> str:
         return str(canary)
     if channel == "nightly":
         base = canary.next_patch()
-        date = today_utc()
-        letter = next_nightly_letter(base, date)
+        date = nightly_date()
+        # The two overrides exist to pin fixture builds to a fixed version.
+        # Those never publish, and a pinned past date is *expected* to sort under
+        # what is live, so they opt out of the ordering check below.
+        if os.environ.get(NIGHTLY_DATE_ENV) or os.environ.get(NIGHTLY_LETTER_ENV):
+            return f"{base}-nightly.{date}.{next_nightly_letter(base, date)}"
+        tags = release_tags()
+        letter = next_nightly_letter(base, date, tags)
+        # The registries mostly resolve by highest version, but the nightly npm
+        # dist-tag and the channel manifest are last-writer-wins: publishing a
+        # version below the live one walks every consumer backwards. Nothing
+        # downstream re-checks this, so refuse here rather than ship it.
+        published = newest_nightly_stamp(base, tags)
+        if published is not None and (date, letter) <= published:
+            fail(
+                f"planned nightly {base}-nightly.{date}.{letter} is not newer than the "
+                f"published {base}-nightly.{published[0]}.{published[1]}; refusing to "
+                "walk the nightly channel backwards"
+            )
         return f"{base}-nightly.{date}.{letter}"
     fail(f"unsupported channel {channel!r}")
 
@@ -382,6 +496,7 @@ def registry_versions_for(canonical: str) -> dict[str, str]:
         "maven": canonical,
         "gradle_plugin": canonical,
         "swiftpm": canonical,
+        "go": f"v{canonical}",
     }
     # Keep the map and the declared registry set in lockstep.
     assert set(translations) == set(PLAN_REGISTRIES)
@@ -520,6 +635,20 @@ def replace_regex(path: Path, pattern: str, replacement: str) -> None:
     path.write_text(new_text, encoding="utf-8")
 
 
+def replace_json_version(path: Path, version: str) -> None:
+    text = path.read_text(encoding="utf-8")
+    new_text, count = re.subn(
+        r'^(\s*"version"\s*:\s*)"[^"]*"(?P<comma>,?)$',
+        lambda match: f'{match.group(1)}"{version}"{match.group("comma")}',
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if count != 1:
+        fail(f"could not update expected version surface in {path.relative_to(ROOT)}")
+    path.write_text(new_text, encoding="utf-8")
+
+
 def stamp(plan: ReleasePlan) -> None:
     BAML_VERSION_RS.parent.mkdir(parents=True, exist_ok=True)
     BAML_VERSION_RS.write_text(
@@ -528,8 +657,7 @@ def stamp(plan: ReleasePlan) -> None:
                 "//! Stamped BAML language product version.",
                 "",
                 f'pub const CANONICAL_VERSION: &str = "{plan.canonical_version}";',
-                "#[allow(dead_code)]",
-                f'const PYPI_VERSION: &str = "{plan.pypi_version}";',
+                f'pub const PYPI_VERSION: &str = "{plan.pypi_version}";',
                 f'pub const CHANNEL: &str = "{plan.channel}";',
                 "#[allow(dead_code)]",
                 f'const STABLE_VERSION: &str = "{plan.canary_version}";',
@@ -544,8 +672,13 @@ def stamp(plan: ReleasePlan) -> None:
     # version handshake compares the loaded engine against it).
     replace_regex(
         RUST_BRIDGE_VERSION_RS,
-        r'^pub\(crate\) const CANONICAL_VERSION: &str = ".*";$',
-        f'pub(crate) const CANONICAL_VERSION: &str = "{plan.canonical_version}";',
+        r'^pub\(crate\) const TOOLCHAIN_VERSION: &str = ".*";$',
+        f'pub(crate) const TOOLCHAIN_VERSION: &str = "{plan.canonical_version}";',
+    )
+    replace_regex(
+        RUST_BRIDGE_VERSION_RS,
+        r'^pub\(crate\) const BRIDGE_RUNTIME_VERSION: &str = ".*";$',
+        f'pub(crate) const BRIDGE_RUNTIME_VERSION: &str = "{plan.crates_io_version}";',
     )
     # The bridge crate publishes to crates.io, so its Cargo.toml version is a
     # literal (not the workspace `0.0.0-beta`) stamped from the plan's
@@ -555,19 +688,85 @@ def stamp(plan: ReleasePlan) -> None:
         r'^version = ".*"$',
         f'version = "{plan.crates_io_version}"',
     )
-    replace_regex(VSIX_PACKAGE, r'^  "version": ".*",$', f'  "version": "{plan.canonical_version}",')
+    replace_regex(
+        RUBY_BRIDGE_VERSION,
+        r'^    TOOLCHAIN_VERSION = ".*"$',
+        f'    TOOLCHAIN_VERSION = "{plan.canonical_version}"',
+    )
+    replace_regex(
+        RUBY_BRIDGE_VERSION,
+        r'^    BRIDGE_RUNTIME_VERSION = ".*"$',
+        f'    BRIDGE_RUNTIME_VERSION = "{plan.canonical_version}"',
+    )
+    replace_json_version(VSIX_PACKAGE, plan.canonical_version)
     for package in NPM_PACKAGES:
         if package.exists():
-            replace_regex(package, r'^  "version": ".*",$', f'  "version": "{plan.canonical_version}",')
+            replace_json_version(package, plan.canonical_version)
     replace_regex(
         GO_RUNTIME_VERSION,
-        r'^const DefaultRuntimeVersion = ".*"$',
-        f'const DefaultRuntimeVersion = "{plan.canonical_version}"',
+        r'^const ToolchainVersion = ".*"$',
+        f'const ToolchainVersion = "{plan.canonical_version}"',
+    )
+    replace_regex(
+        GO_RUNTIME_VERSION,
+        r'^const BridgeRuntimeVersion = ".*"$',
+        f'const BridgeRuntimeVersion = "{plan.go_version}"',
     )
     replace_regex(
         CSHARP_PROJECT,
         r"^    <Version>.*</Version>$",
         f"    <Version>{plan.nuget_version}</Version>",
+    )
+    for path in (NODE_VERSION_RS, WEB_VERSION_RS):
+        replace_regex(
+            path,
+            r'^pub\(crate\) const TOOLCHAIN_VERSION: &str = ".*";$',
+            f'pub(crate) const TOOLCHAIN_VERSION: &str = "{plan.canonical_version}";',
+        )
+        replace_regex(
+            path,
+            r'^pub\(crate\) const BRIDGE_RUNTIME_VERSION: &str = ".*";$',
+            f'pub(crate) const BRIDGE_RUNTIME_VERSION: &str = "{plan.npm_version}";',
+        )
+    replace_regex(
+        CSHARP_RUNTIME_IDENTITY,
+        r'^    internal const string ToolchainVersion = ".*";$',
+        f'    internal const string ToolchainVersion = "{plan.canonical_version}";',
+    )
+    replace_regex(
+        CSHARP_RUNTIME_IDENTITY,
+        r'^    internal const string BridgeRuntimeVersion = ".*";$',
+        f'    internal const string BridgeRuntimeVersion = "{plan.nuget_version}";',
+    )
+    replace_regex(
+        JAVA_VERSION,
+        r'^    static final String TOOLCHAIN_VERSION = ".*";$',
+        f'    static final String TOOLCHAIN_VERSION = "{plan.canonical_version}";',
+    )
+    replace_regex(
+        JAVA_VERSION,
+        r'^    static final String BRIDGE_RUNTIME_VERSION = ".*";$',
+        f'    static final String BRIDGE_RUNTIME_VERSION = "{plan.maven_version}";',
+    )
+    replace_regex(
+        SWIFT_RUNTIME_IDENTITY,
+        r'^    public static let toolchainVersion = ".*"$',
+        f'    public static let toolchainVersion = "{plan.canonical_version}"',
+    )
+    replace_regex(
+        SWIFT_RUNTIME_IDENTITY,
+        r'^    public static let bridgeRuntimeVersion = ".*"$',
+        f'    public static let bridgeRuntimeVersion = "{plan.swiftpm_version}"',
+    )
+    replace_regex(
+        CPP_VERSION,
+        r'^inline constexpr const char\* kToolchainVersion = ".*";$',
+        f'inline constexpr const char* kToolchainVersion = "{plan.canonical_version}";',
+    )
+    replace_regex(
+        CPP_VERSION,
+        r'^inline constexpr const char\* kBridgeRuntimeVersion = ".*";$',
+        f'inline constexpr const char* kBridgeRuntimeVersion = "{plan.canonical_version}";',
     )
 
     text = PY_INIT.read_text(encoding="utf-8")
@@ -656,7 +855,7 @@ def check_release() -> None:
         ),
         "baml_version::PYPI_VERSION": exact_regex_field(
             BAML_VERSION_RS,
-            r'^const PYPI_VERSION: &str = "([^"]+)";$',
+            r'^pub const PYPI_VERSION: &str = "([^"]+)";$',
             expected.pypi_version,
         ),
         "baml_version::CHANNEL": exact_regex_field(
@@ -682,10 +881,15 @@ def check_release() -> None:
         # Load-bearing beyond drift hygiene: the Rust bridge's loader
         # handshakes the loaded engine's version() against this constant,
         # in development builds too.
-        "rust bridge CANONICAL_VERSION": exact_regex_field(
+        "rust bridge toolchain version": exact_regex_field(
             RUST_BRIDGE_VERSION_RS,
-            r'^pub\(crate\) const CANONICAL_VERSION: &str = "([^"]+)";$',
+            r'^pub\(crate\) const TOOLCHAIN_VERSION: &str = "([^"]+)";$',
             expected.canonical_version,
+        ),
+        "rust bridge runtime version": exact_regex_field(
+            RUST_BRIDGE_VERSION_RS,
+            r'^pub\(crate\) const BRIDGE_RUNTIME_VERSION: &str = "([^"]+)";$',
+            expected.crates_io_version,
         ),
         "rust bridge Cargo.toml version": exact_regex_field(
             # stamp() writes this from crates_io_version; check the same
@@ -695,18 +899,73 @@ def check_release() -> None:
             r'^version = "([^"]+)"$',
             expected.crates_io_version,
         ),
+        "ruby toolchain version": exact_regex_field(
+            RUBY_BRIDGE_VERSION,
+            r'^    TOOLCHAIN_VERSION = "([^"]+)"$',
+            expected.canonical_version,
+        ),
+        "ruby bridge runtime version": exact_regex_field(
+            RUBY_BRIDGE_VERSION,
+            r'^    BRIDGE_RUNTIME_VERSION = "([^"]+)"$',
+            expected.canonical_version,
+        ),
         "vsix package version": (
             json_version(VSIX_PACKAGE) == expected.canonical_version
         ),
-        "go runtime version": exact_regex_field(
+        "go toolchain version": exact_regex_field(
             GO_RUNTIME_VERSION,
-            r'^const DefaultRuntimeVersion = "([^"]+)"$',
+            r'^const ToolchainVersion = "([^"]+)"$',
             expected.canonical_version,
+        ),
+        "go bridge runtime version": exact_regex_field(
+            GO_RUNTIME_VERSION,
+            r'^const BridgeRuntimeVersion = "([^"]+)"$',
+            expected.go_version,
         ),
         "C# NuGet project version": exact_regex_field(
             CSHARP_PROJECT,
             r"^    <Version>([^<]+)</Version>$",
             expected.nuget_version,
+        ),
+        "C# toolchain version": exact_regex_field(
+            CSHARP_RUNTIME_IDENTITY,
+            r'^    internal const string ToolchainVersion = "([^"]+)";$',
+            expected.canonical_version,
+        ),
+        "C# bridge runtime version": exact_regex_field(
+            CSHARP_RUNTIME_IDENTITY,
+            r'^    internal const string BridgeRuntimeVersion = "([^"]+)";$',
+            expected.nuget_version,
+        ),
+        "Java toolchain version": exact_regex_field(
+            JAVA_VERSION,
+            r'^    static final String TOOLCHAIN_VERSION = "([^"]+)";$',
+            expected.canonical_version,
+        ),
+        "Java bridge runtime version": exact_regex_field(
+            JAVA_VERSION,
+            r'^    static final String BRIDGE_RUNTIME_VERSION = "([^"]+)";$',
+            expected.maven_version,
+        ),
+        "Swift toolchain version": exact_regex_field(
+            SWIFT_RUNTIME_IDENTITY,
+            r'^    public static let toolchainVersion = "([^"]+)"$',
+            expected.canonical_version,
+        ),
+        "Swift bridge runtime version": exact_regex_field(
+            SWIFT_RUNTIME_IDENTITY,
+            r'^    public static let bridgeRuntimeVersion = "([^"]+)"$',
+            expected.swiftpm_version,
+        ),
+        "C++ toolchain version": exact_regex_field(
+            CPP_VERSION,
+            r'^inline constexpr const char\* kToolchainVersion = "([^"]+)";$',
+            expected.canonical_version,
+        ),
+        "C++ bridge runtime version": exact_regex_field(
+            CPP_VERSION,
+            r'^inline constexpr const char\* kBridgeRuntimeVersion = "([^"]+)";$',
+            expected.canonical_version,
         ),
         # Java/Kotlin packages intentionally receive their identity-valued
         # Maven version from the frozen plan through -PbamlVersion.
@@ -735,6 +994,16 @@ def check_release() -> None:
         checks["node package version"] = (
             json_version(NODE_PACKAGE) == expected.npm_version
         )
+        checks["node toolchain version"] = exact_regex_field(
+            NODE_VERSION_RS,
+            r'^pub\(crate\) const TOOLCHAIN_VERSION: &str = "([^"]+)";$',
+            expected.canonical_version,
+        )
+        checks["node bridge runtime version"] = exact_regex_field(
+            NODE_VERSION_RS,
+            r'^pub\(crate\) const BRIDGE_RUNTIME_VERSION: &str = "([^"]+)";$',
+            expected.npm_version,
+        )
         if not NODE_NATIVE_JS.exists():
             mismatches.append(
                 "node native loader version guards: "
@@ -761,6 +1030,16 @@ def check_release() -> None:
     if WEB_PACKAGE.exists():
         checks["web package version"] = (
             json_version(WEB_PACKAGE) == expected.npm_version
+        )
+        checks["web toolchain version"] = exact_regex_field(
+            WEB_VERSION_RS,
+            r'^pub\(crate\) const TOOLCHAIN_VERSION: &str = "([^"]+)";$',
+            expected.canonical_version,
+        )
+        checks["web bridge runtime version"] = exact_regex_field(
+            WEB_VERSION_RS,
+            r'^pub\(crate\) const BRIDGE_RUNTIME_VERSION: &str = "([^"]+)";$',
+            expected.npm_version,
         )
 
     for name, ok in checks.items():

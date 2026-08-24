@@ -8,8 +8,8 @@
 //!   type annotations inside expression bodies (let, patterns, lambdas)
 
 use crate::ast::{
-    ClassDef, Expr, ExprBody, FunctionBodyDef, FunctionDef, Item, LetDef, TypeAliasDef, TypeExpr,
-    TypeExprKind,
+    ClassDef, Expr, ExprBody, FunctionBodyDef, FunctionDef, Item, LambdaDef, LetDef, TypeAliasDef,
+    TypeExpr, TypeExprKind,
 };
 
 /// The canonical set of field attribute names.
@@ -18,6 +18,13 @@ const FIELD_ATTR_NAMES: &[&str] = &["alias", "description", "skip"];
 /// Check if an attribute name is a field attribute.
 pub fn is_field_attr(name: &str) -> bool {
     FIELD_ATTR_NAMES.contains(&name)
+}
+
+/// Whether a direct outer attribute on a class field belongs to field metadata.
+/// Known type transforms stay on the type; unknown names are user schema
+/// annotations and are hoisted for reflection read-back.
+pub(crate) fn should_hoist_field_attr(name: &str) -> bool {
+    is_field_attr(name) || !name.starts_with("stream.")
 }
 
 /// Post-lowering validation: report field attrs that appear in nested type
@@ -44,11 +51,9 @@ pub(crate) fn validate_field_attrs(items: &[Item]) -> Vec<(String, text_size::Te
 
 fn validate_class(class: &ClassDef, diagnostics: &mut Vec<(String, text_size::TextRange)>) {
     for field in &class.fields {
-        if let Some(ref spanned_type) = field.type_expr {
-            // After hoisting, the outermost TypeExpr should have no field attrs left.
-            // Any remaining field attrs are in invalid positions.
-            validate_type_expr_tree(spanned_type, diagnostics);
-        }
+        // After hoisting, the outermost TypeExpr should have no field attrs left.
+        // Any remaining field attrs are in invalid positions.
+        validate_type_expr_tree(&field.type_expr, diagnostics);
     }
     // Also validate method signatures
     for method in &class.methods {
@@ -99,12 +104,28 @@ fn validate_expr_body(body: &ExprBody, diagnostics: &mut Vec<(String, text_size:
         }
     }
 
-    // Recurse into lambda bodies — they have their own FunctionDef with nested ExprBody.
+    // Recurse into lambda bodies — each has its own nested `ExprBody`.
     for (_, expr) in body.exprs.iter() {
-        if let Expr::Lambda(func_def) = expr {
-            validate_function(func_def, diagnostics);
+        if let Expr::Lambda(lambda) = expr {
+            validate_lambda(lambda, diagnostics);
         }
     }
+}
+
+fn validate_lambda(lambda: &LambdaDef, diagnostics: &mut Vec<(String, text_size::TextRange)>) {
+    for param in &lambda.params {
+        if let Some(ref spanned) = param.type_expr {
+            validate_type_expr_tree(spanned, diagnostics);
+        }
+    }
+    if let Some(ref spanned) = lambda.return_type {
+        validate_type_expr_tree(spanned, diagnostics);
+    }
+    if let Some(ref spanned) = lambda.throws {
+        validate_type_expr_tree(spanned, diagnostics);
+    }
+    // The body lives in the arena this walk is already covering, so there is
+    // nothing further to recurse into.
 }
 
 fn validate_type_alias(

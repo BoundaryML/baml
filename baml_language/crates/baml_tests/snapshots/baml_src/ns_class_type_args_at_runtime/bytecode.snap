@@ -1,0 +1,247 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function class_type_args_at_runtime.$init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.class_type_args_at_runtime"
+    load_const "method_sees_class_type_arg_int"
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.class_type_args_at_runtime"
+    load_const "method_sees_class_type_arg_string"
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.class_type_args_at_runtime"
+    load_const "method_sees_composite_class_type_arg"
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.class_type_args_at_runtime"
+    load_const "union_dispatch_generic_class_int"
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.class_type_args_at_runtime"
+    load_const "union_dispatch_generic_class_string"
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.class_type_args_at_runtime"
+    load_const "is_type_parametric_class_same_args"
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.class_type_args_at_runtime"
+    load_const "is_type_parametric_class_different_args"
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.class_type_args_at_runtime"
+    load_const "is_type_bare_class_still_matches"
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.class_type_args_at_runtime"
+    load_const "closure_inside_method_captures_class_type_arg"
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.class_type_args_at_runtime"
+    load_const "closure_inside_method_survives_gc"
+    make_closure .<lambda($init_test_ns_class_type_args_at_runtime_class_type_args_at_runtime, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function class_type_args_at_runtime.Box.describe(self: class_type_args_at_runtime.Box<#0>) -> string {
+    load_type #0
+    call reflect.Type.baml.ToString.to_string
+    return
+}
+
+function class_type_args_at_runtime.Box2.make_describer(self: class_type_args_at_runtime.Box2<#0>) -> () -> string throws never {
+    load_type #0
+    make_closure .<lambda(Box2.make_describer, 0)>, captures=0, ntypeargs=1
+    return
+}
+
+function class_type_args_at_runtime.check_foo(f: class_type_args_at_runtime.Foo<int> | class_type_args_at_runtime.Foo<string>) -> bool {
+    load_var f
+    is_type class_type_args_at_runtime.Foo<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function class_type_args_at_runtime.check_foo_bare(f: class_type_args_at_runtime.Foo<int> | string) -> bool {
+    load_var f
+    is_type class_type_args_at_runtime.Foo<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function class_type_args_at_runtime.closure_inside_method_captures_class_type_arg_fn() -> string {
+    load_type int
+    load_type int
+    alloc_instance<1> user.class_type_args_at_runtime.Box2
+    call user.class_type_args_at_runtime.Box2.make_describer
+    call_indirect
+    return
+}
+
+function class_type_args_at_runtime.closure_inside_method_survives_gc_fn() -> string {
+    load_type int
+    load_type int
+    alloc_instance<1> user.class_type_args_at_runtime.Box2
+    call user.class_type_args_at_runtime.Box2.make_describer
+    store_var describe
+    load_const 0
+    store_var i
+
+  L0:
+    load_var i
+    load_const 500
+    cmp_int_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var describe
+    call_indirect
+    return
+
+  L2:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L0
+}
+
+function class_type_args_at_runtime.is_type_bare_class_still_matches_fn() -> bool {
+    load_const 1
+    load_type int
+    init_instance<1> user.class_type_args_at_runtime.Foo .value
+    call user.class_type_args_at_runtime.check_foo_bare
+    return
+}
+
+function class_type_args_at_runtime.is_type_parametric_class_different_args_fn() -> bool {
+    load_const "x"
+    load_type string
+    init_instance<1> user.class_type_args_at_runtime.Foo .value
+    call user.class_type_args_at_runtime.check_foo
+    return
+}
+
+function class_type_args_at_runtime.is_type_parametric_class_same_args_fn() -> bool {
+    load_const 1
+    load_type int
+    init_instance<1> user.class_type_args_at_runtime.Foo .value
+    call user.class_type_args_at_runtime.check_foo
+    return
+}
+
+function class_type_args_at_runtime.method_sees_class_type_arg_int_fn() -> string {
+    load_type int
+    load_const 42
+    load_type int
+    init_instance<1> user.class_type_args_at_runtime.Box .value
+    call user.class_type_args_at_runtime.Box.describe
+    return
+}
+
+function class_type_args_at_runtime.method_sees_class_type_arg_string_fn() -> string {
+    load_type string
+    load_const "hi"
+    load_type string
+    init_instance<1> user.class_type_args_at_runtime.Box .value
+    call user.class_type_args_at_runtime.Box.describe
+    return
+}
+
+function class_type_args_at_runtime.method_sees_composite_class_type_arg_fn() -> string {
+    load_type class_type_args_at_runtime.Box<int>
+    load_const 1
+    load_type int
+    init_instance<1> user.class_type_args_at_runtime.Box .value
+    load_type class_type_args_at_runtime.Box<int>
+    init_instance<1> user.class_type_args_at_runtime.Box .value
+    call user.class_type_args_at_runtime.Box.describe
+    return
+}
+
+function class_type_args_at_runtime.pick(x: class_type_args_at_runtime.Foo<int> | class_type_args_at_runtime.Foo<string>) -> string {
+    load_var x
+    is_type class_type_args_at_runtime.Foo<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "string"
+    jump L2
+
+  L1:
+    load_const "int"
+
+  L2:
+    return
+}
+
+function class_type_args_at_runtime.union_dispatch_generic_class_int_fn() -> string {
+    load_const 7
+    load_type int
+    init_instance<1> user.class_type_args_at_runtime.Foo .value
+    call user.class_type_args_at_runtime.pick
+    return
+}
+
+function class_type_args_at_runtime.union_dispatch_generic_class_string_fn() -> string {
+    load_const "x"
+    load_type string
+    init_instance<1> user.class_type_args_at_runtime.Foo .value
+    call user.class_type_args_at_runtime.pick
+    return
+}

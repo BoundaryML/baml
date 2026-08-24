@@ -54,7 +54,7 @@
     background 140ms ease,
     color 140ms ease;
 }
-.btn {
+.band a.btn {
   color: #1a1612;
   background: transparent;
   border: 1.5px solid #1a1612;
@@ -68,7 +68,7 @@
   height: 18px;
   fill: currentColor;
 }
-.btnPrimary {
+.band a.btnPrimary {
   color: #fff;
   background: #6d28d9;
   border: 1.5px solid #6d28d9;

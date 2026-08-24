@@ -12,7 +12,7 @@ use crate::Name;
 /// Prefix used for standard library items in qualified names.
 ///
 /// All `Namespace::BamlStd` and standard `Namespace::Builtin` items
-/// are displayed with this prefix (e.g., `baml.llm.call_llm_function`).
+/// are displayed with this prefix (e.g., `baml.media.Image`).
 pub const BAML_STD_PREFIX: &str = "baml.";
 
 /// FQN (as a display string) of the recursive `json` type alias defined in
@@ -21,6 +21,14 @@ pub const BAML_STD_PREFIX: &str = "baml.";
 /// Used as a sentinel across Phases 3 and 6 to short-circuit alias-body
 /// recursion for output-format rendering, SAP streaming, and Python codegen.
 pub const BAML_JSON_JSON: &str = "baml.json.json";
+
+/// Canonical host-facing typed AI stream. Compiler synthesis, engine handle
+/// lifting, and SDK generators must share this identity rather than carrying
+/// independent string literals.
+pub const AI_STREAM_STREAM: &str = "ai.stream.Stream";
+
+/// Canonical nominal end-of-stream marker used by AI streams.
+pub const AI_STREAM_DONE: &str = "ai.stream.Done";
 
 /// A qualified name that unambiguously identifies an item.
 ///

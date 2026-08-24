@@ -1,8 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 16211
----
-=== PPIR ===
-function user.fetch_as(s: string) -> T  [expr] {
-  {  } baml.json.from_string(s)
-}

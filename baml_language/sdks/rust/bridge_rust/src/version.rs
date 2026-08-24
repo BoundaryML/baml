@@ -7,4 +7,6 @@
 //! loader's post-load `version()` handshake compares against it, in
 //! development builds too.
 
-pub(crate) const CANONICAL_VERSION: &str = "0.15.0";
+pub(crate) const BRIDGE_RUNTIME_NAME: &str = "baml_bridge";
+pub(crate) const TOOLCHAIN_VERSION: &str = "0.17.0";
+pub(crate) const BRIDGE_RUNTIME_VERSION: &str = "0.17.0";

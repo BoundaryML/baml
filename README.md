@@ -33,7 +33,7 @@ BAML looks like TypeScript, but every feature is built so agents make fewer mist
 ## Try it out
 
 ```bash
-brew install boundaryml/tap/baml
+brew install baml
 baml agent install
 baml init
 baml ide install --code

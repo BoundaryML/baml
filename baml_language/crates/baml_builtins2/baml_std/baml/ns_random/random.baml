@@ -24,7 +24,7 @@ interface Rng {
     function random_int(self) -> int throws never {
         let bytes = self.random(8);
         // `<<` truncates to the 63-bit width, so the first byte's top bit falls
-        // off the end and its bit 6 lands on bit 62 — the sign. No branch on
+        // off the end and its bit 6 lands on bit 62, the sign. No branch on
         // the sign is needed: the 63 surviving bits already tile the whole
         // signed range, one draw per value.
         (bytes[0] << 56) | (bytes[1] << 48) | (bytes[2] << 40) | (bytes[3] << 32) | (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7]
@@ -38,7 +38,7 @@ interface Rng {
 class SystemRandom {
     /// Returns a new `SystemRandom` instance using the global system random number generator.
     function get() -> SystemRandom throws never {
-        SystemRandom {}
+        SystemRandom {  }
     }
 
     implements Rng {
@@ -60,7 +60,7 @@ class SystemRandom {
 /// `SystemRandom` or a well-seeded `ChaCha20` instead.
 class Xoshiro256PlusPlus {
     /// Opaque, mutex-guarded generator state owned by the Rust runtime.
-    _state: $rust_type
+    _state: $rust_type,
 
     /// Creates a new `Xoshiro256PlusPlus` pseudo-random number generator.
     ///
@@ -106,7 +106,7 @@ class Xoshiro256PlusPlus {
 /// its output predictable.
 class ChaCha20 {
     /// Opaque, mutex-guarded generator state owned by the Rust runtime.
-    _state: $rust_type
+    _state: $rust_type,
 
     /// Creates a new `ChaCha20` pseudo-random number generator.
     ///
@@ -117,9 +117,7 @@ class ChaCha20 {
     ///
     /// ## Panics
     /// If `seed` is shorter than 32 bytes.
-    function new(
-        seed: uint8array = SystemRandom.get().random(32),
-    ) -> ChaCha20 throws never {
+    function new(seed: uint8array = SystemRandom.get().random(32)) -> ChaCha20 throws never {
         // A `$rust_function` builtin can't fill omitted default args, so this
         // thin wrapper resolves the default seed and forwards to `_new` (whose
         // `seed` is required) — the `net.TcpStream.connect`/`_connect` convention.

@@ -1,30 +1,9 @@
 {
-  "name": "@b/pkg-editor",
-  "version": "0.1.0",
-  "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
-  "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
-    },
-    "./remote": {
-      "types": "./src/remote-backend.ts",
-      "default": "./src/remote-backend.ts"
-    },
-    "./views-workbench.css": "./src/views-workbench.css"
-  },
-  "files": [
-    "src"
-  ],
-  "scripts": {
-    "typecheck": "tsc --noEmit"
-  },
   "dependencies": {
     "@b/pkg-grammar": "workspace:*",
     "@b/pkg-playground": "workspace:*",
     "@codingame/monaco-vscode-api": "^25.1.2",
+    "@codingame/monaco-vscode-editor-api": "^25.1.2",
     "@codingame/monaco-vscode-environment-service-override": "^25.1.2",
     "@codingame/monaco-vscode-explorer-service-override": "^25.1.2",
     "@codingame/monaco-vscode-files-service-override": "^25.1.2",
@@ -36,6 +15,7 @@
     "@codingame/monaco-vscode-search-service-override": "^25.1.2",
     "@codingame/monaco-vscode-secret-storage-service-override": "^25.1.2",
     "@codingame/monaco-vscode-storage-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-textmate-service-override": "^25.1.2",
     "@codingame/monaco-vscode-view-banner-service-override": "^25.1.2",
     "@codingame/monaco-vscode-view-status-bar-service-override": "^25.1.2",
     "@codingame/monaco-vscode-view-title-bar-service-override": "^25.1.2",
@@ -45,15 +25,40 @@
     "vscode": "npm:@codingame/monaco-vscode-extension-api@^25.1.2",
     "vscode-languageclient": "^9.0.1"
   },
-  "peerDependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
   "devDependencies": {
+    "@types/node": "^24.12.4",
     "@types/react": "^18.3.26",
     "@types/react-dom": "^18.3.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "typescript": "^5.9.3"
-  }
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "exports": {
+    ".": {
+      "default": "./src/index.ts",
+      "types": "./src/index.ts"
+    },
+    "./remote": {
+      "default": "./src/remote-backend.ts",
+      "types": "./src/remote-backend.ts"
+    },
+    "./views-workbench.css": "./src/views-workbench.css"
+  },
+  "files": [
+    "src"
+  ],
+  "main": "src/index.ts",
+  "name": "@b/pkg-editor",
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "scripts": {
+    "test": "vitest run --config vitest.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "types": "src/index.ts",
+  "version": "0.1.0"
 }

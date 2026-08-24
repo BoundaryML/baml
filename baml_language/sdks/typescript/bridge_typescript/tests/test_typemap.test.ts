@@ -57,7 +57,7 @@ describe('BamlTypeMap', () => {
             'baml.media.Audio': BamlAudio,
             'baml.media.Video': BamlVideo,
             'baml.media.Pdf': BamlPdf,
-            'baml.llm.Stream': BamlStream,
+            'ai.stream.Stream': BamlStream,
         } as const;
         const m = BamlTypeMap.fromLazyEntries({
             classes: Object.fromEntries(Object.entries(entries).map(([fqn, ctor]) => [fqn, () => ctor])),

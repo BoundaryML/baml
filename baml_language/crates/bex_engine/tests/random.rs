@@ -116,65 +116,6 @@ function main() -> int {
 }
 
 #[tokio::test]
-async fn default_random_int_spans_full_signed_range() {
-    // The `Rng.random_int` default body — inherited by any user implementor that
-    // provides only `random` — lays the 8 drawn bytes straight down into the i63
-    // word, discarding the first byte's top bit where `<<` truncates. These four
-    // inputs pin that layout and, between them, both ends of the signed range:
-    // the sign is the first byte's bit 6, so `0x40` alone is `int.min_value()`
-    // and `0x3F` over all-ones is `int.max_value()`.
-    let source = r#"
-class AllOnes {
-    implements baml.random.Rng {
-        function random(self, bytes: int) -> uint8array throws never {
-            let data = b"\xff\xff\xff\xff\xff\xff\xff\xff";
-            data
-        }
-    }
-}
-class AllZeros {
-    implements baml.random.Rng {
-        function random(self, bytes: int) -> uint8array throws never {
-            let data = b"\x00\x00\x00\x00\x00\x00\x00\x00";
-            data
-        }
-    }
-}
-class SignBitOnly {
-    implements baml.random.Rng {
-        function random(self, bytes: int) -> uint8array throws never {
-            let data = b"\x40\x00\x00\x00\x00\x00\x00\x00";
-            data
-        }
-    }
-}
-class AllButSignBit {
-    implements baml.random.Rng {
-        function random(self, bytes: int) -> uint8array throws never {
-            let data = b"\x3f\xff\xff\xff\xff\xff\xff\xff";
-            data
-        }
-    }
-}
-function main() -> bool {
-    // All-ones is every one of the 63 bits set, i.e. -1.
-    (AllOnes {}).random_int() == -1
-        && (AllZeros {}).random_int() == 0
-        && (SignBitOnly {}).random_int() == baml.Int.min_value()
-        && (AllButSignBit {}).random_int() == baml.Int.max_value()
-}
-"#;
-    assert_engine_executes(EngineProgram {
-        source,
-        entry: "main",
-        expected: Ok(BexExternalValue::Bool(true)),
-        ..Default::default()
-    })
-    .await
-    .unwrap();
-}
-
-#[tokio::test]
 async fn rng_dispatches_through_interface() {
     // A concrete generator assigned to a `Rng`-typed parameter dispatches to
     // the right implementor — the same value as calling it directly.

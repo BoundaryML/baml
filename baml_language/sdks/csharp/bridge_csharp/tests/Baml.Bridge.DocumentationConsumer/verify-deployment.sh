@@ -20,11 +20,11 @@ trap 'rm -rf "$work"' EXIT
 feed="$work/feed"
 consumer="$work/consumer"
 packages="$work/packages"
-mkdir -p "$feed" "$consumer/baml_client" "$packages"
+mkdir -p "$feed" "$consumer/baml_sdk" "$packages"
 cp "$package" "$feed/baml-bridge.$version.nupkg"
 cp "$test_dir/Baml.Bridge.DocumentationConsumer.csproj" "$consumer/"
 cp "$test_dir/Program.cs" "$consumer/"
-cp -R "$generated_source_root/." "$consumer/baml_client/"
+cp -R "$generated_source_root/." "$consumer/baml_sdk/"
 printf '%s\n' \
   '<?xml version="1.0" encoding="utf-8"?>' \
   '<configuration>' \
@@ -47,7 +47,7 @@ NUGET_PACKAGES="$packages" dotnet restore "$project" \
   --configfile "$consumer/NuGet.Config" \
   -p:NuGetAudit=false \
   -p:BamlBridgePackageVersion="$version" \
-  -p:BamlGeneratedSourceRoot="$consumer/baml_client" \
+  -p:BamlGeneratedSourceRoot="$consumer/baml_sdk" \
   -p:SelfContained=true \
   -p:PublishTrimmed=true \
   -p:PublishSingleFile=true
@@ -61,7 +61,7 @@ common=(
   --no-restore
   -p:NuGetAudit=false
   -p:BamlBridgePackageVersion="$version"
-  -p:BamlGeneratedSourceRoot="$consumer/baml_client"
+  -p:BamlGeneratedSourceRoot="$consumer/baml_sdk"
   -p:SuppressTrimAnalysisWarnings=false
   -p:TrimmerSingleWarn=false
   -p:ILLinkTreatWarningsAsErrors=true

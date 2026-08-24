@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import enum
 import os
+import types as python_types
 import typing
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -61,6 +62,84 @@ _MEDIA_WIRE_KINDS = {
     BamlVideo: baml_type_pb2.BAML_TY_MEDIA_KIND_VIDEO,
     BamlPdf: baml_type_pb2.BAML_TY_MEDIA_KIND_PDF,
 }
+
+
+class BamlType:
+    """Opaque host handle for a reflected BAML type definition.
+
+    The protobuf payload is intentionally private: the supported host surface
+    is composition (`meta`, `array`, `optional`) and passing the value back to
+    BAML. Python object identity is not BAML type identity.
+    """
+
+    __slots__ = ("_definition",)
+
+    def __init__(self, definition: "baml_type_pb2.BamlTyDef") -> None:
+        copied = baml_type_pb2.BamlTyDef()
+        copied.CopyFrom(definition)
+        self._definition = copied
+
+    @classmethod
+    def _from_python(cls, value: Any) -> "BamlType":
+        if isinstance(value, cls):
+            return value
+        definition = baml_type_pb2.BamlTyDef()
+        definition.root.CopyFrom(python_type_to_wire_ty(value))
+        return cls(definition)
+
+    def _wire_copy(self) -> "baml_type_pb2.BamlTyDef":
+        copied = baml_type_pb2.BamlTyDef()
+        copied.CopyFrom(self._definition)
+        return copied
+
+    def meta(
+        self,
+        *,
+        alias: Optional[str] = None,
+        description: Optional[str] = None,
+        docstring: Optional[str] = None,
+        other: Optional[Dict[str, str]] = None,
+    ) -> "_BamlTypeMetadataRow":
+        return _BamlTypeMetadataRow(
+            self, alias=alias, description=description,
+            docstring=docstring, other=dict(other or {}),
+        )
+
+    def array(self) -> "BamlType":
+        definition = self._wire_copy()
+        old_root = baml_type_pb2.BamlTy()
+        old_root.CopyFrom(definition.root)
+        definition.root.Clear()
+        definition.root.list.item.CopyFrom(old_root)
+        return BamlType(definition)
+
+    def optional(self) -> "BamlType":
+        definition = self._wire_copy()
+        old_root = baml_type_pb2.BamlTy()
+        old_root.CopyFrom(definition.root)
+        definition.root.Clear()
+        definition.root.optional.inner.CopyFrom(old_root)
+        return BamlType(definition)
+
+    def __reduce__(self):
+        raise TypeError("BamlType values are runtime handles and cannot be serialized")
+
+    def __reduce_ex__(self, protocol: int):
+        raise TypeError("BamlType values are runtime handles and cannot be serialized")
+
+    def __repr__(self) -> str:
+        return "BamlType(<opaque>)"
+
+
+class _BamlTypeMetadataRow:
+    __slots__ = ("ty", "alias", "description", "docstring", "other")
+
+    def __init__(self, type: BamlType, *, alias: Optional[str], description: Optional[str], docstring: Optional[str], other: Dict[str, str]) -> None:
+        self.ty = type
+        self.alias = alias
+        self.description = description
+        self.docstring = docstring
+        self.other = other
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +246,19 @@ def _set_inbound_value(
     """
     if value is None:
         return  # oneof unset ≡ null
+
+    if isinstance(value, BamlType):
+        inbound_value.ty_def_value.CopyFrom(value._definition)
+        return
+
+    if isinstance(value, _BamlTypeMetadataRow):
+        cv = inbound_value.class_value
+        for key in ("ty", "alias", "description", "docstring", "other"):
+            _set_inbound_map_entry(
+                cv.fields.add(), key, getattr(value, key),
+                kwarg_name=kwarg_name, registered=registered,
+            )
+        return
 
     # `enum.Enum` must precede the primitive arms. Codegen emits enums as
     # mixin subclasses of their backing primitive — `SomeEnum(str, enum.Enum)`
@@ -378,7 +470,12 @@ def _set_inbound_map_entry(
 
 
 def python_type_to_wire_ty(py_type: Any) -> "baml_type_pb2.BamlTy":
-    """Lower a Python type (or `None` = unbound) to a wire `BamlTy`."""
+    """Lower an accepted Python type token to a wire `BamlTy`.
+
+    Unsupported classes are rejected at the call site (H-10); silently
+    widening them to `unknown` would make `_types=` appear to succeed while
+    discarding the caller's binding.
+    """
     ty = baml_type_pb2.BamlTy()
     _fill_wire_ty(ty, py_type)
     return ty
@@ -420,6 +517,13 @@ def _fill_wire_ty(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
         ty.unknown.SetInParent()
         return
 
+    if py_type is typing.Any:
+        ty.unknown.SetInParent()
+        return
+
+    if isinstance(py_type, BamlType):
+        raise TypeError("a BamlType definition handle must be passed directly, not nested in typing")
+
     # `Never` (bottom type). Identity check (not `in`) so unhashable special
     # forms can't raise.
     if any(py_type is never for never in _NEVER_TYPES):
@@ -433,10 +537,21 @@ def _fill_wire_ty(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
         ty.primitive.kind = kind
         return
 
+
+    if py_type in _MEDIA_PYO3_TYPES:
+        ty.media.kind = _MEDIA_WIRE_KINDS[py_type]
+        return
+
     # typing constructs: list[X], dict[K, V], Optional[X], Union[...].
     origin = typing.get_origin(py_type)
     if origin is not None:
         targs = typing.get_args(py_type)
+        interface_fqn = getattr(origin, "__baml_interface_fqn__", None)
+        if interface_fqn:
+            ty.interface.name = interface_fqn
+            for arg in targs:
+                _fill_inner(ty.interface.type_args.add(), arg)
+            return
         if origin in (list, typing.List):
             _fill_inner(ty.list.item, targs[0] if targs else None)
             return
@@ -444,7 +559,7 @@ def _fill_wire_ty(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
             _fill_inner(ty.map.key, targs[0] if targs else None)
             _fill_inner(ty.map.value, targs[1] if len(targs) > 1 else None)
             return
-        if origin is typing.Union:
+        if origin in (typing.Union, python_types.UnionType):
             non_none = [a for a in targs if a is not type(None)]
             if len(non_none) == 1 and len(non_none) != len(targs):
                 _fill_inner(ty.optional.inner, non_none[0])
@@ -452,9 +567,31 @@ def _fill_wire_ty(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
             for arg in targs:
                 _fill_inner(ty.union.options.add(), arg)
             return
-        # Any other generic origin: fall through to the unknown default.
+        if origin is typing.Literal:
+            if len(targs) != 1:
+                raise TypeError("BAML type tokens require Literal with exactly one value")
+            literal = targs[0]
+            if isinstance(literal, bool):
+                ty.literal.bool_value = literal
+            elif isinstance(literal, int):
+                if -(1 << 63) <= literal < (1 << 63):
+                    ty.literal.int_value = literal
+                else:
+                    ty.literal.bigint_value = str(literal)
+            elif isinstance(literal, float):
+                ty.literal.float_value = repr(literal)
+            elif isinstance(literal, str):
+                ty.literal.string_value = literal
+            else:
+                raise TypeError(f"unsupported BAML Literal token {literal!r}")
+            return
+        raise TypeError(f"unsupported Python typing token for BAML: {py_type!r}")
 
     if isinstance(py_type, type):
+        interface_fqn = getattr(py_type, "__baml_interface_fqn__", None)
+        if interface_fqn:
+            ty.interface.name = interface_fqn
+            return
         # Parameterized Pydantic generic (`Box[int]`): the base FQN plus the
         # concrete args recovered from Pydantic's generic metadata.
         meta = getattr(py_type, "__pydantic_generic_metadata__", None)
@@ -474,8 +611,10 @@ def _fill_wire_ty(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
             ty.class_ty.name = fqn
             return
 
-    # Unrecognized: leave as the unknown/top type (binds nothing).
-    ty.unknown.SetInParent()
+    raise TypeError(
+        f"unsupported Python type token for BAML: {py_type!r}; expected a BAML "
+        "generated class/enum (or subclass), a builtin/media type, or a supported typing composition"
+    )
 
 
 def _fill_inner(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
@@ -494,7 +633,7 @@ def pydantic_instance_type_args(value: Any) -> List[Any]:
 def encode_call_args(
     kwargs: Dict[str, Any],
     call_id: int,
-    type_args: Optional[List[Tuple[str, "baml_type_pb2.BamlTy"]]] = None,
+    type_args: Optional[List[Tuple[str, Any]]] = None,
     *,
     function_name: Optional[str] = None,
     function_handle: Optional[int] = None,
@@ -532,7 +671,10 @@ def encode_call_args(
             for type_var, wire_ty in type_args:
                 entry = args.type_args.add()
                 entry.type_var = type_var
-                entry.type_value.CopyFrom(wire_ty)
+                if isinstance(wire_ty, BamlType):
+                    entry.type_definition.CopyFrom(wire_ty._definition)
+                else:
+                    entry.type_value.CopyFrom(wire_ty)
         return args.SerializeToString()
     except BaseException:
         # Roll back any host callables registered before the failure.
@@ -676,12 +818,6 @@ def _parameterize_tys(cls, type_args, type_map: BamlTypeMap):
         return cls
 
 
-# Single-underscore "private" field names that codegen emits for
-# handle-backed stdlib classes. Source of truth: `rg '\$rust_type'
-# baml_language/crates/baml_builtins2/`.
-_HANDLE_FIELD_NAMES = ("_handle", "_data", "_body")
-
-
 def _decode_class(class_value, type_map: BamlTypeMap) -> Any:
     """Resolve a `BamlValueClass` to a typed Pydantic model instance.
 
@@ -725,7 +861,9 @@ def _decode_class(class_value, type_map: BamlTypeMap) -> Any:
     # v2 doesn't accept private attrs via kwargs; we set them on
     # `__pydantic_private__` post-construction.
     private_fields = {
-        k: field_dict.pop(k) for k in _HANDLE_FIELD_NAMES if k in field_dict
+        key: field_dict.pop(key)
+        for key, value in list(field_dict.items())
+        if key.startswith("_") and isinstance(value, BamlPyHandle)
     }
     instance = parameterized.model_validate(field_dict)
     if private_fields:
@@ -740,7 +878,12 @@ def _decode_enum(enum_value, type_map: BamlTypeMap) -> Any:
     """Resolve a `BamlValueEnum` to a member of the generated enum class."""
     variant = enum_value.value
     fqn = enum_value.name
-    cls = type_map.get_enum(fqn)
+    try:
+        cls = type_map.get_enum(fqn)
+    except BamlError:
+        # Runtime-created enums have no generated Python class. The loose host
+        # representation is their post-alias variant name (H-5).
+        return variant
     try:
         return cls(variant)
     except ValueError as exc:
@@ -785,7 +928,7 @@ def _decode_handle(handle, type_map: BamlTypeMap) -> Any:
         # reads back as an empty class (`.name == ""`).
         class_fqn = handle.ty.class_ty.name
         cls = type_map.get_class(class_fqn)
-        return cls._from_pyhandle(pyhandle)
+        return cls._from_pyhandle(pyhandle, class_fqn)
     if ht == HT.FUNCTION_REF:
         ty = getattr(handle, "ty", None)
         function_ty = (
@@ -936,6 +1079,12 @@ def decode_value(holder, type_map: BamlTypeMap) -> Any:
         return decode_value(holder.union_variant_value.value, type_map)
     if which == "handle_value":
         return _decode_handle(holder.handle_value, type_map)
+    if which == "ty_value":
+        definition = baml_type_pb2.BamlTyDef()
+        definition.root.CopyFrom(holder.ty_value)
+        return BamlType(definition)
+    if which == "ty_def_value":
+        return BamlType(holder.ty_def_value)
     if which in ("media_value", "prompt_ast_value"):
         raise BamlError(
             f"BEX emitted {which!r} on the FFI path — media/prompt AST "

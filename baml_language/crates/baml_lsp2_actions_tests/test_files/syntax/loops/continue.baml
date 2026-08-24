@@ -27,6 +27,9 @@ function ContinueOutsideLoop() -> int {
     3
 }
 
+// Neither loop holds a `break`, so both diverge and this tail-less body is
+// `never`, not `void` — the declared `int` return is satisfied by never
+// returning. (This used to report E0001 `expected int, found void`.)
 function ContinueNested() -> int {
     while (true) {
         while (true) {
@@ -50,17 +53,4 @@ function ContinueNested() -> int {
 //     ╭─[loops_continue.baml:25:5]
 //  25 │     continue;
 //     ·     ─────────
-//     ╰────
-// E0029
-//
-//   × missing return expression
-//     ╭─[loops_continue.baml:30:34]
-//  30 │ ╭─▶ function ContinueNested() -> int {
-//  31 │ │       while (true) {
-//  32 │ │           while (true) {
-//  33 │ │               continue;
-//  34 │ │           }
-//  35 │ │       }
-//  36 │ ├─▶ }
-//     · ╰──── expected return value of type `int`
 //     ╰────

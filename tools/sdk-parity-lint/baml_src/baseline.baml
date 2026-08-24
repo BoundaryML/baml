@@ -9,7 +9,7 @@ function split_markdown_row(line: string, source: string) -> string[] {
     let escaped = false;
     let index = 1;
     while (index < line.length() - 1) {
-        let char = line.char_at(index);
+        let char = line.slice(index, index + 1);
         if (escaped) {
             current += char;
             escaped = false;
@@ -93,7 +93,7 @@ function parse_baseline(contents: string, source: string, sdk_envs: string[]) ->
     expected_header.push("Required in");
     expected_header.push("Reason");
     let header = split_markdown_row(lines[header_index], source);
-    if (!baml.deep_equals(header, expected_header)) {
+    if (header != expected_header) {
         throw baml.errors.ParseError {
             message: `baseline environment columns do not match the configured matrix: ${source}`,
         };

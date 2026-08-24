@@ -1,8 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 14776
----
-=== PPIR ===
-function user.NestedMapLiteral() -> baml.json.json  [expr] {
-  {  } map { "a": 1, "b": [2, 3], "c": map { "nested": null } }
-}

@@ -37,7 +37,13 @@ function example() -> void {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0002
+//
+//   × cannot infer type parameter `Self`
+//     ╭─[generic_function_and_method_references.baml:31:33]
+//  31 │   let inferredInterfaceMethod = MyInterface.myMethod
+//     ·                                 ────────────────────
+//     ╰────
 //
 //- on_hover expressions
 // hover at generic_function_and_method_references.baml:25:8
@@ -54,7 +60,7 @@ function example() -> void {
 // ```
 // hover at generic_function_and_method_references.baml:31:30
 // ```baml
-// inferredInterfaceMethod: (self: Self) -> int throws never
+// inferredInterfaceMethod: (self: !error) -> int throws never
 // ```
 // hover at generic_function_and_method_references.baml:34:21
 // ```baml

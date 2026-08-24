@@ -5,9 +5,9 @@
 //!
 //! # Layout: folder tree = package + ns_* subfolders = namespace
 //!
-//! Everything lives under `baml_std/baml/` → package **baml**.
-//! Sub-namespaces (env, llm, http, etc.) are expressed via `ns_*` subdirectories
-//! on disk, and namespace is derived from path segments at runtime.
+//! Each directory below `baml_std/` is a package. Sub-namespaces are expressed
+//! via `ns_*` subdirectories, and namespace is derived from path segments at
+//! runtime.
 //!
 //! # Virtual path
 //!
@@ -58,11 +58,17 @@ pub const PACKAGE_BOUNDARY: &str = "boundary";
 /// generated code or committed artifacts).
 pub const BAML_STD_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/baml_std");
 
-/// YAML documentation for BAML keywords, embedded at compile time.
+/// YAML documentation for BAML language-reference topics, embedded at compile time.
 pub const BAML_KEYWORDS_YAML: &str = include_str!("../keyword_docs/baml_keywords.yaml");
 
 /// YAML crosswalk documentation for TypeScript/JS keywords, embedded at compile time.
 pub const TS_KEYWORDS_YAML: &str = include_str!("../keyword_docs/ts_keywords.yaml");
+
+mod language_docs;
+pub use language_docs::{
+    LanguageTopic, TypescriptCrosswalkTopic, has_describe_topic, language_topic, language_topics,
+    typescript_crosswalk_topic, typescript_crosswalk_topics,
+};
 
 /// Builtin registration macro: package, relative virtual path, filesystem include path.
 macro_rules! builtin {
@@ -90,7 +96,6 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "null.baml"),
     builtin!("baml", "string.baml"),
     builtin!("baml", "uint8array.baml"),
-    builtin!("baml", "type_class.baml"),
     // --- Namespaced (ns_* folders) ---
     builtin!("baml", "ns_errors/errors.baml"),
     builtin!("baml", "ns_errors/unknown_error.baml"),
@@ -109,15 +114,11 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_net/net.baml"),
     builtin!("baml", "ns_media/media.baml"),
     builtin!("baml", "ns_json/json.baml"),
-    builtin!("baml", "ns_schema/schema.baml"),
     builtin!("baml", "ns_yaml/yaml.baml"),
     builtin!("baml", "ns_toml/toml.baml"),
     builtin!("baml", "ns_csv/csv.baml"),
-    builtin!("baml", "ns_llm/llm_types.baml"),
-    builtin!("baml", "ns_llm/llm.baml"),
     builtin!("baml", "ns_sap/sap.baml"),
     builtin!("baml", "ns_ws/ws.baml"),
-    builtin!("baml", "ns_stream/stream.baml"),
     builtin!("baml", "ns_iter/iter.baml"),
     builtin!("baml", "ns_future/future.baml"),
     builtin!("baml", "ns_spawn/spawn.baml"),
@@ -129,14 +130,32 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_time/plaindate.baml"),
     builtin!("baml", "ns_time/plaindatetime.baml"),
     builtin!("baml", "ns_time/zoneddatetime.baml"),
+    builtin!("baml", "ns_ops/bitwise.baml"),
     builtin!("baml", "ns_ops/comparison.baml"),
+    builtin!("baml", "ns_ops/index.baml"),
     builtin!("baml", "ns_ops/math.baml"),
     builtin!("baml", "ns_random/random.baml"),
+    builtin!("baml", "ns_crypto/errors.baml"),
+    builtin!("baml", "ns_crypto/interfaces.baml"),
+    builtin!("baml", "ns_crypto/aes_gcm_siv.baml"),
+    builtin!("baml", "ns_crypto/chacha20poly1305.baml"),
+    builtin!("baml", "ns_crypto/sha2.baml"),
+    // --- reflect package ---
+    builtin!("reflect", "reflect.baml"),
+    builtin!("reflect", "type.baml"),
+    builtin!("reflect", "ns_class/class.baml"),
+    builtin!("reflect", "ns_enum/enum.baml"),
+    builtin!("reflect", "ns_union/union.baml"),
+    builtin!("reflect", "ns_literal/literal.baml"),
+    builtin!("reflect", "ns_array/array.baml"),
+    builtin!("reflect", "ns_map/map.baml"),
+    builtin!("reflect", "ns_interface/interface.baml"),
+    builtin!("reflect", "ns_primitive/primitive.baml"),
+    builtin!("reflect", "ns_function/function.baml"),
+    builtin!("reflect", "ns_errors/errors.baml"),
     // --- boundary package ---
     builtin!("boundary", "core.baml"),
     builtin!("boundary", "ns_id/id.baml"),
-    // --- reflect package (standalone, accessible as `reflect.type_of(...)`) ---
-    builtin!("reflect", "reflect.baml"),
     // --- testing package ---
     builtin!("testing", "types.baml"),
     builtin!("testing", "registry.baml"),
@@ -145,6 +164,64 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("assert", "assert.baml"),
     // --- log package ---
     builtin!("log", "log.baml"),
+    // --- ai package (specs, journal, runner, client interface) ---
+    builtin!("ai", "ns_content/content.baml"),
+    builtin!("ai", "ns_events/events.baml"),
+    builtin!("ai", "journal.baml"),
+    // Render-context surface (`ai.Context`, `ai.Role`, `ai.OutputFormat`,
+    // `ai.ContextClient`) — the `ctx` object LLM prompt bodies touch.
+    builtin!("ai", "context.baml"),
+    builtin!("ai", "spec.baml"),
+    builtin!("ai", "ns_tools/tools.baml"),
+    builtin!("ai", "turn.baml"),
+    builtin!("ai", "ns_wire/wire.baml"),
+    builtin!("ai", "ns_clients/clients.baml"),
+    builtin!("ai", "runner.baml"),
+    builtin!("ai", "ns_stream/stream.baml"),
+    builtin!("ai", "ns_errors/errors.baml"),
+    builtin!("ai", "ns_internal/helpers.baml"),
+    // Provider auth sys-ops (`ai.internal._gcp_*` / `ai.internal._aws_*`),
+    // implemented in `crates/sys_auth`.
+    builtin!("ai", "ns_internal/auth.baml"),
+    // `ai.internal` is where the package's PRIVATE free functions live, so that
+    // `baml describe ai` / `ai.wire` / `ai.errors` / `ai.clients` list only the
+    // public surface. Each file backs the like-named public namespace.
+    builtin!("ai", "ns_internal/media_output.baml"),
+    builtin!("ai", "ns_internal/media_resolve.baml"),
+    builtin!("ai", "ns_internal/wire.baml"),
+    builtin!("ai", "ns_internal/clients.baml"),
+    builtin!("ai", "ns_internal/http_errors.baml"),
+    // Prompt-rendering plumbing shared by `ai.*` and the `prompt` tag desugar;
+    // lives here; the render-context classes sit in ai/context.baml.
+    builtin!("ai", "ns_internal/prompt.baml"),
+    // --- provider client packages ---
+    builtin!("openai", "responses.baml"),
+    builtin!("openai", "ns_internal/responses.baml"),
+    builtin!("openai", "chat.baml"),
+    builtin!("openai", "generic.baml"),
+    builtin!("openai", "azure.baml"),
+    builtin!("openai", "ollama.baml"),
+    builtin!("openai", "openrouter.baml"),
+    builtin!("openai", "images.baml"),
+    builtin!("openai", "ns_internal/chat.baml"),
+    builtin!("openai", "ns_internal/images.baml"),
+    builtin!("anthropic", "messages.baml"),
+    builtin!("anthropic", "ns_internal/messages.baml"),
+    builtin!("google", "gemini.baml"),
+    builtin!("google", "vertex.baml"),
+    builtin!("google", "ns_internal/gemini.baml"),
+    builtin!("google", "ns_internal/vertex.baml"),
+    builtin!("google", "ns_internal/auth.baml"),
+    builtin!("aws", "bedrock.baml"),
+    builtin!("aws", "ns_internal/bedrock.baml"),
+    builtin!("aws", "ns_internal/auth.baml"),
+    builtin!("vercel", "images.baml"),
+    builtin!("vercel", "ns_internal/images.baml"),
+    builtin!("claude_code", "cli.baml"),
+    builtin!("claude_code", "ns_internal/cli.baml"),
+    // ai.mcp: MCP servers as ordinary ai tools (part of the ai package).
+    builtin!("ai", "ns_mcp/mcp.baml"),
+    builtin!("ai", "ns_internal/mcp.baml"),
 ];
 
 /// The distinct standard-library / builtin package names, derived from the
@@ -171,6 +248,21 @@ pub fn stdlib_package_names() -> &'static [&'static str] {
                 names.push(file.package);
             }
         }
+        names
+    })
+}
+
+/// Every package name that user-provided mounts may not claim, in stable
+/// first-appearance order: all builtin packages, followed by the implicit user
+/// package and the two compiler-reserved package names.
+///
+/// This is the single source of truth shared by mount filtering and runtime
+/// reflection, so both paths reject exactly the same aliases.
+pub fn reserved_package_names() -> &'static [&'static str] {
+    static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        let mut names = stdlib_package_names().to_vec();
+        names.extend([baml_type::RESERVED_USER_PACKAGE, "root", "env"]);
         names
     })
 }

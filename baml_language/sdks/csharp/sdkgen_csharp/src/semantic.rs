@@ -10,7 +10,10 @@ use std::{
     fmt::{self, Write as _},
 };
 
-use baml_base::{Literal, MediaKind, Name as BaseName, TyAttr, TyAttrValue};
+use baml_base::{
+    Literal, MediaKind, Name as BaseName, TyAttr, TyAttrValue,
+    qualified_name::{AI_STREAM_DONE, AI_STREAM_STREAM},
+};
 use baml_codegen_types::{
     CallableParam, Class, ClassProperty, CodegenFunctionParamMode, EnumVariant, Function,
     FunctionArgument, Name, ParamTy, Symbol, Ty,
@@ -186,9 +189,6 @@ struct TypeSpec {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum BuiltinProjection {
-    Client,
-    RetryPolicy,
-    ClientType,
     StructuralClass,
     StructuralEnum,
     Resource,
@@ -198,9 +198,6 @@ enum BuiltinProjection {
 
 fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
     match name.to_string().as_str() {
-        "baml.llm.Client" => Some(BuiltinProjection::Client),
-        "baml.llm.RetryPolicy" => Some(BuiltinProjection::RetryPolicy),
-        "baml.llm.ClientType" => Some(BuiltinProjection::ClientType),
         "baml.http.Request"
         | "baml.glob.ScanOptions"
         | "baml.fs.DirEntry"
@@ -229,38 +226,25 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.net.TcpStream"
         | "baml.net.TcpListener"
         | "baml.net.UdpSocket" => Some(BuiltinProjection::Resource),
-        "baml.llm.PromptAst" => Some(BuiltinProjection::OpaqueHandle),
+        "ai.Prompt" => Some(BuiltinProjection::OpaqueHandle),
         "baml.csv.CsvNeedData"
         | "baml.csv.CsvSkip"
         | "baml.csv.CsvHeaders"
-        | "baml.llm.OutputFormat"
-        | "baml.llm.StreamAccumulator"
-        | "baml.llm.StreamCache"
+        | "ai.OutputFormat"
+        | "baml.sap.ParseCache"
         | "baml.errors.HostCallable"
-        | "baml.llm.PromptMessage"
-        | "baml.llm.Role"
-        | "baml.llm.ContextClient"
-        | "baml.llm.Context"
-        | "baml.llm.OrchestrationStep"
-        | "baml.llm.ExecutionContext"
-        | "baml.llm.PlannerState"
-        | "baml.llm.PrimitiveClient"
-        | "baml.llm.MediaUrlHandler"
-        | "baml.llm.PrimitiveClientOptions"
-        | "baml.llm.AzureOpenAiOptions"
-        | "baml.llm.AnthropicOptions"
-        | "baml.llm.GoogleAiOptions"
-        | "baml.llm.VertexAiOptions"
-        | "baml.llm.BedrockOptions" => Some(BuiltinProjection::UnsupportedInternal),
+        | "ai.PromptMessage"
+        | AI_STREAM_STREAM
+        | AI_STREAM_DONE
+        | "ai.Role"
+        | "ai.ContextClient"
+        | "ai.Context" => Some(BuiltinProjection::UnsupportedInternal),
         _ => None,
     }
 }
 
 fn builtin_type_source(name: &Name) -> Option<&'static str> {
     match builtin_projection(name)? {
-        BuiltinProjection::Client => Some("global::Baml.BamlClient"),
-        BuiltinProjection::RetryPolicy => Some("global::Baml.BamlRetryPolicy"),
-        BuiltinProjection::ClientType => Some("global::Baml.BamlClientType"),
         BuiltinProjection::OpaqueHandle => Some("global::Baml.BamlHandle"),
         BuiltinProjection::Resource => None,
         BuiltinProjection::StructuralClass
@@ -305,12 +289,7 @@ fn is_public_resource_stdlib_function(name: &Name) -> bool {
 fn is_runtime_class_projection(name: &Name) -> bool {
     matches!(
         builtin_projection(name),
-        Some(
-            BuiltinProjection::Client
-                | BuiltinProjection::RetryPolicy
-                | BuiltinProjection::Resource
-                | BuiltinProjection::OpaqueHandle
-        )
+        Some(BuiltinProjection::Resource | BuiltinProjection::OpaqueHandle)
     )
 }
 
@@ -336,6 +315,7 @@ pub(crate) fn generate_program(
         model,
         None,
         program_bytes,
+        None,
         cli_version,
         required_bridge_version,
         program_identity,
@@ -346,6 +326,7 @@ pub(crate) fn generate_program_with_runtime_identities(
     model: &CodegenModel,
     runtime_identities: &RuntimeCallableIdentities,
     program_bytes: &[u8],
+    embedded_baml_toml: &str,
     cli_version: &str,
     required_bridge_version: &str,
     program_identity: &str,
@@ -354,6 +335,7 @@ pub(crate) fn generate_program_with_runtime_identities(
         model,
         Some(runtime_identities),
         program_bytes,
+        Some(embedded_baml_toml),
         cli_version,
         required_bridge_version,
         program_identity,
@@ -365,6 +347,7 @@ fn generate_program_inner(
     model: &CodegenModel,
     runtime_identities: Option<&RuntimeCallableIdentities>,
     program_bytes: &[u8],
+    embedded_baml_toml: Option<&str>,
     cli_version: &str,
     required_bridge_version: &str,
     program_identity: &str,
@@ -691,8 +674,7 @@ fn generate_program_inner(
             &registry_request,
             &instance_request,
             &deferred_instance_request,
-            cli_version,
-            required_bridge_version,
+            embedded_baml_toml,
         ),
     )?;
     plan.prepare(GenerationInput::new(
@@ -1172,13 +1154,13 @@ fn collect_methods<'a>(
         let (result, stream_partial) = if is_stream_callable_variant(identity.variant) {
             let Ty::Class(stream_name, stream_types, _) = &method.return_type else {
                 return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{owner}.{}` must return baml.llm.Stream<TPartial, TFinal>",
+                    "C# stream companion `{owner}.{}` must return {AI_STREAM_STREAM}<TPartial, TFinal>",
                     method.name
                 )));
             };
-            if stream_name.to_string() != "baml.llm.Stream" || stream_types.len() != 2 {
+            if stream_name.to_string() != AI_STREAM_STREAM || stream_types.len() != 2 {
                 return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{owner}.{}` must return exact baml.llm.Stream<TPartial, TFinal>",
+                    "C# stream companion `{owner}.{}` must return exact {AI_STREAM_STREAM}<TPartial, TFinal>",
                     method.name
                 )));
             }
@@ -1487,12 +1469,12 @@ fn collect_functions<'a>(
         let (result, stream_partial) = if is_stream_callable_variant(identity.variant) {
             let Ty::Class(stream_name, stream_types, _) = &function.return_type else {
                 return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{name}` must return baml.llm.Stream<TPartial, TFinal>"
+                    "C# stream companion `{name}` must return {AI_STREAM_STREAM}<TPartial, TFinal>"
                 )));
             };
-            if stream_name.to_string() != "baml.llm.Stream" || stream_types.len() != 2 {
+            if stream_name.to_string() != AI_STREAM_STREAM || stream_types.len() != 2 {
                 return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{name}` must return exact baml.llm.Stream<TPartial, TFinal>"
+                    "C# stream companion `{name}` must return exact {AI_STREAM_STREAM}<TPartial, TFinal>"
                 )));
             }
             (stream_types[1].clone(), Some(stream_types[0].clone()))
@@ -1702,9 +1684,7 @@ fn require_supported_type_inner(
         }
         Ty::Enum(name, _) | Ty::EnumVariant(name, ..) => match model.symbols.get(name) {
             Some(Symbol::Enum(_))
-                if name.package().as_str() == "user"
-                    || builtin_projection(name) == Some(BuiltinProjection::ClientType)
-                    || is_structural_enum_projection(name) =>
+                if name.package().as_str() == "user" || is_structural_enum_projection(name) =>
             {
                 Ok(())
             }
@@ -3230,8 +3210,7 @@ fn render_program(
     registry_request: &CSharpNameRequest,
     instance_request: &CSharpNameRequest,
     deferred_instance_request: &CSharpNameRequest,
-    cli_version: &str,
-    required_bridge_version: &str,
+    embedded_baml_toml: Option<&str>,
 ) -> String {
     let namespace = rendered_namespace(render.names, namespace_requests);
     let program_type = allocated(render.names, program_type_request).source();
@@ -3431,9 +3410,10 @@ fn render_program(
         ));
     }
     source.push_str(&format!(
-        "        {registry} = builder.Build();\n    }}\n\n    private static global::Baml.Generated.V1.BamlGeneratedProgram Register() =>\n        global::Baml.Generated.V1.BamlGeneratedContract.RegisterProgram(\n            global::Baml.Generated.V1.BamlGeneratedContract.Version,\n            Bytecode,\n            Fingerprint,\n            {generated_version},\n            {bridge_version},\n            {registry});\n\n",
-        generated_version = csharp_string(cli_version),
-        bridge_version = csharp_string(required_bridge_version),
+        "        {registry} = builder.Build();\n    }}\n\n    private static global::Baml.Generated.V1.BamlGeneratedProgram Register() =>\n        global::Baml.Generated.V1.BamlGeneratedContract.RegisterProgram(\n            global::Baml.Generated.V1.BamlGeneratedContract.Version,\n            Bytecode,\n            Fingerprint,\n            {embedded_baml_toml},\n            {registry});\n\n",
+        embedded_baml_toml = embedded_baml_toml
+            .map(csharp_string)
+            .unwrap_or_else(|| "null".to_string()),
     ));
     for ty in render.type_specs {
         source.push_str(&render_codec(
@@ -3538,21 +3518,7 @@ fn render_codec(render: &RenderContext<'_>, ty: &Ty, codec_name: &str) -> String
             render_builtin_codec(render, ty, name)
         }
         Ty::Class(name, arguments, _) => render_class_codec(render, name, arguments),
-        Ty::Enum(name, _) if builtin_projection(name) == Some(BuiltinProjection::ClientType) => {
-            (
-                "            return context.ClientType(value);\n".to_string(),
-                "            return context.ReadClientType(value);\n".to_string(),
-            )
-        }
         Ty::Enum(name, _) => render_enum_codec(render, name, None),
-        Ty::EnumVariant(name, _, _)
-            if builtin_projection(name) == Some(BuiltinProjection::ClientType) =>
-        {
-            (
-                "            return context.ClientType(value);\n".to_string(),
-                "            return context.ReadClientType(value);\n".to_string(),
-            )
-        }
         Ty::EnumVariant(name, variant, _) => render_enum_codec(render, name, Some(variant)),
         Ty::List(item, _) => render_list_codec(render, item),
         Ty::Map { key, value, .. } => render_map_codec(render, key, value),
@@ -3674,15 +3640,6 @@ fn render_function_codec(
 
 fn render_builtin_codec(render: &RenderContext<'_>, ty: &Ty, name: &Name) -> (String, String) {
     match builtin_projection(name).expect("builtin codec requires a classified projection") {
-        BuiltinProjection::Client => (
-            "            return context.Client(value);\n".to_string(),
-            "            return context.ReadClient(value);\n".to_string(),
-        ),
-        BuiltinProjection::RetryPolicy => (
-            "            return context.RetryPolicy(value);\n".to_string(),
-            "            return context.ReadRetryPolicy(value);\n".to_string(),
-        ),
-        BuiltinProjection::ClientType => unreachable!("ClientType is an enum projection"),
         BuiltinProjection::StructuralClass | BuiltinProjection::StructuralEnum => {
             unreachable!("structural builtins use generated nominal codecs")
         }
@@ -5263,8 +5220,8 @@ mod tests {
                 BaseName::new("Echo$stream"),
                 Ty::Class(
                     Name::new(
-                        BaseName::new("baml"),
-                        vec![BaseName::new("llm")],
+                        BaseName::new("ai"),
+                        vec![BaseName::new("stream")],
                         BaseName::new("Stream"),
                     ),
                     vec![primitive_string(), primitive_string()],
@@ -5510,90 +5467,17 @@ mod tests {
             .join("\n")
     }
 
-    fn request_companion_source(variant: CallableVariant) -> String {
-        let namespace = vec![BaseName::new("request_contract")];
-        let suffix = match variant {
-            CallableVariant::BuildRequest => "$build_request",
-            CallableVariant::BuildRequestStream => "$build_request_stream",
-            _ => panic!("request companion helper requires a request variant"),
-        };
-        let function_name = Name::new(
-            BaseName::new("user"),
-            namespace,
-            BaseName::new(format!("Extract{suffix}")),
-        );
-        let client_name = Name::new(
-            BaseName::new("baml"),
-            vec![BaseName::new("llm")],
-            BaseName::new("Client"),
-        );
-        let request_name = Name::new(
-            BaseName::new("baml"),
-            vec![BaseName::new("http")],
-            BaseName::new("Request"),
-        );
-        let function = baml_codegen_types::Function {
-            name: BaseName::new(format!("Extract{suffix}")),
-            generic_params: vec![],
-            docstring: None,
-            arguments: vec![FunctionArgument {
-                name: BaseName::new("client"),
-                docstring: None,
-                ty: Ty::Class(client_name.clone(), vec![], TyAttr::EMPTY),
-                default: None,
-            }],
-            return_type: Ty::Class(request_name.clone(), vec![], TyAttr::EMPTY),
-            throws: None,
-            watchers: vec![],
-            origin: baml_codegen_types::Origin {
-                source_file_path: "request_contract.baml".to_string(),
-                span_start: 0,
-            },
-        };
-        let mut symbols = HashMap::new();
-        symbols.insert(function_name.clone(), Symbol::Function(function));
-        symbols.insert(client_name.clone(), builtin_class(client_name, vec![]));
-        symbols.insert(request_name.clone(), builtin_class(request_name, vec![]));
-        let mut callables = HashMap::new();
-        callables.insert(
-            CallableKey::Free(function_name),
-            CallableIdentity {
-                family_name: BaseName::new("Extract"),
-                wire_name: BaseName::new(format!("Extract{suffix}")),
-                variant,
-                receiver: None,
-            },
-        );
-        let tree = generate_program(
-            &CodegenModel { symbols, callables },
-            &[1, 2, 3],
-            "0.0.0-test",
-            "0.0.0-test",
-            "request-contract",
-        )
-        .expect("the request companion should generate");
-        tree.files
-            .iter()
-            .map(|file| String::from_utf8_lossy(&file.contents))
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
     fn modular_companion_source() -> String {
         let namespace = vec![BaseName::new("modular_contract")];
-        let prompt_name = Name::new(
-            BaseName::new("baml"),
-            vec![BaseName::new("llm")],
-            BaseName::new("PromptAst"),
-        );
+        let prompt_name = Name::new(BaseName::new("ai"), vec![], BaseName::new("Prompt"));
         let sse_name = Name::new(
             BaseName::new("baml"),
             vec![BaseName::new("http")],
             BaseName::new("SseStream"),
         );
         let stream_name = Name::new(
-            BaseName::new("baml"),
-            vec![BaseName::new("llm")],
+            BaseName::new("ai"),
+            vec![BaseName::new("stream")],
             BaseName::new("Stream"),
         );
         let companions = [
@@ -6200,27 +6084,6 @@ mod tests {
     }
 
     #[test]
-    fn request_companions_use_managed_client_and_exact_request_projection() {
-        let source = request_companion_source(CallableVariant::BuildRequest);
-        assert!(source.contains("public static global::Baml.Http.Request ExtractBuildRequest("));
-        assert!(source.contains("Task<global::Baml.Http.Request> ExtractBuildRequestAsync("));
-        assert!(source.contains("global::Baml.BamlClient client"));
-        assert!(source.contains("return context.Client(value);"));
-        assert!(source.contains("return context.ReadClient(value);"));
-        assert!(source.contains("context.ReadClass(value, \"baml.http.Request\")"));
-        assert!(!source.contains("BamlHttpRequest"));
-        assert!(source.contains("\"user.request_contract.Extract$build_request\""));
-
-        let stream_source = request_companion_source(CallableVariant::BuildRequestStream);
-        assert!(
-            stream_source
-                .contains("public static global::Baml.Http.Request ExtractBuildStreamRequest(")
-        );
-        assert!(stream_source.contains("ExtractBuildStreamRequestAsync("));
-        assert!(!stream_source.contains("ExtractBuildRequestStream("));
-    }
-
-    #[test]
     fn compiler_declared_modular_companions_emit_exact_public_surfaces() {
         let source = modular_companion_source();
         assert!(source.contains("public static global::Baml.BamlHandle ExtractRenderPrompt("));
@@ -6591,8 +6454,8 @@ mod tests {
             }],
             return_type: Ty::Class(
                 Name::new(
-                    BaseName::new("baml"),
-                    vec![BaseName::new("llm")],
+                    BaseName::new("ai"),
+                    vec![BaseName::new("stream")],
                     BaseName::new("Stream"),
                 ),
                 vec![

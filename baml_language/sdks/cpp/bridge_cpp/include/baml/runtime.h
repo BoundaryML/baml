@@ -5,6 +5,7 @@
 #include <baml/codec.h>
 #include <baml/detail/loader.h>
 #include <baml/errors.h>
+#include <baml/version.h>
 #include <baml_cffi.h>
 
 #include <cstdint>
@@ -64,6 +65,19 @@ extern "C" inline void baml_cpp_unhandled_spawn_error_trampoline(
 
 inline void shutdown_runtime();
 
+inline void install_shutdown_hook() {
+  static std::once_flag shutdown_hook;
+  std::call_once(shutdown_hook, [] {
+    std::atexit([] {
+      try {
+        shutdown_runtime();
+      } catch (const std::exception& exception) {
+        std::cerr << exception.what() << std::endl;
+      }
+    });
+  });
+}
+
 // Canonical BAML version of the loaded native runtime.
 inline std::string version() {
   detail::owned_buffer buf{detail::api().version()};
@@ -77,23 +91,31 @@ inline std::string version() {
 inline void initialize_runtime_from_bytecode(const uint8_t* bytecode,
                                              size_t length,
                                              const char* sdk_version) {
-  detail::ensure_registered(sdk_version);
+  static_cast<void>(sdk_version);
+  detail::ensure_registered(toolchain_version(), kBridgeRuntimeName,
+                            bridge_runtime_version());
   detail::api().register_unhandled_spawn_error_callback(
       baml_cpp_unhandled_spawn_error_trampoline);
-  static std::once_flag shutdown_hook;
-  std::call_once(shutdown_hook, [] {
-    std::atexit([] {
-      try {
-        shutdown_runtime();
-      } catch (const std::exception& exception) {
-        std::cerr << exception.what() << std::endl;
-      }
-    });
-  });
+  install_shutdown_hook();
   detail::owned_buffer failure{
       detail::api().initialize_runtime_from_bytecode(bytecode, length)};
   if (!failure.empty()) {
-    throw error("BAML_RUNTIME_INITIALIZATION_FAILED: " + failure.to_string());
+    throw error(failure.to_string());
+  }
+}
+
+inline void initialize_runtime_from_bytecode_with_metadata(
+    const uint8_t* bytecode, size_t length, const char* embedded_baml_toml) {
+  detail::ensure_registered(toolchain_version(), kBridgeRuntimeName,
+                            bridge_runtime_version());
+  detail::api().register_unhandled_spawn_error_callback(
+      baml_cpp_unhandled_spawn_error_trampoline);
+  install_shutdown_hook();
+  detail::owned_buffer failure{
+      detail::api().initialize_runtime_from_bytecode_with_metadata(
+          bytecode, length, embedded_baml_toml)};
+  if (!failure.empty()) {
+    throw error(failure.to_string());
   }
 }
 

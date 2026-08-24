@@ -93,7 +93,7 @@ def test_py_type_to_baml_type_returns_empty_for_unknown():
 
 def test_stdlib_reverse_overrides_seeded():
     """Every typemap seeds the PyO3-identity → `baml.media.*` /
-    `baml.llm.Stream` reverse-map overrides at construction time."""
+    `ai.stream.Stream` reverse-map overrides at construction time."""
     from baml_bridge.baml_py import BamlImage, BamlAudio, BamlVideo, BamlPdf
     from baml_bridge import BamlStream
 
@@ -102,4 +102,4 @@ def test_stdlib_reverse_overrides_seeded():
     assert tm.py_type_to_baml_type(BamlAudio) == "baml.media.Audio"
     assert tm.py_type_to_baml_type(BamlVideo) == "baml.media.Video"
     assert tm.py_type_to_baml_type(BamlPdf) == "baml.media.Pdf"
-    assert tm.py_type_to_baml_type(BamlStream) == "baml.llm.Stream"
+    assert tm.py_type_to_baml_type(BamlStream) == "ai.stream.Stream"

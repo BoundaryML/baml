@@ -23,11 +23,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0003
 
   × unresolved name: `GPT4`
-    ╭─[extra_greater.baml:23:51]
- 23 │ ╭─▶ function BadParam(x: map<string, int>>) -> string {
- 24 │ │     client GPT4
- 25 │ │     prompt #"test"#
- 26 │ ╰─▶ }
+    ╭─[extra_greater.baml:24:11]
+ 24 │   client: GPT4
+    ·           ────
     ╰────
 
   [parse] E0010
@@ -42,11 +40,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0003
 
   × unresolved name: `GPT4`
-    ╭─[extra_greater.baml:29:47]
- 29 │ ╭─▶ function BadReturnType() -> map<string, int>> {
- 30 │ │     client GPT4
- 31 │ │     prompt #"test"#
- 32 │ ╰─▶ }
+    ╭─[extra_greater.baml:30:11]
+ 30 │   client: GPT4
+    ·           ────
     ╰────
 
   [parse] E0010

@@ -28,6 +28,7 @@ struct DecodedCallArgs {
     /// engine maps each name onto the entry-frame `type_args` slot by matching
     /// the callee's generic params.
     type_args: indexmap::IndexMap<String, bex_project::RuntimeTy>,
+    type_defs: indexmap::IndexMap<String, bex_project::PortableTypeDef>,
 }
 
 /// The main BAML runtime. A zero-sized handle: the single source of truth for
@@ -73,12 +74,17 @@ impl BamlRuntime {
     /// # Arguments
     /// * `bytecode` - borsh-encoded BAML bytecode program
     #[staticmethod]
-    fn initialize_runtime_from_bytecode(bytecode: Vec<u8>) -> PyResult<Self> {
-        match bridge_cffi::initialize_runtime_from_bytecode(&bytecode) {
+    #[pyo3(signature = (bytecode, embedded_baml_toml=None))]
+    fn initialize_runtime_from_bytecode(
+        bytecode: Vec<u8>,
+        embedded_baml_toml: Option<String>,
+    ) -> PyResult<Self> {
+        match bridge_cffi::initialize_runtime_from_bytecode(
+            &bytecode,
+            embedded_baml_toml.as_deref(),
+        ) {
             Ok(_bex) => Ok(BamlRuntime),
-            // Handle-returning site: can't hand back envelope bytes, so an
-            // SDK setup failure surfaces as BamlPanic(SdkPanic) (32c).
-            Err(e) => Err(bridge_error_to_sdk_panic(e)),
+            Err(e) => Err(crate::errors::bridge_error_to_initialization_error(e)),
         }
     }
 }
@@ -138,6 +144,7 @@ impl BamlRuntime {
                 Ok((runtime, decoded)) => {
                     let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
                         .with_type_args(decoded.type_args)
+                        .with_type_defs(decoded.type_defs)
                         .build();
                     match decoded.target {
                         bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(function_name) => {
@@ -190,6 +197,7 @@ impl BamlRuntime {
         let _ = (&ctx, &collectors);
         let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
             .with_type_args(decoded.type_args)
+            .with_type_defs(decoded.type_defs)
             .build();
 
         // Same shared call_and_encode as the async + C-ABI paths — returns the
@@ -245,7 +253,8 @@ fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::Bridge
         kwargs: kwargs.into(),
         call_id,
         target,
-        type_args,
+        type_args: type_args.type_args,
+        type_defs: type_args.type_defs,
     })
 }
 

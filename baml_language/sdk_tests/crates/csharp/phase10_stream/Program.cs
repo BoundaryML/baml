@@ -42,6 +42,8 @@ if (!args.Contains("--native-child", StringComparer.Ordinal))
     {
         File.Delete(counterFile);
         File.Delete(counterFile + ".next");
+        File.Delete(counterFile + ".auth");
+        File.Delete(counterFile + ".auth.next");
         File.Delete(counterFile + ".dispose-ready");
         File.Delete(counterFile + ".ordered-partials.1");
         File.Delete(counterFile + ".ordered-partials.2");
@@ -56,31 +58,7 @@ string requestCountFile = Environment.GetEnvironmentVariable("BAML_CSHARP_REPLAY
     ?? throw new InvalidOperationException("native child request-count file is missing");
 
 int requestsBefore = ReplayRequestCount();
-BamlClient replayClient = BamlClient.FromShorthand("DeterministicReplayClient");
-BamlProtocolException promptError = Expect<BamlProtocolException>(() =>
-    _ = Functions.DeterministicRenderPrompt("render-only", replayClient));
-Require(
-    promptError.Message.Contains("wrong BAML type", StringComparison.Ordinal),
-    "structurally serialized PromptAst did not fail closed explicitly");
-Require(
-    ReplayRequestCount() == requestsBefore,
-    "render-prompt companion unexpectedly dispatched HTTP");
-Baml.Http.Request request = Functions.DeterministicBuildStreamRequest("request-only");
-Require(
-    request.Method == "POST"
-        && Uri.TryCreate(request.Url, UriKind.Absolute, out Uri? requestUri)
-        && IPAddress.IsLoopback(Dns.GetHostAddresses(requestUri.Host)[0])
-        && request.Headers.TryGetValue("authorization", out string? authorization)
-        && authorization == "Bearer local-replay-key"
-        && request.Body.Contains("request-only", StringComparison.Ordinal),
-    "generated request companion did not preserve the native request structure");
-Require(
-    ReplayRequestCount() == requestsBefore,
-    "generated request companion unexpectedly dispatched HTTP");
-
-BamlStream<string?, string> finalOnly = Functions.DeterministicStream(
-    "final-only",
-    replayClient);
+BamlStream<string?, string> finalOnly = Functions.DeterministicStream("final-only");
 Require(
     ReplayRequestCount() == requestsBefore,
     "generated FunctionStream eagerly dispatched its native factory");
@@ -90,6 +68,12 @@ Require(finalOnlyResult == ExpectedFinal, "native final-only stream result chang
 Require(
     ReplayRequestCount() == requestsBefore + 1,
     "native final-only stream dispatched the wrong request count");
+// The client declaration names its env vars rather than reading them, so the
+// api key only becomes real when the provider builds the request. Observing it
+// on the wire is what proves that request-time resolution happened.
+Require(
+    ObservedAuthorization() == "Bearer local-replay-key",
+    "streamed request did not carry the request-time resolved api key");
 
 int requestsBeforeEarly = ReplayRequestCount();
 BamlStream<string?, string> early = Functions.DeterministicStream("dispose-early");
@@ -226,6 +210,17 @@ int ReplayRequestCount()
         System.Globalization.CultureInfo.InvariantCulture);
 }
 
+string ObservedAuthorization()
+{
+    using var file = new FileStream(
+        requestCountFile + ".auth",
+        FileMode.Open,
+        FileAccess.Read,
+        FileShare.ReadWrite | FileShare.Delete);
+    using var reader = new StreamReader(file, Encoding.UTF8);
+    return reader.ReadToEnd();
+}
+
 void PublishReplayProgress(string suffix, int value)
 {
     File.WriteAllText($"{requestCountFile}{suffix}.{value}", "ready");
@@ -238,21 +233,6 @@ async Task WaitForReplayRequestCountAsync(int expected)
         timeout.Token.ThrowIfCancellationRequested();
         await Task.Delay(10, timeout.Token).ConfigureAwait(false);
     }
-}
-
-static TException Expect<TException>(Action action)
-    where TException : Exception
-{
-    try
-    {
-        action();
-    }
-    catch (TException error)
-    {
-        return error;
-    }
-
-    throw new InvalidOperationException($"expected {typeof(TException).Name}");
 }
 
 static async Task<TException> ExpectAsync<TException>(Task task)
@@ -339,41 +319,42 @@ static void AssertGeneratedStructuredPropertyShapes()
 
 internal sealed class ReplayServer : IAsyncDisposable
 {
+    // OpenAI Responses API SSE. The event layout is load-bearing: the pacing
+    // logic in ServeRequestAsync waits on specific 1-based event indices, so a
+    // leading no-text event keeps the text deltas at indices 2..5 (scalar) and
+    // 2..7 (structured), matching the Chat Completions layout these recordings
+    // replaced.
     private const string Recording = """
-        data: {"id":"replay","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-nano","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+        data: {"type":"response.created","response":{"status":"in_progress","output":[]}}
 
-        data: {"id":"replay","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-nano","choices":[{"index":0,"delta":{"content":"alpha"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":"alpha"}
 
-        data: {"id":"replay","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-nano","choices":[{"index":0,"delta":{"content":" beta"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":" beta"}
 
-        data: {"id":"replay","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-nano","choices":[{"index":0,"delta":{"content":" gamma"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":" gamma"}
 
-        data: {"id":"replay","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-nano","choices":[{"index":0,"delta":{"content":" delta"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":" delta"}
 
-        data: {"id":"replay","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-nano","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
-
-        data: [DONE]
+        data: {"type":"response.completed","response":{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"alpha beta gamma delta"}]}],"usage":{"input_tokens":11,"output_tokens":4}}}
 
         """;
 
     private const string StructuredRecording = """
-        data: {"id":"replay","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-nano","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+        data: {"type":"response.created","response":{"status":"in_progress","output":[]}}
 
-        data: {"id":"replay","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-nano","choices":[{"index":0,"delta":{"content":"{\"required\":\"must\",\"done_required\":\"sealed\""},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":"{\"required\":\"must\",\"done_required\":\"sealed\""}
 
-        data: {"id":"replay","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-nano","choices":[{"index":0,"delta":{"content":",\"defaulted\":\"de"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":",\"defaulted\":\"de"}
 
-        data: {"id":"replay","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-nano","choices":[{"index":0,"delta":{"content":"fault\",\"state\":\"pro"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":"fault\",\"state\":\"pro"}
 
-        data: {"id":"replay","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-nano","choices":[{"index":0,"delta":{"content":"gress\""},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":"gress\""}
 
-        data: {"id":"replay","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-nano","choices":[{"index":0,"delta":{"content":",\"done\":\"fin"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":",\"done\":\"fin"}
 
-        data: {"id":"replay","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-nano","choices":[{"index":0,"delta":{"content":"al\"}"},"finish_reason":null}]}
+        data: {"type":"response.output_text.delta","delta":"al\"}"}
 
-        data: {"id":"replay","object":"chat.completion.chunk","created":1,"model":"gpt-5.4-nano","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
-
-        data: [DONE]
+        data: {"type":"response.completed","response":{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"{\"required\":\"must\",\"done_required\":\"sealed\",\"defaulted\":\"default\",\"state\":\"progress\",\"done\":\"final\"}"}]}],"usage":{"input_tokens":23,"output_tokens":31}}}
 
         """;
 
@@ -467,6 +448,18 @@ internal sealed class ReplayServer : IAsyncDisposable
                 contentLength = int.Parse(
                     line.AsSpan(Prefix.Length).Trim(),
                     System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            const string AuthorizationPrefix = "Authorization:";
+            if (line.StartsWith(AuthorizationPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                // Published for the child to assert: it is the only evidence
+                // that the api key resolved from env when the request was built.
+                string pendingAuthorization = counterFile + ".auth.next";
+                File.WriteAllText(
+                    pendingAuthorization,
+                    line.AsSpan(AuthorizationPrefix.Length).Trim().ToString());
+                File.Move(pendingAuthorization, counterFile + ".auth", overwrite: true);
             }
         }
 

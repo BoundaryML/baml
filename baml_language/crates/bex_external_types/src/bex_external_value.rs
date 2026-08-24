@@ -61,12 +61,9 @@ impl UnionMetadata {
     pub fn new(union_type: RuntimeTy, selected_option: RuntimeTy) -> Self {
         let (is_optional, is_single_pattern) = match &union_type {
             RuntimeTy::Union(members, _) => {
-                let has_null = members.iter().any(|m| matches!(m, RuntimeTy::Null { .. }));
-                let non_null_count = members
-                    .iter()
-                    .filter(|m| !matches!(m, RuntimeTy::Null { .. }))
-                    .count();
-                (has_null, non_null_count == 1)
+                let is_optional = members.iter().any(RuntimeTy::is_null);
+                let non_null_count = members.iter().filter(|member| !member.is_null()).count();
+                (is_optional, non_null_count == 1)
             }
             _ => (false, false),
         };
@@ -85,8 +82,29 @@ impl UnionMetadata {
 #[derive(Clone, Debug, PartialEq)]
 pub enum BexExternalAdt {
     Collector(bex_vm_types::CollectorRef),
-    Type(baml_type::RuntimeTy),
-    /// A rendered prompt AST (from `baml.llm.render_prompt`).
+    /// A reflected type, carried at the sys-op lane's head so a definition
+    /// table can be keyed by declaration identity rather than by name.
+    ///
+    /// Deliberately pointer-free: the collector can run while a sys-op is
+    /// awaiting, so anything a sys-op holds across that boundary must survive
+    /// objects moving. A tag does; an address does not.
+    Type(baml_type::RuntimeTy<baml_type::TaggedTypeName>),
+    /// A reflected type carrying runtime definitions.
+    ///
+    /// The two arms are the two things a `type` value can be at a boundary,
+    /// made explicit rather than inferred:
+    ///
+    /// * [`Live`](TypeDefRef::Live) — a rooted reference back to the very
+    ///   `Object::Type` that produced it. Valid only in the engine that issued
+    ///   the handle, which is why it also carries the portable definitions:
+    ///   anywhere else (another engine, another process) it degrades to them.
+    /// * [`Portable`](TypeDefRef::Portable) — definitions alone, reconstructed
+    ///   into fresh heap objects on arrival.
+    ///
+    /// Wire encoders serialize the portable form in both cases: a handle is a
+    /// live capability, not data, so it cannot cross a process (BEP-066 H-4).
+    TypeDef(TypeDefRef),
+    /// The Rust-backed payload inside a rendered `ai.Prompt`.
     PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
     Media(std::sync::Arc<baml_builtins2::MediaValue>),
@@ -98,13 +116,52 @@ pub enum BexExternalAdt {
     /// the instance alive on the heap so the engine can re-enter it for
     /// instance-method calls (`Stream.next`, `Stream.final`, …).
     ///
-    /// Currently used by `baml.llm.Stream`; any future stdlib generic
+    /// Currently used by `ai.stream.Stream`; any future stdlib generic
     /// class that wants typed-handle round-trip treatment uses this same
     /// variant.
     TaggedHeapHandle {
         ty: baml_type::RuntimeTy,
         heap_handle: crate::Handle,
     },
+}
+
+/// How a `type` value crosses a boundary: as a live reference into the issuing
+/// engine, or as portable definitions.
+///
+/// Both arms carry `def`, so every consumer can read the type's shape without
+/// caring which arm it got; only identity differs.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TypeDefRef {
+    /// Same-engine: `handle` resolves to the originating `Object::Type`, so a
+    /// value that leaves and returns is the *same* object — its identity,
+    /// definitions and provenance are untouched. The handle also keeps that
+    /// object rooted for as long as this value lives.
+    Live {
+        handle: crate::Handle,
+        def: bex_vm_types::types::PortableTypeDef,
+    },
+    /// Definitions only: the receiving engine reconstructs heap objects and
+    /// assigns fresh identity. The form every cross-process payload takes.
+    Portable(bex_vm_types::types::PortableTypeDef),
+}
+
+impl TypeDefRef {
+    /// The portable definitions, whichever arm this is.
+    #[must_use]
+    pub fn def(&self) -> &bex_vm_types::types::PortableTypeDef {
+        match self {
+            Self::Live { def, .. } | Self::Portable(def) => def,
+        }
+    }
+
+    /// Consume into the portable definitions, dropping any live reference.
+    /// This is what a wire encoder does.
+    #[must_use]
+    pub fn into_def(self) -> bex_vm_types::types::PortableTypeDef {
+        match self {
+            Self::Live { def, .. } | Self::Portable(def) => def,
+        }
+    }
 }
 
 /// A deep-copied value tree with no heap references.
@@ -368,7 +425,7 @@ impl BexExternalAdt {
     pub fn type_name(&self) -> &'static str {
         match self {
             BexExternalAdt::Collector(_) => "collector",
-            BexExternalAdt::Type(_) => "type",
+            BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_) => "type",
             BexExternalAdt::PromptAst(_) => "prompt_ast",
             BexExternalAdt::Media(_) => "media",
             BexExternalAdt::TaggedHeapHandle { .. } => "tagged_heap_handle",
@@ -376,7 +433,36 @@ impl BexExternalAdt {
     }
 }
 
+/// Field of the stdlib media wrapper classes (`baml.media.*`) that holds the
+/// structural media payload. The wrapper layout is private to the stdlib;
+/// host code must reach the payload through
+/// [`BexExternalValue::media_wrapper_inner`], never by naming this field
+/// elsewhere.
+pub const MEDIA_WRAPPER_DATA_FIELD: &str = "_data";
+
 impl BexExternalValue {
+    /// If this is an instance of a stdlib media wrapper class
+    /// (`baml.media.{Image,Audio,Video,Pdf}`), the media kind it wraps.
+    pub fn media_wrapper_kind(&self) -> Option<baml_type::MediaKind> {
+        match self {
+            BexExternalValue::Instance { class_name, .. } => {
+                baml_type::MediaKind::from_wrapper_class_name(class_name)
+            }
+            _ => None,
+        }
+    }
+
+    /// The structural media payload of a media wrapper instance. `None` when
+    /// this is not a media wrapper, or when the wrapper is missing its
+    /// payload field (malformed; callers decide whether that is an error).
+    pub fn media_wrapper_inner(&self) -> Option<&BexExternalValue> {
+        self.media_wrapper_kind()?;
+        match self {
+            BexExternalValue::Instance { fields, .. } => fields.get(MEDIA_WRAPPER_DATA_FIELD),
+            _ => None,
+        }
+    }
+
     /// Construct the transient carrier for an inbound value paired with its
     /// exact host-known type. This reuses the external union representation so
     /// existing type-directed VM materialization can honor `value_type`, while
@@ -552,7 +638,7 @@ impl BexExternalValue {
             BexExternalValue::Uint8Array(bytes) => format!("<bytes:{}>", bytes.len()),
             // A rendered prompt handle: render its readable text instead of the
             // `Adt(PromptAst(Message { .. }))` Rust `Debug` dump (B-627). Nested
-            // inside a `baml.llm.PromptAst { _data: .. }` instance, this makes the
+            // inside a `ai.Prompt { _data: .. }` instance, this makes the
             // CLI's value print readable.
             BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => ast.render_text(),
             _ => format!("{self:?}"),
@@ -649,7 +735,7 @@ impl AsBexExternalValue for std::sync::Arc<num_bigint::BigInt> {
     }
 }
 
-impl AsBexExternalValue for baml_type::RuntimeTy {
+impl AsBexExternalValue for baml_type::RuntimeTy<baml_type::TaggedTypeName> {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::Type(self))
     }
@@ -843,7 +929,7 @@ mod render_readable_tests {
         }
     }
 
-    /// A rendered-prompt handle (`baml.llm.PromptAst`'s `_data`) renders as its
+    /// A rendered-prompt handle (`ai.Prompt`'s `_data`) renders as its
     /// readable prompt text, not the `Adt(PromptAst(Message { .. }))` Rust
     /// `Debug` dump. This is the B-627 repro for the CLI value print.
     #[test]

@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+411..415 'ping': throws "stop"
+431..520 '{\n   ...(n)\n}': int
+465..506 'if (n ...n    }': void
+469..470 'n': int
+469..475 'n == 0': bool
+474..475 '0': 0
+477..506 '{\n   ...n    }': never
+493..499 '"stop"': "stop"
+511..515 'pong': (n: int) -> int throws "stop"
+511..518 'pong(n)': int
+516..517 'n': int
+531..535 'pong': throws "stop"
+551..594 '{\n   ...(n)\n}': int
+585..589 'ping': (n: int) -> int throws "stop"
+585..592 'ping(n)': int
+590..591 'n': int

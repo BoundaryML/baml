@@ -3,21 +3,32 @@ name: BAML Language Release
 # Channel-aware replacement for the legacy BAML language release workflow.
 # Release workflows run packaging smoke tests only; the full suite runs in CI.
 
-# Dispatch-only: `CI - BAML Language` calls `gh workflow run` on this file after
-# a green push to canary. That is deliberately not a `workflow_run` trigger --
-# crates.io refuses to mint a Trusted Publishing token for `workflow_run` (and
-# `pull_request_target`) runs, so a `workflow_run` release can never publish
-# baml_bridge. Dispatching from CI keeps the same "CI must be green" gate while
-# tightening the trust chain: `workflow_run` fires for *every* CI run including
-# fork pull requests, whereas a fork's CI has a read-only token and cannot
-# dispatch at all.
+# Dispatch-only, with exactly one production dispatcher per channel:
+#   - `CI - BAML Language` cuts the CANARY channel after a green push to canary
+#     that bumps [release].canary_version in baml_language/release.toml;
+#   - `Nightly BAML Language Release` cuts the NIGHTLY channel once a night, at
+#     midnight America/Los_Angeles, when canary moved since the last nightly.
+# Both pin the run to the immutable `baml-language-source-<sha>` tag CI created
+# for the commit, which the attestation below re-checks.
+#
+# One dispatcher per channel is deliberate: a canary release used to chain a
+# nightly of its own, which meant two sites racing to name the same night with
+# no way to see each other's in-flight claim. The nightly channel now simply
+# advances at the next midnight cut instead.
+#
+# That is deliberately not a `workflow_run` trigger -- crates.io refuses to mint
+# a Trusted Publishing token for `workflow_run` (and `pull_request_target`)
+# runs, so a `workflow_run` release can never publish baml_bridge. Dispatching
+# from CI keeps the same "CI must be green" gate while tightening the trust
+# chain: `workflow_run` fires for *every* CI run including fork pull requests,
+# whereas a fork's CI has a read-only token and cannot dispatch at all.
 on:
   workflow_dispatch:
     inputs:
       channel:
-        description: "Release channel to plan (auto: pick canary/nightly from release.toml, as CI does)"
+        description: "Release channel to plan"
         type: choice
-        options: [auto, nightly, canary]
+        options: [nightly, canary]
         default: nightly
         required: true
       dry_run:
@@ -74,6 +85,7 @@ jobs:
       maven_version: ${{ steps.plan.outputs.maven_version }}
       gradle_plugin_version: ${{ steps.plan.outputs.gradle_plugin_version }}
       swiftpm_version: ${{ steps.plan.outputs.swiftpm_version }}
+      go_version: ${{ steps.plan.outputs.go_version }}
       released_at: ${{ steps.plan.outputs.released_at }}
       git_tag: ${{ steps.plan.outputs.git_tag }}
       release_plan_json: ${{ steps.plan.outputs.release_plan_json }}
@@ -83,7 +95,6 @@ jobs:
       dry_run: ${{ steps.plan.outputs.dry_run }}
       wrapper_version: ${{ steps.wrapper.outputs.wrapper_version }}
       wrapper_changed: ${{ steps.wrapper.outputs.wrapper_changed }}
-      dispatch_nightly_after_canary: ${{ steps.plan.outputs.dispatch_nightly_after_canary }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -194,19 +205,7 @@ jobs:
           channel="${INPUT_CHANNEL:-nightly}"
           dry_run="${INPUT_DRY_RUN:-false}"
           source_branch="${ATTESTED_SOURCE_BRANCH:-${GITHUB_REF_NAME:-}}"
-          dispatch_nightly_after_canary="false"
-          if [[ "$channel" == "auto" ]]; then
-            channel="nightly"
-            if git rev-parse HEAD^ >/dev/null 2>&1 && git diff --quiet HEAD^ HEAD -- baml_language/release.toml; then
-              :
-            elif git rev-parse HEAD^ >/dev/null 2>&1; then
-              canary_version="$(scripts/baml-language-version compute --channel canary)"
-              if ! gh release view "baml-language-${canary_version}" >/dev/null 2>&1; then
-                channel="canary"
-                dispatch_nightly_after_canary="true"
-              fi
-            fi
-          fi
+          # `plan` rejects any channel other than canary/nightly.
           scripts/baml-language-version plan --channel "$channel" --out release-plan.json
           source_sha="$(git rev-parse HEAD)"
           version="$(jq -r .canonical_version release-plan.json)"
@@ -217,6 +216,7 @@ jobs:
           gradle_plugin_version="$(jq -r \
             .registry_versions.gradle_plugin release-plan.json)"
           swiftpm_version="$(jq -r .registry_versions.swiftpm release-plan.json)"
+          go_version="$(jq -r .registry_versions.go release-plan.json)"
           released_at="$(jq -r .released_at release-plan.json)"
           git_tag="$(jq -r .git_tag release-plan.json)"
           {
@@ -228,6 +228,7 @@ jobs:
             echo "maven_version=$maven_version"
             echo "gradle_plugin_version=$gradle_plugin_version"
             echo "swiftpm_version=$swiftpm_version"
+            echo "go_version=$go_version"
             echo "released_at=$released_at"
             echo "git_tag=$git_tag"
             echo "release_plan_json<<EOF"
@@ -237,7 +238,6 @@ jobs:
             echo "source_branch=$source_branch"
             echo "source_ci_run_id=$INPUT_SOURCE_CI_RUN_ID"
             echo "dry_run=$dry_run"
-            echo "dispatch_nightly_after_canary=$dispatch_nightly_after_canary"
           } >> "$GITHUB_OUTPUT"
 
       - name: Check wrapper version
@@ -417,11 +417,13 @@ jobs:
           if [[ "$vsix" != "$dest" ]]; then
             mv "$vsix" "$dest"
           fi
-      - name: Reject bundled native binaries
+      - name: Validate VSIX contents
         run: |
           set -euo pipefail
           vsix="typescript2/app-vscode-ext/baml-language-${{ needs.plan.outputs.version }}.vsix"
-          unzip -l "$vsix" | tee vsix-list.txt
+          unzip -Z1 "$vsix" | tee vsix-list.txt
+          grep -Fxq 'extension/readme.md' vsix-list.txt
+          grep -Fxq 'extension/baml-logo.png' vsix-list.txt
           ! grep -E 'dist/baml-cli|baml-cli|baml-pack-host' vsix-list.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -601,11 +603,13 @@ jobs:
       - name: Assemble and test public module
         env:
           VERSION: ${{ needs.plan.outputs.version }}
+          GO_VERSION: ${{ needs.plan.outputs.go_version }}
         run: |
           set -euo pipefail
           scripts/assemble-go-sdk-mirror \
             --out "$RUNNER_TEMP/go-sdk-mirror" \
-            --version "$VERSION"
+            --version "$VERSION" \
+            --go-version "$GO_VERSION"
           cd "$RUNNER_TEMP/go-sdk-mirror"
           test "$(go list -m)" = "github.com/boundaryml/baml-go"
           go test ./...
@@ -1207,12 +1211,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.plan.outputs.git_tag }}
           VERSION: ${{ needs.plan.outputs.version }}
+          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
         run: |
           set -euo pipefail
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/toolchain/* dist/vsix/* --clobber
           else
+            # `--target` is load-bearing, not cosmetic: without it GitHub tags
+            # the default branch's head at publish time, which is not the commit
+            # these artifacts were built from once canary advances during the
+            # build. The nightly scheduler reads this tag to decide whether
+            # canary moved since the last nightly, so a tag pointing at unbuilt
+            # commits would silently retire them.
             gh release create "$TAG" dist/toolchain/* dist/vsix/* \
+              --target "$SOURCE_SHA" \
               --title "BAML Language $VERSION" \
               --notes "BAML language toolchain $VERSION"
           fi
@@ -1304,6 +1316,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.plan.outputs.git_tag }}
           VERSION: ${{ needs.plan.outputs.version }}
+          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -1313,9 +1326,11 @@ jobs:
             exit 1
           fi
           # The toolchain publisher created the shared release; create it only if
-          # a cffi-only rerun somehow got here first.
+          # a cffi-only rerun somehow got here first. `--target` for the same
+          # reason it is there: whoever wins the race must tag the source commit.
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --title "BAML Language $VERSION" \
+            gh release create "$TAG" --target "$SOURCE_SHA" \
+              --title "BAML Language $VERSION" \
               --notes "BAML language $VERSION"
           fi
           # Immutable upload: add missing assets, verify identical bytes for any
@@ -1381,12 +1396,13 @@ jobs:
       - name: Publish immutable module tag
         env:
           SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
-          VERSION: ${{ needs.plan.outputs.version }}
+          CANONICAL_VERSION: ${{ needs.plan.outputs.version }}
+          GO_VERSION: ${{ needs.plan.outputs.go_version }}
         run: |
           set -euo pipefail
           export GIT_SSH_COMMAND="ssh -i ~/.ssh/baml_go_mirror_key -o IdentitiesOnly=yes"
-          tag="v$VERSION"
-          manifest_url="https://pkg.boundaryml.com/manifest/v1/version/$VERSION.json"
+          tag="$GO_VERSION"
+          manifest_url="https://pkg.boundaryml.com/manifest/v1/version/$CANONICAL_VERSION.json"
 
           # Do not expose an immutable Go module tag until the exact-version
           # manifest it needs is live and identifies this same module version.
@@ -1402,13 +1418,14 @@ jobs:
             sleep "$attempt"
           done
           jq -e \
-            --arg version "$VERSION" \
+            --arg version "$CANONICAL_VERSION" \
+            --arg go_version "$GO_VERSION" \
             --arg module "github.com/boundaryml/baml-go" \
             '
               .version == $version
               and .baml_bridge_go == {
                 "module": $module,
-                "version": ("v" + $version)
+                "version": $go_version
               }
               and (.cffi | type == "object" and length > 0)
             ' "$manifest" >/dev/null
@@ -1430,9 +1447,10 @@ jobs:
 
           cd /tmp/baml-go
           test "$(sed -n '1p' go.mod)" = "module github.com/boundaryml/baml-go"
-          if ! grep -qxF "const DefaultRuntimeVersion = \"$VERSION\"" version.go; then
-            echo "::error::version.go is not stamped for $VERSION"
-            grep -n "DefaultRuntimeVersion" version.go || true
+          if ! grep -qxF "const ToolchainVersion = \"$CANONICAL_VERSION\"" version.go ||
+             ! grep -qxF "const BridgeRuntimeVersion = \"$GO_VERSION\"" version.go; then
+            echo "::error::version.go is not stamped for $CANONICAL_VERSION / $GO_VERSION"
+            grep -n "ToolchainVersion\\|BridgeRuntimeVersion" version.go || true
             exit 1
           fi
           git add -A
@@ -1449,7 +1467,7 @@ jobs:
           if ! git diff --cached --quiet; then
             git -c user.name="github-actions[bot]" \
                 -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-                commit -m "Sync BoundaryML/baml@$SOURCE_SHA for v$VERSION"
+                commit -m "Sync BoundaryML/baml@$SOURCE_SHA for $GO_VERSION"
           fi
           git -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
@@ -1658,7 +1676,9 @@ jobs:
       - publish-swift-sdk
       - publish-crates-io
       - publish-homebrew
-      - publish-aur
+      # AUR publishing is temporarily disabled because upstream maintenance
+      # rejects SSH clones and blocks pkg.boundaryml.com manifest promotion.
+      # - publish-aur
     if: ${{ always() && needs.all-builds.result == 'success' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     steps:
@@ -1677,7 +1697,7 @@ jobs:
           SWIFTPM: ${{ needs.publish-swift-sdk.result }}
           CRATES_IO: ${{ needs.publish-crates-io.result }}
           HOMEBREW: ${{ needs.publish-homebrew.result }}
-          AUR: ${{ needs.publish-aur.result }}
+          # AUR: ${{ needs.publish-aur.result }}
           CHANNEL: ${{ needs.plan.outputs.channel }}
           WRAPPER_CHANGED: ${{ needs.plan.outputs.wrapper_changed }}
         run: |
@@ -1719,11 +1739,11 @@ jobs:
           if [[ "$WRAPPER_CHANGED" == "true" ]]; then
             require_success wrapper-assets "$WRAPPER"
             require_success Homebrew "$HOMEBREW"
-            require_success AUR "$AUR"
+            # require_success AUR "$AUR"
           else
             require_skipped wrapper-assets "$WRAPPER"
             require_skipped Homebrew "$HOMEBREW"
-            require_skipped AUR "$AUR"
+            # require_skipped AUR "$AUR"
           fi
 
   publish-pkg-boundaryml-com:
@@ -2030,41 +2050,6 @@ jobs:
             --content-type application/json \
             --cache-control "public, max-age=60, must-revalidate"
 
-  dispatch-nightly-after-canary:
-    name: Queue nightly after canary publish
-    needs: [plan, publish-pkg-channel]
-    if: >-
-      ${{
-        !cancelled() &&
-        needs.plan.result == 'success' &&
-        needs.publish-pkg-channel.result == 'success' &&
-        needs.plan.outputs.dispatch_nightly_after_canary == 'true' &&
-        needs.plan.outputs.dry_run == 'false' &&
-        needs.plan.outputs.source_branch == 'canary'
-      }}
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - name: Dispatch nightly release run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
-          SOURCE_CI_RUN_ID: ${{ needs.plan.outputs.source_ci_run_id }}
-          SOURCE_WORKFLOW_REF: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          # Reuse the immutable workflow ref from this canary release so the
-          # nightly cannot combine a newer workflow with the pinned source.
-          gh workflow run release-baml-language.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref "$SOURCE_WORKFLOW_REF" \
-            -f channel=nightly \
-            -f dry_run=false \
-            -f source_sha="$SOURCE_SHA" \
-            -f source_ci_run_id="$SOURCE_CI_RUN_ID"
-
   publish-homebrew:
     name: Publish Homebrew wrapper formula
     needs: [plan, all-builds, publish-wrapper-release]
@@ -2117,60 +2102,63 @@ jobs:
           git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || exit 0
           git push origin HEAD
 
-  publish-aur:
-    name: Publish AUR wrapper packages
-    needs: [plan, all-builds, publish-wrapper-release]
-    if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.source_sha }}
-          persist-credentials: false
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: wrapper-*
-          path: dist/wrapper
-          merge-multiple: true
-      - name: Configure AUR SSH
-        env:
-          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          test -n "$AUR_SSH_PRIVATE_KEY"
-          mkdir -p ~/.ssh
-          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
-          chmod 600 ~/.ssh/aur
-          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
-          printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n' >> ~/.ssh/config
-      - name: Generate AUR package files
-        env:
-          SOURCE_SHA256: ${{ needs.publish-wrapper-release.outputs.source_sha256 }}
-          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
-        run: |
-          set -euo pipefail
-          scripts/baml-package-manager-artifacts \
-            --wrapper-dir dist/wrapper \
-            --version "$WRAPPER_VERSION" \
-            --source-sha256 "$SOURCE_SHA256" \
-            --out package-manager
-      - name: Push AUR repos
-        env:
-          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
-        run: |
-          set -euo pipefail
-          for pkg in baml baml-bin; do
-            git clone "ssh://aur@aur.archlinux.org/${pkg}.git" "aur-${pkg}"
-            cp "package-manager/aur/${pkg}/PKGBUILD" "aur-${pkg}/PKGBUILD"
-            cp "package-manager/aur/${pkg}/.SRCINFO" "aur-${pkg}/.SRCINFO"
-            cd "aur-${pkg}"
-            git config user.name "boundaryml-release-bot"
-            git config user.email "boundaryml-release-bot@users.noreply.github.com"
-            git add PKGBUILD .SRCINFO
-            git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || { cd ..; continue; }
-            git push origin HEAD
-            cd ..
-          done
+  # AUR publishing is temporarily disabled because aur.archlinux.org reports
+  # maintenance and rejects SSH clones. Restore this job and its gate dependency
+  # when AUR is available again.
+  # publish-aur:
+  #   name: Publish AUR wrapper packages
+  #   needs: [plan, all-builds, publish-wrapper-release]
+  #   if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         ref: ${{ needs.plan.outputs.source_sha }}
+  #         persist-credentials: false
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: wrapper-*
+  #         path: dist/wrapper
+  #         merge-multiple: true
+  #     - name: Configure AUR SSH
+  #       env:
+  #         AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+  #       run: |
+  #         set -euo pipefail
+  #         test -n "$AUR_SSH_PRIVATE_KEY"
+  #         mkdir -p ~/.ssh
+  #         printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+  #         chmod 600 ~/.ssh/aur
+  #         ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+  #         printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n' >> ~/.ssh/config
+  #     - name: Generate AUR package files
+  #       env:
+  #         SOURCE_SHA256: ${{ needs.publish-wrapper-release.outputs.source_sha256 }}
+  #         WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+  #       run: |
+  #         set -euo pipefail
+  #         scripts/baml-package-manager-artifacts \
+  #           --wrapper-dir dist/wrapper \
+  #           --version "$WRAPPER_VERSION" \
+  #           --source-sha256 "$SOURCE_SHA256" \
+  #           --out package-manager
+  #     - name: Push AUR repos
+  #       env:
+  #         WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+  #       run: |
+  #         set -euo pipefail
+  #         for pkg in baml baml-bin; do
+  #           git clone "ssh://aur@aur.archlinux.org/${pkg}.git" "aur-${pkg}"
+  #           cp "package-manager/aur/${pkg}/PKGBUILD" "aur-${pkg}/PKGBUILD"
+  #           cp "package-manager/aur/${pkg}/.SRCINFO" "aur-${pkg}/.SRCINFO"
+  #           cd "aur-${pkg}"
+  #           git config user.name "boundaryml-release-bot"
+  #           git config user.email "boundaryml-release-bot@users.noreply.github.com"
+  #           git add PKGBUILD .SRCINFO
+  #           git commit -m "Update baml wrapper to ${WRAPPER_VERSION}" || { cd ..; continue; }
+  #           git push origin HEAD
+  #           cd ..
+  #         done
 
   dry-run-artifacts:
     name: Generate dry-run manifests and package files
@@ -2309,7 +2297,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   notify-slack:
-    name: Notify Slack on failure
+    name: Notify Slack
     needs:
       - plan
       - build-matrix
@@ -2338,9 +2326,9 @@ jobs:
       - publish-crates-io
       - publish-pkg-boundaryml-com
       - smoke-go-release
-      - dispatch-nightly-after-canary
       - publish-homebrew
-      - publish-aur
+      # AUR is temporarily absent from the release graph during maintenance.
+      # - publish-aur
       - dry-run-artifacts
       - dry-run-summary
       - build-swift-sdk
@@ -2353,7 +2341,7 @@ jobs:
       - publish-pkg-channel
       - smoke-swift-release
     # Use the dispatch input so a failure in plan itself is still reportable.
-    # This job must run after failed dependencies; the script posts only when the run contains failures.
+    # This job must run after failed dependencies. Failures and successful canary releases notify Slack; successful nightlies stay silent.
     if: ${{ always() && inputs.dry_run == false && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     environment: boundary-tools-dev
@@ -2373,11 +2361,12 @@ jobs:
       - uses: ./.github/actions/setup-mise
         with:
           install_args: uv
-      - name: Find failures and notify Slack
+      - name: Notify Slack of the release result
         env:
           GH_TOKEN: ${{ github.token }}
           SLACK_CHANNEL: "#general"
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
           VERSION: ${{ needs.plan.outputs.version }}
           CHANNEL: ${{ needs.plan.outputs.channel }}
+          RELEASE_SUCCEEDED: ${{ needs.publish-pkg-channel.result == 'success' }}
         run: uv run --script tools/notify-release-failure.py

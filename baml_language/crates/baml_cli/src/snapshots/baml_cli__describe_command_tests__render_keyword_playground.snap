@@ -6,7 +6,7 @@ playground — Serves the BAML playground web UI for a project and opens it in a
 
 Syntax:
   baml playground                      # current project, first free port from 4265
-  baml playground --from ./my-app      # explicit project directory
+  baml playground --project ./my-app   # explicit project directory
   baml playground --file ./one.baml    # standalone single file
   baml playground --port 4265          # pin the port (errors if taken)
   baml playground --no-open            # don't launch a browser (automatic in SSH/headless sessions)

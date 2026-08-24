@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+304..309 'risky': throws user.Boom | user.Kapow
+352..381 '{\n   ..." }\n}': never
+364..379 'Boom { m: "x" }': user.Boom
+374..377 '"x"': "x"
+392..393 'f': throws never
+419..574 '{\n   ...  }\n}': string
+425..430 'risky': () -> string throws user.Boom | user.Kapow
+425..432 'risky()': string
+425..572 'risky(...n    }': string
+440..441 'e': user.Boom | user.Kapow
+453..457 'Boom': user.Boom
+461..539 '{\n   ...     }': string
+475..480 'let b': user.Boom
+483..484 'e': user.Boom
+526..529 'e.m': string
+549..554 'Kapow': user.Kapow
+558..565 '"kapow"': "kapow"

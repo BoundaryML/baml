@@ -19,18 +19,33 @@ use crate::{BamlValue, Error, SdkError, capi, completion, decode, wire};
 /// Generated SDKs call this lazily on first use; it is public for hosts
 /// that want eager, fallible startup.
 pub fn initialize_from_bytecode(bytecode: &[u8]) -> Result<(), SdkError> {
+    initialize_from_bytecode_with_metadata(bytecode, None)
+}
+
+pub fn initialize_from_bytecode_with_metadata(
+    bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+) -> Result<(), SdkError> {
     let api = capi::api()?;
     // SAFETY: the bytecode slice is valid for the duration of the call;
     // the engine copies what it keeps, and returns an owned status buffer
     // that `take_status` reads and frees.
+    let manifest = embedded_baml_toml
+        .map(CString::new)
+        .transpose()
+        .map_err(|_| SdkError::new("embedded baml.toml contains an interior NUL byte"))?;
     #[expect(unsafe_code)]
-    let status =
-        unsafe { (api.initialize_runtime_from_bytecode)(bytecode.as_ptr(), bytecode.len()) };
-    api.take_status(status).map_err(|message| {
-        SdkError::new(format!(
-            "failed to initialize the BAML runtime from embedded bytecode: {message}"
-        ))
-    })
+    let status = unsafe {
+        match manifest.as_ref() {
+            Some(manifest) => (api.initialize_runtime_from_bytecode_with_metadata)(
+                bytecode.as_ptr(),
+                bytecode.len(),
+                manifest.as_ptr(),
+            ),
+            None => (api.initialize_runtime_from_bytecode)(bytecode.as_ptr(), bytecode.len()),
+        }
+    };
+    api.take_status(status).map_err(SdkError::new)
 }
 
 /// Initialize (or replace) the process-global runtime by compiling BAML

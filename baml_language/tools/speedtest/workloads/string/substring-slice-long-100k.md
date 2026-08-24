@@ -25,7 +25,7 @@ function main() -> int {
   let s = $$baml_src;
   let total = 0;
   for (let i = 0; i < 100000; i += 1) {
-    let sub = s.substring(100, 400);
+    let sub = s.slice(100, 400);
     total += sub.length();
   };
   return total;

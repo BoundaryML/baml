@@ -16,6 +16,21 @@ pub mod host_value;
 pub mod media;
 #[cfg(target_arch = "wasm32")]
 pub mod runtime;
+#[cfg(target_arch = "wasm32")]
+mod version;
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(start)]
+pub fn init() -> Result<(), JsValue> {
+    bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
+        language: bridge_cffi::BridgeLanguage::Web,
+        bridge_runtime_name: version::BRIDGE_RUNTIME_NAME.to_string(),
+        bridge_runtime_version: version::BRIDGE_RUNTIME_VERSION.to_string(),
+        toolchain_version: version::TOOLCHAIN_VERSION.to_string(),
+    })
+    .map(|_| ())
+    .map_err(|error| JsValue::from_str(&error))
+}
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(js_name = newFunctionCall)]
@@ -32,7 +47,19 @@ pub fn cancel_function_call(call_id: u64) -> bool {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(js_name = getVersion)]
 pub fn get_version() -> String {
-    baml_version::CANONICAL_VERSION.to_string()
+    get_toolchain_version()
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = getToolchainVersion)]
+pub fn get_toolchain_version() -> String {
+    version::TOOLCHAIN_VERSION.to_string()
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(js_name = getBridgeRuntimeVersion)]
+pub fn get_bridge_runtime_version() -> String {
+    version::BRIDGE_RUNTIME_VERSION.to_string()
 }
 
 #[cfg(target_arch = "wasm32")]

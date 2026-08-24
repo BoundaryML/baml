@@ -1,0 +1,407 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function reflect_type_of_generic.$init_test_ns_reflect_type_of_generic_reflect_type_of_generic(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "describe_user_returns_user"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "describe_int_returns_int"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "describe_string_returns_string"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "array_of_user_to_string"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "array_of_int_to_string"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "described_type_eq_concrete"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "described_type_neq_different"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "closure_captures_type_arg_user"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "closure_captures_type_arg_int"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "fwd_user_eq_reflect_type_of_user"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "fwd_int_neq_user"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "three_level_forwarding_eq_concrete"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "three_level_forwarding_to_string"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "closure_captures_type_arg_array_of_user"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "closure_captures_type_arg_optional_of_int"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "type_of_depth3_path_in_method"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "type_of_depth3_picks_inner_type_param"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "type_of_self_field_method_depth3"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of_generic"
+    load_const "type_of_depth4_path_picks_prefix_class_args"
+    make_closure .<lambda($init_test_ns_reflect_type_of_generic_reflect_type_of_generic, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function reflect_type_of_generic.Box.describe(self: reflect_type_of_generic.Box<#0>) -> string {
+    load_type #0
+    call reflect.Type.baml.ToString.to_string
+    return
+}
+
+function reflect_type_of_generic.HolderStr.delegate(self: reflect_type_of_generic.HolderStr<#0>) -> string {
+    load_type #0
+    load_var self
+    load_field .inner
+    call user.reflect_type_of_generic.InnerShow.show
+    return
+}
+
+function reflect_type_of_generic.Inner.name(self: reflect_type_of_generic.Inner<#0>) -> string {
+    load_type #0
+    call reflect.Type.baml.ToString.to_string
+    return
+}
+
+function reflect_type_of_generic.InnerShow.show(self: reflect_type_of_generic.InnerShow<#0>) -> string {
+    load_type #0
+    call reflect.Type.baml.ToString.to_string
+    return
+}
+
+function reflect_type_of_generic.Leaf.describe(self: reflect_type_of_generic.Leaf<#0>) -> string {
+    load_type #0
+    call reflect.Type.baml.ToString.to_string
+    return
+}
+
+function reflect_type_of_generic.Outer.outer_describe(self: reflect_type_of_generic.Outer<#0>) -> string {
+    load_type #0
+    load_var self
+    load_field .inner
+    call user.reflect_type_of_generic.Inner.name
+    return
+}
+
+function reflect_type_of_generic.array_of() -> reflect.Type {
+    load_type #0[]
+    return
+}
+
+function reflect_type_of_generic.array_of_int_fn() -> string {
+    load_type int
+    call user.reflect_type_of_generic.array_of
+    call reflect.Type.baml.ToString.to_string
+    return
+}
+
+function reflect_type_of_generic.array_of_user_to_string_fn() -> string {
+    load_type reflect_type_of_generic.User
+    call user.reflect_type_of_generic.array_of
+    call reflect.Type.baml.ToString.to_string
+    return
+}
+
+function reflect_type_of_generic.closure_captures_type_arg_array_of_user_fn() -> string {
+    load_type reflect_type_of_generic.User
+    call user.reflect_type_of_generic.make_array_describer
+    call_indirect
+    return
+}
+
+function reflect_type_of_generic.closure_captures_type_arg_int_fn() -> string {
+    load_type int
+    call user.reflect_type_of_generic.make_describer
+    call_indirect
+    return
+}
+
+function reflect_type_of_generic.closure_captures_type_arg_optional_of_int_fn() -> string {
+    load_type int
+    call user.reflect_type_of_generic.make_opt_describer
+    call_indirect
+    return
+}
+
+function reflect_type_of_generic.closure_captures_type_arg_user_fn() -> string {
+    load_type reflect_type_of_generic.User
+    call user.reflect_type_of_generic.make_describer
+    call_indirect
+    return
+}
+
+function reflect_type_of_generic.describe() -> string {
+    load_type #0
+    call reflect.Type.baml.ToString.to_string
+    return
+}
+
+function reflect_type_of_generic.describe_int_fn() -> string {
+    load_type int
+    call user.reflect_type_of_generic.describe
+    return
+}
+
+function reflect_type_of_generic.describe_string_fn() -> string {
+    load_type string
+    call user.reflect_type_of_generic.describe
+    return
+}
+
+function reflect_type_of_generic.describe_user_fn() -> string {
+    load_type reflect_type_of_generic.User
+    call user.reflect_type_of_generic.describe
+    return
+}
+
+function reflect_type_of_generic.described_type() -> reflect.Type {
+    load_type #0
+    return
+}
+
+function reflect_type_of_generic.described_type_eq_concrete_fn() -> bool {
+    load_type reflect_type_of_generic.User
+    call user.reflect_type_of_generic.described_type
+    load_type reflect_type_of_generic.User
+    call baml.ops.equals_equals
+    return
+}
+
+function reflect_type_of_generic.described_type_neq_different_fn() -> bool {
+    load_type int
+    call user.reflect_type_of_generic.described_type
+    load_type reflect_type_of_generic.User
+    call baml.ops.equals_equals
+    return
+}
+
+function reflect_type_of_generic.fwd() -> reflect.Type {
+    load_type #0
+    call user.reflect_type_of_generic.described_type
+    return
+}
+
+function reflect_type_of_generic.fwd_int_neq_user_fn() -> bool {
+    load_type int
+    call user.reflect_type_of_generic.fwd
+    load_type reflect_type_of_generic.User
+    call baml.ops.equals_equals
+    return
+}
+
+function reflect_type_of_generic.fwd_user_eq_reflect_type_of_user_fn() -> bool {
+    load_type reflect_type_of_generic.User
+    call user.reflect_type_of_generic.fwd
+    load_type reflect_type_of_generic.User
+    call baml.ops.equals_equals
+    return
+}
+
+function reflect_type_of_generic.level1() -> reflect.Type {
+    load_type #0
+    return
+}
+
+function reflect_type_of_generic.level1_str() -> string {
+    load_type #0
+    call reflect.Type.baml.ToString.to_string
+    return
+}
+
+function reflect_type_of_generic.level2() -> reflect.Type {
+    load_type #0
+    call user.reflect_type_of_generic.level1
+    return
+}
+
+function reflect_type_of_generic.level2_str() -> string {
+    load_type #0
+    call user.reflect_type_of_generic.level1_str
+    return
+}
+
+function reflect_type_of_generic.level3() -> reflect.Type {
+    load_type #0
+    call user.reflect_type_of_generic.level2
+    return
+}
+
+function reflect_type_of_generic.level3_str() -> string {
+    load_type #0
+    call user.reflect_type_of_generic.level2_str
+    return
+}
+
+function reflect_type_of_generic.make_array_describer() -> () -> string throws never {
+    load_type #0
+    make_closure .<lambda(make_array_describer, 0)>, captures=0, ntypeargs=1
+    return
+}
+
+function reflect_type_of_generic.make_describer() -> () -> string throws never {
+    load_type #0
+    make_closure .<lambda(make_describer, 0)>, captures=0, ntypeargs=1
+    return
+}
+
+function reflect_type_of_generic.make_opt_describer() -> () -> string throws never {
+    load_type #0
+    make_closure .<lambda(make_opt_describer, 0)>, captures=0, ntypeargs=1
+    return
+}
+
+function reflect_type_of_generic.three_level_forwarding_eq_concrete_fn() -> bool {
+    load_type reflect_type_of_generic.User
+    call user.reflect_type_of_generic.level3
+    load_type reflect_type_of_generic.User
+    call baml.ops.equals_equals
+    return
+}
+
+function reflect_type_of_generic.three_level_forwarding_to_string_fn() -> string {
+    load_type int
+    call user.reflect_type_of_generic.level3_str
+    return
+}
+
+function reflect_type_of_generic.type_of_depth3_path_in_method_fn() -> string {
+    load_type int
+    load_const 42
+    load_type int
+    init_instance<1> user.reflect_type_of_generic.Box .value
+    init_instance user.reflect_type_of_generic.Holder .box
+    load_field .box
+    call user.reflect_type_of_generic.Box.describe
+    return
+}
+
+function reflect_type_of_generic.type_of_depth3_picks_inner_type_param_fn() -> string {
+    load_type int
+    load_const 7
+    load_type int
+    init_instance<1> user.reflect_type_of_generic.Inner .v
+    load_type int
+    init_instance<1> user.reflect_type_of_generic.Outer .inner
+    call user.reflect_type_of_generic.Outer.outer_describe
+    return
+}
+
+function reflect_type_of_generic.type_of_depth4_path_picks_prefix_class_args_fn() -> string {
+    load_type int
+    load_const 1
+    load_type int
+    init_instance<1> user.reflect_type_of_generic.Leaf .v
+    init_instance user.reflect_type_of_generic.Mid .leaf
+    init_instance user.reflect_type_of_generic.Root .mid
+    load_field .mid
+    load_field .leaf
+    call user.reflect_type_of_generic.Leaf.describe
+    return
+}
+
+function reflect_type_of_generic.type_of_self_field_method_depth3_fn() -> string {
+    load_type string
+    load_const "x"
+    load_type string
+    init_instance<1> user.reflect_type_of_generic.InnerShow .v
+    load_type string
+    init_instance<1> user.reflect_type_of_generic.HolderStr .inner
+    call user.reflect_type_of_generic.HolderStr.delegate
+    return
+}

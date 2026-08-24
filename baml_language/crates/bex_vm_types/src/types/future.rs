@@ -3,18 +3,20 @@ use std::{
     fmt::Display,
     mem::MaybeUninit,
     sync::{
-        Arc, OnceLock,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicU8, Ordering},
     },
 };
 
-use baml_type::RealizedTy;
 use borsh::{BorshDeserialize, BorshSerialize};
 use tokio_util::sync::CancellationToken;
 
-use crate::{HeapPtr, Value, errors::StackFrame};
+use crate::{
+    HeapPtr, RealizedTy, SessionEvalLease, Value, errors::StackFrame,
+    runtime_compile::WeakSessionEvalLease,
+};
 
-/// Error payload carried by a future's [`Future::ready`] `SetOnce` when the
+/// Error payload carried by a future's [`Future::ready_waiter`] `SetOnce` when the
 /// underlying engine produced an unrecoverable internal error.
 ///
 /// Type-erased so this crate doesn't have to pull in `bex_engine`'s
@@ -24,6 +26,11 @@ use crate::{HeapPtr, Value, errors::StackFrame};
 /// consumers (on the await side) downcast when surfacing the error to
 /// the host.
 pub type FutureInternalError = Box<dyn std::error::Error + Send + Sync>;
+
+struct FutureSettlement {
+    ready: Arc<tokio::sync::SetOnce<Result<(), FutureInternalError>>>,
+    cancelled_session_leases: Mutex<Vec<WeakSessionEvalLease>>,
+}
 
 /// A future heap object.
 ///
@@ -75,8 +82,12 @@ pub struct Future {
     id: FutureId,
     /// The return/throws types that the value will match.
     /// Used for reflection/pattern matching.
-    /// Read-only: set once when the future is created.
-    types: Arc<FutureOutputTypes>,
+    /// Set once when the future is created; the GC repoints the heads inside
+    /// through [`Future::visit_heads_mut`] when their declarations move.
+    /// `Box`, not `Arc`: a shared allocation cannot be soundly head-walked
+    /// (repointing would either fork it or mutate every holder), and the GC's
+    /// relocation `Clone` must produce an independently-fixable copy.
+    types: Box<FutureOutputTypes>,
     /// Written at most once by whichever writer wins the `state` CAS.
     /// Valid only when `state` indicates `Ready` or `Error`. For
     /// `Cancelled` / `InternalError`, this stays uninitialized.
@@ -87,12 +98,14 @@ pub struct Future {
     /// Cancellation signal observed by the producer. Fired by
     /// `f.cancel()` or by parent-cascade when an ancestor is cancelled.
     pub cancel: CancellationToken,
-    /// Cross-task wake: producer (or cancel) sets it on terminal
+    /// Cross-task settlement state: producer (or cancel) sets `ready` on terminal
     /// transition; awaiter clones the Arc and `.wait().await`s.
     /// `Ok(())` is "look at `state` for the actual outcome"; `Err(_)`
     /// carries an unrecoverable engine error for surfacing through the
-    /// engine's `Await` resume path.
-    pub ready: Arc<tokio::sync::SetOnce<Result<(), FutureInternalError>>>,
+    /// engine's `Await` resume path. It also carries weak Session eval leases
+    /// that cancellation releases before waking the awaiter; keeping both in
+    /// one Arc preserves `Future`'s interpreter-hot-loop size budget.
+    settlement: Arc<FutureSettlement>,
 }
 
 // SAFETY: All access to `value` is gated by the Acquire/Release handshake
@@ -234,11 +247,40 @@ impl Future {
             state: AtomicU8::new(FutureTag::Pending as u8),
             flags: AtomicU8::new(0),
             id,
-            types: Arc::new(FutureOutputTypes { returns, throws }),
+            types: Box::new(FutureOutputTypes { returns, throws }),
             value: UnsafeCell::new(MaybeUninit::uninit()),
             error_trace: Arc::new(OnceLock::new()),
             cancel,
-            ready: Arc::new(tokio::sync::SetOnce::new()),
+            settlement: Arc::new(FutureSettlement {
+                ready: Arc::new(tokio::sync::SetOnce::new()),
+                cancelled_session_leases: Mutex::new(Vec::new()),
+            }),
+        }
+    }
+
+    /// Clone the wake signal used by an engine awaiter.
+    pub fn ready_waiter(&self) -> Arc<tokio::sync::SetOnce<Result<(), FutureInternalError>>> {
+        Arc::clone(&self.settlement.ready)
+    }
+
+    /// Associate a Session eval acquired by this future's producer with the
+    /// future's cancellation boundary.
+    ///
+    /// Registration and cancellation share the mutex so a racing cancel
+    /// either drains this lease before waking the awaiter or observes the
+    /// already-cancelled state here and releases it immediately.
+    pub fn register_session_lease(&self, lease: &SessionEvalLease) {
+        let mut leases = self
+            .settlement
+            .cancelled_session_leases
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match self.read() {
+            FutureRead::Pending(_) => leases.push(lease.downgrade()),
+            FutureRead::Cancelled
+            | FutureRead::Ready(_)
+            | FutureRead::Error(_)
+            | FutureRead::InternalError(_) => lease.release(),
         }
     }
 
@@ -249,6 +291,22 @@ impl Future {
 
     pub fn returns(&self) -> &RealizedTy {
         &self.types.returns
+    }
+
+    /// Every head the output types reach — the `Future<T, E>` the spawn site
+    /// was typed at. Named like the generated family walks so
+    /// `visit_object_heads(_mut)` can call it uniformly: the declarations
+    /// these heads name must stay live, and be repointed, for as long as the
+    /// future itself — independent of the settled value.
+    pub fn visit_heads(&self, f: &mut impl FnMut(&crate::TypeHead)) {
+        self.types.returns.visit_heads(f);
+        self.types.throws.visit_heads(f);
+    }
+
+    /// Mutable twin of [`Self::visit_heads`], for the GC's repoint pass.
+    pub fn visit_heads_mut(&mut self, f: &mut impl FnMut(&mut crate::TypeHead)) {
+        self.types.returns.visit_heads_mut(f);
+        self.types.throws.visit_heads_mut(f);
     }
 
     pub fn throws(&self) -> &RealizedTy {
@@ -384,7 +442,7 @@ impl Future {
             Ordering::Acquire,
         ) {
             Ok(_) => {
-                let _ = self.ready.set(Ok(()));
+                let _ = self.settlement.ready.set(Ok(()));
                 true
             }
             Err(_) => {
@@ -425,7 +483,7 @@ impl Future {
         );
         match transitioned {
             Ok(_) => {
-                let _ = self.ready.set(Ok(()));
+                let _ = self.settlement.ready.set(Ok(()));
                 true
             }
             Err(_) => {
@@ -452,7 +510,18 @@ impl Future {
         ) {
             Ok(_) => {
                 self.cancel.cancel();
-                let _ = self.ready.set(Ok(()));
+                let leases = {
+                    let mut leases = self
+                        .settlement
+                        .cancelled_session_leases
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    std::mem::take(&mut *leases)
+                };
+                for lease in leases {
+                    lease.release();
+                }
+                let _ = self.settlement.ready.set(Ok(()));
                 true
             }
             Err(_) => false,
@@ -481,7 +550,7 @@ impl Future {
             Ordering::Acquire,
         ) {
             Ok(_) => {
-                let _ = self.ready.set(Err(err));
+                let _ = self.settlement.ready.set(Err(err));
                 true
             }
             Err(_) => false,
@@ -502,7 +571,7 @@ impl Clone for Future {
         // primitives. Producers that hold a clone of `ready` from before
         // the GC move continue to wake the same set of waiters, and the
         // moved heap copy observes the same `ready.set(...)` because both
-        // copies' `Arc<SetOnce>` point at the same allocation.
+        // copies share the same settlement allocation.
         //
         // Futures are conceptually *handles*, not values: there is no
         // "the same future, but a copy" at the user level. User-side
@@ -514,11 +583,11 @@ impl Clone for Future {
             state: AtomicU8::new(0), // placeholder; rewritten below
             flags: AtomicU8::new(self.flags.load(Ordering::Acquire)),
             id: self.id,
-            types: Arc::clone(&self.types),
+            types: self.types.clone(),
             value: UnsafeCell::new(MaybeUninit::uninit()),
             error_trace: Arc::clone(&self.error_trace),
             cancel: self.cancel.clone(),
-            ready: Arc::clone(&self.ready),
+            settlement: Arc::clone(&self.settlement),
         };
         let tag: u8 = match read {
             FutureRead::Pending(_) => FutureTag::Pending as u8,
@@ -692,6 +761,7 @@ impl From<&Future> for FutureType {
     }
 }
 
+#[derive(Clone)]
 struct FutureOutputTypes {
     returns: RealizedTy,
     throws: RealizedTy,

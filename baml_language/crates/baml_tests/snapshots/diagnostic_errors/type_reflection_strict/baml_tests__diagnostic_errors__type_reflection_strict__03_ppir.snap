@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 58354
 ---
 === PPIR ===
 class user.User {
@@ -10,20 +9,20 @@ class user.User$stream {
   name: string | null
 }
 function user.reflect_type_to_int() -> int  [expr] {
-  { let x: int = reflect.type_of(); return x }
+  { let x: int = reflect.Type.of(); return x }
 }
-function user.too_many_type_args() -> type  [expr] {
-  {  } reflect.type_of()
+function user.too_many_type_args() -> reflect.Type  [expr] {
+  {  } reflect.Type.of()
 }
-function user.unknown_type_in_reflect() -> type  [expr] {
-  {  } reflect.type_of()
+function user.unknown_type_in_reflect() -> reflect.Type  [expr] {
+  {  } reflect.Type.of()
 }
 function user.assign_type_to_int(function_name: string) -> int  [expr] {
-  { let x: int = baml.llm.get_return_type(function_name); return x }
+  { let x: int = ai.internal.get_return_type(function_name); return x }
 }
 function user.pass_type_as_string(function_name: string) -> string  [expr] {
-  { let t = baml.llm.get_return_type(function_name); return t }
+  { let t = ai.internal.get_return_type(function_name); return t }
 }
-function user.type_to_type(function_name: string) -> type  [expr] {
-  { let t: type = baml.llm.get_return_type(function_name); return t }
+function user.type_to_type(function_name: string) -> reflect.Type  [expr] {
+  { let t: reflect.Type = ai.internal.get_return_type(function_name); return t }
 }

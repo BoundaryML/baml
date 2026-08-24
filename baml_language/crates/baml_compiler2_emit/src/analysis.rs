@@ -16,8 +16,10 @@ use std::collections::{HashMap, HashSet};
 
 pub use baml_compiler2_mir::OptLevel;
 use baml_compiler2_mir::{
-    BlockId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator,
+    BinOp, BlockId, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
+    Terminator, UnaryOp,
 };
+use baml_type::{Literal, RuntimeTy};
 
 use crate::stack_carry;
 
@@ -26,7 +28,7 @@ use crate::stack_carry;
 // ============================================================================
 
 /// A reference to either a statement or a terminator within a block.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum StatementRef {
     /// A statement at the given index.
     Statement(usize),
@@ -294,15 +296,15 @@ fn compute_rpo(body: &MirFunctionBody) -> Vec<BlockId> {
 
     // Phase 1: DFS from the entry block. Handlers reachable via CFG edges
     // (Call/Await unwind targets) are visited as descendants of their
-    // try-body entry blocks, so body_entry is a DFS ancestor of handler →
-    // body_entry is pushed AFTER handler in postorder → BEFORE handler in
-    // the reversed RPO. This satisfies start_pc < handler_pc.
+    // try-body entry blocks. Layout order does not affect exception-table
+    // correctness (the table lists each region's protected blocks' exact PC
+    // ranges), so this is purely about code locality and readability.
     rpo_dfs(body, body.entry, &mut visited, &mut postorder);
 
     // Phase 2: Seed handlers NOT reachable from entry (same-frame panics
     // like division-by-zero where there's no Call/Await with an unwind
-    // edge). Prepend their subtrees to the postorder so they appear AFTER
-    // all entry-reachable blocks in the reversed RPO (handler_pc > body_pc).
+    // edge) so they are emitted at all; they land after all entry-reachable
+    // blocks in the reversed RPO.
     let mut handler_postorder = Vec::new();
     for region in &body.catch_regions {
         rpo_dfs(body, region.handler, &mut visited, &mut handler_postorder);
@@ -578,6 +580,12 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
                     // Record uses in the rvalue
                     collect_uses_in_rvalue(value, block.id, stmt_ref, &mut def_use);
                 }
+                StatementKind::VirtualFieldStore {
+                    receiver, value, ..
+                } => {
+                    collect_uses_in_operand(receiver, block.id, stmt_ref, &mut def_use);
+                    collect_uses_in_operand(value, block.id, stmt_ref, &mut def_use);
+                }
                 StatementKind::Drop(place) => {
                     collect_uses_in_place(place, block.id, stmt_ref, &mut def_use);
                 }
@@ -702,16 +710,29 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
         Rvalue::IsType { operand, .. } | Rvalue::IsTypeTag { operand, .. } => {
             walk_operand_locals(operand, f);
         }
+        Rvalue::RuntimeIsType {
+            operand,
+            type_value,
+        } => {
+            walk_operand_locals(operand, f);
+            walk_operand_locals(type_value, f);
+        }
         Rvalue::MakeClosure { captures, .. } => {
             for cap in captures {
                 walk_operand_locals(cap, f);
             }
         }
         Rvalue::MakeBoundMethod { receiver, .. }
-        | Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
+        | Rvalue::MakeVirtualBoundMethod { receiver, .. }
+        | Rvalue::VirtualFieldAccess { receiver, .. } => {
             walk_operand_locals(receiver, f);
         }
-        Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {
+        Rvalue::MakeVirtualFunction { type_args, .. } => {
+            for arg in type_args {
+                walk_operand_locals(arg, f);
+            }
+        }
+        Rvalue::LoadType(_) | Rvalue::CurrentPackage(_) | Rvalue::MakeGenericFunction { .. } => {
             // No local operands — the templates are compile-time data.
         }
         Rvalue::MakeGenericFunctionFromValue { value, .. } => {
@@ -1055,14 +1076,8 @@ fn classify_locals(
             } else {
                 LocalClassification::Virtual
             }
-        } else if is_phi_like(local, du, body, predecessors, def_use) {
+        } else if is_stack_covered_phi(local, du, body, predecessors) {
             // Stack-carry candidate validated in a later stack simulation pass.
-            stack_carry_candidates.insert(local, stack_carry::StackCarryKind::PhiLike);
-            LocalClassification::Real
-        } else if is_short_circuit_phi(local, du, body) {
-            // ShortCircuit destination: the JumpIfFalse keeps lhs on TOS on the
-            // short-circuit path, and the rhs block leaves its result on TOS.
-            // Treated like PhiLike — value stays on the stack, no store/load.
             stack_carry_candidates.insert(local, stack_carry::StackCarryKind::PhiLike);
             LocalClassification::Real
         } else if is_return_phi(local, body, def_use, redirect_targets) {
@@ -1094,107 +1109,243 @@ fn classify_locals(
     (classifications, copy_sources)
 }
 
-/// Check if a local is "phi-like": assigned in each predecessor of a join block,
-/// used exactly once at that join block.
+/// Check if a local is "phi-like": every path into its single use leaves the
+/// local's value on top of the operand stack, so the emitter can drop the
+/// `StoreVar`/`LoadVar` pair and let the value ride the CFG edge instead.
 ///
-/// Phi-like locals can skip Store/Load because:
-/// - Each predecessor leaves the value on the stack
-/// - At the join point, the value is already on top of the stack
-/// - No need for explicit Store/Load through a named variable
-fn is_phi_like(
+/// This predicate is the *entire* soundness proof for `StackCarryKind::PhiLike`.
+/// The stack simulation in [`crate::stack_carry`] starts AT the use block and
+/// only validates that block's own statement prefix — it never inspects the
+/// local's definitions, nor the use block's predecessors. So every def this
+/// function accepts is emitted as a push with no store, and the use pops
+/// exactly one value: an uncovered incoming edge leaves the pop consuming an
+/// unrelated value, and a definition off the covered paths leaves a push that
+/// nothing pops. Inside a loop the latter grows the operand stack every
+/// iteration.
+///
+/// A local qualifies when all of:
+///
+/// 1. It has exactly one use, in block `U`.
+/// 2. `U` is a join — at least two predecessors. Single-predecessor edges are a
+///    different shape and deliberately out of scope here.
+/// 3. Every predecessor covers the block it flows into, per
+///    [`predecessors_cover_block`].
+/// 4. Every definition of the local was recorded while proving (3); any other
+///    definition is a stray push.
+///
+/// Checking only that a `ShortCircuit` terminator's `join` equals `U` is not a
+/// substitute for (3): `merge_passthrough_blocks` in `baml_compiler2_mir`
+/// rewrites a `ShortCircuit`'s `join` when the original join block is an empty
+/// passthrough, and can retarget it onto a block that has unrelated incoming
+/// edges. `let x = false; if (c) { x = a && b } x` ends up with the `if` join as
+/// both the `ShortCircuit` join and the use block, while its other predecessor
+/// is the `Branch` false edge, which pushes nothing.
+fn is_stack_covered_phi(
     local: Local,
     du: &LocalDefUse,
     body: &MirFunctionBody,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
-    def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
-    // Must have exactly one use
-    if du.uses.len() != 1 {
+    if du.uses.len() != 1 || du.all_defs.is_empty() {
         return false;
     }
 
-    let use_loc = &du.uses[0];
-    let use_block = use_loc.block;
+    let use_block = du.uses[0].block;
 
-    // Get predecessors of the use block
-    let preds = match predecessors.get(&use_block) {
-        Some(p) if !p.is_empty() => p,
-        _ => return false,
+    if predecessors
+        .get(&use_block)
+        .is_none_or(|preds| preds.len() < 2)
+    {
+        return false;
+    }
+
+    let mut visited = HashSet::new();
+    let mut covered_defs = HashSet::new();
+    if !predecessors_cover_block(
+        local,
+        use_block,
+        body,
+        predecessors,
+        &mut visited,
+        &mut covered_defs,
+    ) {
+        return false;
+    }
+
+    // No stray defs: everything that writes the local must be one of the pushes
+    // the coverage walk accounted for.
+    du.all_defs.iter().all(|def| covered_defs.contains(def))
+}
+
+/// Prove that control cannot reach `block` without the local's value on top of
+/// the operand stack, recording the definitions that put it there.
+///
+/// Each predecessor must do one of:
+///
+/// a. End in `Goto { target: block }` with its last statement assigning the
+///    local — under `PhiLike` the emitter emits the rvalue and skips the store,
+///    so the value is left on the stack.
+/// b. End in `ShortCircuit { destination: local, join: block, .. }` — the
+///    `JumpIfFalse` peek leaves the LHS on the stack on the short-circuit edge.
+/// c. Be a statement-free block ending in `Goto { target: block }` whose own
+///    predecessors all cover it. The intermediate joins of a chain such as
+///    `a && b && c` have this shape.
+/// d. End in a call terminator that defines the local and returns into `block`
+///    — see [`call_result_carried_into`]. `a || b.starts_with(c)` lowers the rhs
+///    this way, so without this arm every short circuit over a call keeps its
+///    destination in a slot.
+///
+/// `visited` rejects back-edges: a block reachable from itself would need a push
+/// per trip to stay balanced, which this shape cannot prove.
+///
+/// Two kinds of block are refused outright, because the predecessor list is not
+/// a complete account of how they are entered — see the guard below.
+fn predecessors_cover_block(
+    local: Local,
+    block: BlockId,
+    body: &MirFunctionBody,
+    predecessors: &HashMap<BlockId, Vec<BlockId>>,
+    visited: &mut HashSet<BlockId>,
+    covered_defs: &mut HashSet<(BlockId, StatementRef)>,
+) -> bool {
+    if !visited.insert(block) {
+        return false;
+    }
+
+    // `build_predecessors` is built purely from `Terminator::successors`, so it
+    // only knows about entries that traverse a CFG edge. Two blocks are also
+    // entered without one, and nothing is on the stack when they are:
+    //
+    // - `entry`, on every call of the function. A CFG predecessor set can look
+    //   complete for it if the entry block is also a loop header.
+    // - a catch region's handler, when the VM unwinds into it. A call's
+    //   `unwind` target is a `successors` edge, but a same-frame panic — an
+    //   overflowing `add_int`, a division by zero — reaches the handler from
+    //   the middle of a block, with no edge at all. `compute_rpo` has to seed
+    //   those handlers separately for exactly this reason, and `collect_def_use`
+    //   records the VM's write of the error local there as an implicit use.
+    //
+    // Only the block being *covered* is refused. A handler that is itself a
+    // predecessor stays fine: it reaches its successor over a real edge, having
+    // pushed the value like any other predecessor.
+    if block == body.entry
+        || body
+            .catch_regions
+            .iter()
+            .any(|region| region.handler == block)
+    {
+        return false;
+    }
+
+    let Some(preds) = predecessors.get(&block).filter(|preds| !preds.is_empty()) else {
+        return false;
     };
 
-    // Need at least 2 predecessors for this to be a join point
-    if preds.len() < 2 {
-        return false;
-    }
-
-    // Get all definitions of this local
-    let defs = &def_use[&local].all_defs;
-    if defs.is_empty() {
-        return false;
-    }
-
-    // Check that each predecessor:
-    // 1. Defines this local
-    // 2. The definition is the last statement in the block
-    // 3. The block ends with Goto to the use block
     for &pred_id in preds {
-        let pred_block = body.block(pred_id);
+        let pred = body.block(pred_id);
 
-        // Must end with Goto to use_block
-        let goes_to_use_block = matches!(
-            &pred_block.terminator,
-            Some(Terminator::Goto { target }) if *target == use_block
+        if let Some(Terminator::ShortCircuit {
+            destination: Place::Local(destination),
+            join,
+            ..
+        }) = &pred.terminator
+            && *destination == local
+            && *join == block
+        {
+            covered_defs.insert((pred_id, StatementRef::Terminator));
+            continue;
+        }
+
+        if call_result_carried_into(pred.terminator.as_ref(), block) == Some(local) {
+            covered_defs.insert((pred_id, StatementRef::Terminator));
+            continue;
+        }
+
+        let goes_to_block = matches!(
+            &pred.terminator,
+            Some(Terminator::Goto { target }) if *target == block
         );
-        if !goes_to_use_block {
+        if !goes_to_block {
             return false;
         }
 
-        // Must have at least one statement
-        if pred_block.statements.is_empty() {
-            return false;
-        }
-
-        // Last statement must be an assignment to this local
-        let last_stmt_idx = pred_block.statements.len() - 1;
-        let last_stmt = &pred_block.statements[last_stmt_idx];
+        let Some(last) = pred.statements.last() else {
+            // Empty passthrough — push the proof up to its own predecessors.
+            if !predecessors_cover_block(local, pred_id, body, predecessors, visited, covered_defs)
+            {
+                return false;
+            }
+            continue;
+        };
 
         let assigns_local = matches!(
-            &last_stmt.kind,
+            &last.kind,
             StatementKind::Assign { destination: Place::Local(l), .. } if *l == local
         );
         if !assigns_local {
             return false;
         }
 
-        // Verify this definition is in our defs list
-        let has_def = defs
-            .iter()
-            .any(|&(b, s)| b == pred_id && s == StatementRef::Statement(last_stmt_idx));
-        if !has_def {
-            return false;
-        }
+        covered_defs.insert((pred_id, StatementRef::Statement(pred.statements.len() - 1)));
     }
 
     true
 }
 
-/// Check if a local is the destination of a `ShortCircuit` terminator and has
-/// exactly one use in the join block. The `JumpIfFalse` peek instruction keeps
-/// the LHS on TOS for the short-circuit path, while the rhs block leaves its
-/// result on TOS. At the join, the value is on TOS from whichever path ran.
-fn is_short_circuit_phi(local: Local, du: &LocalDefUse, body: &MirFunctionBody) -> bool {
-    if du.uses.len() != 1 {
-        return false;
+/// The local a call terminator leaves on top of the operand stack in `block`,
+/// when the call's result is stack-carried rather than stored.
+///
+/// `Call` and `VirtualCall` both emit as `<call opcode>`, then
+/// `emit_store_place(destination)` — a no-op for a stack-carried destination —
+/// then the jump to `target`. So control arrives at `target` with the call's one
+/// result on top, exactly like a predecessor that assigns and falls through.
+///
+/// The other call-shaped terminators are deliberately not here:
+///
+/// - `Await` and `AwaitAny` suspend the engine, and the note on
+///   `is_call_result_immediate` records that their opcodes rewind and
+///   re-execute across that suspend.
+/// - `SysOp` also suspends, and its dispatch asserts that the arguments are the
+///   whole of the frame's operand stack.
+/// - `Spawn` defines the spawned future rather than a call result, and
+///   continues at `resume`.
+///
+/// None of those covers a join anywhere in the corpus, so allowing them would be
+/// speculation instead of a proof.
+///
+/// `is_call_result_immediate` also excludes `VirtualCall`, but for a reason that
+/// does not apply here: that exclusion exists because the `CallResultImmediate`
+/// stack simulation has to recognize the *defining* terminator to know which
+/// block to start simulating from, and its match has no `VirtualCall` arm. The
+/// `PhiLike` simulation starts at the use block and never looks at the def.
+fn call_result_carried_into(terminator: Option<&Terminator>, block: BlockId) -> Option<Local> {
+    let (Terminator::Call {
+        destination,
+        target,
+        unwind,
+        ..
+    }
+    | Terminator::VirtualCall {
+        destination,
+        target,
+        unwind,
+        ..
+    }) = terminator?
+    else {
+        return None;
+    };
+
+    // A call that unwinds into `block` also reaches it on the throwing edge,
+    // where nothing was pushed. `Terminator::successors` reports both edges, so
+    // without this the same predecessor would be counted as covering twice.
+    if *target != block || *unwind == Some(block) {
+        return None;
     }
 
-    // One of the defs must be a ShortCircuit terminator targeting this local.
-    du.all_defs.iter().any(|&(block_id, ref stmt_ref)| {
-        *stmt_ref == StatementRef::Terminator
-            && matches!(
-                &body.block(block_id).terminator,
-                Some(Terminator::ShortCircuit { destination: Place::Local(l), .. }) if *l == local
-            )
-    })
+    match destination {
+        Place::Local(local) => Some(*local),
+        _ => None,
+    }
 }
 
 /// Check if a MIR statement is stack-neutral (doesn't push or pop from the eval stack).
@@ -1214,6 +1365,10 @@ fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
         // These modify the stack
         StatementKind::Assign { .. } => false,
         StatementKind::Drop(_) => false,
+        // Pushes receiver, value and the interface type, then the opcode pops all
+        // three — net neutral, but it touches the stack in between, so a value
+        // parked there for `Return` would be buried.
+        StatementKind::VirtualFieldStore { .. } => false,
     }
 }
 
@@ -1434,6 +1589,15 @@ fn can_be_virtual(
         if rvalue_has_projection_reads(&def.rvalue) {
             return false;
         }
+        // A panicking evaluation is itself observable, and every path from the
+        // def block to the use block crosses at least the def block's
+        // terminator — a call, whose effects would then run before the panic.
+        // The use site can also sit in a different exception region than the
+        // def, which changes the handler and can double-run a `defer` body
+        // (once inline on the way out, once in the unwind landing pad).
+        if rvalue_can_panic(body, &def.rvalue) {
+            return false;
+        }
         //
         // Rather than walking all intermediate blocks (which requires full path
         // enumeration), we use a sound conservative check: if any local read by
@@ -1458,17 +1622,26 @@ fn can_be_virtual(
             }
         }
 
-        // Check if the use block is a loop header (has back-edge predecessors)
-        // If so, be conservative and don't inline
+        // Preserve the existing protection for values used directly in a loop
+        // header.
         let use_preds = predecessors
             .get(&use_loc.block)
-            .map_or(&[] as &[_], |v| v.as_slice());
-
-        let has_back_edge = use_preds
+            .map_or(&[] as &[_], Vec::as_slice);
+        let use_is_loop_header = use_preds
             .iter()
             .any(|&pred| dominators.dominates(use_loc.block, pred));
 
-        if has_back_edge {
+        // An allocation with observable identity cannot be repeated implicitly.
+        // Merely checking whether the use block is a loop header misses the
+        // common shape `header -> body(use) -> header`: sinking an allocation
+        // made before that loop into its body creates a fresh object on every
+        // iteration. Look for a path from the use back to itself which does not
+        // cross the definition block, and keep the allocation materialized when
+        // such a path exists.
+        let repeats_allocation = rvalue_allocates_with_identity(&def.rvalue)
+            && use_repeats_without_definition(body, def.block, use_loc.block);
+
+        if use_is_loop_header || repeats_allocation {
             return false;
         }
 
@@ -1495,6 +1668,74 @@ fn can_be_virtual(
     }
 
     true
+}
+
+/// Whether evaluating this rvalue allocates a fresh object whose identity is
+/// observable (mutable containers, class instances, and callable objects).
+///
+/// Matched exhaustively on purpose: a wrong `false` silently miscompiles.
+fn rvalue_allocates_with_identity(rvalue: &Rvalue) -> bool {
+    match rvalue {
+        Rvalue::Map(..)
+        | Rvalue::Array(..)
+        | Rvalue::Uint8Array(_)
+        | Rvalue::Aggregate { .. }
+        | Rvalue::MakeClosure { .. }
+        | Rvalue::MakeBoundMethod { .. }
+        | Rvalue::MakeVirtualBoundMethod { .. }
+        | Rvalue::MakeVirtualFunction { .. } => true,
+        Rvalue::Use(_)
+        | Rvalue::BinaryOp { .. }
+        | Rvalue::UnaryOp { .. }
+        | Rvalue::Discriminant(_)
+        | Rvalue::TypeTag(_)
+        | Rvalue::Len(_)
+        | Rvalue::IsType { .. }
+        | Rvalue::IsTypeTag { .. }
+        | Rvalue::RuntimeIsType { .. }
+        | Rvalue::VirtualFieldAccess { .. }
+        | Rvalue::MakeGenericFunction { .. }
+        | Rvalue::MakeGenericFunctionFromValue { .. }
+        | Rvalue::LoadType(_)
+        | Rvalue::CurrentPackage(_) => false,
+    }
+}
+
+/// Whether `use_block` can execute again without first executing `def_block`.
+///
+/// `can_be_virtual` sinks an rvalue from its definition to its use. If a CFG
+/// cycle can revisit the use while bypassing the definition, sinking changes a
+/// once-evaluated binding into a per-iteration evaluation. That is observably
+/// wrong for an allocation with observable identity, so its cross-block
+/// virtualization must reject the shape.
+fn use_repeats_without_definition(
+    body: &MirFunctionBody,
+    def_block: BlockId,
+    use_block: BlockId,
+) -> bool {
+    let Some(terminator) = body.block(use_block).terminator.as_ref() else {
+        return false;
+    };
+
+    let mut worklist = terminator.successors();
+    let mut visited = HashSet::new();
+
+    while let Some(block) = worklist.pop() {
+        if block == def_block {
+            continue;
+        }
+        if block == use_block {
+            return true;
+        }
+        if !visited.insert(block) {
+            continue;
+        }
+        if let Some(terminator) = body.block(block).terminator.as_ref() {
+            worklist.extend(terminator.successors());
+        }
+    }
+
+    false
 }
 
 /// Whether evaluating this rvalue reads through any field/index projection.
@@ -1536,10 +1777,20 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         Rvalue::IsType { operand, .. } | Rvalue::IsTypeTag { operand, .. } => {
             operand_has_projection(operand)
         }
+        Rvalue::RuntimeIsType {
+            operand,
+            type_value,
+        } => operand_has_projection(operand) || operand_has_projection(type_value),
         Rvalue::MakeClosure { captures, .. } => captures.iter().any(operand_has_projection),
         Rvalue::MakeBoundMethod { receiver, .. }
-        | Rvalue::MakeVirtualBoundMethod { receiver, .. } => operand_has_projection(receiver),
-        Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => false,
+        | Rvalue::MakeVirtualBoundMethod { receiver, .. }
+        | Rvalue::VirtualFieldAccess { receiver, .. } => operand_has_projection(receiver),
+        Rvalue::MakeVirtualFunction { type_args, .. } => {
+            type_args.iter().any(operand_has_projection)
+        }
+        Rvalue::LoadType(_) | Rvalue::CurrentPackage(_) | Rvalue::MakeGenericFunction { .. } => {
+            false
+        }
         Rvalue::MakeGenericFunctionFromValue { value, .. } => operand_has_projection(value),
     }
 }
@@ -1639,6 +1890,8 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
         StatementKind::FreshCell(local) => rvalue_reads.contains(local),
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
         StatementKind::Intrinsic { .. } => true, // Intrinsics emit events — observable side effect
+        // A write through an interface field mutates the receiver.
+        StatementKind::VirtualFieldStore { .. } => true,
         StatementKind::Nop => false,
     }
 }
@@ -1649,6 +1902,129 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
 /// so they can be re-emitted at every use site even with multiple uses.
 fn is_pure_constant(rvalue: &Rvalue) -> bool {
     matches!(rvalue, Rvalue::Use(Operand::Constant(_)))
+}
+
+/// Can evaluating this rvalue raise a catchable panic (`baml.panics.*`)?
+///
+/// Virtual emission *moves* an rvalue's evaluation from its definition to its
+/// use site. That is only sound when the evaluation cannot fail: a panicking
+/// evaluation is itself an observable event, so moving it past a call, a store,
+/// or an exception-region boundary changes which effects run before the panic
+/// and which handler receives it.
+///
+/// Concretely, a `defer` block's inline replay is emitted between the
+/// definition and the `return` that uses it. Sinking a panicking arithmetic op
+/// past that replay runs the defer body once on the way out and a second time
+/// in the unwind landing pad.
+///
+/// Only arithmetic can fail, and only `/` fails for every operand type. The
+/// rest are `int`-only failures — `float` saturates to infinity or NaN,
+/// `bigint` grows, and `string + string` is concatenation — so they ask
+/// [`operand_could_be_int`]. Bitwise and/or/xor and the comparisons stay in
+/// range whatever the operands are.
+///
+/// Matched exhaustively on purpose. This is a soundness predicate, and a
+/// wrong `false` miscompiles silently — so a new `Rvalue` variant must fail to
+/// compile here rather than default into the infallible group.
+fn rvalue_can_panic(body: &MirFunctionBody, rvalue: &Rvalue) -> bool {
+    match rvalue {
+        Rvalue::BinaryOp { op, left, right } => match op {
+            // `/` rejects a zero divisor on both numeric paths — BAML throws
+            // rather than yielding IEEE infinity (`OpCode::DivFloat`), so this
+            // holds whatever the operands are.
+            BinOp::Div => true,
+            // `%` is guarded on the `int` path only; the float path yields NaN.
+            BinOp::Mod | BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Shl | BinOp::Shr => {
+                operand_could_be_int(body, left) && operand_could_be_int(body, right)
+            }
+            BinOp::Eq
+            | BinOp::Ne
+            | BinOp::Lt
+            | BinOp::Le
+            | BinOp::Gt
+            | BinOp::Ge
+            | BinOp::BitAnd
+            | BinOp::BitOr
+            | BinOp::BitXor => false,
+        },
+        Rvalue::UnaryOp { op, operand } => match op {
+            UnaryOp::Neg => operand_could_be_int(body, operand),
+            UnaryOp::Not | UnaryOp::Truthy => false,
+        },
+        // Allocation can report `AllocFailure`, but that is a host resource
+        // condition rather than a property of the program point, and treating
+        // every allocation as a barrier would disable virtualization outright.
+        //
+        // `Use` is the one entry here with a real failing case: reading through
+        // an index projection can raise `IndexOutOfBounds`. Every rvalue with a
+        // projection read is rejected a few lines above this predicate's only
+        // caller, on the same cross-block path, so it never reaches here.
+        Rvalue::Use(_)
+        | Rvalue::Array(..)
+        | Rvalue::Uint8Array(_)
+        | Rvalue::Map(..)
+        | Rvalue::Aggregate { .. }
+        | Rvalue::Discriminant(_)
+        | Rvalue::TypeTag(_)
+        | Rvalue::Len(_)
+        | Rvalue::IsType { .. }
+        | Rvalue::IsTypeTag { .. }
+        | Rvalue::RuntimeIsType { .. }
+        | Rvalue::MakeClosure { .. }
+        | Rvalue::MakeBoundMethod { .. }
+        | Rvalue::MakeVirtualBoundMethod { .. }
+        | Rvalue::VirtualFieldAccess { .. }
+        | Rvalue::MakeGenericFunction { .. }
+        | Rvalue::MakeGenericFunctionFromValue { .. }
+        | Rvalue::MakeVirtualFunction { .. }
+        | Rvalue::LoadType(_)
+        | Rvalue::CurrentPackage(_) => false,
+    }
+}
+
+/// Could this operand hold an `int` at runtime?
+///
+/// Deliberately answers `true` for anything whose runtime representation is not
+/// pinned down — a union, a type variable, a value read through a projection, a
+/// type family variant added later. Only a type that provably never holds an
+/// `int` answers `false`.
+fn operand_could_be_int(body: &MirFunctionBody, operand: &Operand) -> bool {
+    match operand {
+        Operand::Constant(c) => matches!(c, Constant::Int(_)),
+        Operand::Copy(place) | Operand::Move(place) => match place {
+            Place::Local(local) => ty_could_be_int(&body.local(*local).ty),
+            // A field / index / capture read carries no type here.
+            Place::Field { .. } | Place::Index { .. } | Place::Capture(_) => true,
+        },
+    }
+}
+
+/// See [`operand_could_be_int`]. The `_ => true` fallback keeps an unlisted or
+/// newly added variant on the conservative side.
+fn ty_could_be_int(ty: &RuntimeTy) -> bool {
+    match ty {
+        RuntimeTy::Int { .. } => true,
+        RuntimeTy::Literal(lit, ..) => matches!(lit, Literal::Int(_)),
+        RuntimeTy::Bigint { .. }
+        | RuntimeTy::Float { .. }
+        | RuntimeTy::String { .. }
+        | RuntimeTy::Bool { .. }
+        | RuntimeTy::Null { .. }
+        | RuntimeTy::Void { .. }
+        | RuntimeTy::Media(..)
+        | RuntimeTy::Class(..)
+        | RuntimeTy::Enum(..)
+        | RuntimeTy::EnumVariant(..)
+        | RuntimeTy::List(..)
+        | RuntimeTy::Map { .. }
+        | RuntimeTy::Function { .. }
+        | RuntimeTy::Future(..)
+        | RuntimeTy::RustType { .. }
+        | RuntimeTy::Type { .. }
+        | RuntimeTy::Resource { .. }
+        | RuntimeTy::PromptAst { .. } => false,
+        _ => true,
+    }
 }
 
 /// Check if a local is a "call result immediate": defined by Call/Await/SysOp,
@@ -1926,7 +2302,8 @@ fn get_copy_source(
 #[cfg(test)]
 mod tests {
     use baml_compiler2_mir::{
-        BasicBlock, Constant, LocalDecl, MirFunctionBody, Operand, Place, Statement, Terminator,
+        BasicBlock, CatchRegion, Constant, LocalDecl, MirFunctionBody, Operand, Place, Statement,
+        Terminator,
     };
     use baml_type::{RuntimeTy, TyAttr};
 
@@ -1970,6 +2347,7 @@ mod tests {
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
+                        runtime_type_check: false,
                         runtime_id: None,
                         destination: Place::Local(target),
                         target: BlockId(1),
@@ -2035,6 +2413,7 @@ mod tests {
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
+                        runtime_type_check: false,
                         runtime_id: None,
                         destination: Place::Local(result),
                         target: BlockId(1),
@@ -2101,6 +2480,634 @@ mod tests {
             scope_span: None,
             is_captured: false,
         }
+    }
+
+    fn int_list_local_decl(name: Option<&str>) -> LocalDecl {
+        LocalDecl {
+            name: name.map(baml_base::Name::new),
+            ty: RuntimeTy::list(RuntimeTy::int()),
+            span: None,
+            scope_span: None,
+            is_captured: false,
+        }
+    }
+
+    /// `a && b && c`: two chained `ShortCircuit` terminators whose inner join
+    /// (bb3) is an empty passthrough into the outer join (bb4).
+    fn nested_short_circuit_body(
+        name: Option<&str>,
+        with_prior_definition: bool,
+    ) -> MirFunctionBody {
+        let destination = Local(1);
+        let prior_definition = with_prior_definition.then(|| assign_bool(destination, false));
+
+        bool_body(
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: prior_definition.into_iter().collect(),
+                    terminator: Some(Terminator::ShortCircuit {
+                        operand: Operand::Constant(Constant::Bool(true)),
+                        is_and: true,
+                        destination: Place::Local(destination),
+                        eval_rhs: BlockId(1),
+                        join: BlockId(4),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![],
+                    terminator: Some(Terminator::ShortCircuit {
+                        operand: Operand::Constant(Constant::Bool(true)),
+                        is_and: true,
+                        destination: Place::Local(destination),
+                        eval_rhs: BlockId(2),
+                        join: BlockId(3),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(2),
+                    statements: vec![assign_bool(destination, true)],
+                    terminator: Some(Terminator::Goto { target: BlockId(3) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(3),
+                    statements: vec![],
+                    terminator: Some(Terminator::Goto { target: BlockId(4) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                return_local_block(BlockId(4), destination),
+            ],
+            name,
+        )
+    }
+
+    fn bool_local_decl(name: Option<&str>) -> LocalDecl {
+        LocalDecl {
+            name: name.map(baml_base::Name::new),
+            ty: RuntimeTy::Bool {
+                attr: TyAttr::default(),
+            },
+            span: None,
+            scope_span: None,
+            is_captured: false,
+        }
+    }
+
+    fn assign_bool(destination: Local, value: bool) -> Statement {
+        Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(destination),
+                value: Rvalue::Use(Operand::Constant(Constant::Bool(value))),
+            },
+            span: None,
+        }
+    }
+
+    /// `_0 = copy destination; return` — the single use of the carried local.
+    fn return_local_block(id: BlockId, destination: Local) -> BasicBlock {
+        BasicBlock {
+            id,
+            statements: vec![Statement {
+                kind: StatementKind::Assign {
+                    destination: Place::Local(Local(0)),
+                    value: Rvalue::Use(Operand::copy_local(destination)),
+                },
+                span: None,
+            }],
+            terminator: Some(Terminator::Return),
+            span: None,
+            terminator_span: None,
+        }
+    }
+
+    fn bool_body(blocks: Vec<BasicBlock>, name: Option<&str>) -> MirFunctionBody {
+        MirFunctionBody {
+            blocks,
+            entry: BlockId(0),
+            locals: vec![bool_local_decl(None), bool_local_decl(name)],
+            catch_regions: vec![],
+            viz_nodes: vec![],
+        }
+    }
+
+    fn is_stack_covered(body: &MirFunctionBody, local: Local) -> bool {
+        let def_use = collect_def_use(body);
+        let predecessors = build_predecessors(body);
+
+        is_stack_covered_phi(local, &def_use[&local], body, &predecessors)
+    }
+
+    fn analyzed_classification(body: &MirFunctionBody, local: Local) -> LocalClassification {
+        AnalysisResult::analyze(body, 0, OptLevel::One).classifications[&local]
+    }
+
+    #[test]
+    fn nested_short_circuit_definitions_are_stack_carried() {
+        let body = nested_short_circuit_body(None, false);
+
+        assert!(is_stack_covered(&body, Local(1)));
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::PhiLike
+        );
+    }
+
+    /// A user-named local is not special: what matters is that every edge into
+    /// the use block pushes its value, and that nothing else defines it.
+    #[test]
+    fn named_short_circuit_local_is_stack_carried() {
+        let body = nested_short_circuit_body(Some("result"), false);
+
+        assert!(is_stack_covered(&body, Local(1)));
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::PhiLike
+        );
+    }
+
+    #[test]
+    fn reassigned_named_short_circuit_local_is_materialized() {
+        let body = nested_short_circuit_body(Some("result"), true);
+
+        assert!(!is_stack_covered(&body, Local(1)));
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Real
+        );
+    }
+
+    /// The stray initializer is just as unbalanced when the local is a compiler
+    /// temp, so the name plays no part in rejecting it.
+    #[test]
+    fn reassigned_unnamed_short_circuit_local_is_materialized() {
+        let body = nested_short_circuit_body(None, true);
+
+        assert!(!is_stack_covered(&body, Local(1)));
+        assert_eq!(
+            analyzed_classification(&body, Local(1)),
+            LocalClassification::Real
+        );
+    }
+
+    /// `let x = false; if (c) { x = a && b } x` — MIR merges the short circuit's
+    /// own join into the `if` join, so the `ShortCircuit`'s `join` really is the
+    /// use block. The `Branch` false edge still reaches that block without
+    /// pushing anything, so the local has to stay in its slot.
+    fn merged_join_body(name: Option<&str>) -> MirFunctionBody {
+        let destination = Local(1);
+
+        bool_body(
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![],
+                    terminator: Some(Terminator::Branch {
+                        condition: Operand::Constant(Constant::Bool(true)),
+                        then_block: BlockId(1),
+                        else_block: BlockId(3),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![],
+                    terminator: Some(Terminator::ShortCircuit {
+                        operand: Operand::Constant(Constant::Bool(true)),
+                        is_and: true,
+                        destination: Place::Local(destination),
+                        eval_rhs: BlockId(2),
+                        join: BlockId(3),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(2),
+                    statements: vec![assign_bool(destination, true)],
+                    terminator: Some(Terminator::Goto { target: BlockId(3) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                return_local_block(BlockId(3), destination),
+            ],
+            name,
+        )
+    }
+
+    #[test]
+    fn short_circuit_join_shared_with_a_branch_edge_is_materialized() {
+        assert!(!is_stack_covered(&merged_join_body(Some("x")), Local(1)));
+        assert!(!is_stack_covered(&merged_join_body(None), Local(1)));
+    }
+
+    /// One predecessor short-circuits into the join, the other assigns and
+    /// falls through. Neither of the two predicates this replaced accepted the
+    /// mix on its own.
+    #[test]
+    fn mixed_short_circuit_and_assignment_predecessors_are_stack_carried() {
+        let destination = Local(1);
+        let body = bool_body(
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![],
+                    terminator: Some(Terminator::Branch {
+                        condition: Operand::Constant(Constant::Bool(true)),
+                        then_block: BlockId(1),
+                        else_block: BlockId(3),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![],
+                    terminator: Some(Terminator::ShortCircuit {
+                        operand: Operand::Constant(Constant::Bool(true)),
+                        is_and: true,
+                        destination: Place::Local(destination),
+                        eval_rhs: BlockId(2),
+                        join: BlockId(4),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(2),
+                    statements: vec![assign_bool(destination, true)],
+                    terminator: Some(Terminator::Goto { target: BlockId(4) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(3),
+                    statements: vec![assign_bool(destination, false)],
+                    terminator: Some(Terminator::Goto { target: BlockId(4) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                return_local_block(BlockId(4), destination),
+            ],
+            Some("x"),
+        );
+
+        assert!(is_stack_covered(&body, Local(1)));
+    }
+
+    /// `a && f(b)`: the short circuit joins at bb2, and the rhs block reaches
+    /// that same join through `rhs`, a terminator that defines the destination.
+    fn short_circuit_over_call_body(name: Option<&str>, rhs: Terminator) -> MirFunctionBody {
+        let destination = Local(1);
+
+        bool_body(
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![],
+                    terminator: Some(Terminator::ShortCircuit {
+                        operand: Operand::Constant(Constant::Bool(true)),
+                        is_and: true,
+                        destination: Place::Local(destination),
+                        eval_rhs: BlockId(1),
+                        join: BlockId(2),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![],
+                    terminator: Some(rhs),
+                    span: None,
+                    terminator_span: None,
+                },
+                return_local_block(BlockId(2), destination),
+            ],
+            name,
+        )
+    }
+
+    fn call_into(target: BlockId, unwind: Option<BlockId>) -> Terminator {
+        Terminator::Call {
+            callee: Operand::Constant(Constant::Null),
+            args: vec![],
+            ntypeargs: 0,
+            runtime_type_check: false,
+            runtime_id: None,
+            destination: Place::Local(Local(1)),
+            target,
+            unwind,
+        }
+    }
+
+    fn virtual_call_into(target: BlockId) -> Terminator {
+        Terminator::VirtualCall {
+            iface: baml_type::TyTemplateInterface::new(
+                baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
+                Vec::new(),
+                Vec::new(),
+            ),
+            method: "eq".to_string(),
+            args: vec![],
+            ntypeargs: 0,
+            runtime_type_check: false,
+            runtime_id: None,
+            destination: Place::Local(Local(1)),
+            target,
+            unwind: None,
+        }
+    }
+
+    /// `a && f(b)` and `a && (b == c)`: the call opcode leaves its result on the
+    /// stack and jumps to the join, exactly like an assignment that falls
+    /// through. Both are common enough that materializing them would cost the
+    /// stdlib's comparison operators a store/load pair.
+    #[test]
+    fn short_circuit_joining_a_call_result_is_stack_carried() {
+        for name in [None, Some("ok")] {
+            let call = short_circuit_over_call_body(name, call_into(BlockId(2), None));
+            assert!(is_stack_covered(&call, Local(1)));
+
+            let virtual_call = short_circuit_over_call_body(name, virtual_call_into(BlockId(2)));
+            assert!(is_stack_covered(&virtual_call, Local(1)));
+        }
+    }
+
+    /// The throwing edge reaches the join without the call ever pushing a
+    /// result, so the join cannot assume anything is on the stack.
+    #[test]
+    fn call_that_unwinds_into_the_join_is_materialized() {
+        let body = short_circuit_over_call_body(None, call_into(BlockId(2), Some(BlockId(2))));
+
+        assert!(!is_stack_covered(&body, Local(1)));
+    }
+
+    /// `Await` suspends the engine and its opcode re-executes across the
+    /// suspend, so its result is not carried even though it lands on the stack
+    /// the same way a call's does.
+    #[test]
+    fn awaited_result_in_the_join_is_materialized() {
+        let body = short_circuit_over_call_body(
+            None,
+            Terminator::Await {
+                future: Place::Local(Local(0)),
+                destination: Place::Local(Local(1)),
+                target: BlockId(2),
+                unwind: None,
+            },
+        );
+
+        assert!(!is_stack_covered(&body, Local(1)));
+    }
+
+    /// The entry block is entered on every call without traversing an edge, so
+    /// a predecessor set that looks complete is not. Contrived — a real MIR
+    /// entry block is never a loop header — but it is the shape the guard
+    /// exists for, and nothing else in the predicate would reject it.
+    #[test]
+    fn entry_block_as_the_join_is_materialized() {
+        let destination = Local(1);
+        let body = bool_body(
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(Local(0)),
+                            value: Rvalue::Use(Operand::copy_local(destination)),
+                        },
+                        span: None,
+                    }],
+                    terminator: Some(Terminator::Branch {
+                        condition: Operand::Constant(Constant::Bool(true)),
+                        then_block: BlockId(1),
+                        else_block: BlockId(2),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![assign_bool(destination, true)],
+                    terminator: Some(Terminator::Goto { target: BlockId(0) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(2),
+                    statements: vec![assign_bool(destination, false)],
+                    terminator: Some(Terminator::Goto { target: BlockId(0) }),
+                    span: None,
+                    terminator_span: None,
+                },
+            ],
+            Some("x"),
+        );
+
+        assert!(!is_stack_covered(&body, Local(1)));
+    }
+
+    /// The VM enters a handler on unwind rather than over an edge, so a block
+    /// the walk would otherwise pass through as an empty passthrough cannot be
+    /// proven covered once it is one.
+    #[test]
+    fn catch_handler_inside_the_coverage_walk_is_materialized() {
+        let mut body = nested_short_circuit_body(None, false);
+
+        // bb3 is the chain's inner join, the empty passthrough arm (c) recurses
+        // through. Everything below is unchanged except that it is now a
+        // handler, so the region is the only reason the answer flips.
+        assert!(is_stack_covered(&body, Local(1)));
+
+        body.catch_regions.push(CatchRegion {
+            body_entry: BlockId(0),
+            handler: BlockId(3),
+            body_blocks: vec![BlockId(0)],
+            handler_body: vec![BlockId(3)],
+            error_local: Local(0),
+            stack_trace_local: None,
+        });
+
+        assert!(!is_stack_covered(&body, Local(1)));
+    }
+
+    /// The classic phi-like diamond: both arms assign and fall through.
+    fn diamond_body(with_prior_definition: bool) -> MirFunctionBody {
+        let destination = Local(1);
+        let prior_definition = with_prior_definition.then(|| assign_bool(destination, false));
+
+        bool_body(
+            vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: prior_definition.into_iter().collect(),
+                    terminator: Some(Terminator::Branch {
+                        condition: Operand::Constant(Constant::Bool(true)),
+                        then_block: BlockId(1),
+                        else_block: BlockId(2),
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![assign_bool(destination, true)],
+                    terminator: Some(Terminator::Goto { target: BlockId(3) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(2),
+                    statements: vec![assign_bool(destination, false)],
+                    terminator: Some(Terminator::Goto { target: BlockId(3) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                return_local_block(BlockId(3), destination),
+            ],
+            Some("x"),
+        )
+    }
+
+    #[test]
+    fn assignment_in_every_predecessor_is_stack_carried() {
+        assert!(is_stack_covered(&diamond_body(false), Local(1)));
+    }
+
+    /// `let x = 0; if (c) { x = 1 } else { x = 2 }; use(x)` — the initializer is
+    /// emitted as a push that nothing pops, so inside a loop it grew the operand
+    /// stack once per iteration.
+    #[test]
+    fn diamond_with_a_definition_outside_the_predecessors_is_materialized() {
+        assert!(!is_stack_covered(&diamond_body(true), Local(1)));
+    }
+
+    /// A single static use in a CFG cycle represents repeated dynamic uses.
+    /// Sinking the array allocation from block 0 into the call in block 1 would
+    /// allocate a fresh array on every trip around the cycle.
+    #[test]
+    fn repeated_identity_allocation_is_not_virtualized() {
+        let array = Local(1);
+        let call_result = Local(2);
+        let body = MirFunctionBody {
+            blocks: vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(array),
+                            value: Rvalue::Array(
+                                baml_type::TyTemplate::from(baml_type::RealizedTy::int()),
+                                vec![],
+                            ),
+                        },
+                        span: None,
+                    }],
+                    terminator: Some(Terminator::Goto { target: BlockId(1) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![],
+                    terminator: Some(Terminator::Call {
+                        callee: Operand::Constant(Constant::Null),
+                        args: vec![Operand::copy_local(array)],
+                        ntypeargs: 0,
+                        runtime_type_check: false,
+                        runtime_id: None,
+                        destination: Place::Local(call_result),
+                        target: BlockId(2),
+                        unwind: None,
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(2),
+                    statements: vec![],
+                    terminator: Some(Terminator::Goto { target: BlockId(1) }),
+                    span: None,
+                    terminator_span: None,
+                },
+            ],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_list_local_decl(Some("items")),
+                int_local_decl(Some("result")),
+            ],
+            catch_regions: vec![],
+            viz_nodes: vec![],
+        };
+
+        let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
+        assert_eq!(
+            analysis.classifications.get(&array),
+            Some(&LocalClassification::Real)
+        );
+    }
+
+    /// The identity guard is cycle-specific: a single cross-block use that
+    /// cannot repeat without re-running the definition remains virtualizable.
+    #[test]
+    fn non_repeating_identity_allocation_stays_virtualized() {
+        let array = Local(1);
+        let body = MirFunctionBody {
+            blocks: vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(array),
+                            value: Rvalue::Array(
+                                baml_type::TyTemplate::from(baml_type::RealizedTy::int()),
+                                vec![],
+                            ),
+                        },
+                        span: None,
+                    }],
+                    terminator: Some(Terminator::Goto { target: BlockId(1) }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(Local(0)),
+                            value: Rvalue::Use(Operand::copy_local(array)),
+                        },
+                        span: None,
+                    }],
+                    terminator: Some(Terminator::Return),
+                    span: None,
+                    terminator_span: None,
+                },
+            ],
+            entry: BlockId(0),
+            locals: vec![
+                int_list_local_decl(None),
+                int_list_local_decl(Some("items")),
+            ],
+            catch_regions: vec![],
+            viz_nodes: vec![],
+        };
+
+        let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
+        assert_eq!(
+            analysis.classifications.get(&array),
+            Some(&LocalClassification::Virtual)
+        );
     }
 
     /// Verifies `Rvalue::Len` bindings are always classified as materialized locals.

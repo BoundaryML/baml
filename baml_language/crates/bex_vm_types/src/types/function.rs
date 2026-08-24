@@ -1,7 +1,7 @@
-use baml_type::TyTemplate;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::{Bytecode, HeapPtr, SysOp, Value};
+use super::InterfaceBound;
+use crate::{Bytecode, HeapPtr, SysOp, TyTemplate, Value};
 
 /// Function type.
 ///
@@ -93,10 +93,7 @@ impl BorshDeserialize for FunctionKind {
 /// LLM-specific metadata for a function.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum FunctionMeta {
-    Llm {
-        prompt_template: String,
-        client: String,
-    },
+    Llm { client: String },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
@@ -264,6 +261,12 @@ pub struct Function {
     /// `(box: #0) -> #0.Item`.
     pub display_type_params: Vec<String>,
 
+    /// Interface bounds for each De Bruijn type-argument slot.  Unlike
+    /// `display_type_params`, this is executable metadata: the VM substitutes
+    /// the actual call-frame types and rejects a failing bound before entering
+    /// the function body.
+    pub generic_param_bounds: Vec<Vec<InterfaceBound>>,
+
     /// Source/TIR-rendered parameter types in declaration order.
     pub display_param_types: Vec<String>,
 
@@ -293,13 +296,18 @@ pub struct Function {
 
     /// Per-run profiling id (`0` = unassigned), written into the BEX event
     /// stream's `CallFunction` records and resolved through the per-run
-    /// function table in the `.bamlprof` header. Assigned by the engine's
+    /// function table registered with the direct consumer. Assigned by the engine's
     /// interim provider at construction (plan §2.6); the M0 id table moves
     /// assignment to compile time. `#[borsh(skip)]` keeps it out of the pack
     /// envelope — it is runtime-only state, and skipping it leaves the wire
     /// format unchanged.
     #[borsh(skip)]
     pub function_id: u32,
+
+    /// Owning runtime package for dynamically grafted functions. Static
+    /// functions use null and address operands through the engine image.
+    #[borsh(skip)]
+    pub runtime_package: HeapPtr,
 }
 
 impl std::fmt::Display for Function {
@@ -323,7 +331,7 @@ pub struct Closure {
     /// before the cell captures.  These become `frame.type_args` when the
     /// closure is invoked, so that `LoadType(TypeArgRef(N))` inside the
     /// closure body resolves correctly.
-    pub captured_type_args: Box<[baml_type::RealizedTy]>,
+    pub captured_type_args: Box<[crate::RealizedTy]>,
 }
 
 /// A method bound to a specific receiver instance.
@@ -360,7 +368,7 @@ pub struct BoundMethod {
     /// type variable, but the upstream fix that stops typevars leaking into
     /// value positions is still in flight, so all three stay `RuntimeTy` and
     /// narrow to `RealizedTy` together once it lands.
-    pub type_args: Box<[baml_type::RealizedTy]>,
+    pub type_args: Box<[crate::RealizedTy]>,
 }
 
 /// A generic function instantiation carrying concrete type arguments.
@@ -368,15 +376,17 @@ pub struct BoundMethod {
 /// Unlike `Closure`/`BoundMethod`, the base function is referenced by its
 /// **global slot** (`GlobalIndex`), not a `HeapPtr` — so a `GenericFunction`
 /// can live in the immutable compile-time object pool and be interned by
-/// `(function, type_args)`, giving pointer-stable identity. Both fields are
-/// non-pointer data, so GC treats this as a leaf (nothing to trace or fix up).
+/// `(function, type_args)`, giving pointer-stable identity.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct GenericFunction {
     /// Global slot of the underlying `Object::Function` (resolved at call time
     /// via the global table, mirroring `MakeBoundMethod`).
     pub function: crate::GlobalIndex,
     /// Concrete type arguments to seed into `frame.type_args` when called.
-    pub type_args: Box<[baml_type::RealizedTy]>,
+    pub type_args: Box<[crate::RealizedTy]>,
+    /// Owning runtime package for resolving `function` in its local globals.
+    #[borsh(skip)]
+    pub runtime_package: HeapPtr,
 }
 
 /// A host-language callable bound to a BAML function type.
@@ -397,7 +407,7 @@ pub struct HostClosure {
     /// The declared return type of the host-callable, threaded through
     /// `SysOp::BamlHostCallHostValue` as `type_arg_0` so the sysop impl
     /// can validate the host's returned value against the BAML signature.
-    pub ret_ty: Box<baml_type::RealizedTy>,
+    pub ret_ty: Box<crate::RealizedTy>,
     /// The declared error/throws contract of the host-callable (`E` in
     /// `call_host_value<T, E>`), threaded through
     /// `SysOp::BamlHostCallHostValue` as `type_arg_1`. A host throw is
@@ -407,7 +417,7 @@ pub struct HostClosure {
     /// accepts any thrown value — the "unknown" fallback. Concrete throws
     /// (e.g. `throws ParseError`) pass through unchanged so the contract
     /// check can reject off-type throws as `HostContractViolation`.
-    pub throws_ty: Box<baml_type::RealizedTy>,
+    pub throws_ty: Box<crate::RealizedTy>,
     /// Number of value arguments the host callable expects.
     ///
     /// `CallIndirect` reads this to drain the right number of operand slots
@@ -421,7 +431,7 @@ pub struct HostClosure {
     /// optionals, omitted ones dropped), so each bridge can apply its calling
     /// convention (e.g. TypeScript's trailing `$opts`) without the callee type
     /// on the wire. `Box`-ed to keep `Object` within its size budget.
-    pub params: Box<Vec<baml_type::RealizedFunctionParamTy>>,
+    pub params: Box<Vec<baml_type::RealizedFunctionParamTy<crate::TypeHead>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]

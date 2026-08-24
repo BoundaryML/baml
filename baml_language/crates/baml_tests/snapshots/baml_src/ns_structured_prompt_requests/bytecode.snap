@@ -1,0 +1,2072 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function structured_prompt_requests.$init_test_ns_structured_prompt_requests_structured_prompt_requests(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "generated build_request companion is network-free and overridable"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "generated companions apply defaulted llm arguments"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "generated build_request companion is reflection-visible"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "generic nested output format uses concrete class arguments"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "generic build_request specializes nested output format"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "client wrapper rendering is pure and deterministic"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "client render smoke covers non-responses providers"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "preview media never reads files or fetches urls"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "chat preview preserves urls unless invoke would inline them"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "openai preserves prompt message roles"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "anthropic splits system from prompt messages"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "google splits system and maps user prompt"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "openai build_request defaults roleless llm prompt to system"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "openai build_request allows image in roleless system prompt"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "openai build_request preserves explicit llm prompt roles"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "openai build_request defaults leading llm prelude to system"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "openai build_request ignores formatting whitespace before first role"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "openai lowers image audio and pdf parts"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "anthropic lowers image and pdf parts"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "anthropic rejects audio parts"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.structured_prompt_requests"
+    load_const "google lowers every supported media part"
+    make_closure .<lambda($init_test_ns_structured_prompt_requests_structured_prompt_requests, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function structured_prompt_requests.AudioShape(sound: audio, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var sound
+    call user.structured_prompt_requests.AudioShape$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.AudioShape$build_request(sound: audio, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var sound
+    call user.structured_prompt_requests.AudioShape$spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.AudioShape$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.AudioShape$render_prompt(sound: audio) -> ai.Prompt {
+    load_var sound
+    call user.structured_prompt_requests.AudioShape$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.AudioShape$spec(sound: audio) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "gemini-2.5-flash"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.GoogleClient.new
+    store_var _6
+    load_const "AudioShape"
+    load_deref ?1
+    load_const "sound"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var sound
+    make_closure .<lambda(AudioShape$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.AudioShape$stream(sound: audio, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var sound
+    call user.structured_prompt_requests.AudioShape$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.ChatMediaShape(photo: image, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var photo
+    call user.structured_prompt_requests.ChatMediaShape$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.ChatMediaShape$build_request(photo: image, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var photo
+    call user.structured_prompt_requests.ChatMediaShape$spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.ChatMediaShape$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.ChatMediaShape$render_prompt(photo: image) -> ai.Prompt {
+    load_var photo
+    call user.structured_prompt_requests.ChatMediaShape$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.ChatMediaShape$spec(photo: image) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_global user.structured_prompt_requests.UnroutableChat
+    call ai.clients.resolve
+    store_var _6
+    load_const "ChatMediaShape"
+    load_deref ?1
+    load_const "photo"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var photo
+    make_closure .<lambda(ChatMediaShape$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.ChatMediaShape$stream(photo: image, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var photo
+    call user.structured_prompt_requests.ChatMediaShape$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.ExplicitRolesShape(client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _4
+    call user.structured_prompt_requests.ExplicitRolesShape$spec
+    store_var _6
+    load_var2 3 4
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.ExplicitRolesShape$build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.ExplicitRolesShape$spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.ExplicitRolesShape$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.ExplicitRolesShape$render_prompt() -> ai.Prompt {
+    call user.structured_prompt_requests.ExplicitRolesShape$spec
+    store_var _1
+    load_type string
+    call ai.wire.render_output_format
+    store_var _2
+    load_type string
+    load_var2 1 2
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.ExplicitRolesShape$spec() -> ai.FunctionSpec<string> {
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _3
+    load_global user.structured_prompt_requests.PreviewResponses
+    call ai.clients.resolve
+    store_var _5
+    load_const "ExplicitRolesShape"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(ExplicitRolesShape$spec, 0)>, 0
+    load_var2 1 2
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.ExplicitRolesShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.ExplicitRolesShape$spec
+    store_var _3
+    load_type string | null
+    load_type string
+    load_var2 2 1
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.FirstShape(client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _4
+    call user.structured_prompt_requests.FirstShape$spec
+    store_var _6
+    load_var2 3 4
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.FirstShape$build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.FirstShape$spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.FirstShape$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.FirstShape$render_prompt() -> ai.Prompt {
+    call user.structured_prompt_requests.FirstShape$spec
+    store_var _1
+    load_type string
+    call ai.wire.render_output_format
+    store_var _2
+    load_type string
+    load_var2 1 2
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.FirstShape$spec() -> ai.FunctionSpec<string> {
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _3
+    load_global user.structured_prompt_requests.PreviewResponses
+    call ai.clients.resolve
+    store_var _5
+    load_const "FirstShape"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(FirstShape$spec, 0)>, 0
+    load_var2 1 2
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.FirstShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.FirstShape$spec
+    store_var _3
+    load_type string | null
+    load_type string
+    load_var2 2 1
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.GenericShape(client: ai.Client | null) -> structured_prompt_requests.Outer<#0> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type structured_prompt_requests.Outer<#0>
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _4
+    load_type #0
+    call user.structured_prompt_requests.GenericShape$spec
+    store_var _6
+    load_var2 3 4
+    load_type ai.Runner<structured_prompt_requests.Outer<#0>, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<structured_prompt_requests.Outer<#0>>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.GenericShape$build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type #0
+    call user.structured_prompt_requests.GenericShape$spec
+    store_var _3
+    load_type structured_prompt_requests.Outer<#0>
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.GenericShape$parse(json: string) -> structured_prompt_requests.Outer<#0> {
+    load_type structured_prompt_requests.Outer<#0>
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.GenericShape$render_prompt() -> ai.Prompt {
+    load_type #0
+    call user.structured_prompt_requests.GenericShape$spec
+    store_var _1
+    load_type structured_prompt_requests.Outer<#0>
+    call ai.wire.render_output_format
+    store_var _3
+    load_type structured_prompt_requests.Outer<#0>
+    load_var2 1 2
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.GenericShape$spec() -> ai.FunctionSpec<structured_prompt_requests.Outer<#0>> {
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _3
+    load_global user.structured_prompt_requests.PreviewResponses
+    call ai.clients.resolve
+    store_var _5
+    load_const "GenericShape"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_type #0
+    make_closure .<lambda(GenericShape$spec, 0)>, captures=0, ntypeargs=1
+    load_var2 1 2
+    load_type structured_prompt_requests.Outer<#0>
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.GenericShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<structured_prompt_requests.Outer$stream<#0> | null, structured_prompt_requests.Outer<#0>> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type #0
+    call user.structured_prompt_requests.GenericShape$spec
+    store_var _3
+    load_type structured_prompt_requests.Outer$stream<#0> | null
+    load_type structured_prompt_requests.Outer<#0>
+    load_var2 2 1
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.Greet(name: string, suffix: string, client: ai.Client | null) -> string {
+    load_var suffix
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "!"
+    store_var suffix
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var client
+
+  L1:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _7
+    load_var2 1 2
+    call user.structured_prompt_requests.Greet$spec
+    store_var _9
+    load_var2 5 6
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _6
+    load_var _6
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.Greet$build_request(name: string, suffix: string, client: ai.Client | null) -> baml.http.Request {
+    load_var suffix
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "!"
+    store_var suffix
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var client
+
+  L1:
+    load_var2 1 2
+    call user.structured_prompt_requests.Greet$spec
+    store_var _6
+    load_type string
+    load_var2 4 3
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.Greet$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.Greet$render_prompt(name: string, suffix: string) -> ai.Prompt {
+    load_var suffix
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "!"
+    store_var suffix
+
+  L0:
+    load_var2 1 2
+    call user.structured_prompt_requests.Greet$spec
+    store_var _4
+    load_type string
+    call ai.wire.render_output_format
+    store_var _5
+    load_type string
+    load_var2 3 4
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.Greet$spec(name: string, suffix: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_deref ?2
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "!"
+    store_deref ?2
+
+  L0:
+    load_deref ?1
+    load_deref ?2
+    load_const "name"
+    load_const "suffix"
+    load_type string
+    load_type unknown
+    alloc_map 2
+    store_var _4
+    load_var2 1 2
+    make_closure .<lambda(Greet$spec, 0)>, 2
+    store_var _5
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _6
+    load_global user.structured_prompt_requests.PreviewResponses
+    call ai.clients.resolve
+    store_var _8
+    load_const "Greet"
+    load_var2 3 4
+    load_var2 5 6
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.Greet$stream(name: string, suffix: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var suffix
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const "!"
+    store_var suffix
+
+  L0:
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var client
+
+  L1:
+    load_var2 1 2
+    call user.structured_prompt_requests.Greet$spec
+    store_var _6
+    load_type string | null
+    load_type string
+    load_var2 4 3
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.MediaAll(photo: image, sound: audio, document: pdf, movie: video, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _8
+    load_var2 1 2
+    load_var2 3 4
+    call user.structured_prompt_requests.MediaAll$spec
+    store_var _10
+    load_var2 7 8
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _7
+    load_var _7
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.MediaAll$build_request(photo: image, sound: audio, document: pdf, movie: video, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var2 1 2
+    load_var2 3 4
+    call user.structured_prompt_requests.MediaAll$spec
+    store_var _7
+    load_type string
+    load_var2 6 5
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.MediaAll$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.MediaAll$render_prompt(photo: image, sound: audio, document: pdf, movie: video) -> ai.Prompt {
+    load_var2 1 2
+    load_var2 3 4
+    call user.structured_prompt_requests.MediaAll$spec
+    store_var _5
+    load_type string
+    call ai.wire.render_output_format
+    store_var _6
+    load_type string
+    load_var2 5 6
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.MediaAll$spec(photo: image, sound: audio, document: pdf, movie: video) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_var ?4
+    make_cell
+    store_var ?4
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _7
+    load_const "gemini-2.5-flash"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.GoogleClient.new
+    store_var _9
+    load_const "MediaAll"
+    load_deref ?1
+    load_deref ?2
+    load_deref ?3
+    load_deref ?4
+    load_const "photo"
+    load_const "sound"
+    load_const "document"
+    load_const "movie"
+    load_type string
+    load_type unknown
+    alloc_map 4
+    load_var2 1 2
+    load_var2 3 4
+    make_closure .<lambda(MediaAll$spec, 0)>, 4
+    load_var2 5 6
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.MediaAll$stream(photo: image, sound: audio, document: pdf, movie: video, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var2 1 2
+    load_var2 3 4
+    call user.structured_prompt_requests.MediaAll$spec
+    store_var _7
+    load_type string | null
+    load_type string
+    load_var2 6 5
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.MediaImageAudioPdf(photo: image, sound: audio, document: pdf, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _7
+    load_var2 1 2
+    load_var document
+    call user.structured_prompt_requests.MediaImageAudioPdf$spec
+    store_var _9
+    load_var2 6 7
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _6
+    load_var _6
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.MediaImageAudioPdf$build_request(photo: image, sound: audio, document: pdf, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var2 1 2
+    load_var document
+    call user.structured_prompt_requests.MediaImageAudioPdf$spec
+    store_var _6
+    load_type string
+    load_var2 5 4
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.MediaImageAudioPdf$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.MediaImageAudioPdf$render_prompt(photo: image, sound: audio, document: pdf) -> ai.Prompt {
+    load_var2 1 2
+    load_var document
+    call user.structured_prompt_requests.MediaImageAudioPdf$spec
+    store_var _4
+    load_type string
+    call ai.wire.render_output_format
+    store_var _5
+    load_type string
+    load_var2 4 5
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.MediaImageAudioPdf$spec(photo: image, sound: audio, document: pdf) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _6
+    load_const "gemini-2.5-flash"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.GoogleClient.new
+    store_var _8
+    load_const "MediaImageAudioPdf"
+    load_deref ?1
+    load_deref ?2
+    load_deref ?3
+    load_const "photo"
+    load_const "sound"
+    load_const "document"
+    load_type string
+    load_type unknown
+    alloc_map 3
+    load_var2 1 2
+    load_var document
+    make_closure .<lambda(MediaImageAudioPdf$spec, 0)>, 3
+    load_var2 4 5
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.MediaImageAudioPdf$stream(photo: image, sound: audio, document: pdf, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var2 1 2
+    load_var document
+    call user.structured_prompt_requests.MediaImageAudioPdf$spec
+    store_var _6
+    load_type string | null
+    load_type string
+    load_var2 5 4
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.MediaImagePdf(photo: image, document: pdf, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _6
+    load_var2 1 2
+    call user.structured_prompt_requests.MediaImagePdf$spec
+    store_var _8
+    load_var2 5 6
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _5
+    load_var _5
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.MediaImagePdf$build_request(photo: image, document: pdf, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var2 1 2
+    call user.structured_prompt_requests.MediaImagePdf$spec
+    store_var _5
+    load_type string
+    load_var2 4 3
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.MediaImagePdf$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.MediaImagePdf$render_prompt(photo: image, document: pdf) -> ai.Prompt {
+    load_var2 1 2
+    call user.structured_prompt_requests.MediaImagePdf$spec
+    store_var _3
+    load_type string
+    call ai.wire.render_output_format
+    store_var _4
+    load_type string
+    load_var2 3 4
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.MediaImagePdf$spec(photo: image, document: pdf) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _5
+    load_const "gemini-2.5-flash"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call google.GoogleClient.new
+    store_var _7
+    load_const "MediaImagePdf"
+    load_deref ?1
+    load_deref ?2
+    load_const "photo"
+    load_const "document"
+    load_type string
+    load_type unknown
+    alloc_map 2
+    load_var2 1 2
+    make_closure .<lambda(MediaImagePdf$spec, 0)>, 2
+    load_var2 3 4
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.MediaImagePdf$stream(photo: image, document: pdf, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var2 1 2
+    call user.structured_prompt_requests.MediaImagePdf$spec
+    store_var _5
+    load_type string | null
+    load_type string
+    load_var2 4 3
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.MediaShape(photo: image, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var photo
+    call user.structured_prompt_requests.MediaShape$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.MediaShape$build_request(photo: image, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var photo
+    call user.structured_prompt_requests.MediaShape$spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.MediaShape$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.MediaShape$render_prompt(photo: image) -> ai.Prompt {
+    load_var photo
+    call user.structured_prompt_requests.MediaShape$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.MediaShape$spec(photo: image) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_global user.structured_prompt_requests.UnroutableResponses
+    call ai.clients.resolve
+    store_var _6
+    load_const "MediaShape"
+    load_deref ?1
+    load_const "photo"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var photo
+    make_closure .<lambda(MediaShape$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.MediaShape$stream(photo: image, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var photo
+    call user.structured_prompt_requests.MediaShape$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.PreludeShape(client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _4
+    call user.structured_prompt_requests.PreludeShape$spec
+    store_var _6
+    load_var2 3 4
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.PreludeShape$build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.PreludeShape$spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.PreludeShape$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.PreludeShape$render_prompt() -> ai.Prompt {
+    call user.structured_prompt_requests.PreludeShape$spec
+    store_var _1
+    load_type string
+    call ai.wire.render_output_format
+    store_var _2
+    load_type string
+    load_var2 1 2
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.PreludeShape$spec() -> ai.FunctionSpec<string> {
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _3
+    load_global user.structured_prompt_requests.PreviewResponses
+    call ai.clients.resolve
+    store_var _5
+    load_const "PreludeShape"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(PreludeShape$spec, 0)>, 0
+    load_var2 1 2
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.PreludeShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.PreludeShape$spec
+    store_var _3
+    load_type string | null
+    load_type string
+    load_var2 2 1
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.RequestShape(input: string, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var input
+    call user.structured_prompt_requests.RequestShape$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.RequestShape$build_request(input: string, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var input
+    call user.structured_prompt_requests.RequestShape$spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.RequestShape$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.RequestShape$render_prompt(input: string) -> ai.Prompt {
+    load_var input
+    call user.structured_prompt_requests.RequestShape$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.RequestShape$spec(input: string) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var _6
+    load_const "RequestShape"
+    load_deref ?1
+    load_const "input"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var input
+    make_closure .<lambda(RequestShape$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.RequestShape$stream(input: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var input
+    call user.structured_prompt_requests.RequestShape$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.RoledShape(client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _4
+    call user.structured_prompt_requests.RoledShape$spec
+    store_var _6
+    load_var2 3 4
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.RoledShape$build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.RoledShape$spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.RoledShape$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.RoledShape$render_prompt() -> ai.Prompt {
+    call user.structured_prompt_requests.RoledShape$spec
+    store_var _1
+    load_type string
+    call ai.wire.render_output_format
+    store_var _2
+    load_type string
+    load_var2 1 2
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.RoledShape$spec() -> ai.FunctionSpec<string> {
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _3
+    load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var _5
+    load_const "RoledShape"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(RoledShape$spec, 0)>, 0
+    load_var2 1 2
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.RoledShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.RoledShape$spec
+    store_var _3
+    load_type string | null
+    load_type string
+    load_var2 2 1
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.RolelessImageShape(photo: image, client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _5
+    load_var photo
+    call user.structured_prompt_requests.RolelessImageShape$spec
+    store_var _7
+    load_var2 4 5
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.RolelessImageShape$build_request(photo: image, client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var photo
+    call user.structured_prompt_requests.RolelessImageShape$spec
+    store_var _4
+    load_type string
+    load_var2 3 2
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.RolelessImageShape$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.RolelessImageShape$render_prompt(photo: image) -> ai.Prompt {
+    load_var photo
+    call user.structured_prompt_requests.RolelessImageShape$spec
+    store_var _2
+    load_type string
+    call ai.wire.render_output_format
+    store_var _3
+    load_type string
+    load_var2 2 3
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.RolelessImageShape$spec(photo: image) -> ai.FunctionSpec<string> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _4
+    load_global user.structured_prompt_requests.PreviewResponses
+    call ai.clients.resolve
+    store_var _6
+    load_const "RolelessImageShape"
+    load_deref ?1
+    load_const "photo"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_var photo
+    make_closure .<lambda(RolelessImageShape$spec, 0)>, 1
+    load_var2 2 3
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.RolelessImageShape$stream(photo: image, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var photo
+    call user.structured_prompt_requests.RolelessImageShape$spec
+    store_var _4
+    load_type string | null
+    load_type string
+    load_var2 3 2
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.RolelessShape(client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _4
+    call user.structured_prompt_requests.RolelessShape$spec
+    store_var _6
+    load_var2 3 4
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.RolelessShape$build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.RolelessShape$spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.RolelessShape$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.RolelessShape$render_prompt() -> ai.Prompt {
+    call user.structured_prompt_requests.RolelessShape$spec
+    store_var _1
+    load_type string
+    call ai.wire.render_output_format
+    store_var _2
+    load_type string
+    load_var2 1 2
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.RolelessShape$spec() -> ai.FunctionSpec<string> {
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _3
+    load_global user.structured_prompt_requests.PreviewResponses
+    call ai.clients.resolve
+    store_var _5
+    load_const "RolelessShape"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(RolelessShape$spec, 0)>, 0
+    load_var2 1 2
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.RolelessShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.RolelessShape$spec
+    store_var _3
+    load_type string | null
+    load_type string
+    load_var2 2 1
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests.WhitespaceShape(client: ai.Client | null) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_type string
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Agent.new
+    store_var _4
+    call user.structured_prompt_requests.WhitespaceShape$spec
+    store_var _6
+    load_var2 3 4
+    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _3
+    load_var _3
+    load_field .value
+    return
+}
+
+function structured_prompt_requests.WhitespaceShape$build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.WhitespaceShape$spec
+    store_var _3
+    load_type string
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function structured_prompt_requests.WhitespaceShape$parse(json: string) -> string {
+    load_type string
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function structured_prompt_requests.WhitespaceShape$render_prompt() -> ai.Prompt {
+    call user.structured_prompt_requests.WhitespaceShape$spec
+    store_var _1
+    load_type string
+    call ai.wire.render_output_format
+    store_var _2
+    load_type string
+    load_var2 1 2
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function structured_prompt_requests.WhitespaceShape$spec() -> ai.FunctionSpec<string> {
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _3
+    load_global user.structured_prompt_requests.PreviewResponses
+    call ai.clients.resolve
+    store_var _5
+    load_const "WhitespaceShape"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(WhitespaceShape$spec, 0)>, 0
+    load_var2 1 2
+    load_type string
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function structured_prompt_requests.WhitespaceShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.structured_prompt_requests.WhitespaceShape$spec
+    store_var _3
+    load_type string | null
+    load_type string
+    load_var2 2 1
+    call ai.stream.from_spec
+    return
+}
+
+function structured_prompt_requests._input_for(spec: ai.FunctionSpec<string>) -> ai.ModelTurnInput {
+    load_var spec
+    load_field .prompt_template
+    store_var _2
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _5
+    load_var _2
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    alloc_array 0
+    init_instance ai.Journal .log
+    load_var _5
+    load_type string
+    init_instance ai.ModelTurnInput .prompt, .journal, .toolbox, .output_type
+    return
+}
+
+function structured_prompt_requests._roled_body(request: baml.http.Request) -> baml.json.json {
+    load_var request
+    load_field .body
+    call baml.json.parse
+    return
+}

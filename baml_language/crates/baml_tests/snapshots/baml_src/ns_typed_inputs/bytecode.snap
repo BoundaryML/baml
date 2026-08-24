@@ -1,0 +1,184 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function typed_inputs.$init_test_ns_typed_inputs_typed_inputs(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.typed_inputs"
+    load_const "int_input"
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.typed_inputs"
+    load_const "string_input"
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.typed_inputs"
+    load_const "multiple_inputs"
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.typed_inputs"
+    load_const "bool_input"
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.typed_inputs"
+    load_const "float_input"
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.typed_inputs"
+    load_const "array_input"
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.typed_inputs"
+    load_const "class_input"
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.typed_inputs"
+    load_const "map_input"
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.typed_inputs"
+    load_const "null_input"
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.typed_inputs"
+    load_const "mixed_types_inputs"
+    make_closure .<lambda($init_test_ns_typed_inputs_typed_inputs, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function typed_inputs.add(a: int, b: int) -> int {
+    load_var2 1 2
+    add_int
+    return
+}
+
+function typed_inputs.concat(a: string, b: string, c: string) -> string {
+    load_var a
+    load_const " "
+    bin_op +
+    load_var b
+    bin_op +
+    load_const " "
+    bin_op +
+    load_var c
+    bin_op +
+    return
+}
+
+function typed_inputs.double(x: int) -> int {
+    load_var x
+    load_const 2
+    mul_int
+    return
+}
+
+function typed_inputs.get_value(m: map<string, int>, key: string) -> int {
+    load_var2 1 2
+    load_map_element
+    return
+}
+
+function typed_inputs.greet(name: string) -> string {
+    load_const "Hello, "
+    load_var name
+    bin_op +
+    load_const "!"
+    bin_op +
+    return
+}
+
+function typed_inputs.half(x: float) -> float {
+    load_var x
+    load_const 2.0
+    div_float
+    return
+}
+
+function typed_inputs.is_null(x: int | null) -> bool {
+    load_var x
+    load_const null
+    call baml.ops.equals_equals
+    return
+}
+
+function typed_inputs.magnitude_squared(p: typed_inputs.Point) -> int {
+    load_var p
+    load_field .x
+    load_var p
+    load_field .x
+    mul_int
+    load_var p
+    load_field .y
+    load_var p
+    load_field .y
+    mul_int
+    add_int
+    return
+}
+
+function typed_inputs.negate(b: bool) -> bool {
+    load_var b
+    unary_op !
+    return
+}
+
+function typed_inputs.sum(arr: int[]) -> int {
+    load_const 0
+    store_var total
+    load_var arr
+    load_type baml.iter.Iterable<Error = never, Item = int>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+
+  L0:
+    load_var _3
+    load_type baml.iter.Iterator<Error = never, Item = int>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _4
+    is_type baml.iter.Done
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var2 2 4
+    add_int
+    store_var total
+    jump L0
+
+  L2:
+    load_var total
+    return
+}

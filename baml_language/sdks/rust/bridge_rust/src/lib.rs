@@ -43,5 +43,13 @@ pub type Map<K, V> = indexmap::IndexMap<K, V>;
 /// loaded engine library must report the same version (the loader's
 /// handshake enforces it).
 pub fn get_version() -> &'static str {
-    version::CANONICAL_VERSION
+    get_toolchain_version()
+}
+
+pub fn get_toolchain_version() -> &'static str {
+    version::TOOLCHAIN_VERSION
+}
+
+pub fn get_bridge_runtime_version() -> &'static str {
+    version::BRIDGE_RUNTIME_VERSION
 }

@@ -49,6 +49,8 @@ enum BamlApi {
     static let registerBridge = v1.register_bridge!
     static let registerUnhandledSpawnErrorCallback = v1.register_unhandled_spawn_error_callback!
     static let shutdownRuntime = v1.shutdown_runtime!
+    static let initializeRuntimeFromBytecodeWithMetadata =
+        v1.initialize_runtime_from_bytecode_with_metadata!
 
     /// Copy a runtime-owned buffer to a `Data` and release it exactly
     /// once via the table's `free_buffer`. A zero-length buffer may have

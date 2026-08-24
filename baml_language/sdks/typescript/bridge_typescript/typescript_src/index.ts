@@ -24,6 +24,8 @@ export {
     BamlHandle,
     HostSpanManager,
     getRuntime,
+    getBridgeRuntimeVersion,
+    getToolchainVersion,
     getVersion,
     flushEvents,
 } from './native.js';
@@ -42,8 +44,8 @@ export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 export { defineFunction, defineInstanceFunction, UNSET } from './define_function.js';
 export type { GenericParams } from './define_function.js';
 // Generic-type spelling for `$types` bindings on generic classes / calls.
-export { Never, lowerTypeToWireTy } from './wire_ty.js';
-export type { BamlType, BamlPrimitiveToken, BamlClassCtor } from './wire_ty.js';
+export { BamlType, Never, lowerTypeToWireTy, reflectType } from './wire_ty.js';
+export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor, BamlInterfaceToken } from './wire_ty.js';
 
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
@@ -59,8 +61,8 @@ export function initializeRuntime(srcDir: string, files: Record<string, string>)
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
-export function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array): void {
-    BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode));
+export function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array, embeddedBamlToml?: string): void {
+    BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode), embeddedBamlToml);
 }
 export {
     BamlAbortError,

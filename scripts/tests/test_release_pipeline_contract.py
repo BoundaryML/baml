@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -14,10 +15,12 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_TOOL = ROOT / "scripts" / "baml-csharp-release-contract"
 VERSION_TOOL = ROOT / "scripts" / "baml-language-version"
 GO_RELEASE_SMOKE = ROOT / "scripts" / "smoke-go-release.py"
+GO_SDK_ASSEMBLER = ROOT / "scripts" / "assemble-go-sdk-mirror"
 PLATFORMS = ROOT / "release" / "platforms.json"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release-baml-language.yml"
+RELEASE_NOTIFIER = ROOT / "tools" / "notify-release-failure.py"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yaml"
-SIZE_POLICY = ROOT / "release" / "csharp-package-size-policy.json"
+NIGHTLY_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-release.yml"
 BRIDGE_CFFI_PUBLIC_EXPORTS = (
     ROOT / "release" / "bridge-cffi-public-exports.txt"
 )
@@ -26,6 +29,9 @@ CROSS_CONFIG = ROOT / "baml_language" / "Cross.toml"
 NUGET_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-csharp-sdk.yaml"
 NODE_NPM_PUBLISHER = (
     ROOT / ".github" / "workflows" / "publish2-nodejs-sdk.yaml"
+)
+NODE_BUILDER = (
+    ROOT / ".github" / "workflows" / "build2-nodejs-sdk.reusable.yaml"
 )
 WEB_NPM_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-web-sdk.yaml"
 CSHARP_PREPARER = (
@@ -38,8 +44,14 @@ CSHARP_VERIFIER = (
     / "verify-csharp-product-slice.reusable.yaml"
 )
 CARGO_TESTS = ROOT / ".github" / "workflows" / "cargo-tests.reusable.yaml"
+PACK_E2E = (
+    ROOT / "baml_language" / "crates" / "baml_cli" / "tests" / "pack_e2e.rs"
+)
 CFFI_BUILDER = (
     ROOT / ".github" / "workflows" / "build2-bridge-cffi.reusable.yaml"
+)
+CPP_VERIFIER = (
+    ROOT / ".github" / "workflows" / "verify-cpp-sdk.reusable.yaml"
 )
 PACK_PRODUCT = (
     ROOT
@@ -100,7 +112,7 @@ class CSharpReleaseContractTests(unittest.TestCase):
         return json.loads(PLATFORMS.read_text(encoding="utf-8"))
 
     def write_generated_sources(self, root: Path) -> Path:
-        generated = root / "baml_client"
+        generated = root / "baml_sdk"
         sources = {
             "Baml/Generated/BamlProgram.g.cs": "program",
             "Baml/Http/Request.g.cs": "request",
@@ -279,15 +291,6 @@ class CSharpReleaseContractTests(unittest.TestCase):
             ),
         }
         self.assertEqual(actual, expected)
-        size_policy = json.loads(SIZE_POLICY.read_text(encoding="utf-8"))
-        self.assertEqual(
-            set(size_policy["native_assets"]["baseline_bytes_by_target"]),
-            {entry[0] for entry in expected},
-        )
-        self.assertLess(
-            size_policy["compressed_package"]["baseline_bytes"],
-            size_policy["compressed_package"]["registry_safety_ceiling_bytes"],
-        )
 
     def test_invalid_or_missing_csharp_metadata_fails_early(self) -> None:
         cases: list[tuple[str, Callable[[dict], object]]] = [
@@ -651,6 +654,94 @@ def step_inputs(step: str) -> dict[str, str]:
 
 
 class WorkflowGraphTests(unittest.TestCase):
+    def test_release_slack_notifications_cover_failures_and_canary_success(self) -> None:
+        workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        notifier = RELEASE_NOTIFIER.read_text(encoding="utf-8")
+        notify_slack = job_block(workflow, "notify-slack")
+        notify_step = step_block(notify_slack, "Notify Slack of the release result")
+
+        self.assertIn("always()", notify_slack)
+        self.assertIn(
+            "run: uv run --script tools/notify-release-failure.py",
+            notify_step,
+        )
+        self.assertIn(
+            "CHANNEL: ${{ needs.plan.outputs.channel }}",
+            notify_step,
+        )
+        self.assertIn(
+            "VERSION: ${{ needs.plan.outputs.version }}",
+            notify_step,
+        )
+        self.assertIn(
+            "RELEASE_SUCCEEDED: ${{ needs.publish-pkg-channel.result == 'success' }}",
+            notify_step,
+        )
+        self.assertIn(
+            'if release_succeeded and not failures and channel != "canary"',
+            notifier,
+        )
+        self.assertIn(
+            'SUCCESSFUL_JOB_CONCLUSIONS = {"success", "skipped"}',
+            notifier,
+        )
+        self.assertIn("conclusion not in SUCCESSFUL_JOB_CONCLUSIONS", notifier)
+        self.assertIn("❌ BAML {channel} release failed", notifier)
+        self.assertIn("✅ BAML {channel} release succeeded", notifier)
+
+    def test_cpp_verifier_stamps_the_frozen_release_plan(self) -> None:
+        workflow = CPP_VERIFIER.read_text(encoding="utf-8")
+        verify = job_block(workflow, "verify")
+        stamp = step_block(verify, "Stamp release plan")
+
+        self.assertIn(
+            "scripts/baml-language-version stamp --plan release-plan.json",
+            stamp,
+        )
+        self.assertLess(
+            stamp.index("printf '%s\\n' \"$RELEASE_PLAN_JSON\""),
+            stamp.index("scripts/baml-language-version stamp"),
+        )
+        self.assertLess(
+            workflow.index("scripts/baml-language-version stamp"),
+            workflow.index("cmake -S baml_language/sdks/cpp/bridge_cpp/tests"),
+        )
+
+    def test_node_musl_abi_check_uses_runtime_dependencies(self) -> None:
+        workflow = NODE_BUILDER.read_text(encoding="utf-8")
+        verify = step_block(workflow, "Verify musl native addon ABI")
+
+        self.assertIn('readelf --wide --dynamic "$native"', verify)
+        self.assertIn('needed="$(grep NEEDED <<<"$dynamic")"', verify)
+        self.assertIn("'\\[libc\\.so\\]'", verify)
+        self.assertIn("'libc\\.so\\.6'", verify)
+        self.assertNotIn("readelf --version-info", verify)
+        self.assertNotIn("grep -q 'GLIBC_'", verify)
+
+    def test_cargo_jobs_name_targets_and_run_pack_e2e_on_musl(self) -> None:
+        workflow = CARGO_TESTS.read_text(encoding="utf-8")
+        for target in (
+            "x86_64-unknown-linux-gnu",
+            "x86_64-unknown-linux-musl",
+            "aarch64-apple-darwin",
+            "x86_64-pc-windows-msvc",
+            "wasm32-unknown-unknown",
+        ):
+            self.assertIn(f'name: "cargo test ({target})"', workflow)
+
+        musl = job_block(workflow, "cargo-test-linux-musl")
+        self.assertIn("CARGO_BUILD_TARGET: x86_64-unknown-linux-musl", musl)
+        self.assertIn("uses: ./.github/actions/setup-musl-cross", musl)
+        self.assertIn("cargo nextest run --workspace", musl)
+        self.assertIn("cargo test -p baml_cli --test pack_e2e", musl)
+        self.assertNotIn("--all-features", musl)
+        self.assertEqual(workflow.count("- cargo-test-linux-musl"), 2)
+
+        pack_e2e = PACK_E2E.read_text(encoding="utf-8")
+        self.assertIn("function main() -> never", pack_e2e)
+        self.assertIn("baml.sys.exit(42)", pack_e2e)
+        self.assertIn("Some(42)", pack_e2e)
+
     def test_cffi_hygiene_is_enforced_at_production_and_package_boundaries(
         self,
     ) -> None:
@@ -757,7 +848,7 @@ class WorkflowGraphTests(unittest.TestCase):
         manifest = job_block(release, "publish-pkg-boundaryml-com")
         channel = job_block(release, "publish-pkg-channel")
         dry_run = job_block(release, "dry-run-artifacts")
-        nightly = job_block(release, "dispatch-nightly-after-canary")
+        nightly = NIGHTLY_WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn("source_ci_run_id:", release)
         self.assertIn("Attest production source CI run", plan)
@@ -803,16 +894,18 @@ class WorkflowGraphTests(unittest.TestCase):
             '-f source_ci_run_id="$GITHUB_RUN_ID"',
             job_block(ci, "dispatch-release"),
         )
+        # The nightly scheduler is the other production dispatcher, and is held
+        # to the same trust chain: attested CI run, dispatched at the source tag.
         self.assertIn(
             '-f source_ci_run_id="$SOURCE_CI_RUN_ID"',
             nightly,
         )
         self.assertIn(
-            'SOURCE_WORKFLOW_REF: ${{ github.ref_name }}',
+            'release_ref="baml-language-source-$SOURCE_SHA"',
             nightly,
         )
         self.assertIn(
-            '--ref "$SOURCE_WORKFLOW_REF"',
+            '--ref "$release_ref"',
             nightly,
         )
         self.assertNotIn("--ref canary", nightly)
@@ -833,6 +926,136 @@ class WorkflowGraphTests(unittest.TestCase):
             pkg_stack,
         )
 
+    def test_go_release_uses_both_frozen_version_identities(self) -> None:
+        release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        assembler = GO_SDK_ASSEMBLER.read_text(encoding="utf-8")
+        build = job_block(release, "build-go-sdk")
+        publish = job_block(release, "publish-go-sdk")
+
+        self.assertIn("go_version: ${{ steps.plan.outputs.go_version }}", release)
+        self.assertIn('GO_VERSION: ${{ needs.plan.outputs.go_version }}', build)
+        self.assertIn('--go-version "$GO_VERSION"', build)
+        self.assertIn('GO_VERSION: ${{ needs.plan.outputs.go_version }}', publish)
+        self.assertIn('tag="$GO_VERSION"', publish)
+        self.assertIn('"version": $go_version', publish)
+        self.assertNotIn('tag="v$CANONICAL_VERSION"', publish)
+        self.assertIn('parser.add_argument("--go-version", required=True)', assembler)
+        self.assertIn("runtime_matches != [args.go_version]", assembler)
+
+    def test_nightly_is_scheduled_and_pushes_only_cut_canary(self) -> None:
+        release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+        ci_dispatch = job_block(CI_WORKFLOW.read_text(encoding="utf-8"), "dispatch-release")
+        nightly_workflow = NIGHTLY_WORKFLOW.read_text(encoding="utf-8")
+        dispatch_job = job_block(nightly_workflow, "dispatch-nightly")
+        toolchain = job_block(release, "publish-toolchain-release")
+        cffi = job_block(release, "publish-bridge-cffi-release")
+
+        # A push to canary cuts the canary channel only, and only when
+        # release.toml asks for it. Nothing else releases on merge.
+        self.assertIn("-f channel=canary", ci_dispatch)
+        self.assertNotIn("-f channel=nightly", ci_dispatch)
+        # Bound the slice to the channel input itself rather than a character
+        # count, so it cannot drift into a neighbouring input's description.
+        # `auto` used to let CI defer the channel choice to the release.
+        channel_input = release[
+            release.index("      channel:") : release.index("      dry_run:")
+        ]
+        self.assertIn("options: [nightly, canary]", channel_input)
+        self.assertNotIn("auto", channel_input)
+        self.assertIn(
+            "git diff --quiet HEAD^ HEAD -- baml_language/release.toml",
+            ci_dispatch,
+        )
+        # The file changing is only the fast path; the cut turns on the parsed
+        # [release].canary_version differing, so that an edit to anything else
+        # in release.toml cannot dispatch a release.
+        self.assertIn('git show "HEAD^:baml_language/release.toml"', ci_dispatch)
+        self.assertIn(
+            'if [[ "$canary_version" == "$previous_version" ]]', ci_dispatch
+        )
+        self.assertIn("steps.canary-cut.outputs.cut == 'true'", ci_dispatch)
+        # The source tag is minted for EVERY green canary push, not just the
+        # cuts: the scheduled nightly dispatches at a tag CI may have created
+        # days earlier, and the release refuses any other ref.
+        tag_step = step_block(ci_dispatch, "Create immutable release workflow ref")
+        self.assertIn('release_ref="baml-language-source-$GITHUB_SHA"', tag_step)
+        self.assertNotIn("if:", tag_step)
+
+        # Two crons bracket both DST offsets; the gate keeps whichever one is
+        # local midnight. Both halves matter: dropping the gate double-cuts, and
+        # inverting it cuts at the wrong hour.
+        crons = re.findall(r"- cron: ['\"](\S+) (\S+) [^'\"]*['\"]", nightly_workflow)
+        self.assertEqual(len(crons), 2, nightly_workflow)
+        self.assertEqual({hour for _, hour in crons}, {"7", "8"}, crons)
+        for minute, _ in crons:
+            # Not on the hour: GitHub delays scheduled runs most at :00, and a
+            # delay past 01:00 local forfeits the night.
+            self.assertNotEqual(minute, "0", crons)
+        self.assertIn('local_hour="$(TZ=America/Los_Angeles date +%H)"', nightly_workflow)
+        # Assert the gate's POLARITY, not just that both words appear: the
+        # midnight branch proceeds and the off-hour branch stands down. Swapping
+        # the two would cut at 23:00 or 01:00 and still contain both strings.
+        gate = re.search(
+            r'if \[\[ "\$local_hour" == "00" \]\]; then(.*?)\belse\b(.*?)\bfi\b',
+            step_block(dispatch_job, "Gate on local midnight in Seattle"),
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(gate, dispatch_job)
+        at_midnight, off_hour = gate.groups()
+        self.assertIn("proceed=true", at_midnight)
+        self.assertNotIn("proceed=false", at_midnight)
+        self.assertIn("proceed=false", off_hour)
+        self.assertNotIn("proceed=true", off_hour)
+
+        # One cut per commit, and the guard must observe the EFFECT -- a release
+        # run at the candidate's source tag -- rather than this workflow's own
+        # conclusion. The clock gate skips steps, not the job, so the cron entry
+        # that loses the gate concludes `success` too; a self-referential guard
+        # would read that no-op as "tonight is handled" and stand the real cut
+        # down every night for the whole PST half of the year.
+        self.assertIn("gh run list --workflow release-baml-language.yml", dispatch_job)
+        self.assertIn("baml-language-source-$CANDIDATE_SHA", dispatch_job)
+        self.assertIn('if [[ "$existing" != "0"', dispatch_job)
+        self.assertNotIn("--workflow nightly-release.yml", dispatch_job)
+
+        # A fork inherits the schedule and must never cut releases upstream.
+        self.assertIn("github.repository == 'BoundaryML/baml'", dispatch_job)
+
+        # Only a CI-attested canary commit is releasable, dispatched at its own
+        # immutable tag with the run that attests it.
+        self.assertIn(
+            "gh run list --workflow ci.yaml --branch canary --event push",
+            nightly_workflow,
+        )
+        self.assertIn("commits?sha=canary", nightly_workflow)
+        self.assertIn('release_ref="baml-language-source-$SOURCE_SHA"', nightly_workflow)
+        self.assertIn('--ref "$release_ref"', nightly_workflow)
+        self.assertNotIn("--ref canary", nightly_workflow)
+        self.assertIn("-f channel=nightly", nightly_workflow)
+        self.assertIn('-f source_ci_run_id="$SOURCE_CI_RUN_ID"', nightly_workflow)
+        # The dispatch verifies the tag resolves to exactly the attested commit.
+        self.assertIn('"$ref_sha" != "$SOURCE_SHA"', nightly_workflow)
+
+        # The schedule is the ONLY nightly cut site. A canary release used to
+        # chain one, which meant two sites racing to name the same night.
+        self.assertNotIn("dispatch-nightly-after-canary", release)
+        self.assertNotIn("dispatch_nightly_after_canary", release)
+        self.assertNotIn("nightly-slot", release + nightly_workflow)
+        self.assertNotIn("nightly_date", release + nightly_workflow)
+
+        # `force` must not reach the rollback guard: re-running with it is the
+        # obvious reaction to that failure, and would publish the rollback.
+        rollback_arm = re.search(
+            r"behind\s*\|\s*diverged\)(.*?);;", nightly_workflow, flags=re.DOTALL
+        )
+        self.assertIsNotNone(rollback_arm, nightly_workflow)
+        self.assertNotIn("FORCE", rollback_arm.group(1))
+
+        # The release tag must name the commit the artifacts were built from:
+        # the scheduler reads it to decide whether canary moved.
+        self.assertIn('--target "$SOURCE_SHA"', toolchain)
+        self.assertIn('--target "$SOURCE_SHA"', cffi)
+
     def test_release_graph_has_early_preflight_parallel_producers_and_complete_fanin(
         self,
     ) -> None:
@@ -847,6 +1070,7 @@ class WorkflowGraphTests(unittest.TestCase):
         crates_io = job_block(workflow, "publish-crates-io")
         wrapper_release = job_block(workflow, "publish-wrapper-release")
         prerequisites = job_block(workflow, "release-prerequisites-complete")
+        notify_slack = job_block(workflow, "notify-slack")
         complete = job_block(workflow, "release-complete")
         manifest = job_block(workflow, "publish-pkg-boundaryml-com")
         go_publisher = job_block(workflow, "publish-go-sdk")
@@ -885,9 +1109,12 @@ class WorkflowGraphTests(unittest.TestCase):
             "publish-swift-sdk",
             "publish-crates-io",
             "publish-homebrew",
-            "publish-aur",
         ):
             self.assertIn(f"- {publisher}", prerequisites)
+        # AUR is temporarily excluded while upstream maintenance rejects SSH clones.
+        self.assertNotIn("\n  publish-aur:\n", workflow)
+        self.assertNotRegex(prerequisites, r"(?m)^\s+- publish-aur\s*$")
+        self.assertNotRegex(notify_slack, r"(?m)^\s+- publish-aur\s*$")
         self.assertIn(
             "needs: [plan, release-prerequisites-complete]",
             manifest,
@@ -924,10 +1151,8 @@ class WorkflowGraphTests(unittest.TestCase):
 
         swift_verify = job_block(workflow, "verify-swift-sdk")
         swift_smoke = job_block(workflow, "smoke-swift-release")
-        dispatch = job_block(workflow, "dispatch-nightly-after-canary")
         self.assertIn("BamlRuntime.nativeVersion()", swift_verify)
         self.assertIn("BamlRuntime.nativeVersion()", swift_smoke)
-        self.assertIn("publish-pkg-channel", dispatch)
         self.assertIn(
             '--cfg=getrandom_backend=\\"wasm_js\\"',
             CFFI_BUILDER.read_text(encoding="utf-8"),
@@ -940,7 +1165,6 @@ class WorkflowGraphTests(unittest.TestCase):
         go_publisher = job_block(workflow, "publish-go-sdk")
         go_smoke = job_block(workflow, "smoke-go-release")
         channel = job_block(workflow, "publish-pkg-channel")
-        nightly = job_block(workflow, "dispatch-nightly-after-canary")
 
         self.assertIn(
             'require_skipped Gradle-Plugin-Portal "$GRADLE_PLUGIN"',
@@ -979,13 +1203,6 @@ class WorkflowGraphTests(unittest.TestCase):
                     "needs.release-complete.result == 'success'",
                     "needs.smoke-go-release.result == 'success'",
                     "needs.smoke-swift-release.result == 'success'",
-                ),
-            ),
-            (
-                nightly,
-                (
-                    "needs.plan.result == 'success'",
-                    "needs.publish-pkg-channel.result == 'success'",
                 ),
             ),
         )

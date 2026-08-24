@@ -17,7 +17,7 @@ import { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInv
 import { handleExitPanic } from './platform.js';
 import { registerHostOpaque, releaseHostOpaque, tryRehydrateHostValueByKey, } from './host_value_registry.js';
 import { getTypeMap } from './typemap.js';
-import { lowerTypeToWireTy, outboundTyToBamlType } from './wire_ty.js';
+import { BamlType, BamlTypeMetadataRow, lowerTypeToWireTy, outboundTyToBamlTypeToken, } from './wire_ty.js';
 const CallFunctionArgs = baml_bridge.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_bridge.cffi.v1.BamlOutboundValue;
 const BamlOutboundResult = baml_bridge.cffi.v1.BamlOutboundResult;
@@ -66,7 +66,19 @@ function setInboundValue(iv, value, ctx) {
     if (value === null || value === undefined) {
         return; // Leave oneof unset → null
     }
-    if (typeof value === 'boolean') {
+    if (value instanceof BamlType) {
+        iv.tyDefValue = value._wireCopy();
+    }
+    else if (value instanceof BamlTypeMetadataRow) {
+        const fields = [];
+        for (const key of ['ty', 'alias', 'description', 'docstring', 'other']) {
+            const child = {};
+            setInboundValue(child, value[key], ctx);
+            fields.push({ stringKey: key, value: child });
+        }
+        iv.classValue = { fields };
+    }
+    else if (typeof value === 'boolean') {
         iv.boolValue = value;
     }
     else if (typeof value === 'number') {
@@ -281,10 +293,9 @@ export function encodeCallArgs(kwargs, options) {
             entry.value = iv;
             entries.push(entry);
         }
-        const typeArgs = (options.typeArgs ?? []).map(([typeVar, typeValue]) => ({
-            typeVar,
-            typeValue,
-        }));
+        const typeArgs = (options.typeArgs ?? []).map(([typeVar, value]) => value instanceof BamlType
+            ? { typeVar, typeDefinition: value._wireCopy() }
+            : { typeVar, typeValue: value });
         const msg = CallFunctionArgs.fromObject({
             kwargs: entries,
             callId: callId.toString(),
@@ -343,6 +354,10 @@ function decodeValueHolder(holder, typeMap) {
         return holder.boolValue;
     if (holder.uint8arrayValue != null)
         return holder.uint8arrayValue;
+    if (holder.tyDefValue)
+        return BamlType._fromWire(holder.tyDefValue);
+    if (holder.tyValue)
+        return BamlType._fromWire({ root: holder.tyValue });
     if (holder.classValue) {
         return decodeClass(holder.classValue, typeMap);
     }
@@ -409,14 +424,14 @@ function decodeValueHolder(holder, typeMap) {
         if (ht === BamlHandleType.ADT_TAGGED_HEAP_HANDLE) {
             // Dispatch via the typemap: every tagged-heap class self-registers
             // under its engine FQN (codegen emits the entry, e.g.
-            // `baml.llm.Stream → BamlStream`), so any class is reachable without
+            // `ai.stream.Stream → BamlStream`), so any class is reachable without
             // special-casing here. Mirrors bridge_python's `_decode_handle`
             // ADT_TAGGED_HEAP_HANDLE arm (sdks/python/.../proto.py).
             // The handle's `ty` is a full `BamlTy`; the typed-wrapper FQN lives
             // on its class variant (a non-class `ty` reads back as `''`).
             const fqn = holder.handleValue.ty?.classTy?.name ?? '';
             const Cls = typeMap.getClass(fqn);
-            return Cls._fromHandle(handle);
+            return Cls._fromHandle(handle, fqn);
         }
         // ADT_MEDIA_GENERIC has no typed wrapper — stays a bare BamlHandle.
         return handle;
@@ -517,7 +532,7 @@ function decodeClass(classValue, typeMap) {
             if (params && typeArgs && typeArgs.length) {
                 const types = {};
                 params.forEach((p, i) => {
-                    types[p] = outboundTyToBamlType(typeArgs[i]);
+                    types[p] = outboundTyToBamlTypeToken(typeArgs[i]);
                 });
                 Object.defineProperty(instance, '$types', {
                     value: types,
@@ -889,7 +904,10 @@ function setInboundTypedThrowValue(iv, value, ctx) {
             if (fqn) {
                 const params = genericParamNames(value);
                 const userTypes = value.$types;
-                const typeArgs = params?.map((param) => lowerTypeToWireTy(userTypes?.[param])) ?? [];
+                const typeArgs = params?.map((param) => {
+                    const token = userTypes?.[param];
+                    return token === undefined ? { unknown: {} } : lowerTypeToWireTy(token);
+                }) ?? [];
                 const fields = [];
                 for (const [key, fieldValue] of Object.entries(value)) {
                     if (typeof fieldValue === 'function' || key === '$types')

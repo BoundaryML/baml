@@ -29,6 +29,7 @@ rustls = [ "aws-crypto" ]
 
 [dependencies]
 baml_compiler2_visualization = { workspace = true }
+baml_path = { workspace = true }
 baml_version = { workspace = true }
 bex_events = { workspace = true }
 bex_heap = { workspace = true }
@@ -65,6 +66,7 @@ webbrowser = { workspace = true }
 
 [dev-dependencies]
 bex_vm_types = { workspace = true }
+tempfile = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = false

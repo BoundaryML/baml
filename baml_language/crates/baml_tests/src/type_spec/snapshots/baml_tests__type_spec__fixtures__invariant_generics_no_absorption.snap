@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+251..252 'f': throws never
+306..403 '{\n   ...  1\n}': 1
+312..317 'let u': user.Pack<int> | user.Pack<int | string>
+320..343 'if (c)... { b }': user.Pack<int> | user.Pack<int | string>
+324..325 'c': bool
+327..332 '{ a }': user.Pack<int>
+329..330 'a': user.Pack<int>
+338..343 '{ b }': user.Pack<int | string>
+340..341 'b': user.Pack<int | string>
+400..401 '1': 1

@@ -310,26 +310,54 @@ impl<'a> BexValue<'a> {
             .map(|cls| T::from(cls))
     }
 
+    /// Read a `type` argument at the sys-op lane's head.
+    ///
+    /// Identity travels with the type, so the definition tables a sys-op
+    /// consults can be keyed by declaration rather than by name — and nothing
+    /// returned here holds a pointer, so a collection during the sys-op's await
+    /// cannot invalidate it.
     pub fn as_baml_type_owned(
         self,
         heap: &BexHeap,
         _permit: PermitProof<'_>,
-    ) -> Result<baml_type::RuntimeTy, AccessError> {
-        fn from_ptr(ptr: &HeapPtr) -> Result<baml_type::RuntimeTy, AccessError> {
+    ) -> Result<baml_type::RuntimeTy<baml_type::TaggedTypeName>, AccessError> {
+        fn from_ptr(
+            ptr: &HeapPtr,
+        ) -> Result<baml_type::RuntimeTy<baml_type::TaggedTypeName>, AccessError> {
             let obj = unsafe { ptr.get() };
-            let Object::Type(ty) = obj else {
+            let Object::Type(tv) = obj else {
                 return Err(AccessError::TypeMismatch {
                     expected: "type",
                     actual: obj.to_string(),
                 });
             };
-            // `Object::Type` stores a realized type; widen it into `RuntimeTy`.
-            Ok((**ty).clone().into())
+            // `Object::Type` stores a realized type at the runtime's head;
+            // carry identity and the declaration's own name off the heap, then
+            // widen into `RuntimeTy`.
+            Ok(baml_type::RuntimeTy::from(
+                tv.ty
+                    .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
+                    .map_err(|head| AccessError::TypeMismatch {
+                        expected: "a resolved declaration",
+                        actual: head.to_string(),
+                    })?,
+            ))
         }
 
         match self {
             BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::Type(ty))) => {
                 Ok(ty.clone())
+            }
+            // The portable definition graph is name-headed and carries no
+            // identities, so it cannot be read onto the lane. Its one real
+            // consumer is the inbound authoring path, which resolves names
+            // against the VM to obtain declarations (and therefore tags); that
+            // resolution is not available here. Dies with the graph itself.
+            BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::TypeDef(_))) => {
+                Err(AccessError::TypeMismatch {
+                    expected: "a type value",
+                    actual: "a portable type definition".to_string(),
+                })
             }
             BexValue::ExternalValue(BexExternalValue::Handle(handle)) => {
                 let ptr = heap
@@ -359,7 +387,19 @@ impl<'a> BexValue<'a> {
         // `_permit` is a zero-sized witness that GC exclusion is held; we don't
         // need to thread it through the recursion since the proof only has to
         // exist at the API boundary.
-        owned_inner(self, heap, /* lossy */ false)
+        owned_inner(self, heap, None, /* lossy */ false)
+    }
+
+    /// Deep-copy values that can stand alone and preserve package objects as
+    /// rooted handles. Package is intentionally the one opaque VM object that
+    /// the host reflection API exposes; its methods must continue to execute
+    /// against the originating heap.
+    pub fn as_owned_with_package_handles(
+        self,
+        heap: &std::sync::Arc<BexHeap>,
+        _permit: PermitProof<'_>,
+    ) -> Result<BexExternalValue, AccessError> {
+        owned_inner(self, heap, Some(heap), /* lossy */ false)
     }
 
     /// Like `as_owned_but_very_slow`, but substitutes non-convertible leaves
@@ -375,13 +415,14 @@ impl<'a> BexValue<'a> {
         heap: &BexHeap,
         _permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, AccessError> {
-        owned_inner(self, heap, /* lossy */ true)
+        owned_inner(self, heap, None, /* lossy */ true)
     }
 }
 
 fn owned_inner(
     value: BexValue<'_>,
     heap: &BexHeap,
+    handle_heap: Option<&std::sync::Arc<BexHeap>>,
     lossy: bool,
 ) -> Result<BexExternalValue, AccessError> {
     let unconvertible = |reason: &str| -> Result<BexExternalValue, AccessError> {
@@ -402,7 +443,7 @@ fn owned_inner(
                 let heap_ptr = heap
                     .resolve_handle_ptr(handle.slab_key())
                     .ok_or(AccessError::InvalidHandle { expected: "handle" })?;
-                owned_inner(BexValue::HeapPtr(&heap_ptr), heap, lossy)
+                owned_inner(BexValue::HeapPtr(&heap_ptr), heap, handle_heap, lossy)
             }
             BexExternalValue::FunctionRef { .. } => unconvertible("function"),
             BexExternalValue::Null => Ok(BexExternalValue::Null),
@@ -418,7 +459,9 @@ fn owned_inner(
                 element_type: element_type.clone(),
                 items: items
                     .iter()
-                    .map(|item| owned_inner(BexValue::ExternalValue(item), heap, lossy))
+                    .map(|item| {
+                        owned_inner(BexValue::ExternalValue(item), heap, handle_heap, lossy)
+                    })
                     .collect::<Result<_, _>>()?,
             }),
             BexExternalValue::Map {
@@ -433,7 +476,7 @@ fn owned_inner(
                     .map(|(k, v)| {
                         Ok((
                             k.clone(),
-                            owned_inner(BexValue::ExternalValue(v), heap, lossy)?,
+                            owned_inner(BexValue::ExternalValue(v), heap, handle_heap, lossy)?,
                         ))
                     })
                     .collect::<Result<_, _>>()?,
@@ -450,7 +493,7 @@ fn owned_inner(
                     .map(|(k, v)| {
                         Ok((
                             k.clone(),
-                            owned_inner(BexValue::ExternalValue(v), heap, lossy)?,
+                            owned_inner(BexValue::ExternalValue(v), heap, handle_heap, lossy)?,
                         ))
                     })
                     .collect::<Result<_, _>>()?,
@@ -463,7 +506,12 @@ fn owned_inner(
                 variant_name: variant_name.clone(),
             }),
             BexExternalValue::Union { value, metadata } => Ok(BexExternalValue::Union {
-                value: Box::new(owned_inner(BexValue::ExternalValue(value), heap, lossy)?),
+                value: Box::new(owned_inner(
+                    BexValue::ExternalValue(value),
+                    heap,
+                    handle_heap,
+                    lossy,
+                )?),
                 metadata: metadata.clone(),
             }),
             BexExternalValue::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
@@ -479,10 +527,10 @@ fn owned_inner(
         // is an object pointer. The two cases share a single object deep-
         // copy via `convert_object`; scalar-typed `Value`s fall through to
         // a separate `ValueKind` match.
-        BexValue::HeapPtr(ptr) => convert_object(*ptr, heap, lossy),
+        BexValue::HeapPtr(ptr) => convert_object(*ptr, heap, handle_heap, lossy),
         BexValue::Value(v) => {
             if let Some(ptr) = v.as_object_ptr() {
-                convert_object(ptr, heap, lossy)
+                convert_object(ptr, heap, handle_heap, lossy)
             } else {
                 match v.kind() {
                     bex_vm_types::ValueKind::OmittedArg => unconvertible("omitted argument"),
@@ -495,13 +543,14 @@ fn owned_inner(
                 }
             }
         }
-        BexValue::OwnedValue(v) => owned_inner(BexValue::Value(&v), heap, lossy),
+        BexValue::OwnedValue(v) => owned_inner(BexValue::Value(&v), heap, handle_heap, lossy),
     }
 }
 
 fn convert_object(
     heap_ptr: HeapPtr,
     heap: &BexHeap,
+    handle_heap: Option<&std::sync::Arc<BexHeap>>,
     lossy: bool,
 ) -> Result<BexExternalValue, AccessError> {
     let unconvertible = |type_name: &str| -> Result<BexExternalValue, AccessError> {
@@ -519,10 +568,14 @@ fn convert_object(
     match obj {
         Object::Function(..) => unconvertible("function"),
         Object::Interface(..) => unconvertible("interface"),
-        Object::Package(..) => unconvertible("package"),
+        Object::Package(..) => match handle_heap {
+            Some(heap) => Ok(BexExternalValue::Handle(heap.create_handle(heap_ptr))),
+            None => unconvertible("package"),
+        },
         Object::ImplRule(..) => unconvertible("impl_rule"),
         Object::Class(..) => unconvertible("class"),
         Object::Enum(..) => unconvertible("enum"),
+        Object::TypeAlias(..) => unconvertible("type alias"),
         Object::Future(..) => unconvertible("future"),
         Object::UnscheduledFuture(..) => unconvertible("unscheduled_future"),
 
@@ -536,7 +589,7 @@ fn convert_object(
             items: array
                 .to_vec()
                 .into_iter()
-                .map(|item| owned_inner(BexValue::OwnedValue(item), heap, lossy))
+                .map(|item| owned_inner(BexValue::OwnedValue(item), heap, handle_heap, lossy))
                 .collect::<Result<_, _>>()?,
         }),
         Object::Map(map) => Ok(BexExternalValue::Map {
@@ -552,7 +605,7 @@ fn convert_object(
                 .map(|(k, v)| {
                     Ok((
                         k.as_str().to_owned(),
-                        owned_inner(BexValue::OwnedValue(v), heap, lossy)?,
+                        owned_inner(BexValue::OwnedValue(v), heap, handle_heap, lossy)?,
                     ))
                 })
                 .collect::<Result<_, _>>()?,
@@ -572,7 +625,7 @@ fn convert_object(
                 .map(|(field, slot)| {
                     Ok((
                         field.name.clone(),
-                        owned_inner(BexValue::OwnedValue(slot.load()), heap, lossy)?,
+                        owned_inner(BexValue::OwnedValue(slot.load()), heap, handle_heap, lossy)?,
                     ))
                 })
                 .collect::<Result<_, _>>()?;
@@ -583,8 +636,23 @@ fn convert_object(
                 type_args: instance
                     .class_type_args
                     .iter()
-                    .map(baml_type::RuntimeTy::from)
-                    .collect(),
+                    .map(|arg| {
+                        arg.try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
+                            .map(|named| baml_type::RuntimeTy::from(&named))
+                            .or_else(|head| {
+                                // Lossy mode (traces) degrades the one
+                                // unnameable argument to `unknown` instead of
+                                // discarding the whole value tree.
+                                if lossy {
+                                    return Ok(baml_type::RuntimeTy::unknown());
+                                }
+                                Err(AccessError::TypeMismatch {
+                                    expected: "a nameable type argument",
+                                    actual: head.to_string(),
+                                })
+                            })
+                    })
+                    .collect::<Result<_, _>>()?,
                 fields,
             })
         }
@@ -609,8 +677,19 @@ fn convert_object(
             })
         }
         Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
-        Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(
-            (**ty).clone().into(),
+        // Only the described type crosses the boundary (BEP-066 H-4), and it
+        // crosses onto the sys-op lane's head: identity plus the declaration's
+        // own name, with no pointer to go stale if the collector runs while the
+        // sys-op awaits.
+        Object::Type(tv) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(
+            baml_type::RuntimeTy::from(
+                tv.ty
+                    .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
+                    .map_err(|head| AccessError::TypeMismatch {
+                        expected: "a resolved declaration",
+                        actual: head.to_string(),
+                    })?,
+            ),
         ))),
         Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
         Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),

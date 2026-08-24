@@ -74,21 +74,26 @@ macro_rules! visit_bytecode_index_operands {
             // uses this bit to add its conservative layout dependency.
             I::LoadField(..)
             | I::StoreField(..)
+            | I::VirtualLoadField(..)
+            | I::VirtualStoreField(..)
             | I::InitField(..)
             | I::InitSpread(..)
             | I::InitInstance(..)
             | I::VirtualCall { .. }
             | I::VirtualCallWithRuntimeId { .. }
             | I::MakeVirtualBoundMethod { .. }
+            | I::MakeVirtualFunction { .. }
             | I::JumpTable(..)
             | I::Discriminant
             | I::TypeTag
             | I::IsType(..)
             | I::NarrowBind { .. }
             | I::LoadType(..)
+            | I::BindType(..)
             | I::DenseTag(..) => bakes_type_layout = true,
             // ── no cross-function references ─────────────────────────────
             I::LoadConst(..)
+            | I::LoadCurrentPackage(..)
             | I::LoadVar(..)
             | I::StoreVar(..)
             | I::StoreVarLoadVar(..)
@@ -134,6 +139,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::AwaitAny
             | I::CallIndirect
             | I::CallIndirectWithRuntimeId
+            | I::RuntimeIsType
             | I::Throw
             | I::Rethrow
             | I::Return
@@ -164,7 +170,8 @@ macro_rules! visit_bytecode_index_operands {
                 | ConstValue::Int(_)
                 | ConstValue::Float(_)
                 | ConstValue::Bool(_)
-                | ConstValue::Type(_) => {}
+                | ConstValue::Type(_)
+                | ConstValue::Literal(_) => {}
             }
         }
         // Each class-init plan carries one class-object reference.
@@ -219,10 +226,20 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
             let mut visit = visit;
             visit(IndexOperand::Global(&mut generic.function));
         }
+        // An interface names each default method's pooled body — a cross-object
+        // operand relocated exactly like a code object's.
+        Object::Interface(interface) => {
+            let mut visit = visit;
+            for method in &mut interface.methods {
+                if let Some(default) = &mut method.default {
+                    visit(IndexOperand::Object(default));
+                }
+            }
+        }
         // Inert at relink time: no cross-function index operands.
         Object::Class(..)
         | Object::Enum(..)
-        | Object::Interface(..)
+        | Object::TypeAlias(..)
         | Object::Package(..)
         | Object::ImplRule(..)
         | Object::String(..)
@@ -253,6 +270,7 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
 mod tests {
     use super::*;
     use crate::{
+        HeapPtr,
         bytecode::{Bytecode, ClassInitPlan},
         types::{FunctionCaptureProps, FunctionKind, FunctionOrigin},
     };
@@ -306,22 +324,24 @@ mod tests {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_base::Span::fake(),
-            return_type: baml_type::TyTemplate::BuiltinUnknown {
+            return_type: crate::TyTemplate::BuiltinUnknown {
                 attr: baml_type::TyAttr::default(),
             },
             param_names: Vec::new(),
             param_types: Vec::new(),
             param_has_default: Vec::new(),
             display_type_params: Vec::new(),
+            generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: String::new(),
-            throws_type: baml_type::TyTemplate::Never {
+            throws_type: crate::TyTemplate::Never {
                 attr: baml_type::TyAttr::default(),
             },
             origin: FunctionOrigin::Internal,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
             function_id: 0,
+            runtime_package: HeapPtr::null(),
         }
     }
 

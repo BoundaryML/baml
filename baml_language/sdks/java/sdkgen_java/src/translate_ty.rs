@@ -32,6 +32,7 @@
 
 use std::collections::BTreeMap;
 
+use baml_base::qualified_name::{AI_STREAM_DONE, AI_STREAM_STREAM};
 use baml_codegen_types::{Name, Ty};
 
 use crate::routing::{PackagePath, java_identifier, route};
@@ -286,18 +287,17 @@ fn annotate_element(ty: &Ty, rendered: String, aliases: &AliasTable) -> String {
 }
 
 /// FQN of a generated (or runtime-owned) named type:
-/// `baml_sdk.<package>.<Ident>`. The runtime-owned `baml.llm.Stream`
+/// `baml_sdk.<package>.<Ident>`. The runtime-owned `ai.stream.Stream`
 /// resolves to the runtime library's `baml_bridge.BamlStream` (no
 /// generated class exists for it; the media classes keep their
 /// `baml_sdk.baml.media.*` paths because the runtime jar provides
 /// classes at exactly those packages).
 fn qualified_type(name: &Name) -> String {
-    if name.package().as_str() == "baml"
-        && name.namespace().len() == 1
-        && name.namespace()[0].as_str() == "llm"
-        && name.name().as_str() == "Stream"
-    {
+    if name.to_string() == AI_STREAM_STREAM {
         return "baml_bridge.BamlStream".to_string();
+    }
+    if name.to_string() == AI_STREAM_DONE {
+        return "baml_sdk.ai.stream.Done".to_string();
     }
     let pkg = route(name);
     format!(
@@ -988,6 +988,14 @@ mod tests {
         assert_eq!(tr(&e, TyPosition::TopLevel), "baml_sdk.ipsum.Sentiment");
         let s = class_ty(name("user", &["lorem"], "Resume$stream"), vec![]);
         assert_eq!(tr(&s, TyPosition::TopLevel), "baml_sdk.lorem.Resume$stream");
+
+        let stream = class_ty(name("ai", &["stream"], "Stream"), vec![string(), string()]);
+        assert_eq!(
+            tr(&stream, TyPosition::TopLevel),
+            "baml_bridge.BamlStream<java.lang.String, java.lang.String>"
+        );
+        let done = class_ty(name("ai", &["stream"], "Done"), vec![]);
+        assert_eq!(tr(&done, TyPosition::TopLevel), "baml_sdk.ai.stream.Done");
     }
 
     #[test]

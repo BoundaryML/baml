@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+9..10 'g': throws never
+23..155 '{\n   ...ing\n}': string
+29..34 'let f': (s: string) -> string throws never
+37..77 '(s: st... { s }': (s: string) -> string throws never
+72..77 '{ s }': string
+74..75 's': string
+127..128 'f': (s: string) -> string throws never
+127..134 'f("hi")': string
+129..133 '"hi"': "hi"

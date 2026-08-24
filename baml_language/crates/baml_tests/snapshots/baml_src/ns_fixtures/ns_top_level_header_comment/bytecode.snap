@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.top_level_header_comment.Foo() -> int {
+    load_const 1
+    return
+}

@@ -41,6 +41,7 @@ bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
 bex_resource_types = { workspace = true }
 bridge_ctypes = { workspace = true, default-features = false }
+sys_auth = { workspace = true }
 sys_glob = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }

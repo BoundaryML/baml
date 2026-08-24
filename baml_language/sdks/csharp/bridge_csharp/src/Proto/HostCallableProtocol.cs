@@ -27,7 +27,7 @@ internal static class HostCallableProtocol
         ownership.AddTransfer(registration);
         return new InboundValue
         {
-            Handle = new BamlBridge.Cffi.V1.BamlHandle
+            Handle = new global::BamlBridge.Cffi.V1.BamlHandle
             {
                 Key = registration.Key,
                 HandleType = BamlHandleType.HostValueCallable,
@@ -159,7 +159,7 @@ internal static class HostCallableProtocol
             "_handle",
             new InboundValue
             {
-                Handle = new BamlBridge.Cffi.V1.BamlHandle
+                Handle = new global::BamlBridge.Cffi.V1.BamlHandle
                 {
                     Key = key,
                     HandleType = BamlHandleType.HostValueOpaque,

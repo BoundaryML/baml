@@ -48,6 +48,29 @@ pub fn to_source_code_with_bytecode(
     user_baml_files: &[UserBamlFile],
     baml_bytecode: &[u8],
 ) -> HashMap<PathBuf, String> {
+    to_source_code_with_optional_metadata(pool, user_baml_files, baml_bytecode, None)
+}
+
+pub fn to_source_code_with_bytecode_and_metadata(
+    pool: &SymbolPool,
+    user_baml_files: &[UserBamlFile],
+    baml_bytecode: &[u8],
+    embedded_baml_toml: &str,
+) -> HashMap<PathBuf, String> {
+    to_source_code_with_optional_metadata(
+        pool,
+        user_baml_files,
+        baml_bytecode,
+        Some(embedded_baml_toml),
+    )
+}
+
+fn to_source_code_with_optional_metadata(
+    pool: &SymbolPool,
+    user_baml_files: &[UserBamlFile],
+    baml_bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+) -> HashMap<PathBuf, String> {
     let mut skipped: Vec<String> = Vec::new();
 
     // Every identifier the output can contain is requested and allocated
@@ -147,17 +170,51 @@ pub fn to_source_code_with_bytecode(
         // from scratch until a round completes with no failures.
         let mut cycle_set: BTreeSet<Name> = pending.iter().map(|n| (*n).clone()).collect();
         loop {
+            // Only forward-declarable members may be assumed available: a
+            // struct (and a recursive alias's wrapper struct) can be named
+            // through `baml::box` ahead of its definition. A NON-recursive
+            // alias emits a `using`, which cannot be forward-declared, so it
+            // has to be declared before anything that names it. Seeding it
+            // here let a struct that names it win `cycle_set`'s alphabetical
+            // order (`ChatMessage` sorts before `ChatMessageContent`) and
+            // emit a use of an undeclared alias. Instead the plain aliases
+            // stay unavailable and the inner loop below settles the real
+            // order.
             for name in &cycle_set {
-                emitted_types.insert(name.clone());
+                if is_plain_alias(pool, name) {
+                    emitted_types.remove(name);
+                } else {
+                    emitted_types.insert(name.clone());
+                }
             }
             let mut round = Vec::new();
             let mut failed = Vec::new();
-            for name in &cycle_set {
-                match emit_type(name, &emitted_types, &cycle_set) {
-                    Ok(Some(emitted)) => round.push(emitted),
-                    Ok(None) | Err(_) => failed.push(name.clone()),
+            // Inner fixed point: `using` declarations (and whatever names
+            // them) land in dependency order rather than name order.
+            let mut cycle_pending: Vec<&Name> = cycle_set.iter().collect();
+            loop {
+                let mut progressed = false;
+                let mut still_pending = Vec::new();
+                for name in cycle_pending {
+                    match emit_type(name, &emitted_types, &cycle_set) {
+                        Ok(Some(emitted)) => {
+                            round.push(emitted);
+                            emitted_types.insert(name.clone());
+                            progressed = true;
+                        }
+                        Ok(None) => still_pending.push(name),
+                        Err(_) => {
+                            failed.push(name.clone());
+                            progressed = true;
+                        }
+                    }
+                }
+                cycle_pending = still_pending;
+                if cycle_pending.is_empty() || !progressed {
+                    break;
                 }
             }
+            failed.extend(cycle_pending.into_iter().cloned());
             if failed.is_empty() {
                 classes.extend(round);
                 break;
@@ -280,7 +337,7 @@ pub fn to_source_code_with_bytecode(
     );
     out.insert(
         PathBuf::from("src/_inlinedbaml.cc"),
-        render_inlinedbaml(user_baml_files, baml_bytecode),
+        render_inlinedbaml(user_baml_files, baml_bytecode, embedded_baml_toml),
     );
     out.insert(PathBuf::from("CMakeLists.txt"), CMAKE_LISTS.to_string());
     for (rel, content) in BRIDGE_HEADERS {
@@ -423,6 +480,10 @@ const BRIDGE_HEADERS: &[(&str, &str)] = &[
     (
         "include/baml/runtime.h",
         include_str!("../../bridge_cpp/include/baml/runtime.h"),
+    ),
+    (
+        "include/baml/version.h",
+        include_str!("../../bridge_cpp/include/baml/version.h"),
     ),
     (
         "include/baml/variant.h",
@@ -588,6 +649,14 @@ fn request_callable_members(
 /// `$`-suffixed companion functions.
 fn skip_symbol(name: &Name) -> bool {
     name.is_stream() || name.bare_name().contains('$')
+}
+
+/// Whether `name` is a NON-recursive type alias, i.e. one that emits a
+/// `using` declaration. Unlike a struct (or a recursive alias's wrapper
+/// struct) a `using` cannot be forward-declared, so every use of it must
+/// follow its declaration.
+fn is_plain_alias(pool: &SymbolPool, name: &Name) -> bool {
+    matches!(pool.get(name), Some(Symbol::TypeAlias(alias)) if !alias.recursive)
 }
 
 /// The name request for a free function. Shared between collection and
@@ -2166,7 +2235,11 @@ fn escape_bytecode(out: &mut String, bytes: &[u8]) {
     }
 }
 
-fn render_inlinedbaml(user_baml_files: &[UserBamlFile], baml_bytecode: &[u8]) -> String {
+fn render_inlinedbaml(
+    user_baml_files: &[UserBamlFile],
+    baml_bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+) -> String {
     let mut buf = String::new();
     buf.push_str(
         "// Generated by sdkgen_cpp - do not edit. Embedded BAML bytecode (the\n\
@@ -2218,6 +2291,15 @@ fn render_inlinedbaml(user_baml_files: &[UserBamlFile], baml_bytecode: &[u8]) ->
         "}};\nconst size_t kBamlBytecodeSize = {};\n}}  // namespace",
         baml_bytecode.len()
     );
+    if let Some(embedded_baml_toml) = embedded_baml_toml {
+        buf.push_str("const char kEmbeddedBamlToml[] =\n");
+        for line in embedded_baml_toml.as_bytes().chunks(32) {
+            buf.push_str("    \"");
+            escape_bytecode(&mut buf, line);
+            buf.push_str("\"\n");
+        }
+        buf.push_str("    ;\n");
+    }
     let _ = writeln!(buf, "\nvoid {}() {{", GeneratorIdent::EnsureRuntime.token());
     // The canonical version stamped at generation time: register_bridge
     // requires exact equality with the loaded runtime.
@@ -2237,6 +2319,16 @@ fn render_inlinedbaml(user_baml_files: &[UserBamlFile], baml_bytecode: &[u8]) ->
          }}\n",
         version = baml_version::CANONICAL_VERSION
     );
+    if embedded_baml_toml.is_some() {
+        let legacy_call = format!(
+            "::baml::initialize_runtime_from_bytecode(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        \"{}\");",
+            baml_version::CANONICAL_VERSION
+        );
+        buf = buf.replace(
+            &legacy_call,
+            "::baml::initialize_runtime_from_bytecode_with_metadata(\n        reinterpret_cast<const uint8_t*>(bytecode.data()), bytecode.size(),\n        kEmbeddedBamlToml);",
+        );
+    }
     let _ = writeln!(buf, "}}  // namespace {detail}");
     buf.push_str("}  // namespace baml_sdk\n");
     buf
@@ -2244,12 +2336,34 @@ fn render_inlinedbaml(user_baml_files: &[UserBamlFile], baml_bytecode: &[u8]) ->
 
 #[cfg(test)]
 mod bytecode_escape_tests {
-    use super::escape_bytecode;
+    use super::{BRIDGE_HEADERS, escape_bytecode, render_inlinedbaml};
 
     fn escaped(bytes: &[u8]) -> String {
         let mut out = String::new();
         escape_bytecode(&mut out, bytes);
         out
+    }
+
+    #[test]
+    fn generated_runtime_embeds_and_validates_the_manifest() {
+        let output = render_inlinedbaml(
+            &[],
+            b"bytecode",
+            Some("[__baml_codegen]\nmetadata_version = 1\n"),
+        );
+
+        assert!(output.contains("const char kEmbeddedBamlToml[]"));
+        assert!(output.contains("initialize_runtime_from_bytecode_with_metadata("));
+        assert!(output.contains("kEmbeddedBamlToml);"));
+    }
+
+    #[test]
+    fn generated_sdk_vendors_the_public_version_header() {
+        let version_header = BRIDGE_HEADERS
+            .iter()
+            .find(|(path, _)| *path == "include/baml/version.h");
+
+        assert!(version_header.is_some());
     }
 
     #[test]

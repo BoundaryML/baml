@@ -137,8 +137,8 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
     set {value = .bigintValue(newValue)}
   }
 
-  /// A reflected BAML type passed as a value (mirrors a `type`-typed BAML
-  /// value, e.g. the result of `reflect.type_of<T>()`). Accepted as an
+  /// A reflected BAML type passed as a value (mirrors a `reflect.Type` BAML
+  /// value, e.g. the result of `reflect.Type.of<T>()`). Accepted as an
   /// argument value so the host can pass types as data.
   var tyValue: BamlBridge_Cffi_V1_BamlTy {
     get {
@@ -146,6 +146,17 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
       return BamlBridge_Cffi_V1_BamlTy()
     }
     set {value = .tyValue(newValue)}
+  }
+
+  /// Definition-carrying reflected type. New hosts use this for values that
+  /// must retain runtime-created class/enum schemas; tag 13 remains for
+  /// rollout compatibility with structural/static type senders.
+  var tyDefValue: BamlBridge_Cffi_V1_BamlTyDef {
+    get {
+      if case .tyDefValue(let v)? = value {return v}
+      return BamlBridge_Cffi_V1_BamlTyDef()
+    }
+    set {value = .tyDefValue(newValue)}
   }
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -162,10 +173,14 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
     case handle(BamlBridge_Cffi_V1_BamlHandle)
     case uint8ArrayValue(Data)
     case bigintValue(String)
-    /// A reflected BAML type passed as a value (mirrors a `type`-typed BAML
-    /// value, e.g. the result of `reflect.type_of<T>()`). Accepted as an
+    /// A reflected BAML type passed as a value (mirrors a `reflect.Type` BAML
+    /// value, e.g. the result of `reflect.Type.of<T>()`). Accepted as an
     /// argument value so the host can pass types as data.
     case tyValue(BamlBridge_Cffi_V1_BamlTy)
+    /// Definition-carrying reflected type. New hosts use this for values that
+    /// must retain runtime-created class/enum schemas; tag 13 remains for
+    /// rollout compatibility with structural/static type senders.
+    case tyDefValue(BamlBridge_Cffi_V1_BamlTyDef)
 
   }
 
@@ -307,11 +322,24 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTyArg: Sendable {
   /// Clears the value of `typeValue`. Subsequent reads from it will return its default value.
   mutating func clearTypeValue() {self._typeValue = nil}
 
+  /// Preferred for a runtime reflected type. Mutually exclusive with
+  /// `type_value` by convention; retained as separate fields for backwards
+  /// compatibility with already generated SDKs.
+  var typeDefinition: BamlBridge_Cffi_V1_BamlTyDef {
+    get {_typeDefinition ?? BamlBridge_Cffi_V1_BamlTyDef()}
+    set {_typeDefinition = newValue}
+  }
+  /// Returns true if `typeDefinition` has been explicitly set.
+  var hasTypeDefinition: Bool {self._typeDefinition != nil}
+  /// Clears the value of `typeDefinition`. Subsequent reads from it will return its default value.
+  mutating func clearTypeDefinition() {self._typeDefinition = nil}
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
   fileprivate var _typeValue: BamlBridge_Cffi_V1_BamlTy? = nil
+  fileprivate var _typeDefinition: BamlBridge_Cffi_V1_BamlTyDef? = nil
 }
 
 nonisolated struct BamlBridge_Cffi_V1_CallFunctionArgs: Sendable {
@@ -396,7 +424,7 @@ fileprivate nonisolated let _protobuf_package = "baml_bridge.cffi.v1"
 
 nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".InboundValue"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}value_type\0\u{3}string_value\0\u{3}int_value\0\u{3}float_value\0\u{3}bool_value\0\u{3}list_value\0\u{3}map_value\0\u{3}class_value\0\u{3}enum_value\0\u{1}handle\0\u{3}uint8array_value\0\u{3}bigint_value\0\u{3}ty_value\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}value_type\0\u{3}string_value\0\u{3}int_value\0\u{3}float_value\0\u{3}bool_value\0\u{3}list_value\0\u{3}map_value\0\u{3}class_value\0\u{3}enum_value\0\u{1}handle\0\u{3}uint8array_value\0\u{3}bigint_value\0\u{3}ty_value\0\u{3}ty_def_value\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -531,6 +559,19 @@ nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, Sw
           self.value = .tyValue(v)
         }
       }()
+      case 14: try {
+        var v: BamlBridge_Cffi_V1_BamlTyDef?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .tyDefValue(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .tyDefValue(v)
+        }
+      }()
       default: break
       }
     }
@@ -592,6 +633,10 @@ nonisolated extension BamlBridge_Cffi_V1_InboundValue: SwiftProtobuf.Message, Sw
     case .tyValue?: try {
       guard case .tyValue(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
+    }()
+    case .tyDefValue?: try {
+      guard case .tyDefValue(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 14)
     }()
     case nil: break
     }
@@ -824,7 +869,7 @@ nonisolated extension BamlBridge_Cffi_V1_InboundEnumValue: SwiftProtobuf.Message
 
 nonisolated extension BamlBridge_Cffi_V1_BamlTyArg: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".BamlTyArg"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}type_var\0\u{3}type_value\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}type_var\0\u{3}type_value\0\u{3}type_definition\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -834,6 +879,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyArg: SwiftProtobuf.Message, Swift
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.typeVar) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._typeValue) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._typeDefinition) }()
       default: break
       }
     }
@@ -850,12 +896,16 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyArg: SwiftProtobuf.Message, Swift
     try { if let v = self._typeValue {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
+    try { if let v = self._typeDefinition {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: BamlBridge_Cffi_V1_BamlTyArg, rhs: BamlBridge_Cffi_V1_BamlTyArg) -> Bool {
     if lhs.typeVar != rhs.typeVar {return false}
     if lhs._typeValue != rhs._typeValue {return false}
+    if lhs._typeDefinition != rhs._typeDefinition {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

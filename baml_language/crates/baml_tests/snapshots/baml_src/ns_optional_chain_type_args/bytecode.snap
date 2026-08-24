@@ -1,0 +1,1195 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function optional_chain_type_args.$init_test_ns_optional_chain_type_args_optional_chain_type_args(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.optional_chain_type_args"
+    load_const "explicit_type_arg_matches_let_else"
+    make_closure .<lambda($init_test_ns_optional_chain_type_args_optional_chain_type_args, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_chain_type_args"
+    load_const "explicit_type_arg_null_receiver_short_circuits"
+    make_closure .<lambda($init_test_ns_optional_chain_type_args_optional_chain_type_args, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_chain_type_args"
+    load_const "inferred_type_arg"
+    make_closure .<lambda($init_test_ns_optional_chain_type_args_optional_chain_type_args, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_chain_type_args"
+    load_const "class_type_arg_through_optional_chain"
+    make_closure .<lambda($init_test_ns_optional_chain_type_args_optional_chain_type_args, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_chain_type_args"
+    load_const "class_and_method_type_args_keep_their_slots"
+    make_closure .<lambda($init_test_ns_optional_chain_type_args_optional_chain_type_args, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_chain_type_args"
+    load_const "interface_method_type_args_through_optional_chain"
+    make_closure .<lambda($init_test_ns_optional_chain_type_args_optional_chain_type_args, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_chain_type_args"
+    load_const "union_receiver_dispatches_and_keeps_its_type_args"
+    make_closure .<lambda($init_test_ns_optional_chain_type_args_optional_chain_type_args, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_chain_type_args"
+    load_const "union_receiver_seeds_class_type_args_per_arm"
+    make_closure .<lambda($init_test_ns_optional_chain_type_args_optional_chain_type_args, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_chain_type_args"
+    load_const "chained_optional_calls_thread_type_args"
+    make_closure .<lambda($init_test_ns_optional_chain_type_args_optional_chain_type_args, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_chain_type_args"
+    load_const "sys_op_method_through_optional_chain_matches_plain_call"
+    make_closure .<lambda($init_test_ns_optional_chain_type_args_optional_chain_type_args, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_chain_type_args"
+    load_const "optional_chain_evaluates_its_receiver_exactly_twice"
+    make_closure .<lambda($init_test_ns_optional_chain_type_args_optional_chain_type_args, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_chain_type_args"
+    load_const "non_generic_optional_calls_unchanged"
+    make_closure .<lambda($init_test_ns_optional_chain_type_args_optional_chain_type_args, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_chain_type_args"
+    load_const "reflected_field_read_through_optional_chain"
+    make_closure .<lambda($init_test_ns_optional_chain_type_args_optional_chain_type_args, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.optional_chain_type_args"
+    load_const "reflected_field_wrong_type_arg_is_a_type_mismatch"
+    make_closure .<lambda($init_test_ns_optional_chain_type_args_optional_chain_type_args, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function optional_chain_type_args.Boxed.both(self: optional_chain_type_args.Boxed<#0>) -> string {
+    load_type #0
+    call reflect.Type.baml.ToString.to_string
+    store_var _3
+    load_type #1
+    call reflect.Type.baml.ToString.to_string
+    store_var _5
+    load_var _3
+    load_const "/"
+    bin_op +
+    load_var _5
+    bin_op +
+    return
+}
+
+function optional_chain_type_args.Boxed.describe(self: optional_chain_type_args.Boxed<#0>) -> string {
+    load_type #0
+    call reflect.Type.baml.ToString.to_string
+    return
+}
+
+function optional_chain_type_args.Callables.method(self: optional_chain_type_args.Callables, v: int) -> string {
+    load_type int
+    load_var v
+    call baml.String.from
+    store_var _3
+    load_const "method:"
+    load_var _3
+    bin_op +
+    return
+}
+
+function optional_chain_type_args.Cat.Speaker.speak(self: optional_chain_type_args.Cat) -> string {
+    load_type #0
+    call reflect.Type.baml.ToString.to_string
+    store_var _2
+    load_const "cat:"
+    load_var _2
+    bin_op +
+    return
+}
+
+function optional_chain_type_args.Dog.Speaker.speak(self: optional_chain_type_args.Dog) -> string {
+    load_type #0
+    call reflect.Type.baml.ToString.to_string
+    return
+}
+
+function optional_chain_type_args.Holder.ident(self: optional_chain_type_args.Holder, v: #0) -> string {
+    load_type #0
+    call reflect.Type.baml.ToString.to_string
+    return
+}
+
+function optional_chain_type_args.Holder.inner(self: optional_chain_type_args.Holder) -> optional_chain_type_args.Holder | null {
+    load_var self
+    load_field .raw
+    init_instance user.optional_chain_type_args.Holder .raw
+    return
+}
+
+function optional_chain_type_args.Holder.inner_missing(self: optional_chain_type_args.Holder) -> optional_chain_type_args.Holder | null {
+    load_const null
+    return
+}
+
+function optional_chain_type_args.Holder.plain(self: optional_chain_type_args.Holder) -> string {
+    load_var self
+    load_field .raw
+    return
+}
+
+function optional_chain_type_args.Holder.value(self: optional_chain_type_args.Holder) -> string {
+    load_type #0
+    call reflect.Type.baml.ToString.to_string
+    return
+}
+
+function optional_chain_type_args.Pair.Tagged.tag(self: optional_chain_type_args.Pair<#0>) -> string {
+    load_type #0
+    call reflect.Type.baml.ToString.to_string
+    store_var _3
+    load_type #1
+    call reflect.Type.baml.ToString.to_string
+    store_var _5
+    load_var _3
+    load_const "/"
+    bin_op +
+    load_var _5
+    bin_op +
+    return
+}
+
+function optional_chain_type_args.animal(which: int) -> optional_chain_type_args.Dog | optional_chain_type_args.Cat | null {
+    load_var which
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var which
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    jump L4
+
+  L2:
+    load_const "tom"
+    init_instance user.optional_chain_type_args.Cat .name
+    jump L4
+
+  L3:
+    load_const "rex"
+    init_instance user.optional_chain_type_args.Dog .name
+
+  L4:
+    return
+}
+
+function optional_chain_type_args.boxed(present: bool) -> optional_chain_type_args.Boxed<int> | null {
+    load_var present
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const 1
+    load_type int
+    init_instance<1> user.optional_chain_type_args.Boxed .v
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.callable_field_eval_count_fn() -> string {
+    load_const 0
+    init_instance user.optional_chain_type_args.EvalCounter .n
+    store_var_load_var c
+    call user.optional_chain_type_args.counted
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var c
+    call user.optional_chain_type_args.counted
+    store_var _7
+    load_const 1
+    load_var _7
+    load_field .0
+    call_indirect
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    store_var_load_var _12
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const "null"
+    store_var _12
+
+  L3:
+    load_type string
+    load_var _12
+    call baml.String.from
+    store_var _10
+    load_type int
+    load_var c
+    load_field .n
+    call baml.String.from
+    store_var _16
+    load_var _10
+    load_const "/"
+    bin_op +
+    load_var _16
+    bin_op +
+    return
+}
+
+function optional_chain_type_args.callable_field_null_after_two_fn() -> string {
+    load_const 0
+    init_instance user.optional_chain_type_args.EvalCounter .n
+    store_var_load_var c
+    call user.optional_chain_type_args.counted_null_after_two
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var c
+    call user.optional_chain_type_args.counted_null_after_two
+    store_var _7
+    load_const 1
+    load_var _7
+    load_field .0
+    call_indirect
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    store_var_load_var _12
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const "null"
+    store_var _12
+
+  L3:
+    load_type string
+    load_var _12
+    call baml.String.from
+    store_var _10
+    load_type int
+    load_var c
+    load_field .n
+    call baml.String.from
+    store_var _16
+    load_var _10
+    load_const "/"
+    bin_op +
+    load_var _16
+    bin_op +
+    return
+}
+
+function optional_chain_type_args.chained_fn() -> string | null {
+    load_const true
+    call user.optional_chain_type_args.holder
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_const true
+    call user.optional_chain_type_args.holder
+    call user.optional_chain_type_args.Holder.inner
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L3
+
+  L1:
+    load_const true
+    call user.optional_chain_type_args.holder
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const true
+    call user.optional_chain_type_args.holder
+    call user.optional_chain_type_args.Holder.inner
+    store_var _6
+    load_type int
+    load_var _6
+    call user.optional_chain_type_args.Holder.value
+    jump L4
+
+  L3:
+    load_const null
+
+  L4:
+    return
+}
+
+function optional_chain_type_args.chained_null_fn() -> string | null {
+    load_const false
+    call user.optional_chain_type_args.holder
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_const false
+    call user.optional_chain_type_args.holder
+    call user.optional_chain_type_args.Holder.inner
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L3
+
+  L1:
+    load_const false
+    call user.optional_chain_type_args.holder
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const false
+    call user.optional_chain_type_args.holder
+    call user.optional_chain_type_args.Holder.inner
+    store_var _6
+    load_type int
+    load_var _6
+    call user.optional_chain_type_args.Holder.value
+    jump L4
+
+  L3:
+    load_const null
+
+  L4:
+    return
+}
+
+function optional_chain_type_args.chained_null_second_stage_fn() -> string | null {
+    load_const true
+    call user.optional_chain_type_args.holder
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_const true
+    call user.optional_chain_type_args.holder
+    call user.optional_chain_type_args.Holder.inner_missing
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L3
+
+  L1:
+    load_const true
+    call user.optional_chain_type_args.holder
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const true
+    call user.optional_chain_type_args.holder
+    call user.optional_chain_type_args.Holder.inner_missing
+    store_var _6
+    load_type int
+    load_var _6
+    call user.optional_chain_type_args.Holder.value
+    jump L4
+
+  L3:
+    load_const null
+
+  L4:
+    return
+}
+
+function optional_chain_type_args.class_and_method_type_args_fn() -> string | null {
+    load_const true
+    call user.optional_chain_type_args.boxed
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const true
+    call user.optional_chain_type_args.boxed
+    store_var _3
+    load_type int
+    load_type string
+    load_var _3
+    call user.optional_chain_type_args.Boxed.both
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.class_type_arg_fn() -> string | null {
+    load_const true
+    call user.optional_chain_type_args.boxed
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const true
+    call user.optional_chain_type_args.boxed
+    store_var _3
+    load_type int
+    load_var _3
+    call user.optional_chain_type_args.Boxed.describe
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.concrete_receiver_interface_method_fn() -> string | null {
+    load_const true
+    call user.optional_chain_type_args.dog
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const true
+    call user.optional_chain_type_args.dog
+    store_var _3
+    load_type string
+    load_var _3
+    load_type optional_chain_type_args.Speaker
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=1
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.counted(c: optional_chain_type_args.EvalCounter) -> optional_chain_type_args.Callables | null {
+    load_var2 1 1
+    load_field .n
+    load_const 1
+    bin_op +
+    store_field .n
+    make_closure .<lambda(counted, 0)>, 0
+    init_instance user.optional_chain_type_args.Callables .describe
+    return
+}
+
+function optional_chain_type_args.counted_null_after_two(c: optional_chain_type_args.EvalCounter) -> optional_chain_type_args.Callables | null {
+    load_var2 1 1
+    load_field .n
+    load_const 1
+    bin_op +
+    store_field .n
+    load_var c
+    load_field .n
+    load_const 2
+    cmp_int_op <=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    make_closure .<lambda(counted_null_after_two, 0)>, 0
+    init_instance user.optional_chain_type_args.Callables .describe
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.dog(present: bool) -> optional_chain_type_args.Dog | null {
+    load_var present
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "rex"
+    init_instance user.optional_chain_type_args.Dog .name
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.explicit_type_arg_fn() -> string | null {
+    load_const true
+    call user.optional_chain_type_args.holder
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const true
+    call user.optional_chain_type_args.holder
+    store_var _3
+    load_type int
+    load_var _3
+    call user.optional_chain_type_args.Holder.value
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.explicit_type_arg_let_else_fn() -> string {
+    load_const true
+    call user.optional_chain_type_args.holder
+    store_var _2
+    load_var _2
+    narrow_bind optional_chain_type_args.Holder, slot=1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "none"
+    jump L2
+
+  L1:
+    load_type int
+    load_var _2
+    call user.optional_chain_type_args.Holder.value
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.explicit_type_arg_null_receiver_fn() -> string | null {
+    load_const false
+    call user.optional_chain_type_args.holder
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    call user.optional_chain_type_args.holder
+    store_var _3
+    load_type int
+    load_var _3
+    call user.optional_chain_type_args.Holder.value
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.holder(present: bool) -> optional_chain_type_args.Holder | null {
+    load_var present
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "seven"
+    init_instance user.optional_chain_type_args.Holder .raw
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.inferred_type_arg_fn() -> string | null {
+    load_const true
+    call user.optional_chain_type_args.holder
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const true
+    call user.optional_chain_type_args.holder
+    store_var _3
+    load_type string
+    load_var _3
+    load_const "hi"
+    call user.optional_chain_type_args.Holder.ident
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.interface_receiver_fn() -> string | null {
+    load_const true
+    call user.optional_chain_type_args.speaker
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const true
+    call user.optional_chain_type_args.speaker
+    store_var _3
+    load_type int
+    load_var _3
+    load_type optional_chain_type_args.Speaker
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=1
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.method_eval_count_fn() -> string {
+    load_const 0
+    init_instance user.optional_chain_type_args.EvalCounter .n
+    store_var_load_var c
+    call user.optional_chain_type_args.counted
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var c
+    call user.optional_chain_type_args.counted
+    load_const 1
+    call user.optional_chain_type_args.Callables.method
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    store_var_load_var _11
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const "null"
+    store_var _11
+
+  L3:
+    load_type string
+    load_var _11
+    call baml.String.from
+    store_var _9
+    load_type int
+    load_var c
+    load_field .n
+    call baml.String.from
+    store_var _15
+    load_var _9
+    load_const "/"
+    bin_op +
+    load_var _15
+    bin_op +
+    return
+}
+
+function optional_chain_type_args.non_generic_call_fn() -> string | null {
+    load_const true
+    call user.optional_chain_type_args.holder
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const true
+    call user.optional_chain_type_args.holder
+    call user.optional_chain_type_args.Holder.plain
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.non_generic_call_null_fn() -> string | null {
+    load_const false
+    call user.optional_chain_type_args.holder
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    call user.optional_chain_type_args.holder
+    call user.optional_chain_type_args.Holder.plain
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.optional_chain_tmp_path(name: string) -> string {
+    sys_op baml.time.Instant.now
+    call baml.time.Instant.to_timestamp_milliseconds
+    store_var _7
+    load_type bigint
+    load_var _7
+    call baml.String.from
+    store_var _6
+    load_const 0
+    load_const 1000000000
+    load_const <omitted>
+    call baml.Int.random
+    store_var _11
+    load_type int
+    load_var _11
+    call baml.String.from
+    store_var _10
+    load_const "/tmp/baml_optional_chain_"
+    load_var name
+    bin_op +
+    load_const "_"
+    bin_op +
+    load_var _6
+    bin_op +
+    load_const "_"
+    bin_op +
+    load_var _10
+    bin_op +
+    return
+}
+
+function optional_chain_type_args.optional_file(path: string) -> baml.fs.File | null {
+    load_var path
+    load_const "r"
+    sys_op baml.fs.open
+    return
+}
+
+function optional_chain_type_args.pair(which: int) -> optional_chain_type_args.Pair<int> | optional_chain_type_args.Pair<string> | null {
+    load_var which
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var which
+    load_const 1
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const null
+    jump L4
+
+  L2:
+    load_const "a"
+    load_type string
+    init_instance<1> user.optional_chain_type_args.Pair .v
+    jump L4
+
+  L3:
+    load_const 1
+    load_type int
+    init_instance<1> user.optional_chain_type_args.Pair .v
+
+  L4:
+    return
+}
+
+function optional_chain_type_args.reflected_field_read_fn() -> int | null {
+    load_const 7
+    load_const "a"
+    init_instance user.optional_chain_type_args.Point .x, .label
+    store_var _2
+    load_var _2
+    narrow_bind baml.AnyClass, slot=1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L4
+
+  L1:
+    load_var _2
+    store_var value
+    load_var value
+    load_const "x"
+    load_type baml.AnyClass
+    load_const "get_field"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var value
+    load_const "x"
+    load_type baml.AnyClass
+    load_const "get_field"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _6
+    load_type int
+    load_var _6
+    call reflect.class.Field.value
+    jump L4
+
+  L3:
+    load_const null
+
+  L4:
+    return
+}
+
+function optional_chain_type_args.reflected_field_wrong_type_arg_fn() -> string {
+    load_const 7
+    load_const "a"
+    init_instance user.optional_chain_type_args.Point .x, .label
+    store_var _2
+    load_var _2
+    narrow_bind baml.AnyClass, slot=1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "no-class"
+    jump L8
+
+  L1:
+    load_var _2
+    store_var value
+    load_var value
+    load_const "x"
+    load_type baml.AnyClass
+    load_const "get_field"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _6
+    load_var _6
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L5
+
+  L2:
+    load_var value
+    load_const "x"
+    load_type baml.AnyClass
+    load_const "get_field"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _8
+    load_type string
+    load_var _8
+    call reflect.class.Field.value
+    jump L6
+    load_var e
+    is_type baml.errors.TypeMismatch
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var e
+    rethrow
+
+  L4:
+    load_const "type-mismatch"
+    jump L8
+
+  L5:
+    load_const null
+
+  L6:
+    store_var_load_var _12
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L7
+    load_const "null"
+    store_var _12
+
+  L7:
+    load_var _12
+
+  L8:
+    return
+}
+
+function optional_chain_type_args.reflected_missing_field_fn() -> int | null {
+    load_const 7
+    load_const "a"
+    init_instance user.optional_chain_type_args.Point .x, .label
+    store_var _2
+    load_var _2
+    narrow_bind baml.AnyClass, slot=1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L4
+
+  L1:
+    load_var _2
+    store_var value
+    load_var value
+    load_const "absent"
+    load_type baml.AnyClass
+    load_const "get_field"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _4
+    load_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var value
+    load_const "absent"
+    load_type baml.AnyClass
+    load_const "get_field"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _6
+    load_type int
+    load_var _6
+    call reflect.class.Field.value
+    jump L4
+
+  L3:
+    load_const null
+
+  L4:
+    return
+}
+
+function optional_chain_type_args.speaker(present: bool) -> optional_chain_type_args.Speaker | null {
+    load_var present
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "rex"
+    init_instance user.optional_chain_type_args.Dog .name
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.sys_op_optional_receiver_fn() -> string {
+    load_const "sysop_optional"
+    call user.optional_chain_type_args.optional_chain_tmp_path
+    store_var path
+    load_var path
+    load_const "sys-op text"
+    sys_op baml.fs.write
+    pop 1
+    load_var path
+    call user.optional_chain_type_args.optional_file
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var path
+    call user.optional_chain_type_args.optional_file
+    sys_op baml.fs.File.text
+    store_var text
+    jump L2
+
+  L1:
+    load_const null
+    store_var text
+
+  L2:
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var text
+    store_var_load_var _12
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const "null"
+    store_var _12
+
+  L3:
+    load_var _12
+    return
+}
+
+function optional_chain_type_args.sys_op_plain_receiver_fn() -> string {
+    load_const "sysop_plain"
+    call user.optional_chain_type_args.optional_chain_tmp_path
+    store_var path
+    load_var path
+    load_const "sys-op text"
+    sys_op baml.fs.write
+    pop 1
+    load_var path
+    load_const "r"
+    sys_op baml.fs.open
+    sys_op baml.fs.File.text
+    store_var text
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var text
+    return
+}
+
+function optional_chain_type_args.union_class_type_args_fn(which: int) -> string | null {
+    load_var which
+    call user.optional_chain_type_args.pair
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var which
+    call user.optional_chain_type_args.pair
+    store_var _4
+    load_type bool
+    load_var _4
+    load_type optional_chain_type_args.Tagged
+    load_const "tag"
+    virtual_call nargs=1 ntypeargs=1
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}
+
+function optional_chain_type_args.union_receiver_fn(which: int) -> string | null {
+    load_var which
+    call user.optional_chain_type_args.animal
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var which
+    call user.optional_chain_type_args.animal
+    store_var _4
+    load_type int
+    load_var _4
+    load_type optional_chain_type_args.Speaker
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=1
+    jump L2
+
+  L1:
+    load_const null
+
+  L2:
+    return
+}

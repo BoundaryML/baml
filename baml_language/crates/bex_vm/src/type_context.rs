@@ -29,18 +29,40 @@
 //! stricter than the compiler where it would break a proven-exhaustive match —
 //! see the List/Map-invariance sequencing constraint).
 
-use baml_type::{
-    Interface, Name, ParamTy, QualifiedTypeName, RealizedTy, Ty, normalize::TypeContext,
-};
-use bex_vm_types::types::Object;
+use baml_type::{Name, ParamTy, QualifiedTypeName, normalize::TypeContext};
+use bex_vm_types::{RealizedTy, TypeHead, types::Object};
 
 use crate::BexVm;
 
-impl TypeContext for BexVm {
-    fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
+/// The algebra's types at the runtime's head.
+type Ty = baml_type::Ty<TypeHead>;
+type Interface = baml_type::Interface<TypeHead>;
+
+impl TypeContext<TypeHead> for BexVm {
+    /// Resolve a *name* to the declaration it refers to, and hand back a head
+    /// pointing at it.
+    ///
+    /// This is one of the few places a name legitimately enters the runtime:
+    /// the algebra's `baml.AnyFunction` special case is spelled as a name in
+    /// the algebra's own source. It resolves through the package surfaces —
+    /// never by content-addressing a guess — so the head it returns carries the
+    /// declaration's real tag and pointer.
+    fn head_lookup(&self, qtn: &QualifiedTypeName) -> Option<TypeHead> {
+        self.declaration_head(qtn)
+    }
+
+    fn alias_def(&self, head: &TypeHead) -> Option<Ty> {
         // Only recursive aliases survive to runtime; non-recursive ones were
-        // expanded inline at lowering. Widen the stored `RuntimeTy` up to `Ty`.
-        self.recursive_type_alias(name).map(Ty::from)
+        // expanded inline at lowering. The head points straight at the
+        // definition — no lookup.
+        debug_assert!(
+            head.is_resolved(),
+            "the algebra was handed an unresolved head; the loader binds every              head before the VM exists"
+        );
+        match self.get_object(head.ptr()) {
+            Object::TypeAlias(alias) => Some(Ty::from(&alias.definition)),
+            _ => None,
+        }
     }
 
     fn implements_interface(&self, concrete: &Ty, interface: &Interface) -> bool {
@@ -69,7 +91,7 @@ impl TypeContext for BexVm {
         };
         crate::package_baml::ImplResolver::new(self).type_implements(
             &concrete,
-            &interface.name,
+            interface.name,
             &args,
             &assoc,
         )
@@ -108,11 +130,13 @@ impl TypeContext for BexVm {
         false
     }
 
-    fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
-        // Enums live on the heap; look the qualified name up through its package
-        // (classes and enums share one type namespace).
-        let ptr = self.lookup_type(name)?;
-        match self.get_object(ptr) {
+    fn enum_variants(&self, head: &TypeHead) -> Option<Vec<Name>> {
+        debug_assert!(
+            head.is_resolved(),
+            "the algebra was handed an unresolved head; the loader binds every \
+             head before the VM exists"
+        );
+        match self.get_object(head.ptr()) {
             Object::Enum(en) => Some(
                 en.variants
                     .iter()
@@ -144,7 +168,7 @@ impl TypeContext for BexVm {
         interface: &Interface,
         member: &Name,
         fuel: u32,
-    ) -> baml_type::normalize::ProjectionStep {
+    ) -> baml_type::normalize::ProjectionStep<TypeHead> {
         use baml_type::normalize::ProjectionStep;
         // Reduce `(base as I).member` to the impl's binding when the base is a
         // realized runtime type — the runtime twin of the compiler's projection
@@ -165,7 +189,7 @@ impl TypeContext for BexVm {
         };
         // Select the applicable impl and read its associated-type binding template.
         let Some((rule, bound_args)) = crate::package_baml::ImplResolver::new(self)
-            .resolve_implements_rule(&base, &interface.name, &iface_args)
+            .resolve_implements_rule(&base, interface.name, &iface_args)
         else {
             return ProjectionStep::Opaque;
         };
@@ -184,12 +208,15 @@ impl TypeContext for BexVm {
 }
 
 /// A [`TypeContext`] for order-insensitive *structural* equivalence over realized
-/// runtime types: **aliases are expanded** — so recursive aliases fold correctly
-/// (`type A = int | A[]` and `type B = int | B[]` denote the same type, via the
-/// canonicalizer's μ-folding) — while every *re-entrant* nominal fact stays an
-/// opaque leaf. It runs the canonical set-theoretic algebra (union
-/// flatten/sort/dedup, `never` removal, literal-into-base collapse), and interface
-/// bindings compare order-insensitively because the canonicalizer sorts them.
+/// runtime types: **aliases are expanded** — so recursive aliases are
+/// equirecursively correct (`type A = int | A[]` and `type B = int | B[]` denote
+/// the same type at any unfolding depth, via the canonicalizer's
+/// μ-canonicalization: α-invariant de Bruijn binders plus automaton
+/// minimization; `TYPE_SYSTEM.md` §Type Aliases and Recursive Types) — while every
+/// *re-entrant* nominal fact stays an opaque leaf. It runs the canonical
+/// set-theoretic algebra (union flatten/sort/dedup, `never` removal,
+/// literal-into-base collapse), and interface bindings compare
+/// order-insensitively because the canonicalizer sorts them.
 ///
 /// This is the runtime twin of the compiler matcher's `AliasEquivCtx` and shares
 /// its exact fact profile — alias-real, nominal-opaque — which keeps runtime
@@ -205,7 +232,9 @@ impl TypeContext for BexVm {
 /// Two conservative *misses* remain, documented and shared with the compiler
 /// matcher (so the two sides agree): interface-membership absorption
 /// (`Shape | Sq` ≡ `Shape` when `Sq <: Shape`) and enum completeness
-/// (`E.A | E.B | …` ≡ `E`). Membership is *forced* opaque by re-entry; enum is
+/// (`E.A | E.B | …` ≡ `E`). Bool completeness (`true | false ≡ bool`) is *not*
+/// among them: its variant family is closed, so the collapse is context-free
+/// and applies here too. Membership is *forced* opaque by re-entry; enum is
 /// non-re-entrant and could be made real, but only in lockstep with
 /// `AliasEquivCtx`. Their soundness rests on the compiler emitting dispatch
 /// requests already in absorbed form. The general fix is a unified goal solver
@@ -214,11 +243,16 @@ impl TypeContext for BexVm {
 /// of severed here); until then, opacity is the termination guarantee.
 pub(crate) struct StructuralEquivCtx<'a>(pub(crate) &'a BexVm);
 
-impl TypeContext for StructuralEquivCtx<'_> {
-    fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
+impl TypeContext<TypeHead> for StructuralEquivCtx<'_> {
+    /// Delegated: resolving a name to its declaration is not re-entrant.
+    fn head_lookup(&self, qtn: &QualifiedTypeName) -> Option<TypeHead> {
+        self.0.head_lookup(qtn)
+    }
+
+    fn alias_def(&self, head: &TypeHead) -> Option<Ty> {
         // Same alias facts as the full context — non-re-entrant, and required
         // for recursive-alias folding.
-        self.0.alias_def(name)
+        self.0.alias_def(head)
     }
 
     fn implements_interface(&self, _concrete: &Ty, _interface: &Interface) -> bool {
@@ -233,7 +267,7 @@ impl TypeContext for StructuralEquivCtx<'_> {
         false // Opaque.
     }
 
-    fn enum_variants(&self, _name: &QualifiedTypeName) -> Option<Vec<Name>> {
+    fn enum_variants(&self, _head: &TypeHead) -> Option<Vec<Name>> {
         None // Opaque.
     }
 
@@ -247,7 +281,7 @@ impl TypeContext for StructuralEquivCtx<'_> {
         _interface: &Interface,
         _member: &Name,
         _fuel: u32,
-    ) -> baml_type::normalize::ProjectionStep {
+    ) -> baml_type::normalize::ProjectionStep<TypeHead> {
         baml_type::normalize::ProjectionStep::Opaque // Opaque: re-entrant (→ the resolver).
     }
 }

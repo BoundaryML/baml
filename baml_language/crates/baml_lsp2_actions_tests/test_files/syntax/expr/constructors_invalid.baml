@@ -86,16 +86,6 @@ function Foo() -> Bar {
 //  7 │   let x = Bar { a: "hello", c: 12 };
 //    ·                             ─
 //    ╰────
-// E0002
-//
-//   × unresolved type: baml.HttpRequest
-//     ╭─[expr_constructors_invalid.baml:8:17]
-//   8 │ ╭─▶   let req_bad = baml.HttpRequest {
-//   9 │ │       url: 10,
-//  10 │ │       headers: {},
-//  11 │ │       query_params: { a 10 },
-//  12 │ ╰─▶   };
-//     ╰────
 // E0003
 //
 //   × unresolved name: `a`
@@ -106,12 +96,12 @@ function Foo() -> Bar {
 // E0002
 //
 //   × unresolved type: baml.HttpRequest
-//     ╭─[expr_constructors_invalid.baml:13:18]
-//  13 │ ╭─▶   let req_good = baml.HttpRequest {
-//  14 │ │       url: "https://example.com",
-//  15 │ │       headers: { Authorization "Bearer mytoken" },
-//  16 │ │       query_params: { foo "bar" },
-//  17 │ ╰─▶   };
+//     ╭─[expr_constructors_invalid.baml:8:17]
+//   8 │ ╭─▶   let req_bad = baml.HttpRequest {
+//   9 │ │       url: 10,
+//  10 │ │       headers: {},
+//  11 │ │       query_params: { a 10 },
+//  12 │ ╰─▶   };
 //     ╰────
 // E0003
 //
@@ -126,4 +116,14 @@ function Foo() -> Bar {
 //     ╭─[expr_constructors_invalid.baml:16:21]
 //  16 │     query_params: { foo "bar" },
 //     ·                     ───
+//     ╰────
+// E0002
+//
+//   × unresolved type: baml.HttpRequest
+//     ╭─[expr_constructors_invalid.baml:13:18]
+//  13 │ ╭─▶   let req_good = baml.HttpRequest {
+//  14 │ │       url: "https://example.com",
+//  15 │ │       headers: { Authorization "Bearer mytoken" },
+//  16 │ │       query_params: { foo "bar" },
+//  17 │ ╰─▶   };
 //     ╰────

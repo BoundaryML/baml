@@ -1,4 +1,4 @@
-// Tests for `reflect.type_of<T>()` with concrete type arguments.
+// Tests for `reflect.Type.of<T>()` with concrete type arguments.
 //
 // Converted from crates/baml_tests/tests/reflect_type_of.rs.
 //
@@ -10,8 +10,12 @@
 // "reflect_type_of.RgbColor", etc.  Primitive types (int, string, bool) and
 // map/array/optional wrappers around them remain unqualified.
 //
-// Each test body goes into a top-level helper function so that locals are
-// not subject to the test-block boxing bug.
+// Test bodies live directly in the `test` blocks. They were originally
+// lifted into top-level helper functions to dodge the "test-block
+// local-boxing VM bug" (test-body `let` locals never resolved and lowered
+// to `const null` — fixed by #3782, see
+// thoughts/antonio/s1-vm-bug-diagnosis.md). Inlined bodies now double as
+// the regression net for that fix.
 
 class User { name string }
 class Container<T> { value T }
@@ -21,176 +25,193 @@ enum RgbColor { Red, Green, Blue }
 
 // ─── Basic to_string tests ───────────────────────────────────────────────────
 
-function type_of_class_to_string_fn() -> string {
-    reflect.type_of<User>().to_string()
-}
-
 test "type_of_class_to_string" {
-    assert.is_true(baml.deep_equals(type_of_class_to_string_fn(), "reflect_type_of.User"))
+    let s = reflect.Type.of<User>().to_string();
+    assert.equal(s, "reflect_type_of.User")
 }
 
 test "type_of_int_to_string" {
-    assert.is_true(baml.deep_equals(reflect.type_of<int>().to_string(), "int"))
+    assert.equal(reflect.Type.of<int>().to_string(), "int")
 }
 
 test "type_of_string_to_string" {
-    assert.is_true(baml.deep_equals(reflect.type_of<string>().to_string(), "string"))
+    assert.equal(reflect.Type.of<string>().to_string(), "string")
 }
 
 test "type_of_bool_to_string" {
-    assert.is_true(baml.deep_equals(reflect.type_of<bool>().to_string(), "bool"))
-}
-
-function type_of_array_to_string_fn() -> string {
-    reflect.type_of<User[]>().to_string()
+    assert.equal(reflect.Type.of<bool>().to_string(), "bool")
 }
 
 test "type_of_array_to_string" {
-    assert.is_true(baml.deep_equals(type_of_array_to_string_fn(), "reflect_type_of.User[]"))
-}
-
-function type_of_optional_to_string_fn() -> string {
-    reflect.type_of<User?>().to_string()
+    let s = reflect.Type.of<User[]>().to_string();
+    assert.equal(s, "reflect_type_of.User[]")
 }
 
 test "type_of_optional_to_string" {
-    assert.is_true(baml.deep_equals(type_of_optional_to_string_fn(), "reflect_type_of.User | null"))
-}
-
-function type_of_map_to_string_fn() -> string {
-    reflect.type_of<map<string, User>>().to_string()
+    let s = reflect.Type.of<User?>().to_string();
+    assert.equal(s, "reflect_type_of.User | null")
 }
 
 test "type_of_map_to_string" {
-    assert.is_true(baml.deep_equals(type_of_map_to_string_fn(), "map<string, reflect_type_of.User>"))
-}
-
-function type_of_generic_class_runs_without_crash_fn() -> string {
-    reflect.type_of<Container<User>>().to_string()
+    let s = reflect.Type.of<map<string, User>>().to_string();
+    assert.equal(s, "map<string, reflect_type_of.User>")
 }
 
 test "type_of_generic_class_runs_without_crash" {
-    assert.is_true(baml.deep_equals(type_of_generic_class_runs_without_crash_fn(), "reflect_type_of.Container<reflect_type_of.User>"))
-}
-
-function type_of_generic_class_to_string_matches_source_fn() -> bool {
-    reflect.type_of<Container<User>>().to_string() == "reflect_type_of.Container<reflect_type_of.User>"
+    let s = reflect.Type.of<Container<User>>().to_string();
+    assert.equal(s, "reflect_type_of.Container<reflect_type_of.User>")
 }
 
 test "type_of_generic_class_to_string_matches_source" {
-    assert.is_true(baml.deep_equals(type_of_generic_class_to_string_matches_source_fn(), true))
+    let matches = reflect.Type.of<Container<User>>().to_string() == "reflect_type_of.Container<reflect_type_of.User>";
+    assert.is_true(matches)
 }
 
 // ─── Structural equality ─────────────────────────────────────────────────────
 
 test "type_of_map_eq" {
-    assert.is_true(baml.deep_equals(
-        reflect.type_of<map<string, User>>() == reflect.type_of<map<string, User>>(),
-        true
-    ))
+    assert.is_true(reflect.Type.of<map<string, User>>() == reflect.Type.of<map<string, User>>())
 }
 
 test "type_of_generic_class_eq" {
-    assert.is_true(baml.deep_equals(
-        reflect.type_of<Container<User>>() == reflect.type_of<Container<User>>(),
-        true
-    ))
+    assert.is_true(reflect.Type.of<Container<User>>() == reflect.Type.of<Container<User>>())
 }
 
 test "type_of_generic_class_neq_different_arg" {
-    assert.is_true(baml.deep_equals(
-        reflect.type_of<Container<User>>() == reflect.type_of<Container<int>>(),
-        false
-    ))
+    assert.is_true(reflect.Type.of<Container<User>>() != reflect.Type.of<Container<int>>())
 }
 
 // ─── Phase 7: parametric class forwarding via generic bodies ─────────────────
 
-function wrap_in_container<T>() -> type {
-    reflect.type_of<Container<T>>()
-}
-
-function wrap_in_container_to_string_fn() -> string {
-    wrap_in_container<int>().to_string()
+// Kept as a top-level generic function: forwarding a type parameter through a
+// generic body into `reflect.Type.of` is itself the feature under test here.
+function wrap_in_container<T>() -> reflect.Type {
+    reflect.Type.of<Container<T>>()
 }
 
 test "wrap_in_container_to_string" {
-    assert.is_true(baml.deep_equals(wrap_in_container_to_string_fn(), "reflect_type_of.Container<int>"))
+    let s = wrap_in_container<int>().to_string();
+    assert.equal(s, "reflect_type_of.Container<int>")
 }
 
 // ─── Structural equality ─────────────────────────────────────────────────────
 
 test "type_of_same_class_eq" {
-    assert.is_true(baml.deep_equals(
-        reflect.type_of<User>() == reflect.type_of<User>(),
-        true
-    ))
+    assert.is_true(reflect.Type.of<User>() == reflect.Type.of<User>())
 }
 
 test "type_of_different_class_neq" {
-    assert.is_true(baml.deep_equals(
-        reflect.type_of<User>() == reflect.type_of<int>(),
-        false
-    ))
-}
-
-function type_of_assign_and_compare_fn() -> bool {
-    let a: type = reflect.type_of<User>();
-    let b: type = reflect.type_of<User>();
-    a == b
+    assert.is_true(reflect.Type.of<User>() != reflect.Type.of<int>())
 }
 
 test "type_of_assign_and_compare" {
-    assert.is_true(baml.deep_equals(type_of_assign_and_compare_fn(), true))
+    // Locals holding `type` values, compared inside a test block: the exact
+    // shape the pre-#3782 lowering bug broke (locals lowered to `const null`,
+    // making this compare `null == null`).
+    let a: reflect.Type = reflect.Type.of<User>();
+    let b: reflect.Type = reflect.Type.of<User>();
+    assert.is_true(a == b)
 }
 
 // ─── Enum and union coverage ─────────────────────────────────────────────────
 
-function type_of_enum_to_string_fn() -> string {
-    reflect.type_of<RgbColor>().to_string()
-}
-
 test "type_of_enum_to_string" {
-    assert.is_true(baml.deep_equals(type_of_enum_to_string_fn(), "reflect_type_of.RgbColor"))
+    let s = reflect.Type.of<RgbColor>().to_string();
+    assert.equal(s, "reflect_type_of.RgbColor")
 }
 
 test "type_of_enum_eq" {
-    assert.is_true(baml.deep_equals(
-        reflect.type_of<RgbColor>() == reflect.type_of<RgbColor>(),
-        true
-    ))
+    assert.is_true(reflect.Type.of<RgbColor>() == reflect.Type.of<RgbColor>())
 }
 
 test "type_of_enum_neq_class" {
-    assert.is_true(baml.deep_equals(
-        reflect.type_of<RgbColor>() == reflect.type_of<User>(),
-        false
-    ))
+    assert.is_true(reflect.Type.of<RgbColor>() != reflect.Type.of<User>())
 }
 
 test "type_of_union_eq" {
-    assert.is_true(baml.deep_equals(
-        reflect.type_of<int | string>() == reflect.type_of<int | string>(),
-        true
-    ))
+    assert.is_true(reflect.Type.of<int | string>() == reflect.Type.of<int | string>())
 }
 
 test "type_of_union_neq_different_member" {
-    assert.is_true(baml.deep_equals(
-        reflect.type_of<int | string>() == reflect.type_of<int | bool>(),
-        false
-    ))
+    assert.is_true(reflect.Type.of<int | string>() != reflect.Type.of<int | bool>())
 }
 
 // ─── Stable identity via .to_string() ───────────────────────────────────────
 
-function type_of_to_string_works_as_map_key_fn() -> int {
+test "type_of_to_string_works_as_map_key" {
     let m: map<string, int> = {};
-    m[reflect.type_of<User>().to_string()] = 1;
-    m[reflect.type_of<int>().to_string()] = 2;
-    m[reflect.type_of<User>().to_string()]
+    m[reflect.Type.of<User>().to_string()] = 1;
+    m[reflect.Type.of<int>().to_string()] = 2;
+    assert.equal(m[reflect.Type.of<User>().to_string()], 1)
 }
 
-test "type_of_to_string_works_as_map_key" {
-    assert.is_true(baml.deep_equals(type_of_to_string_works_as_map_key_fn(), 1))
+// ─── reflect.Type.of_value (BEP-066 K-13) ────────────────────────────────────────────
+
+test "of_value_int" {
+    assert.is_true(reflect.Type.of_value(5) == reflect.Type.of<int>())
+}
+
+test "of_value_never_yields_a_literal_type" {
+    // K-12: the reconstructed type is the value type, never the literal.
+    assert.equal(reflect.Type.of_value(5).to_string(), "int");
+    assert.equal(reflect.Type.of_value("hi").to_string(), "string");
+    assert.equal(reflect.Type.of_value(true).to_string(), "bool")
+}
+
+test "of_value_string_and_bool" {
+    assert.is_true(reflect.Type.of_value("hi") == reflect.Type.of<string>());
+    assert.is_true(reflect.Type.of_value(true) == reflect.Type.of<bool>());
+    assert.is_true(reflect.Type.of_value(null) == reflect.Type.of<null>())
+}
+
+test "of_value_class_instance" {
+    let u = User { name: "a" };
+    assert.is_true(reflect.Type.of_value(u) == reflect.Type.of<User>());
+    assert.equal(reflect.Type.of_value(u).to_string(), "reflect_type_of.User")
+}
+
+test "of_value_array_reports_element_type" {
+    let xs: int[] = [1, 2];
+    assert.is_true(reflect.Type.of_value(xs) == reflect.Type.of<int[]>())
+}
+
+test "of_value_of_a_type_value_is_precise_kind" {
+    // A reflected class type value has the sealed class-kind view as its concrete type.
+    assert.is_true(reflect.Type.of_value(reflect.Type.of<User>()) == reflect.Type.of<reflect.class.Type>())
+}
+
+test "of_value_widened_unknown_slot" {
+    // Through an `unknown`-typed slot the runtime tag still drives the answer.
+    let v: unknown = 42;
+    assert.is_true(reflect.Type.of_value(v) == reflect.Type.of<int>())
+}
+
+function of_value_helper(q: string) -> string throws never {
+    return q
+}
+
+test "of_value_function_value_reports_function_type" {
+    let f: baml.AnyFunction = of_value_helper;
+    let t = reflect.Type.of_value(f);
+    // The reconstructed signature type mentions the arrow, not `unknown`.
+    assert.is_true(t != reflect.Type.of<unknown>())
+}
+
+// ─── `reflect.signature` reads a function value's own signature ─────────────
+//
+// `reflect` is an ordinary root package now (#4543), so this is ordinary
+// package routing — there is no second, qualified spelling for it to agree
+// with. What is worth pinning is the content: the reconstructed signature
+// reports the declared name, return type, and error type.
+
+test "reflect_signature_reports_the_declared_types" {
+    let f: baml.AnyFunction = of_value_helper;
+    let sig = reflect.signature(f);
+    // `name` is null for host and compiler-synthesized callables; a declared
+    // function reports the name it was written with.
+    assert.equal(sig.name ?? "<unnamed>", "of_value_helper");
+    assert.equal(sig.returns.to_string(), "string");
+    assert.is_true(sig.returns == reflect.Type.of<string>());
+    // `of_value_helper` declares `throws never`.
+    assert.is_true(sig.errors == reflect.Type.of<never>())
 }

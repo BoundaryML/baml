@@ -2,7 +2,7 @@ class LocalError {
   message string
 }
 
-function implicit_pipeline<[CURSOR]() -> int[] throws unknown {
+function implicit_pipeline<[CURSOR]() -> int[] {
   let source<[CURSOR] = baml.iter.ArrayIterator.new([1, 2, 3, 4])
   let nextMethod<[CURSOR] = source.next
   let mapMethod<[CURSOR] = source.map
@@ -24,7 +24,7 @@ function implicit_pipeline<[CURSOR]() -> int[] throws unknown {
   collected
 }
 
-function implicit_array_iter<[CURSOR]() -> int[] throws unknown {
+function implicit_array_iter<[CURSOR]() -> int[] {
   let arrayIter<[CURSOR] = [1, 2, 3].iter()
   let found<[CURSOR] = arrayIter.find((x: int) -> bool { x == 2 })
   let collected<[CURSOR] = [4, 5, 6].iter().map((x: int) -> int { x + 1 }).collect()
@@ -35,14 +35,14 @@ function implicit_array_iter<[CURSOR]() -> int[] throws unknown {
   }
 }
 
-function implicit_flat_map<[CURSOR]() -> int[] throws unknown {
+function implicit_flat_map<[CURSOR]() -> int[] {
   let flatMapped<[CURSOR] = baml.iter.ArrayIterator.new([1, 2]).flat_map((x: int) -> baml.iter.ArrayIterator<int> {
     baml.iter.ArrayIterator.new([x, x + 10])
   })
   flatMapped.collect()
 }
 
-function implicit_flatten<[CURSOR]() -> int[] throws unknown {
+function implicit_flatten<[CURSOR]() -> int[] {
   let nested<[CURSOR] = baml.iter.ArrayIterator.new([
     baml.iter.ArrayIterator.new([1, 2]),
     baml.iter.ArrayIterator.new([3, 4]),
@@ -52,7 +52,7 @@ function implicit_flatten<[CURSOR]() -> int[] throws unknown {
   flattened.collect()
 }
 
-function throwing_mapper<[CURSOR]() -> string[] throws unknown {
+function throwing_mapper<[CURSOR]() -> string[] {
   let throwingMapped<[CURSOR] = baml.iter.ArrayIterator.new([1, 2]).map((x: int) -> string throws LocalError {
     if (x == 2) {
       throw LocalError { message: "bad" }
@@ -82,31 +82,31 @@ function throwing_mapper<[CURSOR]() -> string[] throws unknown {
 // ```
 // hover at stdlib_iterator_inference.baml:8:16
 // ```baml
-// mapMethod: (fn: (int) -> R throws E2) -> baml.iter.Iterator<Item = R, Error = E2> throws never
+// mapMethod: !error
 // ```
 // hover at stdlib_iterator_inference.baml:9:17
 // ```baml
-// iterMethod: () -> baml.iter.Iterator<Item = int, Error = never> throws never
+// iterMethod: () -> baml.iter.Iterator<Error = never, Item = int> throws never
 // ```
 // hover at stdlib_iterator_inference.baml:11:13
 // ```baml
-// mapped: baml.iter.Iterator<Item = int, Error = never>
+// mapped: baml.iter.Iterator<Error = never, Item = int>
 // ```
 // hover at stdlib_iterator_inference.baml:12:15
 // ```baml
-// filtered: baml.iter.Iterator<Item = int, Error = never>
+// filtered: baml.iter.Iterator<Error = never, Item = int>
 // ```
 // hover at stdlib_iterator_inference.baml:13:19
 // ```baml
-// filterMapped: baml.iter.Iterator<Item = string, Error = never>
+// filterMapped: baml.iter.Iterator<Error = never, Item = string>
 // ```
 // hover at stdlib_iterator_inference.baml:21:17
 // ```baml
-// stringIter: baml.iter.Iterator<Item = int, Error = never>
+// stringIter: baml.iter.Iterator<Error = never, Item = int>
 // ```
 // hover at stdlib_iterator_inference.baml:22:14
 // ```baml
-// stepped: baml.iter.Iterator<Item = int, Error = never>
+// stepped: baml.iter.Iterator<Error = never, Item = int>
 // ```
 // hover at stdlib_iterator_inference.baml:23:16
 // ```baml
@@ -116,7 +116,7 @@ function throwing_mapper<[CURSOR]() -> string[] throws unknown {
 // No hover content
 // hover at stdlib_iterator_inference.baml:28:16
 // ```baml
-// arrayIter: baml.iter.Iterator<Item = int, Error = never>
+// arrayIter: baml.iter.Iterator<Error = never, Item = int>
 // ```
 // hover at stdlib_iterator_inference.baml:29:12
 // ```baml
@@ -130,7 +130,7 @@ function throwing_mapper<[CURSOR]() -> string[] throws unknown {
 // No hover content
 // hover at stdlib_iterator_inference.baml:39:17
 // ```baml
-// flatMapped: baml.iter.Iterator<Item = int, Error = never>
+// flatMapped: baml.iter.Iterator<Error = never, Item = int>
 // ```
 // hover at stdlib_iterator_inference.baml:45:26
 // No hover content
@@ -140,7 +140,7 @@ function throwing_mapper<[CURSOR]() -> string[] throws unknown {
 // ```
 // hover at stdlib_iterator_inference.baml:50:16
 // ```baml
-// flattened: baml.iter.Iterator<Item = int, Error = never>
+// flattened: baml.iter.Iterator<Error = never, Item = int>
 // ```
 // hover at stdlib_iterator_inference.baml:51:20
 // ```baml
@@ -150,7 +150,7 @@ function throwing_mapper<[CURSOR]() -> string[] throws unknown {
 // No hover content
 // hover at stdlib_iterator_inference.baml:56:21
 // ```baml
-// throwingMapped: baml.iter.Iterator<Item = string, Error = LocalError>
+// throwingMapped: baml.iter.Iterator<Error = LocalError, Item = string>
 // ```
 // hover at stdlib_iterator_inference.baml:62:22
 // ```baml

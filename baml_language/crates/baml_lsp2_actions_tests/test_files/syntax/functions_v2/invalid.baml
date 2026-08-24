@@ -1,33 +1,11 @@
 function Foo() -> {
-  client Bar
-  prompt #"fa"#
+  client: Bar
+  prompt: `fa`
 }
 
 function FooBar(arg) -> bar {
 
 }
-
-// error: Error validating value expression "Foo": No return type specified. Valid function syntax is
-// ```
-// function Foo(param1: String, param2: String) -> ReturnType {
-//     client SomeClient
-//     prompt #"..."#
-// }
-// ```
-//   -->  functions_v2/invalid.baml:1
-//    |
-//    |
-//  1 | function Foo() -> {
-//  2 |   client Bar
-//  3 |   prompt #"fa"#
-//  4 | }
-//    |
-// error: Error validating: No type specified for argument: arg. Expected: `arg: type`
-//   -->  functions_v2/invalid.baml:6
-//    |
-//  5 |
-//  6 | function FooBar(arg) -> bar {
-//    |
 
 //----
 //- diagnostics
@@ -38,6 +16,22 @@ function FooBar(arg) -> bar {
 //  1 │ function Foo() -> {
 //    ·                   ┬
 //    ·                   ╰── expected `type`, found `'{'`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//    ╭─[functions_v2_invalid.baml:2:9]
+//  2 │   client: Bar
+//    ·         ┬
+//    ·         ╰── expected `expression`, found `':'`
+//    ╰────
+// E0010
+//
+//   × unexpected token
+//    ╭─[functions_v2_invalid.baml:3:9]
+//  3 │   prompt: `fa`
+//    ·         ┬
+//    ·         ╰── expected `expression`, found `':'`
 //    ╰────
 // E0010
 //
@@ -54,4 +48,11 @@ function FooBar(arg) -> bar {
 //  1 │ function Foo() -> {
 //    ·                  ▲
 //    ·                  ╰── unparseable type
+//    ╰────
+// E0002
+//
+//   × unresolved type: bar
+//    ╭─[functions_v2_invalid.baml:6:25]
+//  6 │ function FooBar(arg) -> bar {
+//    ·                         ───
 //    ╰────

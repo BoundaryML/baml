@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.namespaces_basic.GetResponse(cfg: fixtures.namespaces_basic.Config) -> fixtures.namespaces_basic.llm.Response {
+    load_const "hello"
+    load_var cfg
+    load_field .model
+    init_instance user.fixtures.namespaces_basic.llm.Response .text, .model
+    return
+}

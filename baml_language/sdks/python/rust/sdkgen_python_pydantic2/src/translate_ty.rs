@@ -5,7 +5,7 @@
 //! - `.humanlayer/tasks/clientpython/09b-codegen-rules.md` §6, §9
 //! - `.humanlayer/tasks/clientpython/11e-phaseg3-ty-translator.md`
 
-use baml_base::{Literal, MediaKind};
+use baml_base::{Literal, MediaKind, qualified_name::AI_STREAM_STREAM};
 use baml_codegen_types::{Name, Ty};
 use indexmap::IndexMap;
 
@@ -38,6 +38,16 @@ pub(crate) struct TranslateCtx {
     /// runtime `.py` path, where callable types fall back to
     /// `typing.Callable[..., R]` (Protocol classes are stub-only).
     pub(crate) callback_protocols: Option<std::rc::Rc<IndexMap<Ty, String>>>,
+    /// Rewrite source `ai.stream.Stream<T, F>` to the underlying host
+    /// `_BamlStream` type. `Stream` is a host re-export rather than a normal
+    /// generated class, so retaining the source spelling in annotations is
+    /// not valid Python codegen. Its synthesized `Stream$stream` companion is
+    /// deliberately excluded: that is a real Pydantic partial-state class.
+    pub(crate) type_stream_accessors: bool,
+    /// Stub-only: include the generated terminal marker in the first stream
+    /// type argument so `next()` is typed as `T | Done`. Runtime annotations
+    /// keep only `T`; the `.pyi` is the authoritative public typing surface.
+    pub(crate) include_stream_done: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,6 +80,27 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
         Ty::Media(MediaKind::Pdf, _) => media_ref("Pdf", ctx),
         Ty::Media(MediaKind::Generic, _) => "typing.Any".to_string(),
         Ty::Class(name, args, _) => {
+            if ctx.type_stream_accessors
+                && is_ai_stream_type(name)
+                && let [stream, final_value] = args.as_slice()
+            {
+                let stream_type = translate_ty(stream, ctx);
+                let next_type = if ctx.include_stream_done {
+                    let done = if ctx.current_leaf.segments == ["ai", "stream"] {
+                        "Done"
+                    } else {
+                        "_BamlStreamDone"
+                    };
+                    format!("typing.Union[{stream_type}, {done}]")
+                } else {
+                    stream_type
+                };
+                return format!(
+                    "_BamlStream[{}, {}]",
+                    next_type,
+                    translate_ty(final_value, ctx),
+                );
+            }
             let arg_strs: Vec<String> = args.iter().map(|a| translate_ty(a, ctx)).collect();
             render_name_ref_or_self_ref(name, ctx, &arg_strs.join(", "))
         }
@@ -154,6 +185,10 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
         // into `__pydantic_private__` post-construction.
         Ty::RustType { .. } => "_BamlPyHandle".to_string(),
     }
+}
+
+pub(crate) fn is_ai_stream_type(name: &Name) -> bool {
+    name.to_string() == AI_STREAM_STREAM
 }
 
 fn render_name_ref_or_self_ref(name: &Name, ctx: &TranslateCtx, generic_args: &str) -> String {
@@ -241,6 +276,8 @@ mod tests {
             self_ref: None,
             defer_name_refs: false,
             callback_protocols: None,
+            type_stream_accessors: false,
+            include_stream_done: false,
         }
     }
 
@@ -253,6 +290,8 @@ mod tests {
             current_leaf: leaf(current_segments),
             defer_name_refs: false,
             callback_protocols: None,
+            type_stream_accessors: false,
+            include_stream_done: false,
             self_ref: Some(SelfRef {
                 routed_leaf: leaf(self_segments),
                 bare_name: bare_name.to_string(),
@@ -272,6 +311,8 @@ mod tests {
             current_leaf: leaf(current_segments),
             defer_name_refs: true,
             callback_protocols: None,
+            type_stream_accessors: false,
+            include_stream_done: false,
             self_ref: Some(SelfRef {
                 routed_leaf: leaf(self_segments),
                 bare_name: bare_name.to_string(),

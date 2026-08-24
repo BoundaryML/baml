@@ -3,6 +3,18 @@
 //! These utilities panic on compile errors, so they are appropriate for test
 //! code only. Production callers should use [`crate::collect_diagnostics`] and
 //! [`baml_compiler2_emit::generate_project_bytecode_with_opt`] directly.
+//!
+//! # These are for white-box tests, not behavior tests
+//!
+//! Reach for these only when the *subject* of the test is something Rust can
+//! see but BAML cannot: emitted bytecode, VM/heap state, salsa invalidation,
+//! diagnostics, or a host-boundary value.
+//!
+//! If the test just compiles some BAML, runs a function, and asserts the
+//! returned value or a catchable throw, it does not belong in Rust at all —
+//! write it as a `test` block in `crates/baml_tests/baml_src/`, where the whole
+//! corpus compiles once instead of once per test. See
+//! `baml_language/TEST_INSTRUCTIONS.md` ("Where does a new test go?").
 
 use std::path::Path;
 

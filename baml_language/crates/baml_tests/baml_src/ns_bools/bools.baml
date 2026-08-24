@@ -1,13 +1,11 @@
 // Tests for the `bool` builtin class.
 //
-// `bool.random` is the only member, so these also pin that `bool` resolves as a
-// primitive static-access root at all — it was absent from that table until
-// `random` gave the class its first member, making `bool.random(...)` an
-// unresolved name even though `baml.Bool.random(...)` worked.
+// `bool.random` is the only member, so these also pin that the new compiler's
+// primitive static-qualifier path resolves `bool` and its companion class.
 
 function bool_random_seed() -> uint8array {
     // Bound to a local: a byte-string literal in tail position is not
-    // recognized as the return value (E0029) — same workaround as ns_ints.
+    // recognized as the return value (E0029), like the workaround in ns_ints.
     let seed = b"\x61\x62\x63\x64\x65\x66\x67\x68\x69\x6a\x6b\x6c\x6d\x6e\x6f\x70\x71\x72\x73\x74\x75\x76\x77\x78\x79\x7a\x7b\x7c\x7d\x7e\x7f\x80";
     seed
 }
@@ -20,7 +18,11 @@ function bool_random_covers_both_values() -> bool {
     let f = 0;
     let i = 0;
     while (i < 1000) {
-        if (bool.random(rng = rng)) { t = t + 1 } else { f = f + 1 }
+        if (bool.random(rng = rng)) {
+            t = t + 1
+        } else {
+            f = f + 1
+        }
         i = i + 1
     }
     t > 400 && f > 400 && (t + f) == 1000
@@ -38,7 +40,11 @@ function bool_random_seeded_is_reproducible() -> bool {
     let ok = true;
     let i = 0;
     while (i < 100) {
-        if (bool.random(rng = b) != bool.random(rng = c)) { ok = false } else { null }
+        if (bool.random(rng = b) != bool.random(rng = c)) {
+            ok = false
+        } else {
+            null
+        }
         // `a` is drawn from too, so a shared-state bug between generators would
         // desynchronize `b` and `c`.
         bool.random(rng = a);

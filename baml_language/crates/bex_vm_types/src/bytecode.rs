@@ -141,6 +141,34 @@ pub struct ClassInitPlan {
     pub fields: Vec<usize>,
 }
 
+/// High bit of a call instruction's `ntypeargs` operand. The remaining bits
+/// retain the actual count; setting this bit asks the VM to run the M-5/M-6
+/// marker checks before entering the callee.
+pub const RUNTIME_TYPE_CHECK_FLAG: u16 = 1 << 15;
+
+/// Packs the call-site type-argument count and the marker-runtime-check flag.
+pub fn encode_call_type_args(count: usize, runtime_type_check: bool) -> u16 {
+    let count = u16::try_from(count).expect("ntypeargs fits in u16");
+    assert!(
+        count < RUNTIME_TYPE_CHECK_FLAG,
+        "call type-argument count must leave the runtime-check flag bit free"
+    );
+    count
+        | if runtime_type_check {
+            RUNTIME_TYPE_CHECK_FLAG
+        } else {
+            0
+        }
+}
+
+/// Unpacks a call-site type-argument count and marker-runtime-check flag.
+pub fn decode_call_type_args(encoded: u16) -> (usize, bool) {
+    (
+        usize::from(encoded & !RUNTIME_TYPE_CHECK_FLAG),
+        encoded & RUNTIME_TYPE_CHECK_FLAG != 0,
+    )
+}
+
 /// Individual bytecode instruction.
 ///
 /// For faster iteration we'll start with an in-memory data structure that
@@ -234,6 +262,37 @@ pub enum Instruction {
     /// Format: `STORE_FIELD i` where `i` is the index of the field in the
     /// object's fields array.
     StoreField(usize),
+
+    /// Read an *interface* field from a receiver whose concrete type is not known
+    /// statically — the field analogue of [`Self::VirtualCall`].
+    ///
+    /// `LoadField` cannot serve here: its operand is a physical slot in the
+    /// receiver's own layout, and two classes implementing the same interface link
+    /// the same interface field to different slots. So the operand is instead the
+    /// field's index in the *interface's* declaration order, and the VM maps it to a
+    /// slot through the resolved impl's
+    /// [`field_links`](crate::types::RuntimeImplRule::field_links).
+    ///
+    /// Stack: `[receiver, iface_type]` -> `[value]`
+    ///
+    /// Pops `iface_type` (an `Object::Type` holding the — possibly parameterized —
+    /// interface) and the receiver, reads `Self` from the receiver's runtime concrete
+    /// type, resolves `<Self as iface_type>` to its single `implements` rule
+    /// (coherence), and pushes `receiver.fields[rule.field_links[i]]`.
+    ///
+    /// The interface arrives via `LoadType`, which substitutes the *caller's* frame
+    /// type args — so a symbolic view (`Slot<T>` inside a generic function) reaches
+    /// the resolver realized, selecting the right block when one class implements the
+    /// same interface family at several instantiations with different links. That is
+    /// the discrimination a receiver-only type test cannot make.
+    VirtualLoadField(usize),
+
+    /// Write an *interface* field on a statically-unknown receiver — the store
+    /// counterpart of [`Self::VirtualLoadField`], with the same operand meaning and
+    /// the same resolution.
+    ///
+    /// Stack: `[receiver, value, iface_type]` -> `[]`
+    VirtualStoreField(usize),
 
     /// Initialize a field during construction: pops the value, stores it in the field,
     /// and keeps the instance on the stack (unlike `StoreField` which pops both).
@@ -647,6 +706,10 @@ pub enum Instruction {
     /// which must hold a `ConstValue::Type(TyTemplate)` at that slot.
     LoadType(usize),
 
+    /// Pop an exact `Object::Type` and bind it to a frame type-argument slot.
+    /// Later `LoadType(TypeArgRef(slot))` reproduces the same type and defs.
+    BindType(usize),
+
     /// Remap a sparse type tag to a dense index via perfect hash lookup.
     ///
     /// Pops the type tag (from a preceding `TypeTag` instruction), computes
@@ -732,6 +795,24 @@ pub enum Instruction {
     ///
     /// Stack: `[receiver, type_args…, iface_type, method_name]` -> `[bound_method]`
     MakeVirtualBoundMethod {
+        /// Number of method-level `Object::Type` args on the stack (below the
+        /// interface type), appended to the resolved impl frame.
+        ntypeargs: u16,
+    },
+
+    /// Resolve an *interface* method to a callable value from a written `Self`
+    /// TYPE — the type-keyed analogue of `MakeVirtualBoundMethod`, and the only
+    /// dispatch form for a method with no `self` receiver (there is no value to
+    /// derive `Self` from). Pops the method name, the interface type
+    /// (`Object::Type`), `ntypeargs` method-level type args, and the `Self`
+    /// type (`Object::Type`, in the receiver's stack slot); resolves `Self`'s
+    /// `implements` rule (coherence guarantees at most one) and pushes a
+    /// capture-less `Object::Closure` over the resolved method, whose
+    /// `captured_type_args` carry the callee's complete frame — the impl's
+    /// realized frame followed by the method-level args.
+    ///
+    /// Stack: `[self_type, type_args…, iface_type, method_name]` -> `[closure]`
+    MakeVirtualFunction {
         /// Number of method-level `Object::Type` args on the stack (below the
         /// interface type), appended to the resolved impl frame.
         ntypeargs: u16,
@@ -829,6 +910,18 @@ pub enum Instruction {
     /// Fused `StoreVar(a); StoreVar(b)` — pop into `local[a]`, then `local[b]`.
     /// (`CPython` `STORE_FAST_STORE_FAST`.)
     StoreVar2(usize, usize),
+
+    /// Test whether a value's declaration is the one an `Object::Type` names.
+    /// Stack: `[value, type_value] -> [bool]`.
+    ///
+    /// Appended to preserve the serialized discriminants of existing
+    /// instructions.
+    RuntimeIsType,
+
+    /// Reify the package selected lexically by the compiler. The operand is a
+    /// constant-pool string naming the static package; a dynamic function's
+    /// runtime owner takes precedence.
+    LoadCurrentPackage(usize),
 }
 
 /// Compact bytecode opcodes.
@@ -953,6 +1046,7 @@ pub enum OpCode {
     IsType,
     DenseTag,
     LoadType,
+    BindType,
     MakeBoundMethod,
     LoadDeref,
     StoreDeref,
@@ -1007,6 +1101,28 @@ pub enum OpCode {
 
     // Atomic type test plus local binding: u32 type constant + u32 destination.
     NarrowBind,
+
+    // Virtual interface-*field* access (the field analogue of `VirtualCall`):
+    // u32 interface-field index; receiver and interface type come off the stack.
+    VirtualLoadField,
+    VirtualStoreField,
+
+    // Runtime nominal identity test, appended to preserve discriminants.
+    RuntimeIsType,
+
+    // Lexical Package.current(): u32 constant-pool string index.
+    LoadCurrentPackage,
+
+    // Truthiness coercion (B-1563), appended to preserve discriminants:
+    // pop a value, push its truthiness (`false`, `null`, zero, and empty
+    // string/list/map/bytes are falsy; everything else is truthy).
+    Truthy,
+
+    // Virtual interface-method value resolved from a written `Self` TYPE (the
+    // type-keyed analogue of `MakeVirtualBoundMethod`): u16 method-level type
+    // arg count; `Self` type, interface type, and method name come off the
+    // stack and the resolved capture-less closure is pushed.
+    MakeVirtualFunction,
 }
 
 impl OpCode {
@@ -1026,11 +1142,13 @@ impl OpCode {
             | Self::CallIndirectWithRuntimeId
             | Self::Discriminant
             | Self::TypeTag
+            | Self::RuntimeIsType
             | Self::ThrowIfPanic
             | Self::Unreachable
             | Self::MakeCell
             | Self::SendEvent
             | Self::ContainerLen
+            | Self::Truthy
             | Self::Spawn
             | Self::AwaitAny
             | Self::Add
@@ -1117,6 +1235,7 @@ impl OpCode {
             | Self::IsType
             | Self::DenseTag
             | Self::LoadType
+            | Self::BindType
             | Self::MakeBoundMethod
             | Self::LoadDeref
             | Self::StoreDeref
@@ -1127,10 +1246,16 @@ impl OpCode {
             | Self::PopJumpIfFalse
             | Self::JumpIfFalse
             | Self::VirtualCall
+            | Self::VirtualLoadField
+            | Self::VirtualStoreField
             | Self::VirtualCallWithRuntimeId => 5,
 
+            Self::LoadCurrentPackage => 5,
+
             // 3-byte: opcode + u16
-            Self::MakeGenericFunctionFromValue | Self::MakeVirtualBoundMethod => 3,
+            Self::MakeGenericFunctionFromValue
+            | Self::MakeVirtualBoundMethod
+            | Self::MakeVirtualFunction => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
             Self::AllocInstance
@@ -1161,6 +1286,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Throw as u8 => Ok(Self::Throw),
             x if x == Self::Rethrow as u8 => Ok(Self::Rethrow),
             x if x == Self::MakeVirtualBoundMethod as u8 => Ok(Self::MakeVirtualBoundMethod),
+            x if x == Self::MakeVirtualFunction as u8 => Ok(Self::MakeVirtualFunction),
             x if x == Self::LoadArrayElement as u8 => Ok(Self::LoadArrayElement),
             x if x == Self::LoadMapElement as u8 => Ok(Self::LoadMapElement),
             x if x == Self::StoreArrayElement as u8 => Ok(Self::StoreArrayElement),
@@ -1169,6 +1295,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::CallIndirectWithRuntimeId as u8 => Ok(Self::CallIndirectWithRuntimeId),
             x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
             x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
+            x if x == Self::RuntimeIsType as u8 => Ok(Self::RuntimeIsType),
+            x if x == Self::LoadCurrentPackage as u8 => Ok(Self::LoadCurrentPackage),
             x if x == Self::ThrowIfPanic as u8 => Ok(Self::ThrowIfPanic),
             x if x == Self::Unreachable as u8 => Ok(Self::Unreachable),
             x if x == Self::MakeCell as u8 => Ok(Self::MakeCell),
@@ -1257,6 +1385,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::IsType as u8 => Ok(Self::IsType),
             x if x == Self::DenseTag as u8 => Ok(Self::DenseTag),
             x if x == Self::LoadType as u8 => Ok(Self::LoadType),
+            x if x == Self::BindType as u8 => Ok(Self::BindType),
             x if x == Self::MakeBoundMethod as u8 => Ok(Self::MakeBoundMethod),
             x if x == Self::LoadDeref as u8 => Ok(Self::LoadDeref),
             x if x == Self::StoreDeref as u8 => Ok(Self::StoreDeref),
@@ -1274,10 +1403,13 @@ impl TryFrom<u8> for OpCode {
             }
             x if x == Self::LoadVar2 as u8 => Ok(Self::LoadVar2),
             x if x == Self::StoreVar2 as u8 => Ok(Self::StoreVar2),
+            x if x == Self::VirtualLoadField as u8 => Ok(Self::VirtualLoadField),
+            x if x == Self::VirtualStoreField as u8 => Ok(Self::VirtualStoreField),
             x if x == Self::VirtualCall as u8 => Ok(Self::VirtualCall),
             x if x == Self::CallWithRuntimeId as u8 => Ok(Self::CallWithRuntimeId),
             x if x == Self::VirtualCallWithRuntimeId as u8 => Ok(Self::VirtualCallWithRuntimeId),
             x if x == Self::NarrowBind as u8 => Ok(Self::NarrowBind),
+            x if x == Self::Truthy as u8 => Ok(Self::Truthy),
             _ => Err(byte),
         }
     }
@@ -1289,11 +1421,14 @@ impl std::fmt::Display for OpCode {
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
             Self::AwaitAny => "AWAIT_ANY",
+            Self::VirtualLoadField => "VIRTUAL_LOAD_FIELD",
+            Self::VirtualStoreField => "VIRTUAL_STORE_FIELD",
             Self::VirtualCall => "VIRTUAL_CALL",
             Self::VirtualCallWithRuntimeId => "VIRTUAL_CALL_WITH_RUNTIME_ID",
             Self::Throw => "THROW",
             Self::Rethrow => "RETHROW",
             Self::MakeVirtualBoundMethod => "MAKE_VIRTUAL_BOUND_METHOD",
+            Self::MakeVirtualFunction => "MAKE_VIRTUAL_FUNCTION",
             Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
             Self::LoadMapElement => "LOAD_MAP_ELEMENT",
             Self::StoreArrayElement => "STORE_ARRAY_ELEMENT",
@@ -1302,6 +1437,9 @@ impl std::fmt::Display for OpCode {
             Self::CallIndirectWithRuntimeId => "CALL_INDIRECT_WITH_RUNTIME_ID",
             Self::Discriminant => "DISCRIMINANT",
             Self::TypeTag => "TYPE_TAG",
+            Self::RuntimeIsType => "RUNTIME_IS_TYPE",
+            Self::LoadCurrentPackage => "LOAD_CURRENT_PACKAGE",
+            Self::Truthy => "TRUTHY",
             Self::ThrowIfPanic => "THROW_IF_PANIC",
             Self::Unreachable => "UNREACHABLE",
             Self::MakeCell => "MAKE_CELL",
@@ -1391,6 +1529,7 @@ impl std::fmt::Display for OpCode {
             Self::IsType => "IS_TYPE",
             Self::DenseTag => "DENSE_TAG",
             Self::LoadType => "LOAD_TYPE",
+            Self::BindType => "BIND_TYPE",
             Self::MakeBoundMethod => "MAKE_BOUND_METHOD",
             Self::LoadDeref => "LOAD_DEREF",
             Self::StoreDeref => "STORE_DEREF",
@@ -1473,6 +1612,8 @@ pub enum CmpOp {
 pub enum UnaryOp {
     Not,
     Neg,
+    /// Truthiness coercion (B-1563). Appended to preserve Borsh indices.
+    Truthy,
 }
 
 impl std::fmt::Display for BinOp {
@@ -1510,6 +1651,7 @@ impl std::fmt::Display for UnaryOp {
         f.write_str(match self {
             UnaryOp::Not => "!",
             UnaryOp::Neg => "-",
+            UnaryOp::Truthy => "truthy",
         })
     }
 }
@@ -1524,6 +1666,8 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadGlobal(i) => write!(f, "LOAD_GLOBAL {i}"),
             Instruction::StoreGlobal(i) => write!(f, "STORE_GLOBAL {i}"),
             Instruction::LoadField(i) => write!(f, "LOAD_FIELD {i}"),
+            Instruction::VirtualLoadField(i) => write!(f, "VIRTUAL_LOAD_FIELD {i}"),
+            Instruction::VirtualStoreField(i) => write!(f, "VIRTUAL_STORE_FIELD {i}"),
             Instruction::StoreField(i) => write!(f, "STORE_FIELD {i}"),
             Instruction::InitField(i) => write!(f, "INIT_FIELD {i}"),
             Instruction::InitSpread(i) => write!(f, "INIT_SPREAD {i}"),
@@ -1608,6 +1752,9 @@ impl std::fmt::Display for Instruction {
             Instruction::MakeVirtualBoundMethod { ntypeargs } => {
                 write!(f, "MAKE_VIRTUAL_BOUND_METHOD {ntypeargs}")
             }
+            Instruction::MakeVirtualFunction { ntypeargs } => {
+                write!(f, "MAKE_VIRTUAL_FUNCTION {ntypeargs}")
+            }
 
             Instruction::Return => f.write_str("RETURN"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
@@ -1616,11 +1763,14 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
+            Instruction::RuntimeIsType => f.write_str("RUNTIME_IS_TYPE"),
+            Instruction::LoadCurrentPackage(i) => write!(f, "LOAD_CURRENT_PACKAGE {i}"),
             Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
             Instruction::NarrowBind { ty, destination } => {
                 write!(f, "NARROW_BIND {ty} {destination}")
             }
             Instruction::LoadType(i) => write!(f, "LOAD_TYPE {i}"),
+            Instruction::BindType(i) => write!(f, "BIND_TYPE {i}"),
             Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
             Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
@@ -1736,8 +1886,12 @@ pub struct DebugLocalScope {
 /// transfers control to `handler_pc`, with the exception value stored
 /// in the frame-local slot `error_slot`.
 ///
-/// Entries are sorted by `start_pc`. For nested catch blocks the innermost
-/// (narrowest range) entry appears first.
+/// One catch region contributes one entry per coalesced run of its protected
+/// blocks (block layout can fragment a region across non-contiguous PCs), so
+/// several entries may share a `handler_pc`. Entries are stably sorted by
+/// `start_pc`; the VM picks the innermost covering entry by largest
+/// `start_pc`, then smallest `end_pc`, then latest table order (identical
+/// ranges are emitted outer-region-first).
 ///
 /// All exceptions (user-thrown values and VM panics) are routed to the
 /// handler. The handler bytecode is responsible for filtering: a
@@ -2061,6 +2215,7 @@ impl Bytecode {
                 | Instruction::CallIndirectWithRuntimeId
                 | Instruction::Discriminant
                 | Instruction::TypeTag
+                | Instruction::RuntimeIsType
                 | Instruction::ThrowIfPanic
                 | Instruction::Unreachable
                 | Instruction::MakeCell
@@ -2126,6 +2281,8 @@ impl Bytecode {
                 | Instruction::StoreVar(v)
                 | Instruction::StoreVarLoadVar(v)
                 | Instruction::LoadField(v)
+                | Instruction::VirtualLoadField(v)
+                | Instruction::VirtualStoreField(v)
                 | Instruction::StoreField(v)
                 | Instruction::InitField(v)
                 | Instruction::InitSpread(v)
@@ -2137,6 +2294,8 @@ impl Bytecode {
                 | Instruction::IsType(v)
                 | Instruction::DenseTag(v)
                 | Instruction::LoadType(v)
+                | Instruction::BindType(v)
+                | Instruction::LoadCurrentPackage(v)
                 | Instruction::LoadDeref(v)
                 | Instruction::StoreDeref(v)
                 | Instruction::LoadCapture(v)
@@ -2186,7 +2345,8 @@ impl Bytecode {
 
                 // ── MakeGenericFunctionFromValue: u16 ntypeargs ──────
                 Instruction::MakeGenericFunctionFromValue { ntypeargs }
-                | Instruction::MakeVirtualBoundMethod { ntypeargs } => {
+                | Instruction::MakeVirtualBoundMethod { ntypeargs }
+                | Instruction::MakeVirtualFunction { ntypeargs } => {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
@@ -2413,6 +2573,7 @@ impl Bytecode {
             Instruction::Throw => OpCode::Throw,
             Instruction::Rethrow => OpCode::Rethrow,
             Instruction::MakeVirtualBoundMethod { .. } => OpCode::MakeVirtualBoundMethod,
+            Instruction::MakeVirtualFunction { .. } => OpCode::MakeVirtualFunction,
             Instruction::LoadArrayElement => OpCode::LoadArrayElement,
             Instruction::LoadMapElement => OpCode::LoadMapElement,
             Instruction::StoreArrayElement => OpCode::StoreArrayElement,
@@ -2421,6 +2582,7 @@ impl Bytecode {
             Instruction::CallIndirectWithRuntimeId => OpCode::CallIndirectWithRuntimeId,
             Instruction::Discriminant => OpCode::Discriminant,
             Instruction::TypeTag => OpCode::TypeTag,
+            Instruction::RuntimeIsType => OpCode::RuntimeIsType,
             Instruction::ThrowIfPanic => OpCode::ThrowIfPanic,
             Instruction::Unreachable => OpCode::Unreachable,
             Instruction::MakeCell => OpCode::MakeCell,
@@ -2453,6 +2615,7 @@ impl Bytecode {
             Instruction::UnaryOp(op) => match op {
                 UnaryOp::Not => OpCode::Not,
                 UnaryOp::Neg => OpCode::Neg,
+                UnaryOp::Truthy => OpCode::Truthy,
             },
 
             // Constant specialization
@@ -2471,6 +2634,8 @@ impl Bytecode {
             Instruction::LoadGlobal(_) => OpCode::LoadGlobal,
             Instruction::StoreGlobal(_) => OpCode::StoreGlobal,
             Instruction::LoadField(_) => OpCode::LoadField,
+            Instruction::VirtualLoadField(_) => OpCode::VirtualLoadField,
+            Instruction::VirtualStoreField(_) => OpCode::VirtualStoreField,
             Instruction::StoreField(_) => OpCode::StoreField,
             Instruction::InitField(_) => OpCode::InitField,
             Instruction::InitSpread(_) => OpCode::InitSpread,
@@ -2490,6 +2655,8 @@ impl Bytecode {
             Instruction::NarrowBind { .. } => OpCode::NarrowBind,
             Instruction::DenseTag(_) => OpCode::DenseTag,
             Instruction::LoadType(_) => OpCode::LoadType,
+            Instruction::BindType(_) => OpCode::BindType,
+            Instruction::LoadCurrentPackage(_) => OpCode::LoadCurrentPackage,
             Instruction::MakeBoundMethod(_) => OpCode::MakeBoundMethod,
             Instruction::LoadDeref(_) => OpCode::LoadDeref,
             Instruction::StoreDeref(_) => OpCode::StoreDeref,
@@ -2606,6 +2773,61 @@ mod compact_tests {
         assert_eq!(compact.code[0], OpCode::LoadIntSmall as u8);
         assert_eq!(compact.code[1], 42u8);
         assert_eq!(compact.code[2], OpCode::Return as u8);
+    }
+
+    #[test]
+    fn encode_virtual_field_ops() {
+        let bc = make_bytecode(
+            vec![
+                Instruction::VirtualLoadField(3),
+                Instruction::VirtualStoreField(258),
+                Instruction::Return,
+            ],
+            Vec::new(),
+        );
+        let compact = bc.lower_to_compact();
+        // Both are opcode + u32, like `LoadField`.
+        assert_eq!(compact.code.len(), 5 + 5 + 1);
+        assert_eq!(compact.code[0], OpCode::VirtualLoadField as u8);
+        assert_eq!(
+            u32::from_le_bytes(compact.code[1..5].try_into().unwrap()),
+            3
+        );
+        assert_eq!(compact.code[5], OpCode::VirtualStoreField as u8);
+        assert_eq!(
+            u32::from_le_bytes(compact.code[6..10].try_into().unwrap()),
+            258,
+        );
+        assert_eq!(compact.code[10], OpCode::Return as u8);
+    }
+
+    /// A wrong `encoded_size` silently desynchronizes the instruction stream: the
+    /// decoder reads the next opcode from the middle of an operand. The offset
+    /// table is built from `encoded_size` while the bytes are written by
+    /// `lower_to_compact`, so the two must agree for every opcode.
+    #[test]
+    fn encoded_size_matches_emitted_bytes_for_every_opcode() {
+        for (instruction, expected) in [
+            (Instruction::UnaryOp(UnaryOp::Truthy), OpCode::Truthy),
+            (Instruction::VirtualLoadField(1), OpCode::VirtualLoadField),
+            (Instruction::VirtualStoreField(1), OpCode::VirtualStoreField),
+            (Instruction::LoadField(1), OpCode::LoadField),
+            (Instruction::StoreField(1), OpCode::StoreField),
+        ] {
+            let bc = make_bytecode(vec![instruction], Vec::new());
+            let op = bc.instruction_to_opcode(&instruction);
+            assert_eq!(op, expected, "opcode mapping for {instruction:?}");
+            assert_eq!(
+                bc.lower_to_compact().code.len(),
+                op.encoded_size(),
+                "encoded_size disagrees with emitted bytes for {instruction:?}",
+            );
+            assert_eq!(
+                OpCode::try_from(op as u8).expect("opcode round-trips"),
+                op,
+                "opcode byte round-trip for {instruction:?}",
+            );
+        }
     }
 
     #[test]

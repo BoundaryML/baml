@@ -13,7 +13,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../../../sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj" />
-    <Compile Include="baml_client/**/*.cs" />
+    <Compile Include="baml_sdk/**/*.cs" />
     <Compile Include="Program.cs" Condition="'$(BamlNegativeCase)' == ''" />
     <Compile
       Include="CompileNegative/$(BamlNegativeCase).cs"

@@ -12,9 +12,8 @@ internal static class Program
     private const string ExpectedStreamFinalSha256 =
         "2e950ddbdb0c2e12f64c09bc6e4a72f687367894cdea17d632529fd6719d2ef2";
     private const string StreamPartialOptionName = "string | null";
-    private const string StreamClassName = "baml.llm.Stream";
-    private const string StreamFinishedClassName =
-        "baml.stream.StreamFinished";
+    private const string StreamClassName = "ai.stream.Stream";
+    private const string StreamDoneClassName = "ai.stream.Done";
 
     public static async Task<int> Main(string[] args)
     {
@@ -739,7 +738,7 @@ internal static class Program
         ulong clone = bridge.CloneHandle(stream.Key);
         BamlOutboundValue value = RequireOk(
             await bridge.CallAsync(
-                    "baml.llm.Stream.next",
+                    "ai.stream.Stream.next",
                     Arguments(
                         ("self", HandleValue(
                             clone,
@@ -781,7 +780,7 @@ internal static class Program
 
         if (StringComparer.Ordinal.Equals(
                 union.ValueOptionName,
-                StreamFinishedClassName))
+                StreamDoneClassName))
         {
             if (selected.ValueCase
                 != BamlOutboundValue.ValueOneofCase.ClassValue)
@@ -793,7 +792,7 @@ internal static class Program
 
             if (!StringComparer.Ordinal.Equals(
                     selected.ClassValue.Name,
-                    StreamFinishedClassName)
+                    StreamDoneClassName)
                 || selected.ClassValue.Fields.Count != 0
                 || selected.ClassValue.TypeArgs.Count != 0)
             {
@@ -825,7 +824,7 @@ internal static class Program
         {
             throw new InvalidDataException(
                 "stream pull union descriptor did not exactly match "
-                + "(string | null) | baml.stream.StreamFinished");
+                + "(string | null) | ai.stream.Done");
         }
 
         BamlTy partial = selfType.Union.Options[0];
@@ -841,14 +840,14 @@ internal static class Program
                 == BamlTy.TyOneofCase.ClassTy
             && StringComparer.Ordinal.Equals(
                 finished.ClassTy.Name,
-                StreamFinishedClassName)
+                StreamDoneClassName)
             && finished.ClassTy.TypeArgs.Count == 0;
 
         if (!valid)
         {
             throw new InvalidDataException(
                 "stream pull union descriptor did not exactly match "
-                + "(string | null) | baml.stream.StreamFinished");
+                + "(string | null) | ai.stream.Done");
         }
     }
 
@@ -870,8 +869,8 @@ internal static class Program
         Require(
             DecodePull(
                 CreateStreamPullUnion(
-                    StreamFinishedClassName,
-                    CreateStreamFinishedValue()))
+                    StreamDoneClassName,
+                    CreateStreamDoneValue()))
                 .IsFinished,
             "canonical stream-finished metadata did not decode");
 
@@ -917,7 +916,7 @@ internal static class Program
             "unknown selected arm");
         RequireDecodePullRejected(
             CreateStreamPullUnion(
-                StreamFinishedClassName,
+                StreamDoneClassName,
                 new BamlOutboundValue
                 {
                     StringValue = "fixture",
@@ -927,13 +926,13 @@ internal static class Program
         RequireDecodePullRejected(
             CreateStreamPullUnion(
                 StreamPartialOptionName,
-                CreateStreamFinishedValue()),
+                CreateStreamDoneValue()),
             "selected the partial arm but carried ClassValue",
             "partial name with finished payload");
 
         BamlOutboundValue wrongFinishedClass = CreateStreamPullUnion(
-            StreamFinishedClassName,
-            CreateStreamFinishedValue());
+            StreamDoneClassName,
+            CreateStreamDoneValue());
         wrongFinishedClass.UnionVariantValue.Value.ClassValue.Name =
             "baml.stream.NotFinished";
         RequireDecodePullRejected(
@@ -973,7 +972,7 @@ internal static class Program
             {
                 ClassTy = new BamlTyClass
                 {
-                    Name = StreamFinishedClassName,
+                    Name = StreamDoneClassName,
                 },
             });
         return new BamlOutboundValue
@@ -987,12 +986,12 @@ internal static class Program
         };
     }
 
-    private static BamlOutboundValue CreateStreamFinishedValue() =>
+    private static BamlOutboundValue CreateStreamDoneValue() =>
         new()
         {
             ClassValue = new BamlValueClass
             {
-                Name = StreamFinishedClassName,
+                Name = StreamDoneClassName,
             },
         };
 
@@ -1093,7 +1092,7 @@ internal static class Program
         return DecodeString(
             RequireOk(
                 await bridge.CallAsync(
-                        "baml.llm.Stream.final",
+                        "ai.stream.Stream.final",
                         Arguments(
                             ("self", HandleValue(
                                 clone,
@@ -1191,7 +1190,7 @@ internal static class Program
             bridge.Cancel(callId) == 0,
             "pre-cancel stream call ID was rejected");
         NativeCall call = bridge.Dispatch(
-            "baml.llm.Stream.next",
+            "ai.stream.Stream.next",
             ArgumentsWithCallId(
                 callId,
                 ("self", HandleValue(

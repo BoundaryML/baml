@@ -1,0 +1,934 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function interfaces_associated_types.$init_test_ns_interfaces_associated_types_interfaces_associated_types(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "associated_type_projection_in_throws_position_runs"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "concrete_associated_error_binds_generic_throws_at_call_site"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "default_method_self_call_yielding_associated_type_runs"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "blanket_impl_self_associated_projection_uses_bounded_typevar"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "blanket_impl_concrete_projection_return_resolves_at_callsite"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "upcast_of_bounded_typevar_preserves_associated_bindings"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "associated_type_default_typevar_satisfies_declared_bound"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "abstract_associated_projection_bound_method_dispatch_runs"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "inferred_native_generic_type_arg_from_interface_associated_return_runs"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "runtime_dispatch_substitutes_class_typevar_in_associated_type_binding"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "runtime_dispatch_substitutes_class_typevar_inside_nested_associated_binding"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "runtime_match_filters_by_associated_type_binding"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "runtime_destructure_filters_by_associated_type_binding"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "reflection_implements_respects_associated_type_bindings"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "reflection_resolves_generic_class_associated_type_binding"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "reflection_respects_generic_interface_impl_bound"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "reflection_respects_generic_interface_impl_bound_plain_args"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "reflection_literal_type_uses_concrete_base_impls"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "reflection_enum_variant_type_uses_concrete_base_impls"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function interfaces_associated_types.AdbUser.AdbSummarizable.summary(self: interfaces_associated_types.AdbUser) -> string {
+    load_var self
+    load_field .name
+    return
+}
+
+function interfaces_associated_types.AdbUserHolder.AdbHolder<AdbUser>.get(self: interfaces_associated_types.AdbUserHolder) -> interfaces_associated_types.AdbUser {
+    load_var self
+    load_field .user
+    return
+}
+
+function interfaces_associated_types.AlwaysFails.Fallible.value(self: interfaces_associated_types.AlwaysFails) -> int {
+    load_const "boom"
+    init_instance user.interfaces_associated_types.Boom .message
+    throw
+}
+
+function interfaces_associated_types.ApdSomeInterface.same_label(self: interfaces_associated_types.ApdSomeInterface, other: #0) -> bool {
+    load_var self
+    load_type interfaces_associated_types.ApdSomeInterface
+    load_const "label"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var other
+    load_type interfaces_associated_types.ApdSomeInterface
+    load_const "label"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var2 3 4
+    cmp_op ==
+    return
+}
+
+function interfaces_associated_types.ApdWidget.ApdSomeInterface.label(self: interfaces_associated_types.ApdWidget) -> string {
+    load_var self
+    load_field .name
+    return
+}
+
+function interfaces_associated_types.ApdWidgetHolder.ApdHolder.get(self: interfaces_associated_types.ApdWidgetHolder) -> interfaces_associated_types.ApdWidget {
+    load_var self
+    load_field .item
+    return
+}
+
+function interfaces_associated_types.BcpTextSource.BcpSource.get(self: interfaces_associated_types.BcpTextSource) -> string {
+    load_var self
+    load_field .text
+    return
+}
+
+function interfaces_associated_types.BcpWrapperView$for$BcpWrapped<S>.output(self: interfaces_associated_types.BcpWrapped<#0>) -> (interfaces_associated_types.BcpWrapped<#0> as interfaces_associated_types.BcpWrapperView<Output = (#0 as interfaces_associated_types.BcpSource<Item = string>).Item>).Output {
+    load_var self
+    load_field .inner
+    load_type interfaces_associated_types.BcpSource<Item = string>
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.BspRenderable$for$BspWrapped<T>.render(self: interfaces_associated_types.BspWrapped<#0>) -> (interfaces_associated_types.BspWrapped<#0> as interfaces_associated_types.BspRenderable<Output = (#0 as interfaces_associated_types.BspSource<Item = string>).Item>).Output {
+    load_var self
+    load_field .inner
+    load_type interfaces_associated_types.BspSource<Item = string>
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.BspTextSource.BspSource.get(self: interfaces_associated_types.BspTextSource) -> string {
+    load_var self
+    load_field .text
+    return
+}
+
+function interfaces_associated_types.CaeIntDriver.CaeDriver<CaeTask<int>>.drive(self: interfaces_associated_types.CaeIntDriver, input: interfaces_associated_types.CaeTask<int>) -> int {
+    load_var input
+    load_field .value
+    init_instance user.interfaces_associated_types.CaeKaboom .data
+    throw
+}
+
+function interfaces_associated_types.CaeTask.drive(self: interfaces_associated_types.CaeTask<#0>, driver: #3) -> #1 {
+    load_var2 2 1
+    load_type interfaces_associated_types.CaeDriver<interfaces_associated_types.CaeTask<#0>, Error = #2, Output = #1>
+    load_const "drive"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.Describable.describe(self: interfaces_associated_types.Describable) -> #1 {
+    load_var self
+    load_type interfaces_associated_types.Describable<Output = #1>
+    load_const "value"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.Fallible.value_plus_one(self: interfaces_associated_types.Fallible) -> int {
+    load_var self
+    load_type interfaces_associated_types.Fallible<Error = #1>
+    load_const "value"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _2
+    load_var _2
+    load_const 1
+    add_int
+    return
+}
+
+function interfaces_associated_types.IngIntIterator.IngIterator.next(self: interfaces_associated_types.IngIntIterator) -> int | null {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces_associated_types.RdnBox.RdnSource.get(self: interfaces_associated_types.RdnBox<#0>) -> #0 {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces_associated_types.RdnOuterBox.RdnOuter.inner(self: interfaces_associated_types.RdnOuterBox<#0>) -> interfaces_associated_types.RdnSource<Item = #0> {
+    load_var self
+    load_field .source
+    return
+}
+
+function interfaces_associated_types.RdsBox.RdsContainer.get(self: interfaces_associated_types.RdsBox<#0>) -> #0 {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces_associated_types.RevNamed$for$RevColor.name(self: interfaces_associated_types.RevColor) -> string {
+    load_const "color"
+    return
+}
+
+function interfaces_associated_types.RltDebuggable$for$int.debug(self: int) -> string {
+    load_const "int"
+    return
+}
+
+function interfaces_associated_types.RmfIntSource.RmfSource.get(self: interfaces_associated_types.RmfIntSource) -> int {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces_associated_types.RmfStringSource.RmfSource.get(self: interfaces_associated_types.RmfStringSource) -> string {
+    load_var self
+    load_field .value
+    return
+}
+
+function interfaces_associated_types.Ticket.Describable.value(self: interfaces_associated_types.Ticket) -> string {
+    load_var self
+    load_field .id
+    return
+}
+
+function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.key(self: interfaces_associated_types.UpcEntityBox<#0>) -> (interfaces_associated_types.UpcEntityBox<#0> as interfaces_associated_types.UpcSummarizes<Key = string>).Key {
+    load_var self
+    load_field .value
+    load_type interfaces_associated_types.UpcHasKey<Key = string>
+    virtual_load_field .key
+    return
+}
+
+function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.summary(self: interfaces_associated_types.UpcEntityBox<#0>) -> string {
+    load_var self
+    load_type interfaces_associated_types.UpcSummarizes<Key = string>
+    load_const "key"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var self
+    load_field .value
+    load_type interfaces_associated_types.UpcNamed
+    virtual_load_field .name
+    load_const ":"
+    bin_op +
+    load_var _5
+    bin_op +
+    return
+}
+
+function interfaces_associated_types.adb_main() -> string {
+    load_type interfaces_associated_types.AdbUserHolder
+    load_const "Ada"
+    init_instance user.interfaces_associated_types.AdbUser .name
+    init_instance user.interfaces_associated_types.AdbUserHolder .user
+    call user.interfaces_associated_types.adb_summarize
+    return
+}
+
+function interfaces_associated_types.adb_summarize(holder: #0) -> string {
+    load_var holder
+    load_type interfaces_associated_types.AdbHolder<interfaces_associated_types.AdbUser>
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _2
+    load_var _2
+    load_type interfaces_associated_types.AdbSummarizable
+    load_const "summary"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.apd_holder_matches_itself(holder: #0) -> bool {
+    load_var holder
+    load_type interfaces_associated_types.ApdHolder
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
+    store_var item
+    load_var2 3 3
+    load_type interfaces_associated_types.ApdSomeInterface
+    load_const "same_label"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.apd_label_from_holder(holder: #0) -> string {
+    load_var holder
+    load_type interfaces_associated_types.ApdHolder
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
+    store_var item
+    load_var item
+    load_type interfaces_associated_types.ApdSomeInterface
+    load_const "label"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.apd_main() -> string {
+    load_const "alpha"
+    init_instance user.interfaces_associated_types.ApdWidget .name
+    init_instance user.interfaces_associated_types.ApdWidgetHolder .item
+    store_var holder
+    load_type interfaces_associated_types.ApdWidgetHolder
+    load_var holder
+    call user.interfaces_associated_types.apd_holder_matches_itself
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "false"
+    store_var same
+    jump L2
+
+  L1:
+    load_const "true"
+    store_var same
+
+  L2:
+    load_type interfaces_associated_types.ApdWidgetHolder
+    load_var holder
+    call user.interfaces_associated_types.apd_label_from_holder
+    load_const ":"
+    bin_op +
+    load_var same
+    bin_op +
+    return
+}
+
+function interfaces_associated_types.atp_throws_main() -> string {
+    alloc_instance user.interfaces_associated_types.AlwaysFails
+    load_type interfaces_associated_types.Fallible<Error = interfaces_associated_types.Boom>
+    load_const "value_plus_one"
+    virtual_call nargs=1 ntypeargs=0
+    store_var default_result
+    jump L2
+    load_var e
+    is_type interfaces_associated_types.Boom
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const "default:"
+    load_var e
+    load_field .message
+    bin_op +
+    store_var default_result
+
+  L2:
+    load_type interfaces_associated_types.AlwaysFails
+    alloc_instance user.interfaces_associated_types.AlwaysFails
+    call user.interfaces_associated_types.call_value
+    store_var generic_result
+    jump L5
+    load_var e
+    is_type interfaces_associated_types.Boom
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var e
+    rethrow
+
+  L4:
+    load_const "generic:"
+    load_var e
+    load_field .message
+    bin_op +
+    store_var generic_result
+
+  L5:
+    load_type int | string
+    load_var default_result
+    call baml.String.from
+    store_var _13
+    load_type int | string
+    load_var generic_result
+    call baml.String.from
+    store_var _15
+    load_var _13
+    load_const "|"
+    bin_op +
+    load_var _15
+    bin_op +
+    return
+}
+
+function interfaces_associated_types.bcp_main() -> string {
+    load_const "hello"
+    init_instance user.interfaces_associated_types.BcpTextSource .text
+    load_type interfaces_associated_types.BcpTextSource
+    init_instance<1> user.interfaces_associated_types.BcpWrapped .inner
+    load_type interfaces_associated_types.BcpWrapperView<Output = string>
+    load_const "output"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.bsp_main() -> string {
+    load_const "sample"
+    load_const "ok"
+    init_instance user.interfaces_associated_types.BspTextSource .name, .text
+    store_var source
+    load_type interfaces_associated_types.BspTextSource
+    load_var source
+    call user.interfaces_associated_types.bsp_take_source
+    store_var _5
+    load_var source
+    load_type interfaces_associated_types.BspTextSource
+    init_instance<1> user.interfaces_associated_types.BspWrapped .inner
+    load_type interfaces_associated_types.BspRenderable<Output = string>
+    load_const "render"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _8
+    load_var _5
+    load_const ":"
+    bin_op +
+    load_var _8
+    bin_op +
+    return
+}
+
+function interfaces_associated_types.bsp_take_source(source: #0) -> (#0 as interfaces_associated_types.BspSource<Item = string>).Item {
+    load_var source
+    load_type interfaces_associated_types.BspSource<Item = string>
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.cae_main() -> int {
+    load_type int
+    load_type int
+    load_type interfaces_associated_types.CaeKaboom
+    load_type interfaces_associated_types.CaeIntDriver
+    load_const 42
+    load_type int
+    init_instance<1> user.interfaces_associated_types.CaeTask .value
+    alloc_instance user.interfaces_associated_types.CaeIntDriver
+    call user.interfaces_associated_types.CaeTask.drive
+    jump L2
+    load_var e
+    store_var _8
+    load_var _8
+    narrow_bind interfaces_associated_types.CaeKaboom, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var _8
+    load_field .data
+
+  L2:
+    return
+}
+
+function interfaces_associated_types.call_value(value: #0) -> int {
+    load_var value
+    load_type interfaces_associated_types.Fallible
+    load_const "value"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.dms_main() -> string {
+    load_const "A-100"
+    init_instance user.interfaces_associated_types.Ticket .id
+    load_type interfaces_associated_types.Describable<Output = string>
+    load_const "describe"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.ing_main() -> string {
+    load_const 7
+    init_instance user.interfaces_associated_types.IngIntIterator .value
+    call user.interfaces_associated_types.ing_stringify_next
+    return
+}
+
+function interfaces_associated_types.ing_stringify_next(iter: interfaces_associated_types.IngIterator<Item = int | null>) -> string {
+    load_var iter
+    load_type interfaces_associated_types.IngIterator<Item = int | null>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _2
+    load_type int | null
+    load_var _2
+    call baml.json.to_string
+    return
+}
+
+function interfaces_associated_types.rdf_main() -> int {
+    load_const "no"
+    init_instance user.interfaces_associated_types.RdfStringSource .value
+    call user.interfaces_associated_types.rdf_score
+    store_var _1
+    load_const 9
+    init_instance user.interfaces_associated_types.RdfIntSource .value
+    call user.interfaces_associated_types.rdf_score
+    load_var _1
+    add_int
+    return
+}
+
+function interfaces_associated_types.rdf_score(source: interfaces_associated_types.RdfSource<Item = int> | interfaces_associated_types.RdfSource<Item = string>) -> int {
+    load_var source
+    is_type interfaces_associated_types.RdfSource<Item = int>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var source
+    load_type interfaces_associated_types.RdfSource<Item = int>
+    virtual_load_field .value
+
+  L2:
+    return
+}
+
+function interfaces_associated_types.rdn_main() -> int {
+    load_const 42
+    load_type int
+    init_instance<1> user.interfaces_associated_types.RdnBox .value
+    load_type int
+    init_instance<1> user.interfaces_associated_types.RdnOuterBox .source
+    call user.interfaces_associated_types.rdn_unwrap
+    return
+}
+
+function interfaces_associated_types.rdn_unwrap(outer: interfaces_associated_types.RdnOuter<Inner = interfaces_associated_types.RdnSource<Item = int>>) -> int {
+    load_var outer
+    load_type interfaces_associated_types.RdnOuter<Inner = interfaces_associated_types.RdnSource<Item = int>>
+    load_const "inner"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _2
+    load_var _2
+    load_type interfaces_associated_types.RdnSource<Item = int>
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.rds_main() -> int {
+    load_const 42
+    load_type int
+    init_instance<1> user.interfaces_associated_types.RdsBox .value
+    call user.interfaces_associated_types.rds_unwrap
+    return
+}
+
+function interfaces_associated_types.rds_unwrap(c: interfaces_associated_types.RdsContainer<Item = int>) -> int {
+    load_var c
+    load_type interfaces_associated_types.RdsContainer<Item = int>
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function interfaces_associated_types.rev_main() -> int {
+    load_const 0
+    store_var score
+    load_type interfaces_associated_types.RevColor.Red
+    load_type interfaces_associated_types.RevNamed
+    call reflect.Type.implements
+    pop_jump_if_false L0
+    load_var score
+    load_const 1
+    add_int
+    store_var score
+
+  L0:
+    load_type interfaces_associated_types.RevColor
+    load_type interfaces_associated_types.RevNamed
+    call reflect.Type.implements
+    pop_jump_if_false L1
+    load_var score
+    load_const 10
+    add_int
+    store_var score
+
+  L1:
+    load_var score
+    return
+}
+
+function interfaces_associated_types.rfg_main() -> int {
+    load_type interfaces_associated_types.RfgBox<int>
+    store_var box_int
+    load_type interfaces_associated_types.RfgSource<Item = string>
+    store_var string_source
+    load_const 0
+    store_var score
+    load_var box_int
+    load_type interfaces_associated_types.RfgSource<Item = int>
+    call reflect.Type.implements
+    pop_jump_if_false L0
+    load_var score
+    load_const 1
+    add_int
+    store_var score
+
+  L0:
+    load_var2 1 2
+    call reflect.Type.implements
+    pop_jump_if_false L1
+    load_var score
+    load_const 10
+    add_int
+    store_var score
+
+  L1:
+    load_var2 2 1
+    call reflect.Type.implemented_by
+    pop_jump_if_false L2
+    load_var score
+    load_const 100
+    add_int
+    store_var score
+
+  L2:
+    load_var score
+    return
+}
+
+function interfaces_associated_types.rfi_main() -> int {
+    load_const 0
+    store_var score
+    load_type interfaces_associated_types.RfiIntSource
+    load_type interfaces_associated_types.RfiSource<Item = int>
+    call reflect.Type.implements
+    pop_jump_if_false L0
+    load_var score
+    load_const 1
+    add_int
+    store_var score
+
+  L0:
+    load_type interfaces_associated_types.RfiIntSource
+    load_type interfaces_associated_types.RfiSource<Item = string>
+    call reflect.Type.implements
+    pop_jump_if_false L1
+    load_var score
+    load_const 10
+    add_int
+    store_var score
+
+  L1:
+    load_type interfaces_associated_types.RfiStringSource
+    load_type interfaces_associated_types.RfiSource<Item = string>
+    call reflect.Type.implements
+    pop_jump_if_false L2
+    load_var score
+    load_const 100
+    add_int
+    store_var score
+
+  L2:
+    load_type interfaces_associated_types.RfiStringSource
+    load_type interfaces_associated_types.RfiSource<Item = int>
+    call reflect.Type.implements
+    pop_jump_if_false L3
+    load_var score
+    load_const 1000
+    add_int
+    store_var score
+
+  L3:
+    load_var score
+    return
+}
+
+function interfaces_associated_types.rgb_main() -> int {
+    load_const 0
+    store_var score
+    load_type interfaces_associated_types.RgbIntSource
+    load_type interfaces_associated_types.RgbIntSourced
+    call reflect.Type.implements
+    pop_jump_if_false L0
+    load_var score
+    load_const 1
+    add_int
+    store_var score
+
+  L0:
+    load_type interfaces_associated_types.RgbStrSource
+    load_type interfaces_associated_types.RgbIntSourced
+    call reflect.Type.implements
+    pop_jump_if_false L1
+    load_var score
+    load_const 10
+    add_int
+    store_var score
+
+  L1:
+    load_var score
+    return
+}
+
+function interfaces_associated_types.rlt_main() -> int {
+    load_const 0
+    store_var score
+    load_type 1
+    load_type interfaces_associated_types.RltDebuggable
+    call reflect.Type.implements
+    pop_jump_if_false L0
+    load_var score
+    load_const 1
+    add_int
+    store_var score
+
+  L0:
+    load_type int
+    load_type interfaces_associated_types.RltDebuggable
+    call reflect.Type.implements
+    pop_jump_if_false L1
+    load_var score
+    load_const 10
+    add_int
+    store_var score
+
+  L1:
+    load_var score
+    return
+}
+
+function interfaces_associated_types.rmf_main() -> int {
+    load_const "no"
+    init_instance user.interfaces_associated_types.RmfStringSource .value
+    call user.interfaces_associated_types.rmf_score
+    store_var _1
+    load_const 7
+    init_instance user.interfaces_associated_types.RmfIntSource .value
+    call user.interfaces_associated_types.rmf_score
+    load_var _1
+    add_int
+    return
+}
+
+function interfaces_associated_types.rmf_score(source: interfaces_associated_types.RmfSource<Item = int> | interfaces_associated_types.RmfSource<Item = string>) -> int {
+    load_var source
+    store_var _2
+    load_var _2
+    narrow_bind interfaces_associated_types.RmfSource<Item = int>, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0
+    jump L2
+
+  L1:
+    load_var _2
+    load_type interfaces_associated_types.RmfSource<Item = int>
+    load_const "get"
+    virtual_call nargs=1 ntypeargs=0
+
+  L2:
+    return
+}
+
+function interfaces_associated_types.rpa_main() -> int {
+    load_const 0
+    store_var score
+    load_type interfaces_associated_types.RpaIntBox
+    load_type interfaces_associated_types.RpaNeedsIntContainer
+    call reflect.Type.implements
+    pop_jump_if_false L0
+    load_var score
+    load_const 1
+    add_int
+    store_var score
+
+  L0:
+    load_type interfaces_associated_types.RpaStrBox
+    load_type interfaces_associated_types.RpaNeedsIntContainer
+    call reflect.Type.implements
+    pop_jump_if_false L1
+    load_var score
+    load_const 10
+    add_int
+    store_var score
+
+  L1:
+    load_var score
+    return
+}
+
+function interfaces_associated_types.upc_entity_key(value: #0) -> string {
+    load_var value
+    load_type interfaces_associated_types.UpcHasKey<Key = string>
+    virtual_load_field .key
+    return
+}
+
+function interfaces_associated_types.upc_main() -> string {
+    load_const "u1"
+    load_const "Ada"
+    init_instance user.interfaces_associated_types.UpcUser .id, .name
+    store_var_load_var user
+    load_type interfaces_associated_types.UpcUser
+    init_instance<1> user.interfaces_associated_types.UpcEntityBox .value
+    load_type interfaces_associated_types.UpcSummarizes<Key = string>
+    load_const "summary"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_type interfaces_associated_types.UpcUser
+    load_var user
+    call user.interfaces_associated_types.upc_entity_key
+    store_var _6
+    load_var _5
+    load_const "|"
+    bin_op +
+    load_var _6
+    bin_op +
+    return
+}

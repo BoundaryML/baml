@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+380..381 'f': throws never
+407..492 '{\n   ...int\n}': int
+413..466 'if (a ...n    }': void
+417..418 'a': int | null
+417..426 'a == null': bool
+417..439 'a == n...= null': bool
+422..426 'null': null
+430..431 'b': int | null
+430..439 'b == null': bool
+435..439 'null': null
+441..466 '{\n   ...n    }': never
+458..459 '0': 0
+471..472 'a': int
+471..476 'a + b': int
+475..476 'b': int

@@ -73,8 +73,8 @@ interface W306Box<T> {
     function get(self) -> T throws never
 }
 function w306_names<U>() -> string {
-    let naked = reflect.type_of<U>().to_string()
-    let wrapped = reflect.type_of<W306Box<U>>().to_string()
+    let naked = reflect.Type.of<U>().to_string()
+    let wrapped = reflect.Type.of<W306Box<U>>().to_string()
     return "naked=" + naked + " wrapped=" + wrapped
 }
 function w306_main() -> string {
@@ -99,10 +99,10 @@ class W307StringBox {
     }
 }
 function w307_box_impls_intbox<T>() -> bool {
-    return reflect.type_of<W307Box<T>>().implemented_by(reflect.type_of<W307IntBox>())
+    return reflect.Type.of<W307Box<T>>().implemented_by(reflect.Type.of<W307IntBox>())
 }
 function w307_box_impls_stringbox<T>() -> bool {
-    return reflect.type_of<W307Box<T>>().implemented_by(reflect.type_of<W307StringBox>())
+    return reflect.Type.of<W307Box<T>>().implemented_by(reflect.Type.of<W307StringBox>())
 }
 function w307_main() -> bool {
     return w307_box_impls_intbox<int>()
@@ -166,10 +166,10 @@ implements W315Debuggable for int {
     function debugW315(self) -> string { return "int" }
 }
 function w315_main() -> int {
-    let a = reflect.type_of<int>().implements(reflect.type_of<W315Debuggable>())
-    let impls = reflect.type_of<W315Debuggable>().implementors()
-    if a { return 1000 + impls.length() }
-    return impls.length()
+    let a = reflect.Type.of<int>().implements(reflect.Type.of<W315Debuggable>())
+    let b = reflect.Type.of<W315Debuggable>().implemented_by(reflect.Type.of<int>())
+    if a && b { return 1001 }
+    return 0
 }
 test "wf3_out_of_body_primitive_impl_visible_to_reflection_runtime" {
     assert.equal(w315_main(), 1001)
@@ -270,9 +270,9 @@ test "wf3_concrete_field_shadows_interface_views_pins" {
 }
 
 // wf3: generic-interface reflection is per-instantiation. A bare generic head
-// (`reflect.type_of<W3bgBox>()`) is an arity error like any other type
+// (`reflect.Type.of<W3bgBox>()`) is an arity error like any other type
 // position (pinned in tests/interfaces.rs); each written instantiation
-// reflects exactly its own implementors.
+// answers membership only for its own implementors.
 interface W3bgBox<T> {
     function get(self) -> T throws never
 }
@@ -287,31 +287,12 @@ class W3bgStringBox {
     }
 }
 function w3bg_main() -> bool {
-    let int_box = reflect.type_of<W3bgBox<int>>()
-    return int_box.implemented_by(reflect.type_of<W3bgIntBox>())
-        && !int_box.implemented_by(reflect.type_of<W3bgStringBox>())
-        && int_box.implementors().length() == 1
+    let int_box = reflect.Type.of<W3bgBox<int>>()
+    return int_box.implemented_by(reflect.Type.of<W3bgIntBox>())
+        && !int_box.implemented_by(reflect.Type.of<W3bgStringBox>())
 }
 test "wf3_generic_interface_reflection_is_per_instantiation" {
     assert.is_true(w3bg_main())
-}
-
-// wf3_blanket_implementor_identity_is_bare_class_pins
-interface W3biPrintable {
-    function display(self) -> string throws never
-}
-class W3biBox<T> {
-    value: T
-}
-implements<T> W3biPrintable for W3biBox<T> {
-    function display(self) -> string { return "box" }
-}
-function w3bi_main() -> string {
-    let p = reflect.type_of<W3biPrintable>()
-    return p.implementors()[0].to_string()
-}
-test "wf3_blanket_implementor_identity_is_bare_class_pins" {
-    assert.equal(w3bi_main(), "interfaces.W3biBox")
 }
 
 // ─── union-fuzz findings + PR #3638 follow-ups ───────────────────────────────
@@ -337,9 +318,9 @@ class Ufp2UBox {
     }
 }
 function ufp2_main() -> int {
-    let ub = reflect.type_of<Ufp2UBox>()
-    let fwd = reflect.type_of<Ufp2Box<(int | string)?>>()
-    let rev = reflect.type_of<Ufp2Box<(string | int)?>>()
+    let ub = reflect.Type.of<Ufp2UBox>()
+    let fwd = reflect.Type.of<Ufp2Box<(int | string)?>>()
+    let rev = reflect.Type.of<Ufp2Box<(string | int)?>>()
     let a = 0
     if ub.implements(fwd) { a = a + 1 }
     if ub.implements(rev) { a = a + 10 }
@@ -382,11 +363,11 @@ class Ufp5UBox {
     implements Ufp5Box<int | int> { function get(self) -> int | int { return self.value } }
 }
 function ufp5_main() -> int {
-    let ub = reflect.type_of<Ufp5UBox>()
+    let ub = reflect.Type.of<Ufp5UBox>()
     let a = 0
     // UBox implements Box<int | int>, NOT Box<int | string>.
-    if ub.implements(reflect.type_of<Ufp5Box<int | int>>()) { a = a + 1 }
-    if ub.implements(reflect.type_of<Ufp5Box<int | string>>()) { a = a + 10 }
+    if ub.implements(reflect.Type.of<Ufp5Box<int | int>>()) { a = a + 1 }
+    if ub.implements(reflect.Type.of<Ufp5Box<int | string>>()) { a = a + 10 }
     return a
 }
 test "union_fuzz_pr_reflection_duplicate_union_members_not_equivalent" {
@@ -464,25 +445,21 @@ class Uf06UBox {
     }
 }
 function uf06_main() -> int {
-    let ub = reflect.type_of<Uf06UBox>()
-    let fwd = reflect.type_of<Uf06Box<int | string>>()
-    let rev = reflect.type_of<Uf06Box<string | int>>()
+    let ub = reflect.Type.of<Uf06UBox>()
+    let fwd = reflect.Type.of<Uf06Box<int | string>>()
+    let rev = reflect.Type.of<Uf06Box<string | int>>()
     let d1 = 0
     if ub.implements(fwd) { d1 = 1 }
     let d2 = 0
     if fwd.implemented_by(ub) { d2 = 1 }
-    let d3 = 0
-    if fwd.implementors().length() == 1 { d3 = 1 }
     let d4 = 0
     if ub.implements(rev) { d4 = 1 }
     let d5 = 0
     if rev.implemented_by(ub) { d5 = 1 }
-    let d6 = 0
-    if rev.implementors().length() == 1 { d6 = 1 }
-    return d1*100000 + d2*10000 + d3*1000 + d4*100 + d5*10 + d6
+    return d1*1000 + d2*100 + d4*10 + d5
 }
 test "union_fuzz_f06_reflection_generic_union_arg_order_insensitive" {
-    assert.equal(uf06_main(), 111111)
+    assert.equal(uf06_main(), 1111)
 }
 
 // union_fuzz_f08_interface_bounded_generic_identity_compiles
@@ -564,4 +541,67 @@ function ptu_main() -> string {
 }
 test "positional_typevar_union_interface_args_dispatch" {
     assert.equal(ptu_main(), "multi:x")
+}
+
+// ── Ported from tests/interfaces.rs ──────────────────────────────────────────
+
+// The dispatch cache keys on the *realized* interface arguments, not just the
+// interface's nominal identity: two `Tagged<...>` instantiations on one class
+// must select different implementations from the same fact-poor structural
+// context.
+interface VdcAnimal {}
+
+class VdcDog {
+    implements VdcAnimal {}
+}
+
+interface VdcTagged<T> {
+    function tag(self) -> string throws never
+}
+
+class VdcBoth {
+    implements VdcTagged<VdcAnimal> {
+        function tag(self) -> string { return "animal" }
+    }
+    implements VdcTagged<VdcAnimal | VdcDog> {
+        function tag(self) -> string { return "animal-or-dog" }
+    }
+}
+
+function vdc_read_tag<T>(value: VdcTagged<T>) -> string {
+    return value.tag()
+}
+
+function vdc_dispatch_distinguishes_instantiations() -> string {
+    let value = VdcBoth {};
+    return vdc_read_tag<VdcAnimal>(value) + "|" + vdc_read_tag<VdcAnimal | VdcDog>(value)
+}
+
+test "virtual_dispatch_cache_distinguishes_generic_interface_instantiations" {
+    assert.equal(vdc_dispatch_distinguishes_instantiations(), "animal|animal-or-dog")
+}
+
+// Union dispatch resolves per-member: a receiver that only has an inherent
+// method must not be sent through the interface vtable selected for the other
+// member of the union.
+interface HudSpeaker {
+    function speak(self) -> string throws never
+}
+
+class HudA {
+    implements HudSpeaker {
+        function speak(self) -> string { return "interface" }
+    }
+}
+
+class HudB {
+    function speak(self) -> string { return "inherent" }
+}
+
+function hud_speak(x: HudA | HudB) -> string {
+    return x.speak()
+}
+
+test "heterogeneous_union_dispatch_calls_inherent_non_implementor_method" {
+    assert.equal(hud_speak(HudB {}), "inherent")
 }

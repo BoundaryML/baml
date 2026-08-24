@@ -6,13 +6,7 @@
 // Run with:
 //   cd baml_language/crates/bridge_wasm && wasm-pack test --node
 
-use std::collections::HashMap;
-
 use base64::Engine;
-use bex_events::{
-    prof::read::read_bamlprof_from_bytes,
-    run::{CallStatus, ReconstructedProfile, bamlprof},
-};
 use bridge_wasm::{
     BamlWasmRuntime, LspNotification,
     baml_bridge::cffi::{BamlOutboundValue, baml_outbound_value::Value as OutboundValue},
@@ -451,31 +445,10 @@ fn get_string(value: &JsValue, key: &str) -> Option<String> {
         .and_then(|value| value.as_string())
 }
 
-fn profile_artifact_bytes(notifications: &js_sys::Array, start_index: u32) -> Option<Vec<u8>> {
-    for idx in start_index..notifications.length() {
-        let notification = notifications.get(idx);
-        if get_string(&notification, "type").as_deref() != Some("profileArtifactChunk") {
-            continue;
-        }
-        let encoded = get_string(&notification, "bytesBase64")?;
-        return base64::engine::general_purpose::STANDARD
-            .decode(encoded)
-            .ok();
-    }
-    None
-}
-
 fn bool_value(value: BamlOutboundValue) -> bool {
     match value.value {
         Some(OutboundValue::BoolValue(v)) => v,
         other => panic!("expected bool result, got {other:?}"),
-    }
-}
-
-fn int_value(value: BamlOutboundValue) -> i64 {
-    match value.value {
-        Some(OutboundValue::IntValue(v)) => v,
-        other => panic!("expected int result, got {other:?}"),
     }
 }
 
@@ -572,22 +545,6 @@ function RemoveDirAllMissingIdempotent() -> bool {
 }
 "#;
 
-const PROFILE_SOURCE: &str = r#"
-function ProfileMarker() -> int {
-  7
-}
-"#;
-
-const PROFILE_PARITY_SOURCE: &str = r#"
-function parity_leaf(n: int) -> int { n + 1 }
-function parity_mid(n: int) -> int {
-  parity_leaf(n) + parity_leaf(n + 10)
-}
-function main() -> int {
-  parity_mid(1) + parity_leaf(5)
-}
-"#;
-
 fn runtime_files() -> Vec<(&'static str, &'static str)> {
     vec![
         ("/workspace/baml_src/main.baml", FS_GLOB_SOURCE),
@@ -616,128 +573,6 @@ async fn wasm_runtime_mkdir_recursive_then_exists() {
 
     let result = call_no_args(&runtime, 1, "MkdirRecursive").await;
     assert!(bool_value(result));
-}
-
-#[wasm_bindgen_test]
-async fn wasm_runtime_emits_reader_compatible_profile_artifact() {
-    let files = vec![("/workspace/baml_src/main.baml", PROFILE_SOURCE)];
-    let dirs = vec!["/workspace", "/workspace/baml_src"];
-    let runtime = runtime(&files, &dirs, PROFILE_SOURCE);
-
-    let start_index = runtime.notifications.length();
-    let result = call_no_args(&runtime, 11, "ProfileMarker").await;
-    assert_eq!(int_value(result), 7);
-
-    let bytes = profile_artifact_bytes(&runtime.notifications, start_index)
-        .expect("profileArtifactChunk notification with retained .bamlprof bytes");
-    let parsed = read_bamlprof_from_bytes(&bytes).expect("WASM .bamlprof bytes parse");
-    let table = parsed
-        .header
-        .function_table
-        .as_ref()
-        .expect("WASM .bamlprof header has function metadata");
-    assert!(
-        table
-            .functions
-            .iter()
-            .any(|f| f.fqn == "user.ProfileMarker"),
-        "profile header must include the executed function: {table:#?}"
-    );
-
-    let reconstructed =
-        bamlprof::reconstruct_bamlprof(&parsed).expect("WASM .bamlprof reconstructs");
-    assert!(
-        reconstructed.diagnostics.is_empty(),
-        "WASM profile reconstruction diagnostics: {:#?}",
-        reconstructed.diagnostics
-    );
-    assert!(
-        reconstructed
-            .calls
-            .iter()
-            .any(|call| call.function_name.as_deref() == Some("user.ProfileMarker")),
-        "reconstructed call tree should include ProfileMarker: {:#?}",
-        reconstructed.calls
-    );
-}
-
-#[wasm_bindgen_test]
-async fn wasm_profile_reconstructs_canonical_parity_shape() {
-    let files = vec![("/workspace/baml_src/main.baml", PROFILE_PARITY_SOURCE)];
-    let dirs = vec!["/workspace", "/workspace/baml_src"];
-    let runtime = runtime(&files, &dirs, PROFILE_PARITY_SOURCE);
-
-    let start_index = runtime.notifications.length();
-    let result = call_no_args(&runtime, 12, "main").await;
-    assert_eq!(int_value(result), 18);
-
-    let bytes = profile_artifact_bytes(&runtime.notifications, start_index)
-        .expect("profileArtifactChunk notification with retained .bamlprof bytes");
-    let parsed = read_bamlprof_from_bytes(&bytes).expect("WASM .bamlprof bytes parse");
-    let reconstructed = bamlprof::reconstruct_bamlprof(&parsed).expect("WASM profile reconstructs");
-    assert_canonical_profile_parity_shape(&reconstructed);
-}
-
-fn assert_canonical_profile_parity_shape(reconstructed: &ReconstructedProfile) {
-    assert!(
-        reconstructed.diagnostics.is_empty(),
-        "profile parity reconstruction diagnostics: {:#?}",
-        reconstructed.diagnostics
-    );
-
-    let calls_by_id: HashMap<_, _> = reconstructed
-        .calls
-        .iter()
-        .map(|call| (call.id, call))
-        .collect();
-    let mut counts: HashMap<String, usize> = HashMap::new();
-    let mut edges: HashMap<(String, String), usize> = HashMap::new();
-
-    for call in &reconstructed.calls {
-        assert_eq!(
-            call.status,
-            CallStatus::Ok,
-            "parity fixture should have only successful calls"
-        );
-        let start = call.started_at_ns.expect("call has start timestamp");
-        let end = call.ended_at_ns.expect("call has end timestamp");
-        assert!(end >= start, "call timestamps are monotonic");
-
-        let function_name = call
-            .function_name
-            .clone()
-            .unwrap_or_else(|| "<unknown>".to_string());
-        *counts.entry(function_name.clone()).or_default() += 1;
-        let parent_name = call
-            .parent_id
-            .and_then(|parent_id| calls_by_id.get(&parent_id))
-            .and_then(|parent| parent.function_name.clone())
-            .unwrap_or_else(|| "<root>".to_string());
-        *edges.entry((parent_name, function_name)).or_default() += 1;
-    }
-
-    assert_eq!(counts.get("user.main"), Some(&1));
-    assert_eq!(counts.get("user.parity_mid"), Some(&1));
-    assert_eq!(counts.get("user.parity_leaf"), Some(&3));
-    assert_eq!(
-        edges.get(&("<root>".to_string(), "user.main".to_string())),
-        Some(&1)
-    );
-    assert_eq!(
-        edges.get(&("user.main".to_string(), "user.parity_mid".to_string())),
-        Some(&1)
-    );
-    assert_eq!(
-        edges.get(&(
-            "user.parity_mid".to_string(),
-            "user.parity_leaf".to_string()
-        )),
-        Some(&2)
-    );
-    assert_eq!(
-        edges.get(&("user.main".to_string(), "user.parity_leaf".to_string())),
-        Some(&1)
-    );
 }
 
 #[wasm_bindgen_test]

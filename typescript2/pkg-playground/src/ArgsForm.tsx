@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing public component filename.
 /**
  * Dynamic args form for the Run tab.
  *
@@ -15,15 +16,15 @@
  * degrade to a per-field raw-JSON textarea.
  */
 
+import { ChevronRight, Plus, SquarePen, Trash2 } from 'lucide-react';
 import {
   createContext,
+  type FC,
+  type ReactNode,
   useContext,
   useMemo,
   useState,
-  type FC,
-  type ReactNode,
 } from 'react';
-import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 
 import {
   activeUnionVariant,
@@ -34,9 +35,9 @@ import {
   isRawJsonSchema,
   resolveRef,
   schemaLabel,
+  type TypeLookup,
   typeLookupFrom,
   valueMatchesSchema,
-  type TypeLookup,
 } from './args-form-model';
 import { Button } from './components/ui/button';
 import {
@@ -49,6 +50,12 @@ import { Select } from './components/ui/select';
 import { Switch } from './components/ui/switch';
 import { Textarea } from './components/ui/textarea';
 import { ToggleGroup } from './components/ui/toggle-group';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './components/ui/tooltip';
 import { cn } from './lib/utils';
 import type {
   FieldSchema,
@@ -63,6 +70,39 @@ const ENUM_TOGGLE_MAX = 5;
 const AUTO_COLLAPSE_DEPTH = 2;
 
 const TypeLookupContext = createContext<TypeLookup>(() => undefined);
+
+/** Whether the rendered widget exposes a native text placeholder. */
+function rendersDefaultPlaceholder(
+  schema: FieldSchema,
+  lookup: TypeLookup,
+  refPath: readonly string[] = [],
+): boolean {
+  if (isRawJsonSchema(schema, lookup)) return true;
+  switch (schema.type) {
+    case 'string':
+    case 'int':
+    case 'bigint':
+    case 'float':
+      return true;
+    case 'ref': {
+      if (refPath.includes(schema.name)) return true;
+      const resolved = resolveRef(schema.name, lookup);
+      return resolved?.kind === 'schema'
+        ? rendersDefaultPlaceholder(resolved.schema, lookup, [
+            ...refPath,
+            schema.name,
+          ])
+        : false;
+    }
+    case 'union':
+      return (
+        schema.variants[0] !== undefined &&
+        rendersDefaultPlaceholder(schema.variants[0], lookup, refPath)
+      );
+    default:
+      return false;
+  }
+}
 
 export interface ArgsFormProps {
   params: ParamSchema[];
@@ -89,18 +129,18 @@ export const ArgsForm: FC<ArgsFormProps> = ({
   }
   return (
     <TypeLookupContext.Provider value={lookup}>
-      <div className="flex flex-col gap-1.5">
+      <div className="grid grid-cols-[minmax(8rem,max-content)_minmax(0,1fr)] items-start gap-x-2 gap-y-1.5">
         {params.map((param) => (
           <ParamRow
             key={param.name}
-            param={param}
-            value={value[param.name]}
-            present={param.name in value}
             onChange={(v) => onChange({ ...value, [param.name]: v })}
             onOmit={() => {
               const { [param.name]: _omitted, ...rest } = value;
               onChange(rest);
             }}
+            param={param}
+            present={param.name in value}
+            value={value[param.name]}
           />
         ))}
       </div>
@@ -109,16 +149,19 @@ export const ArgsForm: FC<ArgsFormProps> = ({
 };
 
 /** Shared field header: name plus a faint type label. */
-const FieldLabel: FC<{ name: string; schema: FieldSchema; extra?: ReactNode }> =
-  ({ name, schema, extra }) => (
-    <div className="flex items-center gap-1.5">
-      <span className="font-vsc-mono text-xs text-foreground">{name}</span>
-      <span className="font-vsc-mono text-[10px] text-vsc-text-faint">
-        {schemaLabel(schema)}
-      </span>
-      {extra}
-    </div>
-  );
+const FieldLabel: FC<{
+  name: string;
+  schema: FieldSchema;
+  extra?: ReactNode;
+}> = ({ name, schema, extra }) => (
+  <div className="flex min-h-7 items-center gap-1.5">
+    <span className="font-vsc-mono text-xs text-foreground">{name}</span>
+    <span className="font-vsc-mono text-[10px] text-vsc-text-faint">
+      {schemaLabel(schema)}
+    </span>
+    {extra}
+  </div>
+);
 
 const ParamRow: FC<{
   param: ParamSchema;
@@ -129,39 +172,73 @@ const ParamRow: FC<{
 }> = ({ param, value, present, onChange, onOmit }) => {
   const lookup = useContext(TypeLookupContext);
   const omitted = param.hasDefault && !present;
+  const showDefaultHint =
+    omitted &&
+    param.defaultExpression !== undefined &&
+    !rendersDefaultPlaceholder(param.schema, lookup);
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="contents">
       <FieldLabel
-        name={param.name}
-        schema={param.schema}
         extra={
           param.hasDefault && (
-            <label className="ml-auto flex items-center gap-1 text-[10px] text-vsc-description">
-              set
-              <Switch
-                checked={!omitted}
-                onCheckedChange={(on) =>
-                  on
-                    ? onChange(defaultValueForSchema(param.schema, lookup))
-                    : onOmit()
-                }
+            <div className="ml-auto flex items-center gap-1.5">
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <input
+                      aria-label={`Use an explicit value for ${param.name} instead of its default`}
+                      checked={!omitted}
+                      className="relative size-3.5 shrink-0 cursor-pointer appearance-none rounded-[3px] border border-vsc-description bg-background after:absolute after:inset-0 after:hidden after:place-items-center after:text-[10px] after:font-bold after:leading-none after:text-vsc-accent-fg after:content-['✓'] checked:border-vsc-accent checked:bg-vsc-accent checked:after:grid focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vsc-accent/50"
+                      onChange={(event) =>
+                        event.currentTarget.checked
+                          ? onChange(
+                              defaultValueForSchema(param.schema, lookup),
+                            )
+                          : onOmit()
+                      }
+                      type="checkbox"
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-72" side="top">
+                    Checked: send an explicitly provided value. Unchecked: use
+                    the argument&apos;s default value.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <SquarePen
+                aria-hidden="true"
+                className="size-3.5 shrink-0 text-vsc-description"
               />
-            </label>
+            </div>
           )
         }
+        name={param.name}
+        schema={param.schema}
       />
-      {omitted ? (
-        <div className="text-[10px] text-vsc-text-faint pl-0.5">
-          omitted — uses the declared default
-        </div>
-      ) : (
+      <fieldset
+        className="m-0 min-w-0 border-0 p-0 disabled:opacity-60"
+        disabled={omitted}
+      >
         <FieldInput
+          depth={0}
+          disabled={omitted}
+          onChange={onChange}
+          placeholder={
+            param.hasDefault
+              ? omitted
+                ? param.defaultExpression
+                : ''
+              : undefined
+          }
           schema={param.schema}
           value={value}
-          onChange={onChange}
-          depth={0}
         />
-      )}
+        {showDefaultHint && (
+          <div className="mt-0.5 font-vsc-mono text-[10px] text-vsc-description">
+            default: {param.defaultExpression}
+          </div>
+        )}
+      </fieldset>
     </div>
   );
 };
@@ -171,6 +248,10 @@ interface FieldInputProps {
   value: unknown;
   onChange: (v: unknown) => void;
   depth: number;
+  /** Whether this field is inside a disabled default-argument control. */
+  disabled?: boolean;
+  /** Placeholder for a top-level declared default expression. */
+  placeholder?: string;
   /** Ref names already unwrapped without descending into a child value —
    *  guards self-referential alias schemas (`type A = A | int` compiles
    *  clean) from recursing the render unboundedly. Same-value hops
@@ -199,7 +280,9 @@ const FieldInput: FC<FieldInputProps> = (props) => {
     case 'bool':
       return <BoolField {...props} />;
     case 'null':
-      return <span className="font-vsc-mono text-xs text-vsc-text-faint">null</span>;
+      return (
+        <span className="font-vsc-mono text-xs text-vsc-text-faint">null</span>
+      );
     case 'literal':
       return (
         <span className="font-vsc-mono text-xs text-vsc-description">
@@ -208,11 +291,7 @@ const FieldInput: FC<FieldInputProps> = (props) => {
       );
     case 'enumVariant':
       return (
-        <EnumField
-          {...props}
-          enumName={schema.name}
-          values={[schema.value]}
-        />
+        <EnumField {...props} enumName={schema.name} values={[schema.value]} />
       );
     case 'ref': {
       // isRawJsonSchema handled dangling refs above, so this resolves.
@@ -234,16 +313,16 @@ const FieldInput: FC<FieldInputProps> = (props) => {
         return (
           <FieldInput
             {...props}
-            schema={resolved.schema}
             refPath={[...refPath, schema.name]}
+            schema={resolved.schema}
           />
         );
       }
       return (
         <ClassSection
           {...props}
-          typeName={resolved.name}
           fields={resolved.fields}
+          typeName={resolved.name}
         />
       );
     }
@@ -272,12 +351,16 @@ function useDraft(canonical: string) {
   return [draft, setDraft] as const;
 }
 
-const StringField: FC<FieldInputProps> = ({ value, onChange }) => (
+const StringField: FC<FieldInputProps> = ({
+  value,
+  onChange,
+  placeholder = 'text',
+}) => (
   <Input
     className="h-7 text-xs font-vsc-mono"
-    value={typeof value === 'string' ? value : ''}
-    placeholder="text"
     onChange={(e) => onChange(e.target.value)}
+    placeholder={placeholder}
+    value={typeof value === 'string' ? value : ''}
   />
 );
 
@@ -285,11 +368,11 @@ const NumberField: FC<FieldInputProps & { integer?: boolean }> = ({
   value,
   onChange,
   integer,
+  disabled,
+  placeholder,
 }) => {
   const canonical =
-    typeof value === 'number' || typeof value === 'bigint'
-      ? String(value)
-      : '';
+    typeof value === 'number' || typeof value === 'bigint' ? String(value) : '';
   const [draft, setDraft] = useDraft(canonical);
   const parse = (text: string): number | null => {
     const trimmed = text.trim();
@@ -304,16 +387,16 @@ const NumberField: FC<FieldInputProps & { integer?: boolean }> = ({
   // of argsJson.
   return (
     <Input
+      aria-invalid={!disabled && parse(draft) === null}
       className="h-7 text-xs font-vsc-mono"
       inputMode={integer ? 'numeric' : 'decimal'}
-      value={draft}
-      placeholder={integer ? '0' : '0.0'}
-      aria-invalid={parse(draft) === null}
       onChange={(e) => {
         setDraft(e.target.value);
         const num = parse(e.target.value);
         if (num !== null) onChange(num);
       }}
+      placeholder={placeholder ?? (integer ? '0' : '0.0')}
+      value={draft}
     />
   );
 };
@@ -332,22 +415,22 @@ const EnumField: FC<
   if (values.length <= ENUM_TOGGLE_MAX) {
     return (
       <ToggleGroup
+        onValueChange={(v) => onChange(enumValue(enumName, v))}
+        options={values.map((v) => ({ label: v, value: v }))}
         size="sm"
         value={current ?? ''}
-        options={values.map((v) => ({ value: v, label: v }))}
-        onValueChange={(v) => onChange(enumValue(enumName, v))}
       />
     );
   }
   return (
     <div className="max-w-[240px]">
       <Select
-        value={current ?? ''}
         onChange={(e) => {
           // The empty value is the "select…" placeholder, not a variant.
           if (e.target.value === '') return;
           onChange(enumValue(enumName, e.target.value));
         }}
+        value={current ?? ''}
       >
         {current === undefined && <option value="">select…</option>}
         {values.map((v) => (
@@ -368,11 +451,11 @@ const ClassSection: FC<
   const setField = (name: string, v: unknown) =>
     onChange({ ...obj, $baml: { type: typeName }, [name]: v });
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
+    <Collapsible onOpenChange={setOpen} open={open}>
       <CollapsibleTrigger className="flex items-center gap-1 cursor-pointer text-xs text-vsc-description hover:text-foreground">
         <ChevronRight
-          size={12}
           className={cn('transition-transform', open && 'rotate-90')}
+          size={12}
         />
         <span className="font-vsc-mono">{schemaLabel(schema)}</span>
       </CollapsibleTrigger>
@@ -381,13 +464,13 @@ const ClassSection: FC<
       <CollapsibleContent>
         <div className="flex flex-col gap-1 border-l border-vsc-border ml-1.5 pl-2.5 pt-1">
           {fields.map((field) => (
-            <div key={field.name} className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5" key={field.name}>
               <FieldLabel name={field.name} schema={field.schema} />
               <FieldInput
+                depth={depth + 1}
+                onChange={(v) => setField(field.name, v)}
                 schema={field.schema}
                 value={obj[field.name]}
-                onChange={(v) => setField(field.name, v)}
-                depth={depth + 1}
               />
             </div>
           ))}
@@ -405,35 +488,36 @@ const ListField: FC<
   return (
     <div className="flex flex-col gap-1">
       {items.map((item, i) => (
-        <div key={i} className="flex items-start gap-1">
+        // biome-ignore lint/suspicious/noArrayIndexKey: Argument list values do not have stable identities.
+        <div className="flex items-start gap-1" key={i}>
           <div className="flex-1 min-w-0">
             <FieldInput
-              schema={schema.item}
-              value={item}
+              depth={depth + 1}
               onChange={(v) =>
                 onChange(items.map((cur, j) => (j === i ? v : cur)))
               }
-              depth={depth + 1}
+              schema={schema.item}
+              value={item}
             />
           </div>
           <Button
-            variant="ghost"
-            size="icon-xs"
-            className="text-vsc-red shrink-0"
             aria-label="Remove item"
+            className="text-vsc-red shrink-0"
             onClick={() => onChange(items.filter((_, j) => j !== i))}
+            size="icon-xs"
+            variant="ghost"
           >
             <Trash2 />
           </Button>
         </div>
       ))}
       <Button
-        variant="ghost"
-        size="xs"
         className="self-start text-vsc-link"
         onClick={() =>
           onChange([...items, defaultValueForSchema(schema.item, lookup)])
         }
+        size="xs"
+        variant="ghost"
       >
         <Plus /> add item
       </Button>
@@ -451,10 +535,8 @@ const MapKeyInput: FC<{
   const collides = draft !== mapKey && siblingKeys.includes(draft);
   return (
     <Input
-      className="h-7 text-xs font-vsc-mono w-[130px] shrink-0"
-      value={draft}
-      placeholder="key"
       aria-invalid={collides}
+      className="h-7 text-xs font-vsc-mono w-[130px] shrink-0"
       onChange={(e) => {
         setDraft(e.target.value);
         if (
@@ -464,6 +546,8 @@ const MapKeyInput: FC<{
           onRename(e.target.value);
         }
       }}
+      placeholder="key"
+      value={draft}
     />
   );
 };
@@ -493,34 +577,33 @@ const MapField: FC<
   return (
     <div className="flex flex-col gap-1">
       {entries.map(([k, v], i) => (
-        <div key={i} className="flex items-start gap-1">
+        // biome-ignore lint/suspicious/noArrayIndexKey: Map keys are editable and cannot identify component state.
+        <div className="flex items-start gap-1" key={i}>
           <MapKeyInput
             mapKey={k}
-            siblingKeys={entries.map(([sk]) => sk)}
             onRename={(nk) => rebuild((e, j) => (j === i ? [nk, e[1]] : e))}
+            siblingKeys={entries.map(([sk]) => sk)}
           />
           <div className="flex-1 min-w-0">
             <FieldInput
+              depth={depth + 1}
+              onChange={(nv) => rebuild((e, j) => (j === i ? [e[0], nv] : e))}
               schema={schema.value}
               value={v}
-              onChange={(nv) => rebuild((e, j) => (j === i ? [e[0], nv] : e))}
-              depth={depth + 1}
             />
           </div>
           <Button
-            variant="ghost"
-            size="icon-xs"
-            className="text-vsc-red shrink-0"
             aria-label="Remove entry"
+            className="text-vsc-red shrink-0"
             onClick={() => rebuild((e, j) => (j === i ? null : e))}
+            size="icon-xs"
+            variant="ghost"
           >
             <Trash2 />
           </Button>
         </div>
       ))}
       <Button
-        variant="ghost"
-        size="xs"
         className="self-start text-vsc-link"
         onClick={() =>
           onChange({
@@ -528,6 +611,8 @@ const MapField: FC<
             [freshKey()]: defaultValueForSchema(schema.value, lookup),
           })
         }
+        size="xs"
+        variant="ghost"
       >
         <Plus /> add entry
       </Button>
@@ -537,12 +622,12 @@ const MapField: FC<
 
 const OptionalField: FC<
   FieldInputProps & { schema: Extract<FieldSchema, { type: 'optional' }> }
-> = ({ schema, value, onChange, depth, refPath }) => {
+> = ({ schema, value, onChange, depth, refPath, placeholder }) => {
   const lookup = useContext(TypeLookupContext);
   const isSet = value !== null && value !== undefined;
   return (
     <div className="flex flex-col gap-1">
-      <label className="flex items-center gap-1.5 text-[10px] text-vsc-description">
+      <div className="flex items-center gap-1.5 text-[10px] text-vsc-description">
         <Switch
           checked={isSet}
           onCheckedChange={(on) =>
@@ -550,14 +635,15 @@ const OptionalField: FC<
           }
         />
         {isSet ? 'set' : 'null'}
-      </label>
+      </div>
       {isSet && (
         <FieldInput
+          depth={depth}
+          onChange={onChange}
+          placeholder={placeholder}
+          refPath={refPath}
           schema={schema.inner}
           value={value}
-          onChange={onChange}
-          depth={depth}
-          refPath={refPath}
         />
       )}
     </div>
@@ -566,7 +652,7 @@ const OptionalField: FC<
 
 const UnionField: FC<
   FieldInputProps & { schema: Extract<FieldSchema, { type: 'union' }> }
-> = ({ schema, value, onChange, depth, refPath }) => {
+> = ({ schema, value, onChange, depth, refPath, placeholder }) => {
   const lookup = useContext(TypeLookupContext);
   const detected = activeUnionVariant(value, schema.variants, lookup);
   const [chosen, setChosen] = useState(0);
@@ -584,25 +670,26 @@ const UnionField: FC<
   return (
     <div className="flex flex-col gap-1">
       <ToggleGroup
-        size="sm"
-        value={String(active)}
-        options={schema.variants.map((v, i) => ({
-          value: String(i),
-          label: schemaLabel(v),
-        }))}
         onValueChange={(v) => {
           const index = Number(v);
           setChosen(index);
           onChange(defaultValueForSchema(schema.variants[index], lookup));
         }}
+        options={schema.variants.map((v, i) => ({
+          label: schemaLabel(v),
+          value: String(i),
+        }))}
+        size="sm"
+        value={String(active)}
       />
       {schema.variants[active] && (
         <FieldInput
+          depth={depth}
+          onChange={onChange}
+          placeholder={placeholder}
+          refPath={refPath}
           schema={schema.variants[active]}
           value={value}
-          onChange={onChange}
-          depth={depth}
-          refPath={refPath}
         />
       )}
     </div>
@@ -614,10 +701,18 @@ const UnionField: FC<
  *  draft is an error state, not a deletion — the last committed value stays
  *  in place (so e.g. emptying a map value doesn't delete the row) and the
  *  invalid style flags the draft. */
-const RawJsonField: FC<FieldInputProps> = ({ schema, value, onChange }) => {
+const RawJsonField: FC<FieldInputProps> = ({
+  schema,
+  value,
+  onChange,
+  disabled,
+  placeholder,
+}) => {
   const canonical = value === undefined ? '' : JSON.stringify(value);
   const [draft, setDraft] = useDraft(canonical);
-  const parse = (text: string): { ok: true; value: unknown } | { ok: false } => {
+  const parse = (
+    text: string,
+  ): { ok: true; value: unknown } | { ok: false } => {
     if (text.trim() === '') return { ok: false };
     try {
       return { ok: true, value: JSON.parse(text) };
@@ -627,16 +722,16 @@ const RawJsonField: FC<FieldInputProps> = ({ schema, value, onChange }) => {
   };
   return (
     <Textarea
+      aria-invalid={!disabled && !parse(draft).ok}
       className="min-h-[28px] px-2 py-1 font-vsc-mono text-xs resize-y"
-      rows={1}
-      value={draft}
-      placeholder={`JSON (${schemaLabel(schema)})`}
-      aria-invalid={!parse(draft).ok}
       onChange={(e) => {
         setDraft(e.target.value);
         const parsed = parse(e.target.value);
         if (parsed.ok) onChange(parsed.value);
       }}
+      placeholder={placeholder ?? `JSON (${schemaLabel(schema)})`}
+      rows={1}
+      value={draft}
     />
   );
 };

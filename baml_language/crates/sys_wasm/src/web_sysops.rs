@@ -266,11 +266,13 @@ impl IoNamespaceHttp for WebHttp {
         self.send(SysOp::BamlHttpSend, request, timeout_nanos.as_ref())
     }
 
-    fn fetch_sse(
+    fn _fetch_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _request: io::owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
         unsupported()
@@ -485,6 +487,36 @@ impl IoNamespaceFs for WebFs {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         unsupported()
+    }
+
+    // These two declare `throws root.errors.Io`, which cannot carry the
+    // `Unsupported` that `unsupported()` builds — an off-contract error escapes
+    // every typed `catch` arm the caller can write — so the browser's lack of a
+    // permission model and of symbolic links is reported as `Io`.
+    fn chmod(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _mode: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Io {
+            message: "File permissions are not supported in the browser".to_string(),
+        })
+    }
+
+    fn symlink(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _target: String,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Io {
+            message: "Symbolic links are not supported in the browser".to_string(),
+        })
     }
 }
 

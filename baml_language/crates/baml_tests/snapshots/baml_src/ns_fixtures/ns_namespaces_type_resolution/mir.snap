@@ -1,0 +1,250 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.namespaces_type_resolution.RootIdentity(cfg: fixtures.namespaces_type_resolution.Config) -> fixtures.namespaces_type_resolution.Config {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.Config // _0 // return
+    let _1: fixtures.namespaces_type_resolution.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.RootConstruct(key: string) -> fixtures.namespaces_type_resolution.Config {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.Config // _0 // return
+    let _1: string // key // param
+
+    bb0: {
+        _0 = user.fixtures.namespaces_type_resolution.Config { copy _1, const "prod" };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.RootEnumReturn() -> fixtures.namespaces_type_resolution.Status {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.Status // _0 // return
+
+    bb0: {
+        _0 = const user.fixtures.namespaces_type_resolution.Status.Ok;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.RootEnumMatch(s: fixtures.namespaces_type_resolution.Status) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.Status // s // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Ok: bb4, Status.Failed: bb3, Status.Pending: bb2, otherwise: bb1] (exhaustive);
+    }
+
+    bb1: {
+        unreachable;
+    }
+
+    bb2: {
+        _0 = const "pending";
+        goto -> bb5;
+    }
+
+    bb3: {
+        _0 = const "failed";
+        goto -> bb5;
+    }
+
+    bb4: {
+        _0 = const "ok";
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.RootAliasParam(cfg: fixtures.namespaces_type_resolution.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.RootThrowClass(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: fixtures.namespaces_type_resolution.Error
+
+    bb0: {
+        switch copy _1 [0: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        _2 = user.fixtures.namespaces_type_resolution.Error { const 500_i64, const "root error" };
+        throw copy _2;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.RootThrowEnum(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        switch copy _1 [0: bb3, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        throw const user.fixtures.namespaces_type_resolution.Status.Failed;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.RootUsesLlmConfig(cfg: fixtures.namespaces_type_resolution.llm.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.RootUsesLlmError(e: fixtures.namespaces_type_resolution.llm.Error) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.Error // e // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.RootUsesLlmStatus() -> fixtures.namespaces_type_resolution.llm.Status {
+    // Locals:
+    let _0: fixtures.namespaces_type_resolution.llm.Status // _0 // return
+
+    bb0: {
+        _0 = const user.fixtures.namespaces_type_resolution.llm.Status.Ready;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.RootUsesAuthConfig(cfg: fixtures.namespaces_type_resolution.auth.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.auth.Config // cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.RootUsesAuthError(e: fixtures.namespaces_type_resolution.auth.Error) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.auth.Error // e // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.RootUsesNestedClient(c: fixtures.namespaces_type_resolution.llm.openai.Client) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.llm.openai.Client // c // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_type_resolution.RootMixedConfigs(root_cfg: fixtures.namespaces_type_resolution.Config, llm_cfg: fixtures.namespaces_type_resolution.llm.Config) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.namespaces_type_resolution.Config // root_cfg // param
+    let _2: fixtures.namespaces_type_resolution.llm.Config // llm_cfg // param
+
+    bb0: {
+        _0 = copy _1.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

@@ -1,0 +1,60 @@
+// `reflect` is an ordinary root package (#4543), so a user-defined name
+// spelled `reflect` shadows it exactly the way it shadows any other package
+// name: ordinary resolution runs first, and the package is reached only for
+// what the user's name does not answer.
+
+class reflect {
+    label string
+
+    function describe(self) -> string {
+        return "user-" + self.label
+    }
+}
+
+// A user class named `reflect` wins over the package: construction and member
+// access on it hit the class.
+function user_class_shadows_package() -> string {
+    let r = reflect { label: "shadow" }
+    return r.describe()
+}
+
+// Type-rooted path access on the user class also wins: `reflect.describe` is
+// the class's unbound method, not a package lookup.
+function unbound_user_method() -> string {
+    let m = reflect.describe
+    return m(reflect { label: "x" })
+}
+
+// A local named `reflect` shadows both the class and the package.
+function local_shadows_package() -> int {
+    let reflect = 1
+    return reflect + 1
+}
+
+function helper(q: string) -> string throws never {
+    return q + "!"
+}
+
+// The class answers for `describe` and nothing else, so a name it does not
+// declare still reaches the package.
+function package_still_reachable() -> string {
+    let f: baml.AnyFunction = helper
+    let sig = reflect.signature(f)
+    return sig.returns.to_string()
+}
+
+test "user class shadows the package" {
+    assert.equal(user_class_shadows_package(), "user-shadow")
+}
+
+test "unbound user method over the package" {
+    assert.equal(unbound_user_method(), "user-x")
+}
+
+test "local shadows the package" {
+    assert.equal(local_shadows_package(), 2)
+}
+
+test "package name still reachable" {
+    assert.equal(package_still_reachable(), "string")
+}

@@ -12,4 +12,13 @@ client<l> MyClient2 {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// E0010
+//
+//   × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient2 = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+//   │ ai.RoundRobin)
+//    ╭─[client_bad_template_args.baml:1:1]
+//  1 │ ╭─▶ client<l> MyClient2 {
+//  2 │ │     provider openai
+//  3 │ ├─▶ }
+//    · ╰──── replace with `client Name = <expr>;`
+//    ╰────

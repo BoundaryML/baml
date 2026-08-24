@@ -1,15 +1,10 @@
-client<llm> GPT4 {
-    provider openai
-    options {
-        model "gpt-4"
-    }
-}
+client GPT4 = openai.ResponsesClient.new(model = "gpt-4");
 
 function Chat() -> string {
-    client GPT4
-    prompt #"
-        ctx.<[CURSOR]
-    "#
+    client: GPT4
+    prompt: `
+        ${ctx.<[CURSOR]output_format}
+    `
 }
 
 //----
@@ -17,4 +12,4 @@ function Chat() -> string {
 // <no-diagnostics-expected>
 //
 //- completions
-// (new pipeline doesn't support prompt template completions)
+// (new pipeline doesn't offer completions inside prompt interpolations)

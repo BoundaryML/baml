@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.226.1](https://github.com/boundaryml/baml/compare/0.226.0..0.226.1) - 2026-08-18
+
+### Bug Fixes
+
+- **(openai)** accept both Chat Completions and Responses API token-detail fields ([#4503](https://github.com/BoundaryML/baml/pull/4503)) - ([378cdcc](https://github.com/BoundaryML/baml/commit/378cdcce3c60706cef603b2d7c9b23d4e536d52e)) - Sam Lijin
+
+## [0.226.0](https://github.com/boundaryml/baml/compare/0.225.0..0.226.0) - 2026-08-17
+
+### Features
+
+- **(runtime)** make connection pooling configurable ([#3975](https://github.com/BoundaryML/baml/pull/3975)) - ([521919c](https://github.com/BoundaryML/baml/commit/521919c7f58b0b930ae1709df1882651db8ca865)) - Dex Hunter
+- **(openai)** add `/v1/audio/transcriptions` endpoint support ([#4202](https://github.com/BoundaryML/baml/pull/4202)) - ([79b8705](https://github.com/BoundaryML/baml/commit/79b87056604730012066633fb0fdcb0f93c07bb7)) - Maceo
+
+## [0.225.0](https://github.com/boundaryml/baml/compare/0.224.0..0.225.0) - 2026-07-31
+
+### Docs
+
+- brand legacy releases as BAML v0 (#4297) - ([5dbd250](https://github.com/boundaryml/baml/commit/5dbd25084b39523854a8967da5f5363b7368f3a6)) - Sam Lijin
+
+## [0.224.0](https://github.com/boundaryml/baml/compare/0.223.0..0.224.0) - 2026-07-30
+
+### Bug Fixes
+
+- **(python)** rebuild generated models so class order cannot break Pydantic (#793, #3819) - ([dce0e79](https://github.com/boundaryml/baml/commit/dce0e798727544293dbca1e7d9466c11700190ee)) - Gourav Singal
+- Correct React streaming hook data types for nullable fields (#3905) - ([7ed5f83](https://github.com/boundaryml/baml/commit/7ed5f8395849876bc5e9801f3977ee47d992daef)) - Matt Van Horn
+- Prevent `baml test` from hanging on self-referential `.env` variables (#3927) - ([7ac6d80](https://github.com/boundaryml/baml/commit/7ac6d80216a32f6815ca9cfd9a671853bed02463)) - hellovai
+- **(zed)** pin the playground version to the Zed extension version (#3853) - ([33a12c0](https://github.com/boundaryml/baml/commit/33a12c013a2a60cd1de7279a45dc976deb1bffb9)) - Sam Lijin
+- **(openai)** preserve allowlisted content-block metadata in the Responses API, including `prompt_cache_breakpoint` (#4155) - ([a2aa426](https://github.com/boundaryml/baml/commit/a2aa426f695fbec16d38f924dd783659a8fc8d6b)) - Conrad Scherb
+
 ## [0.223.0](https://github.com/boundaryml/baml/compare/0.222.0..0.223.0) - 2026-06-23
 
 - Add render_null_as output format option (#3822) - ([e32d2df](https://github.com/boundaryml/baml/commit/e32d2df278f1b9cca345bcf89e57151a91e19b5e)) - aaronvg

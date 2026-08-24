@@ -11,7 +11,9 @@
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
-use bex_engine::{BexEngine, BexExternalValue, CallId, FunctionCallContextBuilder, RuntimeTy};
+use bex_engine::{BexEngine, BexExternalValue, RuntimeTy};
+
+use crate::HelperCallContext;
 
 /// Serialization format for a target's return value.
 #[derive(
@@ -36,6 +38,31 @@ pub async fn write_output(
     return_type: &RuntimeTy,
     format: OutputFormat,
 ) -> Result<()> {
+    write_output_with_context(
+        engine,
+        value,
+        return_type,
+        format,
+        &HelperCallContext::disabled(),
+        || {},
+    )
+    .await
+}
+
+/// Write a target's return value while preserving logger/cancellation context
+/// for conversion hooks.
+///
+/// `before_print` runs after any user-defined `to_json` hook and before the
+/// serialized value is written, allowing callers to keep captured logs ordered
+/// ahead of the target result.
+pub async fn write_output_with_context(
+    engine: &Arc<BexEngine>,
+    value: BexExternalValue,
+    return_type: &RuntimeTy,
+    format: OutputFormat,
+    helper_context: &HelperCallContext,
+    before_print: impl FnOnce(),
+) -> Result<()> {
     match format {
         OutputFormat::Debug => {
             // TODO: route debug mode through a stdlib `baml.debug.format<T>`
@@ -45,11 +72,13 @@ pub async fn write_output(
             // general value-to-debug-string today — adding it is a separate
             // BEP. Until then, the structural pretty-printer below is what
             // the spec calls "human-readable with type annotations".
+            before_print();
             println!("{}", format_value(&value));
             Ok(())
         }
         OutputFormat::Json => {
-            let text = serialize_via_baml_json(engine, value, return_type).await?;
+            let text = serialize_via_baml_json(engine, value, return_type, helper_context).await?;
+            before_print();
             println!("{text}");
             Ok(())
         }
@@ -68,17 +97,16 @@ async fn serialize_via_baml_json(
     engine: &Arc<BexEngine>,
     value: BexExternalValue,
     return_type: &RuntimeTy,
+    helper_context: &HelperCallContext,
 ) -> Result<String> {
     let result = engine
         .call_function(
             "baml.json.serialize",
             vec![value],
-            FunctionCallContextBuilder::new(CallId::next())
-                .with_type_args(indexmap::IndexMap::from([(
-                    "T".to_string(),
-                    return_type.clone(),
-                )]))
-                .build(),
+            helper_context.call_context(indexmap::IndexMap::from([(
+                "T".to_string(),
+                return_type.clone(),
+            )])),
             true,
         )
         .await

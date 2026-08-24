@@ -30,12 +30,73 @@
 //! absorb, or equate, so a missing fact can only yield "not *necessarily*
 //! equivalent / subtype", never a false claim of equivalence or membership.
 
-use std::collections::HashSet;
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+};
 
 use crate::{
-    FunctionParamMode, FunctionParamTy, Interface, Literal, MediaKind, Name, ParamTy,
+    FunctionParamMode, FunctionParamTy, Head, Interface, Literal, MediaKind, Name, ParamTy,
     QualifiedTypeName, Ty, TyAttr,
 };
+
+/// The one declaration the algebra special-cases by identity: `AnyFunction`'s
+/// pins are covariant, unlike every other interface.
+///
+/// Built once rather than per comparison — the subtyping walk reaches the arms
+/// that consult it on every interface-vs-interface node. Resolving it to a head
+/// still goes through [`TypeContext::head_lookup`] per call, which is cheap for
+/// a name-based context and a registry hit for a runtime one.
+static ANY_FUNCTION: std::sync::LazyLock<QualifiedTypeName> = std::sync::LazyLock::new(|| {
+    QualifiedTypeName::new(Name::new("baml"), Vec::new(), Name::new("AnyFunction"))
+});
+
+/// Whether `head` is the [`ANY_FUNCTION`] declaration, decided by identity
+/// against the head `ctx` uses for it rather than by inspecting `head` itself.
+///
+/// An unknown declaration is not `AnyFunction` as far as this can tell, so the
+/// covariance special case does not fire — conservative, per the context's
+/// fail-safe contract.
+fn is_any_function<H: Head, C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
+    ctx.head_lookup(&ANY_FUNCTION)
+        .is_some_and(|any_function| *head == any_function)
+}
+
+/// The compiler-derived interface every class value inhabits.
+static ANY_CLASS: std::sync::LazyLock<QualifiedTypeName> = std::sync::LazyLock::new(|| {
+    QualifiedTypeName::new(Name::new("baml"), Vec::new(), Name::new("AnyClass"))
+});
+
+/// [`is_any_function`] for [`ANY_CLASS`].
+fn is_any_class<H: Head, C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
+    ctx.head_lookup(&ANY_CLASS)
+        .is_some_and(|any_class| *head == any_class)
+}
+
+/// Whether a nominal class head inhabits `baml.AnyClass`. Ordinary classes do.
+/// Within the sealed reflection-kind family, only the class-kind value view is
+/// intentionally admitted.
+///
+/// Decided by identity against the heads `ctx` uses for the kind classes, not
+/// by inspecting `head` — the head-generic counterpart of
+/// [`crate::type_kind::class_inhabits_any_class`]. Only reached when the
+/// supertype is `AnyClass` itself, so the walk over the nine is not on any hot
+/// path.
+fn head_inhabits_any_class<H: Head, C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
+    let mut is_kind_view = false;
+    for kind in crate::type_kind::TypeKind::ALL {
+        let Some(kind_head) = ctx.head_lookup(&kind.class_name()) else {
+            continue;
+        };
+        if *head == kind_head {
+            is_kind_view = true;
+            if matches!(kind, crate::type_kind::TypeKind::Class) {
+                return true;
+            }
+        }
+    }
+    !is_kind_view
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTEXT
@@ -53,12 +114,12 @@ pub(crate) const PROJECTION_REDUCTION_FUEL: u32 = 256;
 
 /// The result of reducing an associated-type projection `(base as I).member`
 /// through [`TypeContext::project`].
-pub enum ProjectionStep {
+pub enum ProjectionStep<H: Head = QualifiedTypeName> {
     /// The projection *is* this type — the impl's binding or the qualifier's pin.
     /// `(int as Foo).Assoc` with `impl Foo for int { type Assoc = string }` reduces
     /// to `string`; the projection is a pure, side-effect-free type-level operator,
     /// so its canonical form is the reduced type (assignable from / equal to it).
-    Reduced(Ty),
+    Reduced(Ty<H>),
     /// The projection cannot be reduced here — its base is still symbolic, or no
     /// impl determines it. It stays an opaque leaf, equal only to a
     /// structurally-identical projection.
@@ -72,7 +133,28 @@ pub enum ProjectionStep {
 /// not" or merely "cannot determine") makes the algebra conservative — it will
 /// not collapse, absorb, or equate what it cannot confirm. A missing fact
 /// therefore degrades only to "not necessarily equivalent / subtype".
-pub trait TypeContext {
+pub trait TypeContext<H: Head = QualifiedTypeName> {
+    /// The head this context represents the declaration at `qtn` with.
+    ///
+    /// The algebra never inspects a head's spelling — heads are opaque values it
+    /// threads through — so recognizing a *particular* declaration is done by
+    /// obtaining its head here and comparing with `==`. That indirection is what
+    /// lets the question be answered by a representation with no name to
+    /// inspect: a name-based context returns the name itself (the identity,
+    /// always available), while a runtime context resolves the declaration on
+    /// its heap and hands back a handle — state only the context has, and the
+    /// reason this cannot live on [`Head`].
+    ///
+    /// Used for the algebra's one nominal special case, `baml.AnyFunction`,
+    /// whose pins are covariant unlike every other interface.
+    ///
+    /// `None` means the declaration could not be resolved *at all*, and fails
+    /// safe in the usual way: the special case does not fire, which is
+    /// conservative. Note this is about resolvability, not knowledge — a
+    /// name-based context answers unconditionally, since naming a declaration
+    /// asserts nothing about it.
+    fn head_lookup(&self, qtn: &QualifiedTypeName) -> Option<H>;
+
     /// The type a type alias expands to, or `None` if the alias is unknown.
     ///
     /// Recursion is discovered structurally (an alias that re-references itself
@@ -89,7 +171,7 @@ pub trait TypeContext {
     /// expected "partial context" — it means the supplied map was incomplete,
     /// and the algebra degrades conservatively (opaque, never equated; "not
     /// necessarily equivalent") rather than panicking or over-equating.
-    fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty>;
+    fn alias_def(&self, name: &H) -> Option<Ty<H>>;
 
     /// Whether the non-interface, non-type-variable `concrete` type implements
     /// `interface`, accounting for the interface's generic
@@ -98,14 +180,14 @@ pub trait TypeContext {
     /// Powers `C <: I` subtyping and the `C | I == I` union absorption (a
     /// concrete member subsumed by an existential member). `false` ⇒ no
     /// membership is claimed.
-    fn implements_interface(&self, concrete: &Ty, interface: &Interface) -> bool;
+    fn implements_interface(&self, concrete: &Ty<H>, interface: &Interface<H>) -> bool;
 
     /// The declared bound of type variable `name` (an interface or a union of
-    /// interfaces), or `None` if it is unbounded or unknown.
+    /// interfaces); empty if it is unbounded or unknown.
     ///
     /// Powers `T <: I` (and the `T | I == I` absorption) when `T`'s bound
     /// is — or transitively requires — `I`.
-    fn type_var_bound(&self, param: &ParamTy) -> Vec<Interface>;
+    fn type_var_bound(&self, param: &ParamTy) -> Vec<Interface<H>>;
 
     /// Whether interface `sub` *properly* (transitively, not reflexively)
     /// requires interface `sup`, accounting for generic arguments.
@@ -115,14 +197,14 @@ pub trait TypeContext {
     /// not report same-name reflexivity — the normalizer handles structural
     /// equality before consulting this, so a same-name query only arises for
     /// distinct instantiations, which are not requirements.
-    fn interface_requires(&self, sub: &Interface, sup: &Interface) -> bool;
+    fn interface_requires(&self, sub: &Interface<H>, sup: &Interface<H>) -> bool;
 
     /// The complete set of variant names of an enum, or `None` if the enum is
     /// unknown.
     ///
     /// Powers the completeness collapse `E.A | E.B | … == E` (a union of *all* of
     /// an enum's variants is the enum itself). `None` ⇒ no collapse.
-    fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>>;
+    fn enum_variants(&self, name: &H) -> Option<Vec<Name>>;
 
     /// The declared interface bounds of associated type `assoc` on `interface` —
     /// the `extends` clause on `type assoc extends …`, specialized through
@@ -152,7 +234,7 @@ pub trait TypeContext {
     /// explicitly; one that genuinely cannot encounter symbolic projections (e.g. a
     /// runtime context over already-realized values) returns an explicit
     /// `Vec::new()`, which the doc-comment there justifies.
-    fn associated_type_bound(&self, interface: &Interface, assoc: Name) -> Vec<Interface>;
+    fn associated_type_bound(&self, interface: &Interface<H>, assoc: Name) -> Vec<Interface<H>>;
 
     /// Reduce an associated-type projection `(base as interface).member` to the type
     /// it denotes, when determinable — the pure type-level operator that makes
@@ -172,8 +254,13 @@ pub trait TypeContext {
     /// threads it on so a cyclic associated-type binding terminates. A single-step
     /// reducer whose recursion is instead bounded by its caller (the canonical
     /// `from_ty` walk, which decrements its own fuel) ignores it.
-    fn project(&self, base: &Ty, interface: &Interface, member: &Name, fuel: u32)
-    -> ProjectionStep;
+    fn project(
+        &self,
+        base: &Ty<H>,
+        interface: &Interface<H>,
+        member: &Name,
+        fuel: u32,
+    ) -> ProjectionStep<H>;
 
     // ── type algebra (defaulted; the canonical implementation) ──────────────
     //
@@ -190,8 +277,26 @@ pub trait TypeContext {
     /// Two types are [`Self::equivalent`] iff their canonical forms are structurally
     /// equal. The canonical form applies the full set-theoretic algebra (union
     /// flatten/sort/dedup, `never` removal, `unknown` absorption, literal-into-base
-    /// and enum-completeness collapse, interface absorption, alias expansion) so
-    /// that distinct spellings of the same type converge.
+    /// and enum-completeness collapse, interface absorption, alias expansion, and
+    /// μ-canonicalization of recursive aliases) so that distinct spellings of the
+    /// same type converge.
+    ///
+    /// # Recursion renders via alias names
+    ///
+    /// Surface syntax has no μ-binder, so recursion is spelled with alias names:
+    /// a recursive alias at the *root* is unfolded once (exposing its head
+    /// constructor — impl-subject classification, dispatch-target resolution,
+    /// and pattern-matrix specialization rely on it), while *nested* recursion
+    /// stays folded as an alias name (`json[]` renders as `baml.json.json[]`,
+    /// not the unfolding). The output is idempotent
+    /// (`normalize(normalize(t)) == normalize(t)`) and always
+    /// [`Self::equivalent`] to the input, but it is canonical only **up to the
+    /// naming of recursion back-references**: names are recorded per run, so two
+    /// equivalent spellings may render with different alias names
+    /// (`normalize(A) = int | A[]` vs `normalize(B) = int | B[]` for
+    /// α-equivalent `A`/`B`). Canonical *identity* is the
+    /// [`Self::equivalent`] judgment, never syntactic equality of rendered
+    /// output.
     ///
     /// # Attributes are erased
     ///
@@ -204,19 +309,32 @@ pub trait TypeContext {
     /// SAP annotations must survive (an LLM function's return type, a generated
     /// stream companion); derive the canonical type from the original `Ty` there
     /// instead.
-    fn normalize(&self, ty: &Ty) -> Ty
+    fn normalize(&self, ty: &Ty<H>) -> Ty<H>
     where
         Self: Sized,
     {
-        NormalTy::canonical(ty, self).into_ty()
+        NormalTy::canonical_render(ty, self)
     }
 
-    /// Whether `a` and `b` denote the same type under the current context.
+    /// Whether `a` and `b` denote the same type under the current context —
+    /// mutual subtyping, decided as structural equality of canonical forms
+    /// (which coincide: canonical forms are unique representatives of the
+    /// equirecursive equivalence class).
     ///
     /// This is invariant equality, not assignability: use it where two spellings
     /// must denote *the same* type (e.g. exact-type operator operands, interface
     /// field implementations), not merely compatible ones.
-    fn equivalent(&self, a: &Ty, b: &Ty) -> bool
+    ///
+    /// Recursive aliases are **equirecursive** (TYPE_SYSTEM.md §Type Aliases and
+    /// Recursive Types): equality holds across alias renaming
+    /// (`type A = int | A[]` ≡ `type B = int | B[]`), finite unfolding depth,
+    /// and mutually recursive definitions. The residual divergences from mutual
+    /// subtyping are deliberate: the error-recovery sentinels (`Unknown`/`Error`
+    /// are bidirectionally *compatible* with everything but equivalent only to
+    /// themselves), and fact sets with a mutual `requires` cycle (mutual
+    /// subtypes as existentials, nominally distinct — rejected in well-formed
+    /// programs by the interface `requires`-cycle check).
+    fn equivalent(&self, a: &Ty<H>, b: &Ty<H>) -> bool
     where
         Self: Sized,
     {
@@ -239,7 +357,7 @@ pub trait TypeContext {
 
     /// Whether every value of `sub` is also a value of `sup` under the current
     /// context (the subset relation).
-    fn is_subtype(&self, sub: &Ty, sup: &Ty) -> bool
+    fn is_subtype(&self, sub: &Ty<H>, sup: &Ty<H>) -> bool
     where
         Self: Sized,
     {
@@ -304,11 +422,11 @@ pub trait TypeContext {
     ///   generic `T`, or an error sentinel): it could still resolve to match.
     /// - Functions (not invariant — contravariant/covariant), interfaces, bare
     ///   type variables, and a bare `unknown`.
-    fn definitely_disjoint(&self, a: &Ty, b: &Ty) -> bool
+    fn definitely_disjoint(&self, a: &Ty<H>, b: &Ty<H>) -> bool
     where
         Self: Sized,
     {
-        NormalTy::canonical(a, self).is_disjoint_from(&NormalTy::canonical(b, self))
+        NormalTy::canonical(a, self).is_disjoint_from(&NormalTy::canonical(b, self), self)
     }
 
     /// Whether a broad `==` between operands of types `a` and `b` is always `true`.
@@ -324,7 +442,7 @@ pub trait TypeContext {
     ///   `Equals` today is not a stable basis for baking in a constant — the
     ///   built-in reflexive equality is guaranteed only for types whose `Equals` the
     ///   orphan rule forbids overriding (primitives, `null`).
-    fn definitely_equal(&self, a: &Ty, b: &Ty) -> bool
+    fn definitely_equal(&self, a: &Ty<H>, b: &Ty<H>) -> bool
     where
         Self: Sized,
     {
@@ -344,13 +462,13 @@ pub trait TypeContext {
     ///
     /// See those two methods for the exact rules and their dynamic-package
     /// soundness.
-    fn constant_equality(&self, a: &Ty, b: &Ty) -> Option<bool>
+    fn constant_equality(&self, a: &Ty<H>, b: &Ty<H>) -> Option<bool>
     where
         Self: Sized,
     {
         let a = NormalTy::canonical(a, self);
         let b = NormalTy::canonical(b, self);
-        if a.is_disjoint_from(&b) {
+        if a.is_disjoint_from(&b, self) {
             Some(false)
         } else if a.is_unoverridable_singleton() && a == b {
             Some(true)
@@ -388,6 +506,14 @@ pub struct NoFacts;
               the type's definition, not a consumer site to migrate off it"
 )]
 impl TypeContext for NoFacts {
+    /// The identity, like every name-based context: naming a declaration is not
+    /// a *fact* about it, so this is answerable even here. Returning `None`
+    /// would silently disable the `AnyFunction` covariance rule, which used to
+    /// fire under this context on the name alone.
+    fn head_lookup(&self, qtn: &QualifiedTypeName) -> Option<QualifiedTypeName> {
+        Some(qtn.clone())
+    }
+
     fn alias_def(&self, _name: &QualifiedTypeName) -> Option<Ty> {
         None
     }
@@ -418,26 +544,26 @@ impl TypeContext for NoFacts {
         _interface: &Interface,
         _member: &Name,
         _fuel: u32,
-    ) -> ProjectionStep {
+    ) -> ProjectionStep<QualifiedTypeName> {
         ProjectionStep::Opaque
     }
 }
 
 /// Free-function form of [`TypeContext::normalize`], for a context held by value.
 /// Pending removal once every caller uses the method form.
-pub fn normalize<C: TypeContext>(ty: &Ty, ctx: &C) -> Ty {
+pub fn normalize<H: Head, C: TypeContext<H>>(ty: &Ty<H>, ctx: &C) -> Ty<H> {
     ctx.normalize(ty)
 }
 
 /// Free-function form of [`TypeContext::equivalent`], for a context held by value.
 /// Pending removal once every caller uses the method form.
-pub fn equivalent<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
+pub fn equivalent<H: Head, C: TypeContext<H>>(a: &Ty<H>, b: &Ty<H>, ctx: &C) -> bool {
     ctx.equivalent(a, b)
 }
 
 /// Free-function form of [`TypeContext::is_subtype`], for a context held by value.
 /// Pending removal once every caller uses the method form.
-pub fn is_subtype<C: TypeContext>(sub: &Ty, sup: &Ty, ctx: &C) -> bool {
+pub fn is_subtype<H: Head, C: TypeContext<H>>(sub: &Ty<H>, sup: &Ty<H>, ctx: &C) -> bool {
     ctx.is_subtype(sub, sup)
 }
 
@@ -463,7 +589,7 @@ pub fn is_subtype<C: TypeContext>(sub: &Ty, sup: &Ty, ctx: &C) -> bool {
 /// undecided (`false`) preserves correctness; only the unambiguous nominal
 /// misses are fast-rejected. Context-independent: canonicalization preserves
 /// these nominal heads regardless of the `TypeContext`.
-fn heads_definitely_differ(a: &Ty, b: &Ty) -> bool {
+fn heads_definitely_differ<H: Head>(a: &Ty<H>, b: &Ty<H>) -> bool {
     match (a, b) {
         (Ty::Class(q1, ..), Ty::Class(q2, ..))
         | (Ty::Interface(q1, ..), Ty::Interface(q2, ..))
@@ -475,20 +601,129 @@ fn heads_definitely_differ(a: &Ty, b: &Ty) -> bool {
 
 /// Free-function form of [`TypeContext::definitely_disjoint`], for a context held
 /// by value. Pending removal once every caller uses the method form.
-pub fn definitely_disjoint<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
+pub fn definitely_disjoint<H: Head, C: TypeContext<H>>(a: &Ty<H>, b: &Ty<H>, ctx: &C) -> bool {
     ctx.definitely_disjoint(a, b)
 }
 
 /// Free-function form of [`TypeContext::definitely_equal`], for a context held by
 /// value. Pending removal once every caller uses the method form.
-pub fn definitely_equal<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
+pub fn definitely_equal<H: Head, C: TypeContext<H>>(a: &Ty<H>, b: &Ty<H>, ctx: &C) -> bool {
     ctx.definitely_equal(a, b)
 }
 
-impl NormalTy {
-    /// Normalize and canonicalize a [`Ty`] in one step (the shared entry point).
-    fn canonical<C: TypeContext>(ty: &Ty, ctx: &C) -> NormalTy {
-        NormalTy::from_ty(ty, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL).canonicalize(ctx)
+impl<H: Head> NormalTy<H> {
+    /// Normalize and canonicalize a [`Ty`] in one step (the shared entry point):
+    /// build the named intermediate, strictly resolve its binders to the
+    /// canonical de Bruijn phase, run the bottom-up set-theoretic algebra, and —
+    /// only when recursion is present — the μ-canonicalization automaton
+    /// ([`mu`]), which makes the result a unique representative of the
+    /// equirecursive equivalence class.
+    fn canonical<C: TypeContext<H>>(ty: &Ty<H>, ctx: &C) -> NormalTy<H> {
+        Self::canonical_with(ty, ctx, &mut HashSet::new())
+    }
+
+    /// [`Self::canonical`] with the caller's co-inductive assumption set
+    /// threaded through the union algebra (`absorb_subtypes`' subtype
+    /// probes). The expanding arms of `is_subtype_of` MUST use this: a
+    /// bound canonicalized under a FRESH set re-enters the very subtype
+    /// question that triggered it, and a self-referential bound
+    /// (`T extends Foo<T | int>`) then recurses unboundedly - a stack
+    /// overflow, B-1091. Threading extends the declared co-inductive
+    /// semantics to the re-entry instead of restarting it.
+    fn canonical_with<C: TypeContext<H>>(
+        ty: &Ty<H>,
+        ctx: &C,
+        assumptions: &mut HashSet<(NormalTy<H>, NormalTy<H>)>,
+    ) -> NormalTy<H> {
+        let (t, saw_mu) = Self::canonical_bottom_up(ty, ctx, assumptions);
+        if saw_mu && t.contains_mu() {
+            mu::canonicalize_mu(t, ctx)
+        } else {
+            t
+        }
+    }
+
+    /// [`Self::canonical`] rendered back as a [`Ty`] - the body of
+    /// [`TypeContext::normalize`]. On the mu path the automaton renders the
+    /// root directly (root-unfold-once: a recursive alias exposes its head
+    /// constructor; nested recursion stays folded as alias names), so
+    /// `normalize` never calls [`Self::into_ty`] on a mu root.
+    fn canonical_render<C: TypeContext<H>>(ty: &Ty<H>, ctx: &C) -> Ty<H> {
+        let (t, saw_mu) = Self::canonical_bottom_up(ty, ctx, &mut HashSet::new());
+        if saw_mu && t.contains_mu() {
+            mu::canonicalize_mu_with_render(t, ctx).1
+        } else {
+            t.into_ty()
+        }
+    }
+
+    /// The shared pre-automaton pipeline: named intermediate -> strict binder
+    /// resolution -> bottom-up algebra (with open-member absorption deferred).
+    fn canonical_bottom_up<C: TypeContext<H>>(
+        ty: &Ty<H>,
+        ctx: &C,
+        assumptions: &mut HashSet<(NormalTy<H>, NormalTy<H>)>,
+    ) -> (NormalTy<H>, bool) {
+        let named = NormalTy::from_ty(ty, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL);
+        let mut saw_mu = false;
+        let resolved = named.resolve_binders(&mut Vec::new(), &mut saw_mu);
+        (resolved.canonicalize(ctx, saw_mu, assumptions), saw_mu)
+    }
+
+    /// Whether a μ-binder survives in this term — the automaton trigger. Checked
+    /// only when [`Self::resolve_binders`] saw one (bottom-up absorption can
+    /// still eliminate a closed μ member, e.g. under `unknown`), so the
+    /// recursion-free hot path never runs this walk.
+    fn contains_mu(&self) -> bool {
+        match self {
+            NormalTy::Mu { .. } => true,
+            // A free `RecVar` cannot occur without its binder in a closed term.
+            NormalTy::RecVar(_) => false,
+            NormalTy::List(inner) => inner.contains_mu(),
+            NormalTy::Map { key, value } | NormalTy::Future(key, value) => {
+                key.contains_mu() || value.contains_mu()
+            }
+            NormalTy::Union(members) => members.iter().any(NormalTy::contains_mu),
+            NormalTy::Class(_, args) => args.iter().any(NormalTy::contains_mu),
+            NormalTy::Interface(_, args, bindings) => {
+                args.iter().any(NormalTy::contains_mu)
+                    || bindings.iter().any(|(_, t)| t.contains_mu())
+            }
+            NormalTy::Function {
+                params,
+                ret,
+                throws,
+            } => {
+                params.iter().any(|p| p.ty.contains_mu())
+                    || ret.contains_mu()
+                    || throws.contains_mu()
+            }
+            NormalTy::AssociatedTypeProjection {
+                base, interface, ..
+            } => base.contains_mu() || interface.contains_mu(),
+            NormalTy::Int
+            | NormalTy::Bigint
+            | NormalTy::Float
+            | NormalTy::String
+            | NormalTy::Bool
+            | NormalTy::Null
+            | NormalTy::Uint8Array
+            | NormalTy::Media(_)
+            | NormalTy::Void
+            | NormalTy::RustType
+            | NormalTy::Type
+            | NormalTy::Resource
+            | NormalTy::PromptAst
+            | NormalTy::Literal(_)
+            | NormalTy::Enum(_)
+            | NormalTy::EnumVariant(_, _)
+            | NormalTy::TypeVar(_)
+            | NormalTy::OpaqueAlias(_)
+            | NormalTy::Never
+            | NormalTy::BuiltinUnknown
+            | NormalTy::Unknown
+            | NormalTy::Error => false,
+        }
     }
 }
 
@@ -523,11 +758,29 @@ enum Category {
     Future,
 }
 
-impl NormalTy {
+impl<H: Head> NormalTy<H> {
     /// Top-level concrete category of this type, or `None` for a non-ground head
     /// (union, interface, hole, type variable, …) for which no disjointness is
     /// provable.
-    fn head_category(&self) -> Option<Category> {
+    /// Whether `head` is one of the reflection type-kind classes
+    /// (`reflect.<kind>.Type`).
+    ///
+    /// The algebra's second nominal special case, recognized the same way as the
+    /// first (`baml.AnyFunction`): by asking the context for each known name's
+    /// head and comparing, never by inspecting the head itself. A head is opaque
+    /// here — see [`Head`](crate::Head) — so the context is the only thing that
+    /// can turn a name the algebra knows into a head it can compare.
+    fn head_is_type_kind_class<C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
+        crate::type_kind::TypeKind::ALL.iter().any(|kind| {
+            // `TypeKind::class_name` is the one source of the kind-view
+            // spelling; duplicating it here is how a package rename silently
+            // un-recognizes the whole family.
+            ctx.head_lookup(&kind.class_name())
+                .is_some_and(|known| &known == head)
+        })
+    }
+
+    fn head_category<C: TypeContext<H>>(&self, ctx: &C) -> Option<Category> {
         Some(match self {
             NormalTy::Int | NormalTy::Literal(Literal::Int(_)) => Category::Int,
             NormalTy::Bigint | NormalTy::Literal(Literal::Bigint(_)) => Category::Bigint,
@@ -542,17 +795,24 @@ impl NormalTy {
             NormalTy::Type => Category::Type,
             NormalTy::Resource => Category::Resource,
             NormalTy::PromptAst => Category::PromptAst,
+            NormalTy::Class(name, _) if Self::head_is_type_kind_class(name, ctx) => Category::Type,
             NormalTy::Class(..) => Category::Class,
             NormalTy::List(_) => Category::List,
             NormalTy::Map { .. } => Category::Map,
             NormalTy::Enum(_) | NormalTy::EnumVariant(..) => Category::Enum,
             NormalTy::Function { .. } => Category::Function,
             NormalTy::Future(..) => Category::Future,
-            // Not a ground concrete head — nothing provable.
+            // A μ is transparent to its head: the head of `μX.T` is the head of
+            // its unfolding, and the walk into the body terminates (no unfold
+            // happens here). A non-constructor body head (e.g. a still-unguarded
+            // union, pending the ε-closure step) answers `None` through the arms
+            // below — conservative.
+            NormalTy::Mu { body, .. } => return body.head_category(ctx),
+            // Not a ground concrete head — nothing provable. (A free `RecVar`
+            // only occurs under its binder, which the μ arm above looks through.)
             NormalTy::Interface(..)
             | NormalTy::Union(_)
             | NormalTy::AssociatedTypeProjection { .. }
-            | NormalTy::Mu { .. }
             | NormalTy::RecVar(_)
             | NormalTy::TypeVar(_)
             | NormalTy::OpaqueAlias(_)
@@ -623,17 +883,51 @@ impl NormalTy {
     /// Whether `self` and `other`, used as invariant generic arguments, make
     /// their instantiations disjoint: both are fully ground and not the same
     /// realized type. A hole leaves it unprovable (it could realize to match).
-    fn arg_forces_disjoint(&self, other: &NormalTy) -> bool {
-        self.is_ground() && other.is_ground() && self != other
+    ///
+    /// Structural `!=` proves distinctness only on **canonical** forms, and the
+    /// μ-unfolding arms of [`Self::is_disjoint_from`] hand this method
+    /// *unfolded* (non-canonical) spellings — `μX.(int | X[])` next to
+    /// `int | (μX.(int | X[]))[]` are one type — so a μ anywhere in either
+    /// argument leaves disjointness unprovable here. (Same-category μ pairs
+    /// still resolve through the nominal-head and category arms, which
+    /// unfolding preserves.)
+    fn arg_forces_disjoint(&self, other: &NormalTy<H>) -> bool {
+        self.is_ground()
+            && other.is_ground()
+            && self != other
+            && !self.contains_mu()
+            && !other.contains_mu()
     }
 
     /// Whether no value of `self` can ever be `==`-equal to a value of `other`
     /// (the structural core of [`definitely_disjoint`]).
-    fn is_disjoint_from(&self, other: &NormalTy) -> bool {
+    fn is_disjoint_from<C: TypeContext<H>>(&self, other: &NormalTy<H>, ctx: &C) -> bool {
         match (self, other) {
+            // A μ is its unfolding — expose the constructor head before the
+            // structural arms. Terminates without an assumption set because
+            // canonical μ bodies are constructor-headed (the automaton's
+            // ε-closure eliminated unguarded spines): after both sides are
+            // unfolded, every arm below is terminal (categories; invariant args
+            // compared by equality) except union decomposition into
+            // constructor-headed, non-union members — so the recursion is
+            // bounded by two unfolds plus one member decomposition per side.
+            //
+            // The read-back bail (`canonicalize_mu` falling back to the
+            // pre-automaton term) is the one path that hands this method a μ
+            // with an unguarded spine; unfolding such a μ re-injects it into
+            // its own union spine without ever crossing a constructor. Nothing
+            // is provable about it here — answer "not provably disjoint".
+            (NormalTy::Mu { .. }, _) | (_, NormalTy::Mu { .. })
+                if self.has_unguarded_mu() || other.has_unguarded_mu() =>
+            {
+                false
+            }
+            (NormalTy::Mu { .. }, _) => self.unfold().is_disjoint_from(other, ctx),
+            (_, NormalTy::Mu { .. }) => self.is_disjoint_from(&other.unfold(), ctx),
+
             // A union is disjoint from `rhs` iff every member is.
-            (NormalTy::Union(members), rhs) => members.iter().all(|m| m.is_disjoint_from(rhs)),
-            (lhs, NormalTy::Union(members)) => members.iter().all(|m| lhs.is_disjoint_from(m)),
+            (NormalTy::Union(members), rhs) => members.iter().all(|m| m.is_disjoint_from(rhs, ctx)),
+            (lhs, NormalTy::Union(members)) => members.iter().all(|m| lhs.is_disjoint_from(m, ctx)),
 
             // Generic constructors are invariant and their type arguments are real
             // instance data, so two instantiations are disjoint as soon as one
@@ -671,7 +965,7 @@ impl NormalTy {
                 !matches!(x, Literal::Float(_)) && !matches!(y, Literal::Float(_)) && x != y
             }
             (NormalTy::Literal(lit), rhs) | (rhs, NormalTy::Literal(lit)) => {
-                match rhs.head_category() {
+                match rhs.head_category(ctx) {
                     Some(cat) => cat != Category::of_literal(lit),
                     None => false,
                 }
@@ -679,7 +973,7 @@ impl NormalTy {
 
             // Otherwise: disjoint iff both are ground concrete heads of different
             // categories (`int` vs `string`, `list` vs `map`, a class vs an enum).
-            _ => match (self.head_category(), other.head_category()) {
+            _ => match (self.head_category(ctx), other.head_category(ctx)) {
                 (Some(x), Some(y)) => x != y,
                 _ => false,
             },
@@ -718,13 +1012,58 @@ impl Category {
 // NORMALIZED TYPE (private)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Phase parameter of [`NormalTy`]: selects the μ-binder representation, so a
+/// cross-phase term is *unrepresentable* — a named binder cannot occur inside a
+/// canonical form, nor a de Bruijn index inside the `from_ty` intermediate, and
+/// the only way from one phase to the other is the strict, total conversion
+/// [`NormalTy::resolve_binders`].
+trait MuPhase<H: Head> {
+    /// Payload carried by a μ-binder ([`NormalTy::Mu`]).
+    type Binder: Clone + std::fmt::Debug + PartialEq + Eq + PartialOrd + Ord + std::hash::Hash;
+    /// Payload carried by a recursion variable ([`NormalTy::RecVar`]).
+    type Var: Clone + std::fmt::Debug + PartialEq + Eq + PartialOrd + Ord + std::hash::Hash;
+}
+
+/// The `from_ty` intermediate phase: binders and back-references carry the alias
+/// name whose expansion introduced them. This phase exists only between
+/// `from_ty` and [`NormalTy::resolve_binders`]; nothing compares it for
+/// identity, subtypes it, or renders it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Named {}
+
+impl<H: Head> MuPhase<H> for Named {
+    type Binder = H;
+    type Var = H;
+}
+
+/// The canonical phase: back-references are de Bruijn indices — so the derived
+/// equality on canonical forms *is* α-equivalence (`type A = int | A[]` and
+/// `type B = int | B[]` share one canonical form) — and binders carry only the
+/// equality-transparent [`MuDisplay`] payload for rendering.
+///
+/// INVARIANT (closed-term): a canonical form at a public boundary is closed —
+/// every `RecVar(i)` has more than `i` enclosing `Mu`s. Unfolding
+/// ([`NormalTy::unfold`]) therefore substitutes a *closed* term for the
+/// outermost binder, which needs no index shifting and keeps derived-`==`
+/// assumption probes exact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Canonical {}
+
+impl<H: Head> MuPhase<H> for Canonical {
+    type Binder = MuDisplay<H>;
+    type Var = u32;
+}
+
 /// Normalized structural type: aliases resolved, attributes and literal
-/// freshness erased, recursion made explicit with μ-binders.
+/// freshness erased, recursion made explicit with μ-binders (representation per
+/// phase `P` — see [`MuPhase`]). The default phase is [`Canonical`]: bare
+/// `NormalTy` throughout the algebra means the canonical form, and only the
+/// short-lived `from_ty` intermediate spells its phase (`NormalTy<H, Named>`).
 ///
 /// Ordering (`PartialOrd`/`Ord`) is the canonical sort key for union members; it
 /// has no semantic meaning beyond producing a deterministic canonical form.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-enum NormalTy {
+enum NormalTy<H: Head = QualifiedTypeName, P: MuPhase<H> = Canonical> {
     // Primitive leaves
     Int,
     Bigint,
@@ -743,45 +1082,48 @@ enum NormalTy {
     // Literal — a single value as a type. Freshness is erased.
     Literal(Literal),
     // Nominal references
-    Class(QualifiedTypeName, Vec<NormalTy>),
-    Interface(QualifiedTypeName, Vec<NormalTy>, Vec<(Name, NormalTy)>),
-    Enum(QualifiedTypeName),
-    EnumVariant(QualifiedTypeName, Name),
+    Class(H, Vec<NormalTy<H, P>>),
+    Interface(H, Vec<NormalTy<H, P>>, Vec<(Name, NormalTy<H, P>)>),
+    Enum(H),
+    EnumVariant(H, Name),
     // Constructors
-    List(Box<NormalTy>),
+    List(Box<NormalTy<H, P>>),
     Map {
-        key: Box<NormalTy>,
-        value: Box<NormalTy>,
+        key: Box<NormalTy<H, P>>,
+        value: Box<NormalTy<H, P>>,
     },
-    Union(Vec<NormalTy>),
+    Union(Vec<NormalTy<H, P>>),
     Function {
-        params: Vec<NormalParam>,
-        ret: Box<NormalTy>,
-        throws: Box<NormalTy>,
+        params: Vec<NormalParam<H, P>>,
+        ret: Box<NormalTy<H, P>>,
+        throws: Box<NormalTy<H, P>>,
     },
-    Future(Box<NormalTy>, Box<NormalTy>),
+    Future(Box<NormalTy<H, P>>, Box<NormalTy<H, P>>),
     AssociatedTypeProjection {
-        base: Box<NormalTy>,
+        base: Box<NormalTy<H, P>>,
         /// The declaring interface (a normalized `NormalTy::Interface`), always
         /// present — mirrors the non-optional `Ty::AssociatedTypeProjection`
         /// qualifier it is built from, and is what makes a realized-base
         /// projection reducible via [`TypeContext::project`].
-        interface: Box<NormalTy>,
+        interface: Box<NormalTy<H, P>>,
         member: Name,
     },
-    // Recursion
+    // Recursion. `Named`: binder/variable carry the alias name whose expansion
+    // introduced them. `Canonical`: the binder carries its equality-transparent
+    // display payload and the variable a de Bruijn index (0 = innermost
+    // enclosing binder) — see [`Canonical`] for the closed-term invariant.
     Mu {
-        var: QualifiedTypeName,
-        body: Box<NormalTy>,
+        binder: P::Binder,
+        body: Box<NormalTy<H, P>>,
     },
     /// μ-bound recursion variable (a back-reference to an enclosing [`NormalTy::Mu`]).
-    RecVar(QualifiedTypeName),
+    RecVar(P::Var),
     /// A generic type parameter — opaque, compatible only with itself, its
     /// bound's supertypes, and the top type.
     TypeVar(ParamTy),
     /// An alias the context could not resolve — opaque, equal only to the same
     /// unresolved alias (fail-safe; never equated to an expansion).
-    OpaqueAlias(QualifiedTypeName),
+    OpaqueAlias(H),
     // Special forms
     /// Bottom — a subtype of every type.
     Never,
@@ -794,26 +1136,81 @@ enum NormalTy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-struct NormalParam {
+struct NormalParam<H: Head, P: MuPhase<H> = Canonical> {
     name: Option<Name>,
-    ty: NormalTy,
+    ty: NormalTy<H, P>,
     mode: FunctionParamMode,
 }
 
-impl NormalTy {
-    // ── conversion in: Ty → NormalTy ───────────────────────────────────────
+/// Display payload of a canonical μ-binder ([`NormalTy::Mu`] at [`Canonical`]).
+///
+/// `rendered` is the whole μ-subterm as a [`Ty`] — surface syntax has no binder,
+/// so recursion is spelled via alias names — and is what [`NormalTy::into_ty`]
+/// emits for the binder (it never descends into the body). Two producers:
+///
+/// - [`NormalTy::resolve_binders`] fills the **legacy** rendering (the body with
+///   back-references spelled as alias names — the historical `normalize` output),
+///   which pre-μ-canonicalization fact-oracle calls observe during bottom-up
+///   absorption of closed μ members.
+/// - The μ-canonicalization automaton ([`super::normalize::mu`]) replaces it with
+///   the **named-cut** rendering (recursion folded to alias names at every named
+///   cycle state), the canonical output form.
+///
+/// `name` is the alias whose expansion introduced the binder — `None` only for
+/// automaton read-back binders that land on a cycle state no alias denotes (e.g.
+/// the list state of `A[]` for `type A = int | A[]`); such a binder is exactly
+/// why `rendered` must be precomputed (no single alias name can spell it).
+///
+/// **Equality-transparent by design**: all values compare equal, order equal, and
+/// hash identically, so the derived `PartialEq`/`Ord`/`Hash` on [`NormalTy`] see
+/// only the de Bruijn structure — canonical equality *is* α-equivalence, and the
+/// rendering (which necessarily picks concrete alias names) can never split it.
+/// This is the same discipline as spans ignored by AST equality: a description of
+/// the value, not part of it.
+#[derive(Debug, Clone)]
+struct MuDisplay<H: Head> {
+    name: Option<H>,
+    rendered: Box<Ty<H>>,
+}
 
-    fn from_ty<C: TypeContext>(
-        ty: &Ty,
+impl<H: Head> PartialEq for MuDisplay<H> {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+impl<H: Head> Eq for MuDisplay<H> {}
+
+impl<H: Head> PartialOrd for MuDisplay<H> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<H: Head> Ord for MuDisplay<H> {
+    fn cmp(&self, _other: &Self) -> std::cmp::Ordering {
+        std::cmp::Ordering::Equal
+    }
+}
+
+impl<H: Head> std::hash::Hash for MuDisplay<H> {
+    fn hash<S: std::hash::Hasher>(&self, _state: &mut S) {}
+}
+
+impl<H: Head> NormalTy<H, Named> {
+    // ── conversion in: Ty → NormalTy<Named> ────────────────────────────────
+
+    fn from_ty<C: TypeContext<H>>(
+        ty: &Ty<H>,
         ctx: &C,
-        expanding: &mut HashSet<QualifiedTypeName>,
+        expanding: &mut HashSet<H>,
         // Remaining projection-reduction steps along this path. Reducing a
         // projection (`(int as Foo).Assoc` → `string`) is a pure type-level
         // operator, but could loop on a cyclic `type A = (C as I).B` /
         // `type B = (C as J).A`; each reduction spends one unit, and on exhaustion
         // the projection stays opaque (conservative — never over-equates).
         fuel: u32,
-    ) -> NormalTy {
+    ) -> NormalTy<H, Named> {
         match ty {
             Ty::Int { .. } => NormalTy::Int,
             Ty::Bigint { .. } => NormalTy::Bigint,
@@ -941,7 +1338,7 @@ impl NormalTy {
                 expanding.remove(qn);
                 if body.mentions_rec_var(qn) {
                     NormalTy::Mu {
-                        var: qn.clone(),
+                        binder: qn.clone(),
                         body: Box::new(body),
                     }
                 } else {
@@ -951,23 +1348,23 @@ impl NormalTy {
         }
     }
 
-    fn from_tys<C: TypeContext>(
-        tys: &[Ty],
+    fn from_tys<C: TypeContext<H>>(
+        tys: &[Ty<H>],
         ctx: &C,
-        expanding: &mut HashSet<QualifiedTypeName>,
+        expanding: &mut HashSet<H>,
         fuel: u32,
-    ) -> Vec<NormalTy> {
+    ) -> Vec<NormalTy<H, Named>> {
         tys.iter()
             .map(|t| Self::from_ty(t, ctx, expanding, fuel))
             .collect()
     }
 
     /// Whether this type contains a back-reference to μ-variable `var`.
-    fn mentions_rec_var(&self, var: &QualifiedTypeName) -> bool {
+    fn mentions_rec_var(&self, var: &H) -> bool {
         match self {
             NormalTy::RecVar(v) => v == var,
             // A nested μ shadowing the same name rebinds it; stop descending.
-            NormalTy::Mu { var: v, body } => v != var && body.mentions_rec_var(var),
+            NormalTy::Mu { binder: v, body } => v != var && body.mentions_rec_var(var),
             NormalTy::Class(_, args) => args.iter().any(|a| a.mentions_rec_var(var)),
             NormalTy::Interface(_, args, bindings) => {
                 args.iter().any(|a| a.mentions_rec_var(var))
@@ -1018,43 +1415,294 @@ impl NormalTy {
         }
     }
 
-    // ── canonicalization ───────────────────────────────────────────────────
-
-    /// Rewrite to a unique canonical form: children canonicalized bottom-up,
-    /// unions reduced by the full set algebra.
-    fn canonicalize<C: TypeContext>(self, ctx: &C) -> NormalTy {
+    /// Render a named-phase term as a [`Ty`], with every binder dropped and every
+    /// back-reference spelled as its alias name — the historical `normalize`
+    /// output shape. This fills the *interim* [`MuDisplay::rendered`] payload in
+    /// [`Self::resolve_binders`]: it is what fact-oracle calls
+    /// (`implements_interface`, `interface_requires`) observe when bottom-up
+    /// absorption compares a closed μ member, keeping their view identical to the
+    /// pre-μ-canonicalization behavior. The automaton replaces it with the
+    /// canonical named-cut rendering.
+    fn legacy_render(&self) -> Ty<H> {
+        let attr = TyAttr::default();
         match self {
-            NormalTy::Class(qn, args) => {
-                NormalTy::Class(qn, args.into_iter().map(|a| a.canonicalize(ctx)).collect())
+            NormalTy::Int => Ty::Int { attr },
+            NormalTy::Bigint => Ty::Bigint { attr },
+            NormalTy::Float => Ty::Float { attr },
+            NormalTy::String => Ty::String { attr },
+            NormalTy::Bool => Ty::Bool { attr },
+            NormalTy::Null => Ty::Null { attr },
+            NormalTy::Uint8Array => Ty::Uint8Array { attr },
+            NormalTy::Media(kind) => Ty::Media(*kind, attr),
+            NormalTy::Void => Ty::Void { attr },
+            NormalTy::RustType => Ty::RustType { attr },
+            NormalTy::Type => Ty::Type { attr },
+            NormalTy::Resource => Ty::Resource { attr },
+            NormalTy::PromptAst => Ty::PromptAst { attr },
+            NormalTy::BuiltinUnknown => Ty::BuiltinUnknown { attr },
+            NormalTy::Never => Ty::Never { attr },
+            NormalTy::Unknown => Ty::Unknown { attr },
+            NormalTy::Error => Ty::Error { attr },
+            NormalTy::Literal(lit) => Ty::Literal(lit.clone(), crate::Freshness::Regular, attr),
+            NormalTy::Class(qn, args) => Ty::Class(
+                qn.clone(),
+                args.iter().map(NormalTy::legacy_render).collect(),
+                attr,
+            ),
+            NormalTy::Interface(qn, args, bindings) => Ty::Interface(
+                qn.clone(),
+                args.iter().map(NormalTy::legacy_render).collect(),
+                bindings
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), ty.legacy_render()))
+                    .collect(),
+                attr,
+            ),
+            NormalTy::Enum(qn) => Ty::Enum(qn.clone(), attr),
+            NormalTy::EnumVariant(qn, v) => Ty::EnumVariant(qn.clone(), v.clone(), attr),
+            NormalTy::List(inner) => Ty::List(Box::new(inner.legacy_render()), attr),
+            NormalTy::Map { key, value } => Ty::Map {
+                key: Box::new(key.legacy_render()),
+                value: Box::new(value.legacy_render()),
+                attr,
+            },
+            NormalTy::Union(members) => {
+                Ty::Union(members.iter().map(NormalTy::legacy_render).collect(), attr)
             }
-            NormalTy::Interface(qn, args, bindings) => {
-                let mut bindings: Vec<_> = bindings
+            NormalTy::Function {
+                params,
+                ret,
+                throws,
+            } => Ty::Function {
+                params: params
+                    .iter()
+                    .map(|p| FunctionParamTy {
+                        name: p.name.clone(),
+                        ty: p.ty.legacy_render(),
+                        mode: p.mode,
+                    })
+                    .collect(),
+                ret: Box::new(ret.legacy_render()),
+                throws: Box::new(throws.legacy_render()),
+                attr,
+            },
+            NormalTy::Future(value, error) => Ty::Future(
+                Box::new(value.legacy_render()),
+                Box::new(error.legacy_render()),
+                attr,
+            ),
+            NormalTy::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+            } => Ty::AssociatedTypeProjection {
+                base: Box::new(base.legacy_render()),
+                interface: Box::new(match &**interface {
+                    NormalTy::Interface(name, generics, bindings) => Interface {
+                        name: name.clone(),
+                        generics: generics.iter().map(NormalTy::legacy_render).collect(),
+                        associated_types: bindings
+                            .iter()
+                            .map(|(name, ty)| (name.clone(), ty.legacy_render()))
+                            .collect(),
+                    },
+                    _ => unreachable!("projection qualifier is an interface"),
+                }),
+                member: member.clone(),
+                attr,
+            },
+            NormalTy::TypeVar(name) => Ty::TypeVar(name.clone(), attr),
+            // The binder has no surface syntax (its body renders in place); a
+            // back-reference is spelled as its alias name — which in the named
+            // phase the variable itself carries.
+            NormalTy::Mu { body, .. } => body.legacy_render(),
+            NormalTy::RecVar(qn) | NormalTy::OpaqueAlias(qn) => Ty::TypeAlias(qn.clone(), attr),
+        }
+    }
+
+    // ── phase conversion: NormalTy<Named> → NormalTy ────────────
+
+    /// Strictly convert the `from_ty` intermediate to the canonical de Bruijn
+    /// phase (the only path between the phases): each back-reference becomes the
+    /// distance to its binder, each binder keeps its alias name as the
+    /// equality-transparent display payload, and `saw_mu` reports whether any
+    /// binder was emitted (the recursive-type slow-path flag).
+    ///
+    /// This runs on the *completed* named term, where binder-hood is already
+    /// decided — computing indices during `from_ty` itself would be off by one
+    /// whenever an intervening alias expansion turns out not to bind (mutual
+    /// recursion), because `from_ty` only wraps a binder after seeing the whole
+    /// body.
+    fn resolve_binders(self, stack: &mut Vec<H>, saw_mu: &mut bool) -> NormalTy<H> {
+        match self {
+            NormalTy::Mu { binder, body } => {
+                // `from_ty` wraps a binder only when the body mentions it, and
+                // nothing between `from_ty` and this conversion can remove a
+                // back-reference — so a vacuous binder is a bug, not a case.
+                debug_assert!(
+                    body.mentions_rec_var(&binder),
+                    "from_ty emitted a vacuous μ-binder"
+                );
+                *saw_mu = true;
+                let display = MuDisplay {
+                    name: Some(binder.clone()),
+                    rendered: Box::new(body.legacy_render()),
+                };
+                stack.push(binder);
+                let body = body.resolve_binders(stack, saw_mu);
+                stack.pop();
+                NormalTy::Mu {
+                    binder: display,
+                    body: Box::new(body),
+                }
+            }
+            NormalTy::RecVar(qn) => {
+                let index = stack
+                    .iter()
+                    .rev()
+                    .position(|v| *v == qn)
+                    .unwrap_or_else(|| {
+                        unreachable!(
+                            "from_ty emits a RecVar only while its alias is on the \
+                             expanding path, so its binder is on the stack"
+                        )
+                    });
+                NormalTy::RecVar(index as u32)
+            }
+            NormalTy::Class(qn, args) => NormalTy::Class(
+                qn,
+                args.into_iter()
+                    .map(|a| a.resolve_binders(stack, saw_mu))
+                    .collect(),
+            ),
+            NormalTy::Interface(qn, args, bindings) => NormalTy::Interface(
+                qn,
+                args.into_iter()
+                    .map(|a| a.resolve_binders(stack, saw_mu))
+                    .collect(),
+                bindings
                     .into_iter()
-                    .map(|(name, ty)| (name, ty.canonicalize(ctx)))
-                    .collect();
-                bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
-                NormalTy::Interface(
-                    qn,
-                    args.into_iter().map(|a| a.canonicalize(ctx)).collect(),
-                    bindings,
-                )
-            }
-            NormalTy::List(inner) => NormalTy::List(Box::new(inner.canonicalize(ctx))),
+                    .map(|(n, t)| (n, t.resolve_binders(stack, saw_mu)))
+                    .collect(),
+            ),
+            NormalTy::List(inner) => NormalTy::List(Box::new(inner.resolve_binders(stack, saw_mu))),
             NormalTy::Map { key, value } => NormalTy::Map {
-                key: Box::new(key.canonicalize(ctx)),
-                value: Box::new(value.canonicalize(ctx)),
+                key: Box::new(key.resolve_binders(stack, saw_mu)),
+                value: Box::new(value.resolve_binders(stack, saw_mu)),
+            },
+            NormalTy::Union(members) => NormalTy::Union(
+                members
+                    .into_iter()
+                    .map(|m| m.resolve_binders(stack, saw_mu))
+                    .collect(),
+            ),
+            NormalTy::Function {
+                params,
+                ret,
+                throws,
+            } => NormalTy::Function {
+                params: params
+                    .into_iter()
+                    .map(|p| NormalParam {
+                        name: p.name,
+                        ty: p.ty.resolve_binders(stack, saw_mu),
+                        mode: p.mode,
+                    })
+                    .collect(),
+                ret: Box::new(ret.resolve_binders(stack, saw_mu)),
+                throws: Box::new(throws.resolve_binders(stack, saw_mu)),
             },
             NormalTy::Future(value, error) => NormalTy::Future(
-                Box::new(value.canonicalize(ctx)),
-                Box::new(error.canonicalize(ctx)),
+                Box::new(value.resolve_binders(stack, saw_mu)),
+                Box::new(error.resolve_binders(stack, saw_mu)),
             ),
             NormalTy::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
             } => NormalTy::AssociatedTypeProjection {
-                base: Box::new(base.canonicalize(ctx)),
-                interface: Box::new(interface.canonicalize(ctx)),
+                base: Box::new(base.resolve_binders(stack, saw_mu)),
+                interface: Box::new(interface.resolve_binders(stack, saw_mu)),
+                member,
+            },
+            NormalTy::Int => NormalTy::Int,
+            NormalTy::Bigint => NormalTy::Bigint,
+            NormalTy::Float => NormalTy::Float,
+            NormalTy::String => NormalTy::String,
+            NormalTy::Bool => NormalTy::Bool,
+            NormalTy::Null => NormalTy::Null,
+            NormalTy::Uint8Array => NormalTy::Uint8Array,
+            NormalTy::Media(kind) => NormalTy::Media(kind),
+            NormalTy::Void => NormalTy::Void,
+            NormalTy::RustType => NormalTy::RustType,
+            NormalTy::Type => NormalTy::Type,
+            NormalTy::Resource => NormalTy::Resource,
+            NormalTy::PromptAst => NormalTy::PromptAst,
+            NormalTy::Literal(lit) => NormalTy::Literal(lit),
+            NormalTy::Enum(qn) => NormalTy::Enum(qn),
+            NormalTy::EnumVariant(qn, v) => NormalTy::EnumVariant(qn, v),
+            NormalTy::TypeVar(name) => NormalTy::TypeVar(name),
+            NormalTy::OpaqueAlias(qn) => NormalTy::OpaqueAlias(qn),
+            NormalTy::Never => NormalTy::Never,
+            NormalTy::BuiltinUnknown => NormalTy::BuiltinUnknown,
+            NormalTy::Unknown => NormalTy::Unknown,
+            NormalTy::Error => NormalTy::Error,
+        }
+    }
+}
+
+impl<H: Head> NormalTy<H> {
+    // ── canonicalization ───────────────────────────────────────────────────
+
+    /// Rewrite to a unique canonical form: children canonicalized bottom-up,
+    /// unions reduced by the full set algebra. `saw_mu` is the recursive-type
+    /// flag from [`NormalTy::resolve_binders`]; when clear, the μ-related guards
+    /// below vanish from the hot path.
+    fn canonicalize<C: TypeContext<H>>(
+        self,
+        ctx: &C,
+        saw_mu: bool,
+        assumptions: &mut HashSet<(NormalTy<H>, NormalTy<H>)>,
+    ) -> NormalTy<H> {
+        match self {
+            NormalTy::Class(qn, args) => NormalTy::Class(
+                qn,
+                args.into_iter()
+                    .map(|a| a.canonicalize(ctx, saw_mu, assumptions))
+                    .collect(),
+            ),
+            NormalTy::Interface(qn, args, bindings) => {
+                let mut bindings: Vec<_> = bindings
+                    .into_iter()
+                    .map(|(name, ty)| (name, ty.canonicalize(ctx, saw_mu, assumptions)))
+                    .collect();
+                bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
+                NormalTy::Interface(
+                    qn,
+                    args.into_iter()
+                        .map(|a| a.canonicalize(ctx, saw_mu, assumptions))
+                        .collect(),
+                    bindings,
+                )
+            }
+            NormalTy::List(inner) => {
+                NormalTy::List(Box::new(inner.canonicalize(ctx, saw_mu, assumptions)))
+            }
+            NormalTy::Map { key, value } => NormalTy::Map {
+                key: Box::new(key.canonicalize(ctx, saw_mu, assumptions)),
+                value: Box::new(value.canonicalize(ctx, saw_mu, assumptions)),
+            },
+            NormalTy::Future(value, error) => NormalTy::Future(
+                Box::new(value.canonicalize(ctx, saw_mu, assumptions)),
+                Box::new(error.canonicalize(ctx, saw_mu, assumptions)),
+            ),
+            NormalTy::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+            } => NormalTy::AssociatedTypeProjection {
+                base: Box::new(base.canonicalize(ctx, saw_mu, assumptions)),
+                interface: Box::new(interface.canonicalize(ctx, saw_mu, assumptions)),
                 member,
             },
             NormalTy::Function {
@@ -1067,7 +1715,7 @@ impl NormalTy {
                 let mut required = Vec::new();
                 let mut optional = Vec::new();
                 for p in params {
-                    let ty = p.ty.canonicalize(ctx);
+                    let ty = p.ty.canonicalize(ctx, saw_mu, assumptions);
                     match p.mode {
                         FunctionParamMode::Required => required.push(NormalParam {
                             name: None,
@@ -1085,26 +1733,26 @@ impl NormalTy {
                 required.extend(optional);
                 NormalTy::Function {
                     params: required,
-                    ret: Box::new(ret.canonicalize(ctx)),
-                    throws: Box::new(throws.canonicalize(ctx)),
+                    ret: Box::new(ret.canonicalize(ctx, saw_mu, assumptions)),
+                    throws: Box::new(throws.canonicalize(ctx, saw_mu, assumptions)),
                 }
             }
-            NormalTy::Mu { var, body } => {
-                let body = body.canonicalize(ctx);
-                // A μ whose body no longer mentions its variable is not actually
-                // recursive (an absorption may have removed the back-edge).
-                if body.mentions_rec_var(&var) {
-                    NormalTy::Mu {
-                        var,
-                        body: Box::new(body),
-                    }
-                } else {
-                    body
-                }
-            }
+            // A binder stays put here even if an algebra step strands it —
+            // `unknown`-absorption can swallow a whole union including its
+            // back-references, leaving a μ over a body that no longer mentions
+            // it. That is harmless: the automaton's read-back emits binders only
+            // for states that are actually back-referenced, so a vacuous binder
+            // self-heals downstream.
+            NormalTy::Mu { binder, body } => NormalTy::Mu {
+                binder,
+                body: Box::new(body.canonicalize(ctx, saw_mu, assumptions)),
+            },
             NormalTy::Union(members) => {
-                let members = members.into_iter().map(|m| m.canonicalize(ctx)).collect();
-                Self::canonicalize_union(members, ctx)
+                let members = members
+                    .into_iter()
+                    .map(|m| m.canonicalize(ctx, saw_mu, assumptions))
+                    .collect();
+                Self::canonicalize_union(members, ctx, saw_mu, assumptions)
             }
             leaf => leaf,
         }
@@ -1122,11 +1770,11 @@ impl NormalTy {
     /// [`Self::is_subtype_of`]'s bidirectional escape, so a hole argument still
     /// matches anything. The `unknown` top type does *not* — it is a real,
     /// distinct argument (`Box<unknown>` is not `Box<int>`).
-    fn invariant_compatible<C: TypeContext>(
+    fn invariant_compatible<C: TypeContext<H>>(
         &self,
-        other: &NormalTy,
+        other: &NormalTy<H>,
         ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        assumptions: &mut HashSet<(NormalTy<H>, NormalTy<H>)>,
     ) -> bool {
         self.is_subtype_of(other, ctx, assumptions) && other.is_subtype_of(self, ctx, assumptions)
     }
@@ -1138,13 +1786,13 @@ impl NormalTy {
     /// before delegating to the variable's bounds. Extra pins on the projection's own
     /// qualifier don't disqualify: a qualifier narrows which interface view is meant, it
     /// never changes the member's value.
-    fn pin_is_tautological<C: TypeContext>(
+    fn pin_is_tautological<C: TypeContext<H>>(
         var: &ParamTy,
-        qn: &QualifiedTypeName,
-        args: &[NormalTy],
-        pin: &(Name, NormalTy),
+        qn: &H,
+        args: &[NormalTy<H>],
+        pin: &(Name, NormalTy<H>),
         ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        assumptions: &mut HashSet<(NormalTy<H>, NormalTy<H>)>,
     ) -> bool {
         let (member, value) = pin;
         let NormalTy::AssociatedTypeProjection {
@@ -1173,11 +1821,11 @@ impl NormalTy {
     /// (`C <: I`, `A <: B` via requires, `T <: I` via bound). There are no
     /// representation-changing coercions: `int` is a subtype of neither `bigint`
     /// nor `float`; the only widenings are literal-into-base and variant-into-enum.
-    fn is_subtype_of<C: TypeContext>(
+    fn is_subtype_of<C: TypeContext<H>>(
         &self,
-        sup: &NormalTy,
+        sup: &NormalTy<H>,
         ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        assumptions: &mut HashSet<(NormalTy<H>, NormalTy<H>)>,
     ) -> bool {
         if self == sup {
             return true;
@@ -1205,8 +1853,8 @@ impl NormalTy {
         // The co-inductive assumption set exists *only* to terminate cycles,
         // and a cycle can only arise through an arm that *expands* (regenerates)
         // a type rather than descending into a strictly-smaller subterm:
-        //   * μ-unfolding — `body.substitute(var, self)` can reproduce the same
-        //     pair (`(_, Mu)` on the right, `(Mu, _)` on the left);
+        //   * μ-unfolding — `unfold` can reproduce the same pair (`(_, Mu)` on
+        //     the right, `(Mu, _)` on the left);
         //   * a `TypeVar` / `AssociatedTypeProjection` on the left — its bound is
         //     looked up through the context and may mention the variable itself.
         // Every *structural* arm (unions, invariant containers, functions,
@@ -1245,21 +1893,18 @@ impl NormalTy {
     /// `is_subtype_of`, which owns the reflexivity / sentinel fast paths and the
     /// co-inductive assumption bookkeeping (only performed on the expanding
     /// arms — see the termination argument there).
-    fn is_subtype_of_inner<C: TypeContext>(
+    fn is_subtype_of_inner<C: TypeContext<H>>(
         &self,
-        sup: &NormalTy,
+        sup: &NormalTy<H>,
         ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        assumptions: &mut HashSet<(NormalTy<H>, NormalTy<H>)>,
     ) -> bool {
         match (self, sup) {
-            // μ-unfolding (equirecursive).
-            (NormalTy::Mu { var, body }, _) => {
-                body.substitute(var, self)
-                    .is_subtype_of(sup, ctx, assumptions)
-            }
-            (_, NormalTy::Mu { var, body }) => {
-                self.is_subtype_of(&body.substitute(var, sup), ctx, assumptions)
-            }
+            // μ-unfolding (equirecursive). The closed-term substitution needs no
+            // index shifting, and the outer `is_subtype_of` recorded this pair on
+            // the expanding-arm assumption set.
+            (NormalTy::Mu { .. }, _) => self.unfold().is_subtype_of(sup, ctx, assumptions),
+            (_, NormalTy::Mu { .. }) => self.is_subtype_of(&sup.unfold(), ctx, assumptions),
 
             // Union decomposition. `Union <: T` must precede `T <: Union` so a
             // union on the left is not mistaken for a single member of the right.
@@ -1298,7 +1943,7 @@ impl NormalTy {
                         .collect(),
                 );
                 ctx.type_var_bound(name).iter().any(|bound| {
-                    NormalTy::canonical(&bound.to_ty(), ctx).is_subtype_of(
+                    NormalTy::canonical_with(&bound.to_ty(), ctx, assumptions).is_subtype_of(
                         &stripped,
                         ctx,
                         assumptions,
@@ -1306,7 +1951,11 @@ impl NormalTy {
                 })
             }
             (NormalTy::TypeVar(name), _) => ctx.type_var_bound(name).iter().any(|bound| {
-                NormalTy::canonical(&bound.to_ty(), ctx).is_subtype_of(sup, ctx, assumptions)
+                NormalTy::canonical_with(&bound.to_ty(), ctx, assumptions).is_subtype_of(
+                    sup,
+                    ctx,
+                    assumptions,
+                )
             }),
 
             // A still-symbolic associated-type projection is a subtype of `sup` if
@@ -1323,17 +1972,32 @@ impl NormalTy {
                     ..
                 },
                 _,
-            ) => (**iface).clone().into_interface().is_some_and(|i| {
-                ctx.associated_type_bound(&i, member.clone())
-                    .iter()
-                    .any(|bound| {
-                        NormalTy::canonical(&bound.to_ty(), ctx).is_subtype_of(
-                            sup,
-                            ctx,
-                            assumptions,
-                        )
-                    })
-            }),
+            ) => {
+                (**iface).clone().into_interface().is_some_and(|i| {
+                    ctx.associated_type_bound(&i, member.clone())
+                        .iter()
+                        .any(|bound| {
+                            NormalTy::canonical_with(&bound.to_ty(), ctx, assumptions)
+                                .is_subtype_of(sup, ctx, assumptions)
+                        })
+                })
+            }
+
+            // `baml.AnyClass` is compiler-derived for class values. The stdlib
+            // blanket impl supplies default-method dispatch, but cannot define
+            // membership by itself without also admitting primitives and
+            // containers. Keep this before the general impl-registry arm so
+            // static coercion and the VM's shared runtime type matcher agree.
+            // Of the nine sealed reflection-kind classes, only the class-kind
+            // view is admitted by the ratified surface.
+            (sub, NormalTy::Interface(qn, _, _))
+                if is_any_class(qn, ctx) && !matches!(sub, NormalTy::Interface(..)) =>
+            {
+                matches!(
+                    sub,
+                    NormalTy::Class(head, _) if head_inhabits_any_class(head, ctx)
+                )
+            }
 
             // BEP-062: `baml.AnyFunction` is a compiler builtin implemented by
             // every function type, with the parameter list erased. Conformance
@@ -1344,7 +2008,7 @@ impl NormalTy {
             // existential was lowered; a pin missing anyway degrades to that
             // same top-type default (accepts everything).
             (NormalTy::Function { ret, throws, .. }, NormalTy::Interface(qn, _, bindings))
-                if qn.is_builtin_root_type("AnyFunction") =>
+                if is_any_function(qn, ctx) =>
             {
                 let pin = |name: &str| {
                     bindings
@@ -1362,18 +2026,20 @@ impl NormalTy {
             // function returning `Label` also returns a `json`. Sound because
             // the pins only describe outputs of the held function (its return
             // and error channels); the erased parameter list leaves no
-            // write-through position. A pin missing on the sub side claims
-            // nothing (conservative), matching the fail-safe contract.
+            // write-through position. A pin missing on the sub side reads as
+            // its declared `unknown` default (BEP-062: a bare `AnyFunction`
+            // holds SOME function whose channels are unconstrained - exactly
+            // the top type), so `AnyFunction <: AnyFunction<Returns = unknown>`
+            // holds without eager default-filling at the lowering layer.
             (
                 NormalTy::Interface(sub_qn, _, sub_bindings),
                 NormalTy::Interface(sup_qn, _, sup_bindings),
-            ) if sub_qn.is_builtin_root_type("AnyFunction")
-                && sup_qn.is_builtin_root_type("AnyFunction") =>
-            {
+            ) if is_any_function(sub_qn, ctx) && is_any_function(sup_qn, ctx) => {
                 sup_bindings.iter().all(|(name, sup_pin)| {
-                    sub_bindings.iter().any(|(n, sub_pin)| {
-                        n == name && sub_pin.is_subtype_of(sup_pin, ctx, assumptions)
-                    })
+                    match sub_bindings.iter().find(|(n, _)| n == name) {
+                        Some((_, sub_pin)) => sub_pin.is_subtype_of(sup_pin, ctx, assumptions),
+                        None => NormalTy::BuiltinUnknown.is_subtype_of(sup_pin, ctx, assumptions),
+                    }
                 })
             }
 
@@ -1409,6 +2075,14 @@ impl NormalTy {
                 a1.iter()
                     .zip(a2.iter())
                     .all(|(a, b)| a.invariant_compatible(b, ctx, assumptions))
+            }
+            // BEP-066: the nine reflection-kind classes form one sealed family
+            // beneath the `type` carrier. Because membership is hard-coded to
+            // builtin qualified names, user classes cannot acquire this edge.
+            (NormalTy::Class(name, _), NormalTy::Type)
+                if Self::head_is_type_kind_class(name, ctx) =>
+            {
+                true
             }
             (NormalTy::List(a), NormalTy::List(b)) => a.invariant_compatible(b, ctx, assumptions),
             (NormalTy::Map { key: k1, value: v1 }, NormalTy::Map { key: k2, value: v2 }) => {
@@ -1453,9 +2127,14 @@ impl NormalTy {
         }
     }
 
-    // ── conversion out: NormalTy → Ty ──────────────────────────────────────
+    // ── conversion out: NormalTy → Ty ───────────────────────────
 
-    fn into_ty(self) -> Ty {
+    /// Render a **closed** canonical form back as a [`Ty`]. Surface syntax has no
+    /// μ-binder, so a μ-subterm renders as its precomputed [`MuDisplay`] payload
+    /// (recursion spelled via alias names) — this never descends into a μ body,
+    /// which is why a `RecVar` (always under its binder in a closed term) is
+    /// unreachable here.
+    fn into_ty(self) -> Ty<H> {
         let attr = TyAttr::default();
         match self {
             NormalTy::Int => Ty::Int { attr },
@@ -1522,7 +2201,10 @@ impl NormalTy {
             } => Ty::AssociatedTypeProjection {
                 base: Box::new(base.into_ty()),
                 // The projection's qualifier is always a normalized interface, so
-                // it round-trips back to an `Interface` here.
+                // it round-trips back to an `Interface` here. (A qualifier
+                // argument capturing an enclosing recursion variable is fine: the
+                // enclosing μ renders as its display, so this arm only ever sees
+                // qualifiers whose free variables were closed off above.)
                 interface: Box::new(
                     interface
                         .into_interface()
@@ -1532,15 +2214,23 @@ impl NormalTy {
                 attr,
             },
             NormalTy::TypeVar(name) => Ty::TypeVar(name, attr),
-            // μ-binders and recursion variables round-trip through the alias name.
-            NormalTy::Mu { body, .. } => body.into_ty(),
-            NormalTy::RecVar(qn) | NormalTy::OpaqueAlias(qn) => Ty::TypeAlias(qn, attr),
+            // A μ-subterm renders as its precomputed display — the named-cut
+            // rendering from the canonicalization automaton (or the legacy
+            // rendering on the short-lived pre-automaton intermediate).
+            NormalTy::Mu { binder, .. } => *binder.rendered,
+            // Unreachable for closed terms: the μ arm above never descends into
+            // its body, so every `RecVar` stays behind its binder's display.
+            NormalTy::RecVar(_) => unreachable!(
+                "into_ty on a free RecVar; canonical forms at public boundaries \
+                 are closed and render recursion via their binder's display"
+            ),
+            NormalTy::OpaqueAlias(qn) => Ty::TypeAlias(qn, attr),
         }
     }
 }
 
-impl NormalTy {
-    fn into_tys(tys: Vec<NormalTy>) -> Vec<Ty> {
+impl<H: Head> NormalTy<H> {
+    fn into_tys(tys: Vec<NormalTy<H>>) -> Vec<Ty<H>> {
         tys.into_iter().map(NormalTy::into_ty).collect()
     }
 
@@ -1549,12 +2239,13 @@ impl NormalTy {
     /// back to `Ty`. This is the precise interface shape handed to the
     /// [`TypeContext`] membership (`implements_interface`) and requires
     /// (`interface_requires`) oracles, so they never have to re-destructure a
-    /// loose `Ty` to recover it.
+    /// loose `Ty` to recover it. The parts are always closed here: the subtype
+    /// arms that build a constraint fire only after μ-unfolding the operand.
     fn interface_constraint(
-        name: &QualifiedTypeName,
-        generics: &[NormalTy],
-        bindings: &[(Name, NormalTy)],
-    ) -> Interface {
+        name: &H,
+        generics: &[NormalTy<H>],
+        bindings: &[(Name, NormalTy<H>)],
+    ) -> Interface<H> {
         Interface {
             name: name.clone(),
             generics: generics.iter().cloned().map(NormalTy::into_ty).collect(),
@@ -1568,7 +2259,18 @@ impl NormalTy {
     /// Consume a normalized interface (`NormalTy::Interface`) and rebuild the
     /// [`Interface`] constraint; `None` for any other variant. Used to put the
     /// `as I` annotation of an associated-type projection back into a `Ty`.
-    fn into_interface(self) -> Option<Interface> {
+    ///
+    /// A μ-wrapped interface recovers the constraint from its **display**: when
+    /// a projection's qualifier mentions the enclosing recursive alias
+    /// (`type A = I<A> | (C as I<A>).M`), minimization merges the qualifier
+    /// state with the standalone `I<A>` member's, so the canonical qualifier is
+    /// `μX.I<…X…>`. Unfolding here would loop — each unfold re-injects the μ
+    /// into the argument that contains the projection, whose qualifier unfolds
+    /// again — but the display is a finite alias-based spelling of the whole
+    /// qualifier (`I<A>`), computed by the renderer, so its parts are read off
+    /// directly. A display that is not interface-shaped (an exotic cover
+    /// rendering) degrades to `None`, conservative.
+    fn into_interface(self) -> Option<Interface<H>> {
         match self {
             NormalTy::Interface(name, generics, bindings) => Some(Interface {
                 name,
@@ -1578,6 +2280,14 @@ impl NormalTy {
                     .map(|(name, ty)| (name, ty.into_ty()))
                     .collect(),
             }),
+            NormalTy::Mu { binder, .. } => match *binder.rendered {
+                Ty::Interface(name, generics, associated_types, _) => Some(Interface {
+                    name,
+                    generics,
+                    associated_types,
+                }),
+                _ => None,
+            },
             _ => None,
         }
     }
@@ -1594,14 +2304,19 @@ impl NormalTy {
 // UNION CANONICALIZATION
 // ═══════════════════════════════════════════════════════════════════════════
 
-impl NormalTy {
+impl<H: Head> NormalTy<H> {
     /// Reduce a union of already-canonical members to canonical form: flatten,
     /// remove `never`, absorb under `unknown`, collapse complete enums, absorb
     /// subtype-members, then sort/dedup and unwrap singletons.
-    fn canonicalize_union<C: TypeContext>(members: Vec<NormalTy>, ctx: &C) -> NormalTy {
+    fn canonicalize_union<C: TypeContext<H>>(
+        members: Vec<NormalTy<H>>,
+        ctx: &C,
+        saw_mu: bool,
+        assumptions: &mut HashSet<(NormalTy<H>, NormalTy<H>)>,
+    ) -> NormalTy<H> {
         // Flatten one level (members are canonical, but a μ-unfold or alias could
         // surface a nested union) and drop `never`.
-        let mut flat: Vec<NormalTy> = Vec::new();
+        let mut flat: Vec<NormalTy<H>> = Vec::new();
         for m in members {
             match m {
                 NormalTy::Union(inner) => flat.extend(inner),
@@ -1619,7 +2334,8 @@ impl NormalTy {
         flat.dedup();
 
         Self::collapse_complete_enums(&mut flat, ctx);
-        let mut flat = Self::absorb_subtypes(&flat, ctx);
+        Self::collapse_complete_bools(&mut flat);
+        let mut flat = Self::absorb_subtypes(&flat, ctx, saw_mu, assumptions);
 
         flat.sort();
         flat.dedup();
@@ -1634,9 +2350,9 @@ impl NormalTy {
     /// (`E.A | E.B | … == E`). A bare `Enum(E)` already present absorbs its
     /// variants via the subtype pass, so this only handles the
     /// all-variants-no-enum case.
-    fn collapse_complete_enums<C: TypeContext>(members: &mut Vec<NormalTy>, ctx: &C) {
+    fn collapse_complete_enums<C: TypeContext<H>>(members: &mut Vec<NormalTy<H>>, ctx: &C) {
         // Distinct enums that have at least one variant present.
-        let mut enums: Vec<QualifiedTypeName> = members
+        let mut enums: Vec<H> = members
             .iter()
             .filter_map(|m| match m {
                 NormalTy::EnumVariant(e, _) => Some(e.clone()),
@@ -1657,34 +2373,151 @@ impl NormalTy {
                     _ => None,
                 })
                 .collect();
-            if !all.is_empty() && all.iter().all(|v| present.contains(v)) {
+            // Requires at least two variants: collapsing a single-variant enum
+            // would split one value set into two canonical spellings (`E.A | E.A`
+            // as a union collapses while a bare `E.A` cannot), breaking
+            // idempotence. `E.A` ≡ `E` for a one-variant enum stays an
+            // (acknowledged) incompleteness instead.
+            if all.len() >= 2 && all.iter().all(|v| present.contains(v)) {
                 members.retain(|m| !matches!(m, NormalTy::EnumVariant(en, _) if *en == e));
                 members.push(NormalTy::Enum(e));
             }
         }
     }
 
+    /// Whether any μ-binder in this term is **non-contractive**: its body
+    /// reaches a back-reference to that same binder through union spines alone
+    /// (an unguarded member, e.g. the μ of `type A = A | A[]`). The coinductive
+    /// subtype checker is sound only on contractive operands — on an unguarded μ
+    /// the assumption probe can close a derivation without ever crossing a
+    /// constructor and prove `T <: μ` for arbitrary `T` — so such members must
+    /// not reach it until the automaton's ε-closure has resolved the spine.
+    fn has_unguarded_mu(&self) -> bool {
+        fn spine_has_rec<H: Head>(t: &NormalTy<H>, depth: u32) -> bool {
+            match t {
+                NormalTy::RecVar(i) => *i == depth,
+                NormalTy::Union(members) => members.iter().any(|m| spine_has_rec(m, depth)),
+                NormalTy::Mu { body, .. } => spine_has_rec(body, depth + 1),
+                _ => false,
+            }
+        }
+        match self {
+            NormalTy::Mu { body, .. } => spine_has_rec(body, 0) || body.has_unguarded_mu(),
+            NormalTy::RecVar(_) => false,
+            NormalTy::List(inner) => inner.has_unguarded_mu(),
+            NormalTy::Map { key, value } | NormalTy::Future(key, value) => {
+                key.has_unguarded_mu() || value.has_unguarded_mu()
+            }
+            NormalTy::Union(members) => members.iter().any(NormalTy::has_unguarded_mu),
+            NormalTy::Class(_, args) => args.iter().any(NormalTy::has_unguarded_mu),
+            NormalTy::Interface(_, args, bindings) => {
+                args.iter().any(NormalTy::has_unguarded_mu)
+                    || bindings.iter().any(|(_, t)| t.has_unguarded_mu())
+            }
+            NormalTy::Function {
+                params,
+                ret,
+                throws,
+            } => {
+                params.iter().any(|p| p.ty.has_unguarded_mu())
+                    || ret.has_unguarded_mu()
+                    || throws.has_unguarded_mu()
+            }
+            NormalTy::AssociatedTypeProjection {
+                base, interface, ..
+            } => base.has_unguarded_mu() || interface.has_unguarded_mu(),
+            NormalTy::Int
+            | NormalTy::Bigint
+            | NormalTy::Float
+            | NormalTy::String
+            | NormalTy::Bool
+            | NormalTy::Null
+            | NormalTy::Uint8Array
+            | NormalTy::Media(_)
+            | NormalTy::Void
+            | NormalTy::RustType
+            | NormalTy::Type
+            | NormalTy::Resource
+            | NormalTy::PromptAst
+            | NormalTy::Literal(_)
+            | NormalTy::Enum(_)
+            | NormalTy::EnumVariant(_, _)
+            | NormalTy::TypeVar(_)
+            | NormalTy::OpaqueAlias(_)
+            | NormalTy::Never
+            | NormalTy::BuiltinUnknown
+            | NormalTy::Unknown
+            | NormalTy::Error => false,
+        }
+    }
+
+    /// Replace the complete pair of bool literals with `bool`
+    /// (`true | false == bool`, TYPE_SYSTEM.md §Subtyping Cases) — the bool
+    /// analogue of enum completeness, context-free because the variant family is
+    /// closed and its equality unoverridable.
+    fn collapse_complete_bools(members: &mut Vec<NormalTy<H>>) {
+        let has = |members: &[NormalTy<H>], b: bool| {
+            members
+                .iter()
+                .any(|m| matches!(m, NormalTy::Literal(Literal::Bool(x)) if *x == b))
+        };
+        if has(members, true) && has(members, false) {
+            members.retain(|m| !matches!(m, NormalTy::Literal(Literal::Bool(_))));
+            members.push(NormalTy::Bool);
+        }
+    }
+
     /// Remove any member subsumed by another (`X | Y == Y` when `X <: Y`). Covers
     /// literal-into-base, variant-into-enum, `C | I == I`, `A | B == B`, and
     /// `T | I == I`. Error-recovery sentinels never absorb or are absorbed.
-    fn absorb_subtypes<C: TypeContext>(members: &[NormalTy], ctx: &C) -> Vec<NormalTy> {
+    ///
+    /// Pairs involving a **deferred** member are skipped, for two reasons that
+    /// share one guard:
+    /// - an *open* member (a free `RecVar` — this bottom-up pass runs inside
+    ///   μ-bodies) must never reach the subtype checker or a [`TypeContext`]
+    ///   callback: its recursion variables are bound by a binder we cannot see;
+    /// - a member containing a *non-contractive* μ (an unguarded spine, e.g.
+    ///   `type A = A | A[]` before ε-closure) would let the coinductive
+    ///   assumption probe prove `T <: μ` for arbitrary `T` without crossing a
+    ///   constructor, silently absorbing real siblings.
+    ///
+    /// Closed, contractive members participate normally. Deferring is
+    /// conservative (a union keeps a member another semantically covers) — the
+    /// μ-canonicalization automaton re-runs absorption over closed, ε-closed
+    /// per-state read-backs and completes it.
+    fn absorb_subtypes<C: TypeContext<H>>(
+        members: &[NormalTy<H>],
+        ctx: &C,
+        saw_mu: bool,
+        assumptions: &mut HashSet<(NormalTy<H>, NormalTy<H>)>,
+    ) -> Vec<NormalTy<H>> {
         let n = members.len();
+        // Only computed when a μ exists somewhere in the term (rare) — the hot
+        // path pays one branch.
+        let open: Vec<bool> = if saw_mu {
+            members
+                .iter()
+                .map(|m| m.has_free_rec_var(0) || m.has_unguarded_mu())
+                .collect()
+        } else {
+            vec![false; n]
+        };
         let mut keep = vec![true; n];
         for i in 0..n {
-            if members[i].is_sentinel() {
+            if members[i].is_sentinel() || open[i] {
                 continue;
             }
             for j in 0..n {
-                if i == j || !keep[j] || members[j].is_sentinel() {
+                if i == j || !keep[j] || members[j].is_sentinel() || open[j] {
                     continue;
                 }
-                if !members[i].is_subtype_of(&members[j], ctx, &mut HashSet::new()) {
+                if !members[i].is_subtype_of(&members[j], ctx, assumptions) {
                     continue;
                 }
                 // `members[i] <: members[j]`. Drop `i`, unless they are mutual
                 // subtypes (equivalent but not structurally equal — e.g. cyclic
                 // `requires`); then keep the lower index deterministically.
-                let mutual = members[j].is_subtype_of(&members[i], ctx, &mut HashSet::new());
+                let mutual = members[j].is_subtype_of(&members[i], ctx, assumptions);
                 if !mutual || j < i {
                     keep[i] = false;
                     break;
@@ -1699,39 +2532,124 @@ impl NormalTy {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SUBSTITUTION (μ-unfolding) & FUNCTION PARAMETERS
+// μ-UNFOLDING & FUNCTION PARAMETERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-impl NormalTy {
-    /// Substitute recursion variable `var` with `replacement` (one μ-unfold step).
-    fn substitute(&self, var: &QualifiedTypeName, replacement: &NormalTy) -> NormalTy {
+impl<H: Head> NormalTy<H> {
+    /// One unfold step of a closed canonical μ: `μX.body ↦ body[μX.body/X]`,
+    /// i.e. every `RecVar` bound by *this* binder is replaced with the whole μ-term.
+    ///
+    /// Because `self` is closed (the public canonical-form invariant), the
+    /// replacement is closed too, so grafting it under deeper binders can neither
+    /// capture nor be captured — no de Bruijn shifting is needed, and the result
+    /// is again closed with a unique (α-canonical) representation, keeping the
+    /// derived-`==` probes of the co-inductive assumption set exact.
+    fn unfold(&self) -> NormalTy<H> {
+        let NormalTy::Mu { body, .. } = self else {
+            unreachable!("unfold on a non-μ canonical form");
+        };
+        debug_assert!(
+            self.is_closed(),
+            "unfold on an open term violates the closed-term invariant"
+        );
+        body.replace_rec_var(0, self)
+    }
+
+    /// Whether every `RecVar` is bound by an enclosing μ-binder (debug-assert
+    /// support for the closed-term invariant).
+    fn is_closed(&self) -> bool {
+        !self.has_free_rec_var(0)
+    }
+
+    /// Whether a `RecVar` with index ≥ `depth` (i.e. free relative to `depth`
+    /// enclosing binders) occurs in this term.
+    fn has_free_rec_var(&self, depth: u32) -> bool {
         match self {
-            NormalTy::RecVar(v) if v == var => replacement.clone(),
+            NormalTy::RecVar(i) => *i >= depth,
+            NormalTy::Mu { body, .. } => body.has_free_rec_var(depth + 1),
+            NormalTy::List(inner) => inner.has_free_rec_var(depth),
+            NormalTy::Map { key, value } | NormalTy::Future(key, value) => {
+                key.has_free_rec_var(depth) || value.has_free_rec_var(depth)
+            }
+            NormalTy::Union(members) => members.iter().any(|m| m.has_free_rec_var(depth)),
+            NormalTy::Class(_, args) => args.iter().any(|a| a.has_free_rec_var(depth)),
+            NormalTy::Interface(_, args, bindings) => {
+                args.iter().any(|a| a.has_free_rec_var(depth))
+                    || bindings.iter().any(|(_, t)| t.has_free_rec_var(depth))
+            }
+            NormalTy::Function {
+                params,
+                ret,
+                throws,
+            } => {
+                params.iter().any(|p| p.ty.has_free_rec_var(depth))
+                    || ret.has_free_rec_var(depth)
+                    || throws.has_free_rec_var(depth)
+            }
+            NormalTy::AssociatedTypeProjection {
+                base, interface, ..
+            } => base.has_free_rec_var(depth) || interface.has_free_rec_var(depth),
+            NormalTy::Int
+            | NormalTy::Bigint
+            | NormalTy::Float
+            | NormalTy::String
+            | NormalTy::Bool
+            | NormalTy::Null
+            | NormalTy::Uint8Array
+            | NormalTy::Media(_)
+            | NormalTy::Void
+            | NormalTy::RustType
+            | NormalTy::Type
+            | NormalTy::Resource
+            | NormalTy::PromptAst
+            | NormalTy::Literal(_)
+            | NormalTy::Enum(_)
+            | NormalTy::EnumVariant(_, _)
+            | NormalTy::TypeVar(_)
+            | NormalTy::OpaqueAlias(_)
+            | NormalTy::Never
+            | NormalTy::BuiltinUnknown
+            | NormalTy::Unknown
+            | NormalTy::Error => false,
+        }
+    }
+
+    /// Replace every `RecVar` bound by the binder `depth` levels out with
+    /// `replacement` (which must be closed — see [`Self::unfold`]).
+    fn replace_rec_var(&self, depth: u32, replacement: &NormalTy<H>) -> NormalTy<H> {
+        match self {
+            NormalTy::RecVar(i) if *i == depth => replacement.clone(),
+            NormalTy::Mu { binder, body } => NormalTy::Mu {
+                binder: binder.clone(),
+                body: Box::new(body.replace_rec_var(depth + 1, replacement)),
+            },
             NormalTy::Class(qn, args) => NormalTy::Class(
                 qn.clone(),
                 args.iter()
-                    .map(|a| a.substitute(var, replacement))
+                    .map(|a| a.replace_rec_var(depth, replacement))
                     .collect(),
             ),
             NormalTy::Interface(qn, args, bindings) => NormalTy::Interface(
                 qn.clone(),
                 args.iter()
-                    .map(|a| a.substitute(var, replacement))
+                    .map(|a| a.replace_rec_var(depth, replacement))
                     .collect(),
                 bindings
                     .iter()
-                    .map(|(n, t)| (n.clone(), t.substitute(var, replacement)))
+                    .map(|(n, t)| (n.clone(), t.replace_rec_var(depth, replacement)))
                     .collect(),
             ),
-            NormalTy::List(inner) => NormalTy::List(Box::new(inner.substitute(var, replacement))),
+            NormalTy::List(inner) => {
+                NormalTy::List(Box::new(inner.replace_rec_var(depth, replacement)))
+            }
             NormalTy::Map { key, value } => NormalTy::Map {
-                key: Box::new(key.substitute(var, replacement)),
-                value: Box::new(value.substitute(var, replacement)),
+                key: Box::new(key.replace_rec_var(depth, replacement)),
+                value: Box::new(value.replace_rec_var(depth, replacement)),
             },
             NormalTy::Union(members) => NormalTy::Union(
                 members
                     .iter()
-                    .map(|m| m.substitute(var, replacement))
+                    .map(|m| m.replace_rec_var(depth, replacement))
                     .collect(),
             ),
             NormalTy::Function {
@@ -1743,51 +2661,49 @@ impl NormalTy {
                     .iter()
                     .map(|p| NormalParam {
                         name: p.name.clone(),
-                        ty: p.ty.substitute(var, replacement),
+                        ty: p.ty.replace_rec_var(depth, replacement),
                         mode: p.mode,
                     })
                     .collect(),
-                ret: Box::new(ret.substitute(var, replacement)),
-                throws: Box::new(throws.substitute(var, replacement)),
+                ret: Box::new(ret.replace_rec_var(depth, replacement)),
+                throws: Box::new(throws.replace_rec_var(depth, replacement)),
             },
             NormalTy::Future(value, error) => NormalTy::Future(
-                Box::new(value.substitute(var, replacement)),
-                Box::new(error.substitute(var, replacement)),
+                Box::new(value.replace_rec_var(depth, replacement)),
+                Box::new(error.replace_rec_var(depth, replacement)),
             ),
             NormalTy::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
             } => NormalTy::AssociatedTypeProjection {
-                base: Box::new(base.substitute(var, replacement)),
-                interface: Box::new(interface.substitute(var, replacement)),
+                base: Box::new(base.replace_rec_var(depth, replacement)),
+                interface: Box::new(interface.replace_rec_var(depth, replacement)),
                 member: member.clone(),
             },
-            // A nested μ binding the same name shadows it; do not substitute inside.
-            NormalTy::Mu { var: v, body } if v != var => NormalTy::Mu {
-                var: v.clone(),
-                body: Box::new(body.substitute(var, replacement)),
-            },
+            // Leaves and non-matching indices are untouched.
             _ => self.clone(),
         }
     }
 }
 
-impl NormalParam {
+impl<H: Head, P: MuPhase<H>> NormalParam<H, P> {
     fn is_required(&self) -> bool {
         matches!(self.mode, FunctionParamMode::Required)
     }
+}
 
+impl<H: Head> NormalParam<H> {
     /// Function parameter-list subtyping (contravariant): required params
     /// positional and matched in order, optional params matched by name.
-    fn list_subtype<C: TypeContext>(
-        sub: &[NormalParam],
-        sup: &[NormalParam],
+    fn list_subtype<C: TypeContext<H>>(
+        sub: &[NormalParam<H>],
+        sup: &[NormalParam<H>],
         ctx: &C,
-        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+        assumptions: &mut HashSet<(NormalTy<H>, NormalTy<H>)>,
     ) -> bool {
-        let sub_required: Vec<&NormalParam> = sub.iter().filter(|p| p.is_required()).collect();
-        let sup_required: Vec<&NormalParam> = sup.iter().filter(|p| p.is_required()).collect();
+        let sub_required: Vec<&NormalParam<H>> = sub.iter().filter(|p| p.is_required()).collect();
+        let sup_required: Vec<&NormalParam<H>> = sup.iter().filter(|p| p.is_required()).collect();
         if sub_required.len() != sup_required.len() {
             return false;
         }
@@ -1814,5 +2730,369 @@ impl NormalParam {
     }
 }
 
+mod mu;
+
 #[cfg(test)]
 mod tests;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERNED ENTRY
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// The hir_ty inference engine's ingestion path: interned types enter the
+// normalizer directly, at the same cost the plain enum pays via `from_ty`,
+// with no intermediate materialization. Facts still exchange plain types at
+// the `TypeContext` boundary (alias definitions, projection reductions) -
+// those are small and rare, and reduction results continue through the plain
+// path. Output-producing entries materialize once via `into_ty` and
+// re-intern.
+
+use crate::interned;
+
+/// Memoizes canonical forms for a sequence of interned relations evaluated
+/// under one immutable [`TypeContext`]. The cache deliberately takes the
+/// context at each call rather than owning it; callers are responsible for
+/// keeping one cache scoped to one fact set (compiler inference uses one per
+/// body). Inference-bearing types should be resolved before entering because
+/// their meaning is table-relative rather than a property of the handle alone.
+#[derive(Default)]
+pub struct InternedCanonicalCache {
+    canonical: RefCell<HashMap<interned::Ty, NormalTy>>,
+}
+
+impl InternedCanonicalCache {
+    fn canonical<C: TypeContext>(&self, ty: &interned::Ty, ctx: &C) -> NormalTy {
+        debug_assert!(!ty.has_infer());
+        if let Some(canonical) = self.canonical.borrow().get(ty) {
+            return canonical.clone();
+        }
+        let canonical = NormalTy::canonical_interned(ty, ctx);
+        self.canonical
+            .borrow_mut()
+            .insert(ty.clone(), canonical.clone());
+        canonical
+    }
+
+    pub fn equivalent<C: TypeContext>(&self, a: &interned::Ty, b: &interned::Ty, ctx: &C) -> bool {
+        if a == b {
+            return true;
+        }
+        if interned_heads_definitely_differ(a, b) {
+            return false;
+        }
+        self.canonical(a, ctx) == self.canonical(b, ctx)
+    }
+
+    pub fn is_subtype<C: TypeContext>(
+        &self,
+        sub: &interned::Ty,
+        sup: &interned::Ty,
+        ctx: &C,
+    ) -> bool {
+        if sub == sup {
+            return true;
+        }
+        if !matches!(
+            (sub.kind(), sup.kind()),
+            (
+                interned::TyKind::Interface(..),
+                interned::TyKind::Interface(..)
+            )
+        ) && interned_heads_definitely_differ(sub, sup)
+        {
+            return false;
+        }
+        self.canonical(sub, ctx)
+            .is_subtype_of(&self.canonical(sup, ctx), ctx, &mut HashSet::new())
+    }
+}
+
+impl NormalTy {
+    /// [`NormalTy::canonical_bottom_up`] for the interned representation: the
+    /// same named-intermediate -> binder-resolution -> bottom-up-algebra
+    /// pipeline, entered from `interned::Ty`.
+    fn canonical_bottom_up_interned<C: TypeContext>(
+        ty: &interned::Ty,
+        ctx: &C,
+    ) -> (NormalTy, bool) {
+        let named =
+            NormalTy::from_interned(ty, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL);
+        let mut saw_mu = false;
+        let resolved = named.resolve_binders(&mut Vec::new(), &mut saw_mu);
+        (
+            resolved.canonicalize(ctx, saw_mu, &mut HashSet::new()),
+            saw_mu,
+        )
+    }
+
+    /// [`NormalTy::canonical`] for the interned representation.
+    fn canonical_interned<C: TypeContext>(ty: &interned::Ty, ctx: &C) -> NormalTy {
+        let (t, saw_mu) = Self::canonical_bottom_up_interned(ty, ctx);
+        if saw_mu && t.contains_mu() {
+            mu::canonicalize_mu(t, ctx)
+        } else {
+            t
+        }
+    }
+}
+
+/// The interned representation is name-headed by construction
+/// (`interned::TyKind::Class(TypeName, ..)`), so this whole ingestion path is
+/// fixed at `H = QualifiedTypeName`; only the μ-phase varies.
+impl NormalTy<QualifiedTypeName, Named> {
+    /// [`NormalTy::from_ty`], mirrored over `interned::TyKind`. The one
+    /// naming trap: the interned `Unknown` is the TOP type (the plain enum's
+    /// `BuiltinUnknown`); TIR's `Unknown` recovery sentinel is
+    /// unrepresentable in the interned form by design.
+    fn from_interned<C: TypeContext>(
+        ty: &interned::Ty,
+        ctx: &C,
+        expanding: &mut HashSet<QualifiedTypeName>,
+        fuel: u32,
+    ) -> NormalTy<QualifiedTypeName, Named> {
+        use interned::TyKind as K;
+        match ty.kind() {
+            K::Int { .. } => NormalTy::Int,
+            K::Bigint { .. } => NormalTy::Bigint,
+            K::Float { .. } => NormalTy::Float,
+            K::String { .. } => NormalTy::String,
+            K::Bool { .. } => NormalTy::Bool,
+            K::Null { .. } => NormalTy::Null,
+            K::Uint8Array { .. } => NormalTy::Uint8Array,
+            K::Media(kind, _) => NormalTy::Media(*kind),
+            K::Void { .. } => NormalTy::Void,
+            K::RustType { .. } => NormalTy::RustType,
+            K::Type { .. } => NormalTy::Type,
+            K::Resource { .. } => NormalTy::Resource,
+            K::PromptAst { .. } => NormalTy::PromptAst,
+            K::Unknown { .. } => NormalTy::BuiltinUnknown,
+            K::Never { .. } => NormalTy::Never,
+            K::Error { .. } => NormalTy::Error,
+            // Same invariant as the plain arm: holes are filled (or made
+            // `Error`) and live variables are resolved or deferred BEFORE any
+            // oracle query; either reaching normalization is a compiler bug.
+            K::Infer { .. } => unreachable!(
+                "inference hole/variable reached type normalization; holes must \
+                 be instantiated and variables resolved (or the check deferred) \
+                 before any equivalence/subtype query"
+            ),
+            K::Literal(lit, _freshness, _) => NormalTy::Literal(lit.clone()),
+            K::Class(qn, args, _) => NormalTy::Class(
+                qn.clone(),
+                Self::from_interned_all(args, ctx, expanding, fuel),
+            ),
+            K::Interface(qn, args, bindings, _) => {
+                let mut bindings: Vec<_> = bindings
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), Self::from_interned(ty, ctx, expanding, fuel)))
+                    .collect();
+                bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
+                NormalTy::Interface(
+                    qn.clone(),
+                    Self::from_interned_all(args, ctx, expanding, fuel),
+                    bindings,
+                )
+            }
+            K::Enum(qn, _) => NormalTy::Enum(qn.clone()),
+            K::EnumVariant(qn, variant, _) => NormalTy::EnumVariant(qn.clone(), variant.clone()),
+            K::List(inner, _) => {
+                NormalTy::List(Box::new(Self::from_interned(inner, ctx, expanding, fuel)))
+            }
+            K::Map { key, value, .. } => NormalTy::Map {
+                key: Box::new(Self::from_interned(key, ctx, expanding, fuel)),
+                value: Box::new(Self::from_interned(value, ctx, expanding, fuel)),
+            },
+            K::Union(members, _) => {
+                NormalTy::Union(Self::from_interned_all(members, ctx, expanding, fuel))
+            }
+            K::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => NormalTy::Function {
+                params: params
+                    .iter()
+                    .map(|p| NormalParam {
+                        name: p.name.clone(),
+                        ty: Self::from_interned(&p.ty, ctx, expanding, fuel),
+                        mode: p.mode,
+                    })
+                    .collect(),
+                ret: Box::new(Self::from_interned(ret, ctx, expanding, fuel)),
+                throws: Box::new(Self::from_interned(throws, ctx, expanding, fuel)),
+            },
+            K::Future(value, error, _) => NormalTy::Future(
+                Box::new(Self::from_interned(value, ctx, expanding, fuel)),
+                Box::new(Self::from_interned(error, ctx, expanding, fuel)),
+            ),
+            K::TypeVar(param, _) => NormalTy::TypeVar(param.clone()),
+            K::AssociatedTypeProjection {
+                base,
+                interface,
+                member,
+                ..
+            } => {
+                // The fact boundary exchanges plain types; a projection's
+                // pieces are small. A reduction continues through the plain
+                // path, exactly like the plain arm.
+                let plain_base = base.to_plain();
+                let plain_interface = crate::Interface::new(
+                    interface.name.clone(),
+                    interface
+                        .generics
+                        .iter()
+                        .map(interned::Ty::to_plain)
+                        .collect(),
+                    interface
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                        .collect(),
+                );
+                if fuel > 0
+                    && let ProjectionStep::Reduced(reduced) =
+                        ctx.project(&plain_base, &plain_interface, member, fuel)
+                {
+                    return Self::from_ty(&reduced, ctx, expanding, fuel - 1);
+                }
+                let mut bindings: Vec<_> = interface
+                    .associated_types
+                    .iter()
+                    .map(|(name, ty)| (name.clone(), Self::from_interned(ty, ctx, expanding, fuel)))
+                    .collect();
+                bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
+                NormalTy::AssociatedTypeProjection {
+                    base: Box::new(Self::from_interned(base, ctx, expanding, fuel)),
+                    interface: Box::new(NormalTy::Interface(
+                        interface.name.clone(),
+                        Self::from_interned_all(&interface.generics, ctx, expanding, fuel),
+                        bindings,
+                    )),
+                    member: member.clone(),
+                }
+            }
+            K::TypeAlias(qn, _) => {
+                if expanding.contains(qn) {
+                    return NormalTy::RecVar(qn.clone());
+                }
+                let Some(def) = ctx.alias_def(qn) else {
+                    return NormalTy::OpaqueAlias(qn.clone());
+                };
+                expanding.insert(qn.clone());
+                // The alias definition is a plain fact; its expansion
+                // continues through the plain path.
+                let body = Self::from_ty(&def, ctx, expanding, fuel);
+                expanding.remove(qn);
+                if body.mentions_rec_var(qn) {
+                    NormalTy::Mu {
+                        binder: qn.clone(),
+                        body: Box::new(body),
+                    }
+                } else {
+                    body
+                }
+            }
+        }
+    }
+
+    fn from_interned_all<C: TypeContext>(
+        tys: &[interned::Ty],
+        ctx: &C,
+        expanding: &mut HashSet<QualifiedTypeName>,
+        fuel: u32,
+    ) -> Vec<NormalTy<QualifiedTypeName, Named>> {
+        tys.iter()
+            .map(|ty| Self::from_interned(ty, ctx, expanding, fuel))
+            .collect()
+    }
+}
+
+/// [`TypeContext::is_subtype`] for interned types: the subset relation,
+/// entered without materializing plain trees. Pointer identity is the
+/// reflexivity fast path.
+pub fn is_subtype_interned<C: TypeContext>(
+    sub: &interned::Ty,
+    sup: &interned::Ty,
+    ctx: &C,
+) -> bool {
+    if sub == sup {
+        return true;
+    }
+    if !matches!(
+        (sub.kind(), sup.kind()),
+        (
+            interned::TyKind::Interface(..),
+            interned::TyKind::Interface(..)
+        )
+    ) && interned_heads_definitely_differ(sub, sup)
+    {
+        return false;
+    }
+    let sub = NormalTy::canonical_interned(sub, ctx);
+    let sup = NormalTy::canonical_interned(sup, ctx);
+    sub.is_subtype_of(&sup, ctx, &mut HashSet::new())
+}
+
+/// [`TypeContext::equivalent`] for interned types.
+pub fn equivalent_interned<C: TypeContext>(a: &interned::Ty, b: &interned::Ty, ctx: &C) -> bool {
+    if a == b {
+        return true;
+    }
+    if interned_heads_definitely_differ(a, b) {
+        return false;
+    }
+    NormalTy::canonical_interned(a, ctx) == NormalTy::canonical_interned(b, ctx)
+}
+
+/// Interned counterpart of [`heads_definitely_differ`]. Hash-consing makes
+/// the identical-head fast path cheaper, but distinct nominal heads are still
+/// common during inference and cannot be changed by canonicalization.
+fn interned_heads_definitely_differ(a: &interned::Ty, b: &interned::Ty) -> bool {
+    use interned::TyKind as K;
+    match (a.kind(), b.kind()) {
+        (K::Class(q1, ..), K::Class(q2, ..))
+        | (K::Interface(q1, ..), K::Interface(q2, ..))
+        | (K::Enum(q1, ..), K::Enum(q2, ..)) => q1 != q2,
+        (K::EnumVariant(q1, v1, ..), K::EnumVariant(q2, v2, ..)) => q1 != q2 || v1 != v2,
+        _ => false,
+    }
+}
+
+/// [`TypeContext::normalize`] for interned types. Materializes once on the
+/// way out (attrs erased, like the plain form), with the mu root rendered
+/// exactly as `NormalTy::canonical_render` renders it (root-unfold-once).
+pub fn normalize_interned<C: TypeContext>(ty: &interned::Ty, ctx: &C) -> interned::Ty {
+    let (t, saw_mu) = NormalTy::canonical_bottom_up_interned(ty, ctx);
+    let plain = if saw_mu && t.contains_mu() {
+        mu::canonicalize_mu_with_render(t, ctx).1
+    } else {
+        t.into_ty()
+    };
+    interned::Ty::from_plain(&plain)
+}
+
+/// The canonical union of `members` - the join operation for control-flow
+/// merge points and throws accumulation: flattens, dedups, absorbs subsumed
+/// members (`1 | int` collapses to `int`), and collapses complete sets
+/// (`true | false` to `bool`). An empty member list is `never` (the join
+/// identity).
+pub fn canonical_union_interned<C: TypeContext>(members: &[interned::Ty], ctx: &C) -> interned::Ty {
+    let named = NormalTy::Union(
+        members
+            .iter()
+            .map(|member| {
+                NormalTy::from_interned(member, ctx, &mut HashSet::new(), PROJECTION_REDUCTION_FUEL)
+            })
+            .collect(),
+    );
+    let mut saw_mu = false;
+    let resolved = named.resolve_binders(&mut Vec::new(), &mut saw_mu);
+    let t = resolved.canonicalize(ctx, saw_mu, &mut HashSet::new());
+    let t = if saw_mu && t.contains_mu() {
+        mu::canonicalize_mu(t, ctx)
+    } else {
+        t
+    };
+    interned::Ty::from_plain(&t.into_ty())
+}

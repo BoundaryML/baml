@@ -151,7 +151,7 @@ impl WasmHttp {
             // `as i64` for f64 is saturating: NaN → 0, +inf → i64::MAX,
             // -inf → i64::MIN, fractionals → truncated toward zero. None
             // of those make sense for an HTTP status code, and downstream
-            // consumers (`sys_llm`'s 2xx success check, auth's
+            // consumers (the stdlib's 2xx success check, auth's
             // `u16::try_from`) would misclassify them as success / 0.
             // `FromPrimitive::from_f64` returns `None` exactly when the
             // value is non-finite, out of `i64` range, or non-integer —
@@ -676,11 +676,13 @@ impl IoNamespaceHttp for WasmHttp {
         self.do_send(call_id, request)
     }
 
-    fn fetch_sse(
+    fn _fetch_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         request: io::owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
         SysOpOutput::async_op(SendFuture(async move {

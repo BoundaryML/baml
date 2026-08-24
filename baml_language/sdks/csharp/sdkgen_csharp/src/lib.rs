@@ -22,6 +22,7 @@ pub use semantic::CSharpGenerationError;
 pub struct CSharpGenerateRequest<'a> {
     pub symbols: &'a SymbolPool,
     pub program_bytes: &'a [u8],
+    pub embedded_baml_toml: &'a str,
     pub cli_version: &'a str,
     pub required_bridge_version: &'a str,
     pub program_identity: &'a str,
@@ -105,6 +106,7 @@ pub fn generate_into(
         &model,
         &runtime_identities,
         request.program_bytes,
+        request.embedded_baml_toml,
         request.cli_version,
         request.required_bridge_version,
         request.program_identity,

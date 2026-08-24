@@ -15,10 +15,13 @@ pub(crate) mod bytecode_cache;
 #[cfg(test)]
 mod cache_test_support;
 pub(crate) mod check_command;
+pub(crate) mod clean_command;
 pub(crate) mod commands;
 pub(crate) mod describe_command;
 #[cfg(test)]
 mod describe_command_tests;
+pub(crate) mod describe_render;
+pub(crate) mod describe_search;
 pub(crate) mod diagnostics_cache;
 #[cfg(test)]
 mod diagnostics_cache_oracle;
@@ -26,19 +29,21 @@ pub(crate) mod feedback_command;
 pub(crate) mod file_signature;
 pub(crate) mod format;
 pub(crate) mod generate;
+pub(crate) mod help_command;
 pub(crate) mod ide_command;
 pub(crate) mod init_command;
+pub(crate) mod log_output;
 pub(crate) mod lsp;
 pub(crate) mod manifest;
 pub(crate) mod output;
 pub(crate) mod pack_command;
-pub(crate) mod pack_elf;
 pub(crate) mod paint;
 pub(crate) mod playground_command;
 pub(crate) mod project_load;
 pub(crate) mod project_session;
 pub mod reporter;
 pub(crate) mod run_command;
+pub(crate) mod shutdown;
 pub(crate) mod skill_check;
 pub(crate) mod telemetry;
 pub(crate) mod telemetry_command;

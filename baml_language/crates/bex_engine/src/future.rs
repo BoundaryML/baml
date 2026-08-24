@@ -40,12 +40,11 @@
 //! re-executes `Await`, reads the terminal state directly from the heap,
 //! and proceeds.
 
-use ::baml_type::RealizedTy;
 use ::bex_heap::{
     HeapPermit, HeapPermitManager, InactiveHeapPermit, PermitProof, Tlab, TlabHolder,
 };
 use ::bex_vm_types::{
-    FutureRead, HeapPtr, Object, ObjectType, RootHaver, Value,
+    FutureRead, HeapPtr, Object, ObjectType, RootHaver, SessionEvalLease, Value,
     errors::StackFrame,
     types::{FutureId, FutureInternalError, FutureType},
 };
@@ -58,6 +57,14 @@ use crate::EngineError;
 
 /// One outstanding future's `ready` wake handle, snapshotted for shutdown.
 pub(crate) type PendingJoinHandle = Arc<SetOnce<Result<(), FutureInternalError>>>;
+
+/// A still-pending background future observed at the shutdown deadline: work
+/// some test or call spawned and never awaited or cleaned up. `origin` is the
+/// spawn's declared name, or the function containing the spawn expression.
+#[derive(Debug, Clone)]
+pub struct LeakedFuture {
+    pub origin: Arc<str>,
+}
 
 /// Manages all futures for the Bex engine.
 ///
@@ -117,6 +124,30 @@ impl FutureManager {
         let mut guard = self.acquire(active.proof()).await;
         guard.pending_join_handles()
     }
+
+    /// Fire every still-`Pending` future's cancellation token and return one
+    /// [`LeakedFuture`] per fired token. First phase of the shutdown
+    /// deadline: cooperative — producers observing their token unwind and
+    /// settle on their own.
+    pub async fn cancel_pending_futures(&self, mgr: &HeapPermitManager) -> Vec<LeakedFuture> {
+        let inactive = mgr.new_permit(()).await;
+        let active = inactive.acquire().await;
+        let mut guard = self.acquire(active.proof()).await;
+        guard.cancel_pending_futures()
+    }
+
+    /// Force-settle every still-`Pending` future to `Cancelled` (the same CAS
+    /// transition `f.cancel()` uses, safe against racing producers). Second
+    /// phase of the shutdown deadline, for producers that ignored their
+    /// token: settling fires the ready waiters so the join-handle wait
+    /// drains, letting shutdown complete; the abandoned tasks die with the
+    /// process. Returns how many futures were force-settled.
+    pub async fn force_settle_pending(&self, mgr: &HeapPermitManager) -> usize {
+        let inactive = mgr.new_permit(()).await;
+        let active = inactive.acquire().await;
+        let mut guard = self.acquire(active.proof()).await;
+        guard.force_settle_pending()
+    }
 }
 
 pub struct FutureManagerGuard<'a> {
@@ -140,9 +171,10 @@ impl FutureManagerGuard<'_> {
     /// future's generic parameters rather than only "some future".
     pub fn new_future(
         &mut self,
-        returns: RealizedTy,
-        throws: RealizedTy,
+        returns: bex_vm_types::RealizedTy,
+        throws: bex_vm_types::RealizedTy,
         cancel: CancellationToken,
+        origin: std::sync::Arc<str>,
     ) -> (FutureId, HeapPtr) {
         // The contract on `FutureId::from_usize` is "no two live ids share a
         // usize". We satisfy this by drawing the value from the manager's
@@ -158,7 +190,13 @@ impl FutureManagerGuard<'_> {
             .tlab
             .alloc_future(::bex_vm_types::Future::pending(id, returns, throws, cancel));
 
-        inner.active_futures.insert(id, FutureState { future: ptr });
+        inner.active_futures.insert(
+            id,
+            FutureState {
+                future: ptr,
+                origin,
+            },
+        );
         (id, ptr)
     }
 
@@ -200,6 +238,25 @@ impl FutureManagerGuard<'_> {
             // settle_ready/settle_error. No value payload → no write barrier.
             let _ = fut.settle_cancelled();
         }
+        Ok(())
+    }
+
+    /// Register a Session lease held by the producer of `id`. If user-side
+    /// cancellation already won the future race, registration releases the
+    /// lease immediately; otherwise `Future::settle_cancelled` releases it
+    /// before waking the awaiter.
+    pub fn register_session_lease(
+        &mut self,
+        id: FutureId,
+        lease: &SessionEvalLease,
+    ) -> Result<(), EngineError> {
+        let Some(entry) = self.holder().active_futures.get(&id) else {
+            lease.release();
+            return Ok(());
+        };
+        // SAFETY: caller holds the heap permit via `self.proof`.
+        let future = unsafe { entry.future_ref() }?;
+        future.register_session_lease(lease);
         Ok(())
     }
 
@@ -381,7 +438,7 @@ impl FutureManagerGuard<'_> {
             Some(entry) => {
                 // SAFETY: caller holds the heap permit via `self.proof`.
                 let fut = unsafe { entry.future_ref() }?;
-                Some(Arc::clone(&fut.ready))
+                Some(fut.ready_waiter())
             }
             None => {
                 // Relaxed is fine: ordering with respect to the
@@ -418,6 +475,38 @@ impl FutureManagerGuard<'_> {
     }
 
     /// Snapshot every pending future for the explicit engine shutdown wait.
+    pub(crate) fn cancel_pending_futures(&mut self) -> Vec<LeakedFuture> {
+        self.holder()
+            .active_futures
+            .values()
+            .filter_map(|state| {
+                // SAFETY: caller holds the heap permit via `self.proof`.
+                let fut = unsafe { state.future_ref() }.ok()?;
+                if !matches!(fut.read(), FutureRead::Pending(_)) {
+                    return None;
+                }
+                fut.cancel.cancel();
+                Some(LeakedFuture {
+                    origin: std::sync::Arc::clone(&state.origin),
+                })
+            })
+            .collect()
+    }
+
+    pub(crate) fn force_settle_pending(&mut self) -> usize {
+        self.holder()
+            .active_futures
+            .values()
+            .filter(|state| {
+                // SAFETY: caller holds the heap permit via `self.proof`.
+                let Ok(fut) = (unsafe { state.future_ref() }) else {
+                    return false;
+                };
+                matches!(fut.read(), FutureRead::Pending(_)) && fut.settle_cancelled()
+            })
+            .count()
+    }
+
     pub(crate) fn pending_join_handles(&mut self) -> Vec<PendingJoinHandle> {
         let settled: Vec<_> = self
             .holder()
@@ -438,7 +527,7 @@ impl FutureManagerGuard<'_> {
             .filter_map(|state| {
                 // SAFETY: caller holds the heap permit via `self.proof`.
                 let fut = unsafe { state.future_ref() }.ok()?;
-                matches!(fut.read(), FutureRead::Pending(_)).then(|| Arc::clone(&fut.ready))
+                matches!(fut.read(), FutureRead::Pending(_)).then(|| fut.ready_waiter())
             })
             .collect()
     }
@@ -524,6 +613,12 @@ struct FutureState {
     /// holds it directly (fire-and-forget spawn before the producer task
     /// gets scheduled).
     future: HeapPtr,
+    /// Provenance label for shutdown leak reports: the spawn's declared
+    /// name when one was written, otherwise the function the spawn
+    /// expression appeared in. Engine-side bookkeeping only — deliberately
+    /// NOT a field on the heap `Future`, whose size is an interpreter
+    /// hot-loop budget.
+    origin: std::sync::Arc<str>,
 }
 impl FutureState {
     /// Returns an immutable reference to the heap-allocated `Future`.
@@ -591,7 +686,12 @@ mod tests {
         guard: &mut FutureManagerGuard<'_>,
         cancel: CancellationToken,
     ) -> (FutureId, HeapPtr) {
-        guard.new_future(RealizedTy::int(), RealizedTy::never(), cancel)
+        guard.new_future(
+            bex_vm_types::RealizedTy::int(),
+            bex_vm_types::RealizedTy::never(),
+            cancel,
+            "test".into(),
+        )
     }
 
     #[tokio::test]

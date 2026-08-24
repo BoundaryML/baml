@@ -2,8 +2,18 @@
 
 use std::{fs, path::PathBuf};
 
+/// This crate's source dir, which `generate()` hands to cbindgen (which in
+/// turn runs `cargo metadata` on it). The compile-time `CARGO_MANIFEST_DIR`
+/// is baked into the test binary, and for the CI nix unit graph that is a
+/// standalone store copy of the crate with no workspace root - cargo
+/// metadata dies there with a workspace-root resolution error (proven
+/// live, run 32090446461). `BAML_BRIDGE_CFFI_DIR` binds the real
+/// checkout's crate dir when set; unset, behavior is byte-identical. Same
+/// pattern as `BAML_SURFACE_SNAPSHOT_DIR` and `BAML_PARAM_SCHEMA_GOLDEN`.
 fn crate_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    std::env::var_os("BAML_BRIDGE_CFFI_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")))
 }
 
 fn generate() -> cbindgen::Bindings {

@@ -118,6 +118,11 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         "test_optional_args.rs",
         Gate::Later("needs the optional-arg matrix and methods on classes"),
     ),
+    (
+        "function_calls",
+        "test_json.rs",
+        Gate::Later("needs a canonical baml.json.json projection in sdkgen_rust"),
+    ),
     ("function_calls", "test_raises.rs", Gate::Now),
     (
         "function_calls",
@@ -282,6 +287,14 @@ fn codegen_fixture(
                     "cargo:warning=sdkgen_rust skipped {} unsupported symbol(s) in fixture `{fixture}`",
                     output.warnings.len()
                 ));
+                if env::var("SDKGEN_SKIP_REASONS").is_ok() {
+                    for warning in &output.warnings {
+                        emit_cargo_line(format_args!(
+                            "cargo:warning=  skip {}: {}",
+                            warning.fqn, warning.reason
+                        ));
+                    }
+                }
             }
             write_codegen_output(
                 &generated,

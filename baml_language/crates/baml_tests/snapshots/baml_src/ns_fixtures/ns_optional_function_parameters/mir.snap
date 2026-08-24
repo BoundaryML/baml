@@ -1,0 +1,607 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.optional_function_parameters.DefaultFilter() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "none";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.Search(query: string, max_results: int, filter: string) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: string // query // param
+    let _2: int // max_results // param
+    let _3: string // filter // param
+    let _4: bool
+    let _5: bool
+
+    bb0: {
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const 10_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _3 = const "none";
+        goto -> bb4;
+    }
+
+    bb4: {
+        _0 = copy _2;
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.SearchDocs(query: string, max_results: int, filter: string | null, chunk_size: int) -> string[] {
+    // Locals:
+    let _0: string[] // _0 // return
+    let _1: string // query // param
+    let _2: int // max_results // param
+    let _3: string | null // filter // param
+    let _4: int // chunk_size // param
+    let _5: bool
+    let _6: bool
+    let _7: bool
+
+    bb0: {
+        _5 = copy _2 == const <omitted>;
+        branch copy _5 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const 10_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = copy _3 == const <omitted>;
+        branch copy _6 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _3 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _7 = copy _4 == const <omitted>;
+        branch copy _7 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _4 = call const fn baml.String.length(copy _1) -> [bb6];
+    }
+
+    bb6: {
+        _0 = [copy _1]: string[];
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.UseNamedDefaults() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = call const fn user.fixtures.optional_function_parameters.Search(const "cats", const 5_i64, const "recent") -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.UseMixedArgs() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = call const fn user.fixtures.optional_function_parameters.Search(const "dogs", const 3_i64, const "all") -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.UseRequiredByName() -> string[] {
+    // Locals:
+    let _0: string[] // _0 // return
+
+    bb0: {
+        _0 = call const fn user.fixtures.optional_function_parameters.SearchDocs(const "birds", const <omitted>, const <omitted>, const <omitted>) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.UseOptionalDropping() -> string[] {
+    // Locals:
+    let _0: string[] // _0 // return
+    let _1: (string, string | null) -> string[] throws never // narrowed
+    let _2: (string, int, string | null, int) -> string[] throws never [captured]
+    let _3: (string, string | null) -> string[] throws never
+
+    bb0: {
+        _2 = const fn user.fixtures.optional_function_parameters.SearchDocs;
+        _1 = make_closure lambda[0](copy _2);
+        _3 = copy _1;
+        _0 = call copy _3(const "cats", const "recent") -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<optional-adapter(UseOptionalDropping, 0)>(query: string, filter: string | null) -> string[] {
+    // Locals:
+    let _0: string[] // _0 // return
+    let _1: string // query // param
+    let _2: string | null // filter // param
+
+    bb0: {
+        _0 = call copy capture[0](copy _1, const <omitted>, copy _2, const <omitted>) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.HostEntry(query: string, max_results: int, filter: string | null) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: string // query // param
+    let _2: int // max_results // param
+    let _3: string | null // filter // param
+    let _4: bool
+    let _5: bool
+    let _6: bool
+
+    bb0: {
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const 10_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _3 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _6 = call const fn baml.ops.equals_equals(copy _3, const null) -> [bb5];
+    }
+
+    bb5: {
+        branch copy _6 -> [bb7, bb6];
+    }
+
+    bb6: {
+        _0 = copy _2 + const 100_i64;
+        goto -> bb8;
+    }
+
+    bb7: {
+        _0 = copy _2;
+        goto -> bb8;
+    }
+
+    bb8: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.AskDocs(query: string, max_results: int, filter: string, client: null | ai.Client) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // query // param
+    let _2: int // max_results // param
+    let _3: string // filter // param
+    let _4: null | ai.Client // client // param
+    let _5: bool
+    let _6: ai.RunResult<string>
+    let _7: ai.Agent<string>
+    let _8: reflect.Type
+    let _9: ai.FunctionSpec<string>
+
+    bb0: {
+        _5 = copy _4 == const <omitted>;
+        branch copy _5 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _4 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _8 = load_type(string);
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _4, const <omitted>, const <omitted>) -> [bb3];
+    }
+
+    bb3: {
+        _9 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb4];
+    }
+
+    bb4: {
+        _6 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _7, copy _9) -> [bb5];
+    }
+
+    bb5: {
+        _0 = copy _6.0;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.AskDocs$build_request(query: string, max_results: int, filter: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // query // param
+    let _2: int // max_results // param
+    let _3: string // filter // param
+    let _4: null | ai.Client // client // param
+    let _5: bool
+    let _6: ai.FunctionSpec<string>
+    let _7: reflect.Type
+
+    bb0: {
+        _5 = copy _4 == const <omitted>;
+        branch copy _5 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _4 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _7>(copy _6, copy _4) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.AskDocs$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+    let _2: reflect.Type
+
+    bb0: {
+        _2 = load_type(string);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.AskDocs$render_prompt(query: string, max_results: int, filter: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // query // param
+    let _2: int // max_results // param
+    let _3: string // filter // param
+    let _4: ai.FunctionSpec<string>
+    let _5: string
+    let _6: reflect.Type
+    let _7: reflect.Type
+
+    bb0: {
+        _4 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _6 = load_type(string);
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = call const fn ai.wire.render_output_format(copy _6) -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _7>(copy _4, copy _5) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.AskDocs$spec(query: string, max_results: int, filter: string) -> ai.FunctionSpec<string> {
+    // Locals:
+    let _0: ai.FunctionSpec<string> // _0 // return
+    let _1: string // query // param [captured]
+    let _2: int // max_results // param [captured]
+    let _3: string // filter // param [captured]
+    let _4: map<string, unknown>
+    let _5: (string) -> ai.Prompt throws never
+    let _6: ai.tools.Toolbox
+    let _7: ai.tools.Tool[]
+    let _8: ai.Client
+
+    bb0: {
+        _4 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
+        _5 = make_closure lambda[0](copy _1, copy _2, copy _3);
+        _7 = []: ai.tools.Tool[];
+        _6 = call const fn ai.tools.Toolbox.new(copy _7) -> [bb1];
+    }
+
+    bb1: {
+        _8 = call const fn ai.clients.resolve(const item user.fixtures.optional_function_parameters.TestClient) -> [bb2];
+    }
+
+    bb2: {
+        _0 = ai.FunctionSpec<string> { const "AskDocs", copy _4, copy _5, copy _6, copy _8 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(AskDocs$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string //  __spec_output_format // param
+    let _2: baml.TaggedString //  __spec_tagged_prompt
+    let _3: string[] //  __tt_parts
+    let _4: unknown[] //  __tt_values
+    let _5: string //  __tt_cur
+    let _6: int
+    let _7: string[]
+    let _8: string
+    let _9: reflect.Type
+    let _10: int
+    let _11: unknown[]
+    let _12: string
+    let _13: reflect.Type
+    let _14: int
+    let _15: string[]
+    let _16: " "
+    let _17: reflect.Type
+    let _18: int
+    let _19: unknown[]
+    let _20: int
+    let _21: reflect.Type
+    let _22: int
+    let _23: string[]
+    let _24: " "
+    let _25: reflect.Type
+    let _26: int
+    let _27: unknown[]
+    let _28: string
+    let _29: reflect.Type
+    let _30: int
+    let _31: string[]
+    let _32: ""
+    let _33: reflect.Type
+    let _34: string[]
+    let _35: unknown[]
+    let _36: string[]
+    let _37: baml.TaggedString
+    let _38: unknown[]
+    let _39: baml.TaggedString
+
+    bb0: {
+        _3 = []: string[];
+        _4 = []: unknown[];
+        _5 = const "";
+        _7 = copy _3;
+        _8 = copy _5;
+        _9 = load_type(string);
+        _6 = call const fn baml.Array.push<copy _9>(copy _7, copy _8) -> [bb1];
+    }
+
+    bb1: {
+        _5 = const "";
+        _11 = copy _4;
+        _12 = copy capture[0];
+        _13 = load_type(unknown);
+        _10 = call const fn baml.Array.push<copy _13>(copy _11, copy _12) -> [bb2];
+    }
+
+    bb2: {
+        _5 = const " ";
+        _15 = copy _3;
+        _16 = copy _5;
+        _17 = load_type(string);
+        _14 = call const fn baml.Array.push<copy _17>(copy _15, copy _16) -> [bb3];
+    }
+
+    bb3: {
+        _5 = const "";
+        _19 = copy _4;
+        _20 = copy capture[1];
+        _21 = load_type(unknown);
+        _18 = call const fn baml.Array.push<copy _21>(copy _19, copy _20) -> [bb4];
+    }
+
+    bb4: {
+        _5 = const " ";
+        _23 = copy _3;
+        _24 = copy _5;
+        _25 = load_type(string);
+        _22 = call const fn baml.Array.push<copy _25>(copy _23, copy _24) -> [bb5];
+    }
+
+    bb5: {
+        _5 = const "";
+        _27 = copy _4;
+        _28 = copy capture[2];
+        _29 = load_type(unknown);
+        _26 = call const fn baml.Array.push<copy _29>(copy _27, copy _28) -> [bb6];
+    }
+
+    bb6: {
+        _31 = copy _3;
+        _32 = copy _5;
+        _33 = load_type(string);
+        _30 = call const fn baml.Array.push<copy _33>(copy _31, copy _32) -> [bb7];
+    }
+
+    bb7: {
+        _34 = copy _3;
+        _35 = copy _4;
+        _2 = baml.TaggedString { copy _34, copy _35 };
+        _37 = copy _2;
+        _36 = copy _37.0;
+        _39 = copy _2;
+        _38 = copy _39.1;
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _36, copy _38) -> [bb8];
+    }
+
+    bb8: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.AskDocs$stream(query: string, max_results: int, filter: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<string | null, string> {
+    // Locals:
+    let _0: ai.stream.Stream<string | null, string> // _0 // return
+    let _1: string // query // param
+    let _2: int // max_results // param
+    let _3: string // filter // param
+    let _4: null | ai.stream.StreamingClient // client // param
+    let _5: bool
+    let _6: ai.FunctionSpec<string>
+    let _7: reflect.Type
+    let _8: reflect.Type
+
+    bb0: {
+        _5 = copy _4 == const <omitted>;
+        branch copy _5 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _4 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(string | null);
+        _8 = load_type(string);
+        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _4) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.SearchService.Run(self: fixtures.optional_function_parameters.SearchService, query: string, limit: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: fixtures.optional_function_parameters.SearchService // self // param
+    let _2: string // query // param
+    let _3: int // limit // param
+    let _4: bool
+    let _5: string
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = const 20_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = copy _1.0;
+        _0 = call const fn user.fixtures.optional_function_parameters.Search(copy _2, copy _3, copy _5) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.fixtures.optional_function_parameters.SearchService.Docs(self: fixtures.optional_function_parameters.SearchService, query: string, filter: string | null) -> string[] {
+    // Locals:
+    let _0: string[] // _0 // return
+    let _1: fixtures.optional_function_parameters.SearchService // self // param
+    let _2: string // query // param
+    let _3: string | null // filter // param
+    let _4: bool
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = call const fn user.fixtures.optional_function_parameters.SearchDocs(copy _2, const <omitted>, copy _3, const <omitted>) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}

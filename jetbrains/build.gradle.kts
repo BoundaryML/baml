@@ -1,5 +1,6 @@
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 plugins {
@@ -65,8 +66,8 @@ intellijPlatform {
         name = providers.gradleProperty("pluginName")
         version = providers.gradleProperty("pluginVersion")
 
-        // Extract the <!-- Plugin description --> section from README.md and provide for the plugin's manifest
-        description = providers.fileContents(layout.projectDirectory.file("../README.md")).asText.map(::markdownToHTML)
+        // Use the BAML v0 README as the plugin's Marketplace description.
+        description = providers.fileContents(layout.projectDirectory.file("../README.v0.md")).asText.map(::markdownToHTML)
 
         val changelog = project.changelog // local variable for configuration cache compatibility
         // Get the latest available change notes from the changelog file
@@ -83,7 +84,7 @@ intellijPlatform {
 
         ideaVersion {
             sinceBuild = providers.gradleProperty("pluginSinceBuild")
-            // untilBuild = providers.gradleProperty("pluginUntilBuild")
+            untilBuild = providers.gradleProperty("pluginUntilBuild")
         }
     }
 
@@ -103,7 +104,14 @@ intellijPlatform {
 
     pluginVerification {
         ides {
-            recommended()
+            if (providers.gradleProperty("verifyDeclaredPlatformOnly").map(String::toBoolean).getOrElse(false)) {
+                ide(providers.gradleProperty("platformType"), providers.gradleProperty("platformVersion"))
+            } else if (providers.gradleProperty("verifyMarketplaceBoundary").map(String::toBoolean).getOrElse(false)) {
+                ide(providers.gradleProperty("platformType"), providers.gradleProperty("platformVersion"))
+                ide(IntelliJPlatformType.IntellijIdeaUltimate, providers.gradleProperty("marketplaceVerificationVersion").get())
+            } else {
+                recommended()
+            }
         }
     }
 }

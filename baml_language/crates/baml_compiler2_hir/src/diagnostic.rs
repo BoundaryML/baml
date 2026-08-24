@@ -6,7 +6,10 @@
 //! type happens lazily via `to_diagnostic(file_id)`.
 
 use baml_base::{FileId, Name, Span};
-use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
+use baml_compiler_diagnostics::{
+    diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase},
+    runtime_type::{self, DuplicateMemberKind, SerializedKeyContainer},
+};
 use text_size::TextRange;
 
 use crate::contributions::DefinitionKind;
@@ -77,12 +80,11 @@ pub enum Hir2Diagnostic {
     ///
     /// `key` is the shared serialized key. `sites` lists the name span of every
     /// contributing member in source order; the first is treated as the original
-    /// and the rest as duplicates. `container` is the kind of declaration the
-    /// collision occurs in (`"class"` or `"enum"`), used only for the message.
+    /// and the rest as duplicates.
     DuplicateFieldAlias {
         key: String,
         sites: Vec<TextRange>,
-        container: &'static str,
+        container: SerializedKeyContainer,
     },
     /// A single declaration (class, enum, field, or variant) carries the same
     /// single-valued schema attribute more than once — e.g. two `@alias`, two
@@ -314,20 +316,40 @@ impl Hir2Diagnostic {
                 };
 
                 let kinds_match = rest.iter().all(|s| s.kind == first.kind);
-                let message = if kinds_match {
-                    format!("duplicate {} `{}`{}", first.kind, qualified, in_scope)
-                } else {
-                    let kind_list: Vec<&str> = sites.iter().map(|s| s.kind.as_str()).collect();
-                    format!(
-                        "name `{}`{} defined {} times as: {}",
-                        qualified,
-                        in_scope,
-                        sites.len(),
-                        kind_list.join(", ")
+                let mut diag = if kinds_match
+                    && first.kind == DefinitionKind::Field
+                    && let Some(scope) = scope
+                {
+                    runtime_type::duplicate_member(
+                        DuplicateMemberKind::Field,
+                        scope.as_str(),
+                        name.as_str(),
                     )
+                } else if kinds_match
+                    && first.kind == DefinitionKind::Variant
+                    && let Some(scope) = scope
+                {
+                    runtime_type::duplicate_member(
+                        DuplicateMemberKind::Variant,
+                        scope.as_str(),
+                        name.as_str(),
+                    )
+                } else {
+                    let message = if kinds_match {
+                        format!("duplicate {} `{}`{}", first.kind, qualified, in_scope)
+                    } else {
+                        let kind_list: Vec<&str> =
+                            sites.iter().map(|s| s.kind.as_str()).collect();
+                        format!(
+                            "name `{}`{} defined {} times as: {}",
+                            qualified,
+                            in_scope,
+                            sites.len(),
+                            kind_list.join(", ")
+                        )
+                    };
+                    Diagnostic::error(DiagnosticId::DuplicateField, message)
                 };
-
-                let mut diag = Diagnostic::error(DiagnosticId::DuplicateField, message);
                 let first_span = Span {
                     file_id,
                     range: first.range,
@@ -458,10 +480,7 @@ impl Hir2Diagnostic {
             } => {
                 let first = sites.first().copied().unwrap_or_default();
                 let rest = sites.get(1..).unwrap_or(&[]);
-                let mut diag = Diagnostic::error(
-                    DiagnosticId::DuplicateFieldAlias,
-                    format!("duplicate serialized key `{key}` in {container}"),
-                )
+                let mut diag = runtime_type::duplicate_serialized_key(key, *container)
                 .with_secondary(
                     Span {
                         file_id,

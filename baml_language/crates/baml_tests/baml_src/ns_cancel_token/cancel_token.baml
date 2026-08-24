@@ -20,7 +20,7 @@ function await_token_cancelled_catches() -> int {
 }
 
 test "await_token_cancelled_catches" {
-    assert.is_true(baml.deep_equals(await_token_cancelled_catches(), 0))
+    assert.equal(await_token_cancelled_catches(), 0)
 }
 
 // An un-fired token leaves the spawn to complete normally — the option must
@@ -32,7 +32,7 @@ function uncancelled_token_completes() -> int {
 }
 
 test "uncancelled_token_completes" {
-    assert.is_true(baml.deep_equals(uncancelled_token_completes(), 42))
+    assert.equal(uncancelled_token_completes(), 42)
 }
 
 // `CancelToken.cancel()` is synchronous on the token, so `is_cancelled()`
@@ -46,7 +46,7 @@ function token_is_cancelled_reflects_cancel() -> bool[] {
 }
 
 test "token_is_cancelled_reflects_cancel" {
-    assert.is_true(baml.deep_equals(token_is_cancelled_reflects_cancel(), [false, true]))
+    assert.equal(token_is_cancelled_reflects_cancel(), [false, true])
 }
 
 // `detach = true` opts out of the parent cascade but must not break normal
@@ -58,5 +58,5 @@ function detached_spawn_completes() -> int {
 }
 
 test "detached_spawn_completes" {
-    assert.is_true(baml.deep_equals(detached_spawn_completes(), 42))
+    assert.equal(detached_spawn_completes(), 42)
 }

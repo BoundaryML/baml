@@ -1,13 +1,7 @@
 /// Returns a deep copy of `value` — all nested structures are recursively cloned.
 //baml:mut_vm
 function deep_copy<T>(value: T) -> T throws never {
-  $rust_function
-}
-
-/// Returns `true` if `a` and `b` are deeply equal — recursively comparing all nested values.
-//baml:vm
-function deep_equals<T>(a: T, b: T) -> bool throws never {
-  $rust_function
+    $rust_function
 }
 
 /// Implemented by all concrete types.
@@ -32,6 +26,97 @@ interface AnyFunction {
   type Throws = unknown
 }
 
+/// A read-only reflected view implemented automatically by class values.
+///
+/// Narrow an opaque value with `let value: baml.AnyClass = opaque else { ... }`
+/// before using this surface. Ordinary class instances implement it, including
+/// runtime-minted classes. Of the sealed reflection-kind views, only
+/// `reflect.class.Type` implements it.
+interface AnyClass {
+  /// Read a field as `T`. A missing field returns `null`; use `has_field` to
+  /// distinguish that case from a present field whose value is null.
+  function get<T>(self, name: string) -> T? throws baml.errors.TypeMismatch {
+    if (!self.has_field(name)) {
+      return null
+    }
+    // NOTE: spelled with `let … else` rather than `self.get_field(name)?.value<T>()`
+    // because an optional-chained call does not thread `T` to the callee.
+    let field: reflect.class.Field = self.get_field(name) else {
+      return null
+    }
+    field.value<T>()
+  }
+
+  /// Return a value-bound field handle, or `null` when no such field exists.
+  function get_field(self, name: string) -> reflect.class.Field? throws never {
+    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+      return null
+    }
+    for (let field in class_type.fields()) {
+      if (field.name == name) {
+        return reflect.class.Field {
+          name: field.name,
+          type: field.type,
+          meta: field.meta,
+          _owner: self,
+        }
+      }
+    }
+    null
+  }
+
+  function has_field(self, name: string) -> bool throws never {
+    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+      return false
+    }
+    for (let field in class_type.fields()) {
+      if (field.name == name) {
+        return true
+      }
+    }
+    false
+  }
+
+  /// Reflected fields bound to this value for `Field.value<T>()`.
+  function list_fields(self) -> reflect.class.Field[] throws never {
+    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+      return []
+    }
+    let fields: reflect.class.Field[] = []
+    for (let field in class_type.fields()) {
+      fields.push(reflect.class.Field {
+        name: field.name,
+        type: field.type,
+        meta: field.meta,
+        _owner: self,
+      })
+    }
+    fields
+  }
+
+  function name(self) -> string throws never {
+    reflect.Type.of_value(self).to_string()
+  }
+
+  function type(self) -> reflect.Type throws never {
+    reflect.Type.of_value(self)
+  }
+
+  function attributes(self) -> reflect.Meta throws never {
+    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+      return reflect.Meta {
+        alias: null,
+        description: null,
+        docstring: null,
+        other: {},
+      }
+    }
+    class_type.meta()
+  }
+}
+
+implement<T> AnyClass for T {}
+
 /// The structured value a tagged template literal produces.
 ///
 /// BEP-049 §10. A `tag` ` `…` ` call site lowers to `tag(body = () -> TaggedString { … })`;
@@ -40,9 +125,9 @@ interface AnyFunction {
 /// ending with a literal — empty strings fill the leading/trailing slot when the
 /// template begins or ends with an interpolation).
 class TaggedString {
-  /// Literal text segments between interpolations, in source order.
-  parts string[]
-  /// Interpolated values, in source order. Heterogeneous: each entry has the
-  /// type of its `${expr}` site; tags inspect element types at runtime.
-  values unknown[]
+    /// Literal text segments between interpolations, in source order.
+    parts: string[],
+    /// Interpolated values, in source order. Heterogeneous: each entry has the
+    /// type of its `${expr}` site; tags inspect element types at runtime.
+    values: unknown[],
 }

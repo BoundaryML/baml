@@ -28,6 +28,24 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
+    /// A class-literal turbofish supplied an inline `unreflect(value)` type
+    /// argument (`Holder<unreflect(t)> { .. }`). The constructed value's type
+    /// is `Holder<T>` — it mentions the call-scoped runtime parameter, which
+    /// stops existing the moment the literal finishes — so the runtime type
+    /// has to be named with a `type` binding first. The literal is the one
+    /// shape whose answer never depends on a callee signature, so it is
+    /// decided here, where the written source is still at hand.
+    RuntimeTypeMustBeNamed {
+        /// The carrier expression inside `unreflect(...)`, when it prints
+        /// cleanly on one line.
+        carrier: Option<String>,
+        /// The written literal with the inline slot replaced by the suggested
+        /// name, when it prints cleanly on one line.
+        named: Option<String>,
+        /// The `unreflect(...)` slot itself.
+        span: TextRange,
+    },
+
     /// A function parameter has no name token.
     MissingParamName {
         function_name: String,
@@ -129,6 +147,10 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
+    /// A source-authored `let` appeared at file scope. Only compiler-synthesized
+    /// globals (such as clients and retry policies) are supported.
+    TopLevelLetNotSupported { span: TextRange },
+
     /// `const` currently parses as a non-immutable alias for `let`.
     ConstBindingIntroducer { span: TextRange },
 
@@ -146,6 +168,11 @@ pub enum LoweringDiagnostic {
     /// has no value; without this diagnostic it would lower to a `Missing` that
     /// only fails at runtime.
     AssignmentInExpressionPosition { span: TextRange },
+
+    /// Parser recovery produced an object-literal node without a constructor
+    /// identifier. The AST cannot represent a constructor-less object, so the
+    /// expression lowers to `Missing` and this diagnostic preserves the error.
+    MissingObjectConstructor { span: TextRange },
 
     /// Top-level `implements I for T` where `T` does not match any class in the file.
     UnresolvedImplementsForTarget {
@@ -175,6 +202,61 @@ pub enum LoweringDiagnostic {
     /// generic function may be specialized into a value (`foo<int>`).
     TypeArgsOnNonPathBase { span: TextRange },
 
+    /// An LLM function's `tools` field cannot switch the function to the
+    /// ai-package spec desugar: the function is missing a backtick prompt or a
+    /// `"provider/model"` client string with a known provider prefix.
+    InvalidLlmToolsField {
+        function_name: String,
+        reason: &'static str,
+        span: TextRange,
+    },
+
+    /// A legacy `client<llm> Name { ... }` config block. Removed: clients are
+    /// plain values now — `client Name = <expr>;`.
+    ///
+    /// `provider` is the block's own `provider` value when it had one, so the
+    /// suggested replacement names the class that actually speaks to that
+    /// provider; see this module's private `client_replacement_expr`.
+    ClientBlockRemoved {
+        name: String,
+        provider: Option<String>,
+        span: TextRange,
+    },
+
+    /// A legacy `retry_policy` block. Removed: retry composes at the client
+    /// boundary via `ai.Retry.new(inner, ...)`.
+    RetryPolicyRemoved { name: String, span: TextRange },
+
+    /// A legacy Jinja `#"..."#` prompt on an LLM function. Removed: prompts
+    /// are backtick templates.
+    LlmJinjaPromptRemoved { span: TextRange },
+
+    /// A `${` in a quoted LLM prompt. Regular strings do not interpolate, so
+    /// the marker reaches the model as literal text — almost always a prompt
+    /// ported from a form where it did interpolate.
+    QuotedPromptInterpolation { span: TextRange },
+
+    /// A legacy `template_string` declaration. Removed: use a function
+    /// returning a backtick string.
+    TemplateStringRemoved { span: TextRange },
+
+    /// The LLM function's `client` value cannot be used: unknown provider
+    /// prefix, a string without a `provider/model` shape, or the removed
+    /// unquoted shorthand.
+    InvalidLlmClient {
+        function_name: String,
+        reason: String,
+        span: TextRange,
+    },
+
+    /// A `${role(...)}` marker in an LLM prompt. Removed: the prompt is
+    /// instructions-only; the conversation lives in the journal and roles are
+    /// the client's wire concern.
+    LlmRoleMarkerRemoved {
+        function_name: String,
+        span: TextRange,
+    },
+
     /// A numeric literal token failed validation (`baml_base::num_lit`):
     /// uppercase base prefix, no digits after the prefix, a digit invalid
     /// for the base, or an integer magnitude exceeding `i64::MAX`. For
@@ -184,6 +266,40 @@ pub enum LoweringDiagnostic {
         error: baml_base::num_lit::IntLitError,
         span: TextRange,
     },
+}
+
+/// The client expression a removed `client<llm>` block should become, given the
+/// block's own `provider` value.
+///
+/// The suggestion is the whole point of the diagnostic, so it has to name the
+/// class that speaks the provider's protocol: telling the author of an
+/// `anthropic` block to write `openai.ResponsesClient` is migration guidance
+/// that changes behavior. The mapping is the legacy `provider` name -> the
+/// native client, and it is deliberately the same set the `"provider/model"`
+/// shorthand resolves (`baml_std/ai/ns_internal/clients.baml::_from_shorthand`).
+///
+/// An unrecognized or absent provider keeps the generic `OpenAI` suggestion:
+/// there is nothing better to say, and it is still a valid client expression.
+///
+/// KNOWN GAP: the composite providers only get a shape, not their configured
+/// `strategy` list — the diagnostic does not carry the block's option values.
+fn client_replacement_expr(provider: Option<&str>) -> &'static str {
+    match provider.map(str::trim).map(|p| p.trim_matches('"')) {
+        Some("anthropic") => "anthropic.AnthropicClient.new(model = \"...\")",
+        Some("google-ai" | "google" | "gemini") => "google.GoogleClient.new(model = \"...\")",
+        Some("vertex-ai" | "vertex") => "google.VertexClient.new(model = \"...\")",
+        Some("aws-bedrock" | "bedrock") => "aws.BedrockClient.new(model = \"...\")",
+        Some("azure-openai" | "azure") => {
+            "openai.AzureClient.new(model = \"...\", base_url = \"...\")"
+        }
+        Some("ollama") => "openai.OllamaClient.new(model = \"...\")",
+        Some("openrouter") => "openai.OpenRouterClient.new(model = \"...\")",
+        Some("openai-generic") => "openai.GenericClient.new(model = \"...\", base_url = \"...\")",
+        Some("openai-chat") => "openai.ChatClient.new(model = \"...\")",
+        Some("fallback") => "ai.Fallback.new(members = [FirstClient, SecondClient])",
+        Some("round-robin") => "ai.RoundRobin.new(members = [FirstClient, SecondClient])",
+        _ => "openai.ResponsesClient.new(model = \"...\")",
+    }
 }
 
 impl LoweringDiagnostic {
@@ -214,6 +330,32 @@ impl LoweringDiagnostic {
                 *span,
                 "unparseable type",
             ),
+            LoweringDiagnostic::RuntimeTypeMustBeNamed {
+                carrier,
+                named,
+                span,
+            } => {
+                let span = Span {
+                    file_id,
+                    range: *span,
+                };
+                let rewrite = baml_compiler_diagnostics::runtime_type::RuntimeTypeNameRewrite {
+                    carrier: carrier.clone(),
+                    named: named.clone(),
+                };
+                return baml_compiler_diagnostics::runtime_type::runtime_type_must_be_named()
+                    .with_primary(
+                        span,
+                        baml_compiler_diagnostics::runtime_type::RUNTIME_TYPE_MUST_BE_NAMED_NOTE,
+                    )
+                    .with_related(
+                        span,
+                        baml_compiler_diagnostics::runtime_type::runtime_type_must_be_named_help(
+                            &rewrite,
+                        ),
+                    )
+                    .with_phase(DiagnosticPhase::Hir);
+            }
             LoweringDiagnostic::MissingParamName {
                 function_name,
                 span,
@@ -342,7 +484,7 @@ impl LoweringDiagnostic {
                 "invalid escape",
             ),
             LoweringDiagnostic::InstanceofRemoved { span } => (
-                DiagnosticId::InstanceofRemoved,
+                DiagnosticId::RemovedFeature,
                 Severity::Error,
                 "`instanceof` is no longer supported. Use a `match` expression for type checking instead.".to_string(),
                 *span,
@@ -435,6 +577,13 @@ impl LoweringDiagnostic {
                 *span,
                 "type ascription not allowed here",
             ),
+            LoweringDiagnostic::TopLevelLetNotSupported { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "top-level `let` bindings are not supported".to_string(),
+                *span,
+                "move this binding into a function body",
+            ),
             LoweringDiagnostic::ConstBindingIntroducer { span } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Warning,
@@ -463,6 +612,13 @@ impl LoweringDiagnostic {
                     .to_string(),
                 *span,
                 "assignment not allowed here",
+            ),
+            LoweringDiagnostic::MissingObjectConstructor { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "object construction requires a class or type name".to_string(),
+                *span,
+                "expected a constructor name before `{`",
             ),
             LoweringDiagnostic::UnresolvedImplementsForTarget {
                 interface_name,
@@ -503,6 +659,96 @@ impl LoweringDiagnostic {
                 "type arguments can only be applied to a function reference".to_string(),
                 *span,
                 "specialize a generic function directly, e.g. `foo<int>`",
+            ),
+            LoweringDiagnostic::InvalidLlmToolsField {
+                function_name,
+                reason,
+                span,
+            } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                format!("LLM function `{function_name}` cannot use a `tools` field: {reason}"),
+                *span,
+                "`tools` requires a backtick prompt and a \"provider/model\" client string",
+            ),
+            LoweringDiagnostic::ClientBlockRemoved {
+                name,
+                provider,
+                span,
+            } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                format!(
+                    "`client<llm>` config blocks are removed; declare a client value instead: \
+                     `client {name} = {replacement};` \
+                     (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)",
+                    replacement = client_replacement_expr(provider.as_deref()),
+                ),
+                *span,
+                "replace with `client Name = <expr>;`",
+            ),
+            LoweringDiagnostic::RetryPolicyRemoved { name, span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                format!(
+                    "`retry_policy` blocks are removed; wrap the client instead: \
+                     `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` \
+                     (`{name}` has no effect)"
+                ),
+                *span,
+                "retry composes at the client boundary now",
+            ),
+            LoweringDiagnostic::LlmJinjaPromptRemoved { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "Jinja `#\"...\"#` prompts are no longer supported. Use a backtick prompt with `${...}` interpolation instead."
+                    .to_string(),
+                *span,
+                "use a backtick prompt instead",
+            ),
+            LoweringDiagnostic::QuotedPromptInterpolation { span } => (
+                DiagnosticId::InvalidSyntax,
+                // Advisory: the prompt is well-formed and renders, it just
+                // renders the marker verbatim. Erroring would reject prompts
+                // that legitimately want a literal `${`.
+                Severity::Warning,
+                r#"`${...}` in a quoted prompt is sent to the model as literal text — `"..."` strings do not interpolate. Use a backtick prompt to interpolate, or write `\${...}` in a backtick prompt to keep the literal `${`."#
+                    .to_string(),
+                *span,
+                "literal text here, not an interpolation",
+            ),
+            LoweringDiagnostic::TemplateStringRemoved { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "`template_string` declarations are no longer supported. Use a function returning a backtick string instead."
+                    .to_string(),
+                *span,
+                "use a function returning a backtick string instead",
+            ),
+            LoweringDiagnostic::InvalidLlmClient {
+                function_name,
+                reason,
+                span,
+            } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                format!("LLM function `{function_name}` has an unusable `client`: {reason}"),
+                *span,
+                "use a \"provider/model\" string or an expression evaluating to ai.Client",
+            ),
+            LoweringDiagnostic::LlmRoleMarkerRemoved {
+                function_name,
+                span,
+            } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                format!(
+                    "`${{role(...)}}` markers are removed; the prompt of `{function_name}` is \
+                     instructions-only — the conversation lives in the journal, and message \
+                     roles are the client's wire concern"
+                ),
+                *span,
+                "delete the role marker; write plain instructions",
             ),
             LoweringDiagnostic::InvalidNumericLiteral { error, span } => {
                 use baml_base::num_lit::IntLitError;

@@ -1,0 +1,41 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// The builtin companion carriers hold no fields; they exist only so the
+// methods of `int`, `map<K, V>`, ... have somewhere to resolve. Every
+// class-literal spelling of one is rejected here, before lowering.
+
+function scalar_carriers() -> int {
+    let i = baml.Int {  };
+    let f = baml.Float {  };
+    let b = baml.Bigint {  };
+    let s = baml.String {  };
+    let t = baml.Bool {  };
+    let n = baml.Null {  };
+    let u = baml.Uint8Array {  };
+    0
+}
+
+// The generic carriers used to reach MIR with error-recovery type
+// arguments and panic there ("`Error` is not a valid `RuntimeTy`"): their
+// type parameters are phantom, so nothing ever solved them.
+function generic_carriers() -> int {
+    let m = baml.Map {  };
+    let a = baml.Array {  };
+    0
+}
+
+function type_carrier() -> int {
+    let t = reflect.Type {  };
+    0
+}
+
+// A user package may name a class `Int`; it is a completely ordinary class
+// and stays constructible.
+class Int {
+    bits: int,
+}
+
+function user_named_int_is_unaffected() -> Int {
+    Int { bits: 32 }
+}

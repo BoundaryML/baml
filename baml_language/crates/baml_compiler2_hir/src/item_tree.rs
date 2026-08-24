@@ -20,7 +20,6 @@ mod type_aliases;
 
 use std::ops::Index;
 
-use baml_base::Name;
 use baml_compiler2_ast as ast;
 pub use classes::*;
 pub use clients::*;
@@ -103,7 +102,10 @@ impl ItemTree {
     /// The single successor of the `classes.values().find(|c|
     /// c.methods.contains(…))` scans that used to be copied (divergently)
     /// across HIR, PPIR and TIR.
-    pub fn enclosing_type_generic_params(&self, method: LocalItemId<FunctionMarker>) -> &[Name] {
+    pub fn enclosing_type_generic_params(
+        &self,
+        method: LocalItemId<FunctionMarker>,
+    ) -> &[GenericParam] {
         match self.method_owners.get(&method) {
             Some(MethodOwner::Class(id)) => &self[*id].generic_params,
             Some(MethodOwner::Interface(id)) => &self[*id].generic_params,

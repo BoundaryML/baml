@@ -2,9 +2,9 @@
 //!
 //! Every test in this file requires `std::env::set_var` on the host before
 //! execution. BAML's stdlib is read-only over the environment
-//! (`baml.env.get` / `baml.env.get_or_panic` only), so tests that establish
-//! sentinel values must run in Rust. The first three tests additionally pin
-//! bytecode with insta snapshots, which requires a compiled artifact.
+//! (`baml.env.get` / `baml.env.get_or_panic` / `baml.env.ref` only), so tests
+//! that establish sentinel values must run in Rust. Three of them additionally
+//! pin bytecode with insta snapshots, which requires a compiled artifact.
 
 #![allow(unsafe_code)]
 
@@ -59,31 +59,57 @@ async fn env_get_existing_var() {
     );
 }
 
+/// `env.X` is a LATE-BOUND reference: it desugars to `baml.env.ref("X")`,
+/// which builds a `baml.env.Ref` carrying the variable NAME only. Nothing is
+/// read until the reference is used, so the value never lands in a constructed
+/// value and a host may load secrets after the runtime initializes.
 #[tokio::test]
 async fn env_sugar_existing_var() {
     unsafe { std::env::set_var("BAML_TEST_SUGAR_VAR", "sugar_value") };
     let output = baml_test!(
         r#"
             function main() -> string {
-                env.BAML_TEST_SUGAR_VAR
+                env.BAML_TEST_SUGAR_VAR.get_or_panic()
             }
         "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const "BAML_TEST_SUGAR_VAR"
-        call baml.env.get_or_panic
-        return
-    }
-    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("sugar_value".to_string().into()))
     );
 }
 
-// ─── Client `api_key` env defaulting ──────────────────────────────────────────
+/// The bare sugar yields the reference itself — the name, not the secret.
+#[tokio::test]
+async fn env_sugar_is_a_late_bound_ref() {
+    unsafe { std::env::set_var("BAML_TEST_SUGAR_REF_VAR", "never-captured") };
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                env.BAML_TEST_SUGAR_REF_VAR.name
+            }
+        "#
+    );
+
+    // The desugar itself: `baml.env.ref("NAME")`, not an eager read.
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> string {
+        load_const "BAML_TEST_SUGAR_REF_VAR"
+        call baml.env.ref
+        load_field .name
+        return
+    }
+    "#);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "BAML_TEST_SUGAR_REF_VAR".to_string().into()
+        ))
+    );
+}
+
+// ─── Provider `api_key` env defaulting ────────────────────────────────────────
 
 /// Extract the headers map from a `main() -> map<string, string>` run.
 fn result_headers(
@@ -96,53 +122,28 @@ fn result_headers(
 }
 
 #[tokio::test]
-async fn declared_openai_client_defaults_api_key_from_env() {
-    unsafe { std::env::set_var("OPENAI_API_KEY", "sk-from-env") };
-    let output = baml_test!(
-        r#"
-            client<llm> EnvClient {
-                provider openai
-                options {
-                    model "gpt-4o"
-                }
-            }
-
-            function Greet(name: string) -> string {
-                client EnvClient
-                prompt `Hello ${name}!`
-            }
-
-            function main() -> map<string, string> {
-                Greet$build_request("World").headers
-            }
-        "#
-    );
-    let headers = result_headers(output.result);
-    assert_eq!(
-        headers.get("authorization"),
-        Some(&BexExternalValue::String("Bearer sk-from-env".into())),
-        "a declared client<llm> with no api_key defaults it from OPENAI_API_KEY"
-    );
-}
-
-#[tokio::test]
 async fn runtime_constructed_openai_client_defaults_api_key_from_env() {
     unsafe { std::env::set_var("OPENAI_API_KEY", "sk-from-env") };
     let output = baml_test!(
         r#"
+            function EnvPrompt() -> string {
+                client: "openai/gpt-4o-mini"
+                tools: []
+                prompt: `Say hi`
+            }
+
             function main() -> map<string, string> {
-                let pc = baml.llm.PrimitiveClient {
-                    name: "runtime-openai",
-                    provider: "openai",
-                    options: baml.llm.PrimitiveClientOptions {
-                        model: "gpt-4o",
-                        headers: {},
-                        query_params: {},
-                        request_body: {},
-                    },
+                let spec = EnvPrompt$spec();
+                let input = ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal { log: [] },
+                    toolbox: ai.tools.Toolbox.new([]),
+                    output_type: reflect.Type.of<string>(),
                 };
-                let prompt = baml.llm.assemble_prompt_ast(["Say hi"], []);
-                pc.build_request(prompt, reflect.type_of<string>()).headers
+                openai.internal.openai_render(
+                    openai.ResponsesClient.new(model = "gpt-4o"),
+                    input,
+                ).headers
             }
         "#
     );
@@ -159,38 +160,30 @@ async fn anthropic_clients_default_api_key_from_env_at_runtime() {
     unsafe { std::env::set_var("ANTHROPIC_API_KEY", "sk-ant-from-env") };
     let output = baml_test!(
         r#"
-            client<llm> EnvClient {
-                provider anthropic
-                options {
-                    model "claude-sonnet-4-20250514"
-                }
-            }
-
-            function Greet(name: string) -> string {
-                client EnvClient
-                prompt `Hello ${name}!`
+            function EnvPrompt() -> string {
+                client: "anthropic/claude-haiku-4-5"
+                tools: []
+                prompt: `Say hi`
             }
 
             function main() -> map<string, string> {
-                let declared = Greet$build_request("World").headers.get("x-api-key") ?? "missing";
-                let runtime_client = baml.llm.PrimitiveClient {
-                    name: "runtime-anthropic",
-                    provider: "anthropic",
-                    options: baml.llm.PrimitiveClientOptions {
-                        model: "claude-sonnet-4-20250514",
-                        headers: {},
-                        query_params: {},
-                        request_body: {},
-                    },
+                let spec = EnvPrompt$spec();
+                let input = ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal { log: [] },
+                    toolbox: ai.tools.Toolbox.new([]),
+                    output_type: reflect.Type.of<string>(),
                 };
-                let prompt = baml.llm.assemble_prompt_ast(["Say hi"], []);
-                let runtime = runtime_client.build_request(prompt, reflect.type_of<string>()).headers.get("x-api-key") ?? "missing";
-                { "declared": declared, "runtime": runtime }
+                let runtime = anthropic.internal._anthropic_request(
+                    anthropic.AnthropicClient.new(model = "claude-sonnet-4-20250514"),
+                    input,
+                    false,
+                ).headers.get("x-api-key") ?? "missing";
+                { "runtime": runtime }
             }
         "#
     );
     let headers = result_headers(output.result);
     let expected = BexExternalValue::String("sk-ant-from-env".into());
-    assert_eq!(headers.get("declared"), Some(&expected));
     assert_eq!(headers.get("runtime"), Some(&expected));
 }

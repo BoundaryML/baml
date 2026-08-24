@@ -37,6 +37,7 @@ struct DecodedCallArgs {
     /// Explicit, named `TypeVar` bindings for a generic call, in De Bruijn
     /// order (empty for non-generic calls). See `CallFunctionArgs.type_args`.
     type_args: IndexMap<String, RuntimeTy>,
+    type_defs: IndexMap<String, bex_project::PortableTypeDef>,
 }
 
 /// Decode protobuf-encoded `CallFunctionArgs` bytes into `BexArgs`.
@@ -69,7 +70,8 @@ fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::Bridge
         kwargs: kwargs.into(),
         call_id,
         target,
-        type_args,
+        type_args: type_args.type_args,
+        type_defs: type_args.type_defs,
     })
 }
 
@@ -94,6 +96,7 @@ fn call_sync_to_bytes(args_proto: &[u8]) -> Vec<u8> {
 
     let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
         .with_type_args(decoded.type_args)
+        .with_type_defs(decoded.type_defs)
         .build();
 
     // Block on the shared multi-thread tokio runtime, like the pyo3 sync path
@@ -118,7 +121,7 @@ fn call_sync_to_bytes(args_proto: &[u8]) -> Vec<u8> {
     }
 }
 
-/// `baml_bridge.BamlFfi.nativeInitFromBytecode(byte[] bytecode)`.
+/// `baml_bridge.BamlFfi.nativeInitFromBytecode(byte[] bytecode, String metadata, String runtimeVersion, String toolchainVersion)`.
 ///
 /// Initialize the process-global runtime from serialized BAML bytecode
 /// (`bridge_cffi::initialize_runtime_from_bytecode`, the same path
@@ -132,6 +135,9 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
     mut env: JNIEnv<'_>,
     class: JClass<'_>,
     bytecode: JByteArray<'_>,
+    embedded_baml_toml: JString<'_>,
+    bridge_runtime_version: JString<'_>,
+    toolchain_version: JString<'_>,
 ) {
     // Capture the JVM + `BamlFfi` class ref (idempotent) so the host-dispatch
     // and host-release trampolines can call back into Java from an engine
@@ -156,12 +162,29 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
         bridge_cffi::register_unhandled_spawn_error_callback(unhandled_spawn_error_trampoline);
     });
 
-    // Register this bridge with the versioned ABI (idempotent; mirrors
-    // bridge_python). A canonical-version mismatch is a real deployment
-    // error and surfaces as a Java exception via the panic handler.
+    let bridge_runtime_version: String = match env.get_string(&bridge_runtime_version) {
+        Ok(value) => value.into(),
+        Err(e) => {
+            throw_runtime_exception(
+                &mut env,
+                &format!("failed to read bridge runtime version: {e}"),
+            );
+            return;
+        }
+    };
+    let toolchain_version: String = match env.get_string(&toolchain_version) {
+        Ok(value) => value.into(),
+        Err(e) => {
+            throw_runtime_exception(&mut env, &format!("failed to read toolchain version: {e}"));
+            return;
+        }
+    };
+    // Register the same stamped versions exposed by BamlFfi's public getters.
     if let Err(e) = bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
         language: bridge_cffi::BridgeLanguage::Java,
-        sdk_version: baml_version::CANONICAL_VERSION.to_string(),
+        bridge_runtime_name: BRIDGE_RUNTIME_NAME.to_string(),
+        bridge_runtime_version,
+        toolchain_version,
     }) {
         throw_runtime_exception(&mut env, &format!("BAML bridge registration failed: {e}"));
         return;
@@ -173,9 +196,25 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeInitFromBytecode(
             return;
         }
     };
+    let embedded_baml_toml: Option<String> = if embedded_baml_toml.is_null() {
+        None
+    } else {
+        match env.get_string(&embedded_baml_toml) {
+            Ok(value) => Some(value.into()),
+            Err(e) => {
+                throw_runtime_exception(
+                    &mut env,
+                    &format!("failed to read embedded baml.toml: {e}"),
+                );
+                return;
+            }
+        }
+    };
 
-    if let Err(e) = bridge_cffi::initialize_runtime_from_bytecode(&bytes) {
-        throw_runtime_exception(&mut env, &format!("runtime initialization failed: {e}"));
+    if let Err(e) =
+        bridge_cffi::initialize_runtime_from_bytecode(&bytes, embedded_baml_toml.as_deref())
+    {
+        throw_runtime_exception_exact(&mut env, &e.to_string());
     }
 }
 
@@ -266,6 +305,7 @@ const UNHANDLED_SPAWN_ERROR_SIG: &str = "([BZ)V";
 /// re-register — `register_host_release_callback` logs a diagnostic on a second
 /// call, which would be spurious noise on every re-init.
 static REGISTER_HOST_CALLBACKS: Once = Once::new();
+const BRIDGE_RUNTIME_NAME: &str = "com.boundaryml:baml-bridge";
 
 /// Capture the JVM handle and a `GlobalRef` to the `BamlFfi` class (idempotent,
 /// first-call-wins). `class` is the `baml_bridge.BamlFfi` class object the JVM
@@ -350,9 +390,11 @@ fn spawn_async_call(call_id: u64, args_proto: Vec<u8>) {
         call_id: engine_call_id,
         target,
         type_args,
+        type_defs,
     } = decoded;
     let call_ctx = bridge_cffi::function_call_context_builder(engine_call_id)
         .with_type_args(type_args)
+        .with_type_defs(type_defs)
         .build();
 
     rt.spawn(async move {
@@ -975,4 +1017,8 @@ fn throw_runtime_exception(env: &mut JNIEnv<'_>, message: &str) {
         "java/lang/RuntimeException",
         format!("bridge_java: {message}"),
     );
+}
+
+fn throw_runtime_exception_exact(env: &mut JNIEnv<'_>, message: &str) {
+    let _ = env.throw_new("java/lang/RuntimeException", message);
 }

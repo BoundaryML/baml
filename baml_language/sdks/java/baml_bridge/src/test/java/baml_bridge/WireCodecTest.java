@@ -1188,19 +1188,54 @@ class WireCodecTest {
     private static final int OV_HANDLE = 16;
     private static final int ADT_MEDIA_IMAGE = 6;
     private static final int ADT_MEDIA_PDF = 9;
+    private static final int ADT_TAGGED_HEAP_HANDLE = 14;
     private static final int FUNCTION_REF = 5;
 
     private static byte[] handleMsg(long key, int handleType) {
+        return handleMsg(key, handleType, null);
+    }
+
+    private static byte[] handleMsg(long key, int handleType, byte[] ty) {
         WireWriter h = new WireWriter();
         h.writeInt64(1, key); // BamlOutboundHandle.key = 1
         h.writeInt64(2, handleType); // handle_type = 2
+        if (ty != null) {
+            h.writeMessage(3, ty); // ty = 3
+        }
         return h.toByteArray();
     }
 
     private static byte[] ovHandle(long key, int handleType) {
+        return ovHandle(key, handleType, null);
+    }
+
+    private static byte[] ovHandle(long key, int handleType, byte[] ty) {
         WireWriter ov = new WireWriter();
-        ov.writeMessage(OV_HANDLE, handleMsg(key, handleType));
+        ov.writeMessage(OV_HANDLE, handleMsg(key, handleType, ty));
         return ov.toByteArray();
+    }
+
+    /** Tagged handles retain their class identity and derive method FQNs from it. */
+    @Test
+    void decode_stream_handle_retains_carried_class_fqn() {
+        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(ovHandle(
+                101L,
+                ADT_TAGGED_HEAP_HANDLE,
+                tyClass("ai.stream.Stream", tyPrimitive(PRIM_STRING), tyPrimitive(PRIM_STRING)))));
+        BamlStream<?, ?> stream = assertInstanceOf(BamlStream.class, decoded);
+        assertEquals("ai.stream.Stream", stream.bamlClassFqn());
+        assertEquals("ai.stream.Stream.next", stream.methodFqn("next"));
+        assertEquals("ai.stream.Stream.final", stream.methodFqn("final"));
+    }
+
+    /** A tagged stream handle without its type identity cannot be called safely. */
+    @Test
+    void decode_stream_handle_rejects_missing_class_fqn() {
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoReader.decodeOutboundResult(
+                        okEnvelope(ovHandle(102L, ADT_TAGGED_HEAP_HANDLE))));
+        assertTrue(ex.getMessage().contains("missing its carried BAML class identity"));
     }
 
     /** A bare handle_value(ADT_MEDIA_IMAGE) decodes to a runtime-owned Image. */

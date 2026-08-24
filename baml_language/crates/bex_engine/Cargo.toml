@@ -13,6 +13,7 @@ baml_type_runtime = { workspace = true }
 bex_events = { workspace = true }
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
+bex_str = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_ops = { workspace = true }
@@ -41,14 +42,13 @@ wasm-bindgen-futures = { workspace = true }
 baml_project = { workspace = true, features = [ "testing" ] }
 bex_resource_types = { workspace = true }
 bridge_ctypes = { workspace = true }
-sys_llm = { workspace = true }
 sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }
 anyhow = { workspace = true }
 indexmap = { workspace = true }
 prost = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = [ "rt-multi-thread", "macros" ] }
+tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "test-util" ] }
 wiremock = { workspace = true }
 
 [lints]
@@ -66,3 +66,6 @@ heap_debug = [
   "bex_heap/heap_debug",
   "bex_vm_types/heap_debug",
 ]
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }

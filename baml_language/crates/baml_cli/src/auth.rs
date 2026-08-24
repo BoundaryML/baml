@@ -1,9 +1,9 @@
-// `baml login` / `baml auth` — a human email login via WorkOS CLI Auth.
+// `baml auth` — a human email login via WorkOS CLI Auth (`baml auth login`).
 //
 // This replaces the earlier agent-registration (auth.md) design: identity
 // for feedback is now PostHog-first (see `feedback_command.rs`) — anonymous
 // reporters get a locally generated PostHog distinct id, and logging in
-// exists to attach a verified email to that id. `baml login` runs the
+// exists to attach a verified email to that id. `baml auth login` runs the
 // OAuth 2.0 device authorization grant (RFC 8628): show a one-time code,
 // the user confirms it in a browser, the CLI polls for tokens. On success,
 // if an anonymous distinct id exists, a PostHog `$identify` event merges the
@@ -86,6 +86,8 @@ fn client_id() -> Result<String> {
 
 #[derive(Subcommand, Debug)]
 pub(crate) enum AuthCommands {
+    #[command(about = "Log in to Boundary with your email")]
+    Login(LoginArgs),
     #[command(about = "Show the current identity")]
     Whoami(WhoamiArgs),
     #[command(about = "Log out (keeps your anonymous feedback id)")]
@@ -97,6 +99,7 @@ pub(crate) enum AuthCommands {
 impl AuthCommands {
     pub fn run(&self) -> Result<crate::ExitCode> {
         match self {
+            AuthCommands::Login(args) => args.run(),
             AuthCommands::Whoami(args) => args.run(),
             AuthCommands::Logout(args) => args.run(),
             AuthCommands::Token(args) => args.run(),
@@ -104,8 +107,15 @@ impl AuthCommands {
     }
 }
 
-/// `baml login` — device-code email login.
+/// `baml auth login` — device-code email login.
 #[derive(Args, Debug)]
+#[command(after_long_help = "\
+Examples:
+  Log in using a browser:
+    baml auth login
+
+  Print the verification URL instead:
+    baml auth login --no-open")]
 pub(crate) struct LoginArgs {
     /// Print the verification URL instead of opening a browser.
     #[arg(long)]
@@ -113,16 +123,18 @@ pub(crate) struct LoginArgs {
 }
 
 #[derive(Args, Debug)]
+#[command(after_long_help = "Examples:\n  Show the current identity:\n    baml auth whoami")]
 pub(crate) struct WhoamiArgs {}
 
 #[derive(Args, Debug)]
+#[command(after_long_help = "Examples:\n  Log out:\n    baml auth logout")]
 pub(crate) struct LogoutArgs {}
 
 #[derive(Args, Debug)]
 pub(crate) struct TokenArgs {}
 
 impl LoginArgs {
-    /// Runs `baml login`.
+    /// Runs `baml auth login`.
     ///
     /// Device-code login via WorkOS CLI Auth, then — when an anonymous
     /// PostHog distinct id exists — sends a `$identify` event so all
@@ -135,8 +147,8 @@ impl LoginArgs {
     /// Errors:
     /// - When authorization can't be started, the user denies the login,
     ///   the code expires, or [`LOGIN_TIMEOUT`] elapses.
-    #[allow(clippy::print_stdout)]
     pub fn run(&self) -> Result<crate::ExitCode> {
+        let reporter = crate::reporter::Reporter::new();
         let mut existing = Credentials::read()?.unwrap_or_default();
         // Only skip the flow when the stored session can still produce a
         // token; a session that can't refresh falls through to a fresh
@@ -144,15 +156,18 @@ impl LoginArgs {
         if let Some(email) = existing.user_email.clone() {
             if existing.access_token().is_ok() {
                 existing.write()?;
-                println!("Already logged in as {email}.");
+                reporter.status("Login", format!("already logged in as {email}"));
                 return Ok(crate::ExitCode::Success);
             }
-            println!("The session for {email} has expired; logging in again.");
+            reporter.status(
+                "Login",
+                format!("the session for {email} has expired; logging in again"),
+            );
         }
         let creds = device_login(self.no_open, existing)?;
         match creds.user_email.as_deref() {
-            Some(email) => println!("Logged in as {email}."),
-            None => println!("Logged in."),
+            Some(email) => reporter.finish("Login", format!("logged in as {email}")),
+            None => reporter.finish("Login", "logged in"),
         }
         Ok(crate::ExitCode::Success)
     }
@@ -173,8 +188,8 @@ impl LoginArgs {
 /// Errors:
 /// - When authorization can't be started or the poll ends in denial,
 ///   expiry, or timeout.
-#[allow(clippy::print_stdout)]
 pub(crate) fn device_login(no_open: bool, existing: Credentials) -> Result<Credentials> {
+    let reporter = crate::reporter::Reporter::new();
     let client_id = client_id()?;
     let device: DeviceAuthResponse = post_form(
         &format!("{}/user_management/authorize/device", api_domain()),
@@ -182,25 +197,37 @@ pub(crate) fn device_login(no_open: bool, existing: Credentials) -> Result<Crede
     )
     .context("Failed to start device authorization")?;
 
-    println!("First, copy your one-time code: {}", device.user_code);
+    reporter.status(
+        "Login",
+        format!("first, copy your one-time code: {}", device.user_code),
+    );
     let open_uri = device
         .verification_uri_complete
         .as_deref()
         .unwrap_or(&device.verification_uri);
     if no_open {
-        println!("Then log in at: {}", device.verification_uri);
+        reporter.status(
+            "Login",
+            format!("then log in at: {}", device.verification_uri),
+        );
     } else {
-        println!("Then confirm the login in your browser...");
+        reporter.status("Login", "then confirm the login in your browser...");
         if webbrowser::open(open_uri).is_err() {
-            println!(
-                "Could not open a browser. Log in at: {}",
-                device.verification_uri
+            reporter.status(
+                "Login",
+                format!(
+                    "could not open a browser; log in at: {}",
+                    device.verification_uri
+                ),
             );
         }
     }
-    println!(
-        "Waiting for confirmation... (times out in {} minutes, Ctrl-C to cancel)",
-        LOGIN_TIMEOUT.as_secs() / 60
+    reporter.status(
+        "Waiting",
+        format!(
+            "for confirmation (times out in {} minutes, ctrl-c to cancel)",
+            LOGIN_TIMEOUT.as_secs() / 60
+        ),
     );
 
     let tokens = poll_token_endpoint(
@@ -222,8 +249,6 @@ pub(crate) fn device_login(no_open: bool, existing: Credentials) -> Result<Crede
             .posthog_distinct_id
             .clone()
             .or_else(|| Some(uuid::Uuid::new_v4().to_string())),
-        feedback_anonymous: false,
-        feedback_declined_at: None,
         user_id: user.and_then(|u| u.id.clone()),
         user_email: user.and_then(|u| u.email.clone()),
         access_token: Some(tokens.access_token),
@@ -246,20 +271,20 @@ impl WhoamiArgs {
         match Credentials::read()? {
             Some(creds) if creds.user_email.is_some() => {
                 println!(
-                    "Logged in as {}.",
+                    "logged in as {}",
                     creds.user_email.as_deref().unwrap_or("<unknown>")
                 );
                 Ok(crate::ExitCode::Success)
             }
             Some(creds) if creds.posthog_distinct_id.is_some() => {
                 println!(
-                    "Anonymous (feedback id {}). Run `baml login` to attach your email.",
+                    "anonymous (feedback id {}); run `baml auth login` to attach your email",
                     creds.posthog_distinct_id.as_deref().unwrap_or("<unknown>")
                 );
                 Ok(crate::ExitCode::Success)
             }
             _ => {
-                println!("Not logged in.");
+                println!("not logged in");
                 Ok(crate::ExitCode::Other)
             }
         }
@@ -270,12 +295,12 @@ impl LogoutArgs {
     /// Removes the login session. The PostHog distinct id is preserved so
     /// anonymous feedback continuity — and a future re-login's retroactive
     /// attribution — still work.
-    #[allow(clippy::print_stdout)]
     pub fn run(&self) -> Result<crate::ExitCode> {
+        let reporter = crate::reporter::Reporter::new();
         match Credentials::read()? {
-            None => println!("Not logged in."),
+            None => reporter.status("Logout", "not logged in"),
             Some(creds) if creds.user_email.is_none() && creds.access_token.is_none() => {
-                println!("Not logged in.");
+                reporter.status("Logout", "not logged in");
             }
             Some(creds) => {
                 let anonymous = Credentials {
@@ -283,7 +308,7 @@ impl LogoutArgs {
                     ..Credentials::default()
                 };
                 anonymous.write()?;
-                println!("Logged out.");
+                reporter.status("Logout", "logged out");
             }
         }
         Ok(crate::ExitCode::Success)
@@ -291,16 +316,19 @@ impl LogoutArgs {
 }
 
 impl TokenArgs {
-    #[allow(clippy::print_stdout, clippy::print_stderr)]
+    #[allow(clippy::print_stdout)]
     pub fn run(&self) -> Result<crate::ExitCode> {
+        let reporter = crate::reporter::Reporter::new();
         let mut creds = match Credentials::read()? {
             Some(creds) => creds,
-            None => {
-                eprintln!("Not logged in. Run `baml login`.");
-                return Ok(crate::ExitCode::Other);
-            }
+            None => return Ok(reporter.fatal("not logged in; run `baml auth login`")),
         };
-        println!("{}", creds.access_token()?);
+        // The token itself is this command's data output (stdout); auth
+        // failures are fatal diagnostics.
+        match creds.access_token() {
+            Ok(token) => println!("{token}"),
+            Err(e) => return Ok(reporter.fatal(e)),
+        }
         creds.write()?;
         Ok(crate::ExitCode::Success)
     }
@@ -370,7 +398,7 @@ fn poll_token_endpoint(
             }
             "access_denied" => anyhow::bail!("Login was denied in the browser."),
             "expired_token" => anyhow::bail!(
-                "The confirmation code expired before it was used. Run `baml login` again."
+                "the confirmation code expired before it was used; run `baml auth login` again"
             ),
             _ => anyhow::bail!("Auth server returned {status}: {value}"),
         }
@@ -442,29 +470,6 @@ fn form_urlencode(s: &str) -> String {
     out
 }
 
-/// Prints a prompt and reads one trimmed line from stdin.
-///
-/// Errors:
-/// - When stdin is closed (EOF — e.g. a piped or non-interactive session),
-///   so retry loops fail cleanly instead of spinning.
-#[allow(clippy::print_stdout)]
-pub(crate) fn prompt(message: &str) -> Result<String> {
-    use std::io::Write as _;
-    print!("{message}");
-    std::io::stdout().flush().ok();
-    let mut line = String::new();
-    let bytes_read = std::io::stdin()
-        .read_line(&mut line)
-        .context("Failed to read input")?;
-    if bytes_read == 0 {
-        anyhow::bail!(
-            "Standard input closed before a response was entered. \
-             This command needs an interactive terminal."
-        );
-    }
-    Ok(line.trim().to_string())
-}
-
 // ---------------------------------------------------------------------------
 // Credential storage: ~/.baml/creds.json
 // ---------------------------------------------------------------------------
@@ -482,16 +487,6 @@ pub(crate) struct Credentials {
     /// Verified email, once logged in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_email: Option<String>,
-    /// Set once feedback has been sent anonymously while logged out; later
-    /// `baml feedback` runs skip the anonymous-vs-email prompt until a
-    /// login replaces these credentials.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub feedback_anonymous: bool,
-    /// Unix seconds of the last "Don't send" choice at the prompt. For a
-    /// day afterwards, `baml feedback` declines quietly instead of
-    /// re-asking; explicit `--anonymous`/`--email` still send.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub feedback_declined_at: Option<u64>,
     /// Cached WorkOS access token (absent while anonymous).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     access_token: Option<String>,
@@ -500,6 +495,35 @@ pub(crate) struct Credentials {
     expires_at: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     refresh_token: Option<String>,
+}
+
+/// Writes a file readable only by the owner (0600 on unix; other
+/// platforms fall back to default permissions). Shared by every store
+/// that persists identity data (`creds.json`, `feedback.json`).
+pub(crate) fn write_owner_only(path: &std::path::Path, content: &str) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    #[cfg(unix)]
+    {
+        use std::{
+            io::Write as _,
+            os::unix::fs::{OpenOptionsExt, PermissionsExt},
+        };
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)
+            .with_context(|| format!("Failed to write {}", path.display()))?;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+        file.write_all(content.as_bytes())
+            .with_context(|| format!("Failed to write {}", path.display()))?;
+    }
+    #[cfg(not(unix))]
+    std::fs::write(path, content).with_context(|| format!("Failed to write {}", path.display()))?;
+    Ok(())
 }
 
 fn creds_path() -> Result<PathBuf> {
@@ -541,31 +565,7 @@ impl Credentials {
     /// other users.
     pub fn write(&self) -> Result<()> {
         let path = creds_path()?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let content = serde_json::to_string_pretty(self)?;
-        #[cfg(unix)]
-        {
-            use std::{
-                io::Write as _,
-                os::unix::fs::{OpenOptionsExt, PermissionsExt},
-            };
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .mode(0o600)
-                .open(&path)
-                .with_context(|| format!("Failed to write {}", path.display()))?;
-            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
-            file.write_all(content.as_bytes())
-                .with_context(|| format!("Failed to write {}", path.display()))?;
-        }
-        #[cfg(not(unix))]
-        std::fs::write(&path, content)
-            .with_context(|| format!("Failed to write {}", path.display()))?;
-        Ok(())
+        write_owner_only(&path, &serde_json::to_string_pretty(self)?)
     }
 
     /// Returns a valid access token, refreshing via the OAuth refresh-token
@@ -577,7 +577,7 @@ impl Credentials {
     ///   refreshed.
     pub fn access_token(&mut self) -> Result<&str> {
         if self.access_token.is_none() {
-            anyhow::bail!("Not logged in. Run `baml login`.");
+            anyhow::bail!("not logged in; run `baml auth login`");
         }
         let expired = match self.expires_at {
             Some(at) => at <= now_unix() + 30,
@@ -589,7 +589,7 @@ impl Credentials {
             let refresh = self
                 .refresh_token
                 .as_deref()
-                .context("Session expired. Run `baml login` again.")?;
+                .context("session expired; run `baml auth login` again")?;
             let tokens: TokenResponse = post_form(
                 &format!("{}/user_management/authenticate", api_domain()),
                 &[
@@ -598,7 +598,7 @@ impl Credentials {
                     ("refresh_token", refresh),
                 ],
             )
-            .context("Failed to refresh session. Run `baml login` again.")?;
+            .context("failed to refresh session; run `baml auth login` again")?;
             self.access_token = Some(tokens.access_token);
             self.expires_at = tokens.expires_in.map(|s| now_unix() + s);
             if tokens.refresh_token.is_some() {

@@ -8,22 +8,17 @@ enum Category {
   Ham
 }
 
-client<llm> GPT4 {
-  provider openai
-  options {
-    model "gpt-4"
-  }
-}
+client GPT4 = openai.ResponsesClient.new(model = "gpt-4");
 
 function ClassifyEmail(email: Email) -> Category {
-  client GPT4
-  prompt #"
+  client: GPT4
+  prompt: `
     Classify this email:
-    Subject: {{ email.subject }}
-    Body: {{ email.body }}
+    Subject: ${email.subject}
+    Body: ${email.body}
 
-    {{ ctx.output_format }}
-  "#
+    ${ctx.output_format}
+  `
 }
 
 //----
@@ -42,51 +37,34 @@ function ClassifyEmail(email: Email) -> Category {
 // llm_function.baml:7:3 (enumMember) [declaration] len=4 "Spam"
 // llm_function.baml:8:3 (enumMember) [declaration] len=3 "Ham"
 // llm_function.baml:11:1 (keyword) len=6 "client"
-// llm_function.baml:11:7 (operator) len=1 "<"
-// llm_function.baml:11:8 (type) len=3 "llm"
-// llm_function.baml:11:11 (operator) len=1 ">"
-// llm_function.baml:11:13 (struct) [declaration] len=4 "GPT4"
-// llm_function.baml:12:3 (property) len=8 "provider"
-// llm_function.baml:13:3 (property) len=7 "options"
-// llm_function.baml:14:5 (property) len=5 "model"
-// llm_function.baml:14:11 (string) len=7 "\"gpt-4\""
-// llm_function.baml:18:1 (keyword) len=8 "function"
-// llm_function.baml:18:10 (function) [declaration] len=13 "ClassifyEmail"
-// llm_function.baml:18:24 (parameter) [declaration] len=5 "email"
-// llm_function.baml:18:31 (class) len=5 "Email"
-// llm_function.baml:18:41 (enum) len=8 "Category"
-// llm_function.baml:19:3 (property) len=6 "client"
-// llm_function.baml:20:3 (property) [declaration] len=6 "prompt"
-// llm_function.baml:20:10 (string) len=1 "#"
-// llm_function.baml:20:11 (string) len=1 "\""
-// llm_function.baml:21:5 (string) len=8 "Classify"
-// llm_function.baml:21:14 (string) len=4 "this"
-// llm_function.baml:21:19 (string) len=5 "email"
-// llm_function.baml:21:24 (string) len=1 ":"
-// llm_function.baml:22:5 (string) len=7 "Subject"
-// llm_function.baml:22:12 (string) len=1 ":"
-// llm_function.baml:22:14 (string) len=1 "{"
-// llm_function.baml:22:15 (string) len=1 "{"
-// llm_function.baml:22:17 (string) len=5 "email"
-// llm_function.baml:22:22 (string) len=1 "."
-// llm_function.baml:22:23 (string) len=7 "subject"
-// llm_function.baml:22:31 (string) len=1 "}"
-// llm_function.baml:22:32 (string) len=1 "}"
-// llm_function.baml:23:5 (string) len=4 "Body"
-// llm_function.baml:23:9 (string) len=1 ":"
-// llm_function.baml:23:11 (string) len=1 "{"
-// llm_function.baml:23:12 (string) len=1 "{"
-// llm_function.baml:23:14 (string) len=5 "email"
-// llm_function.baml:23:19 (string) len=1 "."
-// llm_function.baml:23:20 (string) len=4 "body"
-// llm_function.baml:23:25 (string) len=1 "}"
-// llm_function.baml:23:26 (string) len=1 "}"
-// llm_function.baml:25:5 (string) len=1 "{"
-// llm_function.baml:25:6 (string) len=1 "{"
-// llm_function.baml:25:8 (string) len=3 "ctx"
-// llm_function.baml:25:11 (string) len=1 "."
-// llm_function.baml:25:12 (string) len=13 "output_format"
-// llm_function.baml:25:26 (string) len=1 "}"
-// llm_function.baml:25:27 (string) len=1 "}"
-// llm_function.baml:26:3 (string) len=1 "\""
-// llm_function.baml:26:4 (string) len=1 "#"
+// llm_function.baml:11:13 (operator) len=1 "="
+// llm_function.baml:11:15 (namespace) [defaultLibrary] len=6 "openai"
+// llm_function.baml:11:21 (namespace) [defaultLibrary] len=1 "."
+// llm_function.baml:11:22 (class) [defaultLibrary] len=15 "ResponsesClient"
+// llm_function.baml:11:38 (method) len=3 "new"
+// llm_function.baml:11:42 (parameter) len=5 "model"
+// llm_function.baml:11:48 (operator) len=1 "="
+// llm_function.baml:11:50 (string) len=7 "\"gpt-4\""
+// llm_function.baml:13:1 (keyword) len=8 "function"
+// llm_function.baml:13:10 (function) [declaration] len=13 "ClassifyEmail"
+// llm_function.baml:13:24 (parameter) [declaration] len=5 "email"
+// llm_function.baml:13:31 (class) len=5 "Email"
+// llm_function.baml:13:41 (enum) len=8 "Category"
+// llm_function.baml:14:3 (property) len=6 "client"
+// llm_function.baml:14:11 (variable) len=4 "GPT4"
+// llm_function.baml:15:3 (property) [declaration] len=6 "prompt"
+// llm_function.baml:15:11 (string) len=1 "`"
+// llm_function.baml:16:5 (string) len=8 "Classify"
+// llm_function.baml:16:14 (string) len=4 "this"
+// llm_function.baml:16:19 (string) len=5 "email"
+// llm_function.baml:16:24 (string) len=1 ":"
+// llm_function.baml:17:5 (string) len=7 "Subject"
+// llm_function.baml:17:12 (string) len=1 ":"
+// llm_function.baml:17:16 (parameter) len=5 "email"
+// llm_function.baml:17:22 (property) len=7 "subject"
+// llm_function.baml:18:5 (string) len=4 "Body"
+// llm_function.baml:18:9 (string) len=1 ":"
+// llm_function.baml:18:13 (parameter) len=5 "email"
+// llm_function.baml:18:19 (property) len=4 "body"
+// llm_function.baml:20:11 (property) len=13 "output_format"
+// llm_function.baml:21:3 (string) len=1 "`"

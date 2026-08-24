@@ -1,0 +1,100 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.closure_loop_variable.sum_array(arr: int[]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int[] // arr // param
+    let _2: int // sum [captured]
+    let _3: (() -> void throws never)[] // total
+    let _4: baml.iter.Iterator<Error = never, Item = int>
+    let _5: unknown
+    let _6: bool
+    let _7: int
+    let _8: int // i [captured]
+    let _9: void
+    let _10: () -> void throws never
+    let _11: reflect.Type
+    let _12: (() -> void throws never)[]
+    let _13: baml.iter.Iterator<Error = never, Item = () -> void throws never>
+    let _14: unknown
+    let _15: bool
+    let _16: () -> void throws never
+    let _17: () -> void throws never // cb
+    let _18: void
+    let _19: () -> void throws never
+
+    bb0: {
+        _2 = const 0_i64;
+        _3 = []: () -> void throws never[];
+        _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = int>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _5 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _4) -> [bb2];
+    }
+
+    bb2: {
+        _6 = is_type(copy _5, baml.iter.Done);
+        branch copy _6 -> [bb4, bb3];
+    }
+
+    bb3: {
+        _7 = copy _5;
+        fresh_cell(_8);
+        _8 = copy _7;
+        _10 = make_closure lambda[0](copy _2, copy _8);
+        _11 = load_type(() -> void throws never);
+        _9 = call const fn baml.Array.push<copy _11>(copy _3, copy _10) -> [bb1];
+    }
+
+    bb4: {
+        _12 = copy _3;
+        _13 = virtual_call iter as baml.iter.Iterable<Error = never, Item = () -> void throws never>(copy _12) -> [bb5];
+    }
+
+    bb5: {
+        _14 = virtual_call next as baml.iter.Iterator<Error = never, Item = () -> void throws never>(copy _13) -> [bb6];
+    }
+
+    bb6: {
+        _15 = is_type(copy _14, baml.iter.Done);
+        branch copy _15 -> [bb8, bb7];
+    }
+
+    bb7: {
+        _16 = copy _14;
+        fresh_cell(_17);
+        _17 = copy _16;
+        _19 = copy _17;
+        _18 = call copy _19() -> [bb5];
+    }
+
+    bb8: {
+        _0 = copy _2;
+        goto -> bb9;
+    }
+
+    bb9: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(sum_array, 0)>() -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: int
+
+    bb0: {
+        _1 = copy capture[1];
+        capture[0] = copy capture[0] + copy _1;
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

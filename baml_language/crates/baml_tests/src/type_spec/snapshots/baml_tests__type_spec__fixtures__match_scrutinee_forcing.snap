@@ -1,0 +1,89 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+296..304 'peekable': throws never
+344..429 '{\n   ...n    }': user.PkPeekable<T, E>
+354..423 'PkPeek...alse }': user.PkPeekable<T, E>
+379..383 'self': Self
+393..402 'PkDone {}': user.PkDone
+416..421 'false': false
+542..546 'peek': throws E
+576..753 '{\n   ...n    }': user.PkDone | T
+586..649 'if (se...     }': void
+590..605 'self.has_buffer': bool
+607..649 '{\n   ...     }': never
+628..639 'self.buffer': user.PkDone | T
+658..663 'let v': user.PkDone | T
+666..680 'self.iter.next': (self: user.PkIterator<T, E>) -> user.PkDone | T throws E
+666..682 'self.i...next()': user.PkDone | T
+691..702 'self.buffer': user.PkDone | T
+705..706 'v': user.PkDone | T
+715..730 'self.has_buffer': bool
+733..737 'true': true
+746..747 'v': user.PkDone | T
+806..810 'iter': throws never
+850..858 '{ self }': user.PkPeekable<T, E>
+852..856 'self': user.PkPeekable<T, E>
+917..921 'next': throws E
+951..1181 '{\n   ...     }': user.PkDone | T
+965..1142 'if (se...     }': void
+969..984 'self.has_buffer': bool
+986..1142 '{\n   ...     }': never
+1004..1009 'let v': user.PkDone | T
+1012..1023 'self.buffer': user.PkDone | T
+1040..1051 'self.buffer': user.PkDone | T
+1054..1063 'PkDone {}': user.PkDone
+1080..1095 'self.has_buffer': bool
+1098..1103 'false': false
+1127..1128 'v': user.PkDone | T
+1155..1169 'self.iter.next': (self: user.PkIterator<T, E>) -> user.PkDone | T throws E
+1155..1171 'self.i...next()': user.PkDone | T
+1257..1260 'new': throws never
+1306..1361 '{\n   ...n    }': user.PkArrayIterator<T>
+1316..1355 'PkArra...x: 0 }': user.PkArrayIterator<T>
+1342..1345 'arr': T[]
+1352..1353 '0': 0
+1418..1422 'iter': throws never
+1466..1474 '{ self }': user.PkArrayIterator<T>
+1468..1472 'self': user.PkArrayIterator<T>
+1537..1541 'next': throws never
+1575..1767 '{\n   ...     }': T
+1589..1672 'if (se...     }': void
+1593..1601 'self.idx': int
+1593..1622 'self.i...ngth()': bool
+1605..1620 'self.arr.length': (self: T[]) -> int throws never
+1605..1622 'self.a...ngth()': int
+1624..1672 '{\n   ...     }': never
+1649..1658 'PkDone {}': user.PkDone
+1685..1693 'let item': T
+1696..1704 'self.arr': T[]
+1696..1714 'self.a...f.idx]': T
+1705..1713 'self.idx': int
+1727..1735 'self.idx': int
+1739..1740 '1': 1
+1753..1757 'item': T
+1785..1792 'pk_main': throws never
+1804..2014 '{\n   ...out\n}': int[]
+1810..1815 'let p': user.PkPeekable<int, never>
+1818..1837 'PkArra...or.new': (arr: int[]) -> user.PkArrayIterator<int> throws never
+1818..1845 'PkArra...4, 5])': user.PkArrayIterator<int>
+1818..1854 'PkArra...ekable': (self: user.PkArrayIterator<int>) -> user.PkPeekable<int, never> throws never
+1818..1856 'PkArra...able()': user.PkPeekable<int, never>
+1838..1844 '[4, 5]': int[]
+1839..1840 '4': 4
+1842..1843 '5': 5
+1899..1913 'let out: int[]': int[]
+1908..1913 'int[]': int[]
+1916..1918 '[]': int[]
+1923..2004 'match ...n    }': int | void
+1930..1936 'p.peek': (self: user.PkPeekable<int, never>) -> int | user.PkDone throws never
+1930..1938 'p.peek()': int | user.PkDone
+1950..1956 'PkDone': user.PkDone
+1960..1962 '{}': void
+1972..1982 'let x: int': int
+1979..1982 'int': int
+1986..1994 'out.push': (self: int[], item: int) -> int throws never
+1986..1997 'out.push(x)': int
+1995..1996 'x': int
+2009..2012 'out': int[]

@@ -1,0 +1,73 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+88..98 'ttl_render': throws __effect_param_0
+140..434 '{\n   ...()]\n}': string
+146..151 'let t': baml.TaggedString
+154..158 'body': () -> baml.TaggedString throws __effect_param_0
+154..160 'body()': baml.TaggedString
+165..172 'let out': string
+175..177 '""': ""
+182..187 'let i': int
+190..191 '0': 0
+203..204 'i': int
+203..224 'i < t....ngth()': bool
+207..222 't.values.length': (self: unknown[]) -> int throws never
+207..224 't.valu...ngth()': int
+226..395 '{\n   ...n    }': void
+236..245 'let piece': string
+248..332 'match ...     }': string
+255..263 't.values': unknown[]
+255..266 't.values[i]': unknown
+264..265 'i': int
+282..295 'let s: string': string
+289..295 'string': string
+299..300 's': string
+314..315 '_': unknown
+319..322 '"?"': "?"
+341..344 'out': string
+347..350 'out': string
+347..363 'out + ...rts[i]': string
+347..371 'out + ... piece': string
+353..360 't.parts': string[]
+353..363 't.parts[i]': string
+361..362 'i': int
+366..371 'piece': string
+380..381 'i': int
+384..385 'i': int
+384..389 'i + 1': int
+388..389 '1': 1
+400..403 'out': string
+400..432 'out + ...gth()]': string
+406..413 't.parts': string[]
+406..432 't.part...gth()]': string
+414..429 't.values.length': (self: unknown[]) -> int throws never
+414..431 't.valu...ngth()': int
+444..459 'ttl_interpolate': throws never
+472..566 '{\n   ...ext\n}': string
+478..486 'let name': string
+489..496 '"World"': "World"
+501..509 'let text': string
+512..522 'ttl_render': (body: () -> baml.TaggedString throws never) -> string throws never
+512..535 'ttl_re...ame}!`': string
+527..533 '{name}': string
+528..532 'name': string
+560..564 'text': string
+576..587 'ttl_control': throws never
+600..765 '{\n   ...ext\n}': string
+606..615 'let items': string[]
+618..628 '["a", "b"]': string[]
+619..622 '"a"': "a"
+624..627 '"b"': "b"
+633..641 'let flag': bool
+644..648 'true': true
+653..661 'let text': string
+664..674 'ttl_render': (body: () -> baml.TaggedString throws never) -> string throws never
+664..734 'ttl_re...ndif}`': string
+681..685 'flag': bool
+694..699 'let x': string
+703..708 'items': string[]
+712..715 '{x}': string
+713..714 'x': string
+759..763 'text': string

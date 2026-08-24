@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+632..637 'first': throws (T as baml.iter.Iterator).Error
+701..859 '{\n   ...ull\n}': (T as baml.iter.Iterator).Item | null
+707..712 'let r': (T as baml.iter.Iterator).Item | null
+715..806 'match ...n    }': (T as baml.iter.Iterator).Item | null
+722..729 'it.next': (self: T) -> baml.iter.Done | (T as baml.iter.Iterator).Item throws (T as baml.iter.Iterator).Error
+722..731 'it.next()': baml.iter.Done | (T as baml.iter.Iterator).Item
+743..757 'baml.iter.Done': baml.iter.Done
+761..765 'null': null
+775..791 'let it...T.Item': (T as baml.iter.Iterator).Item
+785..791 'T.Item': (T as baml.iter.Iterator).Item
+795..799 'item': (T as baml.iter.Iterator).Item
+812..813 'r': (T as baml.iter.Iterator).Item | null

@@ -72,7 +72,7 @@ impl CffiHandleTableEntry {
             Self::RustData(_) => BamlHandleType::UntaggedRustData,
             Self::Adt(adt) => match adt {
                 BexExternalAdt::Collector(_) => BamlHandleType::AdtCollector,
-                BexExternalAdt::Type(_) => BamlHandleType::AdtType,
+                BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_) => BamlHandleType::AdtType,
                 BexExternalAdt::PromptAst(_) => BamlHandleType::AdtPromptAst,
                 BexExternalAdt::Media(media) => match media.kind {
                     MediaKind::Image => BamlHandleType::AdtMediaImage,

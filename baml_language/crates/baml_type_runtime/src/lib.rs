@@ -5,7 +5,7 @@
 //! vocabulary (`baml_type`), neither the compiler frontend nor the BEX engine —
 //! so that:
 //!
-//! - the TIR (`baml_compiler2_tir::generics`) uses them at *compile time* over
+//! - the compiler (`baml_compiler2_hir_ty`) uses them at *compile time* over
 //!   typed expressions, re-exporting them so its callers are unchanged; and
 //! - the runtime engine (`bex_engine`) uses them at the *inbound boundary* over
 //!   types synthesized from argument values, by widening its
@@ -20,7 +20,7 @@
 //!
 //! Only the *pure* helpers belong here. Anything needing the compiler database,
 //! `TypeExpr`, or `TirTypeError` (e.g. `lower_type_expr_with_generics`,
-//! `erase_unresolved_typevars`) stays in `baml_compiler2_tir::generics`.
+//! `erase_unresolved_typevars`) stays compiler-side.
 
 #[cfg(test)]
 use baml_type::Name;
@@ -29,7 +29,7 @@ use baml_type::Name;
     reason = "fact-free by necessity: inference runs at the host entry boundary (no VM exists yet) and shares its lattice with compile-time inference — both sides must gain real fact contexts in lockstep"
 )]
 use baml_type::normalize::NoFacts;
-use baml_type::{ParamTy, Ty, TyAttr, normalize::TypeContext};
+use baml_type::{FunctionParamTy, ParamTy, Ty, TyAttr, normalize::TypeContext};
 use rustc_hash::FxHashMap;
 
 // ── Inference options ─────────────────────────────────────────────────────────
@@ -666,42 +666,178 @@ pub fn infer_value_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<P
 /// Combine two types into a union, deduplicating members.
 ///
 /// Used when the same type variable is inferred from multiple arguments
-/// (e.g., `deep_equals(myInt, myString)` → `T` gets `int` then `string`).
+/// (e.g., `pair<T>(myInt, myString)` → `T` gets `int` then `string`).
 pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
     normalize_union_members([a.clone(), b.clone()], TyAttr::default())
 }
 
-/// Flatten nested unions, drop `Never`, deduplicate; collapse a single survivor
-/// to a bare type and an empty result to `Never`.
-pub fn normalize_union_members(members: impl IntoIterator<Item = Ty>, attr: TyAttr) -> Ty {
-    let mut normalized = Vec::new();
-    for member in members {
-        match member {
-            Ty::Never { .. } => {}
-            Ty::Union(inner, _) => {
-                for inner_member in inner {
-                    if !matches!(inner_member, Ty::Never { .. })
-                        && !normalized.contains(&inner_member)
-                    {
-                        normalized.push(inner_member);
-                    }
-                }
-            }
-            other if !normalized.contains(&other) => normalized.push(other),
-            _ => {}
+// ── Pure `Ty` walks (substitution, typevar queries, erasure) ──────────────────
+//
+// Moved from `baml_compiler2_tir::generics` (which re-exports them) during the
+// S16 TIR retirement: they are pure walks over the shared vocabulary with no
+// compiler-database dependence, exactly this crate's charter.
+pub use baml_type::unify::{bind_type_vars, normalize_union_members, substitute_ty};
+
+/// Deep any-node predicate over a type tree: does `pred` hold for `ty` itself
+/// or for any type nested inside it? The single traversal behind the
+/// `contains_*` family; the arms cover every child position a `Ty` can carry.
+/// A function type carries no generic binders of its own (function values are
+/// realized), so recursion enters its params/ret/throws with `pred` unchanged;
+/// a projection is entered through both its base (`T::Item`) and its
+/// qualifying interface's types.
+pub fn contains_ty_where(ty: &Ty, pred: &dyn Fn(&Ty) -> bool) -> bool {
+    if pred(ty) {
+        return true;
+    }
+    match ty {
+        Ty::AssociatedTypeProjection {
+            base, interface, ..
+        } => contains_ty_where(base, pred) || interface.tys().any(|t| contains_ty_where(t, pred)),
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_ty_where(inner, pred),
+        Ty::Map {
+            key: k, value: v, ..
         }
+        | Ty::EvolvingMap(k, v, _) => contains_ty_where(k, pred) || contains_ty_where(v, pred),
+        Ty::Union(tys, _) => tys.iter().any(|t| contains_ty_where(t, pred)),
+        Ty::Future(value, error, _) => {
+            contains_ty_where(value, pred) || contains_ty_where(error, pred)
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params
+                .iter()
+                .any(|param| contains_ty_where(&param.ty, pred))
+                || contains_ty_where(ret, pred)
+                || contains_ty_where(throws, pred)
+        }
+        Ty::Class(_, type_args, _) => type_args.iter().any(|t| contains_ty_where(t, pred)),
+        Ty::Interface(_, type_args, associated_bindings, _) => {
+            type_args.iter().any(|t| contains_ty_where(t, pred))
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| contains_ty_where(ty, pred))
+        }
+        _ => false,
+    }
+}
+
+/// Check if a type contains any `Ty::TypeVar` anywhere in its structure.
+pub fn contains_typevar(ty: &Ty) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(_, _)))
+}
+
+/// Does `ty` carry an error-recovery sentinel (`Ty::Error` or `Ty::Unknown`)
+/// anywhere in its structure? An expression recorded with such a type already
+/// failed to compile at its own site; downstream consumers (e.g. call-site
+/// generic inference) use this to recognize an already-failed input and avoid
+/// cascading a second diagnostic off it.
+pub fn contains_error_recovery(ty: &Ty) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::Error { .. } | Ty::Unknown { .. }))
+}
+
+/// Returns `true` if `ty` contains any type variable for which `pred` returns
+/// `true`. A general form of [`contains_typevar`] used by call validation to
+/// distinguish *rigid* type variables (the pinned `Self`, caller-scope generic
+/// params) — which must be checked — from genuinely-uninferred ones (callee
+/// generics, free inference/effect vars) — which are deferred.
+pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&ParamTy) -> bool) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(param, _) if pred(param)))
+}
+
+/// Replace selected type variables with `unknown` for runtime-facing metadata.
+///
+/// Bounded generic parameters are compile-time evidence, not concrete runtime
+/// type tags. MIR and bytecode metadata both need the same erasure behavior, so
+/// keep the recursive shape walk here beside the other generic utilities.
+pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&ParamTy) -> bool) -> Ty {
+    if !contains_typevar(ty) {
+        return ty.clone();
     }
 
-    match normalized.len() {
-        0 => Ty::Never { attr },
-        1 => normalized.pop().expect("length checked"),
-        _ => {
-            // TODO(TyAttr): This union is synthesized from multiple input types — there's no
-            // single "original attr" to preserve. If inputs carry different attrs, which one
-            // wins? May need a merge/lattice operation on TyAttr, or default may be correct if
-            // attrs describe declaration sites rather than computed types.
-            Ty::Union(normalized, attr)
-        }
+    match ty {
+        Ty::TypeVar(name, attr) if should_erase(name) => Ty::BuiltinUnknown { attr: attr.clone() },
+        Ty::Class(qtn, args, attr) => Ty::Class(
+            qtn.clone(),
+            args.iter()
+                .map(|arg| erase_typevars_matching(arg, should_erase))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::Interface(qtn, args, associated_bindings, attr) => Ty::Interface(
+            qtn.clone(),
+            args.iter()
+                .map(|arg| erase_typevars_matching(arg, should_erase))
+                .collect(),
+            associated_bindings
+                .iter()
+                .map(|(name, ty)| (name.clone(), erase_typevars_matching(ty, should_erase)))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::List(inner, attr) => Ty::List(
+            Box::new(erase_typevars_matching(inner, should_erase)),
+            attr.clone(),
+        ),
+        Ty::EvolvingList(inner, attr) => Ty::EvolvingList(
+            Box::new(erase_typevars_matching(inner, should_erase)),
+            attr.clone(),
+        ),
+        Ty::Map { key, value, attr } => Ty::Map {
+            key: Box::new(erase_typevars_matching(key, should_erase)),
+            value: Box::new(erase_typevars_matching(value, should_erase)),
+            attr: attr.clone(),
+        },
+        Ty::EvolvingMap(key, value, attr) => Ty::EvolvingMap(
+            Box::new(erase_typevars_matching(key, should_erase)),
+            Box::new(erase_typevars_matching(value, should_erase)),
+            attr.clone(),
+        ),
+        Ty::Union(members, attr) => Ty::Union(
+            members
+                .iter()
+                .map(|member| erase_typevars_matching(member, should_erase))
+                .collect(),
+            attr.clone(),
+        ),
+        Ty::Future(value, error, attr) => Ty::Future(
+            Box::new(erase_typevars_matching(value, should_erase)),
+            Box::new(erase_typevars_matching(error, should_erase)),
+            attr.clone(),
+        ),
+        Ty::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            attr,
+        } => Ty::AssociatedTypeProjection {
+            base: Box::new(erase_typevars_matching(base, should_erase)),
+            interface: Box::new(interface.map_tys(|t| erase_typevars_matching(t, should_erase))),
+            member: member.clone(),
+            attr: attr.clone(),
+        },
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            attr,
+        } => Ty::Function {
+            params: params
+                .iter()
+                .map(|param| FunctionParamTy {
+                    name: param.name.clone(),
+                    ty: erase_typevars_matching(&param.ty, should_erase),
+                    mode: param.mode,
+                })
+                .collect(),
+            ret: Box::new(erase_typevars_matching(ret, should_erase)),
+            throws: Box::new(erase_typevars_matching(throws, should_erase)),
+            attr: attr.clone(),
+        },
+        _ => ty.clone(),
     }
 }
 

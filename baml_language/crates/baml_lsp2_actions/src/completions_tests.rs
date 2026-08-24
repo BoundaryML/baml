@@ -598,7 +598,11 @@ function Test() -> string {
         );
         assert!(
             labels.contains(&"reflect"),
-            "Should contain 'reflect' package root, got: {labels:?}"
+            "Should contain the 'reflect' package root, got: {labels:?}"
+        );
+        assert!(
+            labels.contains(&"json"),
+            "Should contain the 'json' namespace shorthand, got: {labels:?}"
         );
     }
 

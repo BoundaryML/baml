@@ -877,10 +877,11 @@ impl BexProject {
         &self,
         compiled: CompiledCandidate,
     ) -> Result<EngineCandidate, RuntimeError> {
-        let engine = BexEngine::new_with_deferred_profiling(
+        let engine = BexEngine::new_with_deferred_profiling_and_runtime_compiler(
             compiled.program,
             self.sys_ops.clone(),
             Vec::new(),
+            Some(crate::runtime_compiler()),
         )
         .map_err(RuntimeError::Engine)?;
         engine.set_unhandled_spawn_error_handler(Some(Arc::new(|error| {
@@ -1069,6 +1070,22 @@ impl BexProject {
             .ok()
             .and_then(|rt| rt.installed.as_ref().map(|i| i.generation))
             .unwrap_or(0)
+    }
+
+    /// Runtime status for a source revision already captured under a caller's
+    /// source lease. This avoids re-locking the source gate while that lease
+    /// is held.
+    pub(crate) fn runtime_status_for_source(&self, source_revision: SourceRevision) -> (bool, u64) {
+        let Ok(runtime) = self.lock_runtime() else {
+            return (false, 0);
+        };
+        let Some(installed) = runtime.installed.as_ref() else {
+            return (false, 0);
+        };
+        (
+            installed.source_revision == source_revision,
+            installed.generation,
+        )
     }
 
     /// Latest installed engine regardless of currentness (playground render

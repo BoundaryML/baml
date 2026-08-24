@@ -21,9 +21,7 @@ fn messages(source: &str) -> Vec<String> {
 }
 
 fn prompt(body: &str) -> String {
-    format!(
-        "client<llm> C {{\n  provider openai\n  options {{ model \"m\" api_key \"k\" }}\n}}\n\nfunction G() -> string {{\n  client C\n  prompt `{body}`\n}}\n"
-    )
+    format!("function G() -> string {{\n  client: \"openai/gpt-4o-mini\"\n  prompt: `{body}`\n}}\n")
 }
 
 fn untagged(body: &str) -> String {

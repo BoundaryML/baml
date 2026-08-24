@@ -8,6 +8,7 @@ pub mod core_types;
 pub mod dedent;
 pub mod escape;
 pub mod files;
+pub mod language;
 pub mod num_lit;
 pub mod qualified_name;
 
@@ -16,6 +17,7 @@ pub use attr::*;
 pub use client_options::*;
 pub use core_types::*;
 pub use files::*;
+pub use language::*;
 pub use qualified_name::{BAML_STD_PREFIX, Namespace, QualifiedName};
 
 /// Package name for the BAML standard library / builtins.

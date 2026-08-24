@@ -7,9 +7,12 @@ use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
     package::{PackageId, package_items},
 };
-use baml_compiler2_ppir::item_data::{function_data, function_llm_meta, test_data};
-use baml_compiler2_tir::package_interface::package_interface;
+use baml_compiler2_hir_ty::package_interface::package_interface;
+use baml_compiler2_ppir::item_data::{
+    function_data, function_llm_meta, function_source_map, test_data,
+};
 use baml_db::Name;
+use baml_workspace::Db as _;
 
 use crate::{
     db::ProjectDatabase,
@@ -46,6 +49,11 @@ pub struct Symbol {
 #[derive(Debug, Clone)]
 pub struct FunctionSymbol {
     pub name: String,
+    /// Source-like declaration including name, generic parameters, parameters,
+    /// return type, and throws clause.
+    pub signature: String,
+    /// One-based source location of the function name.
+    pub source_position: FunctionSourcePosition,
     /// Whether the function came directly from user source, a companion, or compiler lowering.
     pub origin: FunctionOrigin,
     /// Whether this is an LLM function (has `client`/`prompt` declarative body).
@@ -60,6 +68,13 @@ pub struct FunctionSymbol {
     /// interface mid-edit, or extraction skipped for companions/internal
     /// functions); `Some(vec![])` means the function takes no arguments.
     pub params: Option<Vec<ParamSchema>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionSourcePosition {
+    pub file: String,
+    pub line: u32,
+    pub column: u32,
 }
 
 /// Playground function metadata plus the shared type table their param
@@ -127,7 +142,8 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
                 // Sub-functions have names with '$' (e.g. MyFunc$render_prompt)
                 let is_sub_function = name.as_str().contains('$');
 
-                let origin: FunctionOrigin = function_data(db, *func_loc).metadata.origin.into();
+                let function = function_data(db, *func_loc);
+                let origin: FunctionOrigin = function.metadata.origin.into();
                 // Companions clone parent params verbatim and non-userDefined
                 // functions are hidden by default — extracting schemas for
                 // them only duplicates payload. The UI degrades to raw mode.
@@ -136,6 +152,7 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
                 } else {
                     param_schema::function_param_schemas(
                         db,
+                        *func_loc,
                         iface,
                         namespace_path,
                         name,
@@ -146,6 +163,8 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
 
                 functions.push(FunctionSymbol {
                     name: playground_function_name(namespace_path, name),
+                    signature: render_function_signature(function),
+                    source_position: function_source_position(db, *func_loc),
                     origin,
                     is_llm,
                     client_name,
@@ -157,6 +176,84 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
     }
     functions.sort_by(|a, b| a.name.cmp(&b.name));
     FunctionListing { functions, types }
+}
+
+fn render_function_signature(function: &baml_compiler2_ppir::item_data::FunctionData) -> String {
+    let generic_params = function
+        .generic_params
+        .iter()
+        .map(|param| {
+            if param.bounds.is_empty() {
+                return param.name.to_string();
+            }
+            let bounds = param
+                .bounds
+                .iter()
+                .map(|&id| function.type_refs.display(id).to_string())
+                .collect::<Vec<_>>()
+                .join(" & ");
+            format!("{} extends {bounds}", param.name)
+        })
+        .collect::<Vec<_>>();
+    let generics = if generic_params.is_empty() {
+        String::new()
+    } else {
+        format!("<{}>", generic_params.join(", "))
+    };
+    let params = function
+        .params
+        .iter()
+        .map(|param| {
+            let optional = if param.has_default { "?" } else { "" };
+            match param.type_ref {
+                Some(id) => format!(
+                    "{}{optional}: {}",
+                    param.name,
+                    function.type_refs.display(id)
+                ),
+                None => param.name.to_string(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let return_type = function
+        .return_type
+        .map(|id| format!(" -> {}", function.type_refs.display(id)))
+        .unwrap_or_default();
+    let throws = function
+        .throws
+        .map(|id| format!(" throws {}", function.type_refs.display(id)))
+        .unwrap_or_else(|| " throws never".to_string());
+    format!(
+        "function {}{generics}({params}){return_type}{throws}",
+        function.name
+    )
+}
+
+fn function_source_position(
+    db: &ProjectDatabase,
+    function: baml_compiler2_hir::loc::FunctionLoc<'_>,
+) -> FunctionSourcePosition {
+    let source_file = function.file(db);
+    let source_map = function_source_map(db, function);
+    let offset: u32 = if source_map.name_span.is_empty() {
+        source_map.span.start()
+    } else {
+        source_map.name_span.start()
+    }
+    .into();
+    let position = crate::position::LineIndex::new(source_file.text(db))
+        .offset_to_position(offset)
+        .unwrap_or_default();
+    let path = source_file.path(db);
+    let root = db.project().root(db);
+    let relative_path = path.strip_prefix(root).unwrap_or(&path);
+
+    FunctionSourcePosition {
+        file: relative_path.to_string_lossy().into_owned(),
+        line: position.line.saturating_add(1),
+        column: position.character.saturating_add(1),
+    }
 }
 
 /// Function names exposed to the playground preserve source namespaces so the
@@ -173,6 +270,8 @@ pub(crate) fn playground_function_name(namespace_path: &[Name], name: &Name) -> 
 }
 
 /// List tests with full metadata for the playground.
+// BUG: duplicated with different semantics in
+// `baml_cli::test_command::discover_legacy_tests` — see the note there.
 pub fn list_tests_with_metadata(db: &ProjectDatabase) -> Vec<TestSymbol> {
     let pkg_id = PackageId::new(db, Name::new("user"));
     let pkg = package_items(db, pkg_id);
@@ -275,6 +374,37 @@ mod tests {
                 "demo.DemoFunc".to_string(),
                 "demo.inner.InnerFunc".to_string(),
             ]
+        );
+    }
+
+    #[test]
+    fn playground_function_metadata_includes_signature_and_source_position() {
+        let mut db = make_db();
+        let root = std::path::Path::new("/tmp")
+            .canonicalize()
+            .unwrap_or_else(|_| "/tmp".into());
+        db.add_or_update_file(
+            &root.join("ns_demo/main.baml"),
+            "\n\nfunction Transform<T extends string>(value: T, count: int) -> T throws Error {\n  value\n}",
+        );
+
+        let functions = list_functions_with_metadata(&db).functions;
+        let function = functions
+            .iter()
+            .find(|function| function.name == "demo.Transform")
+            .expect("Transform should be listed");
+
+        assert_eq!(
+            function.signature,
+            "function Transform<T extends string>(value: T, count: int) -> T throws Error"
+        );
+        assert_eq!(
+            function.source_position,
+            FunctionSourcePosition {
+                file: "ns_demo/main.baml".to_string(),
+                line: 3,
+                column: 10,
+            }
         );
     }
 

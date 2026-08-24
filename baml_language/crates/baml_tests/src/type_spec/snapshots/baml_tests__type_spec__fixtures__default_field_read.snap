@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+367..375 'describe': throws never
+405..424 '{\n   ...n    }': "x"
+415..418 '"x"': "x"
+500..508 'describe': throws never
+538..634 '{\n   ...     }': string
+552..557 'let n': string
+560..572 'default.name': string
+611..612 'n': string
+611..624 'n + self.name': string
+615..624 'self.name': string
+653..665 'df_field_use': throws never
+697..717 '{\n   ...e()\n}': string
+703..713 'p.describe': (self: user.DfP) -> string throws never
+703..715 'p.describe()': string

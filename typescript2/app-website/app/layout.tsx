@@ -62,7 +62,7 @@ export const metadata: Metadata = {
     description: homeDescription,
     images: [
       {
-        alt: 'BAML — the programming language for agents',
+        alt: 'BAML: the programming language for agents',
         height: 630,
         url: homeOgImage,
         width: 1200,
@@ -70,12 +70,12 @@ export const metadata: Metadata = {
     ],
     locale: 'en_US',
     siteName: 'BAML',
-    title: 'BAML — the programming language for agents',
+    title: 'BAML: the programming language for agents',
     type: 'website',
     url: baseUrl,
   },
   title: {
-    default: 'BAML — the programming language for agents',
+    default: 'BAML: the programming language for agents',
     template: '%s | BAML',
   },
   twitter: {
@@ -84,7 +84,7 @@ export const metadata: Metadata = {
     description: homeDescription,
     images: [homeOgImage],
     site: TWITTER_HANDLE,
-    title: 'BAML — the programming language for agents',
+    title: 'BAML: the programming language for agents',
   },
 };
 
