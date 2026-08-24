@@ -18,8 +18,8 @@ use crate::{
         AssociatedTypeBindingDef, AssociatedTypeDef, BuiltinKind, CallArg, EnumDef, Expr, ExprId,
         FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, ImplementsBlockDef,
         ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Item, LambdaDef, LambdaKind,
-        LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, RawPrompt,
-        TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
+        LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, TemplateStringDef,
+        TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -949,15 +949,6 @@ fn tools_value_element(
         .and_then(ast::ToolsField::value_element)
 }
 
-fn lower_raw_prompt(raw_string: &ast::RawStringLiteral) -> RawPrompt {
-    let prompt_span = raw_string.syntax().span_range();
-    RawPrompt {
-        text: crate::parse_string_attr_value(&raw_string.syntax().text().to_string())
-            .unwrap_or_default(),
-        span: prompt_span,
-    }
-}
-
 fn lower_class(
     node: &SyntaxNode,
     diags: &mut Vec<LoweringDiagnostic>,
@@ -1741,6 +1732,13 @@ fn lower_test_arg_item(item: &ast::ConfigItem) -> TestArgValue {
 }
 
 fn lower_test_arg_config_value(value: &SyntaxNode) -> TestArgValue {
+    if value
+        .descendants()
+        .any(|node| node.kind() == SyntaxKind::RAW_STRING_LITERAL)
+    {
+        return TestArgValue::Null;
+    }
+
     if let Some(array) = value
         .children()
         .find(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)
@@ -2271,12 +2269,9 @@ fn lower_template_string(
         .map(|pl| lower_params(&pl, &ts_name, &context, diags))
         .unwrap_or_default();
 
-    let body = ts.raw_string().map(|rs| lower_raw_prompt(&rs));
-
     Some(TemplateStringDef {
         name: Name::new(name_token.text()),
         params,
-        body,
         span: node.span_range(),
         name_span: name_token.text_range(),
     })
