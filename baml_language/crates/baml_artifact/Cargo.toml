@@ -15,6 +15,9 @@ build = "build.rs"
 [lib]
 doctest = false
 
+[features]
+test-support = [  ]
+
 [lints]
 workspace = true
 

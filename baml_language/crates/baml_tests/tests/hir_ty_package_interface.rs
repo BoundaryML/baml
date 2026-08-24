@@ -91,9 +91,14 @@ fn library_db() -> ProjectDatabase {
 }
 
 fn library_blob() -> Vec<u8> {
+    library_blob_with_format(baml_artifact::FORMAT_VERSION)
+}
+
+fn library_blob_with_format(artifact_format: u32) -> Vec<u8> {
     let db = library_db();
     assert_no_diagnostic_errors(&db);
-    baml_artifact::encode(
+    baml_artifact::encode_with_format_for_test(
+        artifact_format,
         baml_artifact::ArtifactKind::PackageInterface,
         package_interface(&db, PackageId::new(&db, Name::new("app"))),
     )
@@ -102,12 +107,10 @@ fn library_blob() -> Vec<u8> {
 
 #[test]
 fn mounted_interface_skew_is_rejected_before_installation() {
-    let mut blob = library_blob();
-    blob[baml_artifact::MAGIC.len()..baml_artifact::MAGIC.len() + size_of::<u32>()]
-        .copy_from_slice(&(baml_artifact::FORMAT_VERSION + 1).to_le_bytes());
+    let blob = library_blob_with_format(baml_artifact::FORMAT_VERSION + 1);
 
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("/hir-ty-package-interface-skew"));
+    db.workspace(std::path::Path::new("/hir-ty-package-interface-skew"));
     let error = db
         .set_mounted_packages([("app".to_owned(), blob)].into())
         .unwrap_err();

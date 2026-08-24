@@ -134,6 +134,21 @@ pub fn encode<T: BorshSerialize>(kind: ArtifactKind, value: &T) -> Result<Vec<u8
     encode_payload(kind, &payload)
 }
 
+/// Encode a value with an explicit artifact format for cross-crate skew tests.
+#[cfg(feature = "test-support")]
+#[doc(hidden)]
+pub fn encode_with_format_for_test<T: BorshSerialize>(
+    artifact_format: u32,
+    kind: ArtifactKind,
+    value: &T,
+) -> Result<Vec<u8>, Error> {
+    let payload = borsh::to_vec(value).map_err(|error| Error::Encode {
+        kind,
+        message: error.to_string(),
+    })?;
+    encode_payload_with_metadata(artifact_format, BUILD_FINGERPRINT, kind, &payload)
+}
+
 /// Wrap an already-serialized payload in a versioned artifact envelope.
 pub fn encode_payload(kind: ArtifactKind, payload: &[u8]) -> Result<Vec<u8>, Error> {
     encode_payload_with_metadata(FORMAT_VERSION, BUILD_FINGERPRINT, kind, payload)

@@ -49,7 +49,7 @@ wasm-bindgen-futures = { workspace = true }
 cbindgen = { workspace = true }
 
 [dev-dependencies]
-baml_artifact = { workspace = true }
+baml_artifact = { workspace = true, features = [ "test-support" ] }
 
 [package.metadata.ci]
 wasm_support = true

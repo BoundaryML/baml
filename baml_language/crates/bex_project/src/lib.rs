@@ -217,10 +217,12 @@ mod bytecode_artifact_tests {
 
     #[test]
     fn rejects_format_skew_before_decoding_the_program() {
-        let mut bytecode =
-            baml_artifact::encode(baml_artifact::ArtifactKind::Program, &7_u32).unwrap();
-        bytecode[baml_artifact::MAGIC.len()..baml_artifact::MAGIC.len() + size_of::<u32>()]
-            .copy_from_slice(&(baml_artifact::FORMAT_VERSION + 1).to_le_bytes());
+        let bytecode = baml_artifact::encode_with_format_for_test(
+            baml_artifact::FORMAT_VERSION + 1,
+            baml_artifact::ArtifactKind::Program,
+            &7_u32,
+        )
+        .unwrap();
 
         let Err(error) = new_from_bytecode(&bytecode, sys_ops::SysOps::native()) else {
             panic!("format-skewed bytecode must fail");
