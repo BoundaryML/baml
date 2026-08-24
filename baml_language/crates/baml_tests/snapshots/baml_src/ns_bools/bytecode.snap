@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function bools.$init_test_ns_bools_bools(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.bools"
+    load_const "bool_random"
+    make_closure .<lambda($init_test_ns_bools_bools, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function bools.FixedBoolRng.baml.random.Rng.random(self: bools.FixedBoolRng, bytes: int) -> uint8array {
+    load_var self
+    load_field .draw
+    return
+}

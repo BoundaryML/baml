@@ -834,6 +834,7 @@ function optional_chain_type_args.optional_chain_tmp_path(name: string) -> strin
     store_var _6
     load_const 0
     load_const 1000000000
+    load_const <omitted>
     call baml.Int.random
     store_var _11
     load_type int
