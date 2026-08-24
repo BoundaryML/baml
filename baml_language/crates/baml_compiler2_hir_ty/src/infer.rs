@@ -31,7 +31,7 @@ use baml_compiler2_ast::{
 };
 use baml_compiler2_hir::{
     body::BodyOwnerId,
-    body_type_refs::{BodyTypeArgRef, BodyTypeRefs},
+    body_type_refs::{BodyTypeArgRef, BodyTypeRefId, BodyTypeRefs},
     contributions::Definition,
     scope::FileScopeId,
     semantic_index::{
@@ -627,7 +627,7 @@ enum TaggedTagIssue {
 /// body-position type annotation's ref.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum HoleAnchor {
-    TypeRef(baml_compiler2_hir::type_ref::TypeRefId),
+    TypeRef(BodyTypeRefId),
 }
 
 /// S17 pending diagnostic (engine-internal): arena-anchored, payload
@@ -663,7 +663,7 @@ enum PendingDiag<'db> {
     /// A body annotation failing the written-type well-formedness
     /// judgment (generic-argument bounds).
     AnnotWf {
-        type_ref: baml_compiler2_hir::type_ref::TypeRefId,
+        type_ref: BodyTypeRefId,
         error: crate::diagnostics::TirTypeError,
     },
     /// A tagged-template tag failing BEP-049 SS10's contract.
@@ -962,7 +962,7 @@ enum PendingDiag<'db> {
         rhs: Option<Ty>,
     },
     BodyAnnot {
-        type_ref: baml_compiler2_hir::type_ref::TypeRefId,
+        type_ref: BodyTypeRefId,
         kind: crate::lower::LoweringDiagKind,
     },
     InterpolatedMaybeNull {
@@ -1349,8 +1349,7 @@ fn infer_body_impl<'db>(
         .with_frame(frame)
         .with_bounds(bounds.clone())
         .with_self_ty(concrete_self)
-        .with_impl_target(impl_target)
-        .with_diagnostics();
+        .with_impl_target(impl_target);
     let type_refs = baml_compiler2_ppir::body_type_refs(db, owner);
     let plain_bounds = bounds
         .into_iter()
@@ -1624,9 +1623,9 @@ struct InferenceContext<'db> {
     /// One lowering per written body annotation (rust-analyzer's
     /// discipline): the let rule, the pattern walk, and the backfill all
     /// read the SAME lowered type - and so the same instantiated hole
-    /// vars - for one `TypeRefId`. Without this, a `_` hole instantiates
+    /// vars - for one `BodyTypeRefId`. Without this, a `_` hole instantiates
     /// once per consumer and only the demand-connected copy solves.
-    annotation_cache: FxHashMap<baml_compiler2_hir::type_ref::TypeRefId, Ty>,
+    annotation_cache: FxHashMap<BodyTypeRefId, Ty>,
     /// Per-body memoization of ground canonical forms. Inference-bearing types
     /// bypass it because their meaning changes as the table solves variables.
     canonical_cache: baml_type::normalize::InternedCanonicalCache,
@@ -2208,11 +2207,11 @@ impl<'db> InferenceContext<'db> {
                     .get(&expr)
                     .copied()
                     .map(|target_ref| {
-                        let lowered = self.lower_scoped_type_ref_at(
-                            &self.type_refs.store,
+                        let (lowered, diagnostics) = self.lower_scoped_body_type_ref_at(
                             target_ref,
                             crate::lower::TypePosition::Existential,
                         );
+                        self.queue_body_lowering_diagnostics(diagnostics);
                         self.reject_expr_position_holes(&lowered, expr)
                     })
                     .unwrap_or_else(Ty::error);
@@ -2939,18 +2938,29 @@ impl<'db> InferenceContext<'db> {
             .map(|binding| &binding.parameter)
     }
 
-    fn lower_scoped_type_ref_at(
+    fn lower_scoped_body_type_ref_at(
         &self,
-        store: &baml_compiler2_hir::type_ref::TypeRefStore,
-        type_ref: baml_compiler2_hir::type_ref::TypeRefId,
+        type_ref: BodyTypeRefId,
         position: crate::lower::TypePosition,
-    ) -> Ty {
-        self.lower.lower_type_ref_with_overlay(
-            store,
-            type_ref,
+    ) -> (Ty, Vec<crate::lower::LoweringDiag>) {
+        self.lower.lower_type_ref_with_overlay_and_diagnostics(
+            &self.type_refs.store,
+            self.type_refs.raw_id(type_ref),
             position,
             &self.scoped_type_params(),
         )
+    }
+
+    fn queue_body_lowering_diagnostics(&mut self, diagnostics: Vec<crate::lower::LoweringDiag>) {
+        self.pending_diags
+            .extend(
+                diagnostics
+                    .into_iter()
+                    .map(|diagnostic| PendingDiag::BodyAnnot {
+                        type_ref: self.type_refs.diagnostic_id(diagnostic.type_ref),
+                        kind: diagnostic.kind,
+                    }),
+            );
     }
 
     fn lower_scoped_type_path(&self, segments: &[baml_type::Name]) -> Ty {
@@ -6570,7 +6580,8 @@ impl<'db> InferenceContext<'db> {
         let member = member.clone();
 
         let lower = |this: &mut Self, type_ref, position| {
-            let ty = this.lower_scoped_type_ref_at(&this.type_refs.store, type_ref, position);
+            let (ty, diagnostics) = this.lower_scoped_body_type_ref_at(type_ref, position);
+            this.queue_body_lowering_diagnostics(diagnostics);
             this.reject_expr_position_holes(&ty, expr)
         };
         let qself = lower(self, anchors.qself, crate::lower::TypePosition::Existential);
@@ -7758,10 +7769,17 @@ impl<'db> InferenceContext<'db> {
             match slot {
                 BodyTypeArgRef::Static(type_ref) => {
                     let computed = self.computed_generic_argument_name(*type_ref, site);
-                    let lowered =
-                        self.lower_scoped_type_ref_at(&self.type_refs.store, *type_ref, position);
+                    let (lowered, diagnostics) =
+                        self.lower_scoped_body_type_ref_at(*type_ref, position);
                     if let Some(name) = computed {
-                        self.specialize_computed_generic_diagnostic(*type_ref, site, &name);
+                        self.specialize_computed_generic_diagnostic(
+                            diagnostics,
+                            *type_ref,
+                            site,
+                            &name,
+                        );
+                    } else {
+                        self.queue_body_lowering_diagnostics(diagnostics);
                     }
                     let ty = self.reject_expr_position_holes(&lowered, site);
                     slots.push(CallTypeArgPlan::Static {
@@ -7998,11 +8016,11 @@ impl<'db> InferenceContext<'db> {
 
     fn computed_generic_argument_name(
         &self,
-        type_ref: baml_compiler2_hir::type_ref::TypeRefId,
+        type_ref: BodyTypeRefId,
         site: ExprId,
     ) -> Option<baml_type::Name> {
         use baml_compiler2_hir::type_ref::TypeRefKind;
-        let written = &self.type_refs.store[type_ref];
+        let written = &self.type_refs.store[self.type_refs.raw_id(type_ref)];
         let TypeRefKind::Path {
             segments,
             generic_args,
@@ -8031,18 +8049,19 @@ impl<'db> InferenceContext<'db> {
         (is_value && !is_type).then(|| name.clone())
     }
 
-    /// Replace the lowering sink's generic unresolved-type finding for a
-    /// value-shaped slot with M-1's targeted whole-slot diagnostic. Any other
-    /// lowering findings already queued retain their original anchors.
+    /// Replace a generic unresolved-type finding for a value-shaped slot with
+    /// M-1's targeted whole-slot diagnostic. Any other findings from the same
+    /// lowering operation retain their original anchors.
     fn specialize_computed_generic_diagnostic(
         &mut self,
-        type_ref: baml_compiler2_hir::type_ref::TypeRefId,
+        diagnostics: Vec<crate::lower::LoweringDiag>,
+        type_ref: BodyTypeRefId,
         site: ExprId,
         name: &baml_type::Name,
     ) {
         let mut replaced = false;
-        for lowering in self.lower.take_diagnostics() {
-            if lowering.type_ref == type_ref
+        for lowering in diagnostics {
+            if lowering.type_ref == self.type_refs.raw_id(type_ref)
                 && matches!(
                     &lowering.kind,
                     crate::lower::LoweringDiagKind::Unresolved { name: unresolved, .. }
@@ -8052,7 +8071,7 @@ impl<'db> InferenceContext<'db> {
                 replaced = true;
             } else {
                 self.pending_diags.push(PendingDiag::BodyAnnot {
-                    type_ref: lowering.type_ref,
+                    type_ref: self.type_refs.diagnostic_id(lowering.type_ref),
                     kind: lowering.kind,
                 });
             }
@@ -9248,15 +9267,13 @@ impl<'db> InferenceContext<'db> {
     /// One body-position annotation, lowered and hole-instantiated - the
     /// single entry for every type written inside a body (let ascriptions,
     /// lambda signature slots, turbofish go through `instantiation_args`).
-    fn lower_body_annotation(&mut self, type_ref: baml_compiler2_hir::type_ref::TypeRefId) -> Ty {
+    fn lower_body_annotation(&mut self, type_ref: BodyTypeRefId) -> Ty {
         if let Some(cached) = self.annotation_cache.get(&type_ref) {
             return cached.clone();
         }
-        let lowered = self.lower_scoped_type_ref_at(
-            &self.type_refs.store,
-            type_ref,
-            crate::lower::TypePosition::Existential,
-        );
+        let (lowered, diagnostics) =
+            self.lower_scoped_body_type_ref_at(type_ref, crate::lower::TypePosition::Existential);
+        self.queue_body_lowering_diagnostics(diagnostics);
         // Written-type well-formedness (rustc's wfcheck at body
         // annotations): generic arguments must satisfy their heads'
         // declared bounds. Hole-carrying annotations skip - their holes
@@ -10054,14 +10071,6 @@ impl<'db> InferenceContext<'db> {
                     related: Vec::new(),
                 });
             }
-            // The body LowerCtx's sink: every written annotation whose
-            // path resolved nowhere (E0002), anchored at its TypeRefId.
-            for lowering in self.lower.take_diagnostics() {
-                self.pending_diags.push(PendingDiag::BodyAnnot {
-                    type_ref: lowering.type_ref,
-                    kind: lowering.kind,
-                });
-            }
             // A `_` hole that never solved reports E0147 at the hole
             // (rustc's E0282). One WRITTEN hole may instantiate several
             // times (the typing drive and the pattern walk both lower the
@@ -10085,7 +10094,7 @@ impl<'db> InferenceContext<'db> {
                     continue;
                 }
                 let location = match at {
-                    HoleAnchor::TypeRef(type_ref) => DiagnosticLocation::TypeRef(type_ref),
+                    HoleAnchor::TypeRef(type_ref) => DiagnosticLocation::BodyTypeRef(type_ref),
                 };
                 diags.push(TirDiagnostic {
                     error: TirTypeError::CannotInferType,
@@ -10151,7 +10160,7 @@ impl<'db> InferenceContext<'db> {
                         diags.push(TirDiagnostic {
                             error,
                             severity: DiagnosticSeverity::Error,
-                            primary: DiagnosticLocation::TypeRef(type_ref),
+                            primary: DiagnosticLocation::BodyTypeRef(type_ref),
                             related: Vec::new(),
                         });
                         continue;
@@ -10897,7 +10906,7 @@ impl<'db> InferenceContext<'db> {
                         diags.push(TirDiagnostic {
                             error: crate::lower::lowering_diag_error(&kind),
                             severity: DiagnosticSeverity::Error,
-                            primary: DiagnosticLocation::TypeRef(type_ref),
+                            primary: DiagnosticLocation::BodyTypeRef(type_ref),
                             related: Vec::new(),
                         });
                         continue;
@@ -10941,7 +10950,9 @@ impl<'db> InferenceContext<'db> {
                 DiagnosticLocation::Stmt(id) => (1, u32::from(id.into_raw())),
                 DiagnosticLocation::TypeAnnot(id) => (2, u32::from(id.into_raw())),
                 DiagnosticLocation::Pat(id) => (4, u32::from(id.into_raw())),
-                DiagnosticLocation::TypeRef(id) => (5, u32::from(id.into_raw())),
+                DiagnosticLocation::BodyTypeRef(id) => {
+                    (5, u32::from(self.type_refs.raw_id(id).into_raw()))
+                }
                 DiagnosticLocation::UnreflectArg { carrier, .. } => {
                     (6, u32::from(carrier.into_raw()))
                 }

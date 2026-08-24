@@ -44,9 +44,10 @@ enum ResolvedTypeDefinition<'db> {
 
 /// Everything needed to lower type syntax appearing in one file, for one
 /// generic frame.
-/// One unresolved written type (E0002), anchored at its `TypeRefId` -
-/// r-a's `TyLoweringDiagnostic` shape (ids here; the check layer resolves
-/// spans through the body's `TypeRefSourceMap` on demand).
+/// One unresolved written type (E0002), anchored at its `TypeRefId`.
+///
+/// The caller resolves the id through the source map paired with the store
+/// passed to the one-shot lowering operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoweringDiag {
     pub type_ref: TypeRefId,
@@ -100,8 +101,8 @@ pub enum TypePosition {
 }
 
 pub struct LowerCtx<'db> {
-    /// Sink for lowering diagnostics, enabled by [`LowerCtx::with_diagnostics`]
-    /// (signatures/declarations lower without one; bodies collect).
+    /// A short-lived sink used only by the one-shot diagnostic lowering APIs.
+    /// Persistent lowering contexts never retain diagnostics across stores.
     diags: Option<std::cell::RefCell<Vec<LoweringDiag>>>,
     /// The innermost `TypeRefId` currently lowering - the anchor an
     /// unresolved path reports at.
@@ -174,14 +175,6 @@ pub fn lower_ctx_for_package<'db>(
 }
 
 impl<'db> LowerCtx<'db> {
-    /// Enable the lowering-diagnostic sink (bodies; declarations lower
-    /// silent). Drain with [`LowerCtx::take_diagnostics`].
-    #[must_use]
-    pub fn with_diagnostics(mut self) -> LowerCtx<'db> {
-        self.diags = Some(std::cell::RefCell::new(Vec::new()));
-        self
-    }
-
     /// The namespace path this context resolves relative names in.
     pub fn namespace_context(&self) -> &[Name] {
         &self.ns_context
@@ -205,7 +198,7 @@ impl<'db> LowerCtx<'db> {
         }
     }
 
-    pub fn take_diagnostics(&self) -> Vec<LoweringDiag> {
+    fn take_diagnostics(&self) -> Vec<LoweringDiag> {
         self.diags
             .as_ref()
             .map(|cell| std::mem::take(&mut *cell.borrow_mut()))
@@ -252,6 +245,27 @@ impl<'db> LowerCtx<'db> {
         self.lower_type_ref_at(store, id, TypePosition::Existential)
     }
 
+    /// Lower one type-reference tree and return only the diagnostics produced
+    /// by that tree. The sink cannot outlive this call, so arena-local ids can
+    /// never leak into diagnostics from a later store.
+    pub fn lower_type_ref_with_diagnostics(
+        &self,
+        store: &TypeRefStore,
+        id: TypeRefId,
+    ) -> (Ty, Vec<LoweringDiag>) {
+        self.lower_type_ref_at_with_diagnostics(store, id, TypePosition::Existential)
+    }
+
+    /// [`Self::lower_type_ref_with_diagnostics`] at an explicit position.
+    pub fn lower_type_ref_at_with_diagnostics(
+        &self,
+        store: &TypeRefStore,
+        id: TypeRefId,
+        position: TypePosition,
+    ) -> (Ty, Vec<LoweringDiag>) {
+        self.lower_type_ref_with_overlay_and_diagnostics(store, id, position, &[])
+    }
+
     /// [`Self::lower_type_ref`] at an explicit [`TypePosition`]. The
     /// position applies to the reference's HEAD only; nested references
     /// (generic args, union members, binding values) are existential.
@@ -287,6 +301,21 @@ impl<'db> LowerCtx<'db> {
         ty
     }
 
+    /// Diagnostic-producing counterpart to
+    /// [`Self::lower_type_ref_with_overlay`]. The returned diagnostics are
+    /// scoped to `store` and this call only.
+    pub fn lower_type_ref_with_overlay_and_diagnostics(
+        &self,
+        store: &TypeRefStore,
+        id: TypeRefId,
+        position: TypePosition,
+        overlay: &[ParamTy],
+    ) -> (Ty, Vec<LoweringDiag>) {
+        let fork = self.fork_with_overlay_and_diagnostics(overlay);
+        let ty = fork.lower_type_ref_at(store, id, position);
+        (ty, fork.take_diagnostics())
+    }
+
     /// [`Self::lower_type_path`] through the same body-local overlay.
     pub fn lower_type_path_with_overlay(&self, segments: &[Name], overlay: &[ParamTy]) -> Ty {
         if overlay.is_empty() {
@@ -315,6 +344,12 @@ impl<'db> LowerCtx<'db> {
             self_impl_target: self.self_impl_target.clone(),
             bounds: self.bounds.clone(),
         }
+    }
+
+    fn fork_with_overlay_and_diagnostics(&self, overlay: &[ParamTy]) -> LowerCtx<'db> {
+        let mut fork = self.fork_with_overlay(overlay);
+        fork.diags = Some(std::cell::RefCell::new(Vec::new()));
+        fork
     }
 
     fn merge_fork_diagnostics(&self, fork: &LowerCtx<'db>) {
@@ -2119,6 +2154,19 @@ pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTy
     }
 }
 
+fn extend_lowering_diagnostics(
+    out: &mut Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)>,
+    source_map: &baml_compiler2_hir::type_ref::TypeRefSourceMap,
+    diagnostics: Vec<LoweringDiag>,
+) {
+    out.extend(diagnostics.into_iter().map(|diag| {
+        (
+            source_map.span(diag.type_ref),
+            lowering_diag_error(&diag.kind),
+        )
+    }));
+}
+
 /// Whether a declared throws clause is an open contract: it names `unknown`
 /// directly, through a union member, or through a type alias. An open
 /// contract deliberately admits any thrown value, so throws-coverage
@@ -2167,8 +2215,7 @@ pub fn signature_lowering_diagnostics<'db>(
         .with_frame(frame)
         .with_bounds(bounds)
         .with_self_ty(concrete_self)
-        .with_impl_target(impl_target)
-        .with_diagnostics();
+        .with_impl_target(impl_target);
     // Params/ret/throws lowered from the ELABORATED store: their ids index
     // the elaborated source map, not the written one (the two stores number
     // independently - a raw-map lookup here is an out-of-bounds panic on any
@@ -2179,13 +2226,14 @@ pub fn signature_lowering_diagnostics<'db>(
     // judged for generic-argument well-formedness (rustc's wfcheck:
     // `Box<int>` under `class Box<T extends Named>` reports here).
     let scope_env = plain_scope_bounds(function_generic_bounds(db, function));
-    let mut wf: Vec<(text_size::TextRange, TirTypeError)> = Vec::new();
+    let mut out: Vec<(text_size::TextRange, TirTypeError)> = Vec::new();
     let mut lower_and_judge = |type_ref: baml_compiler2_hir::type_ref::TypeRefId| {
-        let lowered = ctx.lower_type_ref(&data.type_refs, type_ref);
+        let (lowered, diagnostics) = ctx.lower_type_ref_with_diagnostics(&data.type_refs, type_ref);
+        extend_lowering_diagnostics(&mut out, &elaborated_map.type_refs, diagnostics);
         for error in
             crate::interfaces::type_generic_bound_errors(db, &scope_env, &lowered.to_plain())
         {
-            wf.push((elaborated_map.type_refs.span(type_ref), error));
+            out.push((elaborated_map.type_refs.span(type_ref), error));
         }
     };
     for param in &data.params {
@@ -2204,17 +2252,6 @@ pub fn signature_lowering_diagnostics<'db>(
     if let Some(throws) = data.throws {
         lower_and_judge(throws);
     }
-    let mut out: Vec<(text_size::TextRange, TirTypeError)> = ctx
-        .take_diagnostics()
-        .into_iter()
-        .map(|diag| {
-            (
-                elaborated_map.type_refs.span(diag.type_ref),
-                lowering_diag_error(&diag.kind),
-            )
-        })
-        .collect();
-    out.extend(wf);
     // A bound must name an interface DIRECTLY (E0145): an alias denotes
     // a type, never the interface itself. `function_generic_bounds`
     // silently skips such bounds; the diagnostic walk names them. Bounds
@@ -2227,8 +2264,12 @@ pub fn signature_lowering_diagnostics<'db>(
         .iter()
         .flat_map(|g| g.bounds.iter())
     {
-        let lowered =
-            ctx.lower_type_ref_at(&func_data.type_refs, *bound, TypePosition::ConstraintHead);
+        let (lowered, diagnostics) = ctx.lower_type_ref_at_with_diagnostics(
+            &func_data.type_refs,
+            *bound,
+            TypePosition::ConstraintHead,
+        );
+        extend_lowering_diagnostics(&mut out, &source_map.type_refs, diagnostics);
         match lowered.kind() {
             // The compiler-derived builtin interface is a VALUE type,
             // never a bound (E0154).
@@ -2256,14 +2297,6 @@ pub fn signature_lowering_diagnostics<'db>(
             }
         }
     }
-    // The bounds walk's own sink records (an unresolved name INSIDE a
-    // bound's arguments) - written-store ids, written-map spans.
-    out.extend(ctx.take_diagnostics().into_iter().map(|diag| {
-        (
-            source_map.type_refs.span(diag.type_ref),
-            lowering_diag_error(&diag.kind),
-        )
-    }));
     out
 }
 
@@ -2368,8 +2401,7 @@ pub fn class_lowering_diagnostics<'db>(
     let frame = class_generic_frame(db, class);
     let ctx = lower_ctx_for_file(db, class.file(db))
         .with_frame(frame)
-        .with_bounds(class_generic_bounds(db, class))
-        .with_diagnostics();
+        .with_bounds(class_generic_bounds(db, class));
     let source_map = baml_compiler2_ppir::item_data::class_source_map(db, class);
     let mut out = Vec::new();
     // Field annotations: every written field type re-lowers with the sink
@@ -2377,7 +2409,9 @@ pub fn class_lowering_diagnostics<'db>(
     // and is judged for generic-argument well-formedness.
     let scope_env = plain_scope_bounds(class_generic_bounds(db, class));
     for field in &data.fields {
-        let lowered = ctx.lower_type_ref(&data.type_refs, field.type_ref);
+        let (lowered, diagnostics) =
+            ctx.lower_type_ref_with_diagnostics(&data.type_refs, field.type_ref);
+        extend_lowering_diagnostics(&mut out, &source_map.type_refs, diagnostics);
         for error in
             crate::interfaces::type_generic_bound_errors(db, &scope_env, &lowered.to_plain())
         {
@@ -2385,7 +2419,12 @@ pub fn class_lowering_diagnostics<'db>(
         }
     }
     for bound in data.generic_params.iter().flat_map(|g| g.bounds.iter()) {
-        let lowered = ctx.lower_type_ref_at(&data.type_refs, *bound, TypePosition::ConstraintHead);
+        let (lowered, diagnostics) = ctx.lower_type_ref_at_with_diagnostics(
+            &data.type_refs,
+            *bound,
+            TypePosition::ConstraintHead,
+        );
+        extend_lowering_diagnostics(&mut out, &source_map.type_refs, diagnostics);
         match lowered.kind() {
             TyKind::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
                 out.push((
@@ -2411,12 +2450,6 @@ pub fn class_lowering_diagnostics<'db>(
             }
         }
     }
-    out.extend(ctx.take_diagnostics().into_iter().map(|diag| {
-        (
-            source_map.type_refs.span(diag.type_ref),
-            lowering_diag_error(&diag.kind),
-        )
-    }));
     out
 }
 
@@ -2432,8 +2465,7 @@ pub fn interface_lowering_diagnostics<'db>(
     let frame = interface_frame(db, interface);
     let ctx = lower_ctx_for_file(db, interface.file(db))
         .with_frame(frame)
-        .with_bounds(interface_scope_bounds(db, interface))
-        .with_diagnostics();
+        .with_bounds(interface_scope_bounds(db, interface));
     let source_map = baml_compiler2_ppir::item_data::interface_source_map(db, interface);
     let mut out = Vec::new();
     // Field and required-method annotations judge for generic-argument
@@ -2441,7 +2473,8 @@ pub fn interface_lowering_diagnostics<'db>(
     let scope_env = plain_scope_bounds(interface_scope_bounds(db, interface));
     let judge = |type_ref: baml_compiler2_hir::type_ref::TypeRefId,
                  out: &mut Vec<(text_size::TextRange, TirTypeError)>| {
-        let lowered = ctx.lower_type_ref(&data.type_refs, type_ref);
+        let (lowered, diagnostics) = ctx.lower_type_ref_with_diagnostics(&data.type_refs, type_ref);
+        extend_lowering_diagnostics(out, &source_map.type_refs, diagnostics);
         for error in
             crate::interfaces::type_generic_bound_errors(db, &scope_env, &lowered.to_plain())
         {
@@ -2566,7 +2599,12 @@ pub fn interface_lowering_diagnostics<'db>(
         ));
     }
     for &target in &data.requires {
-        let lowered = ctx.lower_type_ref_at(&data.type_refs, target, TypePosition::ConstraintHead);
+        let (lowered, diagnostics) = ctx.lower_type_ref_at_with_diagnostics(
+            &data.type_refs,
+            target,
+            TypePosition::ConstraintHead,
+        );
+        extend_lowering_diagnostics(&mut out, &source_map.type_refs, diagnostics);
         if !lowered.has_error() && !matches!(lowered.kind(), TyKind::Interface(..)) {
             out.push((
                 source_map.type_refs.span(target),
@@ -2577,12 +2615,6 @@ pub fn interface_lowering_diagnostics<'db>(
             ));
         }
     }
-    out.extend(ctx.take_diagnostics().into_iter().map(|diag| {
-        (
-            source_map.type_refs.span(diag.type_ref),
-            lowering_diag_error(&diag.kind),
-        )
-    }));
     out
 }
 
@@ -2625,19 +2657,11 @@ pub fn type_alias_lowering_diagnostics<'db>(
     let Some(value) = data.value else {
         return Vec::new();
     };
-    let ctx = lower_ctx_for_file(db, alias.file(db)).with_diagnostics();
-    let lowered = ctx.lower_type_ref(&data.type_refs, value);
+    let ctx = lower_ctx_for_file(db, alias.file(db));
+    let (lowered, diagnostics) = ctx.lower_type_ref_with_diagnostics(&data.type_refs, value);
     let source_map = baml_compiler2_ppir::item_data::type_alias_source_map(db, alias);
-    let mut out: Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> = ctx
-        .take_diagnostics()
-        .into_iter()
-        .map(|diag| {
-            (
-                source_map.type_refs.span(diag.type_ref),
-                lowering_diag_error(&diag.kind),
-            )
-        })
-        .collect();
+    let mut out = Vec::new();
+    extend_lowering_diagnostics(&mut out, &source_map.type_refs, diagnostics);
     // The RHS judges for generic-argument well-formedness (aliases are
     // non-generic, so the scope env is empty). The walk expands nested
     // aliases itself; judging the WRITTEN body here keeps one report at
