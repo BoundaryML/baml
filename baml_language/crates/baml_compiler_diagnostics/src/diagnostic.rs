@@ -392,6 +392,8 @@ pub enum DiagnosticId {
     /// declared interface bound, or any at all for a callable with nothing
     /// left to bind.
     ReflectSpecializationFailed,
+    /// An ordinary inference variable remained unresolved at writeback (E0155).
+    TypeMustBeKnown,
 }
 
 impl DiagnosticId {
@@ -601,6 +603,7 @@ impl DiagnosticId {
             // E0167 is owned by the always-constant-condition lint in #4498.
             DiagnosticId::RuntimeTypeMustBeNamed => "E0168",
             DiagnosticId::ReflectSpecializationFailed => "E0169",
+            DiagnosticId::TypeMustBeKnown => "E0155",
         }
     }
 }
