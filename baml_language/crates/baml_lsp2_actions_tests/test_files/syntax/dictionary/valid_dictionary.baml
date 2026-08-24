@@ -7,9 +7,9 @@ client<llm> MyClient {
     array_key_with_quoted_unquoted [ "abc", "abc", "ccc" ]
     // separate by commas
     key2 "some random value", hello "world", thing "hello"
-     block_string #"hello there my frien
-                d"#
-    inline_raw_string #"inline "raw" string,,"#
+     block_string "hello there my frien
+                d"
+    inline_raw_string "inline \"raw\" string,,"
     "string key" "value with spaces"
     booleanValue true
     stringKey "true"
@@ -44,10 +44,10 @@ client<llm> MyClient {
         another_tool "value"
       }
     ]
-    block_string #"
+    block_string "
       hello there my friend
-      raw strings preserve their contents
-    "#
+      quoted strings preserve their contents
+    "
   }
 }
 
@@ -67,9 +67,9 @@ client<llm> MyClient {
 //   7 │ │       array_key_with_quoted_unquoted [ "abc", "abc", "ccc" ]
 //   8 │ │       // separate by commas
 //   9 │ │       key2 "some random value", hello "world", thing "hello"
-//  10 │ │        block_string #"hello there my frien
-//  11 │ │                   d"#
-//  12 │ │       inline_raw_string #"inline "raw" string,,"#
+//  10 │ │        block_string "hello there my frien
+//  11 │ │                   d"
+//  12 │ │       inline_raw_string "inline \"raw\" string,,"
 //  13 │ │       "string key" "value with spaces"
 //  14 │ │       booleanValue true
 //  15 │ │       stringKey "true"
@@ -104,10 +104,10 @@ client<llm> MyClient {
 //  44 │ │           another_tool "value"
 //  45 │ │         }
 //  46 │ │       ]
-//  47 │ │       block_string #"
+//  47 │ │       block_string "
 //  48 │ │         hello there my friend
-//  49 │ │         raw strings preserve their contents
-//  50 │ │       "#
+//  49 │ │         quoted strings preserve their contents
+//  50 │ │       "
 //  51 │ │     }
 //  52 │ ├─▶ }
 //     · ╰──── replace with `client Name = <expr>;`

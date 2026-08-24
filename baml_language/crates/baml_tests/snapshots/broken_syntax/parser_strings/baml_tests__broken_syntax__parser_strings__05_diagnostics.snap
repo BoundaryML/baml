@@ -233,6 +233,45 @@ source: crates/baml_tests/src/generated_tests.rs
     ·           ────
     ╰────
 
+  [parse] E0098
+
+  × removed language feature
+   ╭─[raw_strings.baml:3:30]
+ 3 │   simple string @description(#"raw string"#)
+   ·                              ───────┬──────
+   ·                                     ╰── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+   ╰────
+
+  [parse] E0098
+
+  × removed language feature
+   ╭─[raw_strings.baml:4:35]
+ 4 │   with_quotes string @description(#"contains "quotes" easily"#)
+   ·                                   ──────────────┬─────────────
+   ·                                                 ╰── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+   ╰────
+
+  [parse] E0098
+
+  × removed language feature
+   ╭─[raw_strings.baml:5:34]
+ 5 │   multi_hash string @description(##"contains #"hash"# inside"##)
+   ·                                  ───────────────┬──────────────
+   ·                                                 ╰── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+   ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[raw_strings.baml:6:33]
+  6 │ ╭─▶   multiline string @description(###"
+  7 │ │       This is a multiline
+  8 │ │       raw string with "quotes"
+  9 │ │       and #hashes#
+ 10 │ ├─▶   "###)
+    · ╰──── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+    ╰────
+
   [type] E0003
 
   × unresolved name: `GPT4`

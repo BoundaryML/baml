@@ -1,9 +1,9 @@
 class TestClassAlias {
   key string @alias("key-dash")
-  @description(#"
+  @description("
      This is a description for key
      af asdf
-   "#)
+   ")
   key2 string @alias("key21") @alias("key22")
   key3 string @alias("key with space")
   key4 string @alias("key.with.punctuation/123")
@@ -76,18 +76,7 @@ class HasThreeBlockAttributes {
 // block_attributes.baml:2:21 (string) len=10 "\"key-dash\""
 // block_attributes.baml:3:3 (decorator) len=1 "@"
 // block_attributes.baml:3:4 (decorator) len=11 "description"
-// block_attributes.baml:3:16 (string) len=1 "#"
-// block_attributes.baml:3:17 (string) len=1 "\""
-// block_attributes.baml:4:6 (string) len=4 "This"
-// block_attributes.baml:4:11 (string) len=2 "is"
-// block_attributes.baml:4:14 (string) len=1 "a"
-// block_attributes.baml:4:16 (string) len=11 "description"
-// block_attributes.baml:4:28 (string) len=3 "for"
-// block_attributes.baml:4:32 (string) len=3 "key"
-// block_attributes.baml:5:6 (string) len=2 "af"
-// block_attributes.baml:5:9 (string) len=4 "asdf"
-// block_attributes.baml:6:4 (string) len=1 "\""
-// block_attributes.baml:6:5 (string) len=1 "#"
+// block_attributes.baml:3:16 (string) len=54 "\"\n     This is a description for key\n     af asdf\n   \""
 // block_attributes.baml:7:3 (property) [declaration] len=4 "key2"
 // block_attributes.baml:7:8 (type) [defaultLibrary] len=6 "string"
 // block_attributes.baml:7:15 (decorator) len=1 "@"

@@ -431,7 +431,7 @@ test PreviewCase {
   functions [Preview]
   args {
     text "hello world\nnext"
-    raw_text #"raw value with spaces"#
+    raw_text "raw value with spaces"
     count -2
     ratio 1.5
     enabled true
