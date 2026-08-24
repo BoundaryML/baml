@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function promptast_accessors.$init_test_ns_promptast_accessors_promptast_accessors(registry: testing.TestCollector) -> null {
+function promptast_accessors.$init_test_ns_promptast_accessors_promptast_accessors(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.promptast_accessors"
     load_const "text_renders_role_headed_prompt"
@@ -406,7 +406,7 @@ function promptast_accessors.paa_fold_messages_fn() -> string {
     return
 }
 
-function promptast_accessors.paa_render_ast() -> ai.Prompt {
+function promptast_accessors.paa_render_ast() -> <unresolved type #135172864440005> {
     make_closure .<tagged(paa_render_ast, 0)>, 0
     call ai.prompt
     store_var render
@@ -429,7 +429,7 @@ function promptast_accessors.paa_render_ast() -> ai.Prompt {
     return
 }
 
-function promptast_accessors.paa_single_message_fn() -> ai.PromptMessage[] {
+function promptast_accessors.paa_single_message_fn() -> <unresolved type #45063328831484>[] {
     make_closure .<tagged(paa_single_message_fn, 0)>, 0
     call ai.prompt
     store_var render

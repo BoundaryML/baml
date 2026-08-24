@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function patterns_new_runtime.$init_test_ns_patterns_new_runtime_patterns_new_runtime(registry: testing.TestCollector) -> null {
+function patterns_new_runtime.$init_test_ns_patterns_new_runtime_patterns_new_runtime(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.patterns_new_runtime"
     load_const "dispatches_int_callback"
@@ -741,7 +741,7 @@ function patterns_new_runtime.$init_test_ns_patterns_new_runtime_patterns_new_ru
     return
 }
 
-function patterns_new_runtime.DispatchCounter.bump(self: patterns_new_runtime.DispatchCounter, d: int) -> int {
+function patterns_new_runtime.DispatchCounter.bump(self: <unresolved type #122392005413549>, d: int) -> int {
     load_var self
     load_field .n
     load_var d
@@ -749,7 +749,7 @@ function patterns_new_runtime.DispatchCounter.bump(self: patterns_new_runtime.Di
     return
 }
 
-function patterns_new_runtime.classify_box_either(box: patterns_new_runtime.BoxT<int> | patterns_new_runtime.BoxT<string>) -> int {
+function patterns_new_runtime.classify_box_either(box: <unresolved type #60690322017954><int> | <unresolved type #60690322017954><string>) -> int {
     load_var box
     is_type patterns_new_runtime.BoxT<...>
     pop_jump_if_false L0
@@ -769,17 +769,17 @@ function patterns_new_runtime.classify_box_either(box: patterns_new_runtime.BoxT
     return
 }
 
-function patterns_new_runtime.classify_box_int(boxed: patterns_new_runtime.BoxT<int>) -> int {
+function patterns_new_runtime.classify_box_int(boxed: <unresolved type #60690322017954><int>) -> int {
     load_const 1
     return
 }
 
-function patterns_new_runtime.classify_box_string(boxed: patterns_new_runtime.BoxT<string>) -> int {
+function patterns_new_runtime.classify_box_string(boxed: <unresolved type #60690322017954><string>) -> int {
     load_const 20
     return
 }
 
-function patterns_new_runtime.classify_box_union_by_field(box: patterns_new_runtime.BoxT<int> | patterns_new_runtime.BoxT<string>) -> int {
+function patterns_new_runtime.classify_box_union_by_field(box: <unresolved type #60690322017954><int> | <unresolved type #60690322017954><string>) -> int {
     load_var box
     is_type patterns_new_runtime.BoxT<...>
     pop_jump_if_false L0
@@ -804,7 +804,7 @@ function patterns_new_runtime.classify_box_union_by_field(box: patterns_new_runt
     return
 }
 
-function patterns_new_runtime.classify_box_union_by_type(box: patterns_new_runtime.BoxT<int> | patterns_new_runtime.BoxT<string>) -> int {
+function patterns_new_runtime.classify_box_union_by_type(box: <unresolved type #60690322017954><int> | <unresolved type #60690322017954><string>) -> int {
     load_var box
     is_type patterns_new_runtime.BoxT<...>
     pop_jump_if_false L0
@@ -832,7 +832,7 @@ function patterns_new_runtime.deep_destruct_box() -> int {
     return
 }
 
-function patterns_new_runtime.describe_direction(d: patterns_new_runtime.Direction) -> string {
+function patterns_new_runtime.describe_direction(d: <unresolved type #124284456617066>) -> string {
     load_var d
     discriminant
     jump_table [L3, L2, L1, L0], default L5
@@ -949,7 +949,7 @@ function patterns_new_runtime.exact_length(xs: int[]) -> int {
     return
 }
 
-function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<int>[]) -> int {
+function patterns_new_runtime.from_array_boxes(boxes: <unresolved type #60690322017954><int>[]) -> int {
     load_const 0
     store_var total
     load_var boxes
@@ -981,7 +981,7 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
     return
 }
 
-function patterns_new_runtime.from_optional_box(box: patterns_new_runtime.BoxT<int> | null) -> int {
+function patterns_new_runtime.from_optional_box(box: <unresolved type #60690322017954><int> | null) -> int {
     load_var box
     is_type patterns_new_runtime.BoxT<...>
     pop_jump_if_false L0
@@ -1004,7 +1004,7 @@ function patterns_new_runtime.from_optional_box(box: patterns_new_runtime.BoxT<i
     return
 }
 
-function patterns_new_runtime.from_union_box(box: patterns_new_runtime.BoxT<int> | null) -> int {
+function patterns_new_runtime.from_union_box(box: <unresolved type #60690322017954><int> | null) -> int {
     load_var box
     is_type patterns_new_runtime.BoxT<...>
     pop_jump_if_false L0
@@ -1037,7 +1037,7 @@ function patterns_new_runtime.make_generic_cb(v: #0) -> (int) -> #0 throws never
     return
 }
 
-function patterns_new_runtime.match_box_union(b: patterns_new_runtime.BoxUnion) -> int {
+function patterns_new_runtime.match_box_union(b: <unresolved type #134604435596473>) -> int {
     load_var b
     is_type patterns_new_runtime.BoxUnion
     pop_jump_if_false L0
@@ -1103,7 +1103,7 @@ function patterns_new_runtime.match_coord_user() -> int {
     return
 }
 
-function patterns_new_runtime.match_person_as(p: patterns_new_runtime.PersonAS) -> int {
+function patterns_new_runtime.match_person_as(p: <unresolved type #124681808879080>) -> int {
     load_var p
     is_type patterns_new_runtime.PersonAS
     pop_jump_if_false L0
@@ -1197,7 +1197,7 @@ function patterns_new_runtime.or_deep_class() -> int {
     return
 }
 
-function patterns_new_runtime.pick_grid(g: patterns_new_runtime.Grid1) -> int {
+function patterns_new_runtime.pick_grid(g: <unresolved type #77941936430264>) -> int {
     load_var g
     is_type patterns_new_runtime.Grid1
     pop_jump_if_false L0
@@ -1317,7 +1317,7 @@ function patterns_new_runtime.pick_grid(g: patterns_new_runtime.Grid1) -> int {
     return
 }
 
-function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns_new_runtime.Wrap1 | int[][] | int[]) -> int {
+function patterns_new_runtime.pick_pair(p: <unresolved type #44065601459992> | <unresolved type #113637920235900> | int[][] | int[]) -> int {
     load_var p
     is_type patterns_new_runtime.Pair1
     pop_jump_if_false L0
@@ -1479,7 +1479,7 @@ function patterns_new_runtime.pick_pair(p: patterns_new_runtime.Pair1 | patterns
     return
 }
 
-function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int {
+function patterns_new_runtime.pick_sheet(s: <unresolved type #117635553872387>) -> int {
     load_var s
     is_type patterns_new_runtime.Sheet1
     pop_jump_if_false L0
@@ -1695,7 +1695,7 @@ function patterns_new_runtime.risky_throws_string() -> string {
     throw
 }
 
-function patterns_new_runtime.score_abcde(v: patterns_new_runtime.ABCDE_A | patterns_new_runtime.ABCDE_B | patterns_new_runtime.ABCDE_C | patterns_new_runtime.ABCDE_D | patterns_new_runtime.ABCDE_E) -> int {
+function patterns_new_runtime.score_abcde(v: <unresolved type #56413823956012> | <unresolved type #59712358840645> | <unresolved type #58612847212434> | <unresolved type #61911382097067> | <unresolved type #60811870468856>) -> int {
     load_var v
     is_type patterns_new_runtime.ABCDE_A
     pop_jump_if_false L0
@@ -1921,7 +1921,7 @@ function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {
     return
 }
 
-function patterns_new_runtime.score_depth(v: patterns_new_runtime.DepthClass | patterns_new_runtime.DepthClass2) -> int {
+function patterns_new_runtime.score_depth(v: <unresolved type #86443238685018> | <unresolved type #100666227733872>) -> int {
     load_var v
     is_type patterns_new_runtime.DepthClass
     pop_jump_if_false L0
@@ -2026,7 +2026,7 @@ function patterns_new_runtime.score_exact_length_45() -> int {
     return
 }
 
-function patterns_new_runtime.score_foo3(f: patterns_new_runtime.Foo3) -> int {
+function patterns_new_runtime.score_foo3(f: <unresolved type #37754971607748>) -> int {
     load_var f
     is_type patterns_new_runtime.Foo3
     pop_jump_if_false L0
@@ -2089,7 +2089,7 @@ function patterns_new_runtime.score_foo3(f: patterns_new_runtime.Foo3) -> int {
     return
 }
 
-function patterns_new_runtime.score_foo_union(f: patterns_new_runtime.FooUnion) -> int {
+function patterns_new_runtime.score_foo_union(f: <unresolved type #121449704776294>) -> int {
     load_var f
     is_type patterns_new_runtime.FooUnion
     pop_jump_if_false L0
@@ -2250,7 +2250,7 @@ function patterns_new_runtime.score_ints(xs: int[]) -> int {
     return
 }
 
-function patterns_new_runtime.score_opat(input: patterns_new_runtime.OPat_A | patterns_new_runtime.OPat_B) -> int {
+function patterns_new_runtime.score_opat(input: <unresolved type #73411875612347> | <unresolved type #74511387240558>) -> int {
     load_var input
     is_type patterns_new_runtime.OPat_A
     pop_jump_if_false L0
@@ -2528,7 +2528,7 @@ function patterns_new_runtime.score_outer_chain(xs: int[][]) -> int {
     return
 }
 
-function patterns_new_runtime.score_pair_or(p: patterns_new_runtime.PairAB) -> int {
+function patterns_new_runtime.score_pair_or(p: <unresolved type #122796197497078>) -> int {
     load_var p
     is_type patterns_new_runtime.PairAB
     pop_jump_if_false L3
@@ -2569,7 +2569,7 @@ function patterns_new_runtime.score_pair_or(p: patterns_new_runtime.PairAB) -> i
     return
 }
 
-function patterns_new_runtime.score_person_age(v: patterns_new_runtime.PersonAge | int) -> int {
+function patterns_new_runtime.score_person_age(v: <unresolved type #36161167397915> | int) -> int {
     load_var v
     is_type patterns_new_runtime.PersonAge
     pop_jump_if_false L0
@@ -2587,7 +2587,7 @@ function patterns_new_runtime.score_person_age(v: patterns_new_runtime.PersonAge
     return
 }
 
-function patterns_new_runtime.score_personid(v: patterns_new_runtime.PersonIdA | patterns_new_runtime.PersonIdB) -> int {
+function patterns_new_runtime.score_personid(v: <unresolved type #5375488763932> | <unresolved type #8674023648565>) -> int {
     load_var v
     is_type patterns_new_runtime.PersonIdA
     pop_jump_if_false L0
@@ -2660,7 +2660,7 @@ function patterns_new_runtime.score_prefix_two_suffix(xs: int[]) -> int {
     return
 }
 
-function patterns_new_runtime.score_refine_a(v: patterns_new_runtime.RefineA | patterns_new_runtime.RefineB) -> int {
+function patterns_new_runtime.score_refine_a(v: <unresolved type #96579851294867> | <unresolved type #97679362923078>) -> int {
     load_var v
     is_type patterns_new_runtime.RefineA
     pop_jump_if_false L0
@@ -2787,7 +2787,7 @@ function patterns_new_runtime.score_suffix_rest(xs: int[]) -> int {
     return
 }
 
-function patterns_new_runtime.score_team2(teams: patterns_new_runtime.Team2[]) -> int {
+function patterns_new_runtime.score_team2(teams: <unresolved type #54367402774794>[]) -> int {
     load_var teams
     is_type _[]
     pop_jump_if_false L0
@@ -2870,7 +2870,7 @@ function patterns_new_runtime.score_team2(teams: patterns_new_runtime.Team2[]) -
     return
 }
 
-function patterns_new_runtime.score_team3(team: patterns_new_runtime.Team3) -> int {
+function patterns_new_runtime.score_team3(team: <unresolved type #55466914403005>) -> int {
     load_var team
     is_type patterns_new_runtime.Team3
     pop_jump_if_false L0
@@ -2901,7 +2901,7 @@ function patterns_new_runtime.score_team3(team: patterns_new_runtime.Team3) -> i
     return
 }
 
-function patterns_new_runtime.score_team4(team: patterns_new_runtime.Team4) -> int {
+function patterns_new_runtime.score_team4(team: <unresolved type #56566426031216>) -> int {
     load_var team
     is_type patterns_new_runtime.Team4
     pop_jump_if_false L0
@@ -2976,7 +2976,7 @@ function patterns_new_runtime.score_two_prefix(xs: int[]) -> int {
     return
 }
 
-function patterns_new_runtime.score_user_score(users: patterns_new_runtime.UserScore[]) -> int {
+function patterns_new_runtime.score_user_score(users: <unresolved type #125040660860752>[]) -> int {
     load_var users
     is_type _[]
     pop_jump_if_false L0
@@ -3037,7 +3037,7 @@ function patterns_new_runtime.score_wildcard_second(xs: int[]) -> int {
     return
 }
 
-function patterns_new_runtime.score_wildcard_user(users: patterns_new_runtime.UserScore[]) -> int {
+function patterns_new_runtime.score_wildcard_user(users: <unresolved type #125040660860752>[]) -> int {
     load_var users
     is_type _[]
     pop_jump_if_false L0
@@ -3068,7 +3068,7 @@ function patterns_new_runtime.score_wildcard_user(users: patterns_new_runtime.Us
     return
 }
 
-function patterns_new_runtime.score_wrap2(v: int[][] | patterns_new_runtime.Wrap2) -> int {
+function patterns_new_runtime.score_wrap2(v: int[][] | <unresolved type #116936455120533>) -> int {
     load_var v
     is_type _[]
     pop_jump_if_false L0

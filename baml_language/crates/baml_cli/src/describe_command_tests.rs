@@ -910,20 +910,6 @@ fn describe_builtin_method_drill_in_via_alias() {
     );
 }
 
-/// The CLI describe surface carries the same listing contract as runtime
-/// reflection, so a reader learns from the docs that a generic entry needs
-/// specializing rather than mistaking it for an unusable listing.
-#[test]
-fn describe_package_functions_documents_the_generic_listing_contract() {
-    let db = simple_project();
-    let output = describe_via_dispatch(&db, "reflect.Package.functions");
-    assert!(
-        output.contains("including generic ones") && output.contains("specialize(args)"),
-        "expected generic-listing contract in builtin method docs:\n{output}",
-    );
-    insta::assert_snapshot!(output);
-}
-
 /// Drilling into builtin methods by their class name (`Array.reduce`,
 /// `String.split`, `Map.get`) resolves the unqualified class against the stdlib.
 #[test]

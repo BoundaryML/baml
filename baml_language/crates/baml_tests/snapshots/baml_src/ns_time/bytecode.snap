@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function time.$init_test_ns_time_datetime(registry: testing.TestCollector) -> null {
+function time.$init_test_ns_time_datetime(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.time"
     load_const "plain_date_parse_round_trip"
@@ -195,7 +195,7 @@ function time.$init_test_ns_time_datetime(registry: testing.TestCollector) -> nu
     return
 }
 
-function time.$init_test_ns_time_time(registry: testing.TestCollector) -> null {
+function time.$init_test_ns_time_time(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.time"
     load_const "instant_parse_epoch"

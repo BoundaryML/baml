@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.comment_in_type.CommentAfterArrow(client: ai.Client | null) -> string {
+function fixtures.comment_in_type.CommentAfterArrow(client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -30,7 +30,7 @@ function fixtures.comment_in_type.CommentAfterArrow(client: ai.Client | null) ->
     return
 }
 
-function fixtures.comment_in_type.CommentAfterArrow$build_request(client: ai.Client | null) -> baml.http.Request {
+function fixtures.comment_in_type.CommentAfterArrow$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -54,7 +54,7 @@ function fixtures.comment_in_type.CommentAfterArrow$parse(json: string) -> strin
     return
 }
 
-function fixtures.comment_in_type.CommentAfterArrow$render_prompt() -> ai.Prompt {
+function fixtures.comment_in_type.CommentAfterArrow$render_prompt() -> <unresolved type #135172864440005> {
     call user.fixtures.comment_in_type.CommentAfterArrow$spec
     store_var _1
     load_type string
@@ -66,7 +66,7 @@ function fixtures.comment_in_type.CommentAfterArrow$render_prompt() -> ai.Prompt
     return
 }
 
-function fixtures.comment_in_type.CommentAfterArrow$spec() -> ai.FunctionSpec<string> {
+function fixtures.comment_in_type.CommentAfterArrow$spec() -> <unresolved type #25974768157144><string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -85,7 +85,7 @@ function fixtures.comment_in_type.CommentAfterArrow$spec() -> ai.FunctionSpec<st
     return
 }
 
-function fixtures.comment_in_type.CommentAfterArrow$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function fixtures.comment_in_type.CommentAfterArrow$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -103,7 +103,7 @@ function fixtures.comment_in_type.CommentAfterArrow$stream(client: ai.stream.Str
     return
 }
 
-function fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client: ai.Client | null) -> string {
+function fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -133,7 +133,7 @@ function fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client
     return
 }
 
-function fixtures.comment_in_type.FunctionWithComments$build_request(a: string, b: int, client: ai.Client | null) -> baml.http.Request {
+function fixtures.comment_in_type.FunctionWithComments$build_request(a: string, b: int, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -158,7 +158,7 @@ function fixtures.comment_in_type.FunctionWithComments$parse(json: string) -> st
     return
 }
 
-function fixtures.comment_in_type.FunctionWithComments$render_prompt(a: string, b: int) -> ai.Prompt {
+function fixtures.comment_in_type.FunctionWithComments$render_prompt(a: string, b: int) -> <unresolved type #135172864440005> {
     load_var2 1 2
     call user.fixtures.comment_in_type.FunctionWithComments$spec
     store_var _3
@@ -171,7 +171,7 @@ function fixtures.comment_in_type.FunctionWithComments$render_prompt(a: string, 
     return
 }
 
-function fixtures.comment_in_type.FunctionWithComments$spec(a: string, b: int) -> ai.FunctionSpec<string> {
+function fixtures.comment_in_type.FunctionWithComments$spec(a: string, b: int) -> <unresolved type #25974768157144><string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -193,7 +193,7 @@ function fixtures.comment_in_type.FunctionWithComments$spec(a: string, b: int) -
     return
 }
 
-function fixtures.comment_in_type.FunctionWithComments$stream(a: string, b: int, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function fixtures.comment_in_type.FunctionWithComments$stream(a: string, b: int, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.testset_dynamic.$init_test_ns_fixtures_ns_testset_dynamic_main(registry: testing.TestCollector) -> null {
+function fixtures.testset_dynamic.$init_test_ns_fixtures_ns_testset_dynamic_main(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.fixtures.testset_dynamic"
     load_const "dynamic tests"

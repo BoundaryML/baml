@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function tostring_sugar.$init_test_ns_tostring_sugar_tostring_sugar(registry: testing.TestCollector) -> null {
+function tostring_sugar.$init_test_ns_tostring_sugar_tostring_sugar(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.tostring_sugar"
     load_const "primitive_to_string"
@@ -104,7 +104,7 @@ function tostring_sugar.$init_test_ns_tostring_sugar_tostring_sugar(registry: te
     return
 }
 
-function tostring_sugar.PointShow.baml.ToString.to_string(self: tostring_sugar.PointShow) -> string {
+function tostring_sugar.PointShow.baml.ToString.to_string(self: <unresolved type #77912895690512>) -> string {
     load_type int
     load_var self
     load_field .x
@@ -127,7 +127,7 @@ function tostring_sugar.PointShow.baml.ToString.to_string(self: tostring_sugar.P
     return
 }
 
-function tostring_sugar.Widget.MyShow.to_string(self: tostring_sugar.Widget) -> string {
+function tostring_sugar.Widget.MyShow.to_string(self: <unresolved type #64005539567221>) -> string {
     load_const "widget!"
     return
 }
@@ -201,7 +201,7 @@ function tostring_sugar.plain_class_to_string_fn() -> string {
     return
 }
 
-function tostring_sugar.sugar_match_line() -> tostring_sugar.Line {
+function tostring_sugar.sugar_match_line() -> <unresolved type #65455041860551> {
     load_const 1
     load_const 2
     init_instance user.tostring_sugar.PointShow .x, .y

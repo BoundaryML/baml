@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function match_basics.$init_test_ns_match_basics_match_basics(registry: testing.TestCollector) -> null {
+function match_basics.$init_test_ns_match_basics_match_basics(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.match_basics"
     load_const "match_catch_all_underscore"

@@ -17,10 +17,10 @@ use std::{
     sync::Arc,
 };
 
-use baml_type::{Name, RealizedTy, TyAttr, TypeName};
+use baml_type::{Name, TyAttr, TypeName, normalize::TypeContext};
 use bex_str::BexStr;
 use bex_vm_types::{
-    HeapPtr, ValueKind,
+    HeapPtr, RealizedTy, ValueKind,
     errors::VmInternalError,
     types::{LockedContainer, LockedReadGuard, Object, Type, Value},
 };
@@ -215,12 +215,17 @@ fn dispatch_op(
     iface_args: &[RealizedTy],
 ) -> NativeCallResult {
     let op_qtn = TypeName::new(Name::new("baml"), vec![Name::new("ops")], Name::new(iface));
+    // A stdlib FQN constant is one of the three places a name legitimately
+    // becomes a head; it resolves once, off the declaration.
+    let Some(op_head) = vm.declaration_head(&op_qtn) else {
+        return NativeCallResult::from(unresolved_op(iface, method));
+    };
     let Some(self_ty) = vm.value_concrete_ty(args[0]) else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };
     let resolver = resolve::ImplResolver::for_value(vm, args[0]);
     let Some((rule, bound_args)) =
-        resolver.resolve_implements_rule(&self_ty.into(), &op_qtn, iface_args)
+        resolver.resolve_implements_rule(&self_ty.into(), op_head, iface_args)
     else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };
@@ -560,10 +565,11 @@ impl EqualsDriver {
             (Object::Collector(x), Object::Collector(y)) => step(Arc::ptr_eq(&x.0, &y.0)),
             (Object::Collector(_), _) => Cmp::NotEqual,
 
-            // BEP-066: all `type` equality paths compare the minted identity.
-            // Canonically equivalent static spellings received the same digest
-            // when materialized; runtime constructions receive unique counters.
-            (Object::Type(x), Object::Type(y)) => step(x.mint() == y.mint()),
+            // A `type` value denotes a type and nothing more: two are equal
+            // exactly when they are mutual subtypes, decided against the
+            // program's facts (TYPE_SYSTEM.md, "Equivalence and canonical
+            // forms") — the same relation `==` on `type` uses.
+            (Object::Type(x), Object::Type(y)) => step(vm.equivalent(x.ty.as_ty(), y.ty.as_ty())),
             (Object::Type(_), _) => Cmp::NotEqual,
 
             // `Sentinel` (heap_debug builds only) is an internal freed/uninit
@@ -580,6 +586,7 @@ impl EqualsDriver {
             | (Object::Closure(_), Object::Closure(_))
             | (Object::Class(_), Object::Class(_))
             | (Object::Enum(_), Object::Enum(_))
+            | (Object::TypeAlias(_), Object::TypeAlias(_))
             | (Object::UnscheduledFuture(_), Object::UnscheduledFuture(_))
             | (Object::RustData(_), Object::RustData(_)) => step(pa == pb),
             (
@@ -590,6 +597,7 @@ impl EqualsDriver {
                 | Object::Closure(_)
                 | Object::Class(_)
                 | Object::Enum(_)
+                | Object::TypeAlias(_)
                 | Object::UnscheduledFuture(_)
                 | Object::RustData(_),
                 _,
@@ -660,7 +668,7 @@ fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
             let (class_ptr, type_args) = (inst.class, inst.class_type_args.to_vec());
             match vm.get_object(class_ptr) {
                 Object::Class(class) => Some(RealizedTy::Class(
-                    class.name.clone(),
+                    bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
                     type_args,
                     TyAttr::default(),
                 )),
@@ -668,7 +676,10 @@ fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
             }
         }
         Object::Variant(v) => match vm.get_object(v.enm) {
-            Object::Enum(e) => Some(RealizedTy::Enum(e.name.clone(), TyAttr::default())),
+            Object::Enum(e) => Some(RealizedTy::Enum(
+                bex_vm_types::TypeHead::new(v.enm, e.type_tag),
+                TyAttr::default(),
+            )),
             _ => None,
         },
         _ => None,
@@ -687,8 +698,9 @@ fn resolve_equals_eq(
     // `Equals` is non-generic — no interface args to select on; off the resolved
     // rule, `eq` is the concrete method (the impl's own, or the merged default),
     // invoked with its frame realized against the impl's bound type args.
+    let equals_head = vm.declaration_head(&equals_qtn())?;
     let resolver = resolve::ImplResolver::for_value(vm, value);
-    let (rule, bound_args) = resolver.resolve_implements_rule(concrete, &equals_qtn(), &[])?;
+    let (rule, bound_args) = resolver.resolve_implements_rule(concrete, equals_head, &[])?;
     let method = rule.methods.get("eq")?;
     // `fqn` is the resolved callee's heap pointer (the impl method or merged
     // default), baked at emit time — invoke it directly.

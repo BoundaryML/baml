@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function env_ref_desugar.$init_test_ns_env_ref_desugar_env_ref_desugar(registry: testing.TestCollector) -> null {
+function env_ref_desugar.$init_test_ns_env_ref_desugar_env_ref_desugar(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.env_ref_desugar"
     load_const "env_ref_sugar_is_a_ref"
@@ -76,7 +76,7 @@ function env_ref_desugar.$init_test_ns_env_ref_desugar_env_ref_desugar(registry:
     return
 }
 
-function env_ref_desugar.EnvRefBadClientFn(client: ai.Client | null) -> string {
+function env_ref_desugar.EnvRefBadClientFn(client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -105,7 +105,7 @@ function env_ref_desugar.EnvRefBadClientFn(client: ai.Client | null) -> string {
     return
 }
 
-function env_ref_desugar.EnvRefBadClientFn$build_request(client: ai.Client | null) -> baml.http.Request {
+function env_ref_desugar.EnvRefBadClientFn$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -129,7 +129,7 @@ function env_ref_desugar.EnvRefBadClientFn$parse(json: string) -> string {
     return
 }
 
-function env_ref_desugar.EnvRefBadClientFn$render_prompt() -> ai.Prompt {
+function env_ref_desugar.EnvRefBadClientFn$render_prompt() -> <unresolved type #135172864440005> {
     call user.env_ref_desugar.EnvRefBadClientFn$spec
     store_var _1
     load_type string
@@ -141,7 +141,7 @@ function env_ref_desugar.EnvRefBadClientFn$render_prompt() -> ai.Prompt {
     return
 }
 
-function env_ref_desugar.EnvRefBadClientFn$spec() -> ai.FunctionSpec<string> {
+function env_ref_desugar.EnvRefBadClientFn$spec() -> <unresolved type #25974768157144><string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -160,7 +160,7 @@ function env_ref_desugar.EnvRefBadClientFn$spec() -> ai.FunctionSpec<string> {
     return
 }
 
-function env_ref_desugar.EnvRefBadClientFn$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_desugar.EnvRefBadClientFn$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -217,7 +217,7 @@ function env_ref_desugar.EnvRefClientId() -> string {
     return
 }
 
-function env_ref_desugar.EnvRefDesugarFn(client: ai.Client | null) -> string {
+function env_ref_desugar.EnvRefDesugarFn(client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -246,7 +246,7 @@ function env_ref_desugar.EnvRefDesugarFn(client: ai.Client | null) -> string {
     return
 }
 
-function env_ref_desugar.EnvRefDesugarFn$build_request(client: ai.Client | null) -> baml.http.Request {
+function env_ref_desugar.EnvRefDesugarFn$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -270,7 +270,7 @@ function env_ref_desugar.EnvRefDesugarFn$parse(json: string) -> string {
     return
 }
 
-function env_ref_desugar.EnvRefDesugarFn$render_prompt() -> ai.Prompt {
+function env_ref_desugar.EnvRefDesugarFn$render_prompt() -> <unresolved type #135172864440005> {
     call user.env_ref_desugar.EnvRefDesugarFn$spec
     store_var _1
     load_type string
@@ -282,7 +282,7 @@ function env_ref_desugar.EnvRefDesugarFn$render_prompt() -> ai.Prompt {
     return
 }
 
-function env_ref_desugar.EnvRefDesugarFn$spec() -> ai.FunctionSpec<string> {
+function env_ref_desugar.EnvRefDesugarFn$spec() -> <unresolved type #25974768157144><string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -301,7 +301,7 @@ function env_ref_desugar.EnvRefDesugarFn$spec() -> ai.FunctionSpec<string> {
     return
 }
 
-function env_ref_desugar.EnvRefDesugarFn$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_desugar.EnvRefDesugarFn$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -330,7 +330,7 @@ function env_ref_desugar.EnvRefDesugarFnClientId() -> string {
     return
 }
 
-function env_ref_desugar.EnvRefDynClientFn(client: ai.Client | null) -> string {
+function env_ref_desugar.EnvRefDynClientFn(client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -359,7 +359,7 @@ function env_ref_desugar.EnvRefDynClientFn(client: ai.Client | null) -> string {
     return
 }
 
-function env_ref_desugar.EnvRefDynClientFn$build_request(client: ai.Client | null) -> baml.http.Request {
+function env_ref_desugar.EnvRefDynClientFn$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -383,7 +383,7 @@ function env_ref_desugar.EnvRefDynClientFn$parse(json: string) -> string {
     return
 }
 
-function env_ref_desugar.EnvRefDynClientFn$render_prompt() -> ai.Prompt {
+function env_ref_desugar.EnvRefDynClientFn$render_prompt() -> <unresolved type #135172864440005> {
     call user.env_ref_desugar.EnvRefDynClientFn$spec
     store_var _1
     load_type string
@@ -395,7 +395,7 @@ function env_ref_desugar.EnvRefDynClientFn$render_prompt() -> ai.Prompt {
     return
 }
 
-function env_ref_desugar.EnvRefDynClientFn$spec() -> ai.FunctionSpec<string> {
+function env_ref_desugar.EnvRefDynClientFn$spec() -> <unresolved type #25974768157144><string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -414,7 +414,7 @@ function env_ref_desugar.EnvRefDynClientFn$spec() -> ai.FunctionSpec<string> {
     return
 }
 
-function env_ref_desugar.EnvRefDynClientFn$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_desugar.EnvRefDynClientFn$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -479,7 +479,7 @@ function env_ref_desugar.EnvRefName() -> string {
     return
 }
 
-function env_ref_desugar.EnvRefOf() -> baml.env.Ref {
+function env_ref_desugar.EnvRefOf() -> <unresolved type #14421915625631> {
     load_const "BAML_TEST_ENV_REF_SOME_VAR"
     call baml.env.ref
     return

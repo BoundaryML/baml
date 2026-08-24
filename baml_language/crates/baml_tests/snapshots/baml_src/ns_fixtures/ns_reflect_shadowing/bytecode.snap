@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.reflect_shadowing.$init_test_ns_fixtures_ns_reflect_shadowing_main(registry: testing.TestCollector) -> null {
+function fixtures.reflect_shadowing.$init_test_ns_fixtures_ns_reflect_shadowing_main(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.fixtures.reflect_shadowing"
     load_const "user class shadows the package"
@@ -56,7 +56,7 @@ function fixtures.reflect_shadowing.package_still_reachable() -> string {
     return
 }
 
-function fixtures.reflect_shadowing.reflect.describe(self: fixtures.reflect_shadowing.reflect) -> string {
+function fixtures.reflect_shadowing.reflect.describe(self: <unresolved type #120525359814665>) -> string {
     load_const "user-"
     load_var self
     load_field .label

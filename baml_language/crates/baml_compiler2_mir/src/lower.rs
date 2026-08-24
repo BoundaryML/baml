@@ -71,30 +71,81 @@ pub fn resolved_aliases_for_package(
     db: &dyn crate::Db,
     pkg_id: baml_compiler2_hir::package::PackageId,
 ) -> ResolvedAliases {
-    use baml_compiler2_hir::package::{package_dependencies, package_items};
+    use baml_compiler2_hir::package::package_dependencies;
 
-    let pkg_items = package_items(db, pkg_id);
-    let mut aliases = collect_type_aliases(db, pkg_items);
+    let mut aliases = collect_type_aliases(db, pkg_id);
     for &dep_id in package_dependencies(db, pkg_id) {
-        aliases.extend(collect_type_aliases(db, package_items(db, dep_id)));
+        aliases.extend(collect_type_aliases(db, dep_id));
+    }
+    // A *mounted* dependency (a runtime compile's world) has no source files
+    // or HIR items to walk — its aliases arrive through the package-interface
+    // blob, already resolved. Source-declared entries win a name collision;
+    // blob entries only fill the gaps. Without these, every reference to a
+    // mounted alias would be a name the environment cannot see, which
+    // `lower_to_runtime` rejects rather than carrying opaque.
+    for package in baml_compiler2_hir::package::external_package_names(db) {
+        let Some(interface) =
+            baml_compiler2_hir_ty::package_interface::mounted_interface(db, &package)
+        else {
+            continue;
+        };
+        for exported in interface
+            .types
+            .values()
+            .flat_map(|namespace| namespace.values())
+        {
+            if let baml_compiler2_hir_ty::package_interface::ExportedType::TypeAlias {
+                qtn,
+                resolved,
+            } = exported
+            {
+                aliases
+                    .entry(qtn.clone())
+                    .or_insert_with(|| resolved.clone());
+            }
+        }
     }
     ResolvedAliases::from_aliases(aliases)
 }
 
 /// Every type alias a package declares, resolved to its (one-level) value
 /// through `hir_ty`'s lowering, keyed by qualified name.
+///
+/// Two enumerations, deliberately unioned. HIR's `package_items` is the only
+/// view that covers a *mounted* package (a runtime compile's dependencies have
+/// no source files to walk), but it predates ppir's synthesis. ppir's
+/// `file_type_aliases` adds the synthesized `*$stream` companion aliases,
+/// which exist only in the expansion set. An alias this map is missing cannot
+/// be classified (recursive → pooled as a declaration) or expanded
+/// (non-recursive → inlined) — it survives as a name nothing declares, which
+/// `lower_to_runtime` now rejects.
 fn collect_type_aliases<'db>(
     db: &'db dyn crate::Db,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    pkg_id: baml_compiler2_hir::package::PackageId<'db>,
 ) -> HashMap<QualifiedTypeName, Tir2Ty> {
     use baml_compiler2_hir::contributions::Definition;
     let mut aliases = HashMap::new();
+    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
     for ns in pkg_items.namespaces.values() {
         for (name, def) in &ns.types {
             if let Definition::TypeAlias(loc) = def {
                 let value = baml_compiler2_hir_ty::lower::type_alias_value(db, *loc).to_plain();
                 aliases.insert(qualify_def(db, Definition::TypeAlias(*loc), name), value);
             }
+        }
+    }
+    let package_name = pkg_id.name(db);
+    for file in baml_compiler2_hir::compiler2_all_files(db) {
+        if baml_compiler2_hir::file_package::file_package(db, file).package != package_name {
+            continue;
+        }
+        for &loc in baml_compiler2_ppir::item_data::file_type_aliases(db, file) {
+            let data = baml_compiler2_ppir::item_data::type_alias_data(db, loc);
+            let value = baml_compiler2_hir_ty::lower::type_alias_value(db, loc).to_plain();
+            aliases.insert(
+                qualify_def(db, Definition::TypeAlias(loc), &data.name),
+                value,
+            );
         }
     }
     aliases
@@ -10106,6 +10157,10 @@ impl LoweringContext<'_> {
     /// Fixing that needs the callee's declared params here, or effect-position
     /// classification for user-written params in inference; either way it is a
     /// wrong ANSWER rather than the ICE this guard removes.
+    // BUG: widening an Error-recovery sentinel to `BuiltinUnknown` launders a
+    // compile error into the top type (an unrecoverable check must stay
+    // `Error` so downstream diagnostics stay suppressed). The deferred slot
+    // deserves its own marker realized at the runtime gate, not `unknown`.
     fn inferred_ty_to_template(&self, ty: &Tir2Ty, generic_params: &[ParamTy]) -> TyTemplate {
         let widened = if baml_type_runtime::contains_error_recovery(ty)
             || baml_type_runtime::contains_typevar_where(ty, &|name| {
@@ -10259,6 +10314,8 @@ impl LoweringContext<'_> {
             // An unsolved slot finalizes to an error-recovery sentinel; that
             // is the same "no static answer" case as an out-of-scope type
             // variable (see `inferred_ty_to_template`), so widen it here too.
+            // BUG: same Error→Unknown laundering as `inferred_ty_to_template`;
+            // both sites should carry a deferred-slot marker instead.
             if baml_type_runtime::contains_error_recovery(ty)
                 || baml_type_runtime::contains_typevar_where(ty, &|name| {
                     !caller_generic_params.iter().any(|param| param == name)
@@ -10654,16 +10711,7 @@ impl<'db> LoweringContext<'db> {
         // synthetic Object exprs from `lower_cst.rs` that already use registry-
         // matching dotted forms like "ai.Prompt".
         let class_name = if let Some(tn) = &type_name_key {
-            if tn.is_runtime_minted() {
-                // A mounted runtime type keeps its hidden mint-qualified QTN
-                // in the value type, but its class object is linked through
-                // the source-visible package alias written at this literal
-                // (`app.Export`). The runtime linker resolves that symbol to
-                // the dependency's minted class object.
-                type_name.to_string()
-            } else {
-                tn.render_dotted(false)
-            }
+            tn.render_dotted(false)
         } else {
             type_name.to_string()
         };

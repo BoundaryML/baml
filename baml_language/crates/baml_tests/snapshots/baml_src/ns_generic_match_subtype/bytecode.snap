@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function generic_match_subtype.$init_test_ns_generic_match_subtype_generic_match_subtype(registry: testing.TestCollector) -> null {
+function generic_match_subtype.$init_test_ns_generic_match_subtype_generic_match_subtype(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.generic_match_subtype"
     load_const "generic_match_subtype_narrow_default"
@@ -62,7 +62,7 @@ function generic_match_subtype.$init_test_ns_generic_match_subtype_generic_match
     return
 }
 
-function generic_match_subtype.Sq.Shape.area(self: generic_match_subtype.Sq) -> int {
+function generic_match_subtype.Sq.Shape.area(self: <unresolved type #123891639230900>) -> int {
     load_var self
     load_field .s
     load_var self
@@ -161,14 +161,14 @@ function generic_match_subtype.generic_match_widened_default_fn() -> int {
     return
 }
 
-function generic_match_subtype.mk(v: #0) -> generic_match_subtype.Opt<#0> | generic_match_subtype.Non {
+function generic_match_subtype.mk(v: #0) -> <unresolved type #137737937352485><#0> | <unresolved type #64070550835183> {
     load_var v
     load_type #0
     init_instance<1> user.generic_match_subtype.Opt .value
     return
 }
 
-function generic_match_subtype.pick_concrete(x: generic_match_subtype.Foo<int> | generic_match_subtype.Foo<string>) -> string {
+function generic_match_subtype.pick_concrete(x: <unresolved type #36583403442708><int> | <unresolved type #36583403442708><string>) -> string {
     load_var x
     store_var _2
     load_var _2
@@ -187,7 +187,7 @@ function generic_match_subtype.pick_concrete(x: generic_match_subtype.Foo<int> |
     return
 }
 
-function generic_match_subtype.pick_concrete_switch(x: generic_match_subtype.Foo<int> | generic_match_subtype.Foo<string> | int | string | bool) -> string {
+function generic_match_subtype.pick_concrete_switch(x: <unresolved type #36583403442708><int> | <unresolved type #36583403442708><string> | int | string | bool) -> string {
     load_var x
     store_var _2
     load_var _2
@@ -242,7 +242,7 @@ function generic_match_subtype.pick_concrete_switch(x: generic_match_subtype.Foo
     return
 }
 
-function generic_match_subtype.unwrap_or(o: generic_match_subtype.Opt<#0> | generic_match_subtype.Non, default: #0) -> #0 {
+function generic_match_subtype.unwrap_or(o: <unresolved type #137737937352485><#0> | <unresolved type #64070550835183>, default: #0) -> #0 {
     load_var o
     store_var _3
     load_var _3

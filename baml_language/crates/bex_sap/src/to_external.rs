@@ -1,11 +1,11 @@
-//! Conversion from SAP types and values to `BexExternalValue` and `baml_type::RuntimeTy`.
+//! Conversion from SAP types and values to `BexExternalValue` and `SapTy`.
 //!
 //! This module provides the bridge between SAP's internal type/value representation
 //! and the external value tree used by the engine to push results back onto the VM heap.
 
-use baml_type::TypeName;
 use bex_external_types::BexExternalValue;
 use indexmap::IndexMap;
+use sys_types::{DefKey, SapTy};
 
 use crate::{
     baml_value::{BamlStreamState, BamlValue},
@@ -17,10 +17,10 @@ use crate::{
 };
 
 // ============================================================================
-// Type conversion: SAP types → baml_type::RuntimeTy
+// Type conversion: SAP types → SapTy
 // ============================================================================
 
-/// Convert a SAP type back to a `baml_type::RuntimeTy`.
+/// Convert a SAP type back to a `SapTy`.
 ///
 /// # Known simplifications (not round-trip safe)
 ///
@@ -30,38 +30,36 @@ use crate::{
 /// - `EnumVariant` becomes `Enum` (variant specificity lost at the type level).
 /// - `TyAttr` annotations are not reconstructed; `TyAttr::default()` is used throughout.
 pub trait ToBamlTy {
-    fn to_baml_ty(&self, db: &TypeRefDb<'_, TypeName>) -> baml_type::RuntimeTy;
+    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy;
 }
 
-impl ToBamlTy for TyResolvedRef<'_, TypeName> {
-    fn to_baml_ty(&self, db: &TypeRefDb<'_, TypeName>) -> baml_type::RuntimeTy {
+impl ToBamlTy for TyResolvedRef<'_, DefKey> {
+    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
         let attr = baml_type::TyAttr::default();
         match self {
-            TyResolvedRef::Int(_) => baml_type::RuntimeTy::Int { attr },
-            TyResolvedRef::Bigint(_) => baml_type::RuntimeTy::Bigint { attr },
-            TyResolvedRef::Float(_) => baml_type::RuntimeTy::Float { attr },
-            TyResolvedRef::String(_) => baml_type::RuntimeTy::String { attr },
-            TyResolvedRef::Bool(_) => baml_type::RuntimeTy::Bool { attr },
-            TyResolvedRef::Null(_) => baml_type::RuntimeTy::Null { attr },
-            TyResolvedRef::Media(media) => {
-                baml_type::RuntimeTy::Media(media.to_baml_media_kind(), attr)
-            }
-            TyResolvedRef::LiteralInt(v) => baml_type::RuntimeTy::Literal(
+            TyResolvedRef::Int(_) => SapTy::Int { attr },
+            TyResolvedRef::Bigint(_) => SapTy::Bigint { attr },
+            TyResolvedRef::Float(_) => SapTy::Float { attr },
+            TyResolvedRef::String(_) => SapTy::String { attr },
+            TyResolvedRef::Bool(_) => SapTy::Bool { attr },
+            TyResolvedRef::Null(_) => SapTy::Null { attr },
+            TyResolvedRef::Media(media) => SapTy::Media(media.to_baml_media_kind(), attr),
+            TyResolvedRef::LiteralInt(v) => SapTy::Literal(
                 baml_type::Literal::Int(v.0),
                 baml_type::Freshness::Regular,
                 attr,
             ),
-            TyResolvedRef::LiteralBigint(v) => baml_type::RuntimeTy::Literal(
+            TyResolvedRef::LiteralBigint(v) => SapTy::Literal(
                 baml_type::Literal::Bigint(v.0.clone()),
                 baml_type::Freshness::Regular,
                 attr,
             ),
-            TyResolvedRef::LiteralString(v) => baml_type::RuntimeTy::Literal(
+            TyResolvedRef::LiteralString(v) => SapTy::Literal(
                 baml_type::Literal::String(v.0.to_string()),
                 baml_type::Freshness::Regular,
                 attr,
             ),
-            TyResolvedRef::LiteralBool(v) => baml_type::RuntimeTy::Literal(
+            TyResolvedRef::LiteralBool(v) => SapTy::Literal(
                 baml_type::Literal::Bool(v.0),
                 baml_type::Freshness::Regular,
                 attr,
@@ -77,8 +75,8 @@ impl ToBamlTy for TyResolvedRef<'_, TypeName> {
     }
 }
 
-impl ToBamlTy for Ty<'_, TypeName> {
-    fn to_baml_ty(&self, db: &TypeRefDb<'_, TypeName>) -> baml_type::RuntimeTy {
+impl ToBamlTy for Ty<'_, DefKey> {
+    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
         match self {
             Ty::Resolved(resolved) => resolved.as_ref().to_baml_ty(db),
             Ty::ResolvedRef(resolved_ref) => resolved_ref.to_baml_ty(db),
@@ -87,25 +85,23 @@ impl ToBamlTy for Ty<'_, TypeName> {
                 Some(TyResolvedRef::Enum(enm)) if enm.name == *name => enm.to_baml_ty(db),
                 // Any other named entry is an alias. Keep it nominal here
                 // instead of recursively expanding aliases such as `json`.
-                Some(_) => {
-                    baml_type::RuntimeTy::TypeAlias(name.clone(), baml_type::TyAttr::default())
-                }
-                None => baml_type::RuntimeTy::unknown(),
+                Some(_) => SapTy::TypeAlias(name.clone(), baml_type::TyAttr::default()),
+                None => SapTy::unknown(),
             },
         }
     }
 }
 
-impl ToBamlTy for ArrayTy<'_, TypeName> {
-    fn to_baml_ty(&self, db: &TypeRefDb<'_, TypeName>) -> baml_type::RuntimeTy {
+impl ToBamlTy for ArrayTy<'_, DefKey> {
+    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
         let inner = self.ty.ty.to_baml_ty(db);
-        baml_type::RuntimeTy::List(Box::new(inner), baml_type::TyAttr::default())
+        SapTy::List(Box::new(inner), baml_type::TyAttr::default())
     }
 }
 
-impl ToBamlTy for MapTy<'_, TypeName> {
-    fn to_baml_ty(&self, db: &TypeRefDb<'_, TypeName>) -> baml_type::RuntimeTy {
-        baml_type::RuntimeTy::Map {
+impl ToBamlTy for MapTy<'_, DefKey> {
+    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
+        SapTy::Map {
             key: Box::new(self.key.ty.to_baml_ty(db)),
             value: Box::new(self.value.ty.to_baml_ty(db)),
             attr: baml_type::TyAttr::default(),
@@ -113,36 +109,35 @@ impl ToBamlTy for MapTy<'_, TypeName> {
     }
 }
 
-impl ToBamlTy for ClassTy<'_, TypeName> {
-    fn to_baml_ty(&self, _db: &TypeRefDb<'_, TypeName>) -> baml_type::RuntimeTy {
-        baml_type::RuntimeTy::Class(self.name.clone(), Vec::new(), baml_type::TyAttr::default())
+impl ToBamlTy for ClassTy<'_, DefKey> {
+    fn to_baml_ty(&self, _db: &TypeRefDb<'_, DefKey>) -> SapTy {
+        SapTy::Class(self.name.clone(), Vec::new(), baml_type::TyAttr::default())
     }
 }
 
-impl ToBamlTy for EnumTy<'_, TypeName> {
-    fn to_baml_ty(&self, _db: &TypeRefDb<'_, TypeName>) -> baml_type::RuntimeTy {
-        baml_type::RuntimeTy::Enum(self.name.clone(), baml_type::TyAttr::default())
+impl ToBamlTy for EnumTy<'_, DefKey> {
+    fn to_baml_ty(&self, _db: &TypeRefDb<'_, DefKey>) -> SapTy {
+        SapTy::Enum(self.name.clone(), baml_type::TyAttr::default())
     }
 }
 
-impl ToBamlTy for EnumVariantTy<'_, TypeName> {
+impl ToBamlTy for EnumVariantTy<'_, DefKey> {
     /// Loses variant specificity — maps back to the parent enum type.
-    fn to_baml_ty(&self, _db: &TypeRefDb<'_, TypeName>) -> baml_type::RuntimeTy {
-        baml_type::RuntimeTy::Enum(self.name.clone(), baml_type::TyAttr::default())
+    fn to_baml_ty(&self, _db: &TypeRefDb<'_, DefKey>) -> SapTy {
+        SapTy::Enum(self.name.clone(), baml_type::TyAttr::default())
     }
 }
 
-impl ToBamlTy for UnionTy<'_, TypeName> {
-    fn to_baml_ty(&self, db: &TypeRefDb<'_, TypeName>) -> baml_type::RuntimeTy {
-        let members: Vec<baml_type::RuntimeTy> =
-            self.variants.iter().map(|v| v.ty.to_baml_ty(db)).collect();
-        baml_type::RuntimeTy::Union(members, baml_type::TyAttr::default())
+impl ToBamlTy for UnionTy<'_, DefKey> {
+    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
+        let members: Vec<SapTy> = self.variants.iter().map(|v| v.ty.to_baml_ty(db)).collect();
+        SapTy::Union(members, baml_type::TyAttr::default())
     }
 }
 
-impl ToBamlTy for StreamStateTy<'_, TypeName> {
+impl ToBamlTy for StreamStateTy<'_, DefKey> {
     /// `StreamState` is a value-level concept; at the type level we return the inner type.
-    fn to_baml_ty(&self, db: &TypeRefDb<'_, TypeName>) -> baml_type::RuntimeTy {
+    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
         self.value.ty.to_baml_ty(db)
     }
 }
@@ -162,22 +157,39 @@ impl MediaTy {
 // Value conversion: SAP BamlValueWithFlags → BexExternalValue
 // ============================================================================
 
+/// Convert a lane type to the name-headed form `BexExternalValue` carries.
+///
+/// The value metadata a parsed result carries has nowhere to put a declaration
+/// identity, so it converts here — through the same per-call overlay spelling
+/// the definition tables for this call were built with, so a returned value's
+/// type names agree with the ones that call rendered. An anonymous declaration
+/// has no resolvable name; its overlay spelling is meaningful only inside this
+/// call and must not be treated as a lookup key beyond it.
+fn to_value_metadata_ty(ty: &SapTy) -> baml_type::RuntimeTy {
+    match ty.try_map_heads(&mut |head: &DefKey| {
+        Ok::<_, std::convert::Infallible>(head.name().overlay_name())
+    }) {
+        Ok(converted) => converted,
+        Err(never) => match never {},
+    }
+}
+
 /// Convert a SAP `BamlValueWithFlags` to a `BexExternalValue`, using the
 /// type metadata from the deserializer to populate type information on
 /// composite values (arrays, maps).
 ///
 /// Deserializer metadata (flags, scores) is discarded.
 pub fn baml_value_to_external(
-    value: &BamlValueWithFlags<'_, '_, '_, TypeName>,
-    db: &TypeRefDb<'_, TypeName>,
+    value: &BamlValueWithFlags<'_, '_, '_, DefKey>,
+    db: &TypeRefDb<'_, DefKey>,
 ) -> BexExternalValue {
     baml_value_inner_to_external(&value.value, &value.meta.ty, db)
 }
 
 fn baml_value_inner_to_external(
-    value: &BamlValue<'_, '_, '_, TypeName>,
-    ty: &TyWithMeta<TyResolvedRef<'_, TypeName>, &TypeAnnotations<'_, TypeName>>,
-    db: &TypeRefDb<'_, TypeName>,
+    value: &BamlValue<'_, '_, '_, DefKey>,
+    ty: &TyWithMeta<TyResolvedRef<'_, DefKey>, &TypeAnnotations<'_, DefKey>>,
+    db: &TypeRefDb<'_, DefKey>,
 ) -> BexExternalValue {
     match value {
         BamlValue::String(s) => BexExternalValue::String(bex_str::BexStr::from(s.value.as_ref())),
@@ -190,10 +202,10 @@ fn baml_value_inner_to_external(
             unimplemented!("Media value conversion to BexExternalValue is not yet implemented")
         }
         BamlValue::Array(arr) => {
-            let element_type = match ty.ty {
+            let element_type = to_value_metadata_ty(&match ty.ty {
                 TyResolvedRef::Array(a) => a.ty.ty.to_baml_ty(db),
-                _ => baml_type::RuntimeTy::unknown(),
-            };
+                _ => SapTy::unknown(),
+            });
             let items: Vec<BexExternalValue> = arr
                 .value
                 .iter()
@@ -207,11 +219,12 @@ fn baml_value_inner_to_external(
         BamlValue::Map(map) => {
             let (key_type, value_type) = match ty.ty {
                 TyResolvedRef::Map(m) => (m.key.ty.to_baml_ty(db), m.value.ty.to_baml_ty(db)),
-                _ => (
-                    baml_type::RuntimeTy::string(),
-                    baml_type::RuntimeTy::unknown(),
-                ),
+                _ => (SapTy::string(), SapTy::unknown()),
             };
+            let (key_type, value_type) = (
+                to_value_metadata_ty(&key_type),
+                to_value_metadata_ty(&value_type),
+            );
             let entries: IndexMap<String, BexExternalValue> = map
                 .value
                 .iter()
@@ -224,7 +237,8 @@ fn baml_value_inner_to_external(
             }
         }
         BamlValue::Enum(e) => BexExternalValue::Variant {
-            enum_name: e.name.to_string(),
+            // As for classes above: the qualified overlay spelling.
+            enum_name: e.name.name().overlay_name().to_string(),
             variant_name: e.value.to_string(),
         },
         BamlValue::Class(c) => {
@@ -234,7 +248,11 @@ fn baml_value_inner_to_external(
                 .map(|(k, v)| (k.to_string(), baml_value_to_external(v, db)))
                 .collect();
             BexExternalValue::Instance {
-                class_name: c.name.to_string(),
+                // The landing resolves this against the per-call handle view,
+                // which is keyed by the *qualified* overlay spelling — so emit
+                // that, not the display name. One declaration has several name
+                // forms; the two sides of this hand-off must pick the same one.
+                class_name: c.name.name().overlay_name().to_string(),
                 type_args: vec![],
                 fields,
             }
@@ -244,8 +262,8 @@ fn baml_value_inner_to_external(
 }
 
 fn stream_state_to_external(
-    state: &BamlStreamState<'_, '_, '_, TypeName>,
-    db: &TypeRefDb<'_, TypeName>,
+    state: &BamlStreamState<'_, '_, '_, DefKey>,
+    db: &TypeRefDb<'_, DefKey>,
 ) -> BexExternalValue {
     let (inner, state_name) = match state {
         BamlStreamState::Pending(v) => (v, "Pending"),

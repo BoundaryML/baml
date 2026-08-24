@@ -1,13 +1,13 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.json_alias_basic.MakeWrapper() -> fixtures.json_alias_basic.Wrapper {
+function fixtures.json_alias_basic.MakeWrapper() -> <unresolved type #108931323217917> {
     load_const null
     init_instance user.fixtures.json_alias_basic.Wrapper .data
     return
 }
 
-function fixtures.json_alias_basic.MatchJson(j: baml.json.json) -> string {
+function fixtures.json_alias_basic.MatchJson(j: <unresolved type #1888633819501>) -> string {
     load_var j
     load_const null
     cmp_op ==
@@ -85,7 +85,7 @@ function fixtures.json_alias_basic.MatchJson(j: baml.json.json) -> string {
     return
 }
 
-function fixtures.json_alias_basic.ReturnArray() -> baml.json.json {
+function fixtures.json_alias_basic.ReturnArray() -> <unresolved type #1888633819501> {
     load_const 1
     load_const 2
     load_const 3
@@ -94,22 +94,22 @@ function fixtures.json_alias_basic.ReturnArray() -> baml.json.json {
     return
 }
 
-function fixtures.json_alias_basic.ReturnBool() -> baml.json.json {
+function fixtures.json_alias_basic.ReturnBool() -> <unresolved type #1888633819501> {
     load_const true
     return
 }
 
-function fixtures.json_alias_basic.ReturnFloat() -> baml.json.json {
+function fixtures.json_alias_basic.ReturnFloat() -> <unresolved type #1888633819501> {
     load_const 3.14
     return
 }
 
-function fixtures.json_alias_basic.ReturnInt() -> baml.json.json {
+function fixtures.json_alias_basic.ReturnInt() -> <unresolved type #1888633819501> {
     load_const 42
     return
 }
 
-function fixtures.json_alias_basic.ReturnMap() -> baml.json.json {
+function fixtures.json_alias_basic.ReturnMap() -> <unresolved type #1888633819501> {
     load_const "value"
     load_const "key"
     load_type string
@@ -118,12 +118,12 @@ function fixtures.json_alias_basic.ReturnMap() -> baml.json.json {
     return
 }
 
-function fixtures.json_alias_basic.ReturnNull() -> baml.json.json {
+function fixtures.json_alias_basic.ReturnNull() -> <unresolved type #1888633819501> {
     load_const null
     return
 }
 
-function fixtures.json_alias_basic.ReturnString() -> baml.json.json {
+function fixtures.json_alias_basic.ReturnString() -> <unresolved type #1888633819501> {
     load_const "hello"
     return
 }

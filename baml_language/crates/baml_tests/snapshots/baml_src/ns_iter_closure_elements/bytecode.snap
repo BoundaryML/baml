@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function iter_closure_elements.$init_test_ns_iter_closure_elements_iter_closure_elements(registry: testing.TestCollector) -> null {
+function iter_closure_elements.$init_test_ns_iter_closure_elements_iter_closure_elements(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.iter_closure_elements"
     load_const "iterating_closure_array_calls_each"

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function to_string_interface.$init_test_ns_to_string_interface_to_string_interface(registry: testing.TestCollector) -> null {
+function to_string_interface.$init_test_ns_to_string_interface_to_string_interface(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.to_string_interface"
     load_const "default_renders_primitives"
@@ -97,7 +97,7 @@ function to_string_interface.$init_test_ns_to_string_interface_to_string_interfa
     return
 }
 
-function to_string_interface.DmcGreeter.baml.ToString.to_string(self: to_string_interface.DmcGreeter) -> string {
+function to_string_interface.DmcGreeter.baml.ToString.to_string(self: <unresolved type #20248427820065>) -> string {
     load_const "Hello, "
     load_var self
     load_field .name
@@ -105,7 +105,7 @@ function to_string_interface.DmcGreeter.baml.ToString.to_string(self: to_string_
     return
 }
 
-function to_string_interface.IouPoint.baml.ToString.to_string(self: to_string_interface.IouPoint) -> string {
+function to_string_interface.IouPoint.baml.ToString.to_string(self: <unresolved type #25869689643228>) -> string {
     load_type int
     load_var self
     load_field .x
@@ -128,7 +128,7 @@ function to_string_interface.IouPoint.baml.ToString.to_string(self: to_string_in
     return
 }
 
-function to_string_interface.OvrPoint.baml.ToString.to_string(self: to_string_interface.OvrPoint) -> string {
+function to_string_interface.OvrPoint.baml.ToString.to_string(self: <unresolved type #99500214906650>) -> string {
     load_type int
     load_var self
     load_field .x

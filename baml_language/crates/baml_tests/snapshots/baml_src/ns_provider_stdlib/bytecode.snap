@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function provider_stdlib.$init_test_ns_provider_stdlib_provider_stdlib(registry: testing.TestCollector) -> null {
+function provider_stdlib.$init_test_ns_provider_stdlib_provider_stdlib(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.provider_stdlib"
     load_const "provider stdlib exposes typed JSON paths and schemas"
@@ -27,7 +27,7 @@ function provider_stdlib.$init_test_ns_provider_stdlib_provider_stdlib(registry:
     return
 }
 
-function provider_stdlib.provider_schema() -> baml.json.json {
+function provider_stdlib.provider_schema() -> <unresolved type #1888633819501> {
     load_type provider_stdlib.ProviderSchemaExample
     sys_op baml.json.schema
     return

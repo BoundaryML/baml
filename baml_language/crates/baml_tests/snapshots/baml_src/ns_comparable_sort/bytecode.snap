@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function comparable_sort.$init_test_ns_comparable_sort_comparable_sort(registry: testing.TestCollector) -> null {
+function comparable_sort.$init_test_ns_comparable_sort_comparable_sort(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.comparable_sort"
     load_const "spike_1a_projection_normalizes_to_never_at_concrete_callsite"
@@ -190,7 +190,7 @@ function comparable_sort.FirstNamed$for$T[].first_name(self: #0[]) -> string {
     return
 }
 
-function comparable_sort.Num.Cmp.compare(self: comparable_sort.Num, other: comparable_sort.Num) -> int {
+function comparable_sort.Num.Cmp.compare(self: <unresolved type #54257572381203>, other: <unresolved type #54257572381203>) -> int {
     load_var self
     load_field .value
     load_var other
@@ -199,7 +199,7 @@ function comparable_sort.Num.Cmp.compare(self: comparable_sort.Num, other: compa
     return
 }
 
-function comparable_sort.OobScore.baml.Comparable.compare(self: comparable_sort.OobScore, other: comparable_sort.OobScore) -> int {
+function comparable_sort.OobScore.baml.Comparable.compare(self: <unresolved type #69352256603359>, other: <unresolved type #69352256603359>) -> int {
     load_var self
     load_field .points
     load_var other
@@ -212,7 +212,7 @@ function comparable_sort.OobScore.baml.Comparable.compare(self: comparable_sort.
     return
 }
 
-function comparable_sort.ParityItem.baml.Comparable.compare(self: comparable_sort.ParityItem, other: comparable_sort.ParityItem) -> int {
+function comparable_sort.ParityItem.baml.Comparable.compare(self: <unresolved type #101715224442427>, other: <unresolved type #101715224442427>) -> int {
     load_var self
     load_field .rank
     load_var other
@@ -225,7 +225,7 @@ function comparable_sort.ParityItem.baml.Comparable.compare(self: comparable_sor
     return
 }
 
-function comparable_sort.Ranked.baml.Comparable.compare(self: comparable_sort.Ranked, other: comparable_sort.Ranked) -> int {
+function comparable_sort.Ranked.baml.Comparable.compare(self: <unresolved type #81024606961230>, other: <unresolved type #81024606961230>) -> int {
     load_var self
     load_field .rank
     load_var other
@@ -238,7 +238,7 @@ function comparable_sort.Ranked.baml.Comparable.compare(self: comparable_sort.Ra
     return
 }
 
-function comparable_sort.Resume.baml.Comparable.compare(self: comparable_sort.Resume, other: comparable_sort.Resume) -> int {
+function comparable_sort.Resume.baml.Comparable.compare(self: <unresolved type #127676715836698>, other: <unresolved type #127676715836698>) -> int {
     load_var self
     load_field .rank
     load_var other
@@ -251,13 +251,13 @@ function comparable_sort.Resume.baml.Comparable.compare(self: comparable_sort.Re
     return
 }
 
-function comparable_sort.Risky.HasErr.f(self: comparable_sort.Risky) -> int {
+function comparable_sort.Risky.HasErr.f(self: <unresolved type #47736627541073>) -> int {
     load_const "kaboom"
     init_instance user.comparable_sort.Kaboom .message
     throw
 }
 
-function comparable_sort.RouteItem.baml.Comparable.compare(self: comparable_sort.RouteItem, other: comparable_sort.RouteItem) -> int {
+function comparable_sort.RouteItem.baml.Comparable.compare(self: <unresolved type #83919786219149>, other: <unresolved type #83919786219149>) -> int {
     load_var self
     load_field .rank
     load_var other
@@ -270,13 +270,13 @@ function comparable_sort.RouteItem.baml.Comparable.compare(self: comparable_sort
     return
 }
 
-function comparable_sort.Safe.HasErr.f(self: comparable_sort.Safe) -> int {
+function comparable_sort.Safe.HasErr.f(self: <unresolved type #114380590870088>) -> int {
     load_var self
     load_field .value
     return
 }
 
-function comparable_sort.Score.baml.Comparable.compare(self: comparable_sort.Score, other: comparable_sort.Score) -> int {
+function comparable_sort.Score.baml.Comparable.compare(self: <unresolved type #114728122227117>, other: <unresolved type #114728122227117>) -> int {
     load_var self
     load_field .points
     load_var other
@@ -309,7 +309,7 @@ function comparable_sort.Score.baml.Comparable.compare(self: comparable_sort.Sco
     return
 }
 
-function comparable_sort.ScorePts.baml.Comparable.compare(self: comparable_sort.ScorePts, other: comparable_sort.ScorePts) -> int {
+function comparable_sort.ScorePts.baml.Comparable.compare(self: <unresolved type #19976938029102>, other: <unresolved type #19976938029102>) -> int {
     load_var self
     load_field .points
     load_var other

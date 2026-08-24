@@ -178,14 +178,6 @@ fn reflect.function.Type.params = builtin(vm)
 
 fn reflect.function.Type.return_type = builtin(vm)
 
-fn reflect.function.Type.is_generic = builtin(vm)
-
-fn reflect.function.Type.generic_params = builtin(vm)
-
-fn reflect.function.Type.specialize = builtin(vm)
-
-fn reflect.function.Type.get = builtin(vm)
-
 fn reflect.interface.Type.reflect.TypeView.as_type = builtin(vm)
 
 fn reflect.interface.Type.implemented_by = builtin(vm)

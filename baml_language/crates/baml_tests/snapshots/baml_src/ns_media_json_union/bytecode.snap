@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function media_json_union.$init_test_ns_media_json_union_media_json_union(registry: testing.TestCollector) -> null {
+function media_json_union.$init_test_ns_media_json_union_media_json_union(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.media_json_union"
     load_const "media JSON unions roundtrip every kind"

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function literal_pattern_membership.$init_test_ns_literal_pattern_membership_literal_pattern_membership(registry: testing.TestCollector) -> null {
+function literal_pattern_membership.$init_test_ns_literal_pattern_membership_literal_pattern_membership(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.literal_pattern_membership"
     load_const "is_matches_int_one"

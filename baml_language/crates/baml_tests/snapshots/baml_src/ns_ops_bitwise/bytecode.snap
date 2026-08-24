@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function ops_bitwise.$init_test_ns_ops_bitwise_ops_bitwise(registry: testing.TestCollector) -> null {
+function ops_bitwise.$init_test_ns_ops_bitwise_ops_bitwise(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.ops_bitwise"
     load_const "bitwise_int_operators"
@@ -34,7 +34,7 @@ function ops_bitwise.$init_test_ns_ops_bitwise_ops_bitwise(registry: testing.Tes
     return
 }
 
-function ops_bitwise.band(x: #0, y: int) -> (#0 as baml.ops.BitAnd<int>).Output {
+function ops_bitwise.band(x: #0, y: int) -> (#0 as <unresolved type #68161494380667><int>).Output {
     load_var2 1 2
     load_type baml.ops.BitAnd<int>
     load_const "bit_and"
@@ -69,7 +69,7 @@ function ops_bitwise.bigint_ops() -> bool {
     return
 }
 
-function ops_bitwise.bshl(x: #0, y: int) -> (#0 as baml.ops.ShiftLeft<int>).Output {
+function ops_bitwise.bshl(x: #0, y: int) -> (#0 as <unresolved type #113926015126128><int>).Output {
     load_var2 1 2
     load_type baml.ops.ShiftLeft<int>
     load_const "shl"

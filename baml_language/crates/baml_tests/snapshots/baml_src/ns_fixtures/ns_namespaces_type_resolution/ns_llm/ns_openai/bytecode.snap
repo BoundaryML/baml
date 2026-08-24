@@ -1,14 +1,14 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIConstruct(key: string) -> fixtures.namespaces_type_resolution.llm.openai.Client {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIConstruct(key: string) -> <unresolved type #52592337154916> {
     load_var key
     load_const "org-123"
     init_instance user.fixtures.namespaces_type_resolution.llm.openai.Client .api_key, .org_id
     return
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIEnumMatch(m: fixtures.namespaces_type_resolution.llm.openai.Model) -> string {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIEnumMatch(m: <unresolved type #83630767087728>) -> string {
     load_var m
     discriminant
     load_const Model.GPT4o
@@ -39,18 +39,18 @@ function fixtures.namespaces_type_resolution.llm.openai.OpenAIEnumMatch(m: fixtu
     return
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIEnumReturn() -> fixtures.namespaces_type_resolution.llm.openai.Model {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIEnumReturn() -> <unresolved type #83630767087728> {
     load_const user.fixtures.namespaces_type_resolution.llm.openai.Model.GPT4o
     alloc_variant user.fixtures.namespaces_type_resolution.llm.openai.Model
     return
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIIdentity(c: fixtures.namespaces_type_resolution.llm.openai.Client) -> fixtures.namespaces_type_resolution.llm.openai.Client {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIIdentity(c: <unresolved type #52592337154916>) -> <unresolved type #52592337154916> {
     load_var c
     return
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesAuthRole(r: fixtures.namespaces_type_resolution.auth.Role) -> string {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesAuthRole(r: <unresolved type #45379476450178>) -> string {
     load_var r
     discriminant
     load_const Role.Admin
@@ -81,7 +81,7 @@ function fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesAuthRole(r:
     return
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesLlmStatus(s: fixtures.namespaces_type_resolution.llm.Status) -> string {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesLlmStatus(s: <unresolved type #127535337431579>) -> string {
     load_var s
     discriminant
     load_const Status.Ready
@@ -112,7 +112,7 @@ function fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesLlmStatus(s
     return
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesRootStatus(s: fixtures.namespaces_type_resolution.Status) -> string {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesRootStatus(s: <unresolved type #86032342827612>) -> string {
     load_var s
     discriminant
     load_const Status.Ok
@@ -143,13 +143,13 @@ function fixtures.namespaces_type_resolution.llm.openai.OpenAIMatchesRootStatus(
     return
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIMixedErrors(openai_err: fixtures.namespaces_type_resolution.llm.openai.Error, root_err: fixtures.namespaces_type_resolution.Error, llm_err: fixtures.namespaces_type_resolution.llm.Error, auth_err: fixtures.namespaces_type_resolution.auth.Error) -> string {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIMixedErrors(openai_err: <unresolved type #93130735156099>, root_err: <unresolved type #41883823745380>, llm_err: <unresolved type #137713710482013>, auth_err: <unresolved type #35037536625220>) -> string {
     load_var openai_err
     load_field .body
     return
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIMixedModels(openai_model: fixtures.namespaces_type_resolution.llm.openai.Model, llm_model: fixtures.namespaces_type_resolution.llm.Model) -> string {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIMixedModels(openai_model: <unresolved type #83630767087728>, llm_model: <unresolved type #14148008908518>) -> string {
     load_var openai_model
     discriminant
     load_const Model.GPT4o
@@ -215,43 +215,43 @@ function fixtures.namespaces_type_resolution.llm.openai.OpenAIThrowEnum(x: int) 
     throw
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesAuthConfig(cfg: fixtures.namespaces_type_resolution.auth.Config) -> string {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesAuthConfig(cfg: <unresolved type #108104746875348>) -> string {
     load_var cfg
     load_field .provider
     return
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesAuthRole() -> fixtures.namespaces_type_resolution.auth.Role {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesAuthRole() -> <unresolved type #45379476450178> {
     load_const user.fixtures.namespaces_type_resolution.auth.Role.User
     alloc_variant user.fixtures.namespaces_type_resolution.auth.Role
     return
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmConfig(cfg: fixtures.namespaces_type_resolution.llm.Config) -> string {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmConfig(cfg: <unresolved type #56181504664899>) -> string {
     load_var cfg
     load_field .model
     return
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmResponse(r: fixtures.namespaces_type_resolution.llm.Response) -> string {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmResponse(r: <unresolved type #8324156647274>) -> string {
     load_var r
     load_field .text
     return
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmStatus() -> fixtures.namespaces_type_resolution.llm.Status {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesLlmStatus() -> <unresolved type #127535337431579> {
     load_const user.fixtures.namespaces_type_resolution.llm.Status.Generating
     alloc_variant user.fixtures.namespaces_type_resolution.llm.Status
     return
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesRootConfig(cfg: fixtures.namespaces_type_resolution.Config) -> string {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesRootConfig(cfg: <unresolved type #95568016566388>) -> string {
     load_var cfg
     load_field .key
     return
 }
 
-function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesRootStatus() -> fixtures.namespaces_type_resolution.Status {
+function fixtures.namespaces_type_resolution.llm.openai.OpenAIUsesRootStatus() -> <unresolved type #86032342827612> {
     load_const user.fixtures.namespaces_type_resolution.Status.Ok
     alloc_variant user.fixtures.namespaces_type_resolution.Status
     return

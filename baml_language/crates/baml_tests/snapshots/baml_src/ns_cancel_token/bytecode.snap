@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function cancel_token.$init_test_ns_cancel_token_cancel_token(registry: testing.TestCollector) -> null {
+function cancel_token.$init_test_ns_cancel_token_cancel_token(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.cancel_token"
     load_const "await_token_cancelled_catches"

@@ -123,7 +123,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
                 causes: Vec::new(),
             },
             Err(ident) => ParsingError {
-                reason: format!("Failed to resolve type {}", ident.render()),
+                reason: format!("Failed to resolve type {ident}"),
                 scope: self.scope.clone(),
                 causes: vec![ParsingError {
                     reason: format!("Too many matches for <UNRESOLVED>. Got: {got}"),
@@ -157,7 +157,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
                 causes: Vec::new(),
             },
             Err(ident) => ParsingError {
-                reason: format!("Failed to resolve type {}", ident.render()),
+                reason: format!("Failed to resolve type {ident}"),
                 scope: self.scope.clone(),
                 causes: vec![ParsingError {
                     reason: "Expected <UNRESOLVED>, got empty array".to_string(),
@@ -176,7 +176,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
                 causes: Vec::new(),
             },
             Err(ident) => ParsingError {
-                reason: format!("Failed to resolve type {}", ident.render()),
+                reason: format!("Failed to resolve type {ident}"),
                 scope: self.scope.clone(),
                 causes: vec![ParsingError {
                     reason: "Expected <UNRESOLVED>, got null".to_string(),
@@ -232,7 +232,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             causes: Vec::new(),
         },
             Err(ident) => ParsingError {
-                reason: format!("Failed to resolve type {}", ident.render()),
+                reason: format!("Failed to resolve type {ident}"),
                 scope: self.scope.clone(),
                 causes: vec![
                     ParsingError {
@@ -286,7 +286,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
                 causes: Vec::new(),
             },
             Err(ident) => ParsingError {
-                reason: format!("Failed to resolve type {}", ident.render()),
+                reason: format!("Failed to resolve type {ident}"),
                 scope: self.scope.clone(),
                 causes: vec![ParsingError {
                     reason: format!("Expected <UNRESOLVED>, got {got:?}."),
@@ -327,7 +327,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
 
     pub fn error_type_resolution(&self, ident: &N) -> ParsingError {
         ParsingError {
-            reason: format!("Failed to resolve type {}", ident.render()),
+            reason: format!("Failed to resolve type {ident}"),
             scope: self.scope.clone(),
             causes: Vec::new(),
         }

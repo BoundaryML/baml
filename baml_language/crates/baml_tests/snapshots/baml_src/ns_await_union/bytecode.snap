@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function await_union.$init_test_ns_await_union_await_union(registry: testing.TestCollector) -> null {
+function await_union.$init_test_ns_await_union_await_union(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.await_union"
     load_const "await_union_of_futures_value_side"

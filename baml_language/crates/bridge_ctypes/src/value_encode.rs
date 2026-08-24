@@ -165,12 +165,29 @@ pub fn external_to_outbound(
         // crosses the boundary as a first-class `Ty`, sharing the inbound
         // representation. Must precede the opaque-ADT catch-all, which would
         // otherwise box it into a handle.
-        BexExternalValue::Adt(BexExternalAdt::Type(rt)) => Some(BamlValueVariant::TyValue(
-            crate::ty_encode::runtime_ty_to_proto_ty(rt),
-        )),
-        BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => Some(
-            BamlValueVariant::TyDefValue(crate::ty_encode::portable_type_def_to_proto(definition)),
-        ),
+        // A lane type crossing out: the wire spells heads by name, so a
+        // declared one converts and an anonymous one cannot. Anonymous heads
+        // are dropped to `unknown` rather than given a fabricated spelling
+        // that would resolve to a *different*, compiled declaration on the way
+        // back in. Carrying them faithfully is what `BamlTypeHead` is for.
+        BexExternalValue::Adt(BexExternalAdt::Type(rt)) => {
+            let named = rt
+                .clone()
+                .try_map_heads(&mut |head: &baml_type::TaggedTypeName| {
+                    head.declared().cloned().ok_or(())
+                })
+                .unwrap_or_else(|()| baml_type::RuntimeTy::unknown());
+            Some(BamlValueVariant::TyValue(
+                crate::ty_encode::runtime_ty_to_proto_ty(&named),
+            ))
+        }
+        // A live handle is an engine capability, not data: only the portable
+        // definitions cross a process (BEP-066 H-4).
+        BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => {
+            Some(BamlValueVariant::TyDefValue(
+                crate::ty_encode::portable_type_def_to_proto(definition.def()),
+            ))
+        }
 
         // All opaque types → insert into handle table, encode as BamlOutboundHandle.
         BexExternalValue::Handle(_)
@@ -314,12 +331,29 @@ pub(crate) fn artifact_safe_external_to_outbound(
                 "host-owned rust data",
             ))
         }
-        BexExternalValue::Adt(BexExternalAdt::Type(rt)) => Some(BamlValueVariant::TyValue(
-            crate::ty_encode::runtime_ty_to_proto_ty(rt),
-        )),
-        BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => Some(
-            BamlValueVariant::TyDefValue(crate::ty_encode::portable_type_def_to_proto(definition)),
-        ),
+        // A lane type crossing out: the wire spells heads by name, so a
+        // declared one converts and an anonymous one cannot. Anonymous heads
+        // are dropped to `unknown` rather than given a fabricated spelling
+        // that would resolve to a *different*, compiled declaration on the way
+        // back in. Carrying them faithfully is what `BamlTypeHead` is for.
+        BexExternalValue::Adt(BexExternalAdt::Type(rt)) => {
+            let named = rt
+                .clone()
+                .try_map_heads(&mut |head: &baml_type::TaggedTypeName| {
+                    head.declared().cloned().ok_or(())
+                })
+                .unwrap_or_else(|()| baml_type::RuntimeTy::unknown());
+            Some(BamlValueVariant::TyValue(
+                crate::ty_encode::runtime_ty_to_proto_ty(&named),
+            ))
+        }
+        // A live handle is an engine capability, not data: only the portable
+        // definitions cross a process (BEP-066 H-4).
+        BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => {
+            Some(BamlValueVariant::TyDefValue(
+                crate::ty_encode::portable_type_def_to_proto(definition.def()),
+            ))
+        }
         BexExternalValue::HostValue(arc) => Some(artifact_safe_omission(
             "hostOwnedValue",
             match arc.kind {

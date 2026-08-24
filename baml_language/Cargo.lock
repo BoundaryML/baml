@@ -1232,6 +1232,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_builtins2",
+ "baml_cli",
  "baml_compiler2_ast",
  "baml_compiler2_emit",
  "baml_compiler2_hir",
@@ -1258,6 +1259,7 @@ dependencies = [
  "indexmap",
  "insta",
  "libc",
+ "mimalloc",
  "num-bigint",
  "prettyplease",
  "proc-macro2",

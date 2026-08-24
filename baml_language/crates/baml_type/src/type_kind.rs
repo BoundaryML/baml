@@ -58,7 +58,9 @@ impl TypeKind {
 }
 
 /// Classify every realized runtime type into exactly one reflection kind.
-pub fn classify_type(ty: &RealizedTy) -> TypeKind {
+///
+/// Shape only — no head is inspected — so this answers the same at either head.
+pub fn classify_type<N: Clone>(ty: &RealizedTy<N>) -> TypeKind {
     match ty {
         RealizedTy::Class(..) => TypeKind::Class,
         RealizedTy::Enum(..) => TypeKind::Enum,
@@ -80,6 +82,28 @@ pub fn is_type_kind_class(name: &QualifiedTypeName) -> bool {
             .iter()
             .any(|kind| name.namespace()[0].as_str() == kind.namespace())
         && name.name().as_str() == "Type"
+}
+
+/// Whether `tag` identifies one of the sealed reflection kind classes.
+///
+/// A compiled declaration's tag is content-addressed from its fully-qualified
+/// name, so this is an integer compare against the nine known names — no
+/// lookup, and no runtime declaration can collide with one, since counter tags
+/// are drawn from a disjoint range.
+#[must_use]
+pub fn is_type_kind_tag(tag: crate::typetag::TypeTag) -> bool {
+    TypeKind::ALL.iter().any(|kind| {
+        tag == crate::typetag::TypeTag::of_head(&kind.class_name().render_dotted(false))
+    })
+}
+
+/// [`class_inhabits_any_class`] for a runtime head, which carries a tag rather
+/// than a name.
+#[must_use]
+pub fn tag_inhabits_any_class(tag: crate::typetag::TypeTag) -> bool {
+    !is_type_kind_tag(tag)
+        || tag
+            == crate::typetag::TypeTag::of_head(&TypeKind::Class.class_name().render_dotted(false))
 }
 
 /// A builtin type and where its values actually come from, for the

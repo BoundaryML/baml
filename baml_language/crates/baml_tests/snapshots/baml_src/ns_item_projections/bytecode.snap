@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function item_projections.$init_test_ns_item_projections_item_projections(registry: testing.TestCollector) -> null {
+function item_projections.$init_test_ns_item_projections_item_projections(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.item_projections"
     load_const "qualifier_selects_between_same_named_methods"
@@ -153,7 +153,7 @@ function item_projections.$init_test_ns_item_projections_item_projections(regist
     return
 }
 
-function item_projections.Bin.Buildable.build(seed: int) -> item_projections.Bin<#0> {
+function item_projections.Bin.Buildable.build(seed: int) -> <unresolved type #10960285746069><#0> {
     load_type int
     load_var seed
     call baml.String.from
@@ -166,23 +166,23 @@ function item_projections.Bin.Buildable.build(seed: int) -> item_projections.Bin
     return
 }
 
-function item_projections.Bin.Buildable.describe(self: item_projections.Bin<#0>) -> string {
+function item_projections.Bin.Buildable.describe(self: <unresolved type #10960285746069><#0>) -> string {
     load_var self
     load_field .label
     return
 }
 
-function item_projections.Dual.Marked<int>.mark(self: item_projections.Dual) -> int {
+function item_projections.Dual.Marked<int>.mark(self: <unresolved type #87179227547218>) -> int {
     load_const 1
     return
 }
 
-function item_projections.Dual.Marked<string>.mark(self: item_projections.Dual) -> string {
+function item_projections.Dual.Marked<string>.mark(self: <unresolved type #87179227547218>) -> string {
     load_const "two"
     return
 }
 
-function item_projections.Gadget.Buildable.build(seed: int) -> item_projections.Gadget {
+function item_projections.Gadget.Buildable.build(seed: int) -> <unresolved type #27776547098272> {
     load_var seed
     load_const 10
     mul_int
@@ -190,7 +190,7 @@ function item_projections.Gadget.Buildable.build(seed: int) -> item_projections.
     return
 }
 
-function item_projections.Gadget.Buildable.describe(self: item_projections.Gadget) -> string {
+function item_projections.Gadget.Buildable.describe(self: <unresolved type #27776547098272>) -> string {
     load_type int
     load_var self
     load_field .g
@@ -202,22 +202,22 @@ function item_projections.Gadget.Buildable.describe(self: item_projections.Gadge
     return
 }
 
-function item_projections.Keyed2.Keyworded.extends(self: item_projections.Keyed2) -> int {
+function item_projections.Keyed2.Keyworded.extends(self: <unresolved type #125990819733024>) -> int {
     load_const 2
     return
 }
 
-function item_projections.Keyed2.Keyworded.implements(self: item_projections.Keyed2) -> int {
+function item_projections.Keyed2.Keyworded.implements(self: <unresolved type #125990819733024>) -> int {
     load_const 1
     return
 }
 
-function item_projections.Label.label(self: item_projections.Label<#1>) -> string {
+function item_projections.Label.label(self: <unresolved type #76022932726954><#1>) -> string {
     load_const "ok"
     return
 }
 
-function item_projections.Loud.Sayer.say(self: item_projections.Loud) -> string {
+function item_projections.Loud.Sayer.say(self: <unresolved type #119884222509268>) -> string {
     load_const "LOUD"
     return
 }
@@ -232,7 +232,7 @@ function item_projections.Plate.Embosser.emboss(u: #1) -> string {
     return
 }
 
-function item_projections.Plate.Embosser.fresh(seed: int) -> item_projections.Plate<#0> {
+function item_projections.Plate.Embosser.fresh(seed: int) -> <unresolved type #7580447635944><#0> {
     load_type int
     load_var seed
     call baml.String.from
@@ -241,7 +241,7 @@ function item_projections.Plate.Embosser.fresh(seed: int) -> item_projections.Pl
     return
 }
 
-function item_projections.Plate.Embosser.label(self: item_projections.Plate<#0>) -> string {
+function item_projections.Plate.Embosser.label(self: <unresolved type #7580447635944><#0>) -> string {
     load_const "plate "
     load_var self
     load_field .tag
@@ -249,7 +249,7 @@ function item_projections.Plate.Embosser.label(self: item_projections.Plate<#0>)
     return
 }
 
-function item_projections.Poly.Convert<int>.conv(self: item_projections.Poly, other: item_projections.Poly) -> int {
+function item_projections.Poly.Convert<int>.conv(self: <unresolved type #111753319151946>, other: <unresolved type #111753319151946>) -> int {
     load_var self
     load_field .n
     load_var other
@@ -258,7 +258,7 @@ function item_projections.Poly.Convert<int>.conv(self: item_projections.Poly, ot
     return
 }
 
-function item_projections.Poly.Convert<string>.conv(self: item_projections.Poly, other: item_projections.Poly) -> string {
+function item_projections.Poly.Convert<string>.conv(self: <unresolved type #111753319151946>, other: <unresolved type #111753319151946>) -> string {
     load_const "poly"
     return
 }
@@ -273,7 +273,7 @@ function item_projections.Press.Stamper.emboss(u: #0) -> string {
     return
 }
 
-function item_projections.Press.Stamper.stamp(self: item_projections.Press, u: #0) -> string {
+function item_projections.Press.Stamper.stamp(self: <unresolved type #13819115888355>, u: #0) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     store_var _3
@@ -283,18 +283,18 @@ function item_projections.Press.Stamper.stamp(self: item_projections.Press, u: #
     return
 }
 
-function item_projections.Row.Keyed.key(self: item_projections.Row) -> int {
+function item_projections.Row.Keyed.key(self: <unresolved type #1063387236000>) -> int {
     load_var self
     load_field .id
     return
 }
 
-function item_projections.Sayer.say(self: item_projections.Sayer) -> string {
+function item_projections.Sayer.say(self: <unresolved type #87312228751916>) -> string {
     load_const "default"
     return
 }
 
-function item_projections.Sized.Sizer.pick(self: item_projections.Sized, other: item_projections.Sized) -> item_projections.Sized {
+function item_projections.Sized.Sizer.pick(self: <unresolved type #119480608614235>, other: <unresolved type #119480608614235>) -> <unresolved type #119480608614235> {
     load_var self
     load_field .s
     load_var other
@@ -314,7 +314,7 @@ function item_projections.Sized.Sizer.pick(self: item_projections.Sized, other: 
     return
 }
 
-function item_projections.Sizer.grow(self: item_projections.Sizer) -> #0 {
+function item_projections.Sizer.grow(self: <unresolved type #134873771409189>) -> #0 {
     load_var2 1 1
     load_type item_projections.Sizer
     load_const "pick"
@@ -324,25 +324,25 @@ function item_projections.Sizer.grow(self: item_projections.Sizer) -> #0 {
     return
 }
 
-function item_projections.Twin.Alpha.tag(self: item_projections.Twin, other: item_projections.Twin) -> int {
+function item_projections.Twin.Alpha.tag(self: <unresolved type #139390953222766>, other: <unresolved type #139390953222766>) -> int {
     load_var self
     load_field .n
     return
 }
 
-function item_projections.Twin.Beta.tag(self: item_projections.Twin, other: item_projections.Twin) -> int {
+function item_projections.Twin.Beta.tag(self: <unresolved type #139390953222766>, other: <unresolved type #139390953222766>) -> int {
     load_var other
     load_field .0
     return
 }
 
-function item_projections.Widget.Buildable.build(seed: int) -> item_projections.Widget {
+function item_projections.Widget.Buildable.build(seed: int) -> <unresolved type #94739264436344> {
     load_var seed
     init_instance user.item_projections.Widget .w
     return
 }
 
-function item_projections.Widget.Buildable.describe(self: item_projections.Widget) -> string {
+function item_projections.Widget.Buildable.describe(self: <unresolved type #94739264436344>) -> string {
     load_type int
     load_var self
     load_field .w

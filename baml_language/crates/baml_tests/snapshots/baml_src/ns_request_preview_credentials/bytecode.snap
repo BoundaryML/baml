@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function request_preview_credentials.$init_test_ns_request_preview_credentials_request_preview_credentials(registry: testing.TestCollector) -> null {
+function request_preview_credentials.$init_test_ns_request_preview_credentials_request_preview_credentials(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.request_preview_credentials"
     load_const "provider previews are keyless and preserve user headers"
@@ -41,7 +41,7 @@ function request_preview_credentials.$init_test_ns_request_preview_credentials_r
     return
 }
 
-function request_preview_credentials.PreviewShape(client: ai.Client | null) -> string {
+function request_preview_credentials.PreviewShape(client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -70,7 +70,7 @@ function request_preview_credentials.PreviewShape(client: ai.Client | null) -> s
     return
 }
 
-function request_preview_credentials.PreviewShape$build_request(client: ai.Client | null) -> baml.http.Request {
+function request_preview_credentials.PreviewShape$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -94,7 +94,7 @@ function request_preview_credentials.PreviewShape$parse(json: string) -> string 
     return
 }
 
-function request_preview_credentials.PreviewShape$render_prompt() -> ai.Prompt {
+function request_preview_credentials.PreviewShape$render_prompt() -> <unresolved type #135172864440005> {
     call user.request_preview_credentials.PreviewShape$spec
     store_var _1
     load_type string
@@ -106,7 +106,7 @@ function request_preview_credentials.PreviewShape$render_prompt() -> ai.Prompt {
     return
 }
 
-function request_preview_credentials.PreviewShape$spec() -> ai.FunctionSpec<string> {
+function request_preview_credentials.PreviewShape$spec() -> <unresolved type #25974768157144><string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -140,7 +140,7 @@ function request_preview_credentials.PreviewShape$spec() -> ai.FunctionSpec<stri
     return
 }
 
-function request_preview_credentials.PreviewShape$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function request_preview_credentials.PreviewShape$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -176,7 +176,7 @@ function request_preview_credentials._google_timeout_source() -> string {
     return
 }
 
-function request_preview_credentials._preview_input() -> ai.ModelTurnInput {
+function request_preview_credentials._preview_input() -> <unresolved type #66661248708833> {
     call user.request_preview_credentials.PreviewShape$spec
     store_var spec
     load_var spec

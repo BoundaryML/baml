@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function reflect_type_of_generic.$init_test_ns_reflect_type_of_generic_reflect_type_of_generic(registry: testing.TestCollector) -> null {
+function reflect_type_of_generic.$init_test_ns_reflect_type_of_generic_reflect_type_of_generic(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.reflect_type_of_generic"
     load_const "describe_user_returns_user"
@@ -139,13 +139,13 @@ function reflect_type_of_generic.$init_test_ns_reflect_type_of_generic_reflect_t
     return
 }
 
-function reflect_type_of_generic.Box.describe(self: reflect_type_of_generic.Box<#0>) -> string {
+function reflect_type_of_generic.Box.describe(self: <unresolved type #136181398667771><#0>) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function reflect_type_of_generic.HolderStr.delegate(self: reflect_type_of_generic.HolderStr<#0>) -> string {
+function reflect_type_of_generic.HolderStr.delegate(self: <unresolved type #132535731543395><#0>) -> string {
     load_type #0
     load_var self
     load_field .inner
@@ -153,25 +153,25 @@ function reflect_type_of_generic.HolderStr.delegate(self: reflect_type_of_generi
     return
 }
 
-function reflect_type_of_generic.Inner.name(self: reflect_type_of_generic.Inner<#0>) -> string {
+function reflect_type_of_generic.Inner.name(self: <unresolved type #80313414854078><#0>) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function reflect_type_of_generic.InnerShow.show(self: reflect_type_of_generic.InnerShow<#0>) -> string {
+function reflect_type_of_generic.InnerShow.show(self: <unresolved type #112984556204051><#0>) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function reflect_type_of_generic.Leaf.describe(self: reflect_type_of_generic.Leaf<#0>) -> string {
+function reflect_type_of_generic.Leaf.describe(self: <unresolved type #138982567197874><#0>) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function reflect_type_of_generic.Outer.outer_describe(self: reflect_type_of_generic.Outer<#0>) -> string {
+function reflect_type_of_generic.Outer.outer_describe(self: <unresolved type #47113718285933><#0>) -> string {
     load_type #0
     load_var self
     load_field .inner

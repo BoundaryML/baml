@@ -372,6 +372,7 @@ impl BexHeap {
             | Object::Interface(_)
             | Object::Package(_)
             | Object::ImplRule(_)
+            | Object::TypeAlias(_)
             | Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)

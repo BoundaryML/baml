@@ -40,7 +40,6 @@
 //! re-executes `Await`, reads the terminal state directly from the heap,
 //! and proceeds.
 
-use ::baml_type::RealizedTy;
 use ::bex_heap::{
     HeapPermit, HeapPermitManager, InactiveHeapPermit, PermitProof, Tlab, TlabHolder,
 };
@@ -172,8 +171,8 @@ impl FutureManagerGuard<'_> {
     /// future's generic parameters rather than only "some future".
     pub fn new_future(
         &mut self,
-        returns: RealizedTy,
-        throws: RealizedTy,
+        returns: bex_vm_types::RealizedTy,
+        throws: bex_vm_types::RealizedTy,
         cancel: CancellationToken,
         origin: std::sync::Arc<str>,
     ) -> (FutureId, HeapPtr) {
@@ -688,8 +687,8 @@ mod tests {
         cancel: CancellationToken,
     ) -> (FutureId, HeapPtr) {
         guard.new_future(
-            RealizedTy::int(),
-            RealizedTy::never(),
+            bex_vm_types::RealizedTy::int(),
+            bex_vm_types::RealizedTy::never(),
             cancel,
             "test".into(),
         )

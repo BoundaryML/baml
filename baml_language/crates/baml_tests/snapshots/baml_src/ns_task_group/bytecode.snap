@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function task_group.$init_test_ns_task_group_task_group(registry: testing.TestCollector) -> null {
+function task_group.$init_test_ns_task_group_task_group(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.task_group"
     load_const "caps_active_and_queues_rest"

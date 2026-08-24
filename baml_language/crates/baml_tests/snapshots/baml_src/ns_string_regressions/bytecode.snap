@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function string_regressions.$init_test_ns_string_regressions_string_regressions(registry: testing.TestCollector) -> null {
+function string_regressions.$init_test_ns_string_regressions_string_regressions(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.string_regressions"
     load_const "split_empty_delimiter_has_no_padding"

@@ -226,10 +226,20 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
             let mut visit = visit;
             visit(IndexOperand::Global(&mut generic.function));
         }
+        // An interface names each default method's pooled body — a cross-object
+        // operand relocated exactly like a code object's.
+        Object::Interface(interface) => {
+            let mut visit = visit;
+            for method in &mut interface.methods {
+                if let Some(default) = &mut method.default {
+                    visit(IndexOperand::Object(default));
+                }
+            }
+        }
         // Inert at relink time: no cross-function index operands.
         Object::Class(..)
         | Object::Enum(..)
-        | Object::Interface(..)
+        | Object::TypeAlias(..)
         | Object::Package(..)
         | Object::ImplRule(..)
         | Object::String(..)
@@ -314,7 +324,7 @@ mod tests {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_base::Span::fake(),
-            return_type: baml_type::TyTemplate::BuiltinUnknown {
+            return_type: crate::TyTemplate::BuiltinUnknown {
                 attr: baml_type::TyAttr::default(),
             },
             param_names: Vec::new(),
@@ -324,7 +334,7 @@ mod tests {
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: String::new(),
-            throws_type: baml_type::TyTemplate::Never {
+            throws_type: crate::TyTemplate::Never {
                 attr: baml_type::TyAttr::default(),
             },
             origin: FunctionOrigin::Internal,

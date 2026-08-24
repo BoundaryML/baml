@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function env_ref_clients.$init_test_ns_env_ref_clients_env_ref_clients(registry: testing.TestCollector) -> null {
+function env_ref_clients.$init_test_ns_env_ref_clients_env_ref_clients(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.env_ref_clients"
     load_const "env_ref_is_pure_data"
@@ -155,7 +155,7 @@ function env_ref_clients.$init_test_ns_env_ref_clients_env_ref_clients(registry:
     return
 }
 
-function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client | null) -> string {
+function env_ref_clients.EnvRefDynamicEcho(question: string, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -185,7 +185,7 @@ function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client |
     return
 }
 
-function env_ref_clients.EnvRefDynamicEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+function env_ref_clients.EnvRefDynamicEcho$build_request(question: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -210,7 +210,7 @@ function env_ref_clients.EnvRefDynamicEcho$parse(json: string) -> string {
     return
 }
 
-function env_ref_clients.EnvRefDynamicEcho$render_prompt(question: string) -> ai.Prompt {
+function env_ref_clients.EnvRefDynamicEcho$render_prompt(question: string) -> <unresolved type #135172864440005> {
     load_var question
     call user.env_ref_clients.EnvRefDynamicEcho$spec
     store_var _2
@@ -223,7 +223,7 @@ function env_ref_clients.EnvRefDynamicEcho$render_prompt(question: string) -> ai
     return
 }
 
-function env_ref_clients.EnvRefDynamicEcho$spec(question: string) -> ai.FunctionSpec<string> {
+function env_ref_clients.EnvRefDynamicEcho$spec(question: string) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -259,7 +259,7 @@ function env_ref_clients.EnvRefDynamicEcho$spec(question: string) -> ai.Function
     return
 }
 
-function env_ref_clients.EnvRefDynamicEcho$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.EnvRefDynamicEcho$stream(question: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -278,7 +278,7 @@ function env_ref_clients.EnvRefDynamicEcho$stream(question: string, client: ai.s
     return
 }
 
-function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null) -> string {
+function env_ref_clients.EnvRefEcho(question: string, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -308,7 +308,7 @@ function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null) 
     return
 }
 
-function env_ref_clients.EnvRefEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+function env_ref_clients.EnvRefEcho$build_request(question: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -333,7 +333,7 @@ function env_ref_clients.EnvRefEcho$parse(json: string) -> string {
     return
 }
 
-function env_ref_clients.EnvRefEcho$render_prompt(question: string) -> ai.Prompt {
+function env_ref_clients.EnvRefEcho$render_prompt(question: string) -> <unresolved type #135172864440005> {
     load_var question
     call user.env_ref_clients.EnvRefEcho$spec
     store_var _2
@@ -346,7 +346,7 @@ function env_ref_clients.EnvRefEcho$render_prompt(question: string) -> ai.Prompt
     return
 }
 
-function env_ref_clients.EnvRefEcho$spec(question: string) -> ai.FunctionSpec<string> {
+function env_ref_clients.EnvRefEcho$spec(question: string) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -386,7 +386,7 @@ function env_ref_clients.EnvRefEcho$spec(question: string) -> ai.FunctionSpec<st
     return
 }
 
-function env_ref_clients.EnvRefEcho$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.EnvRefEcho$stream(question: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -405,7 +405,7 @@ function env_ref_clients.EnvRefEcho$stream(question: string, client: ai.stream.S
     return
 }
 
-function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client | null) -> string {
+function env_ref_clients.EnvRefResolvedEcho(question: string, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -435,7 +435,7 @@ function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client 
     return
 }
 
-function env_ref_clients.EnvRefResolvedEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+function env_ref_clients.EnvRefResolvedEcho$build_request(question: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -460,7 +460,7 @@ function env_ref_clients.EnvRefResolvedEcho$parse(json: string) -> string {
     return
 }
 
-function env_ref_clients.EnvRefResolvedEcho$render_prompt(question: string) -> ai.Prompt {
+function env_ref_clients.EnvRefResolvedEcho$render_prompt(question: string) -> <unresolved type #135172864440005> {
     load_var question
     call user.env_ref_clients.EnvRefResolvedEcho$spec
     store_var _2
@@ -473,7 +473,7 @@ function env_ref_clients.EnvRefResolvedEcho$render_prompt(question: string) -> a
     return
 }
 
-function env_ref_clients.EnvRefResolvedEcho$spec(question: string) -> ai.FunctionSpec<string> {
+function env_ref_clients.EnvRefResolvedEcho$spec(question: string) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -499,7 +499,7 @@ function env_ref_clients.EnvRefResolvedEcho$spec(question: string) -> ai.Functio
     return
 }
 
-function env_ref_clients.EnvRefResolvedEcho$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.EnvRefResolvedEcho$stream(question: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -518,7 +518,7 @@ function env_ref_clients.EnvRefResolvedEcho$stream(question: string, client: ai.
     return
 }
 
-function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | null) -> string {
+function env_ref_clients.LiveEnvRefEcho(question: string, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -548,7 +548,7 @@ function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | nu
     return
 }
 
-function env_ref_clients.LiveEnvRefEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+function env_ref_clients.LiveEnvRefEcho$build_request(question: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -573,7 +573,7 @@ function env_ref_clients.LiveEnvRefEcho$parse(json: string) -> string {
     return
 }
 
-function env_ref_clients.LiveEnvRefEcho$render_prompt(question: string) -> ai.Prompt {
+function env_ref_clients.LiveEnvRefEcho$render_prompt(question: string) -> <unresolved type #135172864440005> {
     load_var question
     call user.env_ref_clients.LiveEnvRefEcho$spec
     store_var _2
@@ -586,7 +586,7 @@ function env_ref_clients.LiveEnvRefEcho$render_prompt(question: string) -> ai.Pr
     return
 }
 
-function env_ref_clients.LiveEnvRefEcho$spec(question: string) -> ai.FunctionSpec<string> {
+function env_ref_clients.LiveEnvRefEcho$spec(question: string) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -611,7 +611,7 @@ function env_ref_clients.LiveEnvRefEcho$spec(question: string) -> ai.FunctionSpe
     return
 }
 
-function env_ref_clients.LiveEnvRefEcho$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.LiveEnvRefEcho$stream(question: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -630,7 +630,7 @@ function env_ref_clients.LiveEnvRefEcho$stream(question: string, client: ai.stre
     return
 }
 
-function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Client | null) -> string {
+function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: <unresolved type #34575171419448> | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -660,7 +660,7 @@ function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Cli
     return
 }
 
-function env_ref_clients.LiveEnvRefFallbackEcho$build_request(question: string, client: ai.Client | null) -> baml.http.Request {
+function env_ref_clients.LiveEnvRefFallbackEcho$build_request(question: string, client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -685,7 +685,7 @@ function env_ref_clients.LiveEnvRefFallbackEcho$parse(json: string) -> string {
     return
 }
 
-function env_ref_clients.LiveEnvRefFallbackEcho$render_prompt(question: string) -> ai.Prompt {
+function env_ref_clients.LiveEnvRefFallbackEcho$render_prompt(question: string) -> <unresolved type #135172864440005> {
     load_var question
     call user.env_ref_clients.LiveEnvRefFallbackEcho$spec
     store_var _2
@@ -698,7 +698,7 @@ function env_ref_clients.LiveEnvRefFallbackEcho$render_prompt(question: string) 
     return
 }
 
-function env_ref_clients.LiveEnvRefFallbackEcho$spec(question: string) -> ai.FunctionSpec<string> {
+function env_ref_clients.LiveEnvRefFallbackEcho$spec(question: string) -> <unresolved type #25974768157144><string> {
     load_var ?1
     make_cell
     store_var ?1
@@ -734,7 +734,7 @@ function env_ref_clients.LiveEnvRefFallbackEcho$spec(question: string) -> ai.Fun
     return
 }
 
-function env_ref_clients.LiveEnvRefFallbackEcho$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.LiveEnvRefFallbackEcho$stream(question: string, client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==

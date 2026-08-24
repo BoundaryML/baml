@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function crypto.$init_test_ns_crypto_aes_gcm_siv(registry: testing.TestCollector) -> null {
+function crypto.$init_test_ns_crypto_aes_gcm_siv(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.crypto"
     load_const "aes256_matches_rfc8452_vector"
@@ -111,7 +111,7 @@ function crypto.$init_test_ns_crypto_aes_gcm_siv(registry: testing.TestCollector
     return
 }
 
-function crypto.$init_test_ns_crypto_chacha20poly1305(registry: testing.TestCollector) -> null {
+function crypto.$init_test_ns_crypto_chacha20poly1305(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.crypto"
     load_const "chacha20poly1305_matches_rfc8439_vector"
@@ -221,7 +221,7 @@ function crypto.$init_test_ns_crypto_chacha20poly1305(registry: testing.TestColl
     return
 }
 
-function crypto.$init_test_ns_crypto_sha2(registry: testing.TestCollector) -> null {
+function crypto.$init_test_ns_crypto_sha2(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.crypto"
     load_const "sha256_empty_message"
@@ -289,7 +289,7 @@ function crypto.$init_test_ns_crypto_sha2(registry: testing.TestCollector) -> nu
     return
 }
 
-function crypto.feed_hasher(h: baml.crypto.Hasher, data: uint8array) -> void {
+function crypto.feed_hasher(h: <unresolved type #140711300529081>, data: uint8array) -> void {
     load_var2 1 2
     load_type baml.crypto.Hasher
     load_const "update"
@@ -299,7 +299,7 @@ function crypto.feed_hasher(h: baml.crypto.Hasher, data: uint8array) -> void {
     return
 }
 
-function crypto.seal_and_open(cipher: baml.crypto.Aead, nonce: uint8array, message: uint8array, aad: uint8array) -> bool {
+function crypto.seal_and_open(cipher: <unresolved type #27982010901265>, nonce: uint8array, message: uint8array, aad: uint8array) -> bool {
     load_var2 1 2
     load_var2 3 4
     load_type baml.crypto.Aead

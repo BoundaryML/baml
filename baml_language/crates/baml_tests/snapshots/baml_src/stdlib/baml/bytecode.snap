@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function baml.AnyClass.attributes(self: baml.AnyClass) -> reflect.Meta {
+function baml.AnyClass.attributes(self: <unresolved type #110845576346431>) -> <unresolved type #105595230800669> {
     load_var self
     call reflect.Type.of_value
     call reflect.Type.as_class
@@ -29,7 +29,7 @@ function baml.AnyClass.attributes(self: baml.AnyClass) -> reflect.Meta {
     return
 }
 
-function baml.AnyClass.get(self: baml.AnyClass, name: string) -> #1 | null {
+function baml.AnyClass.get(self: <unresolved type #110845576346431>, name: string) -> #1 | null {
     load_var2 1 2
     load_type baml.AnyClass
     load_const "has_field"
@@ -70,7 +70,7 @@ function baml.AnyClass.get(self: baml.AnyClass, name: string) -> #1 | null {
     return
 }
 
-function baml.AnyClass.get_field(self: baml.AnyClass, name: string) -> reflect.class.Field | null {
+function baml.AnyClass.get_field(self: <unresolved type #110845576346431>, name: string) -> <unresolved type #21943740533182> | null {
     load_var self
     call reflect.Type.of_value
     call reflect.Type.as_class
@@ -127,7 +127,7 @@ function baml.AnyClass.get_field(self: baml.AnyClass, name: string) -> reflect.c
     return
 }
 
-function baml.AnyClass.has_field(self: baml.AnyClass, name: string) -> bool {
+function baml.AnyClass.has_field(self: <unresolved type #110845576346431>, name: string) -> bool {
     load_var self
     call reflect.Type.of_value
     call reflect.Type.as_class
@@ -176,7 +176,7 @@ function baml.AnyClass.has_field(self: baml.AnyClass, name: string) -> bool {
     return
 }
 
-function baml.AnyClass.list_fields(self: baml.AnyClass) -> reflect.class.Field[] {
+function baml.AnyClass.list_fields(self: <unresolved type #110845576346431>) -> <unresolved type #21943740533182>[] {
     load_var self
     call reflect.Type.of_value
     call reflect.Type.as_class
@@ -236,14 +236,14 @@ function baml.AnyClass.list_fields(self: baml.AnyClass) -> reflect.class.Field[]
     return
 }
 
-function baml.AnyClass.name(self: baml.AnyClass) -> string {
+function baml.AnyClass.name(self: <unresolved type #110845576346431>) -> string {
     load_var self
     call reflect.Type.of_value
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function baml.AnyClass.type(self: baml.AnyClass) -> reflect.Type {
+function baml.AnyClass.type(self: <unresolved type #110845576346431>) -> reflect.Type {
     load_var self
     call reflect.Type.of_value
     return
@@ -695,34 +695,34 @@ function baml.Array.splice(self: #0[], start: int, count: int, replace: #0[]) ->
 function baml.Array.unshift(self: #0[], item: #0) -> int {
 }
 
-function baml.Bigint.abs(self: baml.Bigint) -> bigint {
+function baml.Bigint.abs(self: <unresolved type #56197276432026>) -> bigint {
 }
 
-function baml.Bigint.clamp(self: baml.Bigint, min: bigint, max: bigint) -> bigint {
+function baml.Bigint.clamp(self: <unresolved type #56197276432026>, min: bigint, max: bigint) -> bigint {
 }
 
-function baml.Bigint.ilog(self: baml.Bigint, base: bigint) -> bigint {
+function baml.Bigint.ilog(self: <unresolved type #56197276432026>, base: bigint) -> bigint {
 }
 
-function baml.Bigint.isqrt(self: baml.Bigint) -> bigint {
+function baml.Bigint.isqrt(self: <unresolved type #56197276432026>) -> bigint {
 }
 
-function baml.Bigint.max(self: baml.Bigint, other: bigint) -> bigint {
+function baml.Bigint.max(self: <unresolved type #56197276432026>, other: bigint) -> bigint {
 }
 
-function baml.Bigint.min(self: baml.Bigint, other: bigint) -> bigint {
+function baml.Bigint.min(self: <unresolved type #56197276432026>, other: bigint) -> bigint {
 }
 
 function baml.Bigint.parse(text: string) -> bigint {
 }
 
-function baml.Bigint.pow(self: baml.Bigint, exp: bigint) -> bigint {
+function baml.Bigint.pow(self: <unresolved type #56197276432026>, exp: bigint) -> bigint {
 }
 
 function baml.Bigint.random(lower: bigint, upper: bigint) -> bigint {
 }
 
-function baml.Bigint.to_int(self: baml.Bigint) -> int {
+function baml.Bigint.to_int(self: <unresolved type #56197276432026>) -> int {
 }
 
 function baml.Comparable$for$bigint.compare(self: bigint, other: bigint) -> int {
@@ -812,70 +812,70 @@ function baml.Comparable$for$string.compare(self: string, other: string) -> int 
     return
 }
 
-function baml.Float.abs(self: baml.Float) -> float {
+function baml.Float.abs(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.acos(self: baml.Float) -> float {
+function baml.Float.acos(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.acosh(self: baml.Float) -> float {
+function baml.Float.acosh(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.asin(self: baml.Float) -> float {
+function baml.Float.asin(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.asinh(self: baml.Float) -> float {
+function baml.Float.asinh(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.atan(self: baml.Float) -> float {
+function baml.Float.atan(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.atan2(self: baml.Float, other: float) -> float {
+function baml.Float.atan2(self: <unresolved type #13497803430149>, other: float) -> float {
 }
 
-function baml.Float.atanh(self: baml.Float) -> float {
+function baml.Float.atanh(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.ceil(self: baml.Float) -> float {
+function baml.Float.ceil(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.clamp(self: baml.Float, min: float, max: float) -> float {
+function baml.Float.clamp(self: <unresolved type #13497803430149>, min: float, max: float) -> float {
 }
 
-function baml.Float.cos(self: baml.Float) -> float {
+function baml.Float.cos(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.cosh(self: baml.Float) -> float {
+function baml.Float.cosh(self: <unresolved type #13497803430149>) -> float {
 }
 
 function baml.Float.e() -> float {
 }
 
-function baml.Float.floor(self: baml.Float) -> float {
+function baml.Float.floor(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.fract(self: baml.Float) -> float {
+function baml.Float.fract(self: <unresolved type #13497803430149>) -> float {
 }
 
 function baml.Float.golden_ratio() -> float {
 }
 
-function baml.Float.hypot(self: baml.Float, other: float) -> float {
+function baml.Float.hypot(self: <unresolved type #13497803430149>, other: float) -> float {
 }
 
-function baml.Float.iceil(self: baml.Float) -> int {
+function baml.Float.iceil(self: <unresolved type #13497803430149>) -> int {
 }
 
-function baml.Float.ifloor(self: baml.Float) -> int {
+function baml.Float.ifloor(self: <unresolved type #13497803430149>) -> int {
 }
 
 function baml.Float.inf() -> float {
 }
 
-function baml.Float.iround(self: baml.Float) -> int {
+function baml.Float.iround(self: <unresolved type #13497803430149>) -> int {
 }
 
-function baml.Float.is_finite(self: baml.Float) -> bool {
+function baml.Float.is_finite(self: <unresolved type #13497803430149>) -> bool {
     load_var self
     call baml.Float.is_nan
     unary_op !
@@ -889,22 +889,22 @@ function baml.Float.is_finite(self: baml.Float) -> bool {
     return
 }
 
-function baml.Float.is_infinite(self: baml.Float) -> bool {
+function baml.Float.is_infinite(self: <unresolved type #13497803430149>) -> bool {
 }
 
-function baml.Float.is_nan(self: baml.Float) -> bool {
+function baml.Float.is_nan(self: <unresolved type #13497803430149>) -> bool {
 }
 
-function baml.Float.itrunc(self: baml.Float) -> int {
+function baml.Float.itrunc(self: <unresolved type #13497803430149>) -> int {
 }
 
-function baml.Float.log(self: baml.Float, base: float) -> float {
+function baml.Float.log(self: <unresolved type #13497803430149>, base: float) -> float {
 }
 
-function baml.Float.max(self: baml.Float, other: float) -> float {
+function baml.Float.max(self: <unresolved type #13497803430149>, other: float) -> float {
 }
 
-function baml.Float.min(self: baml.Float, other: float) -> float {
+function baml.Float.min(self: <unresolved type #13497803430149>, other: float) -> float {
 }
 
 function baml.Float.nan() -> float {
@@ -916,31 +916,31 @@ function baml.Float.parse(text: string) -> float {
 function baml.Float.pi() -> float {
 }
 
-function baml.Float.pow(self: baml.Float, exp: float) -> float {
+function baml.Float.pow(self: <unresolved type #13497803430149>, exp: float) -> float {
 }
 
 function baml.Float.random() -> float {
 }
 
-function baml.Float.round(self: baml.Float) -> float {
+function baml.Float.round(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.sin(self: baml.Float) -> float {
+function baml.Float.sin(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.sinh(self: baml.Float) -> float {
+function baml.Float.sinh(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.sqrt(self: baml.Float) -> float {
+function baml.Float.sqrt(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.tan(self: baml.Float) -> float {
+function baml.Float.tan(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.tanh(self: baml.Float) -> float {
+function baml.Float.tanh(self: <unresolved type #13497803430149>) -> float {
 }
 
-function baml.Float.to_degrees(self: baml.Float) -> float {
+function baml.Float.to_degrees(self: <unresolved type #13497803430149>) -> float {
     call baml.Float.pi
     store_var _3
     load_var self
@@ -951,7 +951,7 @@ function baml.Float.to_degrees(self: baml.Float) -> float {
     return
 }
 
-function baml.Float.to_radians(self: baml.Float) -> float {
+function baml.Float.to_radians(self: <unresolved type #13497803430149>) -> float {
     call baml.Float.pi
     store_var _3
     load_var2 1 2
@@ -961,7 +961,7 @@ function baml.Float.to_radians(self: baml.Float) -> float {
     return
 }
 
-function baml.Float.trunc(self: baml.Float) -> float {
+function baml.Float.trunc(self: <unresolved type #13497803430149>) -> float {
 }
 
 function baml.FloatStats$for$float[].mean(self: float[]) -> float {
@@ -976,31 +976,31 @@ function baml.FloatStats$for$float[].median(self: float[]) -> float {
     return
 }
 
-function baml.Int.abs(self: baml.Int) -> int {
+function baml.Int.abs(self: <unresolved type #70861580131406>) -> int {
 }
 
-function baml.Int.clamp(self: baml.Int, min: int, max: int) -> int {
+function baml.Int.clamp(self: <unresolved type #70861580131406>, min: int, max: int) -> int {
 }
 
-function baml.Int.count_ones(self: baml.Int) -> int {
+function baml.Int.count_ones(self: <unresolved type #70861580131406>) -> int {
 }
 
-function baml.Int.count_zeros(self: baml.Int) -> int {
+function baml.Int.count_zeros(self: <unresolved type #70861580131406>) -> int {
 }
 
-function baml.Int.ilog(self: baml.Int, base: int) -> int {
+function baml.Int.ilog(self: <unresolved type #70861580131406>, base: int) -> int {
 }
 
-function baml.Int.isqrt(self: baml.Int) -> int {
+function baml.Int.isqrt(self: <unresolved type #70861580131406>) -> int {
 }
 
-function baml.Int.leading_ones(self: baml.Int) -> int {
+function baml.Int.leading_ones(self: <unresolved type #70861580131406>) -> int {
 }
 
-function baml.Int.leading_zeros(self: baml.Int) -> int {
+function baml.Int.leading_zeros(self: <unresolved type #70861580131406>) -> int {
 }
 
-function baml.Int.max(self: baml.Int, other: int) -> int {
+function baml.Int.max(self: <unresolved type #70861580131406>, other: int) -> int {
 }
 
 function baml.Int.max_value() -> int {
@@ -1008,7 +1008,7 @@ function baml.Int.max_value() -> int {
     return
 }
 
-function baml.Int.min(self: baml.Int, other: int) -> int {
+function baml.Int.min(self: <unresolved type #70861580131406>, other: int) -> int {
 }
 
 function baml.Int.min_value() -> int {
@@ -1019,16 +1019,16 @@ function baml.Int.min_value() -> int {
 function baml.Int.parse(text: string) -> int {
 }
 
-function baml.Int.pow(self: baml.Int, exp: int) -> int {
+function baml.Int.pow(self: <unresolved type #70861580131406>, exp: int) -> int {
 }
 
 function baml.Int.random(lower: int, upper: int) -> int {
 }
 
-function baml.Int.trailing_ones(self: baml.Int) -> int {
+function baml.Int.trailing_ones(self: <unresolved type #70861580131406>) -> int {
 }
 
-function baml.Int.trailing_zeros(self: baml.Int) -> int {
+function baml.Int.trailing_zeros(self: <unresolved type #70861580131406>) -> int {
 }
 
 function baml.Map.clear(self: map<#0, #1>) -> null {
@@ -1083,22 +1083,22 @@ function baml.Sortable$for$T[].sort(self: #0[]) -> #0[] {
     return
 }
 
-function baml.String.at(self: baml.String, index: int) -> string | null {
+function baml.String.at(self: <unresolved type #51143073561080>, index: int) -> string | null {
 }
 
-function baml.String.byte_length(self: baml.String) -> int {
+function baml.String.byte_length(self: <unresolved type #51143073561080>) -> int {
 }
 
-function baml.String.char_count(self: baml.String) -> int {
+function baml.String.char_count(self: <unresolved type #51143073561080>) -> int {
 }
 
-function baml.String.chars(self: baml.String) -> string[] {
+function baml.String.chars(self: <unresolved type #51143073561080>) -> string[] {
 }
 
-function baml.String.code_point_at(self: baml.String, index: int) -> int | null {
+function baml.String.code_point_at(self: <unresolved type #51143073561080>, index: int) -> int | null {
 }
 
-function baml.String.ends_with(self: baml.String, suffix: string) -> bool {
+function baml.String.ends_with(self: <unresolved type #51143073561080>, suffix: string) -> bool {
 }
 
 function baml.String.from(value: #0) -> string {
@@ -1114,52 +1114,52 @@ function baml.String.from_code_points(unicode: int[]) -> string {
 function baml.String.from_utf8(utf8: uint8array) -> string {
 }
 
-function baml.String.includes(self: baml.String, search: string) -> bool {
+function baml.String.includes(self: <unresolved type #51143073561080>, search: string) -> bool {
 }
 
-function baml.String.index_of(self: baml.String, search: string) -> int | null {
+function baml.String.index_of(self: <unresolved type #51143073561080>, search: string) -> int | null {
 }
 
-function baml.String.is_alphabetic(self: baml.String) -> bool {
+function baml.String.is_alphabetic(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_alphanumeric(self: baml.String) -> bool {
+function baml.String.is_alphanumeric(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_ascii(self: baml.String) -> bool {
+function baml.String.is_ascii(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_ascii_alphabetic(self: baml.String) -> bool {
+function baml.String.is_ascii_alphabetic(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_ascii_alphanumeric(self: baml.String) -> bool {
+function baml.String.is_ascii_alphanumeric(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_ascii_control(self: baml.String) -> bool {
+function baml.String.is_ascii_control(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_ascii_graphic(self: baml.String) -> bool {
+function baml.String.is_ascii_graphic(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_ascii_hex(self: baml.String) -> bool {
+function baml.String.is_ascii_hex(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_ascii_lowercase(self: baml.String) -> bool {
+function baml.String.is_ascii_lowercase(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_ascii_numeric(self: baml.String) -> bool {
+function baml.String.is_ascii_numeric(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_ascii_uppercase(self: baml.String) -> bool {
+function baml.String.is_ascii_uppercase(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_ascii_whitespace(self: baml.String) -> bool {
+function baml.String.is_ascii_whitespace(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_control(self: baml.String) -> bool {
+function baml.String.is_control(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_empty(self: baml.String) -> bool {
+function baml.String.is_empty(self: <unresolved type #51143073561080>) -> bool {
     load_var self
     call baml.String.byte_length
     load_const 0
@@ -1167,67 +1167,67 @@ function baml.String.is_empty(self: baml.String) -> bool {
     return
 }
 
-function baml.String.is_graphic(self: baml.String) -> bool {
+function baml.String.is_graphic(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_lowercase(self: baml.String) -> bool {
+function baml.String.is_lowercase(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_numeric(self: baml.String) -> bool {
+function baml.String.is_numeric(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_uppercase(self: baml.String) -> bool {
+function baml.String.is_uppercase(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.is_whitespace(self: baml.String) -> bool {
+function baml.String.is_whitespace(self: <unresolved type #51143073561080>) -> bool {
 }
 
-function baml.String.last_index_of(self: baml.String, search: string) -> int | null {
+function baml.String.last_index_of(self: <unresolved type #51143073561080>, search: string) -> int | null {
 }
 
-function baml.String.length(self: baml.String) -> int {
+function baml.String.length(self: <unresolved type #51143073561080>) -> int {
 }
 
-function baml.String.lines(self: baml.String) -> string[] {
+function baml.String.lines(self: <unresolved type #51143073561080>) -> string[] {
 }
 
-function baml.String.repeat(self: baml.String, count: int) -> string {
+function baml.String.repeat(self: <unresolved type #51143073561080>, count: int) -> string {
 }
 
-function baml.String.replace(self: baml.String, search: string, replacement: string) -> string {
+function baml.String.replace(self: <unresolved type #51143073561080>, search: string, replacement: string) -> string {
 }
 
-function baml.String.replace_all(self: baml.String, search: string, replacement: string) -> string {
+function baml.String.replace_all(self: <unresolved type #51143073561080>, search: string, replacement: string) -> string {
 }
 
-function baml.String.slice(self: baml.String, start: int, end: int) -> string {
+function baml.String.slice(self: <unresolved type #51143073561080>, start: int, end: int) -> string {
 }
 
-function baml.String.split(self: baml.String, delimiter: string) -> string[] {
+function baml.String.split(self: <unresolved type #51143073561080>, delimiter: string) -> string[] {
 }
 
-function baml.String.starts_with(self: baml.String, prefix: string) -> bool {
+function baml.String.starts_with(self: <unresolved type #51143073561080>, prefix: string) -> bool {
 }
 
-function baml.String.to_code_points(self: baml.String) -> int[] {
+function baml.String.to_code_points(self: <unresolved type #51143073561080>) -> int[] {
 }
 
-function baml.String.to_lower_case(self: baml.String) -> string {
+function baml.String.to_lower_case(self: <unresolved type #51143073561080>) -> string {
 }
 
-function baml.String.to_upper_case(self: baml.String) -> string {
+function baml.String.to_upper_case(self: <unresolved type #51143073561080>) -> string {
 }
 
-function baml.String.to_utf8(self: baml.String) -> uint8array {
+function baml.String.to_utf8(self: <unresolved type #51143073561080>) -> uint8array {
 }
 
-function baml.String.trim(self: baml.String) -> string {
+function baml.String.trim(self: <unresolved type #51143073561080>) -> string {
 }
 
-function baml.String.trim_end(self: baml.String) -> string {
+function baml.String.trim_end(self: <unresolved type #51143073561080>) -> string {
 }
 
-function baml.String.trim_start(self: baml.String) -> string {
+function baml.String.trim_start(self: <unresolved type #51143073561080>) -> string {
 }
 
 function baml.Summable$for$float[].sum(self: float[]) -> float {
@@ -1242,33 +1242,33 @@ function baml.Summable$for$int[].sum(self: int[]) -> int {
     return
 }
 
-function baml.ToJson.to_json(self: baml.ToJson) -> baml.json.json {
+function baml.ToJson.to_json(self: <unresolved type #117998098088334>) -> <unresolved type #1888633819501> {
     load_type #0
     load_var self
     call baml._to_json_default
     return
 }
 
-function baml.ToString.to_string(self: baml.ToString) -> string {
+function baml.ToString.to_string(self: <unresolved type #134539316387445>) -> string {
     load_type #0
     load_var self
     call baml._to_string_default
     return
 }
 
-function baml.Uint8Array._to_string_impl(self: baml.Uint8Array) -> string {
+function baml.Uint8Array._to_string_impl(self: <unresolved type #46383445447776>) -> string {
 }
 
-function baml.Uint8Array.at(self: baml.Uint8Array, index: int) -> int | null {
+function baml.Uint8Array.at(self: <unresolved type #46383445447776>, index: int) -> int | null {
 }
 
-function baml.Uint8Array.baml.ToString.to_string(self: baml.Uint8Array) -> string {
+function baml.Uint8Array.baml.ToString.to_string(self: <unresolved type #46383445447776>) -> string {
     load_var self
     call baml.Uint8Array._to_string_impl
     return
 }
 
-function baml.Uint8Array.concat(self: baml.Uint8Array, other: uint8array) -> uint8array {
+function baml.Uint8Array.concat(self: <unresolved type #46383445447776>, other: uint8array) -> uint8array {
 }
 
 function baml.Uint8Array.from_array(array: int[]) -> uint8array {
@@ -1280,34 +1280,34 @@ function baml.Uint8Array.from_base64(base64: string) -> uint8array {
 function baml.Uint8Array.from_hex(hex: string) -> uint8array {
 }
 
-function baml.Uint8Array.includes(self: baml.Uint8Array, item: int) -> bool {
+function baml.Uint8Array.includes(self: <unresolved type #46383445447776>, item: int) -> bool {
 }
 
-function baml.Uint8Array.length(self: baml.Uint8Array) -> int {
+function baml.Uint8Array.length(self: <unresolved type #46383445447776>) -> int {
 }
 
-function baml.Uint8Array.pop(self: baml.Uint8Array) -> int | null {
+function baml.Uint8Array.pop(self: <unresolved type #46383445447776>) -> int | null {
 }
 
-function baml.Uint8Array.push(self: baml.Uint8Array, item: int) -> int {
+function baml.Uint8Array.push(self: <unresolved type #46383445447776>, item: int) -> int {
 }
 
-function baml.Uint8Array.reverse(self: baml.Uint8Array) -> uint8array {
+function baml.Uint8Array.reverse(self: <unresolved type #46383445447776>) -> uint8array {
 }
 
-function baml.Uint8Array.slice(self: baml.Uint8Array, start: int, end: int) -> uint8array {
+function baml.Uint8Array.slice(self: <unresolved type #46383445447776>, start: int, end: int) -> uint8array {
 }
 
-function baml.Uint8Array.sort(self: baml.Uint8Array) -> null {
+function baml.Uint8Array.sort(self: <unresolved type #46383445447776>) -> null {
 }
 
-function baml.Uint8Array.to_array(self: baml.Uint8Array) -> int[] {
+function baml.Uint8Array.to_array(self: <unresolved type #46383445447776>) -> int[] {
 }
 
-function baml.Uint8Array.to_base64(self: baml.Uint8Array) -> string {
+function baml.Uint8Array.to_base64(self: <unresolved type #46383445447776>) -> string {
 }
 
-function baml.Uint8Array.to_hex(self: baml.Uint8Array) -> string {
+function baml.Uint8Array.to_hex(self: <unresolved type #46383445447776>) -> string {
 }
 
 function baml.Uint8Array.zeroes(size: int) -> uint8array {
@@ -1322,7 +1322,7 @@ function baml._compare_shim(a: #0, b: #0) -> int {
 function baml._float_total_cmp(a: float, b: float) -> int {
 }
 
-function baml._from_json_shim(j: baml.json.json) -> #0 {
+function baml._from_json_shim(j: <unresolved type #1888633819501>) -> #0 {
 }
 
 function baml._is_primitive_array(arr: #0[]) -> bool {
@@ -1343,10 +1343,10 @@ function baml._sum_float(values: float[]) -> float {
 function baml._sum_int(values: int[]) -> int {
 }
 
-function baml._to_json_default(value: #0) -> baml.json.json {
+function baml._to_json_default(value: #0) -> <unresolved type #1888633819501> {
 }
 
-function baml._to_json_shim(value: #0) -> baml.json.json {
+function baml._to_json_shim(value: #0) -> <unresolved type #1888633819501> {
 }
 
 function baml._to_string_default(value: #0) -> string {
@@ -1358,13 +1358,13 @@ function baml._to_string_shim(value: #0) -> string {
 function baml._trunc_to_int(value: float) -> int {
 }
 
-function baml.crypto.Aes128GcmSiv.Aead.decrypt(self: baml.crypto.Aes128GcmSiv, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
+function baml.crypto.Aes128GcmSiv.Aead.decrypt(self: <unresolved type #29318151644475>, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
 }
 
-function baml.crypto.Aes128GcmSiv.Aead.encrypt(self: baml.crypto.Aes128GcmSiv, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
+function baml.crypto.Aes128GcmSiv.Aead.encrypt(self: <unresolved type #29318151644475>, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
 }
 
-function baml.crypto.Aes128GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+function baml.crypto.Aes128GcmSiv.GenerateKey.random_key(rng: <unresolved type #37131764174841>) -> uint8array {
     load_var rng
     load_const 16
     load_type baml.random.Rng
@@ -1375,16 +1375,16 @@ function baml.crypto.Aes128GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -
     return
 }
 
-function baml.crypto.Aes128GcmSiv.new(key: uint8array) -> baml.crypto.Aes128GcmSiv {
+function baml.crypto.Aes128GcmSiv.new(key: uint8array) -> <unresolved type #29318151644475> {
 }
 
-function baml.crypto.Aes256GcmSiv.Aead.decrypt(self: baml.crypto.Aes256GcmSiv, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
+function baml.crypto.Aes256GcmSiv.Aead.decrypt(self: <unresolved type #17206959925263>, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
 }
 
-function baml.crypto.Aes256GcmSiv.Aead.encrypt(self: baml.crypto.Aes256GcmSiv, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
+function baml.crypto.Aes256GcmSiv.Aead.encrypt(self: <unresolved type #17206959925263>, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
 }
 
-function baml.crypto.Aes256GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+function baml.crypto.Aes256GcmSiv.GenerateKey.random_key(rng: <unresolved type #37131764174841>) -> uint8array {
     load_var rng
     load_const 32
     load_type baml.random.Rng
@@ -1395,16 +1395,16 @@ function baml.crypto.Aes256GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -
     return
 }
 
-function baml.crypto.Aes256GcmSiv.new(key: uint8array) -> baml.crypto.Aes256GcmSiv {
+function baml.crypto.Aes256GcmSiv.new(key: uint8array) -> <unresolved type #17206959925263> {
 }
 
-function baml.crypto.ChaCha20Poly1305.Aead.decrypt(self: baml.crypto.ChaCha20Poly1305, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
+function baml.crypto.ChaCha20Poly1305.Aead.decrypt(self: <unresolved type #96779008948405>, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
 }
 
-function baml.crypto.ChaCha20Poly1305.Aead.encrypt(self: baml.crypto.ChaCha20Poly1305, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
+function baml.crypto.ChaCha20Poly1305.Aead.encrypt(self: <unresolved type #96779008948405>, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
 }
 
-function baml.crypto.ChaCha20Poly1305.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+function baml.crypto.ChaCha20Poly1305.GenerateKey.random_key(rng: <unresolved type #37131764174841>) -> uint8array {
     load_var rng
     load_const 32
     load_type baml.random.Rng
@@ -1415,25 +1415,25 @@ function baml.crypto.ChaCha20Poly1305.GenerateKey.random_key(rng: baml.random.Rn
     return
 }
 
-function baml.crypto.ChaCha20Poly1305.new(key: uint8array) -> baml.crypto.ChaCha20Poly1305 {
+function baml.crypto.ChaCha20Poly1305.new(key: uint8array) -> <unresolved type #96779008948405> {
 }
 
-function baml.crypto.Sha256.Hasher.finish(self: baml.crypto.Sha256) -> uint8array {
+function baml.crypto.Sha256.Hasher.finish(self: <unresolved type #74777595099357>) -> uint8array {
 }
 
-function baml.crypto.Sha256.Hasher.update(self: baml.crypto.Sha256, data: uint8array) -> void {
+function baml.crypto.Sha256.Hasher.update(self: <unresolved type #74777595099357>, data: uint8array) -> void {
 }
 
-function baml.crypto.Sha256.new() -> baml.crypto.Sha256 {
+function baml.crypto.Sha256.new() -> <unresolved type #74777595099357> {
 }
 
-function baml.crypto.XChaCha20Poly1305.Aead.decrypt(self: baml.crypto.XChaCha20Poly1305, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
+function baml.crypto.XChaCha20Poly1305.Aead.decrypt(self: <unresolved type #63038077839361>, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array {
 }
 
-function baml.crypto.XChaCha20Poly1305.Aead.encrypt(self: baml.crypto.XChaCha20Poly1305, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
+function baml.crypto.XChaCha20Poly1305.Aead.encrypt(self: <unresolved type #63038077839361>, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array {
 }
 
-function baml.crypto.XChaCha20Poly1305.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+function baml.crypto.XChaCha20Poly1305.GenerateKey.random_key(rng: <unresolved type #37131764174841>) -> uint8array {
     load_var rng
     load_const 32
     load_type baml.random.Rng
@@ -1444,28 +1444,28 @@ function baml.crypto.XChaCha20Poly1305.GenerateKey.random_key(rng: baml.random.R
     return
 }
 
-function baml.crypto.XChaCha20Poly1305.new(key: uint8array) -> baml.crypto.XChaCha20Poly1305 {
+function baml.crypto.XChaCha20Poly1305.new(key: uint8array) -> <unresolved type #63038077839361> {
 }
 
-function baml.csv.CsvReader._feed(self: baml.csv.CsvReader, chunk: uint8array) -> null {
+function baml.csv.CsvReader._feed(self: <unresolved type #51935291672366>, chunk: uint8array) -> null {
 }
 
-function baml.csv.CsvReader._feed_eof(self: baml.csv.CsvReader) -> null {
+function baml.csv.CsvReader._feed_eof(self: <unresolved type #51935291672366>) -> null {
 }
 
-function baml.csv.CsvReader._mark_closed(self: baml.csv.CsvReader) -> null {
+function baml.csv.CsvReader._mark_closed(self: <unresolved type #51935291672366>) -> null {
 }
 
-function baml.csv.CsvReader._mark_exhausted(self: baml.csv.CsvReader) -> null {
+function baml.csv.CsvReader._mark_exhausted(self: <unresolved type #51935291672366>) -> null {
 }
 
-function baml.csv.CsvReader._poll(self: baml.csv.CsvReader) -> baml.csv.CsvRecord | baml.csv.CsvSkip | baml.csv.CsvNeedData | baml.iter.Done {
+function baml.csv.CsvReader._poll(self: <unresolved type #51935291672366>) -> <unresolved type #6932950170900> | <unresolved type #136284151596098> | <unresolved type #87810258121933> | <unresolved type #77132703667455> {
 }
 
-function baml.csv.CsvReader._poll_headers(self: baml.csv.CsvReader) -> baml.csv.CsvHeaders | baml.csv.CsvNeedData {
+function baml.csv.CsvReader._poll_headers(self: <unresolved type #51935291672366>) -> <unresolved type #88294143726185> | <unresolved type #87810258121933> {
 }
 
-function baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> null {
+function baml.csv.CsvReader._read_chunk(self: <unresolved type #51935291672366>) -> null {
     load_var self
     load_field ._file
     store_var_load_var _2
@@ -1547,7 +1547,7 @@ function baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> null {
     return
 }
 
-function baml.csv.CsvReader.close(self: baml.csv.CsvReader) -> null {
+function baml.csv.CsvReader.close(self: <unresolved type #51935291672366>) -> null {
     load_var self
     call baml.csv.CsvReader._mark_closed
     pop 1
@@ -1587,7 +1587,7 @@ function baml.csv.CsvReader.close(self: baml.csv.CsvReader) -> null {
     return
 }
 
-function baml.csv.CsvReader.headers(self: baml.csv.CsvReader) -> string[] | null {
+function baml.csv.CsvReader.headers(self: <unresolved type #51935291672366>) -> string[] | null {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -1621,15 +1621,15 @@ function baml.csv.CsvReader.headers(self: baml.csv.CsvReader) -> string[] | null
     return
 }
 
-function baml.csv.CsvReader.position(self: baml.csv.CsvReader) -> baml.csv.CsvPosition {
+function baml.csv.CsvReader.position(self: <unresolved type #51935291672366>) -> <unresolved type #131692107272410> {
 }
 
-function baml.csv.CsvReader.root.iter.Iterable.iter(self: baml.csv.CsvReader) -> baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord> {
+function baml.csv.CsvReader.root.iter.Iterable.iter(self: <unresolved type #51935291672366>) -> <unresolved type #134608312336441><Error = <unresolved type #107135614984825> | <unresolved type #336598637428>, Item = <unresolved type #6932950170900>> {
     load_var self
     return
 }
 
-function baml.csv.CsvReader.root.iter.Iterator.next(self: baml.csv.CsvReader) -> baml.csv.CsvRecord | baml.iter.Done {
+function baml.csv.CsvReader.root.iter.Iterator.next(self: <unresolved type #51935291672366>) -> <unresolved type #6932950170900> | <unresolved type #77132703667455> {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -1703,7 +1703,7 @@ function baml.csv.CsvReader.root.iter.Iterator.next(self: baml.csv.CsvReader) ->
     return
 }
 
-function baml.csv.CsvReader.rows(self: baml.csv.CsvReader) -> baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = #0> {
+function baml.csv.CsvReader.rows(self: <unresolved type #51935291672366>) -> <unresolved type #134608312336441><Error = <unresolved type #107135614984825> | <unresolved type #336598637428>, Item = #0> {
     load_var self
     call baml.csv.CsvReader.headers
     pop 1
@@ -1717,51 +1717,51 @@ function baml.csv.CsvReader.rows(self: baml.csv.CsvReader) -> baml.iter.Iterator
     return
 }
 
-function baml.csv.CsvReader.skipped(self: baml.csv.CsvReader) -> baml.csv.CsvError[] {
+function baml.csv.CsvReader.skipped(self: <unresolved type #51935291672366>) -> <unresolved type #107135614984825>[] {
 }
 
-function baml.csv.CsvReader.skipped_count(self: baml.csv.CsvReader) -> int {
+function baml.csv.CsvReader.skipped_count(self: <unresolved type #51935291672366>) -> int {
 }
 
-function baml.csv.CsvRecord.decode(self: baml.csv.CsvRecord) -> #0 {
+function baml.csv.CsvRecord.decode(self: <unresolved type #6932950170900>) -> #0 {
     load_type #0
     load_var self
     call baml.csv._decode_record
     return
 }
 
-function baml.csv.CsvRecord.fields(self: baml.csv.CsvRecord) -> string[] {
+function baml.csv.CsvRecord.fields(self: <unresolved type #6932950170900>) -> string[] {
 }
 
-function baml.csv.CsvRecord.get(self: baml.csv.CsvRecord, column: string) -> #0 | null {
+function baml.csv.CsvRecord.get(self: <unresolved type #6932950170900>, column: string) -> #0 | null {
     load_type #0
     load_var2 1 2
     call baml.csv._cell_by_name
     return
 }
 
-function baml.csv.CsvRecord.get_at(self: baml.csv.CsvRecord, index: int) -> #0 | null {
+function baml.csv.CsvRecord.get_at(self: <unresolved type #6932950170900>, index: int) -> #0 | null {
     load_type #0
     load_var2 1 2
     call baml.csv._cell_by_index
     return
 }
 
-function baml.csv.CsvRecord.length(self: baml.csv.CsvRecord) -> int {
+function baml.csv.CsvRecord.length(self: <unresolved type #6932950170900>) -> int {
 }
 
-function baml.csv.CsvRecord.position(self: baml.csv.CsvRecord) -> baml.csv.CsvPosition {
+function baml.csv.CsvRecord.position(self: <unresolved type #6932950170900>) -> <unresolved type #131692107272410> {
 }
 
-function baml.csv.CsvRecord.to_map(self: baml.csv.CsvRecord) -> map<string, string> {
+function baml.csv.CsvRecord.to_map(self: <unresolved type #6932950170900>) -> map<string, string> {
 }
 
-function baml.csv.CsvRows.root.iter.Iterable.iter(self: baml.csv.CsvRows<#0>) -> baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = #0> {
+function baml.csv.CsvRows.root.iter.Iterable.iter(self: <unresolved type #139612403766296><#0>) -> <unresolved type #134608312336441><Error = <unresolved type #107135614984825> | <unresolved type #336598637428>, Item = #0> {
     load_var self
     return
 }
 
-function baml.csv.CsvRows.root.iter.Iterator.next(self: baml.csv.CsvRows<#0>) -> #0 | baml.iter.Done {
+function baml.csv.CsvRows.root.iter.Iterator.next(self: <unresolved type #139612403766296><#0>) -> #0 | <unresolved type #77132703667455> {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -1830,10 +1830,10 @@ function baml.csv.CsvRows.root.iter.Iterator.next(self: baml.csv.CsvRows<#0>) ->
     return
 }
 
-function baml.csv.CsvWriter._bytes_written(self: baml.csv.CsvWriter) -> int {
+function baml.csv.CsvWriter._bytes_written(self: <unresolved type #120098763983554>) -> int {
 }
 
-function baml.csv.CsvWriter._emit(self: baml.csv.CsvWriter, out: string) -> null {
+function baml.csv.CsvWriter._emit(self: <unresolved type #120098763983554>, out: string) -> null {
     load_var self
     load_field ._file
     store_var_load_var _3
@@ -1880,16 +1880,16 @@ function baml.csv.CsvWriter._emit(self: baml.csv.CsvWriter, out: string) -> null
     return
 }
 
-function baml.csv.CsvWriter._encode_header(self: baml.csv.CsvWriter, names: string[]) -> string {
+function baml.csv.CsvWriter._encode_header(self: <unresolved type #120098763983554>, names: string[]) -> string {
 }
 
-function baml.csv.CsvWriter._encode_record(self: baml.csv.CsvWriter, record: (null | bool | int | bigint | float | string)[]) -> string {
+function baml.csv.CsvWriter._encode_record(self: <unresolved type #120098763983554>, record: (null | bool | int | bigint | float | string)[]) -> string {
 }
 
-function baml.csv.CsvWriter._mark_closed(self: baml.csv.CsvWriter) -> null {
+function baml.csv.CsvWriter._mark_closed(self: <unresolved type #120098763983554>) -> null {
 }
 
-function baml.csv.CsvWriter.close(self: baml.csv.CsvWriter) -> null {
+function baml.csv.CsvWriter.close(self: <unresolved type #120098763983554>) -> null {
     load_var self
     call baml.csv.CsvWriter._mark_closed
     pop 1
@@ -1929,18 +1929,18 @@ function baml.csv.CsvWriter.close(self: baml.csv.CsvWriter) -> null {
     return
 }
 
-function baml.csv.CsvWriter.flush(self: baml.csv.CsvWriter) -> null {
+function baml.csv.CsvWriter.flush(self: <unresolved type #120098763983554>) -> null {
     load_const null
     return
 }
 
-function baml.csv.CsvWriter.records_written(self: baml.csv.CsvWriter) -> int {
+function baml.csv.CsvWriter.records_written(self: <unresolved type #120098763983554>) -> int {
 }
 
-function baml.csv.CsvWriter.text(self: baml.csv.CsvWriter) -> string {
+function baml.csv.CsvWriter.text(self: <unresolved type #120098763983554>) -> string {
 }
 
-function baml.csv.CsvWriter.write_header(self: baml.csv.CsvWriter, names: string[]) -> null {
+function baml.csv.CsvWriter.write_header(self: <unresolved type #120098763983554>, names: string[]) -> null {
     load_var2 1 2
     call baml.csv.CsvWriter._encode_header
     store_var _3
@@ -1949,7 +1949,7 @@ function baml.csv.CsvWriter.write_header(self: baml.csv.CsvWriter, names: string
     return
 }
 
-function baml.csv.CsvWriter.write_record(self: baml.csv.CsvWriter, record: (null | bool | int | bigint | float | string)[]) -> null {
+function baml.csv.CsvWriter.write_record(self: <unresolved type #120098763983554>, record: (null | bool | int | bigint | float | string)[]) -> null {
     load_var2 1 2
     call baml.csv.CsvWriter._encode_record
     store_var _3
@@ -1958,7 +1958,7 @@ function baml.csv.CsvWriter.write_record(self: baml.csv.CsvWriter, record: (null
     return
 }
 
-function baml.csv.CsvWriter.write_row(self: baml.csv.CsvWriter, row: #0) -> null {
+function baml.csv.CsvWriter.write_row(self: <unresolved type #120098763983554>, row: #0) -> null {
     load_type #0
     load_var2 1 2
     call baml.csv._encode_row
@@ -1968,7 +1968,7 @@ function baml.csv.CsvWriter.write_row(self: baml.csv.CsvWriter, row: #0) -> null
     return
 }
 
-function baml.csv.CsvWriter.write_rows(self: baml.csv.CsvWriter, rows: #0[]) -> null {
+function baml.csv.CsvWriter.write_rows(self: <unresolved type #120098763983554>, rows: #0[]) -> null {
     load_type #0
     load_var2 1 2
     call baml.csv._encode_rows
@@ -1978,25 +1978,25 @@ function baml.csv.CsvWriter.write_rows(self: baml.csv.CsvWriter, rows: #0[]) -> 
     return
 }
 
-function baml.csv._buffer(options: baml.csv.WriterOptions | null) -> baml.csv.CsvWriter {
+function baml.csv._buffer(options: <unresolved type #24074331555626> | null) -> <unresolved type #120098763983554> {
 }
 
-function baml.csv._cell_by_index(rec: baml.csv.CsvRecord, index: int) -> #0 | null {
+function baml.csv._cell_by_index(rec: <unresolved type #6932950170900>, index: int) -> #0 | null {
 }
 
-function baml.csv._cell_by_name(rec: baml.csv.CsvRecord, column: string) -> #0 | null {
+function baml.csv._cell_by_name(rec: <unresolved type #6932950170900>, column: string) -> #0 | null {
 }
 
-function baml.csv._decode_record(rec: baml.csv.CsvRecord) -> #0 {
+function baml.csv._decode_record(rec: <unresolved type #6932950170900>) -> #0 {
 }
 
-function baml.csv._encode_row(w: baml.csv.CsvWriter, row: #0) -> string {
+function baml.csv._encode_row(w: <unresolved type #120098763983554>, row: #0) -> string {
 }
 
-function baml.csv._encode_rows(w: baml.csv.CsvWriter, rows: #0[]) -> string {
+function baml.csv._encode_rows(w: <unresolved type #120098763983554>, rows: #0[]) -> string {
 }
 
-function baml.csv._error(kind: baml.csv.CsvErrorKind, message: string) -> baml.csv.CsvError {
+function baml.csv._error(kind: <unresolved type #129839178998711>, message: string) -> <unresolved type #107135614984825> {
     load_var2 1 2
     load_const null
     load_const null
@@ -2008,7 +2008,7 @@ function baml.csv._error(kind: baml.csv.CsvErrorKind, message: string) -> baml.c
     return
 }
 
-function baml.csv._reader(source: string | uint8array | baml.fs.File, options: baml.csv.ReaderOptions | null, owns_file: bool) -> baml.csv.CsvReader {
+function baml.csv._reader(source: string | uint8array | <unresolved type #98405344117422>, options: <unresolved type #127270352465770> | null, owns_file: bool) -> <unresolved type #51935291672366> {
 }
 
 function baml.csv._to_markdown(rows: #0[], max_rows: int) -> string {
@@ -2017,16 +2017,16 @@ function baml.csv._to_markdown(rows: #0[], max_rows: int) -> string {
 function baml.csv._to_markdown_records(records: string[][], headers: string[] | null, max_rows: int) -> string {
 }
 
-function baml.csv._try_decode(rec: baml.csv.CsvRecord, r: baml.csv.CsvReader) -> #0 | baml.csv.CsvSkip {
+function baml.csv._try_decode(rec: <unresolved type #6932950170900>, r: <unresolved type #51935291672366>) -> #0 | <unresolved type #136284151596098> {
 }
 
-function baml.csv._validate_columns(r: baml.csv.CsvReader) -> void {
+function baml.csv._validate_columns(r: <unresolved type #51935291672366>) -> void {
 }
 
-function baml.csv._writer(file: baml.fs.File, options: baml.csv.WriterOptions | null, owns_file: bool) -> baml.csv.CsvWriter {
+function baml.csv._writer(file: <unresolved type #98405344117422>, options: <unresolved type #24074331555626> | null, owns_file: bool) -> <unresolved type #120098763983554> {
 }
 
-function baml.csv.buffer(options: baml.csv.WriterOptions | null) -> baml.csv.CsvWriter {
+function baml.csv.buffer(options: <unresolved type #24074331555626> | null) -> <unresolved type #120098763983554> {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2040,7 +2040,7 @@ function baml.csv.buffer(options: baml.csv.WriterOptions | null) -> baml.csv.Csv
     return
 }
 
-function baml.csv.create(path: string, options: baml.csv.WriterOptions | null) -> baml.csv.CsvWriter {
+function baml.csv.create(path: string, options: <unresolved type #24074331555626> | null) -> <unresolved type #120098763983554> {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2075,7 +2075,7 @@ function baml.csv.create(path: string, options: baml.csv.WriterOptions | null) -
     return
 }
 
-function baml.csv.decode(source: string | uint8array, options: baml.csv.ReaderOptions | null) -> #0[] {
+function baml.csv.decode(source: string | uint8array, options: <unresolved type #127270352465770> | null) -> #0[] {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2114,7 +2114,7 @@ function baml.csv.decode(source: string | uint8array, options: baml.csv.ReaderOp
     return
 }
 
-function baml.csv.decode_one(source: string | uint8array, options: baml.csv.ReaderOptions | null) -> #0 {
+function baml.csv.decode_one(source: string | uint8array, options: <unresolved type #127270352465770> | null) -> #0 {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2192,7 +2192,7 @@ function baml.csv.decode_one(source: string | uint8array, options: baml.csv.Read
     throw
 }
 
-function baml.csv.decode_optional(source: string | uint8array, options: baml.csv.ReaderOptions | null) -> #0 | null {
+function baml.csv.decode_optional(source: string | uint8array, options: <unresolved type #127270352465770> | null) -> #0 | null {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2237,7 +2237,7 @@ function baml.csv.decode_optional(source: string | uint8array, options: baml.csv
     throw
 }
 
-function baml.csv.open(path: string, options: baml.csv.ReaderOptions | null) -> baml.csv.CsvReader {
+function baml.csv.open(path: string, options: <unresolved type #127270352465770> | null) -> <unresolved type #51935291672366> {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2272,7 +2272,7 @@ function baml.csv.open(path: string, options: baml.csv.ReaderOptions | null) -> 
     return
 }
 
-function baml.csv.parse(source: string | uint8array, options: baml.csv.ReaderOptions | null) -> string[][] {
+function baml.csv.parse(source: string | uint8array, options: <unresolved type #127270352465770> | null) -> string[][] {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2334,7 +2334,7 @@ function baml.csv.parse(source: string | uint8array, options: baml.csv.ReaderOpt
     return
 }
 
-function baml.csv.read(path: string, options: baml.csv.ReaderOptions | null) -> #0[] {
+function baml.csv.read(path: string, options: <unresolved type #127270352465770> | null) -> #0[] {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2360,7 +2360,7 @@ function baml.csv.read(path: string, options: baml.csv.ReaderOptions | null) -> 
     return
 }
 
-function baml.csv.reader(source: string | uint8array | baml.fs.File, options: baml.csv.ReaderOptions | null) -> baml.csv.CsvReader {
+function baml.csv.reader(source: string | uint8array | <unresolved type #98405344117422>, options: <unresolved type #127270352465770> | null) -> <unresolved type #51935291672366> {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2375,7 +2375,7 @@ function baml.csv.reader(source: string | uint8array | baml.fs.File, options: ba
     return
 }
 
-function baml.csv.stringify(rows: #0[], options: baml.csv.WriterOptions | null) -> string {
+function baml.csv.stringify(rows: #0[], options: <unresolved type #24074331555626> | null) -> string {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2414,7 +2414,7 @@ function baml.csv.stringify(rows: #0[], options: baml.csv.WriterOptions | null) 
     return
 }
 
-function baml.csv.stringify_records(records: (null | bool | int | bigint | float | string)[][], options: baml.csv.WriterOptions | null) -> string {
+function baml.csv.stringify_records(records: (null | bool | int | bigint | float | string)[][], options: <unresolved type #24074331555626> | null) -> string {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2511,7 +2511,7 @@ function baml.csv.to_markdown_records(records: string[][], headers: string[] | n
     return
 }
 
-function baml.csv.write(path: string, rows: #0[], options: baml.csv.WriterOptions | null) -> int {
+function baml.csv.write(path: string, rows: #0[], options: <unresolved type #24074331555626> | null) -> int {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2535,7 +2535,7 @@ function baml.csv.write(path: string, rows: #0[], options: baml.csv.WriterOption
     return
 }
 
-function baml.csv.writer(file: baml.fs.File, options: baml.csv.WriterOptions | null) -> baml.csv.CsvWriter {
+function baml.csv.writer(file: <unresolved type #98405344117422>, options: <unresolved type #24074331555626> | null) -> <unresolved type #120098763983554> {
     load_var options
     load_const <omitted>
     cmp_op ==
@@ -2553,21 +2553,21 @@ function baml.csv.writer(file: baml.fs.File, options: baml.csv.WriterOptions | n
 function baml.deep_copy(value: #0) -> #0 {
 }
 
-function baml.env.Ref.get(self: baml.env.Ref) -> string | null {
+function baml.env.Ref.get(self: <unresolved type #14421915625631>) -> string | null {
     load_var self
     load_field .name
     sys_op baml.env.get
     return
 }
 
-function baml.env.Ref.get_or_panic(self: baml.env.Ref) -> string {
+function baml.env.Ref.get_or_panic(self: <unresolved type #14421915625631>) -> string {
     load_var self
     load_field .name
     call baml.env.get_or_panic
     return
 }
 
-function baml.env.Ref.or(self: baml.env.Ref, fallback: string) -> string {
+function baml.env.Ref.or(self: <unresolved type #14421915625631>, fallback: string) -> string {
     load_var self
     load_field .name
     sys_op baml.env.get
@@ -2631,22 +2631,22 @@ function baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string {
     return
 }
 
-function baml.env.ref(name: string) -> baml.env.Ref {
+function baml.env.ref(name: string) -> <unresolved type #14421915625631> {
     load_var name
     init_instance baml.env.Ref .name
     return
 }
 
-function baml.errors.ErrorContext._to_string_impl(self: baml.errors.ErrorContext) -> string {
+function baml.errors.ErrorContext._to_string_impl(self: <unresolved type #119669651966377>) -> string {
 }
 
-function baml.errors.ErrorContext.baml.ToString.to_string(self: baml.errors.ErrorContext) -> string {
+function baml.errors.ErrorContext.baml.ToString.to_string(self: <unresolved type #119669651966377>) -> string {
     load_var self
     call baml.errors.ErrorContext._to_string_impl
     return
 }
 
-function baml.errors.ErrorContext.root_cause(self: baml.errors.ErrorContext) -> baml.errors.ErrorContext {
+function baml.errors.ErrorContext.root_cause(self: <unresolved type #119669651966377>) -> <unresolved type #119669651966377> {
     load_var self
     load_field .cause
     store_var_load_var _2
@@ -2667,10 +2667,10 @@ function baml.errors.ErrorContext.root_cause(self: baml.errors.ErrorContext) -> 
     return
 }
 
-function baml.errors.StackTrace._to_string_impl(self: baml.errors.StackTrace) -> string {
+function baml.errors.StackTrace._to_string_impl(self: <unresolved type #123919198071273>) -> string {
 }
 
-function baml.errors.StackTrace.baml.ToString.to_string(self: baml.errors.StackTrace) -> string {
+function baml.errors.StackTrace.baml.ToString.to_string(self: <unresolved type #123919198071273>) -> string {
     load_var self
     call baml.errors.StackTrace._to_string_impl
     return
@@ -2679,7 +2679,7 @@ function baml.errors.StackTrace.baml.ToString.to_string(self: baml.errors.StackT
 function baml.errors.UnknownError._preserve_context(source: unknown, target: unknown) -> null {
 }
 
-function baml.errors.UnknownError.baml.ToString.to_string(self: baml.errors.UnknownError) -> string {
+function baml.errors.UnknownError.baml.ToString.to_string(self: <unresolved type #74601415421372>) -> string {
     load_type unknown
     load_var self
     load_field .data
@@ -2732,7 +2732,7 @@ function baml.errors.UnknownError.baml.ToString.to_string(self: baml.errors.Unkn
     return
 }
 
-function baml.errors.UnknownError.from(data: unknown) -> #0 | baml.errors.UnknownError {
+function baml.errors.UnknownError.from(data: unknown) -> #0 | <unresolved type #74601415421372> {
     load_var data
     store_var _2
     load_var _2
@@ -2802,7 +2802,7 @@ function baml.errors.UnknownError.from(data: unknown) -> #0 | baml.errors.Unknow
     return
 }
 
-function baml.errors.UnknownError.with_message(data: unknown, message: string) -> #0 | baml.errors.UnknownError {
+function baml.errors.UnknownError.with_message(data: unknown, message: string) -> #0 | <unresolved type #74601415421372> {
     load_var data
     store_var _3
     load_var _3
@@ -2882,28 +2882,28 @@ function baml.errors.UnknownError.with_message(data: unknown, message: string) -
     return
 }
 
-function baml.fs.File.bytes(self: baml.fs.File) -> uint8array {
+function baml.fs.File.bytes(self: <unresolved type #98405344117422>) -> uint8array {
 }
 
-function baml.fs.File.close(self: baml.fs.File) -> null {
+function baml.fs.File.close(self: <unresolved type #98405344117422>) -> null {
 }
 
-function baml.fs.File.read(self: baml.fs.File, n: int) -> string {
+function baml.fs.File.read(self: <unresolved type #98405344117422>, n: int) -> string {
 }
 
-function baml.fs.File.read_bytes(self: baml.fs.File, n: int) -> uint8array {
+function baml.fs.File.read_bytes(self: <unresolved type #98405344117422>, n: int) -> uint8array {
 }
 
-function baml.fs.File.seek_from(self: baml.fs.File, whence: "start" | "current" | "end", offset: int) -> int {
+function baml.fs.File.seek_from(self: <unresolved type #98405344117422>, whence: "start" | "current" | "end", offset: int) -> int {
 }
 
-function baml.fs.File.text(self: baml.fs.File) -> string {
+function baml.fs.File.text(self: <unresolved type #98405344117422>) -> string {
 }
 
-function baml.fs.File.write(self: baml.fs.File, data: string) -> int {
+function baml.fs.File.write(self: <unresolved type #98405344117422>, data: string) -> int {
 }
 
-function baml.fs.File.write_bytes(self: baml.fs.File, data: uint8array) -> int {
+function baml.fs.File.write_bytes(self: <unresolved type #98405344117422>, data: uint8array) -> int {
 }
 
 function baml.fs.chmod(path: string, mode: int) -> void {
@@ -2912,16 +2912,16 @@ function baml.fs.chmod(path: string, mode: int) -> void {
 function baml.fs.exists(path: string) -> bool {
 }
 
-function baml.fs.mkdir(path: string, options: baml.fs.MkdirOptions) -> null {
+function baml.fs.mkdir(path: string, options: <unresolved type #39695353343311>) -> null {
 }
 
-function baml.fs.open(path: string, mode: "r" | "r+" | "w" | "w+" | "a" | "a+") -> baml.fs.File {
+function baml.fs.open(path: string, mode: "r" | "r+" | "w" | "w+" | "a" | "a+") -> <unresolved type #98405344117422> {
 }
 
 function baml.fs.read(path: string) -> string {
 }
 
-function baml.fs.read_dir(path: string) -> baml.fs.DirEntry[] {
+function baml.fs.read_dir(path: string) -> <unresolved type #21507357821553>[] {
 }
 
 function baml.fs.remove(path: string) -> null {
@@ -2960,7 +2960,7 @@ function baml.future.Future.is_result(self: future<#0, #1>) -> bool {
 function baml.future.Future.is_settled(self: future<#0, #1>) -> bool {
 }
 
-function baml.future.Future.state(self: future<#0, #1>) -> baml.future.FutureState {
+function baml.future.Future.state(self: future<#0, #1>) -> <unresolved type #133838588634832> {
 }
 
 function baml.future.all(futures: future<#0, #1>[]) -> future<#0[], #1> {
@@ -2999,7 +2999,7 @@ function baml.future.all_complete(futures: future<#0, #1>[]) -> future<#0[], #1>
     return
 }
 
-function baml.future.any(futures: future<#0, #1>[]) -> future<#0, baml.future.AllFailed<#1>> {
+function baml.future.any(futures: future<#0, #1>[]) -> future<#0, <unresolved type #48291419752014><#1>> {
     load_var ?1
     make_cell
     store_var ?1
@@ -3035,31 +3035,31 @@ function baml.future.race(futures: future<#0, #1>[]) -> future<#0, #1> {
     return
 }
 
-function baml.glob.Glob.matches(self: baml.glob.Glob, path: string) -> bool {
+function baml.glob.Glob.matches(self: <unresolved type #16834055972193>, path: string) -> bool {
 }
 
-function baml.glob.Glob.scan(self: baml.glob.Glob, root: string | baml.glob.ScanOptions) -> string[] {
+function baml.glob.Glob.scan(self: <unresolved type #16834055972193>, root: string | <unresolved type #19391210444672>) -> string[] {
 }
 
-function baml.glob.new(pattern: string) -> baml.glob.Glob {
+function baml.glob.new(pattern: string) -> <unresolved type #16834055972193> {
 }
 
-function baml.host.call_host_value(handle: baml.host.HostValue, args: unknown[]) -> #0 {
+function baml.host.call_host_value(handle: <unresolved type #10365343407810>, args: unknown[]) -> #0 {
 }
 
-function baml.http.Response.bytes(self: baml.http.Response) -> uint8array {
+function baml.http.Response.bytes(self: <unresolved type #43007235494578>) -> uint8array {
 }
 
-function baml.http.Response.end(self: baml.http.Response) -> null {
+function baml.http.Response.end(self: <unresolved type #43007235494578>) -> null {
 }
 
-function baml.http.Response.new(status_code: int, headers: map<string, string>, body: uint8array) -> baml.http.Response {
+function baml.http.Response.new(status_code: int, headers: map<string, string>, body: uint8array) -> <unresolved type #43007235494578> {
 }
 
-function baml.http.Response.new_streaming(status_code: int, headers: map<string, string>) -> baml.http.Response {
+function baml.http.Response.new_streaming(status_code: int, headers: map<string, string>) -> <unresolved type #43007235494578> {
 }
 
-function baml.http.Response.ok(self: baml.http.Response) -> bool {
+function baml.http.Response.ok(self: <unresolved type #43007235494578>) -> bool {
     load_var self
     load_field .status_code
     load_const 200
@@ -3075,19 +3075,19 @@ function baml.http.Response.ok(self: baml.http.Response) -> bool {
     return
 }
 
-function baml.http.Response.text(self: baml.http.Response) -> string {
+function baml.http.Response.text(self: <unresolved type #43007235494578>) -> string {
 }
 
-function baml.http.Response.write(self: baml.http.Response, data: uint8array) -> null {
+function baml.http.Response.write(self: <unresolved type #43007235494578>, data: uint8array) -> null {
 }
 
-function baml.http.Server._serve(self: baml.http.Server, handler: (baml.http.Request) -> baml.http.Response throws never, tls_config: baml.http.TlsConfig | null, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout_nanos: bigint) -> never {
+function baml.http.Server._serve(self: <unresolved type #22870959868806>, handler: (<unresolved type #50857447195238>) -> <unresolved type #43007235494578> throws never, tls_config: <unresolved type #83283976203960> | null, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout_nanos: bigint) -> never {
 }
 
-function baml.http.Server.bind(addr: string) -> baml.http.Server {
+function baml.http.Server.bind(addr: string) -> <unresolved type #22870959868806> {
 }
 
-function baml.http.Server.serve(self: baml.http.Server, handler: (baml.http.Request) -> baml.http.Response throws never, tls_config: baml.http.TlsConfig | null, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout: baml.time.Duration) -> never {
+function baml.http.Server.serve(self: <unresolved type #22870959868806>, handler: (<unresolved type #50857447195238>) -> <unresolved type #43007235494578> throws never, tls_config: <unresolved type #83283976203960> | null, allow_http1: bool, allow_http2: bool, max_body_size: int, max_connections: int, header_read_timeout: <unresolved type #16018747206762>) -> never {
     load_var tls_config
     load_const <omitted>
     cmp_op ==
@@ -3148,16 +3148,16 @@ function baml.http.Server.serve(self: baml.http.Server, handler: (baml.http.Requ
     return
 }
 
-function baml.http.SseStream.close(self: baml.http.SseStream) -> null {
+function baml.http.SseStream.close(self: <unresolved type #75245510125758>) -> null {
 }
 
-function baml.http.SseStream.next(self: baml.http.SseStream) -> string | null {
+function baml.http.SseStream.next(self: <unresolved type #75245510125758>) -> string | null {
 }
 
-function baml.http.TlsConfig._new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool, handshake_timeout_nanos: bigint) -> baml.http.TlsConfig {
+function baml.http.TlsConfig._new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool, handshake_timeout_nanos: bigint) -> <unresolved type #83283976203960> {
 }
 
-function baml.http.TlsConfig.new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool, handshake_timeout: baml.time.Duration) -> baml.http.TlsConfig {
+function baml.http.TlsConfig.new(cert_pem: uint8array, key_pem: uint8array, allow_tls1_2: bool, handshake_timeout: <unresolved type #16018747206762>) -> <unresolved type #83283976203960> {
     load_var allow_tls1_2
     load_const <omitted>
     cmp_op ==
@@ -3184,16 +3184,16 @@ function baml.http.TlsConfig.new(cert_pem: uint8array, key_pem: uint8array, allo
     return
 }
 
-function baml.http._fetch(url: string, timeout_nanos: bigint) -> baml.http.Response {
+function baml.http._fetch(url: string, timeout_nanos: bigint) -> <unresolved type #43007235494578> {
 }
 
-function baml.http._fetch_sse(request: baml.http.Request, timeout_nanos: bigint, first_event_timeout_nanos: bigint) -> baml.http.SseStream {
+function baml.http._fetch_sse(request: <unresolved type #50857447195238>, timeout_nanos: bigint, first_event_timeout_nanos: bigint) -> <unresolved type #75245510125758> {
 }
 
-function baml.http._send(request: baml.http.Request, timeout_nanos: bigint) -> baml.http.Response {
+function baml.http._send(request: <unresolved type #50857447195238>, timeout_nanos: bigint) -> <unresolved type #43007235494578> {
 }
 
-function baml.http._timeout_nanos(timeout: baml.time.Duration | null) -> bigint {
+function baml.http._timeout_nanos(timeout: <unresolved type #16018747206762> | null) -> bigint {
     load_var timeout
     load_const null
     cmp_op ==
@@ -3212,7 +3212,7 @@ function baml.http._timeout_nanos(timeout: baml.time.Duration | null) -> bigint 
     return
 }
 
-function baml.http.fetch(url: string, timeout: baml.time.Duration | null) -> baml.http.Response {
+function baml.http.fetch(url: string, timeout: <unresolved type #16018747206762> | null) -> <unresolved type #43007235494578> {
     load_var timeout
     load_const <omitted>
     cmp_op ==
@@ -3229,7 +3229,7 @@ function baml.http.fetch(url: string, timeout: baml.time.Duration | null) -> bam
     return
 }
 
-function baml.http.fetch_sse(request: baml.http.Request, timeout: baml.time.Duration | null, first_event_timeout: baml.time.Duration | null) -> baml.http.SseStream {
+function baml.http.fetch_sse(request: <unresolved type #50857447195238>, timeout: <unresolved type #16018747206762> | null, first_event_timeout: <unresolved type #16018747206762> | null) -> <unresolved type #75245510125758> {
     load_var timeout
     load_const <omitted>
     cmp_op ==
@@ -3258,7 +3258,7 @@ function baml.http.fetch_sse(request: baml.http.Request, timeout: baml.time.Dura
     return
 }
 
-function baml.http.send(request: baml.http.Request, timeout: baml.time.Duration | null) -> baml.http.Response {
+function baml.http.send(request: <unresolved type #50857447195238>, timeout: <unresolved type #16018747206762> | null) -> <unresolved type #43007235494578> {
     load_var timeout
     load_const <omitted>
     cmp_op ==
@@ -3299,12 +3299,12 @@ function baml.io.print(s: string) -> null {
 function baml.io.println(s: string) -> null {
 }
 
-function baml.iter.ArrayIterator.Iterable.iter(self: baml.iter.ArrayIterator<#0>) -> baml.iter.Iterator<Error = never, Item = #0> {
+function baml.iter.ArrayIterator.Iterable.iter(self: <unresolved type #107071825794698><#0>) -> <unresolved type #134608312336441><Error = never, Item = #0> {
     load_var self
     return
 }
 
-function baml.iter.ArrayIterator.Iterator.next(self: baml.iter.ArrayIterator<#0>) -> #0 | baml.iter.Done {
+function baml.iter.ArrayIterator.Iterator.next(self: <unresolved type #107071825794698><#0>) -> #0 | <unresolved type #77132703667455> {
     load_var self
     load_field .idx
     store_var _3
@@ -3340,7 +3340,7 @@ function baml.iter.ArrayIterator.Iterator.next(self: baml.iter.ArrayIterator<#0>
     return
 }
 
-function baml.iter.ArrayIterator.new(arr: #0[]) -> baml.iter.ArrayIterator<#0> {
+function baml.iter.ArrayIterator.new(arr: #0[]) -> <unresolved type #107071825794698><#0> {
     load_var arr
     load_const 0
     load_type #0
@@ -3348,12 +3348,12 @@ function baml.iter.ArrayIterator.new(arr: #0[]) -> baml.iter.ArrayIterator<#0> {
     return
 }
 
-function baml.iter.Chain.Iterable.iter(self: baml.iter.Chain<#0, #1, #2>) -> baml.iter.Iterator<Error = #1 | #2, Item = #0> {
+function baml.iter.Chain.Iterable.iter(self: <unresolved type #58111719246632><#0, #1, #2>) -> <unresolved type #134608312336441><Error = #1 | #2, Item = #0> {
     load_var self
     return
 }
 
-function baml.iter.Chain.Iterator.next(self: baml.iter.Chain<#0, #1, #2>) -> #0 | baml.iter.Done {
+function baml.iter.Chain.Iterator.next(self: <unresolved type #58111719246632><#0, #1, #2>) -> #0 | <unresolved type #77132703667455> {
     load_var self
     load_field .first_done
     unary_op !
@@ -3389,12 +3389,12 @@ function baml.iter.Chain.Iterator.next(self: baml.iter.Chain<#0, #1, #2>) -> #0 
     return
 }
 
-function baml.iter.Filter.Iterable.iter(self: baml.iter.Filter<#0, #1, #2>) -> baml.iter.Iterator<Error = #1 | #2, Item = #0> {
+function baml.iter.Filter.Iterable.iter(self: <unresolved type #30940994939501><#0, #1, #2>) -> <unresolved type #134608312336441><Error = #1 | #2, Item = #0> {
     load_var self
     return
 }
 
-function baml.iter.Filter.Iterator.next(self: baml.iter.Filter<#0, #1, #2>) -> #0 | baml.iter.Done {
+function baml.iter.Filter.Iterator.next(self: <unresolved type #30940994939501><#0, #1, #2>) -> #0 | <unresolved type #77132703667455> {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -3433,12 +3433,12 @@ function baml.iter.Filter.Iterator.next(self: baml.iter.Filter<#0, #1, #2>) -> #
     return
 }
 
-function baml.iter.FilterMap.Iterable.iter(self: baml.iter.FilterMap<#0, #1, #2, #3>) -> baml.iter.Iterator<Error = #2 | #3, Item = #1> {
+function baml.iter.FilterMap.Iterable.iter(self: <unresolved type #50093738746249><#0, #1, #2, #3>) -> <unresolved type #134608312336441><Error = #2 | #3, Item = #1> {
     load_var self
     return
 }
 
-function baml.iter.FilterMap.Iterator.next(self: baml.iter.FilterMap<#0, #1, #2, #3>) -> #1 | baml.iter.Done {
+function baml.iter.FilterMap.Iterator.next(self: <unresolved type #50093738746249><#0, #1, #2, #3>) -> #1 | <unresolved type #77132703667455> {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -3482,12 +3482,12 @@ function baml.iter.FilterMap.Iterator.next(self: baml.iter.FilterMap<#0, #1, #2,
     return
 }
 
-function baml.iter.FlatMap.Iterable.iter(self: baml.iter.FlatMap<#0, #1, #2, #3, #4>) -> baml.iter.Iterator<Error = #2 | #3 | #4, Item = #1> {
+function baml.iter.FlatMap.Iterable.iter(self: <unresolved type #523143182146><#0, #1, #2, #3, #4>) -> <unresolved type #134608312336441><Error = #2 | #3 | #4, Item = #1> {
     load_var self
     return
 }
 
-function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<#0, #1, #2, #3, #4>) -> #1 | baml.iter.Done {
+function baml.iter.FlatMap.Iterator.next(self: <unresolved type #523143182146><#0, #1, #2, #3, #4>) -> #1 | <unresolved type #77132703667455> {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -3566,12 +3566,12 @@ function baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap<#0, #1, #2, #3,
     unreachable
 }
 
-function baml.iter.Flatten.Iterable.iter(self: baml.iter.Flatten<#0, #1, #2, #3>) -> baml.iter.Iterator<Error = #2 | #3, Item = #1> {
+function baml.iter.Flatten.Iterable.iter(self: <unresolved type #135762356492059><#0, #1, #2, #3>) -> <unresolved type #134608312336441><Error = #2 | #3, Item = #1> {
     load_var self
     return
 }
 
-function baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten<#0, #1, #2, #3>) -> #1 | baml.iter.Done {
+function baml.iter.Flatten.Iterator.next(self: <unresolved type #135762356492059><#0, #1, #2, #3>) -> #1 | <unresolved type #77132703667455> {
   L0:
     load_const true
     pop_jump_if_false L1
@@ -3648,14 +3648,14 @@ function baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten<#0, #1, #2, #3>
     unreachable
 }
 
-function baml.iter.Iterable$for$T[].iter(self: #0[]) -> baml.iter.Iterator<Error = never, Item = #0> {
+function baml.iter.Iterable$for$T[].iter(self: #0[]) -> <unresolved type #134608312336441><Error = never, Item = #0> {
     load_type #0
     load_var self
     call baml.iter.ArrayIterator.new
     return
 }
 
-function baml.iter.Iterable$for$string.iter(self: string) -> baml.iter.Iterator<Error = never, Item = string> {
+function baml.iter.Iterable$for$string.iter(self: string) -> <unresolved type #134608312336441><Error = never, Item = string> {
     load_var self
     call baml.String.chars
     load_type baml.iter.Iterable<Error = never, Item = string>
@@ -3666,7 +3666,7 @@ function baml.iter.Iterable$for$string.iter(self: string) -> baml.iter.Iterator<
     return
 }
 
-function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Iterable<Error = #3, Item = #1>) -> baml.iter.Iterator<Error = #2 | #3, Item = #1> {
+function baml.iter.Iterator.chain(self: <unresolved type #134608312336441>, other: <unresolved type #120313837417593><Error = #3, Item = #1>) -> <unresolved type #134608312336441><Error = #2 | #3, Item = #1> {
     load_var other
     load_type baml.iter.Iterable<Error = #3, Item = #1>
     load_const "iter"
@@ -3681,7 +3681,7 @@ function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Ite
     return
 }
 
-function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> #1[] {
+function baml.iter.Iterator.collect(self: <unresolved type #134608312336441>) -> #1[] {
     load_type #1
     alloc_array 0
     store_var r
@@ -3711,7 +3711,7 @@ function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> #1[] {
     return
 }
 
-function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
+function baml.iter.Iterator.count(self: <unresolved type #134608312336441>) -> int {
     load_const 0
     store_var n
 
@@ -3740,7 +3740,7 @@ function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
     return
 }
 
-function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> bool {
+function baml.iter.Iterator.every(self: <unresolved type #134608312336441>, predicate: (#1) -> bool throws #3) -> bool {
   L0:
     load_const true
     pop_jump_if_false L2
@@ -3769,7 +3769,7 @@ function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (#1) -> b
     return
 }
 
-function baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> baml.iter.Iterator<Error = #2 | #3, Item = #1> {
+function baml.iter.Iterator.filter(self: <unresolved type #134608312336441>, predicate: (#1) -> bool throws #3) -> <unresolved type #134608312336441><Error = #2 | #3, Item = #1> {
     load_var2 1 2
     load_type #1
     load_type #2
@@ -3778,7 +3778,7 @@ function baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: (#1) -> 
     return
 }
 
-function baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: (#1) -> #3 | null throws #4) -> baml.iter.Iterator<Error = #2 | #4, Item = #3> {
+function baml.iter.Iterator.filter_map(self: <unresolved type #134608312336441>, fn: (#1) -> #3 | null throws #4) -> <unresolved type #134608312336441><Error = #2 | #4, Item = #3> {
     load_var2 1 2
     load_type #1
     load_type #3
@@ -3788,7 +3788,7 @@ function baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: (#1) -> #3 
     return
 }
 
-function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> #1 | null {
+function baml.iter.Iterator.find(self: <unresolved type #134608312336441>, predicate: (#1) -> bool throws #3) -> #1 | null {
   L0:
     load_const true
     pop_jump_if_false L2
@@ -3818,7 +3818,7 @@ function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: (#1) -> bo
     return
 }
 
-function baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: (#1) -> baml.iter.Iterable<Error = #5, Item = #3> throws #4) -> baml.iter.Iterator<Error = #2 | #4 | #5, Item = #3> {
+function baml.iter.Iterator.flat_map(self: <unresolved type #134608312336441>, fn: (#1) -> <unresolved type #120313837417593><Error = #5, Item = #3> throws #4) -> <unresolved type #134608312336441><Error = #2 | #4 | #5, Item = #3> {
     load_var2 1 2
     alloc_instance baml.iter.Done
     load_type #1
@@ -3830,7 +3830,7 @@ function baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: (#1) -> baml.
     return
 }
 
-function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (#1) -> void throws #3) -> void {
+function baml.iter.Iterator.for_each(self: <unresolved type #134608312336441>, fn: (#1) -> void throws #3) -> void {
   L0:
     load_const true
     pop_jump_if_false L2
@@ -3855,7 +3855,7 @@ function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (#1) -> void 
     return
 }
 
-function baml.iter.Iterator.map(self: baml.iter.Iterator, fn: (#1) -> #3 throws #4) -> baml.iter.Iterator<Error = #2 | #4, Item = #3> {
+function baml.iter.Iterator.map(self: <unresolved type #134608312336441>, fn: (#1) -> #3 throws #4) -> <unresolved type #134608312336441><Error = #2 | #4, Item = #3> {
     load_var2 1 2
     load_type #1
     load_type #3
@@ -3865,7 +3865,7 @@ function baml.iter.Iterator.map(self: baml.iter.Iterator, fn: (#1) -> #3 throws 
     return
 }
 
-function baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peekable<#1, #2> {
+function baml.iter.Iterator.peekable(self: <unresolved type #134608312336441>) -> <unresolved type #43067891011360><#1, #2> {
     load_var self
     alloc_instance baml.iter.Done
     load_const false
@@ -3875,7 +3875,7 @@ function baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peek
     return
 }
 
-function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (#3, #1) -> #3 throws #4, initial: #3) -> #3 {
+function baml.iter.Iterator.reduce(self: <unresolved type #134608312336441>, fn: (#3, #1) -> #3 throws #4, initial: #3) -> #3 {
     load_var initial
     store_var acc
 
@@ -3904,7 +3904,7 @@ function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (#3, #1) -> #3 
     return
 }
 
-function baml.iter.Iterator.skip(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = #2, Item = #1> {
+function baml.iter.Iterator.skip(self: <unresolved type #134608312336441>, n: int) -> <unresolved type #134608312336441><Error = #2, Item = #1> {
     load_var2 1 2
     load_type #1
     load_type #2
@@ -3912,7 +3912,7 @@ function baml.iter.Iterator.skip(self: baml.iter.Iterator, n: int) -> baml.iter.
     return
 }
 
-function baml.iter.Iterator.skip_while(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> baml.iter.Iterator<Error = #2 | #3, Item = #1> {
+function baml.iter.Iterator.skip_while(self: <unresolved type #134608312336441>, predicate: (#1) -> bool throws #3) -> <unresolved type #134608312336441><Error = #2 | #3, Item = #1> {
     load_var2 1 2
     load_const true
     load_type #1
@@ -3922,7 +3922,7 @@ function baml.iter.Iterator.skip_while(self: baml.iter.Iterator, predicate: (#1)
     return
 }
 
-function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> bool {
+function baml.iter.Iterator.some(self: <unresolved type #134608312336441>, predicate: (#1) -> bool throws #3) -> bool {
   L0:
     load_const true
     pop_jump_if_false L2
@@ -3950,7 +3950,7 @@ function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (#1) -> bo
     return
 }
 
-function baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = #2, Item = #1> {
+function baml.iter.Iterator.step_by(self: <unresolved type #134608312336441>, n: int) -> <unresolved type #134608312336441><Error = #2, Item = #1> {
     load_var2 1 2
     load_const true
     load_type #1
@@ -3959,7 +3959,7 @@ function baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.it
     return
 }
 
-function baml.iter.Iterator.take(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = #2, Item = #1> {
+function baml.iter.Iterator.take(self: <unresolved type #134608312336441>, n: int) -> <unresolved type #134608312336441><Error = #2, Item = #1> {
     load_var2 1 2
     load_type #1
     load_type #2
@@ -3967,7 +3967,7 @@ function baml.iter.Iterator.take(self: baml.iter.Iterator, n: int) -> baml.iter.
     return
 }
 
-function baml.iter.Iterator.take_while(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> baml.iter.Iterator<Error = #2 | #3, Item = #1> {
+function baml.iter.Iterator.take_while(self: <unresolved type #134608312336441>, predicate: (#1) -> bool throws #3) -> <unresolved type #134608312336441><Error = #2 | #3, Item = #1> {
     load_var2 1 2
     load_const false
     load_type #1
@@ -3977,12 +3977,12 @@ function baml.iter.Iterator.take_while(self: baml.iter.Iterator, predicate: (#1)
     return
 }
 
-function baml.iter.Map.Iterable.iter(self: baml.iter.Map<#0, #1, #2, #3>) -> baml.iter.Iterator<Error = #2 | #3, Item = #1> {
+function baml.iter.Map.Iterable.iter(self: <unresolved type #11196941613811><#0, #1, #2, #3>) -> <unresolved type #134608312336441><Error = #2 | #3, Item = #1> {
     load_var self
     return
 }
 
-function baml.iter.Map.Iterator.next(self: baml.iter.Map<#0, #1, #2, #3>) -> #1 | baml.iter.Done {
+function baml.iter.Map.Iterator.next(self: <unresolved type #11196941613811><#0, #1, #2, #3>) -> #1 | <unresolved type #77132703667455> {
     load_var self
     load_field .source
     load_type baml.iter.Iterator<Error = #2, Item = #0>
@@ -4007,12 +4007,12 @@ function baml.iter.Map.Iterator.next(self: baml.iter.Map<#0, #1, #2, #3>) -> #1 
     return
 }
 
-function baml.iter.Peekable.Iterable.iter(self: baml.iter.Peekable<#0, #1>) -> baml.iter.Iterator<Error = #1, Item = #0> {
+function baml.iter.Peekable.Iterable.iter(self: <unresolved type #43067891011360><#0, #1>) -> <unresolved type #134608312336441><Error = #1, Item = #0> {
     load_var self
     return
 }
 
-function baml.iter.Peekable.Iterator.next(self: baml.iter.Peekable<#0, #1>) -> #0 | baml.iter.Done {
+function baml.iter.Peekable.Iterator.next(self: <unresolved type #43067891011360><#0, #1>) -> #0 | <unresolved type #77132703667455> {
     load_var self
     load_field .has_buffer
     pop_jump_if_false L0
@@ -4042,7 +4042,7 @@ function baml.iter.Peekable.Iterator.next(self: baml.iter.Peekable<#0, #1>) -> #
     return
 }
 
-function baml.iter.Peekable.peek(self: baml.iter.Peekable<#0, #1>) -> #0 | baml.iter.Done {
+function baml.iter.Peekable.peek(self: <unresolved type #43067891011360><#0, #1>) -> #0 | <unresolved type #77132703667455> {
     load_var self
     load_field .has_buffer
     pop_jump_if_false L0
@@ -4071,12 +4071,12 @@ function baml.iter.Peekable.peek(self: baml.iter.Peekable<#0, #1>) -> #0 | baml.
     return
 }
 
-function baml.iter.Range.Iterable.iter(self: baml.iter.Range) -> baml.iter.Iterator<Error = never, Item = int> {
+function baml.iter.Range.Iterable.iter(self: <unresolved type #66477434871112>) -> <unresolved type #134608312336441><Error = never, Item = int> {
     load_var self
     return
 }
 
-function baml.iter.Range.Iterator.next(self: baml.iter.Range) -> int | baml.iter.Done {
+function baml.iter.Range.Iterator.next(self: <unresolved type #66477434871112>) -> int | <unresolved type #77132703667455> {
     load_var self
     load_field .i
     load_var self
@@ -4106,7 +4106,7 @@ function baml.iter.Range.Iterator.next(self: baml.iter.Range) -> int | baml.iter
     return
 }
 
-function baml.iter.Range.new(min: int, max: int, step: int) -> baml.iter.Range {
+function baml.iter.Range.new(min: int, max: int, step: int) -> <unresolved type #66477434871112> {
     load_var step
     load_const <omitted>
     cmp_op ==
@@ -4121,12 +4121,12 @@ function baml.iter.Range.new(min: int, max: int, step: int) -> baml.iter.Range {
     return
 }
 
-function baml.iter.Repeat.Iterable.iter(self: baml.iter.Repeat<#0>) -> baml.iter.Iterator<Error = never, Item = #0> {
+function baml.iter.Repeat.Iterable.iter(self: <unresolved type #24382870597324><#0>) -> <unresolved type #134608312336441><Error = never, Item = #0> {
     load_var self
     return
 }
 
-function baml.iter.Repeat.Iterator.next(self: baml.iter.Repeat<#0>) -> #0 | baml.iter.Done {
+function baml.iter.Repeat.Iterator.next(self: <unresolved type #24382870597324><#0>) -> #0 | <unresolved type #77132703667455> {
     load_var self
     load_field .count
     load_const 0
@@ -4165,7 +4165,7 @@ function baml.iter.Repeat.Iterator.next(self: baml.iter.Repeat<#0>) -> #0 | baml
     return
 }
 
-function baml.iter.Repeat.new(value: #0, count: int) -> baml.iter.Repeat<#0> {
+function baml.iter.Repeat.new(value: #0, count: int) -> <unresolved type #24382870597324><#0> {
     load_var count
     load_const <omitted>
     cmp_op ==
@@ -4180,12 +4180,12 @@ function baml.iter.Repeat.new(value: #0, count: int) -> baml.iter.Repeat<#0> {
     return
 }
 
-function baml.iter.Skip.Iterable.iter(self: baml.iter.Skip<#0, #1>) -> baml.iter.Iterator<Error = #1, Item = #0> {
+function baml.iter.Skip.Iterable.iter(self: <unresolved type #103014193449368><#0, #1>) -> <unresolved type #134608312336441><Error = #1, Item = #0> {
     load_var self
     return
 }
 
-function baml.iter.Skip.Iterator.next(self: baml.iter.Skip<#0, #1>) -> #0 | baml.iter.Done {
+function baml.iter.Skip.Iterator.next(self: <unresolved type #103014193449368><#0, #1>) -> #0 | <unresolved type #77132703667455> {
   L0:
     load_var self
     load_field .remaining
@@ -4233,12 +4233,12 @@ function baml.iter.Skip.Iterator.next(self: baml.iter.Skip<#0, #1>) -> #0 | baml
     return
 }
 
-function baml.iter.SkipWhile.Iterable.iter(self: baml.iter.SkipWhile<#0, #1, #2>) -> baml.iter.Iterator<Error = #1 | #2, Item = #0> {
+function baml.iter.SkipWhile.Iterable.iter(self: <unresolved type #119517059439885><#0, #1, #2>) -> <unresolved type #134608312336441><Error = #1 | #2, Item = #0> {
     load_var self
     return
 }
 
-function baml.iter.SkipWhile.Iterator.next(self: baml.iter.SkipWhile<#0, #1, #2>) -> #0 | baml.iter.Done {
+function baml.iter.SkipWhile.Iterator.next(self: <unresolved type #119517059439885><#0, #1, #2>) -> #0 | <unresolved type #77132703667455> {
   L0:
     load_var self
     load_field .skipping
@@ -4289,12 +4289,12 @@ function baml.iter.SkipWhile.Iterator.next(self: baml.iter.SkipWhile<#0, #1, #2>
     return
 }
 
-function baml.iter.StepBy.Iterable.iter(self: baml.iter.StepBy<#0, #1>) -> baml.iter.Iterator<Error = #1, Item = #0> {
+function baml.iter.StepBy.Iterable.iter(self: <unresolved type #71437444746208><#0, #1>) -> <unresolved type #134608312336441><Error = #1, Item = #0> {
     load_var self
     return
 }
 
-function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<#0, #1>) -> #0 | baml.iter.Done {
+function baml.iter.StepBy.Iterator.next(self: <unresolved type #71437444746208><#0, #1>) -> #0 | <unresolved type #77132703667455> {
     load_var self
     load_field .first
     pop_jump_if_false L0
@@ -4358,12 +4358,12 @@ function baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy<#0, #1>) -> #0 | 
     return
 }
 
-function baml.iter.Take.Iterable.iter(self: baml.iter.Take<#0, #1>) -> baml.iter.Iterator<Error = #1, Item = #0> {
+function baml.iter.Take.Iterable.iter(self: <unresolved type #97485089009568><#0, #1>) -> <unresolved type #134608312336441><Error = #1, Item = #0> {
     load_var self
     return
 }
 
-function baml.iter.Take.Iterator.next(self: baml.iter.Take<#0, #1>) -> #0 | baml.iter.Done {
+function baml.iter.Take.Iterator.next(self: <unresolved type #97485089009568><#0, #1>) -> #0 | <unresolved type #77132703667455> {
     load_var self
     load_field .remaining
     load_const 0
@@ -4407,12 +4407,12 @@ function baml.iter.Take.Iterator.next(self: baml.iter.Take<#0, #1>) -> #0 | baml
     return
 }
 
-function baml.iter.TakeWhile.Iterable.iter(self: baml.iter.TakeWhile<#0, #1, #2>) -> baml.iter.Iterator<Error = #1 | #2, Item = #0> {
+function baml.iter.TakeWhile.Iterable.iter(self: <unresolved type #54898623511637><#0, #1, #2>) -> <unresolved type #134608312336441><Error = #1 | #2, Item = #0> {
     load_var self
     return
 }
 
-function baml.iter.TakeWhile.Iterator.next(self: baml.iter.TakeWhile<#0, #1, #2>) -> #0 | baml.iter.Done {
+function baml.iter.TakeWhile.Iterator.next(self: <unresolved type #54898623511637><#0, #1, #2>) -> #0 | <unresolved type #77132703667455> {
     load_var self
     load_field .done
     pop_jump_if_false L0
@@ -4465,7 +4465,7 @@ function baml.iter.TakeWhile.Iterator.next(self: baml.iter.TakeWhile<#0, #1, #2>
     return
 }
 
-function baml.iter.flatten(src: baml.iter.Iterator<Error = #1, Item = #3>) -> baml.iter.Iterator<Error = #1 | #2, Item = #0> {
+function baml.iter.flatten(src: <unresolved type #134608312336441><Error = #1, Item = #3>) -> <unresolved type #134608312336441><Error = #1 | #2, Item = #0> {
     load_var src
     alloc_instance baml.iter.Done
     load_type #3
@@ -4476,7 +4476,7 @@ function baml.iter.flatten(src: baml.iter.Iterator<Error = #1, Item = #3>) -> ba
     return
 }
 
-function baml.json._path_field(current: baml.json.json, key: string, selector: string) -> baml.json.json {
+function baml.json._path_field(current: <unresolved type #1888633819501>, key: string, selector: string) -> <unresolved type #1888633819501> {
     load_var current
     store_var _4
     load_var _4
@@ -4523,7 +4523,7 @@ function baml.json._path_field(current: baml.json.json, key: string, selector: s
     throw
 }
 
-function baml.json._path_index(current: baml.json.json, idx: int, selector: string) -> baml.json.json {
+function baml.json._path_index(current: <unresolved type #1888633819501>, idx: int, selector: string) -> <unresolved type #1888633819501> {
     load_var current
     store_var _4
     load_var _4
@@ -4611,26 +4611,26 @@ function baml.json.deserialize(s: string) -> #0 {
 function baml.json.encode(v: #0) -> string {
 }
 
-function baml.json.field(j: baml.json.json, key: string) -> baml.json.json {
+function baml.json.field(j: <unresolved type #1888633819501>, key: string) -> <unresolved type #1888633819501> {
 }
 
-function baml.json.from(value: #0) -> baml.json.json {
+function baml.json.from(value: #0) -> <unresolved type #1888633819501> {
     load_type #0
     load_var value
     call baml._to_json_shim
     return
 }
 
-function baml.json.from_json(j: baml.json.json) -> #0 {
+function baml.json.from_json(j: <unresolved type #1888633819501>) -> #0 {
 }
 
 function baml.json.from_string(s: string) -> #0 {
 }
 
-function baml.json.parse(s: string) -> baml.json.json {
+function baml.json.parse(s: string) -> <unresolved type #1888633819501> {
 }
 
-function baml.json.path(j: baml.json.json, selector: string) -> #0 {
+function baml.json.path(j: <unresolved type #1888633819501>, selector: string) -> #0 {
     load_var selector
     load_const "."
     call baml.String.starts_with
@@ -5073,7 +5073,7 @@ function baml.json.path(j: baml.json.json, selector: string) -> #0 {
     throw
 }
 
-function baml.json.path_or(j: baml.json.json, selector: string, default: #0) -> #0 {
+function baml.json.path_or(j: <unresolved type #1888633819501>, selector: string, default: #0) -> #0 {
     load_type #0
     load_var2 1 2
     call baml.json.path
@@ -5094,7 +5094,7 @@ function baml.json.path_or(j: baml.json.json, selector: string, default: #0) -> 
     return
 }
 
-function baml.json.schema(t: reflect.Type) -> baml.json.json {
+function baml.json.schema(t: reflect.Type) -> <unresolved type #1888633819501> {
 }
 
 function baml.json.serialize(v: #0) -> string {
@@ -5105,29 +5105,29 @@ function baml.json.serialize(v: #0) -> string {
     return
 }
 
-function baml.json.stringify(j: baml.json.json) -> string {
+function baml.json.stringify(j: <unresolved type #1888633819501>) -> string {
 }
 
-function baml.json.stringify_pretty(j: baml.json.json) -> string {
+function baml.json.stringify_pretty(j: <unresolved type #1888633819501>) -> string {
 }
 
-function baml.json.to(j: baml.json.json) -> #0 {
+function baml.json.to(j: <unresolved type #1888633819501>) -> #0 {
     load_type #0
     load_var j
     call baml._from_json_shim
     return
 }
 
-function baml.json.to_json(v: #0) -> baml.json.json {
+function baml.json.to_json(v: #0) -> <unresolved type #1888633819501> {
 }
 
 function baml.json.to_string(v: #0) -> string {
 }
 
-function baml.media.Audio.base64(self: baml.media.Audio) -> string {
+function baml.media.Audio.base64(self: <unresolved type #35343763937051>) -> string {
 }
 
-function baml.media.Audio.file(self: baml.media.Audio) -> string | null {
+function baml.media.Audio.file(self: <unresolved type #35343763937051>) -> string | null {
 }
 
 function baml.media.Audio.from_base64(base64: string, mime_type: string | null) -> audio {
@@ -5139,16 +5139,16 @@ function baml.media.Audio.from_file(file: string, mime_type: string | null) -> a
 function baml.media.Audio.from_url(url: string, mime_type: string | null) -> audio {
 }
 
-function baml.media.Audio.mime_type(self: baml.media.Audio) -> string | null {
+function baml.media.Audio.mime_type(self: <unresolved type #35343763937051>) -> string | null {
 }
 
-function baml.media.Audio.url(self: baml.media.Audio) -> string | null {
+function baml.media.Audio.url(self: <unresolved type #35343763937051>) -> string | null {
 }
 
-function baml.media.Image.base64(self: baml.media.Image) -> string {
+function baml.media.Image.base64(self: <unresolved type #80582473093252>) -> string {
 }
 
-function baml.media.Image.file(self: baml.media.Image) -> string | null {
+function baml.media.Image.file(self: <unresolved type #80582473093252>) -> string | null {
 }
 
 function baml.media.Image.from_base64(base64: string, mime_type: string | null) -> image {
@@ -5160,16 +5160,16 @@ function baml.media.Image.from_file(file: string, mime_type: string | null) -> i
 function baml.media.Image.from_url(url: string, mime_type: string | null) -> image {
 }
 
-function baml.media.Image.mime_type(self: baml.media.Image) -> string | null {
+function baml.media.Image.mime_type(self: <unresolved type #80582473093252>) -> string | null {
 }
 
-function baml.media.Image.url(self: baml.media.Image) -> string | null {
+function baml.media.Image.url(self: <unresolved type #80582473093252>) -> string | null {
 }
 
-function baml.media.Pdf.base64(self: baml.media.Pdf) -> string {
+function baml.media.Pdf.base64(self: <unresolved type #113218833774991>) -> string {
 }
 
-function baml.media.Pdf.file(self: baml.media.Pdf) -> string | null {
+function baml.media.Pdf.file(self: <unresolved type #113218833774991>) -> string | null {
 }
 
 function baml.media.Pdf.from_base64(base64: string, mime_type: string | null) -> pdf {
@@ -5181,16 +5181,16 @@ function baml.media.Pdf.from_file(file: string, mime_type: string | null) -> pdf
 function baml.media.Pdf.from_url(url: string, mime_type: string | null) -> pdf {
 }
 
-function baml.media.Pdf.mime_type(self: baml.media.Pdf) -> string | null {
+function baml.media.Pdf.mime_type(self: <unresolved type #113218833774991>) -> string | null {
 }
 
-function baml.media.Pdf.url(self: baml.media.Pdf) -> string | null {
+function baml.media.Pdf.url(self: <unresolved type #113218833774991>) -> string | null {
 }
 
-function baml.media.Video.base64(self: baml.media.Video) -> string {
+function baml.media.Video.base64(self: <unresolved type #7174237770506>) -> string {
 }
 
-function baml.media.Video.file(self: baml.media.Video) -> string | null {
+function baml.media.Video.file(self: <unresolved type #7174237770506>) -> string | null {
 }
 
 function baml.media.Video.from_base64(base64: string, mime_type: string | null) -> video {
@@ -5202,34 +5202,34 @@ function baml.media.Video.from_file(file: string, mime_type: string | null) -> v
 function baml.media.Video.from_url(url: string, mime_type: string | null) -> video {
 }
 
-function baml.media.Video.mime_type(self: baml.media.Video) -> string | null {
+function baml.media.Video.mime_type(self: <unresolved type #7174237770506>) -> string | null {
 }
 
-function baml.media.Video.url(self: baml.media.Video) -> string | null {
+function baml.media.Video.url(self: <unresolved type #7174237770506>) -> string | null {
 }
 
-function baml.net.TcpListener.accept(self: baml.net.TcpListener) -> baml.net.TcpStream {
+function baml.net.TcpListener.accept(self: <unresolved type #122759645117517>) -> <unresolved type #123396628519841> {
 }
 
-function baml.net.TcpListener.bind(addr: string) -> baml.net.TcpListener {
+function baml.net.TcpListener.bind(addr: string) -> <unresolved type #122759645117517> {
 }
 
-function baml.net.TcpListener.close(self: baml.net.TcpListener) -> null {
+function baml.net.TcpListener.close(self: <unresolved type #122759645117517>) -> null {
 }
 
-function baml.net.TcpStream._connect(addr: string, timeout_nanos: bigint) -> baml.net.TcpStream {
+function baml.net.TcpStream._connect(addr: string, timeout_nanos: bigint) -> <unresolved type #123396628519841> {
 }
 
-function baml.net.TcpStream._read(self: baml.net.TcpStream, timeout_nanos: bigint) -> uint8array {
+function baml.net.TcpStream._read(self: <unresolved type #123396628519841>, timeout_nanos: bigint) -> uint8array {
 }
 
-function baml.net.TcpStream._write(self: baml.net.TcpStream, data: uint8array, timeout_nanos: bigint) -> null {
+function baml.net.TcpStream._write(self: <unresolved type #123396628519841>, data: uint8array, timeout_nanos: bigint) -> null {
 }
 
-function baml.net.TcpStream.close(self: baml.net.TcpStream) -> null {
+function baml.net.TcpStream.close(self: <unresolved type #123396628519841>) -> null {
 }
 
-function baml.net.TcpStream.connect(addr: string, timeout: baml.time.Duration | null) -> baml.net.TcpStream {
+function baml.net.TcpStream.connect(addr: string, timeout: <unresolved type #16018747206762> | null) -> <unresolved type #123396628519841> {
     load_var timeout
     load_const <omitted>
     cmp_op ==
@@ -5246,7 +5246,7 @@ function baml.net.TcpStream.connect(addr: string, timeout: baml.time.Duration | 
     return
 }
 
-function baml.net.TcpStream.read(self: baml.net.TcpStream, timeout: baml.time.Duration | null) -> uint8array {
+function baml.net.TcpStream.read(self: <unresolved type #123396628519841>, timeout: <unresolved type #16018747206762> | null) -> uint8array {
     load_var timeout
     load_const <omitted>
     cmp_op ==
@@ -5263,7 +5263,7 @@ function baml.net.TcpStream.read(self: baml.net.TcpStream, timeout: baml.time.Du
     return
 }
 
-function baml.net.TcpStream.write(self: baml.net.TcpStream, data: uint8array, timeout: baml.time.Duration | null) -> null {
+function baml.net.TcpStream.write(self: <unresolved type #123396628519841>, data: uint8array, timeout: <unresolved type #16018747206762> | null) -> null {
     load_var timeout
     load_const <omitted>
     cmp_op ==
@@ -5281,19 +5281,19 @@ function baml.net.TcpStream.write(self: baml.net.TcpStream, data: uint8array, ti
     return
 }
 
-function baml.net.UdpSocket._recv_from(self: baml.net.UdpSocket, timeout_nanos: bigint) -> baml.net.Datagram {
+function baml.net.UdpSocket._recv_from(self: <unresolved type #15554907477040>, timeout_nanos: bigint) -> <unresolved type #118251714855621> {
 }
 
-function baml.net.UdpSocket._send_to(self: baml.net.UdpSocket, data: uint8array, addr: string, timeout_nanos: bigint) -> int {
+function baml.net.UdpSocket._send_to(self: <unresolved type #15554907477040>, data: uint8array, addr: string, timeout_nanos: bigint) -> int {
 }
 
-function baml.net.UdpSocket.bind(addr: string) -> baml.net.UdpSocket {
+function baml.net.UdpSocket.bind(addr: string) -> <unresolved type #15554907477040> {
 }
 
-function baml.net.UdpSocket.close(self: baml.net.UdpSocket) -> null {
+function baml.net.UdpSocket.close(self: <unresolved type #15554907477040>) -> null {
 }
 
-function baml.net.UdpSocket.recv_from(self: baml.net.UdpSocket, timeout: baml.time.Duration | null) -> baml.net.Datagram {
+function baml.net.UdpSocket.recv_from(self: <unresolved type #15554907477040>, timeout: <unresolved type #16018747206762> | null) -> <unresolved type #118251714855621> {
     load_var timeout
     load_const <omitted>
     cmp_op ==
@@ -5310,7 +5310,7 @@ function baml.net.UdpSocket.recv_from(self: baml.net.UdpSocket, timeout: baml.ti
     return
 }
 
-function baml.net.UdpSocket.send_to(self: baml.net.UdpSocket, data: uint8array, addr: string, timeout: baml.time.Duration | null) -> int {
+function baml.net.UdpSocket.send_to(self: <unresolved type #15554907477040>, data: uint8array, addr: string, timeout: <unresolved type #16018747206762> | null) -> int {
     load_var timeout
     load_const <omitted>
     cmp_op ==
@@ -5328,7 +5328,7 @@ function baml.net.UdpSocket.send_to(self: baml.net.UdpSocket, data: uint8array, 
     return
 }
 
-function baml.net._timeout_nanos(timeout: baml.time.Duration | null) -> bigint {
+function baml.net._timeout_nanos(timeout: <unresolved type #16018747206762> | null) -> bigint {
     load_var timeout
     load_const null
     cmp_op ==
@@ -5456,7 +5456,7 @@ function baml.ops.Compare$for$string.le(self: string, other: string) -> bool {
 function baml.ops.Compare$for$string.lt(self: string, other: string) -> bool {
 }
 
-function baml.ops.Compare.ge(self: baml.ops.Compare, other: #0) -> bool {
+function baml.ops.Compare.ge(self: <unresolved type #80872665280838>, other: #0) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "lt"
@@ -5467,7 +5467,7 @@ function baml.ops.Compare.ge(self: baml.ops.Compare, other: #0) -> bool {
     return
 }
 
-function baml.ops.Compare.gt(self: baml.ops.Compare, other: #0) -> bool {
+function baml.ops.Compare.gt(self: <unresolved type #80872665280838>, other: #0) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "le"
@@ -5478,7 +5478,7 @@ function baml.ops.Compare.gt(self: baml.ops.Compare, other: #0) -> bool {
     return
 }
 
-function baml.ops.Compare.le(self: baml.ops.Compare, other: #0) -> bool {
+function baml.ops.Compare.le(self: <unresolved type #80872665280838>, other: #0) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "lt"
@@ -5560,7 +5560,7 @@ function baml.ops.Equals$for$string.eq(self: string, other: string) -> bool {
 function baml.ops.Equals$for$uint8array.eq(self: uint8array, other: uint8array) -> bool {
 }
 
-function baml.ops.Equals.neq(self: baml.ops.Equals, other: #0) -> bool {
+function baml.ops.Equals.neq(self: <unresolved type #3956743371218>, other: #0) -> bool {
     load_var2 1 2
     load_type baml.ops.Equals
     load_const "eq"
@@ -5706,16 +5706,16 @@ function baml.ops.__union_sub(a: unknown, b: unknown) -> unknown {
 function baml.ops.equals_equals(a: unknown, b: unknown) -> bool {
 }
 
-function baml.random.ChaCha20.Rng.random(self: baml.random.ChaCha20, bytes: int) -> uint8array {
+function baml.random.ChaCha20.Rng.random(self: <unresolved type #9388362065098>, bytes: int) -> uint8array {
 }
 
-function baml.random.ChaCha20.Rng.random_int(self: baml.random.ChaCha20) -> int {
+function baml.random.ChaCha20.Rng.random_int(self: <unresolved type #9388362065098>) -> int {
 }
 
-function baml.random.ChaCha20._new(seed: uint8array) -> baml.random.ChaCha20 {
+function baml.random.ChaCha20._new(seed: uint8array) -> <unresolved type #9388362065098> {
 }
 
-function baml.random.ChaCha20.new(seed: uint8array) -> baml.random.ChaCha20 {
+function baml.random.ChaCha20.new(seed: uint8array) -> <unresolved type #9388362065098> {
     load_var seed
     load_const <omitted>
     cmp_op ==
@@ -5733,7 +5733,7 @@ function baml.random.ChaCha20.new(seed: uint8array) -> baml.random.ChaCha20 {
     return
 }
 
-function baml.random.Rng.random_int(self: baml.random.Rng) -> int {
+function baml.random.Rng.random_int(self: <unresolved type #37131764174841>) -> int {
     load_var self
     load_const 8
     load_type baml.random.Rng
@@ -5813,27 +5813,27 @@ function baml.random.Rng.random_int(self: baml.random.Rng) -> int {
     return
 }
 
-function baml.random.SystemRandom.Rng.random(self: baml.random.SystemRandom, bytes: int) -> uint8array {
+function baml.random.SystemRandom.Rng.random(self: <unresolved type #60607381426730>, bytes: int) -> uint8array {
 }
 
-function baml.random.SystemRandom.Rng.random_int(self: baml.random.SystemRandom) -> int {
+function baml.random.SystemRandom.Rng.random_int(self: <unresolved type #60607381426730>) -> int {
 }
 
-function baml.random.SystemRandom.get() -> baml.random.SystemRandom {
+function baml.random.SystemRandom.get() -> <unresolved type #60607381426730> {
     alloc_instance baml.random.SystemRandom
     return
 }
 
-function baml.random.Xoshiro256PlusPlus.Rng.random(self: baml.random.Xoshiro256PlusPlus, bytes: int) -> uint8array {
+function baml.random.Xoshiro256PlusPlus.Rng.random(self: <unresolved type #130053837566099>, bytes: int) -> uint8array {
 }
 
-function baml.random.Xoshiro256PlusPlus.Rng.random_int(self: baml.random.Xoshiro256PlusPlus) -> int {
+function baml.random.Xoshiro256PlusPlus.Rng.random_int(self: <unresolved type #130053837566099>) -> int {
 }
 
-function baml.random.Xoshiro256PlusPlus._new(seed: uint8array) -> baml.random.Xoshiro256PlusPlus {
+function baml.random.Xoshiro256PlusPlus._new(seed: uint8array) -> <unresolved type #130053837566099> {
 }
 
-function baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xoshiro256PlusPlus {
+function baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> <unresolved type #130053837566099> {
     load_var seed
     load_const <omitted>
     cmp_op ==
@@ -5865,20 +5865,20 @@ function baml.root.ops.Add<string>$for$string.add(self: string, rhs: string) -> 
     return
 }
 
-function baml.sap.ParseCache.new(t_stream: reflect.Type, t_final: reflect.Type) -> baml.sap.ParseCache<#0, #1> {
+function baml.sap.ParseCache.new(t_stream: reflect.Type, t_final: reflect.Type) -> <unresolved type #29844416305488><#0, #1> {
 }
 
-function baml.sap.__new_parse_cache() -> baml.sap.ParseCache<#0, #1> {
+function baml.sap.__new_parse_cache() -> <unresolved type #29844416305488><#0, #1> {
     load_type #0
     load_type #1
     sys_op baml.sap.ParseCache.new
     return
 }
 
-function baml.sap.__parse_final(json: string, cache: baml.sap.ParseCache<#0, #1>) -> #1 {
+function baml.sap.__parse_final(json: string, cache: <unresolved type #29844416305488><#0, #1>) -> #1 {
 }
 
-function baml.sap.__parse_partial(json: string, cache: baml.sap.ParseCache<#0, #1>) -> #0 | baml.sap.NoYield {
+function baml.sap.__parse_partial(json: string, cache: <unresolved type #29844416305488><#0, #1>) -> #0 | <unresolved type #104665196946517> {
 }
 
 function baml.sap.parse(text: string) -> #0 {
@@ -5904,40 +5904,40 @@ function baml.sap.parse_type(t: reflect.Type, text: string) -> unknown {
     return
 }
 
-function baml.spawn.CancelToken.any(tokens: baml.spawn.CancelToken[]) -> baml.spawn.CancelToken {
+function baml.spawn.CancelToken.any(tokens: <unresolved type #32483050987877>[]) -> <unresolved type #32483050987877> {
 }
 
-function baml.spawn.CancelToken.cancel(self: baml.spawn.CancelToken) -> int {
+function baml.spawn.CancelToken.cancel(self: <unresolved type #32483050987877>) -> int {
 }
 
-function baml.spawn.CancelToken.is_cancelled(self: baml.spawn.CancelToken) -> bool {
+function baml.spawn.CancelToken.is_cancelled(self: <unresolved type #32483050987877>) -> bool {
 }
 
-function baml.spawn.CancelToken.new() -> baml.spawn.CancelToken {
+function baml.spawn.CancelToken.new() -> <unresolved type #32483050987877> {
 }
 
-function baml.spawn.TaskGroup.active_count(self: baml.spawn.TaskGroup) -> int {
+function baml.spawn.TaskGroup.active_count(self: <unresolved type #24663281363118>) -> int {
 }
 
-function baml.spawn.TaskGroup.cancel(self: baml.spawn.TaskGroup, pending: bool | null, active: bool | null) -> int {
+function baml.spawn.TaskGroup.cancel(self: <unresolved type #24663281363118>, pending: bool | null, active: bool | null) -> int {
 }
 
-function baml.spawn.TaskGroup.limit(self: baml.spawn.TaskGroup) -> int {
+function baml.spawn.TaskGroup.limit(self: <unresolved type #24663281363118>) -> int {
 }
 
-function baml.spawn.TaskGroup.name(self: baml.spawn.TaskGroup) -> string | null {
+function baml.spawn.TaskGroup.name(self: <unresolved type #24663281363118>) -> string | null {
 }
 
-function baml.spawn.TaskGroup.new(limit: int, name: string | null) -> baml.spawn.TaskGroup {
+function baml.spawn.TaskGroup.new(limit: int, name: string | null) -> <unresolved type #24663281363118> {
 }
 
-function baml.spawn.TaskGroup.queued_count(self: baml.spawn.TaskGroup) -> int {
+function baml.spawn.TaskGroup.queued_count(self: <unresolved type #24663281363118>) -> int {
 }
 
-function baml.spawn.TaskGroup.set_limit(self: baml.spawn.TaskGroup, limit: int) -> void {
+function baml.spawn.TaskGroup.set_limit(self: <unresolved type #24663281363118>, limit: int) -> void {
 }
 
-function baml.spawn.options(group: baml.spawn.TaskGroup | null, cancel: baml.spawn.CancelToken | null, detach: bool | null) -> (baml.spawn.SpawnParams<#0, #1>) -> baml.spawn.SpawnParams<#0, #1> throws never {
+function baml.spawn.options(group: <unresolved type #24663281363118> | null, cancel: <unresolved type #32483050987877> | null, detach: bool | null) -> (<unresolved type #29716594952623><#0, #1>) -> <unresolved type #29716594952623><#0, #1> throws never {
     load_var ?1
     make_cell
     store_var ?1
@@ -5979,22 +5979,22 @@ function baml.spawn.options(group: baml.spawn.TaskGroup | null, cancel: baml.spa
     return
 }
 
-function baml.sys.Process.close(self: baml.sys.Process) -> null {
+function baml.sys.Process.close(self: <unresolved type #81020467275101>) -> null {
 }
 
-function baml.sys.Process.close_stdin(self: baml.sys.Process) -> null {
+function baml.sys.Process.close_stdin(self: <unresolved type #81020467275101>) -> null {
 }
 
-function baml.sys.Process.kill(self: baml.sys.Process) -> null {
+function baml.sys.Process.kill(self: <unresolved type #81020467275101>) -> null {
 }
 
-function baml.sys.Process.wait(self: baml.sys.Process) -> baml.sys.ProcessExit {
+function baml.sys.Process.wait(self: <unresolved type #81020467275101>) -> <unresolved type #115941107595165> {
 }
 
-function baml.sys.Process.write_stdin(self: baml.sys.Process, data: string) -> null {
+function baml.sys.Process.write_stdin(self: <unresolved type #81020467275101>, data: string) -> null {
 }
 
-function baml.sys.ProcessExit.ok(self: baml.sys.ProcessExit) -> bool {
+function baml.sys.ProcessExit.ok(self: <unresolved type #115941107595165>) -> bool {
     load_var self
     load_field .exit_code
     load_const 0
@@ -6002,18 +6002,18 @@ function baml.sys.ProcessExit.ok(self: baml.sys.ProcessExit) -> bool {
     return
 }
 
-function baml.sys.ProcessLineStream._next(self: baml.sys.ProcessLineStream) -> string | null {
+function baml.sys.ProcessLineStream._next(self: <unresolved type #66490456484335>) -> string | null {
 }
 
-function baml.sys.ProcessLineStream.close(self: baml.sys.ProcessLineStream) -> null {
+function baml.sys.ProcessLineStream.close(self: <unresolved type #66490456484335>) -> null {
 }
 
-function baml.sys.ProcessLineStream.root.iter.Iterable.iter(self: baml.sys.ProcessLineStream) -> baml.iter.Iterator<Error = baml.errors.Io | baml.errors.Timeout, Item = string> {
+function baml.sys.ProcessLineStream.root.iter.Iterable.iter(self: <unresolved type #66490456484335>) -> <unresolved type #134608312336441><Error = <unresolved type #336598637428> | <unresolved type #136308358920907>, Item = string> {
     load_var self
     return
 }
 
-function baml.sys.ProcessLineStream.root.iter.Iterator.next(self: baml.sys.ProcessLineStream) -> string | baml.iter.Done {
+function baml.sys.ProcessLineStream.root.iter.Iterator.next(self: <unresolved type #66490456484335>) -> string | <unresolved type #77132703667455> {
     load_var self
     sys_op baml.sys.ProcessLineStream._next
     store_var _3
@@ -6033,7 +6033,7 @@ function baml.sys.ProcessLineStream.root.iter.Iterator.next(self: baml.sys.Proce
     return
 }
 
-function baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool {
+function baml.sys.ShellOutput.ok(self: <unresolved type #109435665896611>) -> bool {
     load_var self
     load_field .exit_code
     load_const 0
@@ -6047,7 +6047,7 @@ function baml.sys.argv() -> string[] {
 function baml.sys.collect_garbage() -> null {
 }
 
-function baml.sys.exec(program: string, args: string[] | null, options: baml.sys.ProcessOptions | null) -> baml.sys.ShellOutput {
+function baml.sys.exec(program: string, args: string[] | null, options: <unresolved type #79124101285829> | null) -> <unresolved type #109435665896611> {
 }
 
 function baml.sys.exit(code: int) -> never {
@@ -6059,16 +6059,16 @@ function baml.sys.panic(message: string) -> never {
 function baml.sys.pid() -> int {
 }
 
-function baml.sys.shell(command: string, options: baml.sys.ProcessOptions | null) -> baml.sys.ShellOutput {
+function baml.sys.shell(command: string, options: <unresolved type #79124101285829> | null) -> <unresolved type #109435665896611> {
 }
 
-function baml.sys.sleep(delay: baml.time.Duration) -> null {
+function baml.sys.sleep(delay: <unresolved type #16018747206762>) -> null {
 }
 
-function baml.sys.start_process(program: string, args: string[] | null, options: baml.sys.ProcessOptions | null) -> baml.sys.Process {
+function baml.sys.start_process(program: string, args: string[] | null, options: <unresolved type #79124101285829> | null) -> <unresolved type #81020467275101> {
 }
 
-function baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration {
+function baml.time.Duration.abs(self: <unresolved type #16018747206762>) -> <unresolved type #16018747206762> {
     load_var self
     load_field ._nanoseconds
     call baml.Bigint.abs
@@ -6076,7 +6076,7 @@ function baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration 
     return
 }
 
-function baml.time.Duration.from_hours(h: int | bigint) -> baml.time.Duration {
+function baml.time.Duration.from_hours(h: int | bigint) -> <unresolved type #16018747206762> {
     load_var h
     store_var _4
     load_var _4
@@ -6103,7 +6103,7 @@ function baml.time.Duration.from_hours(h: int | bigint) -> baml.time.Duration {
     return
 }
 
-function baml.time.Duration.from_microseconds(us: int | bigint) -> baml.time.Duration {
+function baml.time.Duration.from_microseconds(us: int | bigint) -> <unresolved type #16018747206762> {
     load_var us
     store_var _4
     load_var _4
@@ -6130,7 +6130,7 @@ function baml.time.Duration.from_microseconds(us: int | bigint) -> baml.time.Dur
     return
 }
 
-function baml.time.Duration.from_milliseconds(ms: int | bigint) -> baml.time.Duration {
+function baml.time.Duration.from_milliseconds(ms: int | bigint) -> <unresolved type #16018747206762> {
     load_var ms
     store_var _4
     load_var _4
@@ -6157,7 +6157,7 @@ function baml.time.Duration.from_milliseconds(ms: int | bigint) -> baml.time.Dur
     return
 }
 
-function baml.time.Duration.from_minutes(m: int | bigint) -> baml.time.Duration {
+function baml.time.Duration.from_minutes(m: int | bigint) -> <unresolved type #16018747206762> {
     load_var m
     store_var _4
     load_var _4
@@ -6184,7 +6184,7 @@ function baml.time.Duration.from_minutes(m: int | bigint) -> baml.time.Duration 
     return
 }
 
-function baml.time.Duration.from_nanoseconds(ns: int | bigint) -> baml.time.Duration {
+function baml.time.Duration.from_nanoseconds(ns: int | bigint) -> <unresolved type #16018747206762> {
     load_var ns
     store_var _3
     load_var _3
@@ -6206,7 +6206,7 @@ function baml.time.Duration.from_nanoseconds(ns: int | bigint) -> baml.time.Dura
     return
 }
 
-function baml.time.Duration.from_seconds(s: int | bigint) -> baml.time.Duration {
+function baml.time.Duration.from_seconds(s: int | bigint) -> <unresolved type #16018747206762> {
     load_var s
     store_var _4
     load_var _4
@@ -6233,7 +6233,7 @@ function baml.time.Duration.from_seconds(s: int | bigint) -> baml.time.Duration 
     return
 }
 
-function baml.time.Duration.root.ops.Add<Duration>.add(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration {
+function baml.time.Duration.root.ops.Add<Duration>.add(self: <unresolved type #16018747206762>, other: <unresolved type #16018747206762>) -> <unresolved type #16018747206762> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -6243,7 +6243,7 @@ function baml.time.Duration.root.ops.Add<Duration>.add(self: baml.time.Duration,
     return
 }
 
-function baml.time.Duration.root.ops.Divide<bigint>.div(self: baml.time.Duration, other: bigint) -> baml.time.Duration {
+function baml.time.Duration.root.ops.Divide<bigint>.div(self: <unresolved type #16018747206762>, other: bigint) -> <unresolved type #16018747206762> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -6252,7 +6252,7 @@ function baml.time.Duration.root.ops.Divide<bigint>.div(self: baml.time.Duration
     return
 }
 
-function baml.time.Duration.root.ops.Divide<int>.div(self: baml.time.Duration, other: int) -> baml.time.Duration {
+function baml.time.Duration.root.ops.Divide<int>.div(self: <unresolved type #16018747206762>, other: int) -> <unresolved type #16018747206762> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -6261,7 +6261,7 @@ function baml.time.Duration.root.ops.Divide<int>.div(self: baml.time.Duration, o
     return
 }
 
-function baml.time.Duration.root.ops.Multiply<bigint>.mul(self: baml.time.Duration, other: bigint) -> baml.time.Duration {
+function baml.time.Duration.root.ops.Multiply<bigint>.mul(self: <unresolved type #16018747206762>, other: bigint) -> <unresolved type #16018747206762> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -6270,7 +6270,7 @@ function baml.time.Duration.root.ops.Multiply<bigint>.mul(self: baml.time.Durati
     return
 }
 
-function baml.time.Duration.root.ops.Multiply<int>.mul(self: baml.time.Duration, other: int) -> baml.time.Duration {
+function baml.time.Duration.root.ops.Multiply<int>.mul(self: <unresolved type #16018747206762>, other: int) -> <unresolved type #16018747206762> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -6279,7 +6279,7 @@ function baml.time.Duration.root.ops.Multiply<int>.mul(self: baml.time.Duration,
     return
 }
 
-function baml.time.Duration.root.ops.Negate.neg(self: baml.time.Duration) -> baml.time.Duration {
+function baml.time.Duration.root.ops.Negate.neg(self: <unresolved type #16018747206762>) -> <unresolved type #16018747206762> {
     load_var self
     load_field ._nanoseconds
     unary_op -
@@ -6287,7 +6287,7 @@ function baml.time.Duration.root.ops.Negate.neg(self: baml.time.Duration) -> bam
     return
 }
 
-function baml.time.Duration.root.ops.Remainder<Duration>.rem(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration {
+function baml.time.Duration.root.ops.Remainder<Duration>.rem(self: <unresolved type #16018747206762>, other: <unresolved type #16018747206762>) -> <unresolved type #16018747206762> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -6297,7 +6297,7 @@ function baml.time.Duration.root.ops.Remainder<Duration>.rem(self: baml.time.Dur
     return
 }
 
-function baml.time.Duration.root.ops.Subtract<Duration>.sub(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration {
+function baml.time.Duration.root.ops.Subtract<Duration>.sub(self: <unresolved type #16018747206762>, other: <unresolved type #16018747206762>) -> <unresolved type #16018747206762> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -6307,7 +6307,7 @@ function baml.time.Duration.root.ops.Subtract<Duration>.sub(self: baml.time.Dura
     return
 }
 
-function baml.time.Duration.to_hours(self: baml.time.Duration) -> bigint {
+function baml.time.Duration.to_hours(self: <unresolved type #16018747206762>) -> bigint {
     load_var self
     load_field ._nanoseconds
     load_const 3600000000000
@@ -6315,7 +6315,7 @@ function baml.time.Duration.to_hours(self: baml.time.Duration) -> bigint {
     return
 }
 
-function baml.time.Duration.to_microseconds(self: baml.time.Duration) -> bigint {
+function baml.time.Duration.to_microseconds(self: <unresolved type #16018747206762>) -> bigint {
     load_var self
     load_field ._nanoseconds
     load_const 1000
@@ -6323,7 +6323,7 @@ function baml.time.Duration.to_microseconds(self: baml.time.Duration) -> bigint 
     return
 }
 
-function baml.time.Duration.to_milliseconds(self: baml.time.Duration) -> bigint {
+function baml.time.Duration.to_milliseconds(self: <unresolved type #16018747206762>) -> bigint {
     load_var self
     load_field ._nanoseconds
     load_const 1000000
@@ -6331,7 +6331,7 @@ function baml.time.Duration.to_milliseconds(self: baml.time.Duration) -> bigint 
     return
 }
 
-function baml.time.Duration.to_minutes(self: baml.time.Duration) -> bigint {
+function baml.time.Duration.to_minutes(self: <unresolved type #16018747206762>) -> bigint {
     load_var self
     load_field ._nanoseconds
     load_const 60000000000
@@ -6339,13 +6339,13 @@ function baml.time.Duration.to_minutes(self: baml.time.Duration) -> bigint {
     return
 }
 
-function baml.time.Duration.to_nanoseconds(self: baml.time.Duration) -> bigint {
+function baml.time.Duration.to_nanoseconds(self: <unresolved type #16018747206762>) -> bigint {
     load_var self
     load_field ._nanoseconds
     return
 }
 
-function baml.time.Duration.to_seconds(self: baml.time.Duration) -> bigint {
+function baml.time.Duration.to_seconds(self: <unresolved type #16018747206762>) -> bigint {
     load_var self
     load_field ._nanoseconds
     load_const 1000000000
@@ -6353,10 +6353,10 @@ function baml.time.Duration.to_seconds(self: baml.time.Duration) -> bigint {
     return
 }
 
-function baml.time.Instant._to_string_impl(self: baml.time.Instant) -> string {
+function baml.time.Instant._to_string_impl(self: <unresolved type #60360448987095>) -> string {
 }
 
-function baml.time.Instant.abs_diff(self: baml.time.Instant, other: baml.time.Instant) -> baml.time.Duration {
+function baml.time.Instant.abs_diff(self: <unresolved type #60360448987095>, other: <unresolved type #60360448987095>) -> <unresolved type #16018747206762> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -6367,7 +6367,7 @@ function baml.time.Instant.abs_diff(self: baml.time.Instant, other: baml.time.In
     return
 }
 
-function baml.time.Instant.baml.FromJson.from_json(j: baml.json.json) -> baml.time.Instant {
+function baml.time.Instant.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #60360448987095> {
     load_var j
     is_type string
     pop_jump_if_false L0
@@ -6403,7 +6403,7 @@ function baml.time.Instant.baml.FromJson.from_json(j: baml.json.json) -> baml.ti
     return
 }
 
-function baml.time.Instant.baml.ToJson.to_json(self: baml.time.Instant) -> baml.json.json {
+function baml.time.Instant.baml.ToJson.to_json(self: <unresolved type #60360448987095>) -> <unresolved type #1888633819501> {
     load_var self
     call baml.time.Instant._to_string_impl
     jump L2
@@ -6428,7 +6428,7 @@ function baml.time.Instant.baml.ToJson.to_json(self: baml.time.Instant) -> baml.
     return
 }
 
-function baml.time.Instant.baml.ToString.to_string(self: baml.time.Instant) -> string {
+function baml.time.Instant.baml.ToString.to_string(self: <unresolved type #60360448987095>) -> string {
     load_var self
     call baml.time.Instant._to_string_impl
     jump L2
@@ -6452,7 +6452,7 @@ function baml.time.Instant.baml.ToString.to_string(self: baml.time.Instant) -> s
     return
 }
 
-function baml.time.Instant.elapsed(self: baml.time.Instant) -> baml.time.Duration {
+function baml.time.Instant.elapsed(self: <unresolved type #60360448987095>) -> <unresolved type #16018747206762> {
     sys_op baml.time.Instant.now
     store_var _4
     load_var _4
@@ -6464,13 +6464,13 @@ function baml.time.Instant.elapsed(self: baml.time.Instant) -> baml.time.Duratio
     return
 }
 
-function baml.time.Instant.epoch() -> baml.time.Instant {
+function baml.time.Instant.epoch() -> <unresolved type #60360448987095> {
     load_const 0n
     init_instance baml.time.Instant ._nanoseconds
     return
 }
 
-function baml.time.Instant.from_timestamp_microseconds(us: bigint) -> baml.time.Instant {
+function baml.time.Instant.from_timestamp_microseconds(us: bigint) -> <unresolved type #60360448987095> {
     load_var us
     load_const 1000
     mul_bigint
@@ -6478,7 +6478,7 @@ function baml.time.Instant.from_timestamp_microseconds(us: bigint) -> baml.time.
     return
 }
 
-function baml.time.Instant.from_timestamp_milliseconds(ms: bigint) -> baml.time.Instant {
+function baml.time.Instant.from_timestamp_milliseconds(ms: bigint) -> <unresolved type #60360448987095> {
     load_var ms
     load_const 1000000
     mul_bigint
@@ -6486,13 +6486,13 @@ function baml.time.Instant.from_timestamp_milliseconds(ms: bigint) -> baml.time.
     return
 }
 
-function baml.time.Instant.from_timestamp_nanoseconds(ns: bigint) -> baml.time.Instant {
+function baml.time.Instant.from_timestamp_nanoseconds(ns: bigint) -> <unresolved type #60360448987095> {
     load_var ns
     init_instance baml.time.Instant ._nanoseconds
     return
 }
 
-function baml.time.Instant.from_timestamp_seconds(s: bigint) -> baml.time.Instant {
+function baml.time.Instant.from_timestamp_seconds(s: bigint) -> <unresolved type #60360448987095> {
     load_var s
     load_const 1000000000
     mul_bigint
@@ -6500,7 +6500,7 @@ function baml.time.Instant.from_timestamp_seconds(s: bigint) -> baml.time.Instan
     return
 }
 
-function baml.time.Instant.max(self: baml.time.Instant, other: baml.time.Instant) -> baml.time.Instant {
+function baml.time.Instant.max(self: <unresolved type #60360448987095>, other: <unresolved type #60360448987095>) -> <unresolved type #60360448987095> {
     load_var other
     load_field ._nanoseconds
     load_var self
@@ -6520,7 +6520,7 @@ function baml.time.Instant.max(self: baml.time.Instant, other: baml.time.Instant
     return
 }
 
-function baml.time.Instant.min(self: baml.time.Instant, other: baml.time.Instant) -> baml.time.Instant {
+function baml.time.Instant.min(self: <unresolved type #60360448987095>, other: <unresolved type #60360448987095>) -> <unresolved type #60360448987095> {
     load_var other
     load_field ._nanoseconds
     load_var self
@@ -6540,13 +6540,13 @@ function baml.time.Instant.min(self: baml.time.Instant, other: baml.time.Instant
     return
 }
 
-function baml.time.Instant.now() -> baml.time.Instant {
+function baml.time.Instant.now() -> <unresolved type #60360448987095> {
 }
 
-function baml.time.Instant.parse(s: string) -> baml.time.Instant {
+function baml.time.Instant.parse(s: string) -> <unresolved type #60360448987095> {
 }
 
-function baml.time.Instant.root.ops.Add<Duration>.add(self: baml.time.Instant, other: baml.time.Duration) -> baml.time.Instant {
+function baml.time.Instant.root.ops.Add<Duration>.add(self: <unresolved type #60360448987095>, other: <unresolved type #16018747206762>) -> <unresolved type #60360448987095> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -6556,7 +6556,7 @@ function baml.time.Instant.root.ops.Add<Duration>.add(self: baml.time.Instant, o
     return
 }
 
-function baml.time.Instant.root.ops.Subtract<Duration>.sub(self: baml.time.Instant, other: baml.time.Duration) -> baml.time.Instant {
+function baml.time.Instant.root.ops.Subtract<Duration>.sub(self: <unresolved type #60360448987095>, other: <unresolved type #16018747206762>) -> <unresolved type #60360448987095> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -6566,7 +6566,7 @@ function baml.time.Instant.root.ops.Subtract<Duration>.sub(self: baml.time.Insta
     return
 }
 
-function baml.time.Instant.root.ops.Subtract<Instant>.sub(self: baml.time.Instant, other: baml.time.Instant) -> baml.time.Duration {
+function baml.time.Instant.root.ops.Subtract<Instant>.sub(self: <unresolved type #60360448987095>, other: <unresolved type #60360448987095>) -> <unresolved type #16018747206762> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -6576,7 +6576,7 @@ function baml.time.Instant.root.ops.Subtract<Instant>.sub(self: baml.time.Instan
     return
 }
 
-function baml.time.Instant.to_timestamp_microseconds(self: baml.time.Instant) -> bigint {
+function baml.time.Instant.to_timestamp_microseconds(self: <unresolved type #60360448987095>) -> bigint {
     load_var self
     load_field ._nanoseconds
     load_const 1000
@@ -6584,7 +6584,7 @@ function baml.time.Instant.to_timestamp_microseconds(self: baml.time.Instant) ->
     return
 }
 
-function baml.time.Instant.to_timestamp_milliseconds(self: baml.time.Instant) -> bigint {
+function baml.time.Instant.to_timestamp_milliseconds(self: <unresolved type #60360448987095>) -> bigint {
     load_var self
     load_field ._nanoseconds
     load_const 1000000
@@ -6592,13 +6592,13 @@ function baml.time.Instant.to_timestamp_milliseconds(self: baml.time.Instant) ->
     return
 }
 
-function baml.time.Instant.to_timestamp_nanoseconds(self: baml.time.Instant) -> bigint {
+function baml.time.Instant.to_timestamp_nanoseconds(self: <unresolved type #60360448987095>) -> bigint {
     load_var self
     load_field ._nanoseconds
     return
 }
 
-function baml.time.Instant.to_timestamp_seconds(self: baml.time.Instant) -> bigint {
+function baml.time.Instant.to_timestamp_seconds(self: <unresolved type #60360448987095>) -> bigint {
     load_var self
     load_field ._nanoseconds
     load_const 1000000000
@@ -6606,13 +6606,13 @@ function baml.time.Instant.to_timestamp_seconds(self: baml.time.Instant) -> bigi
     return
 }
 
-function baml.time.PlainDate._to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime | null) -> baml.time.PlainDateTime {
+function baml.time.PlainDate._to_plain_datetime(self: <unresolved type #64414065796030>, time: <unresolved type #86965999680555> | null) -> <unresolved type #47094587363295> {
 }
 
-function baml.time.PlainDate._to_string_impl(self: baml.time.PlainDate) -> string {
+function baml.time.PlainDate._to_string_impl(self: <unresolved type #64414065796030>) -> string {
 }
 
-function baml.time.PlainDate.baml.FromJson.from_json(j: baml.json.json) -> baml.time.PlainDate {
+function baml.time.PlainDate.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #64414065796030> {
     load_var j
     is_type string
     pop_jump_if_false L0
@@ -6648,7 +6648,7 @@ function baml.time.PlainDate.baml.FromJson.from_json(j: baml.json.json) -> baml.
     return
 }
 
-function baml.time.PlainDate.baml.ToJson.to_json(self: baml.time.PlainDate) -> baml.json.json {
+function baml.time.PlainDate.baml.ToJson.to_json(self: <unresolved type #64414065796030>) -> <unresolved type #1888633819501> {
     load_var self
     call baml.time.PlainDate._to_string_impl
     jump L2
@@ -6673,7 +6673,7 @@ function baml.time.PlainDate.baml.ToJson.to_json(self: baml.time.PlainDate) -> b
     return
 }
 
-function baml.time.PlainDate.baml.ToString.to_string(self: baml.time.PlainDate) -> string {
+function baml.time.PlainDate.baml.ToString.to_string(self: <unresolved type #64414065796030>) -> string {
     load_var self
     call baml.time.PlainDate._to_string_impl
     jump L2
@@ -6697,19 +6697,19 @@ function baml.time.PlainDate.baml.ToString.to_string(self: baml.time.PlainDate) 
     return
 }
 
-function baml.time.PlainDate.day(self: baml.time.PlainDate) -> int {
+function baml.time.PlainDate.day(self: <unresolved type #64414065796030>) -> int {
 }
 
-function baml.time.PlainDate.from_components(year: int, month: int, day: int) -> baml.time.PlainDate {
+function baml.time.PlainDate.from_components(year: int, month: int, day: int) -> <unresolved type #64414065796030> {
 }
 
-function baml.time.PlainDate.month(self: baml.time.PlainDate) -> int {
+function baml.time.PlainDate.month(self: <unresolved type #64414065796030>) -> int {
 }
 
-function baml.time.PlainDate.parse(s: string) -> baml.time.PlainDate {
+function baml.time.PlainDate.parse(s: string) -> <unresolved type #64414065796030> {
 }
 
-function baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: baml.time.PlainTime | null) -> baml.time.PlainDateTime {
+function baml.time.PlainDate.to_plain_datetime(self: <unresolved type #64414065796030>, time: <unresolved type #86965999680555> | null) -> <unresolved type #47094587363295> {
     load_var time
     load_const <omitted>
     cmp_op ==
@@ -6723,16 +6723,16 @@ function baml.time.PlainDate.to_plain_datetime(self: baml.time.PlainDate, time: 
     return
 }
 
-function baml.time.PlainDate.year(self: baml.time.PlainDate) -> int {
+function baml.time.PlainDate.year(self: <unresolved type #64414065796030>) -> int {
 }
 
-function baml.time.PlainDateTime._from_components(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainDateTime {
+function baml.time.PlainDateTime._from_components(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> <unresolved type #47094587363295> {
 }
 
-function baml.time.PlainDateTime._to_string_impl(self: baml.time.PlainDateTime) -> string {
+function baml.time.PlainDateTime._to_string_impl(self: <unresolved type #47094587363295>) -> string {
 }
 
-function baml.time.PlainDateTime.baml.FromJson.from_json(j: baml.json.json) -> baml.time.PlainDateTime {
+function baml.time.PlainDateTime.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #47094587363295> {
     load_var j
     is_type string
     pop_jump_if_false L0
@@ -6768,7 +6768,7 @@ function baml.time.PlainDateTime.baml.FromJson.from_json(j: baml.json.json) -> b
     return
 }
 
-function baml.time.PlainDateTime.baml.ToJson.to_json(self: baml.time.PlainDateTime) -> baml.json.json {
+function baml.time.PlainDateTime.baml.ToJson.to_json(self: <unresolved type #47094587363295>) -> <unresolved type #1888633819501> {
     load_var self
     call baml.time.PlainDateTime._to_string_impl
     jump L2
@@ -6793,7 +6793,7 @@ function baml.time.PlainDateTime.baml.ToJson.to_json(self: baml.time.PlainDateTi
     return
 }
 
-function baml.time.PlainDateTime.baml.ToString.to_string(self: baml.time.PlainDateTime) -> string {
+function baml.time.PlainDateTime.baml.ToString.to_string(self: <unresolved type #47094587363295>) -> string {
     load_var self
     call baml.time.PlainDateTime._to_string_impl
     jump L2
@@ -6817,10 +6817,10 @@ function baml.time.PlainDateTime.baml.ToString.to_string(self: baml.time.PlainDa
     return
 }
 
-function baml.time.PlainDateTime.day(self: baml.time.PlainDateTime) -> int {
+function baml.time.PlainDateTime.day(self: <unresolved type #47094587363295>) -> int {
 }
 
-function baml.time.PlainDateTime.from_components(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainDateTime {
+function baml.time.PlainDateTime.from_components(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> <unresolved type #47094587363295> {
     load_var hour
     load_const <omitted>
     cmp_op ==
@@ -6878,10 +6878,10 @@ function baml.time.PlainDateTime.from_components(year: int, month: int, day: int
     return
 }
 
-function baml.time.PlainDateTime.hour(self: baml.time.PlainDateTime) -> int {
+function baml.time.PlainDateTime.hour(self: <unresolved type #47094587363295>) -> int {
 }
 
-function baml.time.PlainDateTime.max(self: baml.time.PlainDateTime, other: baml.time.PlainDateTime) -> baml.time.PlainDateTime {
+function baml.time.PlainDateTime.max(self: <unresolved type #47094587363295>, other: <unresolved type #47094587363295>) -> <unresolved type #47094587363295> {
     load_var other
     load_field ._nanoseconds
     load_var self
@@ -6901,10 +6901,10 @@ function baml.time.PlainDateTime.max(self: baml.time.PlainDateTime, other: baml.
     return
 }
 
-function baml.time.PlainDateTime.millisecond(self: baml.time.PlainDateTime) -> int {
+function baml.time.PlainDateTime.millisecond(self: <unresolved type #47094587363295>) -> int {
 }
 
-function baml.time.PlainDateTime.min(self: baml.time.PlainDateTime, other: baml.time.PlainDateTime) -> baml.time.PlainDateTime {
+function baml.time.PlainDateTime.min(self: <unresolved type #47094587363295>, other: <unresolved type #47094587363295>) -> <unresolved type #47094587363295> {
     load_var other
     load_field ._nanoseconds
     load_var self
@@ -6924,16 +6924,16 @@ function baml.time.PlainDateTime.min(self: baml.time.PlainDateTime, other: baml.
     return
 }
 
-function baml.time.PlainDateTime.minute(self: baml.time.PlainDateTime) -> int {
+function baml.time.PlainDateTime.minute(self: <unresolved type #47094587363295>) -> int {
 }
 
-function baml.time.PlainDateTime.month(self: baml.time.PlainDateTime) -> int {
+function baml.time.PlainDateTime.month(self: <unresolved type #47094587363295>) -> int {
 }
 
-function baml.time.PlainDateTime.parse(s: string) -> baml.time.PlainDateTime {
+function baml.time.PlainDateTime.parse(s: string) -> <unresolved type #47094587363295> {
 }
 
-function baml.time.PlainDateTime.root.ops.Add<Duration>.add(self: baml.time.PlainDateTime, other: baml.time.Duration) -> baml.time.PlainDateTime {
+function baml.time.PlainDateTime.root.ops.Add<Duration>.add(self: <unresolved type #47094587363295>, other: <unresolved type #16018747206762>) -> <unresolved type #47094587363295> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -6943,7 +6943,7 @@ function baml.time.PlainDateTime.root.ops.Add<Duration>.add(self: baml.time.Plai
     return
 }
 
-function baml.time.PlainDateTime.root.ops.Subtract<Duration>.sub(self: baml.time.PlainDateTime, other: baml.time.Duration) -> baml.time.PlainDateTime {
+function baml.time.PlainDateTime.root.ops.Subtract<Duration>.sub(self: <unresolved type #47094587363295>, other: <unresolved type #16018747206762>) -> <unresolved type #47094587363295> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -6953,7 +6953,7 @@ function baml.time.PlainDateTime.root.ops.Subtract<Duration>.sub(self: baml.time
     return
 }
 
-function baml.time.PlainDateTime.root.ops.Subtract<PlainDateTime>.sub(self: baml.time.PlainDateTime, other: baml.time.PlainDateTime) -> baml.time.Duration {
+function baml.time.PlainDateTime.root.ops.Subtract<PlainDateTime>.sub(self: <unresolved type #47094587363295>, other: <unresolved type #47094587363295>) -> <unresolved type #16018747206762> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -6963,16 +6963,16 @@ function baml.time.PlainDateTime.root.ops.Subtract<PlainDateTime>.sub(self: baml
     return
 }
 
-function baml.time.PlainDateTime.second(self: baml.time.PlainDateTime) -> int {
+function baml.time.PlainDateTime.second(self: <unresolved type #47094587363295>) -> int {
 }
 
-function baml.time.PlainDateTime.to_plain_date(self: baml.time.PlainDateTime) -> baml.time.PlainDate {
+function baml.time.PlainDateTime.to_plain_date(self: <unresolved type #47094587363295>) -> <unresolved type #64414065796030> {
 }
 
-function baml.time.PlainDateTime.to_plain_time(self: baml.time.PlainDateTime) -> baml.time.PlainTime {
+function baml.time.PlainDateTime.to_plain_time(self: <unresolved type #47094587363295>) -> <unresolved type #86965999680555> {
 }
 
-function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezone: baml.time.TimeZoneOffset | string, disambiguation: "compatible" | "earlier" | "later" | "reject") -> baml.time.ZonedDateTime {
+function baml.time.PlainDateTime.to_zoned(self: <unresolved type #47094587363295>, timezone: <unresolved type #103635136628562> | string, disambiguation: "compatible" | "earlier" | "later" | "reject") -> <unresolved type #99464468439737> {
     load_var disambiguation
     load_const <omitted>
     cmp_op ==
@@ -7106,16 +7106,16 @@ function baml.time.PlainDateTime.to_zoned(self: baml.time.PlainDateTime, timezon
     return
 }
 
-function baml.time.PlainDateTime.year(self: baml.time.PlainDateTime) -> int {
+function baml.time.PlainDateTime.year(self: <unresolved type #47094587363295>) -> int {
 }
 
-function baml.time.PlainTime._from_components(hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainTime {
+function baml.time.PlainTime._from_components(hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> <unresolved type #86965999680555> {
 }
 
-function baml.time.PlainTime._to_string_impl(self: baml.time.PlainTime) -> string {
+function baml.time.PlainTime._to_string_impl(self: <unresolved type #86965999680555>) -> string {
 }
 
-function baml.time.PlainTime.baml.FromJson.from_json(j: baml.json.json) -> baml.time.PlainTime {
+function baml.time.PlainTime.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #86965999680555> {
     load_var j
     is_type string
     pop_jump_if_false L0
@@ -7151,7 +7151,7 @@ function baml.time.PlainTime.baml.FromJson.from_json(j: baml.json.json) -> baml.
     return
 }
 
-function baml.time.PlainTime.baml.ToJson.to_json(self: baml.time.PlainTime) -> baml.json.json {
+function baml.time.PlainTime.baml.ToJson.to_json(self: <unresolved type #86965999680555>) -> <unresolved type #1888633819501> {
     load_var self
     load_type baml.ToString
     load_const "to_string"
@@ -7163,13 +7163,13 @@ function baml.time.PlainTime.baml.ToJson.to_json(self: baml.time.PlainTime) -> b
     return
 }
 
-function baml.time.PlainTime.baml.ToString.to_string(self: baml.time.PlainTime) -> string {
+function baml.time.PlainTime.baml.ToString.to_string(self: <unresolved type #86965999680555>) -> string {
     load_var self
     call baml.time.PlainTime._to_string_impl
     return
 }
 
-function baml.time.PlainTime.from_components(hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> baml.time.PlainTime {
+function baml.time.PlainTime.from_components(hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int) -> <unresolved type #86965999680555> {
     load_var minute
     load_const <omitted>
     cmp_op ==
@@ -7217,7 +7217,7 @@ function baml.time.PlainTime.from_components(hour: int, minute: int, second: int
     return
 }
 
-function baml.time.PlainTime.hour(self: baml.time.PlainTime) -> int {
+function baml.time.PlainTime.hour(self: <unresolved type #86965999680555>) -> int {
     load_var self
     load_field ._nanoseconds
     load_const 3600000000000
@@ -7225,7 +7225,7 @@ function baml.time.PlainTime.hour(self: baml.time.PlainTime) -> int {
     return
 }
 
-function baml.time.PlainTime.millisecond(self: baml.time.PlainTime) -> int {
+function baml.time.PlainTime.millisecond(self: <unresolved type #86965999680555>) -> int {
     load_var self
     load_field ._nanoseconds
     load_const 1000000
@@ -7235,7 +7235,7 @@ function baml.time.PlainTime.millisecond(self: baml.time.PlainTime) -> int {
     return
 }
 
-function baml.time.PlainTime.minute(self: baml.time.PlainTime) -> int {
+function baml.time.PlainTime.minute(self: <unresolved type #86965999680555>) -> int {
     load_var self
     load_field ._nanoseconds
     load_const 60000000000
@@ -7245,10 +7245,10 @@ function baml.time.PlainTime.minute(self: baml.time.PlainTime) -> int {
     return
 }
 
-function baml.time.PlainTime.parse(s: string) -> baml.time.PlainTime {
+function baml.time.PlainTime.parse(s: string) -> <unresolved type #86965999680555> {
 }
 
-function baml.time.PlainTime.root.ops.Add<Duration>.add(self: baml.time.PlainTime, other: baml.time.Duration) -> baml.time.PlainTime {
+function baml.time.PlainTime.root.ops.Add<Duration>.add(self: <unresolved type #86965999680555>, other: <unresolved type #16018747206762>) -> <unresolved type #86965999680555> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -7259,7 +7259,7 @@ function baml.time.PlainTime.root.ops.Add<Duration>.add(self: baml.time.PlainTim
     return
 }
 
-function baml.time.PlainTime.root.ops.Subtract<Duration>.sub(self: baml.time.PlainTime, other: baml.time.Duration) -> baml.time.PlainTime {
+function baml.time.PlainTime.root.ops.Subtract<Duration>.sub(self: <unresolved type #86965999680555>, other: <unresolved type #16018747206762>) -> <unresolved type #86965999680555> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -7270,7 +7270,7 @@ function baml.time.PlainTime.root.ops.Subtract<Duration>.sub(self: baml.time.Pla
     return
 }
 
-function baml.time.PlainTime.root.ops.Subtract<PlainTime>.sub(self: baml.time.PlainTime, other: baml.time.PlainTime) -> baml.time.Duration {
+function baml.time.PlainTime.root.ops.Subtract<PlainTime>.sub(self: <unresolved type #86965999680555>, other: <unresolved type #86965999680555>) -> <unresolved type #16018747206762> {
     load_const 0n
     load_var self
     load_field ._nanoseconds
@@ -7282,7 +7282,7 @@ function baml.time.PlainTime.root.ops.Subtract<PlainTime>.sub(self: baml.time.Pl
     return
 }
 
-function baml.time.PlainTime.second(self: baml.time.PlainTime) -> int {
+function baml.time.PlainTime.second(self: <unresolved type #86965999680555>) -> int {
     load_var self
     load_field ._nanoseconds
     load_const 1000000000
@@ -7292,16 +7292,16 @@ function baml.time.PlainTime.second(self: baml.time.PlainTime) -> int {
     return
 }
 
-function baml.time.PlainTime.to_plain_datetime(self: baml.time.PlainTime, date: baml.time.PlainDate) -> baml.time.PlainDateTime {
+function baml.time.PlainTime.to_plain_datetime(self: <unresolved type #86965999680555>, date: <unresolved type #64414065796030>) -> <unresolved type #47094587363295> {
     load_var2 2 1
     call baml.time.PlainDate.to_plain_datetime
     return
 }
 
-function baml.time.TimeZoneOffset.from_duration(duration: baml.time.Duration) -> baml.time.TimeZoneOffset {
+function baml.time.TimeZoneOffset.from_duration(duration: <unresolved type #16018747206762>) -> <unresolved type #103635136628562> {
 }
 
-function baml.time.TimeZoneOffset.from_timezone(timezone: string, at: baml.time.Instant) -> baml.time.TimeZoneOffset {
+function baml.time.TimeZoneOffset.from_timezone(timezone: string, at: <unresolved type #60360448987095>) -> <unresolved type #103635136628562> {
     load_var2 1 2
     load_field ._nanoseconds
     sys_op baml.time._tz_offset_at
@@ -7332,7 +7332,7 @@ function baml.time.TimeZoneOffset.from_timezone(timezone: string, at: baml.time.
     throw
 }
 
-function baml.time.TimeZoneOffset.hours(self: baml.time.TimeZoneOffset) -> int {
+function baml.time.TimeZoneOffset.hours(self: <unresolved type #103635136628562>) -> int {
     load_var self
     load_field ._nanoseconds
     load_const 3600000000000
@@ -7340,7 +7340,7 @@ function baml.time.TimeZoneOffset.hours(self: baml.time.TimeZoneOffset) -> int {
     return
 }
 
-function baml.time.TimeZoneOffset.local() -> baml.time.TimeZoneOffset {
+function baml.time.TimeZoneOffset.local() -> <unresolved type #103635136628562> {
     sys_op baml.time.system_timezone
     store_var _1
     sys_op baml.time.Instant.now
@@ -7350,7 +7350,7 @@ function baml.time.TimeZoneOffset.local() -> baml.time.TimeZoneOffset {
     return
 }
 
-function baml.time.TimeZoneOffset.minutes(self: baml.time.TimeZoneOffset) -> int {
+function baml.time.TimeZoneOffset.minutes(self: <unresolved type #103635136628562>) -> int {
     load_var self
     load_field ._nanoseconds
     load_const 60000000000
@@ -7360,7 +7360,7 @@ function baml.time.TimeZoneOffset.minutes(self: baml.time.TimeZoneOffset) -> int
     return
 }
 
-function baml.time.TimeZoneOffset.new(hours: int, minutes: int) -> baml.time.TimeZoneOffset {
+function baml.time.TimeZoneOffset.new(hours: int, minutes: int) -> <unresolved type #103635136628562> {
     load_var hours
     load_const 0
     cmp_int_op >
@@ -7431,7 +7431,7 @@ function baml.time.TimeZoneOffset.new(hours: int, minutes: int) -> baml.time.Tim
     throw
 }
 
-function baml.time.TimeZoneOffset.to_duration(self: baml.time.TimeZoneOffset) -> baml.time.Duration {
+function baml.time.TimeZoneOffset.to_duration(self: <unresolved type #103635136628562>) -> <unresolved type #16018747206762> {
     load_const 0n
     load_var self
     load_field ._nanoseconds
@@ -7440,13 +7440,13 @@ function baml.time.TimeZoneOffset.to_duration(self: baml.time.TimeZoneOffset) ->
     return
 }
 
-function baml.time.TimeZoneOffset.utc() -> baml.time.TimeZoneOffset {
+function baml.time.TimeZoneOffset.utc() -> <unresolved type #103635136628562> {
     load_const 0
     init_instance baml.time.TimeZoneOffset ._nanoseconds
     return
 }
 
-function baml.time.ZonedDateTime._to_string_impl(self: baml.time.ZonedDateTime) -> string {
+function baml.time.ZonedDateTime._to_string_impl(self: <unresolved type #99464468439737>) -> string {
     load_var self
     load_field ._nanoseconds
     store_var _2
@@ -7461,7 +7461,7 @@ function baml.time.ZonedDateTime._to_string_impl(self: baml.time.ZonedDateTime) 
     return
 }
 
-function baml.time.ZonedDateTime.baml.FromJson.from_json(j: baml.json.json) -> baml.time.ZonedDateTime {
+function baml.time.ZonedDateTime.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #99464468439737> {
     load_var j
     is_type string
     pop_jump_if_false L0
@@ -7497,7 +7497,7 @@ function baml.time.ZonedDateTime.baml.FromJson.from_json(j: baml.json.json) -> b
     return
 }
 
-function baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTime) -> baml.json.json {
+function baml.time.ZonedDateTime.baml.ToJson.to_json(self: <unresolved type #99464468439737>) -> <unresolved type #1888633819501> {
     load_var self
     call baml.time.ZonedDateTime._to_string_impl
     jump L6
@@ -7552,7 +7552,7 @@ function baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTi
     return
 }
 
-function baml.time.ZonedDateTime.baml.ToString.to_string(self: baml.time.ZonedDateTime) -> string {
+function baml.time.ZonedDateTime.baml.ToString.to_string(self: <unresolved type #99464468439737>) -> string {
     load_var self
     call baml.time.ZonedDateTime._to_string_impl
     jump L0
@@ -7565,14 +7565,14 @@ function baml.time.ZonedDateTime.baml.ToString.to_string(self: baml.time.ZonedDa
     return
 }
 
-function baml.time.ZonedDateTime.day(self: baml.time.ZonedDateTime) -> int {
+function baml.time.ZonedDateTime.day(self: <unresolved type #99464468439737>) -> int {
     load_var self
     call baml.time.ZonedDateTime.to_plain
     call baml.time.PlainDateTime.day
     return
 }
 
-function baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOffset | string, year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int, disambiguation: "compatible" | "earlier" | "later" | "reject") -> baml.time.ZonedDateTime {
+function baml.time.ZonedDateTime.from_components(timezone: <unresolved type #103635136628562> | string, year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, microsecond: int, nanosecond: int, disambiguation: "compatible" | "earlier" | "later" | "reject") -> <unresolved type #99464468439737> {
     load_var hour
     load_const <omitted>
     cmp_op ==
@@ -7640,7 +7640,7 @@ function baml.time.ZonedDateTime.from_components(timezone: baml.time.TimeZoneOff
     return
 }
 
-function baml.time.ZonedDateTime.from_instant(instant: baml.time.Instant, timezone: baml.time.TimeZoneOffset | string) -> baml.time.ZonedDateTime {
+function baml.time.ZonedDateTime.from_instant(instant: <unresolved type #60360448987095>, timezone: <unresolved type #103635136628562> | string) -> <unresolved type #99464468439737> {
     load_var timezone
     is_type baml.time.TimeZoneOffset
     pop_jump_if_false L0
@@ -7666,14 +7666,14 @@ function baml.time.ZonedDateTime.from_instant(instant: baml.time.Instant, timezo
     return
 }
 
-function baml.time.ZonedDateTime.hour(self: baml.time.ZonedDateTime) -> int {
+function baml.time.ZonedDateTime.hour(self: <unresolved type #99464468439737>) -> int {
     load_var self
     call baml.time.ZonedDateTime.to_plain
     call baml.time.PlainDateTime.hour
     return
 }
 
-function baml.time.ZonedDateTime.max(self: baml.time.ZonedDateTime, other: baml.time.ZonedDateTime) -> baml.time.ZonedDateTime {
+function baml.time.ZonedDateTime.max(self: <unresolved type #99464468439737>, other: <unresolved type #99464468439737>) -> <unresolved type #99464468439737> {
     load_var other
     load_field ._nanoseconds
     load_var self
@@ -7693,14 +7693,14 @@ function baml.time.ZonedDateTime.max(self: baml.time.ZonedDateTime, other: baml.
     return
 }
 
-function baml.time.ZonedDateTime.millisecond(self: baml.time.ZonedDateTime) -> int {
+function baml.time.ZonedDateTime.millisecond(self: <unresolved type #99464468439737>) -> int {
     load_var self
     call baml.time.ZonedDateTime.to_plain
     call baml.time.PlainDateTime.millisecond
     return
 }
 
-function baml.time.ZonedDateTime.min(self: baml.time.ZonedDateTime, other: baml.time.ZonedDateTime) -> baml.time.ZonedDateTime {
+function baml.time.ZonedDateTime.min(self: <unresolved type #99464468439737>, other: <unresolved type #99464468439737>) -> <unresolved type #99464468439737> {
     load_var other
     load_field ._nanoseconds
     load_var self
@@ -7720,21 +7720,21 @@ function baml.time.ZonedDateTime.min(self: baml.time.ZonedDateTime, other: baml.
     return
 }
 
-function baml.time.ZonedDateTime.minute(self: baml.time.ZonedDateTime) -> int {
+function baml.time.ZonedDateTime.minute(self: <unresolved type #99464468439737>) -> int {
     load_var self
     call baml.time.ZonedDateTime.to_plain
     call baml.time.PlainDateTime.minute
     return
 }
 
-function baml.time.ZonedDateTime.month(self: baml.time.ZonedDateTime) -> int {
+function baml.time.ZonedDateTime.month(self: <unresolved type #99464468439737>) -> int {
     load_var self
     call baml.time.ZonedDateTime.to_plain
     call baml.time.PlainDateTime.month
     return
 }
 
-function baml.time.ZonedDateTime.now() -> baml.time.ZonedDateTime {
+function baml.time.ZonedDateTime.now() -> <unresolved type #99464468439737> {
     sys_op baml.time.Instant.now
     store_var _1
     sys_op baml.time.system_timezone
@@ -7744,17 +7744,17 @@ function baml.time.ZonedDateTime.now() -> baml.time.ZonedDateTime {
     return
 }
 
-function baml.time.ZonedDateTime.now_in(timezone: baml.time.TimeZoneOffset | string) -> baml.time.ZonedDateTime {
+function baml.time.ZonedDateTime.now_in(timezone: <unresolved type #103635136628562> | string) -> <unresolved type #99464468439737> {
     sys_op baml.time.Instant.now
     load_var timezone
     call baml.time.ZonedDateTime.from_instant
     return
 }
 
-function baml.time.ZonedDateTime.parse(s: string) -> baml.time.ZonedDateTime {
+function baml.time.ZonedDateTime.parse(s: string) -> <unresolved type #99464468439737> {
 }
 
-function baml.time.ZonedDateTime.root.ops.Add<Duration>.add(self: baml.time.ZonedDateTime, other: baml.time.Duration) -> baml.time.ZonedDateTime {
+function baml.time.ZonedDateTime.root.ops.Add<Duration>.add(self: <unresolved type #99464468439737>, other: <unresolved type #16018747206762>) -> <unresolved type #99464468439737> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -7768,7 +7768,7 @@ function baml.time.ZonedDateTime.root.ops.Add<Duration>.add(self: baml.time.Zone
     return
 }
 
-function baml.time.ZonedDateTime.root.ops.Subtract<Duration>.sub(self: baml.time.ZonedDateTime, other: baml.time.Duration) -> baml.time.ZonedDateTime {
+function baml.time.ZonedDateTime.root.ops.Subtract<Duration>.sub(self: <unresolved type #99464468439737>, other: <unresolved type #16018747206762>) -> <unresolved type #99464468439737> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -7782,7 +7782,7 @@ function baml.time.ZonedDateTime.root.ops.Subtract<Duration>.sub(self: baml.time
     return
 }
 
-function baml.time.ZonedDateTime.root.ops.Subtract<ZonedDateTime>.sub(self: baml.time.ZonedDateTime, other: baml.time.ZonedDateTime) -> baml.time.Duration {
+function baml.time.ZonedDateTime.root.ops.Subtract<ZonedDateTime>.sub(self: <unresolved type #99464468439737>, other: <unresolved type #99464468439737>) -> <unresolved type #16018747206762> {
     load_var self
     load_field ._nanoseconds
     load_var other
@@ -7792,14 +7792,14 @@ function baml.time.ZonedDateTime.root.ops.Subtract<ZonedDateTime>.sub(self: baml
     return
 }
 
-function baml.time.ZonedDateTime.second(self: baml.time.ZonedDateTime) -> int {
+function baml.time.ZonedDateTime.second(self: <unresolved type #99464468439737>) -> int {
     load_var self
     call baml.time.ZonedDateTime.to_plain
     call baml.time.PlainDateTime.second
     return
 }
 
-function baml.time.ZonedDateTime.timezone(self: baml.time.ZonedDateTime) -> baml.time.TimeZoneOffset | string {
+function baml.time.ZonedDateTime.timezone(self: <unresolved type #99464468439737>) -> <unresolved type #103635136628562> | string {
     load_var self
     load_field ._iana
     store_var_load_var _2
@@ -7839,7 +7839,7 @@ function baml.time.ZonedDateTime.timezone(self: baml.time.ZonedDateTime) -> baml
     return
 }
 
-function baml.time.ZonedDateTime.timezone_offset(self: baml.time.ZonedDateTime) -> baml.time.TimeZoneOffset {
+function baml.time.ZonedDateTime.timezone_offset(self: <unresolved type #99464468439737>) -> <unresolved type #103635136628562> {
     load_var self
     load_field ._iana
     store_var_load_var _2
@@ -7915,14 +7915,14 @@ function baml.time.ZonedDateTime.timezone_offset(self: baml.time.ZonedDateTime) 
     return
 }
 
-function baml.time.ZonedDateTime.to_instant(self: baml.time.ZonedDateTime) -> baml.time.Instant {
+function baml.time.ZonedDateTime.to_instant(self: <unresolved type #99464468439737>) -> <unresolved type #60360448987095> {
     load_var self
     load_field ._nanoseconds
     init_instance baml.time.Instant ._nanoseconds
     return
 }
 
-function baml.time.ZonedDateTime.to_plain(self: baml.time.ZonedDateTime) -> baml.time.PlainDateTime {
+function baml.time.ZonedDateTime.to_plain(self: <unresolved type #99464468439737>) -> <unresolved type #47094587363295> {
     load_var self
     load_field ._nanoseconds
     store_var _3
@@ -7936,7 +7936,7 @@ function baml.time.ZonedDateTime.to_plain(self: baml.time.ZonedDateTime) -> baml
     return
 }
 
-function baml.time.ZonedDateTime.with_timezone(self: baml.time.ZonedDateTime, timezone: baml.time.TimeZoneOffset | string) -> baml.time.ZonedDateTime {
+function baml.time.ZonedDateTime.with_timezone(self: <unresolved type #99464468439737>, timezone: <unresolved type #103635136628562> | string) -> <unresolved type #99464468439737> {
     load_var self
     call baml.time.ZonedDateTime.to_instant
     load_var timezone
@@ -7944,7 +7944,7 @@ function baml.time.ZonedDateTime.with_timezone(self: baml.time.ZonedDateTime, ti
     return
 }
 
-function baml.time.ZonedDateTime.year(self: baml.time.ZonedDateTime) -> int {
+function baml.time.ZonedDateTime.year(self: <unresolved type #99464468439737>) -> int {
     load_var self
     call baml.time.ZonedDateTime.to_plain
     call baml.time.PlainDateTime.year
@@ -7990,13 +7990,13 @@ function baml.time._wrap_into_day(total_ns: bigint) -> int {
 function baml.time.system_timezone() -> string {
 }
 
-function baml.toml.Table.baml.FromJson.from_json(j: baml.json.json) -> baml.toml.Table {
+function baml.toml.Table.baml.FromJson.from_json(j: <unresolved type #1888633819501>) -> <unresolved type #136544457603747> {
     load_var j
     call baml.toml.table_from_json
     return
 }
 
-function baml.toml.Table.baml.ToJson.to_json(self: baml.toml.Table) -> baml.json.json {
+function baml.toml.Table.baml.ToJson.to_json(self: <unresolved type #136544457603747>) -> <unresolved type #1888633819501> {
     load_type map<string, baml.toml.Item>
     load_var self
     load_field .items
@@ -8004,10 +8004,10 @@ function baml.toml.Table.baml.ToJson.to_json(self: baml.toml.Table) -> baml.json
     return
 }
 
-function baml.toml.Table.parse(s: string) -> baml.toml.Table {
+function baml.toml.Table.parse(s: string) -> <unresolved type #136544457603747> {
 }
 
-function baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item {
+function baml.toml.item_from_json(json: <unresolved type #1888633819501>) -> <unresolved type #118385227995786> {
     load_var json
     type_tag
     jump_table [L3, L3, L3, L2, L3, _, L0, L1], default L5
@@ -8042,7 +8042,7 @@ function baml.toml.item_from_json(json: baml.json.json) -> baml.toml.Item {
     unreachable
 }
 
-function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
+function baml.toml.item_to_json(item: <unresolved type #118385227995786>) -> <unresolved type #1888633819501> {
     load_var item
     type_tag
     dense_tag [bool, int, float, string, Table, list, ZonedDateTime, PlainDateTime, PlainDate, PlainTime]
@@ -8102,7 +8102,7 @@ function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json {
     unreachable
 }
 
-function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
+function baml.toml.table_from_json(j: <unresolved type #1888633819501>) -> <unresolved type #136544457603747> {
     load_var j
     is_type map<_, _>
     pop_jump_if_false L0
@@ -8163,19 +8163,19 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
     return
 }
 
-function baml.ws.WsStream.close(self: baml.ws.WsStream) -> null {
+function baml.ws.WsStream.close(self: <unresolved type #112647635702237>) -> null {
 }
 
-function baml.ws.WsStream.next(self: baml.ws.WsStream) -> string | null {
+function baml.ws.WsStream.next(self: <unresolved type #112647635702237>) -> string | null {
 }
 
-function baml.ws.WsStream.send(self: baml.ws.WsStream, text: string) -> null {
+function baml.ws.WsStream.send(self: <unresolved type #112647635702237>, text: string) -> null {
 }
 
-function baml.ws._connect(url: string, headers: map<string, string>, timeout_nanos: bigint) -> baml.ws.WsStream {
+function baml.ws._connect(url: string, headers: map<string, string>, timeout_nanos: bigint) -> <unresolved type #112647635702237> {
 }
 
-function baml.ws.connect(url: string, headers: map<string, string>, timeout: baml.time.Duration) -> baml.ws.WsStream {
+function baml.ws.connect(url: string, headers: map<string, string>, timeout: <unresolved type #16018747206762>) -> <unresolved type #112647635702237> {
     load_var timeout
     load_const <omitted>
     cmp_op ==
@@ -8204,5 +8204,5 @@ function baml.yaml.deserialize(s: string) -> #0 {
     return
 }
 
-function baml.yaml.parse(s: string) -> baml.json.json {
+function baml.yaml.parse(s: string) -> <unresolved type #1888633819501> {
 }

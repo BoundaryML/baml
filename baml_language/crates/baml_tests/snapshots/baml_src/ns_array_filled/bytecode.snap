@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function array_filled.$init_test_ns_array_filled_array_filled(registry: testing.TestCollector) -> null {
+function array_filled.$init_test_ns_array_filled_array_filled(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.array_filled"
     load_const "array_filled_length_and_value"

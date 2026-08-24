@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.test_raw_string_name.$init_test_ns_fixtures_ns_test_raw_string_name_main(registry: testing.TestCollector) -> null {
+function fixtures.test_raw_string_name.$init_test_ns_fixtures_ns_test_raw_string_name_main(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.fixtures.test_raw_string_name"
     load_const "raw string name"

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function backtick_strings.$init_test_ns_backtick_strings_backtick_strings(registry: testing.TestCollector) -> null {
+function backtick_strings.$init_test_ns_backtick_strings_backtick_strings(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.backtick_strings"
     load_const "backtick_one_liner_evaluates_to_string"
@@ -573,7 +573,7 @@ function backtick_strings.$init_test_ns_backtick_strings_backtick_strings(regist
     return
 }
 
-function backtick_strings.Person.baml.ToString.to_string(self: backtick_strings.Person) -> string {
+function backtick_strings.Person.baml.ToString.to_string(self: <unresolved type #83813457989906>) -> string {
     load_var self
     load_field .name
     return

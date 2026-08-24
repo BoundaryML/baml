@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function runtime_render_identity.$init_test_ns_runtime_render_identity_runtime_render_identity(registry: testing.TestCollector) -> null {
+function runtime_render_identity.$init_test_ns_runtime_render_identity_runtime_render_identity(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.runtime_render_identity"
     load_const "non-equivalent same-name runtime classes fail before render"
@@ -62,7 +62,7 @@ function runtime_render_identity.$init_test_ns_runtime_render_identity_runtime_r
     return
 }
 
-function runtime_render_identity.Render(client: ai.Client | null) -> #0 {
+function runtime_render_identity.Render(client: <unresolved type #34575171419448> | null) -> #0 {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -92,7 +92,7 @@ function runtime_render_identity.Render(client: ai.Client | null) -> #0 {
     return
 }
 
-function runtime_render_identity.Render$build_request(client: ai.Client | null) -> baml.http.Request {
+function runtime_render_identity.Render$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -117,7 +117,7 @@ function runtime_render_identity.Render$parse(json: string) -> #0 {
     return
 }
 
-function runtime_render_identity.Render$render_prompt() -> ai.Prompt {
+function runtime_render_identity.Render$render_prompt() -> <unresolved type #135172864440005> {
     load_type #0
     call user.runtime_render_identity.Render$spec
     store_var _1
@@ -130,7 +130,7 @@ function runtime_render_identity.Render$render_prompt() -> ai.Prompt {
     return
 }
 
-function runtime_render_identity.Render$spec() -> ai.FunctionSpec<#0> {
+function runtime_render_identity.Render$spec() -> <unresolved type #25974768157144><#0> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -150,7 +150,7 @@ function runtime_render_identity.Render$spec() -> ai.FunctionSpec<#0> {
     return
 }
 
-function runtime_render_identity.Render$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<#0 | null, #0> {
+function runtime_render_identity.Render$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><#0 | null, #0> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -169,7 +169,7 @@ function runtime_render_identity.Render$stream(client: ai.stream.StreamingClient
     return
 }
 
-function runtime_render_identity.RenderPair(client: ai.Client | null) -> runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1> {
+function runtime_render_identity.RenderPair(client: <unresolved type #34575171419448> | null) -> <unresolved type #94627279688079><#0> | <unresolved type #94627279688079><#1> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -200,7 +200,7 @@ function runtime_render_identity.RenderPair(client: ai.Client | null) -> runtime
     return
 }
 
-function runtime_render_identity.RenderPair$build_request(client: ai.Client | null) -> baml.http.Request {
+function runtime_render_identity.RenderPair$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -219,14 +219,14 @@ function runtime_render_identity.RenderPair$build_request(client: ai.Client | nu
     return
 }
 
-function runtime_render_identity.RenderPair$parse(json: string) -> runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1> {
+function runtime_render_identity.RenderPair$parse(json: string) -> <unresolved type #94627279688079><#0> | <unresolved type #94627279688079><#1> {
     load_type runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>
     load_var json
     call baml.sap.parse
     return
 }
 
-function runtime_render_identity.RenderPair$render_prompt() -> ai.Prompt {
+function runtime_render_identity.RenderPair$render_prompt() -> <unresolved type #135172864440005> {
     load_type #0
     load_type #1
     call user.runtime_render_identity.RenderPair$spec
@@ -240,7 +240,7 @@ function runtime_render_identity.RenderPair$render_prompt() -> ai.Prompt {
     return
 }
 
-function runtime_render_identity.RenderPair$spec() -> ai.FunctionSpec<runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>> {
+function runtime_render_identity.RenderPair$spec() -> <unresolved type #25974768157144><<unresolved type #94627279688079><#0> | <unresolved type #94627279688079><#1>> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -261,7 +261,7 @@ function runtime_render_identity.RenderPair$spec() -> ai.FunctionSpec<runtime_re
     return
 }
 
-function runtime_render_identity.RenderPair$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<runtime_render_identity.BoxRec$stream<#0> | runtime_render_identity.BoxRec$stream<#1> | null, runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>> {
+function runtime_render_identity.RenderPair$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><<unresolved type #107639544073393><#0> | <unresolved type #107639544073393><#1> | null, <unresolved type #94627279688079><#0> | <unresolved type #94627279688079><#1>> {
     load_var client
     load_const <omitted>
     cmp_op ==

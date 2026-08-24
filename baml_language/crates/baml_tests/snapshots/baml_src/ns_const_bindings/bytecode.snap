@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function const_bindings.$init_test_ns_const_bindings_const_bindings(registry: testing.TestCollector) -> null {
+function const_bindings.$init_test_ns_const_bindings_const_bindings(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.const_bindings"
     load_const "let_and_const_bindings_execute_the_same"

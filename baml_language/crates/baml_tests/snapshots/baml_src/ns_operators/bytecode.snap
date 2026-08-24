@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function operators.$init_test_ns_operators_operators(registry: testing.TestCollector) -> null {
+function operators.$init_test_ns_operators_operators(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.operators"
     load_const "add"
@@ -433,7 +433,7 @@ function operators.$init_test_ns_operators_operators(registry: testing.TestColle
     return
 }
 
-function operators.Boom.baml.ops.Compare.lt(self: operators.Boom, other: operators.Boom) -> bool {
+function operators.Boom.baml.ops.Compare.lt(self: <unresolved type #14889001654482>, other: <unresolved type #14889001654482>) -> bool {
     load_const 1
     load_var self
     load_field .n
@@ -444,7 +444,7 @@ function operators.Boom.baml.ops.Compare.lt(self: operators.Boom, other: operato
     return
 }
 
-function operators.Boom.baml.ops.Equals.eq(self: operators.Boom, other: operators.Boom) -> bool {
+function operators.Boom.baml.ops.Equals.eq(self: <unresolved type #14889001654482>, other: <unresolved type #14889001654482>) -> bool {
     load_var self
     load_field .n
     load_var other
@@ -453,7 +453,7 @@ function operators.Boom.baml.ops.Equals.eq(self: operators.Boom, other: operator
     return
 }
 
-function operators.Counter.baml.ops.Add<int>.add(self: operators.Counter, rhs: int) -> int {
+function operators.Counter.baml.ops.Add<int>.add(self: <unresolved type #48139423768819>, rhs: int) -> int {
     load_var self
     load_field .n
     load_var rhs
@@ -461,7 +461,7 @@ function operators.Counter.baml.ops.Add<int>.add(self: operators.Counter, rhs: i
     return
 }
 
-function operators.Debt.baml.ops.Negate.neg(self: operators.Debt) -> int {
+function operators.Debt.baml.ops.Negate.neg(self: <unresolved type #11646095708244>) -> int {
     load_const 0
     load_var self
     load_field .amount
@@ -469,7 +469,7 @@ function operators.Debt.baml.ops.Negate.neg(self: operators.Debt) -> int {
     return
 }
 
-function operators.Feet.baml.ops.Add<int>.add(self: operators.Feet, rhs: int) -> operators.Feet {
+function operators.Feet.baml.ops.Add<int>.add(self: <unresolved type #84285488791605>, rhs: int) -> <unresolved type #84285488791605> {
     load_var self
     load_field .v
     load_var rhs
@@ -478,7 +478,7 @@ function operators.Feet.baml.ops.Add<int>.add(self: operators.Feet, rhs: int) ->
     return
 }
 
-function operators.Meters.baml.ops.Add<int>.add(self: operators.Meters, rhs: int) -> operators.Meters {
+function operators.Meters.baml.ops.Add<int>.add(self: <unresolved type #130176082045667>, rhs: int) -> <unresolved type #130176082045667> {
     load_var self
     load_field .v
     load_var rhs
@@ -487,12 +487,12 @@ function operators.Meters.baml.ops.Add<int>.add(self: operators.Meters, rhs: int
     return
 }
 
-function operators.OddOrder.baml.ops.Compare.gt(self: operators.OddOrder, other: operators.OddOrder) -> bool {
+function operators.OddOrder.baml.ops.Compare.gt(self: <unresolved type #139588415227782>, other: <unresolved type #139588415227782>) -> bool {
     load_const true
     return
 }
 
-function operators.OddOrder.baml.ops.Compare.lt(self: operators.OddOrder, other: operators.OddOrder) -> bool {
+function operators.OddOrder.baml.ops.Compare.lt(self: <unresolved type #139588415227782>, other: <unresolved type #139588415227782>) -> bool {
     load_var self
     load_field .n
     load_var other
@@ -501,7 +501,7 @@ function operators.OddOrder.baml.ops.Compare.lt(self: operators.OddOrder, other:
     return
 }
 
-function operators.OddOrder.baml.ops.Equals.eq(self: operators.OddOrder, other: operators.OddOrder) -> bool {
+function operators.OddOrder.baml.ops.Equals.eq(self: <unresolved type #139588415227782>, other: <unresolved type #139588415227782>) -> bool {
     load_var self
     load_field .n
     load_var other
@@ -510,7 +510,7 @@ function operators.OddOrder.baml.ops.Equals.eq(self: operators.OddOrder, other: 
     return
 }
 
-function operators.Ordered.precedes(self: operators.Ordered, other: #0) -> bool {
+function operators.Ordered.precedes(self: <unresolved type #125890835253590>, other: #0) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "lt"
@@ -520,7 +520,7 @@ function operators.Ordered.precedes(self: operators.Ordered, other: #0) -> bool 
     return
 }
 
-function operators.Poly.baml.ops.Add<float>.add(self: operators.Poly, rhs: float) -> operators.Poly {
+function operators.Poly.baml.ops.Add<float>.add(self: <unresolved type #94540270306359>, rhs: float) -> <unresolved type #94540270306359> {
     load_var self
     load_field .v
     load_const 1000
@@ -529,7 +529,7 @@ function operators.Poly.baml.ops.Add<float>.add(self: operators.Poly, rhs: float
     return
 }
 
-function operators.Poly.baml.ops.Add<int>.add(self: operators.Poly, rhs: int) -> operators.Poly {
+function operators.Poly.baml.ops.Add<int>.add(self: <unresolved type #94540270306359>, rhs: int) -> <unresolved type #94540270306359> {
     load_var self
     load_field .v
     load_var rhs
@@ -538,7 +538,7 @@ function operators.Poly.baml.ops.Add<int>.add(self: operators.Poly, rhs: int) ->
     return
 }
 
-function operators.Ranked.baml.ops.Compare.lt(self: operators.Ranked, other: operators.Ranked) -> bool {
+function operators.Ranked.baml.ops.Compare.lt(self: <unresolved type #96636045369710>, other: <unresolved type #96636045369710>) -> bool {
     load_var self
     load_field .rank
     load_var other
@@ -547,7 +547,7 @@ function operators.Ranked.baml.ops.Compare.lt(self: operators.Ranked, other: ope
     return
 }
 
-function operators.Ranked.baml.ops.Equals.eq(self: operators.Ranked, other: operators.Ranked) -> bool {
+function operators.Ranked.baml.ops.Equals.eq(self: <unresolved type #96636045369710>, other: <unresolved type #96636045369710>) -> bool {
     load_var self
     load_field .rank
     load_var other
@@ -556,7 +556,7 @@ function operators.Ranked.baml.ops.Equals.eq(self: operators.Ranked, other: oper
     return
 }
 
-function operators.Scaled.baml.ops.Divide<Scaled>.div(self: operators.Scaled, rhs: operators.Scaled) -> operators.Scaled {
+function operators.Scaled.baml.ops.Divide<Scaled>.div(self: <unresolved type #125411701107943>, rhs: <unresolved type #125411701107943>) -> <unresolved type #125411701107943> {
     load_var self
     load_field .v
     load_var rhs
@@ -566,7 +566,7 @@ function operators.Scaled.baml.ops.Divide<Scaled>.div(self: operators.Scaled, rh
     return
 }
 
-function operators.Scaled.baml.ops.Multiply<Scaled>.mul(self: operators.Scaled, rhs: operators.Scaled) -> operators.Scaled {
+function operators.Scaled.baml.ops.Multiply<Scaled>.mul(self: <unresolved type #125411701107943>, rhs: <unresolved type #125411701107943>) -> <unresolved type #125411701107943> {
     load_var self
     load_field .v
     load_var rhs
@@ -576,7 +576,7 @@ function operators.Scaled.baml.ops.Multiply<Scaled>.mul(self: operators.Scaled, 
     return
 }
 
-function operators.Scaled.baml.ops.Remainder<Scaled>.rem(self: operators.Scaled, rhs: operators.Scaled) -> operators.Scaled {
+function operators.Scaled.baml.ops.Remainder<Scaled>.rem(self: <unresolved type #125411701107943>, rhs: <unresolved type #125411701107943>) -> <unresolved type #125411701107943> {
     load_var self
     load_field .v
     load_var rhs
@@ -586,7 +586,7 @@ function operators.Scaled.baml.ops.Remainder<Scaled>.rem(self: operators.Scaled,
     return
 }
 
-function operators.Scaled.baml.ops.Subtract<Scaled>.sub(self: operators.Scaled, rhs: operators.Scaled) -> operators.Scaled {
+function operators.Scaled.baml.ops.Subtract<Scaled>.sub(self: <unresolved type #125411701107943>, rhs: <unresolved type #125411701107943>) -> <unresolved type #125411701107943> {
     load_var self
     load_field .v
     load_var rhs
@@ -596,7 +596,7 @@ function operators.Scaled.baml.ops.Subtract<Scaled>.sub(self: operators.Scaled, 
     return
 }
 
-function operators.Tier.baml.ops.Compare.lt(self: operators.Tier, other: operators.Tier) -> bool {
+function operators.Tier.baml.ops.Compare.lt(self: <unresolved type #86995967923817>, other: <unresolved type #86995967923817>) -> bool {
     load_var self
     load_field .level
     load_var other
@@ -605,7 +605,7 @@ function operators.Tier.baml.ops.Compare.lt(self: operators.Tier, other: operato
     return
 }
 
-function operators.Tier.baml.ops.Equals.eq(self: operators.Tier, other: operators.Tier) -> bool {
+function operators.Tier.baml.ops.Equals.eq(self: <unresolved type #86995967923817>, other: <unresolved type #86995967923817>) -> bool {
     load_var self
     load_field .level
     load_var other
@@ -614,7 +614,7 @@ function operators.Tier.baml.ops.Equals.eq(self: operators.Tier, other: operator
     return
 }
 
-function operators.Vec2.baml.ops.Add<Vec2>.add(self: operators.Vec2, rhs: operators.Vec2) -> operators.Vec2 {
+function operators.Vec2.baml.ops.Add<Vec2>.add(self: <unresolved type #43092723979717>, rhs: <unresolved type #43092723979717>) -> <unresolved type #43092723979717> {
     load_var self
     load_field .x
     load_var rhs
@@ -629,7 +629,7 @@ function operators.Vec2.baml.ops.Add<Vec2>.add(self: operators.Vec2, rhs: operat
     return
 }
 
-function operators.Vec2.baml.ops.Negate.neg(self: operators.Vec2) -> operators.Vec2 {
+function operators.Vec2.baml.ops.Negate.neg(self: <unresolved type #43092723979717>) -> <unresolved type #43092723979717> {
     load_var self
     load_field .x
     unary_op -
@@ -640,7 +640,7 @@ function operators.Vec2.baml.ops.Negate.neg(self: operators.Vec2) -> operators.V
     return
 }
 
-function operators.Wrapped.baml.ops.Compare.lt(self: operators.Wrapped<#0>, other: operators.Wrapped<#0>) -> bool {
+function operators.Wrapped.baml.ops.Compare.lt(self: <unresolved type #56322393889662><#0>, other: <unresolved type #56322393889662><#0>) -> bool {
     load_var self
     load_field .weight
     load_var other
@@ -649,7 +649,7 @@ function operators.Wrapped.baml.ops.Compare.lt(self: operators.Wrapped<#0>, othe
     return
 }
 
-function operators.Wrapped.baml.ops.Equals.eq(self: operators.Wrapped<#0>, other: operators.Wrapped<#0>) -> bool {
+function operators.Wrapped.baml.ops.Equals.eq(self: <unresolved type #56322393889662><#0>, other: <unresolved type #56322393889662><#0>) -> bool {
     load_var self
     load_field .weight
     load_var other
@@ -971,19 +971,19 @@ function operators.drv_sub(a: #0, b: #0) -> #0 {
     return
 }
 
-function operators.ops_add_to_unit(u: operators.Meters | operators.Feet, n: int) -> operators.Meters | operators.Feet {
+function operators.ops_add_to_unit(u: <unresolved type #130176082045667> | <unresolved type #84285488791605>, n: int) -> <unresolved type #130176082045667> | <unresolved type #84285488791605> {
     load_var2 1 2
     call baml.ops.__union_add
     return
 }
 
-function operators.ops_add_vecs(a: operators.Vec2, b: operators.Vec2) -> operators.Vec2 {
+function operators.ops_add_vecs(a: <unresolved type #43092723979717>, b: <unresolved type #43092723979717>) -> <unresolved type #43092723979717> {
     load_var2 1 2
     call baml.ops.__union_add
     return
 }
 
-function operators.ops_compound_add_vec() -> operators.Vec2 {
+function operators.ops_compound_add_vec() -> <unresolved type #43092723979717> {
     load_const 1
     load_const 2
     init_instance user.operators.Vec2 .x, .y
@@ -998,7 +998,7 @@ function operators.ops_compound_add_vec() -> operators.Vec2 {
     return
 }
 
-function operators.ops_counter_add(c: operators.Counter, n: int) -> int {
+function operators.ops_counter_add(c: <unresolved type #48139423768819>, n: int) -> int {
     load_var2 1 2
     call baml.ops.__union_add
     return
@@ -1019,13 +1019,13 @@ function operators.ops_mixed_union_add(n: int) -> int | float {
     return
 }
 
-function operators.ops_neg_debt(d: operators.Debt) -> int {
+function operators.ops_neg_debt(d: <unresolved type #11646095708244>) -> int {
     load_var d
     call baml.ops.__union_neg
     return
 }
 
-function operators.ops_neg_vec(a: operators.Vec2) -> operators.Vec2 {
+function operators.ops_neg_vec(a: <unresolved type #43092723979717>) -> <unresolved type #43092723979717> {
     load_var a
     call baml.ops.__union_neg
     return
@@ -1049,13 +1049,13 @@ function operators.ops_pick_int_or_float(n: int) -> int | float {
     return
 }
 
-function operators.ops_poly_add_float(p: operators.Poly, f: float) -> operators.Poly {
+function operators.ops_poly_add_float(p: <unresolved type #94540270306359>, f: float) -> <unresolved type #94540270306359> {
     load_var2 1 2
     call baml.ops.__union_add
     return
 }
 
-function operators.ops_poly_add_int(p: operators.Poly, n: int) -> operators.Poly {
+function operators.ops_poly_add_int(p: <unresolved type #94540270306359>, n: int) -> <unresolved type #94540270306359> {
     load_var2 1 2
     call baml.ops.__union_add
     return
@@ -1066,25 +1066,25 @@ function operators.ops_ret_bool() -> bool {
     return
 }
 
-function operators.ops_scaled_div(a: operators.Scaled, b: operators.Scaled) -> operators.Scaled {
+function operators.ops_scaled_div(a: <unresolved type #125411701107943>, b: <unresolved type #125411701107943>) -> <unresolved type #125411701107943> {
     load_var2 1 2
     call baml.ops.__union_div
     return
 }
 
-function operators.ops_scaled_mul(a: operators.Scaled, b: operators.Scaled) -> operators.Scaled {
+function operators.ops_scaled_mul(a: <unresolved type #125411701107943>, b: <unresolved type #125411701107943>) -> <unresolved type #125411701107943> {
     load_var2 1 2
     call baml.ops.__union_mul
     return
 }
 
-function operators.ops_scaled_rem(a: operators.Scaled, b: operators.Scaled) -> operators.Scaled {
+function operators.ops_scaled_rem(a: <unresolved type #125411701107943>, b: <unresolved type #125411701107943>) -> <unresolved type #125411701107943> {
     load_var2 1 2
     call baml.ops.__union_rem
     return
 }
 
-function operators.ops_scaled_sub(a: operators.Scaled, b: operators.Scaled) -> operators.Scaled {
+function operators.ops_scaled_sub(a: <unresolved type #125411701107943>, b: <unresolved type #125411701107943>) -> <unresolved type #125411701107943> {
     load_var2 1 2
     call baml.ops.__union_sub
     return
@@ -1313,7 +1313,7 @@ function operators.ord_ge(a: #0, b: #0) -> bool {
     return
 }
 
-function operators.ord_generic_int(a: operators.Wrapped<int>, b: operators.Wrapped<int>) -> bool {
+function operators.ord_generic_int(a: <unresolved type #56322393889662><int>, b: <unresolved type #56322393889662><int>) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "lt"
@@ -1323,7 +1323,7 @@ function operators.ord_generic_int(a: operators.Wrapped<int>, b: operators.Wrapp
     return
 }
 
-function operators.ord_generic_string(a: operators.Wrapped<string>, b: operators.Wrapped<string>) -> bool {
+function operators.ord_generic_string(a: <unresolved type #56322393889662><string>, b: <unresolved type #56322393889662><string>) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "lt"
@@ -1470,7 +1470,7 @@ function operators.ord_lt(a: #0, b: #0) -> bool {
     return
 }
 
-function operators.ord_odd_gt(a: operators.OddOrder, b: operators.OddOrder) -> bool {
+function operators.ord_odd_gt(a: <unresolved type #139588415227782>, b: <unresolved type #139588415227782>) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "gt"
@@ -1480,7 +1480,7 @@ function operators.ord_odd_gt(a: operators.OddOrder, b: operators.OddOrder) -> b
     return
 }
 
-function operators.ord_odd_le(a: operators.OddOrder, b: operators.OddOrder) -> bool {
+function operators.ord_odd_le(a: <unresolved type #139588415227782>, b: <unresolved type #139588415227782>) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "le"
@@ -1490,7 +1490,7 @@ function operators.ord_odd_le(a: operators.OddOrder, b: operators.OddOrder) -> b
     return
 }
 
-function operators.ord_rank_ge(a: operators.Ranked, b: operators.Ranked) -> bool {
+function operators.ord_rank_ge(a: <unresolved type #96636045369710>, b: <unresolved type #96636045369710>) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "ge"
@@ -1500,14 +1500,14 @@ function operators.ord_rank_ge(a: operators.Ranked, b: operators.Ranked) -> bool
     return
 }
 
-function operators.ord_rank_generic_lt(a: operators.Ranked, b: operators.Ranked) -> bool {
+function operators.ord_rank_generic_lt(a: <unresolved type #96636045369710>, b: <unresolved type #96636045369710>) -> bool {
     load_type operators.Ranked
     load_var2 1 2
     call user.operators.ord_lt
     return
 }
 
-function operators.ord_rank_gt(a: operators.Ranked, b: operators.Ranked) -> bool {
+function operators.ord_rank_gt(a: <unresolved type #96636045369710>, b: <unresolved type #96636045369710>) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "gt"
@@ -1517,7 +1517,7 @@ function operators.ord_rank_gt(a: operators.Ranked, b: operators.Ranked) -> bool
     return
 }
 
-function operators.ord_rank_le(a: operators.Ranked, b: operators.Ranked) -> bool {
+function operators.ord_rank_le(a: <unresolved type #96636045369710>, b: <unresolved type #96636045369710>) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "le"
@@ -1527,7 +1527,7 @@ function operators.ord_rank_le(a: operators.Ranked, b: operators.Ranked) -> bool
     return
 }
 
-function operators.ord_rank_lt(a: operators.Ranked, b: operators.Ranked) -> bool {
+function operators.ord_rank_lt(a: <unresolved type #96636045369710>, b: <unresolved type #96636045369710>) -> bool {
     load_var2 1 2
     load_type baml.ops.Compare
     load_const "lt"
@@ -1537,7 +1537,7 @@ function operators.ord_rank_lt(a: operators.Ranked, b: operators.Ranked) -> bool
     return
 }
 
-function operators.ord_self_in_default(a: operators.Tier, b: operators.Tier) -> bool {
+function operators.ord_self_in_default(a: <unresolved type #86995967923817>, b: <unresolved type #86995967923817>) -> bool {
     load_var2 1 2
     load_type operators.Ordered
     load_const "precedes"

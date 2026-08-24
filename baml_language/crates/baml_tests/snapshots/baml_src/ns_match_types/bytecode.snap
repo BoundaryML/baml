@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function match_types.$init_test_ns_match_types_match_types(registry: testing.TestCollector) -> null {
+function match_types.$init_test_ns_match_types_match_types(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.match_types"
     load_const "match_typed_pattern_second_arm"
@@ -273,7 +273,7 @@ function match_types.classify_all_guarded(x: int, flag: bool) -> string {
     return
 }
 
-function match_types.classify_animal(animal: match_types.Cat | match_types.Dog | match_types.Bird) -> string {
+function match_types.classify_animal(animal: <unresolved type #35871879766905> | <unresolved type #66658794474703> | <unresolved type #12140158137124>) -> string {
     load_var animal
     store_var _2
     load_var _2
@@ -313,7 +313,7 @@ function match_types.classify_animal(animal: match_types.Cat | match_types.Dog |
     return
 }
 
-function match_types.classify_animal_wildcard(animal: match_types.Cat | match_types.Dog | match_types.Bird) -> string {
+function match_types.classify_animal_wildcard(animal: <unresolved type #35871879766905> | <unresolved type #66658794474703> | <unresolved type #12140158137124>) -> string {
     load_var animal
     store_var _2
     load_var _2
@@ -350,7 +350,7 @@ function match_types.classify_animal_wildcard(animal: match_types.Cat | match_ty
     return
 }
 
-function match_types.classify_guard_on_typed_field(result: match_types.Success | match_types.Failure) -> string {
+function match_types.classify_guard_on_typed_field(result: <unresolved type #60088854730674> | <unresolved type #54420461500007>) -> string {
     load_var result
     store_var _2
     load_var _2
@@ -425,7 +425,7 @@ function match_types.classify_guarded_int(x: int, flag: bool) -> string {
     return
 }
 
-function match_types.classify_mixed_class_primitive(x: match_types.MyClass | int | string | bool) -> string {
+function match_types.classify_mixed_class_primitive(x: <unresolved type #22396660456327> | int | string | bool) -> string {
     load_var x
     store_var _2
     load_var _2
@@ -497,7 +497,7 @@ function match_types.classify_mixed_lit_typed_guard(x: int, flag: bool) -> strin
     return
 }
 
-function match_types.classify_null_with_class(x: match_types.Cat | match_types.Dog | null) -> string {
+function match_types.classify_null_with_class(x: <unresolved type #35871879766905> | <unresolved type #66658794474703> | null) -> string {
     load_var x
     store_var _2
     load_var _2
@@ -555,7 +555,7 @@ function match_types.classify_primitives(x: int | string | bool | float) -> int 
     unreachable
 }
 
-function match_types.classify_result_guarded(result: match_types.SuccessCode | match_types.FailureCode, strict: bool) -> string {
+function match_types.classify_result_guarded(result: <unresolved type #6140770651799> | <unresolved type #70213006798398>, strict: bool) -> string {
     load_var result
     store_var _3
     load_var _3
@@ -605,7 +605,7 @@ function match_types.classify_result_guarded(result: match_types.SuccessCode | m
     return
 }
 
-function match_types.classify_status(s: match_types.Status) -> string {
+function match_types.classify_status(s: <unresolved type #85104933336713>) -> string {
     load_var s
     discriminant
     load_const Status.Active
@@ -636,7 +636,7 @@ function match_types.classify_status(s: match_types.Status) -> string {
     return
 }
 
-function match_types.classify_status_wildcard(s: match_types.Status) -> string {
+function match_types.classify_status_wildcard(s: <unresolved type #85104933336713>) -> string {
     load_var s
     discriminant
     load_const Status.Active
@@ -694,7 +694,7 @@ function match_types.classify_with_null(x: int | string | bool | null) -> string
     unreachable
 }
 
-function match_types.compass(d: match_types.Direction) -> string {
+function match_types.compass(d: <unresolved type #124798558333440>) -> string {
     load_var d
     discriminant
     jump_table [L3, L2, L1, L0], default L5
@@ -721,7 +721,7 @@ function match_types.compass(d: match_types.Direction) -> string {
     unreachable
 }
 
-function match_types.describe_animal(animal: match_types.Cat | match_types.Dog | match_types.Bird | match_types.Fish) -> string {
+function match_types.describe_animal(animal: <unresolved type #35871879766905> | <unresolved type #66658794474703> | <unresolved type #12140158137124> | <unresolved type #137615855190853>) -> string {
     load_var animal
     store_var _2
     load_var _2
@@ -764,7 +764,7 @@ function match_types.describe_animal(animal: match_types.Cat | match_types.Dog |
     return
 }
 
-function match_types.describe_sparse(animal: match_types.Cat | match_types.Dog | match_types.Bird | match_types.Fish) -> string {
+function match_types.describe_sparse(animal: <unresolved type #35871879766905> | <unresolved type #66658794474703> | <unresolved type #12140158137124> | <unresolved type #137615855190853>) -> string {
     load_var animal
     store_var _2
     load_var _2
@@ -807,7 +807,7 @@ function match_types.describe_sparse(animal: match_types.Cat | match_types.Dog |
     return
 }
 
-function match_types.describe_two(animal: match_types.Cat | match_types.Dog) -> string {
+function match_types.describe_two(animal: <unresolved type #35871879766905> | <unresolved type #66658794474703>) -> string {
     load_var animal
     store_var _2
     load_var _2

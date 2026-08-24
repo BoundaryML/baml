@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function runtime_type_binding_generic_calls.$init_test_ns_runtime_type_binding_generic_calls_runtime_type_binding_generic_calls(registry: testing.TestCollector) -> null {
+function runtime_type_binding_generic_calls.$init_test_ns_runtime_type_binding_generic_calls_runtime_type_binding_generic_calls(registry: <unresolved type #49679510787122>) -> null {
     load_var registry
     load_const "root.runtime_type_binding_generic_calls"
     load_const "non-closure generic list ops over a runtime-bound element type"
@@ -54,14 +54,14 @@ function runtime_type_binding_generic_calls.EmptyOf() -> #0[] {
     return
 }
 
-function runtime_type_binding_generic_calls.Holder.count(self: runtime_type_binding_generic_calls.Holder<#0>) -> int {
+function runtime_type_binding_generic_calls.Holder.count(self: <unresolved type #40694423398289><#0>) -> int {
     load_var self
     load_field .items
     container_len
     return
 }
 
-function runtime_type_binding_generic_calls.Holder.first_or_null(self: runtime_type_binding_generic_calls.Holder<#0>) -> #0 | null {
+function runtime_type_binding_generic_calls.Holder.first_or_null(self: <unresolved type #40694423398289><#0>) -> #0 | null {
     load_type #0
     load_var self
     load_field .items
@@ -70,14 +70,14 @@ function runtime_type_binding_generic_calls.Holder.first_or_null(self: runtime_t
     return
 }
 
-function runtime_type_binding_generic_calls.Holder.matches_type(self: runtime_type_binding_generic_calls.Holder<#0>, expected: reflect.Type) -> bool {
+function runtime_type_binding_generic_calls.Holder.matches_type(self: <unresolved type #40694423398289><#0>, expected: reflect.Type) -> bool {
     load_type #0
     load_var expected
     call baml.ops.equals_equals
     return
 }
 
-function runtime_type_binding_generic_calls.Holder.new(items: #0[]) -> runtime_type_binding_generic_calls.Holder<#0> {
+function runtime_type_binding_generic_calls.Holder.new(items: #0[]) -> <unresolved type #40694423398289><#0> {
     load_var items
     load_type #0
     init_instance<1> user.runtime_type_binding_generic_calls.Holder .items
