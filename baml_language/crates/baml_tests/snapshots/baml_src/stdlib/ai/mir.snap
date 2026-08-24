@@ -2642,6 +2642,61 @@ fn ai.errors.classify_http(provider: string, status_code: int, body: string, hea
     }
 }
 
+fn ai.events.guard(listener: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws E)) -> null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) {
+    // Locals:
+    let _0: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // _0 // return
+    let _1: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws E) // listener // param
+    let _2: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws E)
+    let _3: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws E // cb [captured]
+
+    bb0: {
+        _2 = copy _1;
+        _2 = narrow_bind copy _2 as Function { params: [TyTemplateFunctionParamTy { name: None, ty: Union([Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), mode: Required }], ret: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, throws: TypeArgRef(0), attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const null;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _3 = copy _2;
+        _0 = make_closure lambda[0]<1 type_args>(copy _3);
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(guard, 0)>(e: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage // e // param
+    let _2: unknown // err
+    let _3: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws E
+
+    bb0: {
+        _3 = copy capture[0];
+        _0 = call copy _3(copy _1) -> [bb3, unwind: bb1];
+    }
+
+    bb1: {
+        throw_if_panic copy _2 -> bb2;
+    }
+
+    bb2: {
+        _0 = const null;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
 fn ai.internal._gcp_access_token = builtin(io)
 
 fn ai.internal._gcp_project_id = builtin(io)
@@ -7508,51 +7563,64 @@ fn ai.stream.Stream.final(self: ai.stream.Stream) -> TFinal {
     }
 }
 
-fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<TStream, TFinal> {
+fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<TStream, TFinal> {
     // Locals:
     let _0: ai.stream.Stream<TStream, TFinal> // _0 // return
     let _1: ai.FunctionSpec<TFinal> // spec // param
     let _2: null | ai.stream.StreamingClient // client // param
-    let _3: bool
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
-    let _6: ai.tools.Toolbox
-    let _7: reflect.Type
-    let _8: baml.errors.InvalidArgument
-    let _9: string
-    let _10: string
+    let _6: bool
+    let _7: bool
+    let _8: ai.tools.Toolbox
+    let _9: reflect.Type
+    let _10: baml.errors.InvalidArgument
     let _11: string
     let _12: string
-    let _13: reflect.Type
-    let _14: reflect.Type
-    let _15: ai.stream.StreamingClient // selected
-    let _16: null | ai.stream.StreamingClient
-    let _17: ai.stream.StreamingClient // s
-    let _18: ai.Client
-    let _19: ai.Client
-    let _20: ai.stream.StreamingClient // s
-    let _21: ai.errors.StreamingUnsupported
-    let _22: string
-    let _23: ai.Client
-    let _24: string // provider
-    let _25: ai.Client // c
-    let _26: ai.stream.TurnStream // turns [captured]
-    let _27: ai.ModelTurnInput
-    let _28: (string) -> ai.Prompt throws never
-    let _29: ai.Journal
-    let _30: reflect.Type
-    let _31: ai.tools.Toolbox
-    let _32: reflect.Type
-    let _33: reflect.Type
-    let _34: reflect.Type
-    let _35: () -> string | null throws baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
-    let _36: baml.sap.ParseCache<TStream, TFinal>
-    let _37: reflect.Type
+    let _13: string
+    let _14: string
+    let _15: reflect.Type
+    let _16: reflect.Type
+    let _17: ai.stream.StreamingClient // selected
+    let _18: null | ai.stream.StreamingClient
+    let _19: ai.stream.StreamingClient // s
+    let _20: ai.Client
+    let _21: ai.Client
+    let _22: ai.stream.StreamingClient // s
+    let _23: ai.errors.StreamingUnsupported
+    let _24: string
+    let _25: ai.Client
+    let _26: string // provider [captured]
+    let _27: ai.Client // c
+    let _28: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // emit [captured]
+    let _29: reflect.Type
+    let _30: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)
+    let _31: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never // cb
+    let _32: void
+    let _33: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never
+    let _34: ai.events.RunStarted
+    let _35: string
+    let _36: reflect.Type
+    let _37: map<string, unknown>
     let _38: reflect.Type
+    let _39: ai.stream.TurnStream // turns [captured]
+    let _40: ai.ModelTurnInput
+    let _41: (string) -> ai.Prompt throws never
+    let _42: ai.Journal
+    let _43: reflect.Type
+    let _44: ai.tools.Toolbox
+    let _45: reflect.Type
+    let _46: reflect.Type
+    let _47: reflect.Type
+    let _48: () -> string | null throws baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _49: baml.sap.ParseCache<TStream, TFinal>
+    let _50: reflect.Type
+    let _51: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -7561,109 +7629,146 @@ fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.S
     }
 
     bb2: {
-        _7 = load_type(#1);
-        _6 = call const fn ai.FunctionSpec.tools<copy _7>(copy _1) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _5 = call const fn ai.tools.Toolbox.is_empty(copy _6) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
-        _4 = !copy _5;
-        branch copy _4 -> [bb19, bb5];
+        _9 = load_type(#1);
+        _8 = call const fn ai.FunctionSpec.tools<copy _9>(copy _1) -> [bb5];
     }
 
     bb5: {
-        _16 = copy _2;
-        _16 = narrow_bind copy _16 as Interface(QualifiedTypeName { pkg: Dep("ai"), namespace: ["stream"], name: "StreamingClient" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb10, bb6];
+        _7 = call const fn ai.tools.Toolbox.is_empty(copy _8) -> [bb6];
     }
 
     bb6: {
-        _18 = copy _1.4;
-        _19 = copy _18;
-        _19 = narrow_bind copy _19 as Interface(QualifiedTypeName { pkg: Dep("ai"), namespace: ["stream"], name: "StreamingClient" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb9, bb7];
+        _6 = !copy _7;
+        branch copy _6 -> [bb26, bb7];
     }
 
     bb7: {
-        _23 = copy _1.4;
-        _22 = virtual_call id as ai.Client(copy _23) -> [bb8];
+        _18 = copy _2;
+        _18 = narrow_bind copy _18 as Interface(QualifiedTypeName { pkg: Dep("ai"), namespace: ["stream"], name: "StreamingClient" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb12, bb8];
     }
 
     bb8: {
-        _21 = ai.errors.StreamingUnsupported { copy _22 };
-        throw copy _21;
+        _20 = copy _1.4;
+        _21 = copy _20;
+        _21 = narrow_bind copy _21 as Interface(QualifiedTypeName { pkg: Dep("ai"), namespace: ["stream"], name: "StreamingClient" }, [], [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb11, bb9];
     }
 
     bb9: {
-        _20 = copy _19;
-        _15 = copy _20;
-        goto -> bb11;
+        _25 = copy _1.4;
+        _24 = virtual_call id as ai.Client(copy _25) -> [bb10];
     }
 
     bb10: {
-        _17 = copy _16;
-        _15 = copy _17;
-        goto -> bb11;
+        _23 = ai.errors.StreamingUnsupported { copy _24 };
+        throw copy _23;
     }
 
     bb11: {
-        _25 = copy _15;
-        _24 = virtual_call id as ai.Client(copy _25) -> [bb12];
+        _22 = copy _21;
+        _17 = copy _22;
+        goto -> bb13;
     }
 
     bb12: {
-        _28 = copy _1.2;
-        _30 = load_type(#1);
-        _29 = call const fn ai.Journal.new<copy _30>(copy _1) -> [bb13];
+        _19 = copy _18;
+        _17 = copy _19;
+        goto -> bb13;
     }
 
     bb13: {
-        _32 = load_type(#1);
-        _31 = call const fn ai.FunctionSpec.tools<copy _32>(copy _1) -> [bb14];
+        _27 = copy _17;
+        _26 = virtual_call id as ai.Client(copy _27) -> [bb14];
     }
 
     bb14: {
-        _34 = load_type(#1);
-        _33 = call const fn ai.FunctionSpec.output_type<copy _34>(copy _1) -> [bb15];
+        _29 = load_type(unknown);
+        _28 = call const fn ai.events.guard<copy _29>(copy _3) -> [bb15];
     }
 
     bb15: {
-        _27 = ai.ModelTurnInput { copy _28, copy _29, copy _31, copy _33 };
-        _26 = virtual_call invoke_stream as ai.stream.StreamingClient(copy _15, copy _27) -> [bb16];
+        _30 = copy _28;
+        _30 = narrow_bind copy _30 as Function { params: [TyTemplateFunctionParamTy { name: None, ty: Union([Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), mode: Required }], ret: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, throws: Never { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb16, bb19];
     }
 
     bb16: {
-        _35 = make_closure lambda[0]<2 type_args>(copy _26);
-        _37 = load_type(#0);
-        _38 = load_type(#1);
-        _36 = call const fn baml.sap.__new_parse_cache<copy _37, copy _38>() -> [bb17];
+        _31 = copy _30;
+        _33 = copy _31;
+        _36 = load_type(#1);
+        _35 = call const fn ai.FunctionSpec.name<copy _36>(copy _1) -> [bb17];
     }
 
     bb17: {
-        _0 = ai.stream.Stream<#0, #1> { copy _35, copy _36, const "", const false };
-        goto -> bb18;
+        _38 = load_type(#1);
+        _37 = call const fn ai.FunctionSpec.arguments<copy _38>(copy _1) -> [bb18];
     }
 
     bb18: {
-        return;
+        _34 = ai.events.RunStarted { copy _35, copy _37 };
+        _32 = call copy _33(copy _34) -> [bb19];
     }
 
     bb19: {
-        _13 = load_type(#1);
-        _12 = call const fn ai.FunctionSpec.name<copy _13>(copy _1) -> [bb20];
+        _41 = copy _1.2;
+        _43 = load_type(#1);
+        _42 = call const fn ai.Journal.new<copy _43>(copy _1) -> [bb20];
     }
 
     bb20: {
-        _14 = load_type(string);
-        _11 = call const fn baml.String.from<copy _14>(copy _12) -> [bb21];
+        _45 = load_type(#1);
+        _44 = call const fn ai.FunctionSpec.tools<copy _45>(copy _1) -> [bb21];
     }
 
     bb21: {
-        _10 = const "streaming does not run the tool loop yet: " + copy _11;
-        _9 = copy _10 + const " has a non-empty toolbox";
-        _8 = baml.errors.InvalidArgument { copy _9 };
-        throw copy _8;
+        _47 = load_type(#1);
+        _46 = call const fn ai.FunctionSpec.output_type<copy _47>(copy _1) -> [bb22];
+    }
+
+    bb22: {
+        _40 = ai.ModelTurnInput { copy _41, copy _42, copy _44, copy _46 };
+        _39 = virtual_call invoke_stream as ai.stream.StreamingClient(copy _17, copy _40) -> [bb23];
+    }
+
+    bb23: {
+        _48 = make_closure lambda[0]<2 type_args>(copy _39, copy _28, copy _26);
+        _50 = load_type(#0);
+        _51 = load_type(#1);
+        _49 = call const fn baml.sap.__new_parse_cache<copy _50, copy _51>() -> [bb24];
+    }
+
+    bb24: {
+        _0 = ai.stream.Stream<#0, #1> { copy _48, copy _49, const "", const false };
+        goto -> bb25;
+    }
+
+    bb25: {
+        return;
+    }
+
+    bb26: {
+        _15 = load_type(#1);
+        _14 = call const fn ai.FunctionSpec.name<copy _15>(copy _1) -> [bb27];
+    }
+
+    bb27: {
+        _16 = load_type(string);
+        _13 = call const fn baml.String.from<copy _16>(copy _14) -> [bb28];
+    }
+
+    bb28: {
+        _12 = const "streaming does not run the tool loop yet: " + copy _13;
+        _11 = copy _12 + const " has a non-empty toolbox";
+        _10 = baml.errors.InvalidArgument { copy _11 };
+        throw copy _10;
     }
 }
 
@@ -7674,12 +7779,27 @@ fn .<lambda(from_spec, 0)>() -> string | null {
     let _1: unknown // e
     let _2: string | ai.stream.Done
     let _3: string | ai.stream.Done
-    let _4: string // s
-    let _5: baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
-    let _6: baml.errors.Io | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _4: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)
+    let _5: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)
+    let _6: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never // cb
+    let _7: ai.ModelTurn // turn
+    let _8: void
+    let _9: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never
+    let _10: ai.events.AssistantMessage
+    let _11: (ai.content.Media | ai.content.Reasoning | ai.content.Text | ai.content.ToolUse)[]
+    let _12: string
+    let _13: null | ai.events.Usage
+    let _14: null | ai.events.Usage
+    let _15: ai.events.Usage // u
+    let _16: void
+    let _17: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never
+    let _18: ai.events.Usage
+    let _19: string // s
+    let _20: baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
+    let _21: baml.errors.Io | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure
 
     bb0: {
-        _2 = call const fn ai.stream.TurnStream.next(copy capture[0]) -> [bb1, unwind: bb5];
+        _2 = call const fn ai.stream.TurnStream.next(copy capture[0]) -> [bb1, unwind: bb10];
     }
 
     bb1: {
@@ -7688,31 +7808,63 @@ fn .<lambda(from_spec, 0)>() -> string | null {
     }
 
     bb2: {
-        _4 = copy _2;
-        _0 = copy _4;
-        goto -> bb4;
+        _19 = copy _2;
+        _0 = copy _19;
+        goto -> bb9;
     }
 
     bb3: {
-        _0 = const null;
-        goto -> bb4;
+        _4 = copy capture[1];
+        _5 = copy _4;
+        _5 = narrow_bind copy _5 as Function { params: [TyTemplateFunctionParamTy { name: None, ty: Union([Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), mode: Required }], ret: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, throws: Never { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb4, bb8];
     }
 
     bb4: {
-        return;
+        _6 = copy _5;
+        _7 = call const fn ai.stream.TurnStream.final_turn(copy capture[0]) -> [bb5, unwind: bb10];
     }
 
     bb5: {
-        throw_if_panic copy _1 -> bb6;
+        _9 = copy _6;
+        _11 = copy _7.0;
+        _12 = copy capture[2];
+        _10 = ai.events.AssistantMessage { copy _11, copy _12 };
+        _8 = call copy _9(copy _10) -> [bb6, unwind: bb10];
     }
 
     bb6: {
-        _6 = copy _1;
-        _5 = call const fn ai.errors.normalize(copy _6) -> [bb7];
+        _13 = copy _7.2;
+        _14 = copy _13;
+        _14 = narrow_bind copy _14 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb7, bb8];
     }
 
     bb7: {
-        throw copy _5;
+        _15 = copy _14;
+        _17 = copy _6;
+        _18 = copy _15;
+        _16 = call copy _17(copy _18) -> [bb8, unwind: bb10];
+    }
+
+    bb8: {
+        _0 = const null;
+        goto -> bb9;
+    }
+
+    bb9: {
+        return;
+    }
+
+    bb10: {
+        throw_if_panic copy _1 -> bb11;
+    }
+
+    bb11: {
+        _21 = copy _1;
+        _20 = call const fn ai.errors.normalize(copy _21) -> [bb12];
+    }
+
+    bb12: {
+        throw copy _20;
     }
 }
 
@@ -9448,14 +9600,14 @@ fn ai.Runner.run(_1: void, _2: void) -> void {
     }
 }
 
-fn ai.Agent.new(max_steps: int, schema_attempts: int, client: null | ai.Client, tool_errors: ai.tools.ErrorMode, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> null throws never)) -> ai.Agent {
+fn ai.Agent.new(max_steps: int, schema_attempts: int, client: null | ai.Client, tool_errors: ai.tools.ErrorMode, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.Agent {
     // Locals:
     let _0: ai.Agent // _0 // return
     let _1: int // max_steps // param
     let _2: int // schema_attempts // param
     let _3: null | ai.Client // client // param
     let _4: ai.tools.ErrorMode // tool_errors // param
-    let _5: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> null throws never) // on_event // param
+    let _5: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _6: bool
     let _7: bool
     let _8: bool
@@ -9463,9 +9615,8 @@ fn ai.Agent.new(max_steps: int, schema_attempts: int, client: null | ai.Client, 
     let _10: bool
     let _11: bool
     let _12: baml.errors.InvalidArgument
-    let _13: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> null throws never
-    let _14: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> null throws never
-    let _15: bool
+    let _13: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)
+    let _14: reflect.Type
 
     bb0: {
         _6 = copy _1 == const <omitted>;
@@ -9519,49 +9670,26 @@ fn ai.Agent.new(max_steps: int, schema_attempts: int, client: null | ai.Client, 
 
     bb10: {
         _11 = copy _2 < const 1_i64;
-        branch copy _11 -> [bb15, bb11];
+        branch copy _11 -> [bb14, bb11];
     }
 
     bb11: {
-        _14 = copy _5;
-        _15 = copy _14 == const null;
-        branch copy _15 -> [bb12, bb13];
+        _14 = load_type(unknown);
+        _13 = call const fn ai.events.guard<copy _14>(copy _5) -> [bb12];
     }
 
     bb12: {
-        _14 = make_closure lambda[0]();
+        _0 = ai.Agent { copy _1, copy _2, copy _3, copy _4, copy _13 };
         goto -> bb13;
     }
 
     bb13: {
-        _13 = copy _14;
-        _0 = ai.Agent { copy _1, copy _2, copy _3, copy _4, copy _13 };
-        goto -> bb14;
+        return;
     }
 
     bb14: {
-        return;
-    }
-
-    bb15: {
         _12 = baml.errors.InvalidArgument { const "Agent schema_attempts must be at least 1" };
         throw copy _12;
-    }
-}
-
-// lambda[0]
-fn .<lambda(Agent.new, 0)>(e: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage // e // param
-
-    bb0: {
-        _0 = const null;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
     }
 }
 
@@ -10820,99 +10948,109 @@ fn ai.Agent._emit_from(self: ai.Agent, j: ai.Journal, seen: int) -> int {
     let _2: ai.Journal // j // param
     let _3: int // seen // param
     let _4: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] // entries
-    let _5: int // i
-    let _6: bool
-    let _7: int
-    let _8: int
-    let _9: null | ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
+    let _5: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)
+    let _6: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)
+    let _7: (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never // cb
+    let _8: int // i
+    let _9: bool
     let _10: int
-    let _11: reflect.Type
+    let _11: int
     let _12: null | ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
-    let _13: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced // e
-    let _14: null
-    let _15: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> null throws never
-    let _16: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
-    let _17: int
+    let _13: int
+    let _14: reflect.Type
+    let _15: null | ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
+    let _16: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced // e
+    let _17: void
+    let _18: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never
+    let _19: ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage
+    let _20: int
 
     bb0: {
         _4 = call const fn ai.Journal.entries(copy _2) -> [bb1];
     }
 
     bb1: {
-        _5 = copy _3;
-        goto -> bb2;
+        _5 = copy _1.4;
+        _6 = copy _5;
+        _6 = narrow_bind copy _6 as Function { params: [TyTemplateFunctionParamTy { name: None, ty: Union([Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), mode: Required }], ret: Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, throws: Never { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb2, bb5];
     }
 
     bb2: {
-        _7 = copy _5;
-        _8 = len(_4);
+        _7 = copy _6;
+        _8 = copy _3;
         goto -> bb3;
     }
 
     bb3: {
-        _6 = copy _7 < copy _8;
-        branch copy _6 -> [bb6, bb4];
+        _10 = copy _8;
+        _11 = len(_4);
+        goto -> bb4;
     }
 
     bb4: {
-        _0 = len(_4);
-        goto -> bb5;
+        _9 = copy _10 < copy _11;
+        branch copy _9 -> [bb7, bb5];
     }
 
     bb5: {
-        return;
+        _0 = len(_4);
+        goto -> bb6;
     }
 
     bb6: {
-        _10 = copy _5;
-        _11 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced);
-        _9 = call const fn baml.Array.at<copy _11>(copy _4, copy _10) -> [bb7];
+        return;
     }
 
     bb7: {
-        _12 = copy _9;
-        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb15, bb8];
+        _13 = copy _8;
+        _14 = load_type(ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced);
+        _12 = call const fn baml.Array.at<copy _14>(copy _4, copy _13) -> [bb8];
     }
 
     bb8: {
-        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb15, bb9];
+        _15 = copy _12;
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "RunStarted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb16, bb9];
     }
 
     bb9: {
-        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb15, bb10];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "UserMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb16, bb10];
     }
 
     bb10: {
-        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb15, bb11];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "AssistantMessage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb16, bb11];
     }
 
     bb11: {
-        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb15, bb12];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolRequested" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb16, bb12];
     }
 
     bb12: {
-        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb15, bb13];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolCompleted" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb16, bb13];
     }
 
     bb13: {
-        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb15, bb14];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "ToolFailed" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb16, bb14];
     }
 
     bb14: {
-        _12 = narrow_bind copy _12 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb15, bb16];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "Usage" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb16, bb15];
     }
 
     bb15: {
-        _13 = copy _12;
-        _15 = copy _1.4;
-        _16 = copy _13;
-        _14 = call copy _15(copy _16) -> [bb16];
+        _15 = narrow_bind copy _15 as Class(QualifiedTypeName { pkg: Dep("ai"), namespace: ["events"], name: "FinalProduced" }, [], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb16, bb17];
     }
 
     bb16: {
-        _17 = copy _5;
-        _5 = copy _17 + const 1_i64;
-        goto -> bb2;
+        _16 = copy _15;
+        _18 = copy _7;
+        _19 = copy _16;
+        _17 = call copy _18(copy _19) -> [bb17];
+    }
+
+    bb17: {
+        _20 = copy _8;
+        _8 = copy _20 + const 1_i64;
+        goto -> bb3;
     }
 }
 

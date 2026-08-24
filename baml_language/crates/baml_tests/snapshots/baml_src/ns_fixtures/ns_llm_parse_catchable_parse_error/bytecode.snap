@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.llm_parse_catchable_parse_error.ExtractInvoice(text: string, client: ai.Client | null) -> fixtures.llm_parse_catchable_parse_error.Invoice {
+function fixtures.llm_parse_catchable_parse_error.ExtractInvoice(text: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> fixtures.llm_parse_catchable_parse_error.Invoice {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -10,18 +10,27 @@ function fixtures.llm_parse_catchable_parse_error.ExtractInvoice(text: string, c
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _5
+    store_var _7
     load_var text
     call user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice$spec
-    store_var _6
+    store_var _9
     load_type fixtures.llm_parse_catchable_parse_error.Invoice
-    load_var2 3 4
+    load_var2 4 5
     call ai.Agent.run
     load_field .value
     return
@@ -90,7 +99,7 @@ function fixtures.llm_parse_catchable_parse_error.ExtractInvoice$spec(text: stri
     return
 }
 
-function fixtures.llm_parse_catchable_parse_error.ExtractInvoice$stream(text: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<fixtures.llm_parse_catchable_parse_error.Invoice$stream | null, fixtures.llm_parse_catchable_parse_error.Invoice> {
+function fixtures.llm_parse_catchable_parse_error.ExtractInvoice$stream(text: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<fixtures.llm_parse_catchable_parse_error.Invoice$stream | null, fixtures.llm_parse_catchable_parse_error.Invoice> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -99,12 +108,21 @@ function fixtures.llm_parse_catchable_parse_error.ExtractInvoice$stream(text: st
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     load_var text
     call user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice$spec
-    store_var _4
+    store_var _6
     load_type fixtures.llm_parse_catchable_parse_error.Invoice$stream | null
     load_type fixtures.llm_parse_catchable_parse_error.Invoice
-    load_var2 3 2
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }

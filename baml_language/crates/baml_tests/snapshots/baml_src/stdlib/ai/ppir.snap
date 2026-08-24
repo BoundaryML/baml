@@ -451,6 +451,12 @@ class ai.events.UserMessage$stream {
 }
 type ai.events.Event = ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
 type ai.events.Event$stream = ai.events.RunStarted$stream | ai.events.UserMessage$stream | ai.events.AssistantMessage$stream | ai.events.ToolRequested$stream | ai.events.ToolCompleted$stream | ai.events.ToolFailed$stream | ai.events.Usage$stream | ai.events.FinalProduced$stream
+function ai.events.guard(listener: (ai.events.Event) -> void throws E?) -> (ai.events.Event) -> void throws never?  [expr] {
+  {  } if let cb: (ai.events.Event) -> void throws E = listener {  } (e: ai.events.Event) -> void { {  } cb(e) catch_all (err) { _ => {  } } } else {  } null
+}
+
+--- captures ---
+lambda (e) in ?: captures [cb]
 
 --- <builtin>/ai/ns_internal/auth.baml ---
 function ai.internal._aws_resolve_region(region: string?, profile: string?) -> string?  [builtin]
@@ -708,8 +714,8 @@ function ai.stream.from_chunks(chunks: string[]) -> ai.stream.TurnStream  [expr]
 function ai.stream.from_event_source(next_event: ai.stream.EventSource) -> ai.stream.TurnStream  [expr] {
   {  } ai.stream.TurnStream { _event_source: next_event, _sse: null, _decode: null, _chunks: [], _cursor: 0, _pending: [], _pcursor: 0, _text: "", _stop_reason: null, _input_tokens: null, _output_tokens: null, _done: false, _require_terminal: null, _saw_terminal: false }
 }
-function ai.stream.from_spec(spec: root.FunctionSpec<TFinal>, client: StreamingClient? = null) -> ai.stream.Stream<TStream, TFinal>  [expr] {
-  { if (Not spec.tools().is_empty()) { throw baml.errors.InvalidArgument { message: `...` } }; let selected: StreamingClient = match (client) { s: StreamingClient => s, null => {  } match (spec.default_client) { s: StreamingClient => s, _ => { throw root.errors.StreamingUnsupported { client_id: spec.default_client.id() } } } }; let provider = match (selected) { c: root.Client => c.id() }; let turns = selected.invoke_stream(root.ModelTurnInput { prompt: spec.prompt_template, journal: root.Journal.new(spec), toolbox: spec.tools(), output_type: spec.output_type() }); let _ = provider } ai.stream.Stream { _next_text: () -> { {  } match (turns.next()) { d: ai.stream.Done => null, s: string => s } catch_all (e) { _ => throw root.errors.normalize(e) } }, _cache: baml.sap.__new_parse_cache(), _text: "", _finished: false }
+function ai.stream.from_spec(spec: root.FunctionSpec<TFinal>, client: StreamingClient? = null, on_event: (root.events.Event) -> void? = null) -> ai.stream.Stream<TStream, TFinal>  [expr] {
+  { if (Not spec.tools().is_empty()) { throw baml.errors.InvalidArgument { message: `...` } }; let selected: StreamingClient = match (client) { s: StreamingClient => s, null => {  } match (spec.default_client) { s: StreamingClient => s, _ => { throw root.errors.StreamingUnsupported { client_id: spec.default_client.id() } } } }; let provider = match (selected) { c: root.Client => c.id() }; let emit = root.events.guard(on_event); if let cb: (root.events.Event) -> void throws never = emit { cb(root.events.RunStarted { spec_name: spec.name(), arguments: spec.arguments() }) }; let turns = selected.invoke_stream(root.ModelTurnInput { prompt: spec.prompt_template, journal: root.Journal.new(spec), toolbox: spec.tools(), output_type: spec.output_type() }) } ai.stream.Stream { _next_text: () -> { {  } match (turns.next()) { d: ai.stream.Done => { if let cb: (root.events.Event) -> void throws never = emit { let turn = turns.final_turn(); cb(root.events.AssistantMessage { content: turn.content, client_id: provider }) } if let u: root.events.Usage = turn.usage { cb(u) } } null, s: string => s } catch_all (e) { _ => throw root.errors.normalize(e) } }, _cache: baml.sap.__new_parse_cache(), _text: "", _finished: false }
 }
 function ai.stream.from_sse(sse: baml.http.SseStream, decode: (string) -> ai.stream.StreamEvent[] throws root.errors.InvokeError, require_terminal: string? = null) -> ai.stream.TurnStream  [expr] {
   {  } ai.stream.TurnStream { _event_source: null, _sse: sse, _decode: decode, _chunks: [], _cursor: 0, _pending: [], _pcursor: 0, _text: "", _stop_reason: null, _input_tokens: null, _output_tokens: null, _done: false, _require_terminal: require_terminal, _saw_terminal: false }
@@ -723,7 +729,7 @@ function ai.stream.next(self: ?) -> TStream | ai.stream.Done  [expr] {
 }
 
 --- captures ---
-lambda () in from_spec: captures [turns]
+lambda () in from_spec: captures [turns, emit, provider]
 
 --- <builtin>/ai/ns_tools/tools.baml ---
 class ai.tools.Tool {
@@ -819,14 +825,14 @@ class ai.Agent {
   schema_attempts: int
   client: Client?
   tool_errors: root.tools.ErrorMode
-  on_event: (root.events.Event) -> null throws never
+  on_event: (root.events.Event) -> void throws never?
 }
 class ai.Agent$stream {
   max_steps: int | null
   schema_attempts: int | null
   client: Client | null
   tool_errors: root.tools.ErrorMode | null
-  on_event: unknown
+  on_event: unknown | null
 }
 class ai.RunResult {
   value: Out
@@ -842,7 +848,7 @@ function ai._attempt_turn(self: ?, c: Client, spec: FunctionSpec<Out>, j: Journa
   { let turn = c.invoke(ModelTurnInput { prompt: spec.prompt_template, journal: j, toolbox: spec.tools(), output_type: spec.output_type() }); if let u: root.events.Usage = turn.usage { total.input_tokens Add= u.input_tokens; total.output_tokens Add= u.output_tokens; if let ci: int = u.cached_input_tokens { total.cached_input_tokens = total.cached_input_tokens NullCoalesce 0 Add ci } } if let rt: int = u.reasoning_tokens { total.reasoning_tokens = total.reasoning_tokens NullCoalesce 0 Add rt }; let batch: root.events.Event[] = [root.events.AssistantMessage { content: turn.content, client_id: c.id() }]; for u in turn.tool_uses() { batch.push(root.events.ToolRequested { id: u.id, name: u.name, args: u.args }) }; if let u: root.events.Usage = turn.usage { batch.push(u) }; let candidate = turn.terminal_text() NullCoalesce ""; let accepted = turn.tool_uses().length() Gt 0 Or turn.stop_reason Eq root.content.StopReason.MaxTokens Or turn.stop_reason Eq root.content.StopReason.Refused Or self._parses(turn, candidate) } if (accepted) { j.append_all(batch); match (turn.stop_reason) { root.content.StopReason.MaxTokens => { throw root.errors.FinishReasonError { provider: c.id(), finish_reason: turn.stop_reason, raw_output: candidate } }, root.content.StopReason.Refused => { throw root.errors.Refused { provider: c.id(), reason: "the model decline...", raw_body: null } }, _ => null } } turn else if (attempts_left Gt 1) { batch.push(root.events.UserMessage { content: "The reply did not..." }); j.append_all(batch) } self._attempt_turn(c, spec, j, total, attempts_left Sub 1) else { j.append_all(batch); throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate } }
 }
 function ai._emit_from(self: ?, j: Journal, seen: int) -> int  [expr] {
-  { let entries = j.entries(); let i = seen; while i Lt entries.length() { if let e: root.events.Event = entries.at(i) { let _ = self.on_event(e) }; i = i Add 1 } } entries.length()
+  { let entries = j.entries(); if let cb: (root.events.Event) -> void throws never = self.on_event { let i = seen; while i Lt entries.length() { if let e: root.events.Event = entries.at(i) { cb(e) }; i = i Add 1 } } } entries.length()
 }
 function ai._has_media_output(self: ?, turn: ModelTurn) -> bool  [expr] {
   { let shape = root.internal._media_shape(reflect.Type.of()); let form = shape.split(":").at(0) NullCoalesce ""; if (form Eq "") { return false }; if (form Eq "mixed" Or form Eq "mixedlist") { return root.internal._media_mixed_parts(turn).length() Gt 0 } } root.internal._media_of_kind(turn, shape.split(":").at(1) NullCoalesce "").length() Gt 0
@@ -859,8 +865,8 @@ function ai._run_one_tool(self: ?, tb: root.tools.Toolbox, call: root.content.To
 function ai._validated_schema_attempts(self: ?) -> int  [expr] {
   { if (self.schema_attempts Lt 1) { throw baml.errors.InvalidArgument { message: "Agent schema_atte..." } } } self.schema_attempts
 }
-function ai.new(max_steps: int = 12, schema_attempts: int = 2, client: Client? = null, tool_errors: root.tools.ErrorMode = root.tools.ErrorMode.Report, on_event: (root.events.Event) -> null throws never? = null) -> ai.Agent  [expr] {
-  { if (schema_attempts Lt 1) { throw baml.errors.InvalidArgument { message: "Agent schema_atte..." } } } ai.Agent { max_steps: max_steps, schema_attempts: schema_attempts, client: client, tool_errors: tool_errors, on_event: on_event NullCoalesce (e: root.events.Event) -> { {  } null } }
+function ai.new(max_steps: int = 12, schema_attempts: int = 2, client: Client? = null, tool_errors: root.tools.ErrorMode = root.tools.ErrorMode.Report, on_event: (root.events.Event) -> void? = null) -> ai.Agent  [expr] {
+  { if (schema_attempts Lt 1) { throw baml.errors.InvalidArgument { message: "Agent schema_atte..." } } } ai.Agent { max_steps: max_steps, schema_attempts: schema_attempts, client: client, tool_errors: tool_errors, on_event: root.events.guard(on_event) }
 }
 function ai.run(self: ?, spec: FunctionSpec<Out>) -> Self.Output  [missing]
 function ai.run(self: ?, spec: FunctionSpec<Out>) -> ai.RunResult<Out>  [expr] {

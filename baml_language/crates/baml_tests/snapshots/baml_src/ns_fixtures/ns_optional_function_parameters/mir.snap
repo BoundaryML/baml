@@ -232,22 +232,25 @@ fn user.fixtures.optional_function_parameters.HostEntry(query: string, max_resul
     }
 }
 
-fn user.fixtures.optional_function_parameters.AskDocs(query: string, max_results: int, filter: string, client: null | ai.Client) -> string {
+fn user.fixtures.optional_function_parameters.AskDocs(query: string, max_results: int, filter: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // query // param
     let _2: int // max_results // param
     let _3: string // filter // param
     let _4: null | ai.Client // client // param
-    let _5: bool
-    let _6: ai.RunResult<string>
-    let _7: ai.Agent
-    let _8: ai.FunctionSpec<string>
-    let _9: reflect.Type
+    let _5: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _6: bool
+    let _7: bool
+    let _8: ai.RunResult<string>
+    let _9: ai.Agent
+    let _10: reflect.Type
+    let _11: ai.FunctionSpec<string>
+    let _12: reflect.Type
 
     bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
+        _6 = copy _4 == const <omitted>;
+        branch copy _6 -> [bb1, bb2];
     }
 
     bb1: {
@@ -256,24 +259,35 @@ fn user.fixtures.optional_function_parameters.AskDocs(query: string, max_results
     }
 
     bb2: {
-        _7 = call const fn ai.Agent.new(const <omitted>, const <omitted>, copy _4, const <omitted>, const <omitted>) -> [bb3];
+        _7 = copy _5 == const <omitted>;
+        branch copy _7 -> [bb3, bb4];
     }
 
     bb3: {
-        _8 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb4];
+        _5 = const null;
+        goto -> bb4;
     }
 
     bb4: {
-        _9 = load_type(string);
-        _6 = call const fn ai.Agent.run<copy _9>(copy _7, copy _8) -> [bb5];
+        _10 = load_type(unknown);
+        _9 = call const fn ai.Agent.new<copy _10>(const <omitted>, const <omitted>, copy _4, const <omitted>, copy _5) -> [bb5];
     }
 
     bb5: {
-        _0 = copy _6.0;
-        goto -> bb6;
+        _11 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb6];
     }
 
     bb6: {
+        _12 = load_type(string);
+        _8 = call const fn ai.Agent.run<copy _12>(copy _9, copy _11) -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _8.0;
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -513,21 +527,23 @@ fn .<lambda(AskDocs$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     }
 }
 
-fn user.fixtures.optional_function_parameters.AskDocs$stream(query: string, max_results: int, filter: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.optional_function_parameters.AskDocs$stream(query: string, max_results: int, filter: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: string // query // param
     let _2: int // max_results // param
     let _3: string // filter // param
     let _4: null | ai.stream.StreamingClient // client // param
-    let _5: bool
-    let _6: ai.FunctionSpec<string>
-    let _7: reflect.Type
-    let _8: reflect.Type
+    let _5: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _6: bool
+    let _7: bool
+    let _8: ai.FunctionSpec<string>
+    let _9: reflect.Type
+    let _10: reflect.Type
 
     bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
+        _6 = copy _4 == const <omitted>;
+        branch copy _6 -> [bb1, bb2];
     }
 
     bb1: {
@@ -536,16 +552,26 @@ fn user.fixtures.optional_function_parameters.AskDocs$stream(query: string, max_
     }
 
     bb2: {
-        _6 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb3];
+        _7 = copy _5 == const <omitted>;
+        branch copy _7 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = load_type(string | null);
-        _8 = load_type(string);
-        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _4) -> [bb4];
+        _5 = const null;
+        goto -> bb4;
     }
 
     bb4: {
+        _8 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb5];
+    }
+
+    bb5: {
+        _9 = load_type(string | null);
+        _10 = load_type(string);
+        _0 = call const fn ai.stream.from_spec<copy _9, copy _10>(copy _8, copy _4, copy _5) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }

@@ -62,7 +62,7 @@ function runtime_render_identity.$init_test_ns_runtime_render_identity_runtime_r
     return
 }
 
-function runtime_render_identity.Render(client: ai.Client | null) -> #0 {
+function runtime_render_identity.Render(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> #0 {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -71,18 +71,27 @@ function runtime_render_identity.Render(client: ai.Client | null) -> #0 {
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _4
+    store_var _6
     load_type #0
     call user.runtime_render_identity.Render$spec
-    store_var _5
+    store_var _8
     load_type #0
-    load_var2 2 3
+    load_var2 3 4
     call ai.Agent.run
     load_field .value
     return
@@ -146,7 +155,7 @@ function runtime_render_identity.Render$spec() -> ai.FunctionSpec<#0> {
     return
 }
 
-function runtime_render_identity.Render$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<#0 | null, #0> {
+function runtime_render_identity.Render$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<#0 | null, #0> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -155,17 +164,26 @@ function runtime_render_identity.Render$stream(client: ai.stream.StreamingClient
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     load_type #0
     call user.runtime_render_identity.Render$spec
-    store_var _3
+    store_var _5
     load_type #0 | null
     load_type #0
-    load_var2 2 1
+    load_var2 3 1
+    load_var on_event
     call ai.stream.from_spec
     return
 }
 
-function runtime_render_identity.RenderPair(client: ai.Client | null) -> runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1> {
+function runtime_render_identity.RenderPair(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -174,19 +192,28 @@ function runtime_render_identity.RenderPair(client: ai.Client | null) -> runtime
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _4
+    store_var _6
     load_type #0
     load_type #1
     call user.runtime_render_identity.RenderPair$spec
-    store_var _5
+    store_var _8
     load_type runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>
-    load_var2 2 3
+    load_var2 3 4
     call ai.Agent.run
     load_field .value
     return
@@ -253,7 +280,7 @@ function runtime_render_identity.RenderPair$spec() -> ai.FunctionSpec<runtime_re
     return
 }
 
-function runtime_render_identity.RenderPair$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<runtime_render_identity.BoxRec$stream<#0> | runtime_render_identity.BoxRec$stream<#1> | null, runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>> {
+function runtime_render_identity.RenderPair$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<runtime_render_identity.BoxRec$stream<#0> | runtime_render_identity.BoxRec$stream<#1> | null, runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -262,13 +289,22 @@ function runtime_render_identity.RenderPair$stream(client: ai.stream.StreamingCl
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     load_type #0
     load_type #1
     call user.runtime_render_identity.RenderPair$spec
-    store_var _3
+    store_var _5
     load_type runtime_render_identity.BoxRec$stream<#0> | runtime_render_identity.BoxRec$stream<#1> | null
     load_type runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>
-    load_var2 2 1
+    load_var2 3 1
+    load_var on_event
     call ai.stream.from_spec
     return
 }

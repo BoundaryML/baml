@@ -155,7 +155,7 @@ function env_ref_clients.$init_test_ns_env_ref_clients_env_ref_clients(registry:
     return
 }
 
-function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client | null) -> string {
+function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -164,18 +164,27 @@ function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client |
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _5
+    store_var _7
     load_var question
     call user.env_ref_clients.EnvRefDynamicEcho$spec
-    store_var _6
+    store_var _9
     load_type string
-    load_var2 3 4
+    load_var2 4 5
     call ai.Agent.run
     load_field .value
     return
@@ -255,7 +264,7 @@ function env_ref_clients.EnvRefDynamicEcho$spec(question: string) -> ai.Function
     return
 }
 
-function env_ref_clients.EnvRefDynamicEcho$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.EnvRefDynamicEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -264,17 +273,26 @@ function env_ref_clients.EnvRefDynamicEcho$stream(question: string, client: ai.s
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     load_var question
     call user.env_ref_clients.EnvRefDynamicEcho$spec
-    store_var _4
+    store_var _6
     load_type string | null
     load_type string
-    load_var2 3 2
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }
 
-function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null) -> string {
+function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -283,18 +301,27 @@ function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null) 
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _5
+    store_var _7
     load_var question
     call user.env_ref_clients.EnvRefEcho$spec
-    store_var _6
+    store_var _9
     load_type string
-    load_var2 3 4
+    load_var2 4 5
     call ai.Agent.run
     load_field .value
     return
@@ -378,7 +405,7 @@ function env_ref_clients.EnvRefEcho$spec(question: string) -> ai.FunctionSpec<st
     return
 }
 
-function env_ref_clients.EnvRefEcho$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.EnvRefEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -387,17 +414,26 @@ function env_ref_clients.EnvRefEcho$stream(question: string, client: ai.stream.S
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     load_var question
     call user.env_ref_clients.EnvRefEcho$spec
-    store_var _4
+    store_var _6
     load_type string | null
     load_type string
-    load_var2 3 2
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }
 
-function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client | null) -> string {
+function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -406,18 +442,27 @@ function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client 
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _5
+    store_var _7
     load_var question
     call user.env_ref_clients.EnvRefResolvedEcho$spec
-    store_var _6
+    store_var _9
     load_type string
-    load_var2 3 4
+    load_var2 4 5
     call ai.Agent.run
     load_field .value
     return
@@ -487,7 +532,7 @@ function env_ref_clients.EnvRefResolvedEcho$spec(question: string) -> ai.Functio
     return
 }
 
-function env_ref_clients.EnvRefResolvedEcho$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.EnvRefResolvedEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -496,17 +541,26 @@ function env_ref_clients.EnvRefResolvedEcho$stream(question: string, client: ai.
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     load_var question
     call user.env_ref_clients.EnvRefResolvedEcho$spec
-    store_var _4
+    store_var _6
     load_type string | null
     load_type string
-    load_var2 3 2
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }
 
-function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | null) -> string {
+function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -515,18 +569,27 @@ function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | nu
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _5
+    store_var _7
     load_var question
     call user.env_ref_clients.LiveEnvRefEcho$spec
-    store_var _6
+    store_var _9
     load_type string
-    load_var2 3 4
+    load_var2 4 5
     call ai.Agent.run
     load_field .value
     return
@@ -595,7 +658,7 @@ function env_ref_clients.LiveEnvRefEcho$spec(question: string) -> ai.FunctionSpe
     return
 }
 
-function env_ref_clients.LiveEnvRefEcho$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.LiveEnvRefEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -604,17 +667,26 @@ function env_ref_clients.LiveEnvRefEcho$stream(question: string, client: ai.stre
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     load_var question
     call user.env_ref_clients.LiveEnvRefEcho$spec
-    store_var _4
+    store_var _6
     load_type string | null
     load_type string
-    load_var2 3 2
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }
 
-function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Client | null) -> string {
+function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -623,18 +695,27 @@ function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Cli
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _5
+    store_var _7
     load_var question
     call user.env_ref_clients.LiveEnvRefFallbackEcho$spec
-    store_var _6
+    store_var _9
     load_type string
-    load_var2 3 4
+    load_var2 4 5
     call ai.Agent.run
     load_field .value
     return
@@ -714,7 +795,7 @@ function env_ref_clients.LiveEnvRefFallbackEcho$spec(question: string) -> ai.Fun
     return
 }
 
-function env_ref_clients.LiveEnvRefFallbackEcho$stream(question: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.LiveEnvRefFallbackEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -723,12 +804,21 @@ function env_ref_clients.LiveEnvRefFallbackEcho$stream(question: string, client:
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     load_var question
     call user.env_ref_clients.LiveEnvRefFallbackEcho$spec
-    store_var _4
+    store_var _6
     load_type string | null
     load_type string
-    load_var2 3 2
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }
@@ -1293,7 +1383,9 @@ function env_ref_clients.explicit_resolve_selector_runs_against_the_mock() -> st
 }
 
 function env_ref_clients.live_env_ref_client_answers() -> bool {
+    load_type never
     load_const "Say pong."
+    load_const <omitted>
     load_const <omitted>
     call user.env_ref_clients.LiveEnvRefEcho
     call baml.String.trim
@@ -1304,7 +1396,9 @@ function env_ref_clients.live_env_ref_client_answers() -> bool {
 }
 
 function env_ref_clients.live_env_ref_fallback_selection_answers() -> bool {
+    load_type never
     load_const "Say pong."
+    load_const <omitted>
     load_const <omitted>
     call user.env_ref_clients.LiveEnvRefFallbackEcho
     call baml.String.trim

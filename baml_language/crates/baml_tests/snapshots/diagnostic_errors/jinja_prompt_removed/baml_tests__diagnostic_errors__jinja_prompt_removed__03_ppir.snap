@@ -2,4 +2,4 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === PPIR ===
-function user.Greet(name: string, client: ai.Client? = null) -> string  [llm]
+function user.Greet(name: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm]

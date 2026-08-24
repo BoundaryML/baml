@@ -48,7 +48,7 @@ function type_reflection.$init_test_ns_type_reflection_type_reflection(registry:
     return
 }
 
-function type_reflection.GetBar(client: ai.Client | null) -> type_reflection.Bar {
+function type_reflection.GetBar(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> type_reflection.Bar {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -57,17 +57,26 @@ function type_reflection.GetBar(client: ai.Client | null) -> type_reflection.Bar
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _4
+    store_var _6
     call user.type_reflection.GetBar$spec
-    store_var _5
+    store_var _8
     load_type type_reflection.Bar
-    load_var2 2 3
+    load_var2 3 4
     call ai.Agent.run
     load_field .value
     return
@@ -128,7 +137,7 @@ function type_reflection.GetBar$spec() -> ai.FunctionSpec<type_reflection.Bar> {
     return
 }
 
-function type_reflection.GetBar$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<type_reflection.Bar$stream | null, type_reflection.Bar> {
+function type_reflection.GetBar$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<type_reflection.Bar$stream | null, type_reflection.Bar> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -137,16 +146,25 @@ function type_reflection.GetBar$stream(client: ai.stream.StreamingClient | null)
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     call user.type_reflection.GetBar$spec
-    store_var _3
+    store_var _5
     load_type type_reflection.Bar$stream | null
     load_type type_reflection.Bar
-    load_var2 2 1
+    load_var2 3 1
+    load_var on_event
     call ai.stream.from_spec
     return
 }
 
-function type_reflection.GetFoo(client: ai.Client | null) -> type_reflection.Foo {
+function type_reflection.GetFoo(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> type_reflection.Foo {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -155,17 +173,26 @@ function type_reflection.GetFoo(client: ai.Client | null) -> type_reflection.Foo
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _4
+    store_var _6
     call user.type_reflection.GetFoo$spec
-    store_var _5
+    store_var _8
     load_type type_reflection.Foo
-    load_var2 2 3
+    load_var2 3 4
     call ai.Agent.run
     load_field .value
     return
@@ -226,7 +253,7 @@ function type_reflection.GetFoo$spec() -> ai.FunctionSpec<type_reflection.Foo> {
     return
 }
 
-function type_reflection.GetFoo$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<type_reflection.Foo$stream | null, type_reflection.Foo> {
+function type_reflection.GetFoo$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<type_reflection.Foo$stream | null, type_reflection.Foo> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -235,11 +262,20 @@ function type_reflection.GetFoo$stream(client: ai.stream.StreamingClient | null)
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     call user.type_reflection.GetFoo$spec
-    store_var _3
+    store_var _5
     load_type type_reflection.Foo$stream | null
     load_type type_reflection.Foo
-    load_var2 2 1
+    load_var2 3 1
+    load_var on_event
     call ai.stream.from_spec
     return
 }

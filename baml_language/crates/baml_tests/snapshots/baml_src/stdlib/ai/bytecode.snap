@@ -1,333 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>) -> ai.RunResult<#0> {
-    load_var ?1
-    make_cell
-    store_var ?1
-    load_var ?2
-    make_cell
-    store_var ?2
-    load_var ?6
-    make_cell
-    store_var ?6
-    load_var ?21
-    make_cell
-    store_var ?21
-    load_type #0
-    load_deref ?1
-    call ai.Agent._validated_schema_attempts
-    store_var schema_attempts
-    load_deref ?1
-    load_field .client
-    store_var_load_var _6
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
-    load_deref ?2
-    load_field .default_client
-    store_var _6
-
-  L0:
-    load_var _6
-    store_var selected
-    load_type #0
-    load_deref ?2
-    call ai.Journal.new
-    store_deref ?6
-    load_type #0
-    load_deref ?1
-    load_deref ?6
-    load_const 0
-    call ai.Agent._emit_from
-    store_var seen
-    load_const 0
-    store_var steps
-    load_const 0
-    load_const 0
-    load_const null
-    load_const null
-    init_instance ai.events.Usage .input_tokens, .output_tokens, .cached_input_tokens, .reasoning_tokens
-    store_var total
-    load_type string
-    load_type int
-    alloc_map 0
-    store_var fail_counts
-
-  L1:
-    load_var steps
-    load_deref ?1
-    load_field .max_steps
-    cmp_int_op <
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var steps
-    init_instance ai.errors.StepBudgetExceeded .steps
-    throw
-
-  L3:
-    load_type #0
-    load_deref ?1
-    load_var selected
-    load_deref ?2
-    load_deref ?6
-    load_var2 9 3
-    call ai.Agent._attempt_turn
-    store_var turn
-    load_var steps
-    load_const 1
-    add_int
-    store_var steps
-    load_type #0
-    load_deref ?1
-    load_deref ?6
-    load_var seen
-    call ai.Agent._emit_from
-    store_var seen
-    load_var turn
-    call ai.ModelTurn.tool_uses
-    store_var calls
-    load_var calls
-    container_len
-    store_var _32
-    load_var _32
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_false L4
-    jump L10
-
-  L4:
-    load_var turn
-    call ai.ModelTurn.terminal_text
-    store_var_load_var _101
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L5
-    load_const ""
-    store_var _101
-
-  L5:
-    load_var _101
-    store_var candidate
-    load_type #0
-    load_deref ?1
-    load_var turn
-    call ai.Agent._has_media_output
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
-    load_type #0
-    load_var candidate
-    call baml.sap.parse
-    store_var value
-    jump L8
-    load_var e
-    throw_if_panic
-    load_var selected
-    load_type ai.Client
-    load_const "id"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _115
-    load_var2 38 33
-    init_instance ai.errors.ParseFailed .provider, .raw_output
-    throw
-
-  L7:
-    load_var selected
-    load_type ai.Client
-    load_const "id"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _109
-    load_type #0
-    load_deref ?1
-    load_var2 11 36
-    call ai.Agent._media_value
-    store_var value
-
-  L8:
-    load_type #0
-    load_var value
-    call baml.json.to_json
-    jump L9
-    load_var e
-    throw_if_panic
-    load_type never
-    load_var e
-    load_const "final value serialization failed"
-    call baml.errors.UnknownError.with_message
-    throw
-
-  L9:
-    call baml.json.stringify
-    store_var _127
-    load_deref ?6
-    load_var _127
-    init_instance ai.events.FinalProduced .value_json
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
-    alloc_array 1
-    call ai.Journal.append_all
-    pop 1
-    load_type #0
-    load_deref ?1
-    load_deref ?6
-    load_var seen
-    call ai.Agent._emit_from
-    store_var seen
-    load_var value
-    load_deref ?6
-    load_var total
-    load_type #0
-    init_instance<1> ai.RunResult .value, .journal, .usage
-    return
-
-  L10:
-    load_deref ?6
-    call ai.Journal.entries
-    container_len
-    store_var before
-    load_type ai.content.ToolUse
-    load_type future<void, ai.errors.ToolFailedError>
-    load_type never
-    load_var calls
-    load_type #0
-    load_var2 1 2
-    load_var j
-    make_closure .<lambda(Agent.run, 0)>, captures=3, ntypeargs=1
-    call baml.Array.map
-    store_var futures
-    load_type void
-    load_type ai.errors.ToolFailedError
-    load_var futures
-    call baml.future.all
-    await
-    pop 1
-    load_type #0
-    load_deref ?1
-    load_deref ?6
-    load_var seen
-    call ai.Agent._emit_from
-    store_var seen
-    load_deref ?6
-    call ai.Journal.entries
-    store_var entries
-    load_var before
-    store_var i
-
-  L11:
-    load_var i
-    store_var _51
-    load_var entries
-    container_len
-    store_var _52
-    load_var2 18 19
-    cmp_int_op <
-    pop_jump_if_false L1
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
-    load_var2 16 17
-    call baml.Array.at
-    store_var _56
-    load_var _56
-    narrow_bind ai.events.ToolFailed, slot=20
-    pop_jump_if_false L13
-    load_var _56
-    store_deref ?21
-    load_type ai.content.ToolUse
-    load_type never
-    load_var calls
-    load_type #0
-    load_var f
-    make_closure .<lambda(Agent.run, 2)>, captures=1, ntypeargs=1
-    call baml.Array.find
-    store_var _62
-    load_var _62
-    narrow_bind ai.content.ToolUse, slot=22
-    pop_jump_if_false L13
-    load_var _62
-    store_var known
-    load_type string
-    load_var known
-    load_field .name
-    call baml.String.from
-    store_var _66
-    load_type string
-    load_deref ?21
-    load_field .message
-    call baml.String.from
-    store_var _69
-    load_var _66
-    load_const "|"
-    bin_op +
-    load_var _69
-    bin_op +
-    store_var key
-    load_type string
-    load_type int
-    load_var2 10 24
-    call baml.Map.get
-    store_var_load_var _74
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L12
-    load_const 0
-    store_var _74
-
-  L12:
-    load_var _74
-    load_const 1
-    add_int
-    store_var n
-    load_type string
-    load_type int
-    load_var2 10 24
-    load_var n
-    call baml.Map.set
-    pop 1
-    load_var n
-    load_const 3
-    cmp_int_op >=
-    pop_jump_if_false L13
-    jump L14
-
-  L13:
-    load_var i
-    load_const 1
-    add_int
-    store_var i
-    jump L11
-
-  L14:
-    load_var known
-    load_field .id
-    store_var _88
-    load_var known
-    load_field .name
-    store_var _89
-    load_type int
-    load_var n
-    call baml.String.from
-    store_var _93
-    load_type string
-    load_deref ?21
-    load_field .message
-    call baml.String.from
-    store_var _96
-    load_var2 29 30
-    load_const "the same tool call failed "
-    load_var _93
-    bin_op +
-    load_const " times; stopping the run: "
-    bin_op +
-    load_var _96
-    bin_op +
-    load_const null
-    init_instance ai.errors.ToolFailedError .id, .name, .message, .cause
-    throw
-}
-
-function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.FunctionSpec<#0>, j: ai.Journal, total: ai.events.Usage, attempts_left: int) -> ai.ModelTurn {
+function ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionSpec<#0>, j: ai.Journal, total: ai.events.Usage, attempts_left: int) -> ai.ModelTurn {
     load_var spec
     load_field .prompt_template
     store_var _9
@@ -624,20 +298,28 @@ function ai.Agent._attempt_turn(self: ai.Agent<#0>, c: ai.Client, spec: ai.Funct
     throw
 }
 
-function ai.Agent._emit_from(self: ai.Agent<#0>, j: ai.Journal, seen: int) -> int {
+function ai.Agent._emit_from(self: ai.Agent, j: ai.Journal, seen: int) -> int {
     load_var j
     call ai.Journal.entries
     store_var entries
+    load_var self
+    load_field .on_event
+    store_var _6
+    load_var _6
+    narrow_bind (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never, slot=5
+    pop_jump_if_false L1
+    load_var _6
+    store_var cb
     load_var seen
     store_var i
 
   L0:
     load_var i
-    store_var _7
+    store_var _10
     load_var entries
     container_len
-    store_var _8
-    load_var2 6 7
+    store_var _11
+    load_var2 8 9
     cmp_int_op <
     pop_jump_if_false L1
     jump L2
@@ -649,58 +331,57 @@ function ai.Agent._emit_from(self: ai.Agent<#0>, j: ai.Journal, seen: int) -> in
 
   L2:
     load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
-    load_var2 4 5
+    load_var2 4 7
     call baml.Array.at
-    store_var _12
-    load_var _12
-    narrow_bind ai.events.RunStarted, slot=8
+    store_var _15
+    load_var _15
+    narrow_bind ai.events.RunStarted, slot=10
     pop_jump_if_false L3
     jump L10
 
   L3:
-    load_var _12
-    narrow_bind ai.events.UserMessage, slot=8
+    load_var _15
+    narrow_bind ai.events.UserMessage, slot=10
     pop_jump_if_false L4
     jump L10
 
   L4:
-    load_var _12
-    narrow_bind ai.events.AssistantMessage, slot=8
+    load_var _15
+    narrow_bind ai.events.AssistantMessage, slot=10
     pop_jump_if_false L5
     jump L10
 
   L5:
-    load_var _12
-    narrow_bind ai.events.ToolRequested, slot=8
+    load_var _15
+    narrow_bind ai.events.ToolRequested, slot=10
     pop_jump_if_false L6
     jump L10
 
   L6:
-    load_var _12
-    narrow_bind ai.events.ToolCompleted, slot=8
+    load_var _15
+    narrow_bind ai.events.ToolCompleted, slot=10
     pop_jump_if_false L7
     jump L10
 
   L7:
-    load_var _12
-    narrow_bind ai.events.ToolFailed, slot=8
+    load_var _15
+    narrow_bind ai.events.ToolFailed, slot=10
     pop_jump_if_false L8
     jump L10
 
   L8:
-    load_var _12
-    narrow_bind ai.events.Usage, slot=8
+    load_var _15
+    narrow_bind ai.events.Usage, slot=10
     pop_jump_if_false L9
     jump L10
 
   L9:
-    load_var _12
-    narrow_bind ai.events.FinalProduced, slot=8
+    load_var _15
+    narrow_bind ai.events.FinalProduced, slot=10
     pop_jump_if_false L11
 
   L10:
-    load_var2 8 1
-    load_field .on_event
+    load_var2 10 6
     call_indirect
     pop 1
 
@@ -712,7 +393,7 @@ function ai.Agent._emit_from(self: ai.Agent<#0>, j: ai.Journal, seen: int) -> in
     jump L0
 }
 
-function ai.Agent._has_media_output(self: ai.Agent<#0>, turn: ai.ModelTurn) -> bool {
+function ai.Agent._has_media_output(self: ai.Agent, turn: ai.ModelTurn) -> bool {
     load_type #0
     call ai.internal._media_shape
     store_var shape
@@ -799,7 +480,7 @@ function ai.Agent._has_media_output(self: ai.Agent<#0>, turn: ai.ModelTurn) -> b
     return
 }
 
-function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider: string) -> #0 {
+function ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -> #0 {
     load_type #0
     store_var t
     load_var t
@@ -1134,7 +815,7 @@ function ai.Agent._media_value(self: ai.Agent<#0>, turn: ai.ModelTurn, provider:
     return
 }
 
-function ai.Agent._parses(self: ai.Agent<#0>, turn: ai.ModelTurn, candidate: string) -> bool {
+function ai.Agent._parses(self: ai.Agent, turn: ai.ModelTurn, candidate: string) -> bool {
     load_type #0
     load_var2 1 2
     call ai.Agent._has_media_output
@@ -1163,7 +844,7 @@ function ai.Agent._parses(self: ai.Agent<#0>, turn: ai.ModelTurn, candidate: str
     return
 }
 
-function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: ai.content.ToolUse, j: ai.Journal) -> void {
+function ai.Agent._run_one_tool(self: ai.Agent, tb: ai.tools.Toolbox, call: ai.content.ToolUse, j: ai.Journal) -> void {
     load_var2 2 3
     load_field .name
     call ai.tools.Toolbox.get
@@ -1293,7 +974,7 @@ function ai.Agent._run_one_tool(self: ai.Agent<#0>, tb: ai.tools.Toolbox, call: 
     return
 }
 
-function ai.Agent._validated_schema_attempts(self: ai.Agent<#0>) -> int {
+function ai.Agent._validated_schema_attempts(self: ai.Agent) -> int {
     load_var self
     load_field .schema_attempts
     load_const 1
@@ -1312,7 +993,7 @@ function ai.Agent._validated_schema_attempts(self: ai.Agent<#0>) -> int {
     throw
 }
 
-function ai.Agent.new(max_steps: int, schema_attempts: int, client: ai.Client | null, tool_errors: ai.tools.ErrorMode, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> null throws never) | null) -> ai.Agent<#0> {
+function ai.Agent.new(max_steps: int, schema_attempts: int, client: ai.Client | null, tool_errors: ai.tools.ErrorMode, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.Agent {
     load_var max_steps
     load_const <omitted>
     cmp_op ==
@@ -1358,29 +1039,343 @@ function ai.Agent.new(max_steps: int, schema_attempts: int, client: ai.Client | 
     load_const 1
     cmp_int_op <
     pop_jump_if_false L5
-    jump L7
+    jump L6
 
   L5:
+    load_type unknown
     load_var on_event
-    store_var_load_var _14
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L6
-    load_type #0
-    make_closure .<lambda(Agent.new, 0)>, captures=0, ntypeargs=1
-    store_var _14
-
-  L6:
+    call ai.events.guard
+    store_var _13
     load_var2 1 2
     load_var2 3 4
-    load_var _14
-    load_type #0
-    init_instance<1> ai.Agent .max_steps, .schema_attempts, .client, .tool_errors, .on_event
+    load_var _13
+    init_instance ai.Agent .max_steps, .schema_attempts, .client, .tool_errors, .on_event
     return
 
-  L7:
+  L6:
     load_const "Agent schema_attempts must be at least 1"
     init_instance baml.errors.InvalidArgument .message
+    throw
+}
+
+function ai.Agent.run(self: ai.Agent, spec: ai.FunctionSpec<#0>) -> ai.RunResult<#0> {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?6
+    make_cell
+    store_var ?6
+    load_var ?21
+    make_cell
+    store_var ?21
+    load_deref ?1
+    call ai.Agent._validated_schema_attempts
+    store_var schema_attempts
+    load_deref ?1
+    load_field .client
+    store_var_load_var _5
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_deref ?2
+    load_field .default_client
+    store_var _5
+
+  L0:
+    load_var _5
+    store_var selected
+    load_type #0
+    load_deref ?2
+    call ai.Journal.new
+    store_deref ?6
+    load_deref ?1
+    load_deref ?6
+    load_const 0
+    call ai.Agent._emit_from
+    store_var seen
+    load_const 0
+    store_var steps
+    load_const 0
+    load_const 0
+    load_const null
+    load_const null
+    init_instance ai.events.Usage .input_tokens, .output_tokens, .cached_input_tokens, .reasoning_tokens
+    store_var total
+    load_type string
+    load_type int
+    alloc_map 0
+    store_var fail_counts
+
+  L1:
+    load_var steps
+    load_deref ?1
+    load_field .max_steps
+    cmp_int_op <
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var steps
+    init_instance ai.errors.StepBudgetExceeded .steps
+    throw
+
+  L3:
+    load_type #0
+    load_deref ?1
+    load_var selected
+    load_deref ?2
+    load_deref ?6
+    load_var2 9 3
+    call ai.Agent._attempt_turn
+    store_var turn
+    load_var steps
+    load_const 1
+    add_int
+    store_var steps
+    load_deref ?1
+    load_deref ?6
+    load_var seen
+    call ai.Agent._emit_from
+    store_var seen
+    load_var turn
+    call ai.ModelTurn.tool_uses
+    store_var calls
+    load_var calls
+    container_len
+    store_var _29
+    load_var _29
+    load_const 0
+    cmp_int_op >
+    pop_jump_if_false L4
+    jump L10
+
+  L4:
+    load_var turn
+    call ai.ModelTurn.terminal_text
+    store_var_load_var _97
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L5
+    load_const ""
+    store_var _97
+
+  L5:
+    load_var _97
+    store_var candidate
+    load_type #0
+    load_deref ?1
+    load_var turn
+    call ai.Agent._has_media_output
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_type #0
+    load_var candidate
+    call baml.sap.parse
+    store_var value
+    jump L8
+    load_var e
+    throw_if_panic
+    load_var selected
+    load_type ai.Client
+    load_const "id"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _111
+    load_var2 38 33
+    init_instance ai.errors.ParseFailed .provider, .raw_output
+    throw
+
+  L7:
+    load_var selected
+    load_type ai.Client
+    load_const "id"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _105
+    load_type #0
+    load_deref ?1
+    load_var2 11 36
+    call ai.Agent._media_value
+    store_var value
+
+  L8:
+    load_type #0
+    load_var value
+    call baml.json.to_json
+    jump L9
+    load_var e
+    throw_if_panic
+    load_type never
+    load_var e
+    load_const "final value serialization failed"
+    call baml.errors.UnknownError.with_message
+    throw
+
+  L9:
+    call baml.json.stringify
+    store_var _123
+    load_deref ?6
+    load_var _123
+    init_instance ai.events.FinalProduced .value_json
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    alloc_array 1
+    call ai.Journal.append_all
+    pop 1
+    load_deref ?1
+    load_deref ?6
+    load_var seen
+    call ai.Agent._emit_from
+    store_var seen
+    load_var value
+    load_deref ?6
+    load_var total
+    load_type #0
+    init_instance<1> ai.RunResult .value, .journal, .usage
+    return
+
+  L10:
+    load_deref ?6
+    call ai.Journal.entries
+    container_len
+    store_var before
+    load_type ai.content.ToolUse
+    load_type future<void, ai.errors.ToolFailedError>
+    load_type never
+    load_var calls
+    load_type #0
+    load_var2 1 2
+    load_var j
+    make_closure .<lambda(Agent.run, 0)>, captures=3, ntypeargs=1
+    call baml.Array.map
+    store_var futures
+    load_type void
+    load_type ai.errors.ToolFailedError
+    load_var futures
+    call baml.future.all
+    await
+    pop 1
+    load_deref ?1
+    load_deref ?6
+    load_var seen
+    call ai.Agent._emit_from
+    store_var seen
+    load_deref ?6
+    call ai.Journal.entries
+    store_var entries
+    load_var before
+    store_var i
+
+  L11:
+    load_var i
+    store_var _47
+    load_var entries
+    container_len
+    store_var _48
+    load_var2 18 19
+    cmp_int_op <
+    pop_jump_if_false L1
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    load_var2 16 17
+    call baml.Array.at
+    store_var _52
+    load_var _52
+    narrow_bind ai.events.ToolFailed, slot=20
+    pop_jump_if_false L13
+    load_var _52
+    store_deref ?21
+    load_type ai.content.ToolUse
+    load_type never
+    load_var calls
+    load_type #0
+    load_var f
+    make_closure .<lambda(Agent.run, 2)>, captures=1, ntypeargs=1
+    call baml.Array.find
+    store_var _58
+    load_var _58
+    narrow_bind ai.content.ToolUse, slot=22
+    pop_jump_if_false L13
+    load_var _58
+    store_var known
+    load_type string
+    load_var known
+    load_field .name
+    call baml.String.from
+    store_var _62
+    load_type string
+    load_deref ?21
+    load_field .message
+    call baml.String.from
+    store_var _65
+    load_var _62
+    load_const "|"
+    bin_op +
+    load_var _65
+    bin_op +
+    store_var key
+    load_type string
+    load_type int
+    load_var2 10 24
+    call baml.Map.get
+    store_var_load_var _70
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L12
+    load_const 0
+    store_var _70
+
+  L12:
+    load_var _70
+    load_const 1
+    add_int
+    store_var n
+    load_type string
+    load_type int
+    load_var2 10 24
+    load_var n
+    call baml.Map.set
+    pop 1
+    load_var n
+    load_const 3
+    cmp_int_op >=
+    pop_jump_if_false L13
+    jump L14
+
+  L13:
+    load_var i
+    load_const 1
+    add_int
+    store_var i
+    jump L11
+
+  L14:
+    load_var known
+    load_field .id
+    store_var _84
+    load_var known
+    load_field .name
+    store_var _85
+    load_type int
+    load_var n
+    call baml.String.from
+    store_var _89
+    load_type string
+    load_deref ?21
+    load_field .message
+    call baml.String.from
+    store_var _92
+    load_var2 29 30
+    load_const "the same tool call failed "
+    load_var _89
+    bin_op +
+    load_const " times; stopping the run: "
+    bin_op +
+    load_var _92
+    bin_op +
+    load_const null
+    init_instance ai.errors.ToolFailedError .id, .name, .message, .cause
     throw
 }
 
@@ -3367,6 +3362,32 @@ function ai.errors.normalize(error: ai.errors.Failure | baml.errors.Timeout | ba
 function ai.errors.normalize_invoke(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError {
     load_var error
     call ai.errors.normalize
+    return
+}
+
+function ai.events.guard(listener: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws #0) | null) -> ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null {
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_var listener
+    store_var _2
+    load_var _2
+    narrow_bind (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws #0, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_var _2
+    store_deref ?3
+    load_type #0
+    load_var cb
+    make_closure .<lambda(guard, 0)>, captures=1, ntypeargs=1
+
+  L2:
     return
 }
 
@@ -7062,10 +7083,16 @@ function ai.stream.decode_sse_batch(batch: string) -> ai.stream.SseEvent[] {
     return
 }
 
-function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<#0, #1> {
+function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<#0, #1> {
     load_var ?10
     make_cell
     store_var ?10
+    load_var ?11
+    make_cell
+    store_var ?11
+    load_var ?14
+    make_cell
+    store_var ?14
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -7074,89 +7101,121 @@ function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.Stream
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     load_type #1
     load_var spec
     call ai.FunctionSpec.tools
     call ai.tools.Toolbox.is_empty
     unary_op !
-    pop_jump_if_false L1
-    jump L7
-
-  L1:
-    load_var client
-    store_var _16
-    load_var _16
-    narrow_bind ai.stream.StreamingClient, slot=6
     pop_jump_if_false L2
-    jump L5
+    jump L9
 
   L2:
-    load_var spec
-    load_field .default_client
-    store_var _19
-    load_var _19
+    load_var client
+    store_var _18
+    load_var _18
     narrow_bind ai.stream.StreamingClient, slot=7
     pop_jump_if_false L3
-    jump L4
+    jump L6
 
   L3:
     load_var spec
     load_field .default_client
+    store_var _21
+    load_var _21
+    narrow_bind ai.stream.StreamingClient, slot=8
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var spec
+    load_field .default_client
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var _22
-    load_var _22
+    store_var _24
+    load_var _24
     init_instance ai.errors.StreamingUnsupported .client_id
     throw
 
-  L4:
-    load_var _19
-    store_var selected
-    jump L6
-
   L5:
-    load_var _16
+    load_var _21
     store_var selected
+    jump L7
 
   L6:
+    load_var _18
+    store_var selected
+
+  L7:
     load_var selected
     load_type ai.Client
     load_const "id"
     virtual_call nargs=1 ntypeargs=0
-    store_var provider
+    store_deref ?10
+    load_type unknown
+    load_var on_event
+    call ai.events.guard
+    store_deref ?11
+    load_deref ?11
+    store_var _30
+    load_var _30
+    narrow_bind (ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never, slot=12
+    pop_jump_if_false L8
+    load_var _30
+    store_var _33
+    load_type #1
+    load_var spec
+    call ai.FunctionSpec.name
+    load_type #1
+    load_var spec
+    call ai.FunctionSpec.arguments
+    init_instance ai.events.RunStarted .spec_name, .arguments
+    load_var _33
+    call_indirect
+    pop 1
+
+  L8:
     load_var spec
     load_field .prompt_template
-    store_var _28
+    store_var _41
     load_type #1
     load_var spec
     call ai.Journal.new
-    store_var _29
+    store_var _42
     load_type #1
     load_var spec
     call ai.FunctionSpec.tools
-    store_var _31
+    store_var _44
     load_type #1
     load_var spec
     call ai.FunctionSpec.output_type
-    store_var _33
-    load_var2 5 11
-    load_var2 12 13
-    load_var _33
+    store_var _46
+    load_var2 6 15
+    load_var2 16 17
+    load_var _46
     init_instance ai.ModelTurnInput .prompt, .journal, .toolbox, .output_type
     load_type ai.stream.StreamingClient
     load_const "invoke_stream"
     virtual_call nargs=2 ntypeargs=0
-    store_deref ?10
+    store_deref ?14
     load_type #0
     load_type #1
     call baml.sap.__new_parse_cache
-    store_var _36
+    store_var _49
     load_type #0
     load_type #1
-    load_var turns
-    make_closure .<lambda(from_spec, 0)>, captures=1, ntypeargs=2
-    load_var _36
+    load_var2 14 11
+    load_var provider
+    make_closure .<lambda(from_spec, 0)>, captures=3, ntypeargs=2
+    load_var _49
     load_const ""
     load_const false
     load_type #0
@@ -7164,17 +7223,17 @@ function ai.stream.from_spec(spec: ai.FunctionSpec<#1>, client: ai.stream.Stream
     init_instance<2> ai.stream.Stream ._next_text, ._cache, ._text, ._finished
     return
 
-  L7:
+  L9:
     load_type #1
     load_var spec
     call ai.FunctionSpec.name
-    store_var _12
+    store_var _14
     load_type string
-    load_var _12
+    load_var _14
     call baml.String.from
-    store_var _11
+    store_var _13
     load_const "streaming does not run the tool loop yet: "
-    load_var _11
+    load_var _13
     bin_op +
     load_const " has a non-empty toolbox"
     bin_op +
