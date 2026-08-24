@@ -47,3 +47,34 @@ function unresolved_throws_with_body_annotations() -> string throws MissingInBou
         assert_eq!(primary.span.range, expected);
     }
 }
+
+#[test]
+fn unresolved_type_in_parameter_default_has_its_source_span() {
+    let source = r#"function parameter_default(
+  value: int = { let typed: MissingDefault = 1; 1 }
+) -> int {
+  value
+}
+"#;
+    let mut db = ProjectDatabase::new();
+    db.set_project_root(Path::new("."));
+    let file = db.add_or_update_file(Path::new("b1607-default.baml"), source);
+
+    let diagnostics = check_file(&db, file);
+    let unresolved: Vec<_> = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.id == DiagnosticId::UnknownType)
+        .collect();
+    assert_eq!(unresolved.len(), 1);
+
+    let diagnostic = unresolved[0];
+    let missing = "MissingDefault";
+    let start = source.find(missing).expect("missing type in source") as u32;
+    let expected = TextRange::at(TextSize::new(start), TextSize::new(missing.len() as u32));
+    let primary = diagnostic
+        .annotations
+        .iter()
+        .find(|annotation| annotation.is_primary)
+        .expect("primary annotation");
+    assert_eq!(primary.span.range, expected);
+}

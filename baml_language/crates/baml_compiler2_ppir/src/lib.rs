@@ -768,7 +768,12 @@ pub fn body_type_ref_spans(
                 LetBody::Missing => None,
             }
         }
-        BodyOwnerId::ParameterDefaults(_) => None,
+        BodyOwnerId::ParameterDefaults(function) => Some(
+            baml_compiler2_hir::body_type_refs::collect_body_type_refs(
+                &function_parameter_defaults(db, function).defaults.exprs,
+            )
+            .1,
+        ),
     }
 }
 
