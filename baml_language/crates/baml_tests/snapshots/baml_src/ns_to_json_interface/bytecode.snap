@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function to_json_interface.$init_test_ns_to_json_interface_to_json_interface(registry: <unresolved type #49679510787122>) -> null {
+function to_json_interface.$init_test_ns_to_json_interface_to_json_interface(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.to_json_interface"
     load_const "operator_style_to_json_desugars_to_from"
@@ -104,7 +104,7 @@ function to_json_interface.$init_test_ns_to_json_interface_to_json_interface(reg
     return
 }
 
-function to_json_interface.Inner.baml.ToJson.to_json(self: <unresolved type #19728236715814>) -> <unresolved type #1888633819501> {
+function to_json_interface.Inner.baml.ToJson.to_json(self: to_json_interface.Inner) -> baml.json.json {
     load_type int
     load_var self
     load_field .v
@@ -116,7 +116,7 @@ function to_json_interface.Inner.baml.ToJson.to_json(self: <unresolved type #197
     return
 }
 
-function to_json_interface.Point.baml.ToJson.to_json(self: <unresolved type #129126654429128>) -> <unresolved type #1888633819501> {
+function to_json_interface.Point.baml.ToJson.to_json(self: to_json_interface.Point) -> baml.json.json {
     load_type int
     load_var self
     load_field .x
@@ -137,7 +137,7 @@ function to_json_interface.Point.baml.ToJson.to_json(self: <unresolved type #129
     return
 }
 
-function to_json_interface.Tag.baml.ToJson.to_json(self: <unresolved type #66909227763534>) -> <unresolved type #1888633819501> {
+function to_json_interface.Tag.baml.ToJson.to_json(self: to_json_interface.Tag) -> baml.json.json {
     load_type string
     load_var self
     load_field .name

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function ops_index.$init_test_ns_ops_index_ops_index(registry: <unresolved type #49679510787122>) -> null {
+function ops_index.$init_test_ns_ops_index_ops_index(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.ops_index"
     load_const "index_direct_operators"
@@ -92,7 +92,7 @@ function ops_index.direct_ops() -> bool {
     return
 }
 
-function ops_index.nth(c: #0, i: int) -> (#0 as <unresolved type #32563131164093><int>).Output {
+function ops_index.nth(c: #0, i: int) -> (#0 as baml.ops.Index<int>).Output {
     load_var2 1 2
     load_type baml.ops.Index<int>
     load_const "index"

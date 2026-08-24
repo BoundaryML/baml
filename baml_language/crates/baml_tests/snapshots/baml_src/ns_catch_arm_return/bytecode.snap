@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function catch_arm_return.$init_test_ns_catch_arm_return_catch_arm_return(registry: <unresolved type #49679510787122>) -> null {
+function catch_arm_return.$init_test_ns_catch_arm_return_catch_arm_return(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.catch_arm_return"
     load_const "catch_arm_braceless_return_fires_on_throw"

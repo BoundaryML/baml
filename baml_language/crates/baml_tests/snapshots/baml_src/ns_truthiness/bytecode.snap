@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function truthiness.$init_test_ns_truthiness_truthiness(registry: <unresolved type #49679510787122>) -> null {
+function truthiness.$init_test_ns_truthiness_truthiness(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.truthiness"
     load_const "int_zero_falsy"
@@ -645,7 +645,7 @@ function truthiness.tr_id(v: #0) -> #0 {
     return
 }
 
-function truthiness.tr_instance(v: <unresolved type #133281062360525> | null) -> string {
+function truthiness.tr_instance(v: truthiness.TrPoint | null) -> string {
     load_var v
     unary_op truthy
     pop_jump_if_false L0
@@ -838,7 +838,7 @@ function truthiness.tr_string(v: string) -> string {
     return
 }
 
-function truthiness.tr_variant(v: <unresolved type #120507817984244> | null) -> string {
+function truthiness.tr_variant(v: truthiness.TrColor | null) -> string {
     load_var v
     unary_op truthy
     pop_jump_if_false L0

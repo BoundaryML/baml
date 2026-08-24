@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function parse_companions.$init_test_ns_parse_companions_parse_companions(registry: <unresolved type #49679510787122>) -> null {
+function parse_companions.$init_test_ns_parse_companions_parse_companions(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.parse_companions"
     load_const "parse_companion_allows_missing_optional_class_field"
@@ -20,7 +20,7 @@ function parse_companions.$init_test_ns_parse_companions_parse_companions(regist
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload(client: <unresolved type #34575171419448> | null) -> <unresolved type #82189350374183> {
+function parse_companions.ParseCompanionsParseAliasPayload(client: ai.Client | null) -> parse_companions.ParseCompanionsAliasPayload {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -49,7 +49,7 @@ function parse_companions.ParseCompanionsParseAliasPayload(client: <unresolved t
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
+function parse_companions.ParseCompanionsParseAliasPayload$build_request(client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -66,14 +66,14 @@ function parse_companions.ParseCompanionsParseAliasPayload$build_request(client:
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload$parse(json: string) -> <unresolved type #82189350374183> {
+function parse_companions.ParseCompanionsParseAliasPayload$parse(json: string) -> parse_companions.ParseCompanionsAliasPayload {
     load_type parse_companions.ParseCompanionsAliasPayload
     load_var json
     call baml.sap.parse
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload$render_prompt() -> <unresolved type #135172864440005> {
+function parse_companions.ParseCompanionsParseAliasPayload$render_prompt() -> ai.Prompt {
     call user.parse_companions.ParseCompanionsParseAliasPayload$spec
     store_var _1
     load_type parse_companions.ParseCompanionsAliasPayload
@@ -85,7 +85,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$render_prompt() -> <u
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload$spec() -> <unresolved type #25974768157144><<unresolved type #82189350374183>> {
+function parse_companions.ParseCompanionsParseAliasPayload$spec() -> ai.FunctionSpec<parse_companions.ParseCompanionsAliasPayload> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -104,7 +104,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$spec() -> <unresolved
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><<unresolved type #89183201449033> | null, <unresolved type #82189350374183>> {
+function parse_companions.ParseCompanionsParseAliasPayload$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<parse_companions.ParseCompanionsAliasPayload$stream | null, parse_companions.ParseCompanionsAliasPayload> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -122,7 +122,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$stream(client: <unres
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload(client: <unresolved type #34575171419448> | null) -> <unresolved type #124196448947864> {
+function parse_companions.ParseCompanionsParseOptPayload(client: ai.Client | null) -> parse_companions.ParseCompanionsOptPayload {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -151,7 +151,7 @@ function parse_companions.ParseCompanionsParseOptPayload(client: <unresolved typ
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
+function parse_companions.ParseCompanionsParseOptPayload$build_request(client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -168,14 +168,14 @@ function parse_companions.ParseCompanionsParseOptPayload$build_request(client: <
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload$parse(json: string) -> <unresolved type #124196448947864> {
+function parse_companions.ParseCompanionsParseOptPayload$parse(json: string) -> parse_companions.ParseCompanionsOptPayload {
     load_type parse_companions.ParseCompanionsOptPayload
     load_var json
     call baml.sap.parse
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload$render_prompt() -> <unresolved type #135172864440005> {
+function parse_companions.ParseCompanionsParseOptPayload$render_prompt() -> ai.Prompt {
     call user.parse_companions.ParseCompanionsParseOptPayload$spec
     store_var _1
     load_type parse_companions.ParseCompanionsOptPayload
@@ -187,7 +187,7 @@ function parse_companions.ParseCompanionsParseOptPayload$render_prompt() -> <unr
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload$spec() -> <unresolved type #25974768157144><<unresolved type #124196448947864>> {
+function parse_companions.ParseCompanionsParseOptPayload$spec() -> ai.FunctionSpec<parse_companions.ParseCompanionsOptPayload> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -206,7 +206,7 @@ function parse_companions.ParseCompanionsParseOptPayload$spec() -> <unresolved t
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><<unresolved type #20878574668756> | null, <unresolved type #124196448947864>> {
+function parse_companions.ParseCompanionsParseOptPayload$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<parse_companions.ParseCompanionsOptPayload$stream | null, parse_companions.ParseCompanionsOptPayload> {
     load_var client
     load_const <omitted>
     cmp_op ==

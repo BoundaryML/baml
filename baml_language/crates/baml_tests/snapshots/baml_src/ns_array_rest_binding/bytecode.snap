@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function array_rest_binding.$init_test_ns_array_rest_binding_array_rest_binding(registry: <unresolved type #49679510787122>) -> null {
+function array_rest_binding.$init_test_ns_array_rest_binding_array_rest_binding(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.array_rest_binding"
     load_const "rest_binds_middle_values"
@@ -195,7 +195,7 @@ function array_rest_binding.arb_grab(xs: int[]) -> int {
     return
 }
 
-function array_rest_binding.arb_pick(v: <unresolved type #57472826723556> | int[][]) -> int {
+function array_rest_binding.arb_pick(v: array_rest_binding.ArbNumberBag | int[][]) -> int {
     load_var v
     is_type array_rest_binding.ArbNumberBag
     pop_jump_if_false L0

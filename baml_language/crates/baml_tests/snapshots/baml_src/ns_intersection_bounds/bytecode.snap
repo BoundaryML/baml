@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function intersection_bounds.$init_test_ns_intersection_bounds_intersection_bounds(registry: <unresolved type #49679510787122>) -> null {
+function intersection_bounds.$init_test_ns_intersection_bounds_intersection_bounds(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.intersection_bounds"
     load_const "intersection_bound_reaches_members_of_every_conjunct"
@@ -48,12 +48,12 @@ function intersection_bounds.$init_test_ns_intersection_bounds_intersection_boun
     return
 }
 
-function intersection_bounds.IbBoth.IbSized.size(self: <unresolved type #112241448232131>) -> int {
+function intersection_bounds.IbBoth.IbSized.size(self: intersection_bounds.IbBoth) -> int {
     load_const 7
     return
 }
 
-function intersection_bounds.IbBoth.IbTagged.tag(self: <unresolved type #112241448232131>) -> string {
+function intersection_bounds.IbBoth.IbTagged.tag(self: intersection_bounds.IbBoth) -> string {
     load_const "t:"
     load_var self
     load_field .name
@@ -61,7 +61,7 @@ function intersection_bounds.IbBoth.IbTagged.tag(self: <unresolved type #1122414
     return
 }
 
-function intersection_bounds.IbOther.IbSized.size(self: <unresolved type #45643654899702>) -> int {
+function intersection_bounds.IbOther.IbSized.size(self: intersection_bounds.IbOther) -> int {
     load_const 2
     return
 }
@@ -73,7 +73,7 @@ function intersection_bounds.IbPrintable$for$T.display(self: #0) -> string {
     return
 }
 
-function intersection_bounds.IbRegistered.IbRegistry.summarize(self: <unresolved type #68640380486788>, item: #0) -> string {
+function intersection_bounds.IbRegistered.IbRegistry.summarize(self: intersection_bounds.IbRegistered, item: #0) -> string {
     load_type #0
     load_var item
     call user.intersection_bounds.ib_describe
@@ -120,7 +120,7 @@ function intersection_bounds.ib_describe_reordered(item: #0) -> string {
     return
 }
 
-function intersection_bounds.ib_holder_summary(holder: <unresolved type #102557347588674><<unresolved type #112241448232131>>) -> string {
+function intersection_bounds.ib_holder_summary(holder: intersection_bounds.IbHolder<intersection_bounds.IbBoth>) -> string {
     load_var holder
     load_field .item
     load_type intersection_bounds.IbSized

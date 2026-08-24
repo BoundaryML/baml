@@ -18,7 +18,7 @@ function fixtures.parser_expressions.Calculate() -> int {
     return
 }
 
-function fixtures.parser_expressions.FieldAccess(user: <unresolved type #79579490195212>) -> string {
+function fixtures.parser_expressions.FieldAccess(user: fixtures.parser_expressions.User) -> string {
     load_var user
     load_field .profile
     load_field .settings
@@ -26,7 +26,7 @@ function fixtures.parser_expressions.FieldAccess(user: <unresolved type #7957949
     return
 }
 
-function fixtures.parser_expressions.IndexAccess(users: <unresolved type #58695510909426>[]) -> string {
+function fixtures.parser_expressions.IndexAccess(users: fixtures.parser_expressions.IndexUser[]) -> string {
     load_var users
     load_const 0
     load_array_element

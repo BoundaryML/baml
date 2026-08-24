@@ -7,7 +7,7 @@ function fixtures.function_call.Bar() -> int {
     return
 }
 
-function fixtures.function_call.Baz.Greeting(self: <unresolved type #67972490571290>) -> string {
+function fixtures.function_call.Baz.Greeting(self: fixtures.function_call.Baz) -> string {
     load_const "Hello, "
     load_var self
     load_field .name

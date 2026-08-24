@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.test_expr_throwing_body.$init_test_ns_fixtures_ns_test_expr_throwing_body_main(registry: <unresolved type #49679510787122>) -> null {
+function fixtures.test_expr_throwing_body.$init_test_ns_fixtures_ns_test_expr_throwing_body_main(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.fixtures.test_expr_throwing_body"
     load_const "throwing body becomes failure"

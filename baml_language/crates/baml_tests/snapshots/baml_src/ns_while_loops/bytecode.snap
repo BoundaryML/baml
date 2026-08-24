@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function while_loops.$init_test_ns_while_loops_while_loops(registry: <unresolved type #49679510787122>) -> null {
+function while_loops.$init_test_ns_while_loops_while_loops(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.while_loops"
     load_const "while_loop_gcd"

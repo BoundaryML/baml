@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function self_frame_slot.$init_test_ns_self_frame_slot_self_frame_slot(registry: <unresolved type #49679510787122>) -> null {
+function self_frame_slot.$init_test_ns_self_frame_slot_self_frame_slot(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.self_frame_slot"
     load_const "self_is_true_for_same_concrete_type"
@@ -174,7 +174,7 @@ function self_frame_slot.$init_test_ns_self_frame_slot_self_frame_slot(registry:
     return
 }
 
-function self_frame_slot.Crate.Marked.is_self(self: <unresolved type #112895533624084><#0>, other: unknown) -> bool {
+function self_frame_slot.Crate.Marked.is_self(self: self_frame_slot.Crate<#0>, other: unknown) -> bool {
     load_var other
     is_type self_frame_slot.Crate<...>
     pop_jump_if_false L0
@@ -191,18 +191,18 @@ function self_frame_slot.Crate.Marked.is_self(self: <unresolved type #1128955336
     return
 }
 
-function self_frame_slot.Crate.Marked.mark(self: <unresolved type #112895533624084><#0>) -> string {
+function self_frame_slot.Crate.Marked.mark(self: self_frame_slot.Crate<#0>) -> string {
     load_const "crate"
     return
 }
 
-function self_frame_slot.Crate.Marked.type_name(self: <unresolved type #112895533624084><#0>) -> string {
+function self_frame_slot.Crate.Marked.type_name(self: self_frame_slot.Crate<#0>) -> string {
     load_type self_frame_slot.Crate<#0>
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function self_frame_slot.Croc.Marked.is_self(self: <unresolved type #98055404820686>, other: unknown) -> bool {
+function self_frame_slot.Croc.Marked.is_self(self: self_frame_slot.Croc, other: unknown) -> bool {
     load_var other
     is_type self_frame_slot.Croc
     pop_jump_if_false L0
@@ -219,18 +219,18 @@ function self_frame_slot.Croc.Marked.is_self(self: <unresolved type #98055404820
     return
 }
 
-function self_frame_slot.Croc.Marked.mark(self: <unresolved type #98055404820686>) -> string {
+function self_frame_slot.Croc.Marked.mark(self: self_frame_slot.Croc) -> string {
     load_const "croc"
     return
 }
 
-function self_frame_slot.Croc.Marked.type_name(self: <unresolved type #98055404820686>) -> string {
+function self_frame_slot.Croc.Marked.type_name(self: self_frame_slot.Croc) -> string {
     load_type self_frame_slot.Croc
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function self_frame_slot.IntShelf.Store<int>.describe(self: <unresolved type #38677651404194>) -> string {
+function self_frame_slot.IntShelf.Store<int>.describe(self: self_frame_slot.IntShelf) -> string {
     load_type self_frame_slot.IntShelf
     load_type int
     load_type string
@@ -243,19 +243,19 @@ function self_frame_slot.IntShelf.Store<int>.describe(self: <unresolved type #38
     return
 }
 
-function self_frame_slot.Kinded.kind_name(self: <unresolved type #50357239318358>) -> string {
+function self_frame_slot.Kinded.kind_name(self: self_frame_slot.Kinded) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     return
 }
 
-function self_frame_slot.Kinded.kind_namer(self: <unresolved type #50357239318358>) -> () -> string throws never {
+function self_frame_slot.Kinded.kind_namer(self: self_frame_slot.Kinded) -> () -> string throws never {
     load_type #0
     make_closure .<lambda(Kinded.kind_namer, 0)>, captures=0, ntypeargs=1
     return
 }
 
-function self_frame_slot.Kinded.match_kind(self: <unresolved type #50357239318358>, other: unknown) -> string {
+function self_frame_slot.Kinded.match_kind(self: self_frame_slot.Kinded, other: unknown) -> string {
     load_var other
     store_var _3
     load_var _3
@@ -274,7 +274,7 @@ function self_frame_slot.Kinded.match_kind(self: <unresolved type #5035723931835
     return
 }
 
-function self_frame_slot.Kinded.same_kind(self: <unresolved type #50357239318358>, other: unknown) -> bool {
+function self_frame_slot.Kinded.same_kind(self: self_frame_slot.Kinded, other: unknown) -> bool {
     load_var other
     is_type #0
     pop_jump_if_false L0
@@ -291,7 +291,7 @@ function self_frame_slot.Kinded.same_kind(self: <unresolved type #50357239318358
     return
 }
 
-function self_frame_slot.Kinded.same_kind_of(self: <unresolved type #50357239318358>, other: <unresolved type #50357239318358>) -> bool {
+function self_frame_slot.Kinded.same_kind_of(self: self_frame_slot.Kinded, other: self_frame_slot.Kinded) -> bool {
     load_var other
     is_type #0
     pop_jump_if_false L0
@@ -364,7 +364,7 @@ function self_frame_slot.Marked$for$int.type_name(self: int) -> string {
     return
 }
 
-function self_frame_slot.Store.describe(self: <unresolved type #36303163464226><#1>) -> string {
+function self_frame_slot.Store.describe(self: self_frame_slot.Store<#1>) -> string {
     load_type #0
     call reflect.Type.baml.ToString.to_string
     store_var _5

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fs.$init_test_ns_fs_fs(registry: <unresolved type #49679510787122>) -> null {
+function fs.$init_test_ns_fs_fs(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.fs"
     load_const "fs_open_and_read"
@@ -293,7 +293,7 @@ function fs.$init_test_ns_fs_fs(registry: <unresolved type #49679510787122>) -> 
     return
 }
 
-function fs.$init_test_ns_fs_fs_from_rust(registry: <unresolved type #49679510787122>) -> null {
+function fs.$init_test_ns_fs_fs_from_rust(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.fs"
     load_const "fs_open_nonexistent_file"

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function bigints.$init_test_ns_bigints_bigints(registry: <unresolved type #49679510787122>) -> null {
+function bigints.$init_test_ns_bigints_bigints(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.bigints"
     load_const "test_bigint_compound_assign_int_add"
@@ -888,7 +888,7 @@ function bigints.$init_test_ns_bigints_bigints(registry: <unresolved type #49679
     return
 }
 
-function bigints.BigintBox.set(self: <unresolved type #80586011303550><#0>, x: #0) -> #0 {
+function bigints.BigintBox.set(self: bigints.BigintBox<#0>, x: #0) -> #0 {
     load_var2 1 2
     store_field .v
     load_var x

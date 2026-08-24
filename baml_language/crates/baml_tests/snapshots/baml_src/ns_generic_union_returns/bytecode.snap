@@ -48,7 +48,7 @@ function generic_union_returns.model_step_flattens_union_type_arg() -> bool {
     return
 }
 
-function generic_union_returns.parse_model_step(raw: string) -> <unresolved type #33776812622728><#0> {
+function generic_union_returns.parse_model_step(raw: string) -> generic_union_returns.ModelStep<#0> {
     load_type #0 | generic_union_returns.PendingCalls
     load_var raw
     call baml.sap.parse

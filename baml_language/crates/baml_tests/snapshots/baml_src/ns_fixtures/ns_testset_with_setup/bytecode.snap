@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.testset_with_setup.$init_test_ns_fixtures_ns_testset_with_setup_main(registry: <unresolved type #49679510787122>) -> null {
+function fixtures.testset_with_setup.$init_test_ns_fixtures_ns_testset_with_setup_main(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.fixtures.testset_with_setup"
     load_const "with shared setup"

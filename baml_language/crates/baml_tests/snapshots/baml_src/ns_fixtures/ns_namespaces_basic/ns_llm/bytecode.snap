@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.namespaces_basic.llm.MakeResponse(cfg: <unresolved type #62717553232679>) -> <unresolved type #112098456780997> {
+function fixtures.namespaces_basic.llm.MakeResponse(cfg: fixtures.namespaces_basic.Config) -> fixtures.namespaces_basic.llm.Response {
     load_const "ok"
     load_var cfg
     load_field .model

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function spawn_name_object.$init_test_ns_spawn_name_object_spawn_name_object(registry: <unresolved type #49679510787122>) -> null {
+function spawn_name_object.$init_test_ns_spawn_name_object_spawn_name_object(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.spawn_name_object"
     load_const "spawn_name_then_struct_body_parses_correctly"

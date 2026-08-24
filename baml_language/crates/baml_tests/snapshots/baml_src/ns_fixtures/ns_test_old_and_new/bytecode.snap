@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.test_old_and_new.$init_test_ns_fixtures_ns_test_old_and_new_main(registry: <unresolved type #49679510787122>) -> null {
+function fixtures.test_old_and_new.$init_test_ns_fixtures_ns_test_old_and_new_main(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.fixtures.test_old_and_new"
     load_const "new style"

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function runtime_leaf_narrowing.$init_test_ns_runtime_leaf_narrowing_runtime_leaf_narrowing(registry: <unresolved type #49679510787122>) -> null {
+function runtime_leaf_narrowing.$init_test_ns_runtime_leaf_narrowing_runtime_leaf_narrowing(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.runtime_leaf_narrowing"
     load_const "is recognizes type runtime values"

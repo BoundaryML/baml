@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function invoke_error_normalization.$init_test_ns_invoke_error_normalization_invoke_error_normalization(registry: <unresolved type #49679510787122>) -> null {
+function invoke_error_normalization.$init_test_ns_invoke_error_normalization_invoke_error_normalization(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.invoke_error_normalization"
     load_const "normalize_invoke_preserves_cancelled_identity"
@@ -55,12 +55,12 @@ function invoke_error_normalization.$init_test_ns_invoke_error_normalization_inv
     return
 }
 
-function invoke_error_normalization.TimeoutInvokeClient.ai.Client.id(self: <unresolved type #43887360684717>) -> string {
+function invoke_error_normalization.TimeoutInvokeClient.ai.Client.id(self: invoke_error_normalization.TimeoutInvokeClient) -> string {
     load_const "timeout-provider"
     return
 }
 
-function invoke_error_normalization.TimeoutInvokeClient.ai.Client.invoke(self: <unresolved type #43887360684717>, input: <unresolved type #66661248708833>) -> <unresolved type #127276340552691> {
+function invoke_error_normalization.TimeoutInvokeClient.ai.Client.invoke(self: invoke_error_normalization.TimeoutInvokeClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     load_var self
     load_field .probe
     copy 0
@@ -74,7 +74,7 @@ function invoke_error_normalization.TimeoutInvokeClient.ai.Client.invoke(self: <
     throw
 }
 
-function invoke_error_normalization.TimeoutInvokeClient.ai.Client.render(self: <unresolved type #43887360684717>, input: <unresolved type #66661248708833>) -> <unresolved type #50857447195238> {
+function invoke_error_normalization.TimeoutInvokeClient.ai.Client.render(self: invoke_error_normalization.TimeoutInvokeClient, input: ai.ModelTurnInput) -> baml.http.Request {
     load_const "POST"
     load_const "https://example.invalid/timeout"
     load_type string
@@ -85,7 +85,7 @@ function invoke_error_normalization.TimeoutInvokeClient.ai.Client.render(self: <
     return
 }
 
-function invoke_error_normalization.TimeoutSpec(client: <unresolved type #34575171419448> | null) -> string {
+function invoke_error_normalization.TimeoutSpec(client: ai.Client | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -114,7 +114,7 @@ function invoke_error_normalization.TimeoutSpec(client: <unresolved type #345751
     return
 }
 
-function invoke_error_normalization.TimeoutSpec$build_request(client: <unresolved type #34575171419448> | null) -> <unresolved type #50857447195238> {
+function invoke_error_normalization.TimeoutSpec$build_request(client: ai.Client | null) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -138,7 +138,7 @@ function invoke_error_normalization.TimeoutSpec$parse(json: string) -> string {
     return
 }
 
-function invoke_error_normalization.TimeoutSpec$render_prompt() -> <unresolved type #135172864440005> {
+function invoke_error_normalization.TimeoutSpec$render_prompt() -> ai.Prompt {
     call user.invoke_error_normalization.TimeoutSpec$spec
     store_var _1
     load_type string
@@ -150,7 +150,7 @@ function invoke_error_normalization.TimeoutSpec$render_prompt() -> <unresolved t
     return
 }
 
-function invoke_error_normalization.TimeoutSpec$spec() -> <unresolved type #25974768157144><string> {
+function invoke_error_normalization.TimeoutSpec$spec() -> ai.FunctionSpec<string> {
     load_type ai.tools.Tool
     alloc_array 0
     call ai.tools.Toolbox.new
@@ -184,7 +184,7 @@ function invoke_error_normalization.TimeoutSpec$spec() -> <unresolved type #2597
     return
 }
 
-function invoke_error_normalization.TimeoutSpec$stream(client: <unresolved type #128660828740598> | null) -> <unresolved type #15157338033827><string | null, string> {
+function invoke_error_normalization.TimeoutSpec$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -202,7 +202,7 @@ function invoke_error_normalization.TimeoutSpec$stream(client: <unresolved type 
     return
 }
 
-function invoke_error_normalization.capture_agent_timeout(client: <unresolved type #34575171419448>) -> unknown {
+function invoke_error_normalization.capture_agent_timeout(client: ai.Client) -> unknown {
     load_type string
     load_const <omitted>
     load_const <omitted>
@@ -226,7 +226,7 @@ function invoke_error_normalization.capture_agent_timeout(client: <unresolved ty
     return
 }
 
-function invoke_error_normalization.capture_client_timeout(client: <unresolved type #34575171419448>) -> unknown {
+function invoke_error_normalization.capture_client_timeout(client: ai.Client) -> unknown {
     call user.invoke_error_normalization.timeout_input
     store_var _3
     load_var2 1 3
@@ -242,7 +242,7 @@ function invoke_error_normalization.capture_client_timeout(client: <unresolved t
     return
 }
 
-function invoke_error_normalization.normalized_kind(error: <unresolved type #139235867967860> | <unresolved type #136308358920907> | <unresolved type #74601415421372> | <unresolved type #36914685764984> | <unresolved type #42220037087656> | <unresolved type #59433995467168> | <unresolved type #336598637428> | <unresolved type #9662590026407> | <unresolved type #38806699051567> | <unresolved type #92755081178858> | <unresolved type #71316871800887> | <unresolved type #98454085444692> | <unresolved type #31634034957599>) -> string {
+function invoke_error_normalization.normalized_kind(error: ai.errors.Failure | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | baml.errors.InvalidArgument | baml.errors.Io | baml.errors.ParseError | baml.json.JsonSerializationError | baml.json.JsonParseError | baml.json.JsonDecodeError | baml.errors.AccessError | baml.errors.Unsupported) -> string {
     load_var error
     call ai.errors.normalize_invoke
     store_var _2
@@ -407,7 +407,7 @@ function invoke_error_normalization.timeout_detail(error: unknown) -> string {
     return
 }
 
-function invoke_error_normalization.timeout_input() -> <unresolved type #66661248708833> {
+function invoke_error_normalization.timeout_input() -> ai.ModelTurnInput {
     call user.invoke_error_normalization.TimeoutSpec$spec
     store_var spec
     load_var spec

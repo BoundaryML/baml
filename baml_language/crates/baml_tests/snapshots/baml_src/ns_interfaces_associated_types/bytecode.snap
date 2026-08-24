@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function interfaces_associated_types.$init_test_ns_interfaces_associated_types_interfaces_associated_types(registry: <unresolved type #49679510787122>) -> null {
+function interfaces_associated_types.$init_test_ns_interfaces_associated_types_interfaces_associated_types(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.interfaces_associated_types"
     load_const "associated_type_projection_in_throws_position_runs"
@@ -139,25 +139,25 @@ function interfaces_associated_types.$init_test_ns_interfaces_associated_types_i
     return
 }
 
-function interfaces_associated_types.AdbUser.AdbSummarizable.summary(self: <unresolved type #139405579723845>) -> string {
+function interfaces_associated_types.AdbUser.AdbSummarizable.summary(self: interfaces_associated_types.AdbUser) -> string {
     load_var self
     load_field .name
     return
 }
 
-function interfaces_associated_types.AdbUserHolder.AdbHolder<AdbUser>.get(self: <unresolved type #66523609412831>) -> <unresolved type #139405579723845> {
+function interfaces_associated_types.AdbUserHolder.AdbHolder<AdbUser>.get(self: interfaces_associated_types.AdbUserHolder) -> interfaces_associated_types.AdbUser {
     load_var self
     load_field .user
     return
 }
 
-function interfaces_associated_types.AlwaysFails.Fallible.value(self: <unresolved type #105058505189461>) -> int {
+function interfaces_associated_types.AlwaysFails.Fallible.value(self: interfaces_associated_types.AlwaysFails) -> int {
     load_const "boom"
     init_instance user.interfaces_associated_types.Boom .message
     throw
 }
 
-function interfaces_associated_types.ApdSomeInterface.same_label(self: <unresolved type #93308072367167>, other: #0) -> bool {
+function interfaces_associated_types.ApdSomeInterface.same_label(self: interfaces_associated_types.ApdSomeInterface, other: #0) -> bool {
     load_var self
     load_type interfaces_associated_types.ApdSomeInterface
     load_const "label"
@@ -173,25 +173,25 @@ function interfaces_associated_types.ApdSomeInterface.same_label(self: <unresolv
     return
 }
 
-function interfaces_associated_types.ApdWidget.ApdSomeInterface.label(self: <unresolved type #43797079910560>) -> string {
+function interfaces_associated_types.ApdWidget.ApdSomeInterface.label(self: interfaces_associated_types.ApdWidget) -> string {
     load_var self
     load_field .name
     return
 }
 
-function interfaces_associated_types.ApdWidgetHolder.ApdHolder.get(self: <unresolved type #70848565207230>) -> <unresolved type #43797079910560> {
+function interfaces_associated_types.ApdWidgetHolder.ApdHolder.get(self: interfaces_associated_types.ApdWidgetHolder) -> interfaces_associated_types.ApdWidget {
     load_var self
     load_field .item
     return
 }
 
-function interfaces_associated_types.BcpTextSource.BcpSource.get(self: <unresolved type #29215842445836>) -> string {
+function interfaces_associated_types.BcpTextSource.BcpSource.get(self: interfaces_associated_types.BcpTextSource) -> string {
     load_var self
     load_field .text
     return
 }
 
-function interfaces_associated_types.BcpWrapperView$for$BcpWrapped<S>.output(self: <unresolved type #105519933529979><#0>) -> (<unresolved type #105519933529979><#0> as <unresolved type #106057791020672><Output = (#0 as <unresolved type #82249248519951><Item = string>).Item>).Output {
+function interfaces_associated_types.BcpWrapperView$for$BcpWrapped<S>.output(self: interfaces_associated_types.BcpWrapped<#0>) -> (interfaces_associated_types.BcpWrapped<#0> as interfaces_associated_types.BcpWrapperView<Output = (#0 as interfaces_associated_types.BcpSource<Item = string>).Item>).Output {
     load_var self
     load_field .inner
     load_type interfaces_associated_types.BcpSource<Item = string>
@@ -202,7 +202,7 @@ function interfaces_associated_types.BcpWrapperView$for$BcpWrapped<S>.output(sel
     return
 }
 
-function interfaces_associated_types.BspRenderable$for$BspWrapped<T>.render(self: <unresolved type #62339363291467><#0>) -> (<unresolved type #62339363291467><#0> as <unresolved type #63630311183362><Output = (#0 as <unresolved type #51113053382239><Item = string>).Item>).Output {
+function interfaces_associated_types.BspRenderable$for$BspWrapped<T>.render(self: interfaces_associated_types.BspWrapped<#0>) -> (interfaces_associated_types.BspWrapped<#0> as interfaces_associated_types.BspRenderable<Output = (#0 as interfaces_associated_types.BspSource<Item = string>).Item>).Output {
     load_var self
     load_field .inner
     load_type interfaces_associated_types.BspSource<Item = string>
@@ -213,20 +213,20 @@ function interfaces_associated_types.BspRenderable$for$BspWrapped<T>.render(self
     return
 }
 
-function interfaces_associated_types.BspTextSource.BspSource.get(self: <unresolved type #131384086973756>) -> string {
+function interfaces_associated_types.BspTextSource.BspSource.get(self: interfaces_associated_types.BspTextSource) -> string {
     load_var self
     load_field .text
     return
 }
 
-function interfaces_associated_types.CaeIntDriver.CaeDriver<CaeTask<int>>.drive(self: <unresolved type #98658178321323>, input: <unresolved type #18998825332069><int>) -> int {
+function interfaces_associated_types.CaeIntDriver.CaeDriver<CaeTask<int>>.drive(self: interfaces_associated_types.CaeIntDriver, input: interfaces_associated_types.CaeTask<int>) -> int {
     load_var input
     load_field .value
     init_instance user.interfaces_associated_types.CaeKaboom .data
     throw
 }
 
-function interfaces_associated_types.CaeTask.drive(self: <unresolved type #18998825332069><#0>, driver: #3) -> #1 {
+function interfaces_associated_types.CaeTask.drive(self: interfaces_associated_types.CaeTask<#0>, driver: #3) -> #1 {
     load_var2 2 1
     load_type interfaces_associated_types.CaeDriver<interfaces_associated_types.CaeTask<#0>, Error = #2, Output = #1>
     load_const "drive"
@@ -236,7 +236,7 @@ function interfaces_associated_types.CaeTask.drive(self: <unresolved type #18998
     return
 }
 
-function interfaces_associated_types.Describable.describe(self: <unresolved type #36787746630081>) -> #1 {
+function interfaces_associated_types.Describable.describe(self: interfaces_associated_types.Describable) -> #1 {
     load_var self
     load_type interfaces_associated_types.Describable<Output = #1>
     load_const "value"
@@ -246,7 +246,7 @@ function interfaces_associated_types.Describable.describe(self: <unresolved type
     return
 }
 
-function interfaces_associated_types.Fallible.value_plus_one(self: <unresolved type #84800603409092>) -> int {
+function interfaces_associated_types.Fallible.value_plus_one(self: interfaces_associated_types.Fallible) -> int {
     load_var self
     load_type interfaces_associated_types.Fallible<Error = #1>
     load_const "value"
@@ -258,31 +258,31 @@ function interfaces_associated_types.Fallible.value_plus_one(self: <unresolved t
     return
 }
 
-function interfaces_associated_types.IngIntIterator.IngIterator.next(self: <unresolved type #68486660131186>) -> int | null {
+function interfaces_associated_types.IngIntIterator.IngIterator.next(self: interfaces_associated_types.IngIntIterator) -> int | null {
     load_var self
     load_field .value
     return
 }
 
-function interfaces_associated_types.RdnBox.RdnSource.get(self: <unresolved type #131369506206348><#0>) -> #0 {
+function interfaces_associated_types.RdnBox.RdnSource.get(self: interfaces_associated_types.RdnBox<#0>) -> #0 {
     load_var self
     load_field .value
     return
 }
 
-function interfaces_associated_types.RdnOuterBox.RdnOuter.inner(self: <unresolved type #14752414309699><#0>) -> <unresolved type #6870469236870><Item = #0> {
+function interfaces_associated_types.RdnOuterBox.RdnOuter.inner(self: interfaces_associated_types.RdnOuterBox<#0>) -> interfaces_associated_types.RdnSource<Item = #0> {
     load_var self
     load_field .source
     return
 }
 
-function interfaces_associated_types.RdsBox.RdsContainer.get(self: <unresolved type #39118256163069><#0>) -> #0 {
+function interfaces_associated_types.RdsBox.RdsContainer.get(self: interfaces_associated_types.RdsBox<#0>) -> #0 {
     load_var self
     load_field .value
     return
 }
 
-function interfaces_associated_types.RevNamed$for$RevColor.name(self: <unresolved type #128287325513385>) -> string {
+function interfaces_associated_types.RevNamed$for$RevColor.name(self: interfaces_associated_types.RevColor) -> string {
     load_const "color"
     return
 }
@@ -292,25 +292,25 @@ function interfaces_associated_types.RltDebuggable$for$int.debug(self: int) -> s
     return
 }
 
-function interfaces_associated_types.RmfIntSource.RmfSource.get(self: <unresolved type #111184307840746>) -> int {
+function interfaces_associated_types.RmfIntSource.RmfSource.get(self: interfaces_associated_types.RmfIntSource) -> int {
     load_var self
     load_field .value
     return
 }
 
-function interfaces_associated_types.RmfStringSource.RmfSource.get(self: <unresolved type #35846734649626>) -> string {
+function interfaces_associated_types.RmfStringSource.RmfSource.get(self: interfaces_associated_types.RmfStringSource) -> string {
     load_var self
     load_field .value
     return
 }
 
-function interfaces_associated_types.Ticket.Describable.value(self: <unresolved type #46683484546185>) -> string {
+function interfaces_associated_types.Ticket.Describable.value(self: interfaces_associated_types.Ticket) -> string {
     load_var self
     load_field .id
     return
 }
 
-function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.key(self: <unresolved type #117834983768751><#0>) -> (<unresolved type #117834983768751><#0> as <unresolved type #90645974696787><Key = string>).Key {
+function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.key(self: interfaces_associated_types.UpcEntityBox<#0>) -> (interfaces_associated_types.UpcEntityBox<#0> as interfaces_associated_types.UpcSummarizes<Key = string>).Key {
     load_var self
     load_field .value
     load_type interfaces_associated_types.UpcHasKey<Key = string>
@@ -318,7 +318,7 @@ function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.key(self:
     return
 }
 
-function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.summary(self: <unresolved type #117834983768751><#0>) -> string {
+function interfaces_associated_types.UpcSummarizes$for$UpcEntityBox<T>.summary(self: interfaces_associated_types.UpcEntityBox<#0>) -> string {
     load_var self
     load_type interfaces_associated_types.UpcSummarizes<Key = string>
     load_const "key"
@@ -519,7 +519,7 @@ function interfaces_associated_types.bsp_main() -> string {
     return
 }
 
-function interfaces_associated_types.bsp_take_source(source: #0) -> (#0 as <unresolved type #51113053382239><Item = string>).Item {
+function interfaces_associated_types.bsp_take_source(source: #0) -> (#0 as interfaces_associated_types.BspSource<Item = string>).Item {
     load_var source
     load_type interfaces_associated_types.BspSource<Item = string>
     load_const "get"
@@ -587,7 +587,7 @@ function interfaces_associated_types.ing_main() -> string {
     return
 }
 
-function interfaces_associated_types.ing_stringify_next(iter: <unresolved type #20425934946581><Item = int | null>) -> string {
+function interfaces_associated_types.ing_stringify_next(iter: interfaces_associated_types.IngIterator<Item = int | null>) -> string {
     load_var iter
     load_type interfaces_associated_types.IngIterator<Item = int | null>
     load_const "next"
@@ -612,7 +612,7 @@ function interfaces_associated_types.rdf_main() -> int {
     return
 }
 
-function interfaces_associated_types.rdf_score(source: <unresolved type #14717002269726><Item = int> | <unresolved type #14717002269726><Item = string>) -> int {
+function interfaces_associated_types.rdf_score(source: interfaces_associated_types.RdfSource<Item = int> | interfaces_associated_types.RdfSource<Item = string>) -> int {
     load_var source
     is_type interfaces_associated_types.RdfSource<Item = int>
     pop_jump_if_false L0
@@ -641,7 +641,7 @@ function interfaces_associated_types.rdn_main() -> int {
     return
 }
 
-function interfaces_associated_types.rdn_unwrap(outer: <unresolved type #117610341971302><Inner = <unresolved type #6870469236870><Item = int>>) -> int {
+function interfaces_associated_types.rdn_unwrap(outer: interfaces_associated_types.RdnOuter<Inner = interfaces_associated_types.RdnSource<Item = int>>) -> int {
     load_var outer
     load_type interfaces_associated_types.RdnOuter<Inner = interfaces_associated_types.RdnSource<Item = int>>
     load_const "inner"
@@ -664,7 +664,7 @@ function interfaces_associated_types.rds_main() -> int {
     return
 }
 
-function interfaces_associated_types.rds_unwrap(c: <unresolved type #116010468731483><Item = int>) -> int {
+function interfaces_associated_types.rds_unwrap(c: interfaces_associated_types.RdsContainer<Item = int>) -> int {
     load_var c
     load_type interfaces_associated_types.RdsContainer<Item = int>
     load_const "get"
@@ -854,7 +854,7 @@ function interfaces_associated_types.rmf_main() -> int {
     return
 }
 
-function interfaces_associated_types.rmf_score(source: <unresolved type #5397176173851><Item = int> | <unresolved type #5397176173851><Item = string>) -> int {
+function interfaces_associated_types.rmf_score(source: interfaces_associated_types.RmfSource<Item = int> | interfaces_associated_types.RmfSource<Item = string>) -> int {
     load_var source
     store_var _2
     load_var _2

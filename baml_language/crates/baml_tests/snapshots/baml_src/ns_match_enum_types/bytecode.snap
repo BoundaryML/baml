@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function match_enum_types.$init_test_ns_match_enum_types_match_enum_types(registry: <unresolved type #49679510787122>) -> null {
+function match_enum_types.$init_test_ns_match_enum_types_match_enum_types(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.match_enum_types"
     load_const "match_enum_type_color"
@@ -48,7 +48,7 @@ function match_enum_types.$init_test_ns_match_enum_types_match_enum_types(regist
     return
 }
 
-function match_enum_types.classify(x: <unresolved type #126280542156092> | <unresolved type #108634737545907>) -> string {
+function match_enum_types.classify(x: match_enum_types.Color | match_enum_types.Status) -> string {
     load_var x
     store_var _2
     load_var _2
@@ -74,7 +74,7 @@ function match_enum_types.classify_color_fn() -> string {
     return
 }
 
-function match_enum_types.classify_one_enum(x: <unresolved type #126280542156092> | int | string | bool) -> string {
+function match_enum_types.classify_one_enum(x: match_enum_types.Color | int | string | bool) -> string {
     load_var x
     store_var _2
     load_var _2
@@ -131,7 +131,7 @@ function match_enum_types.classify_status_fn() -> string {
     return
 }
 
-function match_enum_types.classify_switch(x: <unresolved type #126280542156092> | <unresolved type #108634737545907> | int | string | bool) -> string {
+function match_enum_types.classify_switch(x: match_enum_types.Color | match_enum_types.Status | int | string | bool) -> string {
     load_var x
     store_var _2
     load_var _2

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function property_shorthand.$init_test_ns_property_shorthand_property_shorthand(registry: <unresolved type #49679510787122>) -> null {
+function property_shorthand.$init_test_ns_property_shorthand_property_shorthand(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.property_shorthand"
     load_const "class properties use shorthand"
@@ -75,7 +75,7 @@ function property_shorthand.property_shorthand_catch() -> string {
     return
 }
 
-function property_shorthand.property_shorthand_class(mode: string, retries: int, label: string) -> <unresolved type #56204083479140> {
+function property_shorthand.property_shorthand_class(mode: string, retries: int, label: string) -> property_shorthand.PropertyShorthandRequest {
     load_var mode
     load_const "mode"
     load_type string
@@ -286,7 +286,7 @@ function property_shorthand.property_shorthand_match(input: string | null) -> st
     return
 }
 
-function property_shorthand.property_shorthand_mixed(mode: string, retries: int, label: string) -> <unresolved type #128392965457575> {
+function property_shorthand.property_shorthand_mixed(mode: string, retries: int, label: string) -> property_shorthand.PropertyShorthandEnvelope {
     load_var mode
     load_const "mode"
     load_type string
@@ -301,7 +301,7 @@ function property_shorthand.property_shorthand_mixed(mode: string, retries: int,
     return
 }
 
-function property_shorthand.property_shorthand_multi_nested(value: string) -> <unresolved type #33251328606030> {
+function property_shorthand.property_shorthand_multi_nested(value: string) -> property_shorthand.PropertyShorthandOuter {
     load_var value
     init_instance user.property_shorthand.PropertyShorthandLeaf .value
     init_instance user.property_shorthand.PropertyShorthandMiddle .leaf
