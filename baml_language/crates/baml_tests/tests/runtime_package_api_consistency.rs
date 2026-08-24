@@ -62,13 +62,13 @@ async fn package_type_finders_and_enumerators_are_precise_by_kind() {
     let output = baml_test!(
         r###"
 function main() -> bool throws unknown {
-  let source = #"
+  let source = `
 class C { value string }
 enum E { A }
 interface I {}
 type Alias = C
 function F() -> null { null }
-"#
+`
   let first = reflect.Package.compile({ "types.baml": source })
   let second = reflect.Package.compile({ "types.baml": source })
 

@@ -847,10 +847,10 @@ fn describe_preserves_comment_like_lines_inside_strings() {
         r##"
 function PromptFn() -> string {
     // a real comment that must be stripped
-    #"
+    `
 // not a comment — this is prompt content
 keep this line
-"#
+`
 }
 "##,
     )]);

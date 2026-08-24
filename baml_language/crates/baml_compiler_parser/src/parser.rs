@@ -2222,7 +2222,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a quoted string or removed hash string.
+    /// Parse a quoted, backtick, or removed hash string.
     pub(crate) fn parse_any_string(&mut self) -> bool {
         if self.at(TokenKind::Hash) {
             self.parse_raw_string()
