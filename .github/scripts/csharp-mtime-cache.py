@@ -34,7 +34,10 @@ ROOTS = [
     "baml_language/sdks/csharp",
     "baml_language/sdk_tests/crates/csharp",
 ]
-EXCLUDED_DIR_NAMES = {"bin", "obj"}
+# bin/obj are build outputs (cached wholesale, never hashed); .baml is BAML's
+# own runtime state (profile CAS + locks written during test execution) —
+# volatile, content-addressed, and never an MSBuild input.
+EXCLUDED_DIR_NAMES = {"bin", "obj", ".baml"}
 MANIFEST = os.path.expanduser("~/.baml-csharp-ci/manifest.json")
 # 2000-01-01 UTC: comfortably older than any output restored from the cache.
 BACKDATED_MTIME = 946_684_800
