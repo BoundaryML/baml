@@ -1,254 +1,6 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function baml.AnyClass.attributes(self: baml.AnyClass) -> reflect.Meta {
-    load_var self
-    call reflect.Type.of_value
-    call reflect.Type.as_class
-    store_var _4
-    load_var _4
-    narrow_bind reflect.class.Type, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const null
-    load_const null
-    load_const null
-    load_type string
-    load_type string
-    alloc_map 0
-    init_instance reflect.Meta .alias, .description, .docstring, .other
-    jump L2
-
-  L1:
-    load_var _4
-    call reflect.class.Type.meta
-
-  L2:
-    return
-}
-
-function baml.AnyClass.get(self: baml.AnyClass, name: string) -> #1 | null {
-    load_var2 1 2
-    load_type baml.AnyClass
-    load_const "has_field"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
-    unary_op !
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
-    load_var2 1 2
-    load_type baml.AnyClass
-    load_const "get_field"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _5
-    load_var _5
-    store_var _6
-    load_var _6
-    narrow_bind reflect.class.Field, slot=5
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const null
-    jump L4
-
-  L2:
-    load_type #1
-    load_var _6
-    call reflect.class.Field.value
-    jump L4
-
-  L3:
-    load_const null
-
-  L4:
-    return
-}
-
-function baml.AnyClass.get_field(self: baml.AnyClass, name: string) -> reflect.class.Field | null {
-    load_var self
-    call reflect.Type.of_value
-    call reflect.Type.as_class
-    store_var _5
-    load_var _5
-    narrow_bind reflect.class.Type, slot=3
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const null
-    jump L5
-
-  L1:
-    load_var _5
-    call reflect.class.Type.fields
-    load_type baml.iter.Iterable<Error = never, Item = reflect.class.Field>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _8
-
-  L2:
-    load_var _8
-    load_type baml.iter.Iterator<Error = never, Item = reflect.class.Field>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _9
-    load_var _9
-    is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_var _9
-    store_var_load_var field
-    load_field .name
-    load_var name
-    cmp_op ==
-    pop_jump_if_false L2
-    load_var field
-    load_field .name
-    load_var field
-    load_field .type
-    load_var field
-    load_field .meta
-    load_var self
-    init_instance reflect.class.Field .name, .type, .meta, ._owner
-    jump L5
-
-  L4:
-    load_const null
-
-  L5:
-    return
-}
-
-function baml.AnyClass.has_field(self: baml.AnyClass, name: string) -> bool {
-    load_var self
-    call reflect.Type.of_value
-    call reflect.Type.as_class
-    store_var _5
-    load_var _5
-    narrow_bind reflect.class.Type, slot=3
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L5
-
-  L1:
-    load_var _5
-    call reflect.class.Type.fields
-    load_type baml.iter.Iterable<Error = never, Item = reflect.class.Field>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _8
-
-  L2:
-    load_var _8
-    load_type baml.iter.Iterator<Error = never, Item = reflect.class.Field>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _9
-    load_var _9
-    is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_var _9
-    load_field .name
-    load_var name
-    cmp_op ==
-    pop_jump_if_false L2
-    load_const true
-    jump L5
-
-  L4:
-    load_const false
-
-  L5:
-    return
-}
-
-function baml.AnyClass.list_fields(self: baml.AnyClass) -> reflect.class.Field[] {
-    load_var self
-    call reflect.Type.of_value
-    call reflect.Type.as_class
-    store_var _4
-    load_var _4
-    narrow_bind reflect.class.Type, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_type reflect.class.Field
-    alloc_array 0
-    jump L5
-
-  L1:
-    load_type reflect.class.Field
-    alloc_array 0
-    store_var fields
-    load_var _4
-    call reflect.class.Type.fields
-    load_type baml.iter.Iterable<Error = never, Item = reflect.class.Field>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _8
-
-  L2:
-    load_var _8
-    load_type baml.iter.Iterator<Error = never, Item = reflect.class.Field>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _9
-    load_var _9
-    is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_var _9
-    store_var field
-    load_type reflect.class.Field
-    load_var2 3 6
-    load_field .name
-    load_var field
-    load_field .type
-    load_var field
-    load_field .meta
-    load_var self
-    init_instance reflect.class.Field .name, .type, .meta, ._owner
-    call baml.Array.push
-    pop 1
-    jump L2
-
-  L4:
-    load_var fields
-
-  L5:
-    return
-}
-
-function baml.AnyClass.name(self: baml.AnyClass) -> string {
-    load_var self
-    call reflect.Type.of_value
-    call reflect.Type.baml.ToString.to_string
-    return
-}
-
-function baml.AnyClass.type(self: baml.AnyClass) -> reflect.Type {
-    load_var self
-    call reflect.Type.of_value
-    return
-}
-
 function baml.Array.at(self: #0[], index: int) -> #0 | null {
 }
 
@@ -695,6 +447,12 @@ function baml.Array.splice(self: #0[], start: int, count: int, replace: #0[]) ->
 function baml.Array.unshift(self: #0[], item: #0) -> int {
 }
 
+function baml.Bigint._random_byte_count(lower: bigint, upper: bigint) -> int {
+}
+
+function baml.Bigint._random_in_range(draw: uint8array, lower: bigint, upper: bigint) -> bigint {
+}
+
 function baml.Bigint.abs(self: baml.Bigint) -> bigint {
 }
 
@@ -719,10 +477,104 @@ function baml.Bigint.parse(text: string) -> bigint {
 function baml.Bigint.pow(self: baml.Bigint, exp: bigint) -> bigint {
 }
 
-function baml.Bigint.random(lower: bigint, upper: bigint) -> bigint {
+function baml.Bigint.random(lower: bigint, upper: bigint, rng: baml.random.Rng) -> bigint {
+    load_var rng
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    store_var rng
+
+  L0:
+    load_var2 1 2
+    cmp_bigint_op >=
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    load_var2 1 2
+    call baml.Bigint._random_byte_count
+    store_var width
+    load_var2 3 6
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _17
+    load_var2 8 1
+    load_var upper
+    call baml.Bigint._random_in_range
+    store_var r
+
+  L2:
+    load_var2 7 2
+    cmp_bigint_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var r
+    return
+
+  L4:
+    load_var2 3 6
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _21
+    load_var2 9 1
+    load_var upper
+    call baml.Bigint._random_in_range
+    store_var r
+    jump L2
+
+  L5:
+    load_type bigint
+    load_var lower
+    call baml.String.from
+    store_var _11
+    load_type bigint
+    load_var upper
+    call baml.String.from
+    store_var _13
+    load_const "bigint.random: lower ("
+    load_var _11
+    bin_op +
+    load_const ") must be less than upper ("
+    bin_op +
+    load_var _13
+    bin_op +
+    load_const ")"
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
 }
 
 function baml.Bigint.to_int(self: baml.Bigint) -> int {
+}
+
+function baml.Bool.random(rng: baml.random.Rng) -> bool {
+    load_var rng
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    store_var rng
+
+  L0:
+    load_var rng
+    load_const 1
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _5
+    load_var _5
+    load_const 0
+    load_array_element
+    load_const 128
+    bin_op &
+    load_const 128
+    cmp_int_op ==
+    return
 }
 
 function baml.Comparable$for$bigint.compare(self: bigint, other: bigint) -> int {
@@ -810,6 +662,9 @@ function baml.Comparable$for$string.compare(self: string, other: string) -> int 
 
   L4:
     return
+}
+
+function baml.Float._unit_from_draw(draw: int) -> float {
 }
 
 function baml.Float.abs(self: baml.Float) -> float {
@@ -919,7 +774,23 @@ function baml.Float.pi() -> float {
 function baml.Float.pow(self: baml.Float, exp: float) -> float {
 }
 
-function baml.Float.random() -> float {
+function baml.Float.random(rng: baml.random.Rng) -> float {
+    load_var rng
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    store_var rng
+
+  L0:
+    load_var rng
+    load_type baml.random.Rng
+    load_const "random_int"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var _3
+    call baml.Float._unit_from_draw
+    return
 }
 
 function baml.Float.round(self: baml.Float) -> float {
@@ -976,6 +847,9 @@ function baml.FloatStats$for$float[].median(self: float[]) -> float {
     return
 }
 
+function baml.Int._random_in_range(draw: int, lower: int, upper: int) -> int {
+}
+
 function baml.Int.abs(self: baml.Int) -> int {
 }
 
@@ -1022,7 +896,73 @@ function baml.Int.parse(text: string) -> int {
 function baml.Int.pow(self: baml.Int, exp: int) -> int {
 }
 
-function baml.Int.random(lower: int, upper: int) -> int {
+function baml.Int.random(lower: int, upper: int, rng: baml.random.Rng) -> int {
+    load_var rng
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    store_var rng
+
+  L0:
+    load_var2 1 2
+    cmp_int_op >=
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    load_var rng
+    load_type baml.random.Rng
+    load_const "random_int"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _16
+    load_var2 7 1
+    load_var upper
+    call baml.Int._random_in_range
+    store_var r
+
+  L2:
+    load_var2 6 2
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var r
+    return
+
+  L4:
+    load_var rng
+    load_type baml.random.Rng
+    load_const "random_int"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _19
+    load_var2 8 1
+    load_var upper
+    call baml.Int._random_in_range
+    store_var r
+    jump L2
+
+  L5:
+    load_type int
+    load_var lower
+    call baml.String.from
+    store_var _11
+    load_type int
+    load_var upper
+    call baml.String.from
+    store_var _13
+    load_const "int.random: lower ("
+    load_var _11
+    bin_op +
+    load_const ") must be less than upper ("
+    bin_op +
+    load_var _13
+    bin_op +
+    load_const ")"
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
 }
 
 function baml.Int.trailing_ones(self: baml.Int) -> int {
@@ -5743,8 +5683,6 @@ function baml.random.Rng.random_int(self: baml.random.Rng) -> int {
     load_var bytes
     load_const 0
     load_array_element
-    load_const 63
-    bin_op &
     load_const 56
     bin_op <<
     load_var bytes
@@ -5787,29 +5725,6 @@ function baml.random.Rng.random_int(self: baml.random.Rng) -> int {
     load_const 7
     load_array_element
     bin_op |
-    store_var magnitude
-    load_var bytes
-    load_const 0
-    load_array_element
-    load_const 64
-    bin_op &
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const 0
-    load_var magnitude
-    sub_int
-    load_const 1
-    sub_int
-    jump L2
-
-  L1:
-    load_var magnitude
-
-  L2:
     return
 }
 
@@ -5848,6 +5763,12 @@ function baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xos
   L0:
     load_var seed
     call baml.random.Xoshiro256PlusPlus._new
+    return
+}
+
+function baml.root.ToString$for$reflect.Type.to_string(self: reflect.Type) -> string {
+    load_var self
+    call reflect.Type._to_string_impl
     return
 }
 

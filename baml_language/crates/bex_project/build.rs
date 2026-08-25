@@ -1,33 +1,26 @@
-use std::{collections::BTreeMap, path::Path};
+//! Embed the stdlib slice this crate's transient runtime compiler splices in.
+//!
+//! Cargo keys `OUT_DIR` and reruns this script with the exact compiler
+//! dependency graph, so the embedded bytes cannot outlive the build that
+//! produced their `Program`/`PackageInterface` layouts.
+//!
+//! The derivation itself lives in `baml_project::stdlib_prefix`, shared with
+//! the test-side artifact in `baml_tests`. This artifact deliberately
+//! carries only [`precompiled_stdlib_config::OPT_LEVEL`]: it ships inside
+//! production binaries, where each additional level is a few more megabytes for
+//! no runtime benefit.
 
-use baml_base::Name;
-use baml_compiler2_emit::generate_stdlib_program;
-use baml_compiler2_hir::package::PackageId;
-use baml_compiler2_hir_ty::package_interface::package_interface;
-use baml_project::ProjectDatabase;
+use baml_project::stdlib_prefix::build_stdlib_prefix;
 
 #[path = "src/precompiled_stdlib_config.rs"]
 mod precompiled_stdlib_config;
 
 fn main() {
-    let mut db = ProjectDatabase::new();
-    db.set_project_root(Path::new("<precompiled-stdlib>"));
-
-    let interfaces = baml_builtins2::stdlib_package_names()
-        .iter()
-        .map(|name| {
-            let package = PackageId::new(&db, Name::new(*name));
-            let bytes = borsh::to_vec(package_interface(&db, package))
-                .expect("serialize compiler-built stdlib PackageInterface");
-            ((*name).to_string(), bytes)
-        })
-        .collect::<BTreeMap<_, _>>();
-    let program = generate_stdlib_program(&db, precompiled_stdlib_config::OPT_LEVEL)
-        .expect("compile compiler-built stdlib bytecode prefix");
+    let prefix = build_stdlib_prefix(precompiled_stdlib_config::OPT_LEVEL);
     let artifact = (
         precompiled_stdlib_config::artifact_key(),
-        interfaces,
-        program,
+        prefix.interfaces,
+        prefix.program,
     );
     let bytes = borsh::to_vec(&artifact).expect("serialize compiler-built stdlib artifact");
 

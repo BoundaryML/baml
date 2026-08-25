@@ -66,6 +66,11 @@ class GoogleClient {
     // Sent as `safetySettings`.
     safety_settings: SafetySetting[]?,
 
+    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // records delivered through on_event. Status, headers, and timing are
+    // always recorded; this flag only gates the bodies.
+    capture_wire: bool,
+
     function new(
         model: string = "gemini-2.5-flash",
         api_key: ai.Credential? = null,
@@ -80,6 +85,7 @@ class GoogleClient {
         stop_sequences: string[]? = null,
         response_modalities: string[]? = null,
         safety_settings: SafetySetting[]? = null,
+        capture_wire: bool = true,
     ) -> GoogleClient {
         GoogleClient {
             model: model,
@@ -95,6 +101,7 @@ class GoogleClient {
             stop_sequences: stop_sequences,
             response_modalities: response_modalities,
             safety_settings: safety_settings,
+            capture_wire: capture_wire,
         }
     }
 

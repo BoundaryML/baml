@@ -2,7 +2,7 @@
 
 // One JSON Schema object for a function's parameters, derived from the
 // signature: every parameter typed via baml.json.schema.
-function _schema_for_signature(handler: baml.AnyFunction) -> map<string, unknown> {
+function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unknown> {
     let sig = reflect.signature(handler);
     let props: map<string, unknown> = {};
     let required: string[] = [];

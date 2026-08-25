@@ -35,6 +35,7 @@ baml_surface = { workspace = true }
 baml_type = { workspace = true }
 baml_workspace = { workspace = true }
 bex_vm_types = { workspace = true }
+borsh = { workspace = true }
 la-arena = { workspace = true }
 lsp-types = { workspace = true }
 rayon = { workspace = true }

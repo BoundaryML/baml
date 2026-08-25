@@ -4704,6 +4704,21 @@ fn topological_sort_packages(
         }
     }
 
+    // Kahn's algorithm cannot order the members of a dependency cycle: they
+    // never reach in-degree zero, so they would silently VANISH from the
+    // result — and with it from `package_init_order`, leaving their globals
+    // uninitialized. The package dependency graph is acyclic by construction;
+    // enforce it so a future edge cannot rot into that silent failure.
+    assert_eq!(
+        result.len(),
+        pkg_names.len(),
+        "package dependency cycle: {:?} cannot be topologically ordered",
+        pkg_names
+            .iter()
+            .filter(|name| !result.contains(name))
+            .collect::<Vec<_>>()
+    );
+
     result
 }
 

@@ -36,10 +36,11 @@ impl BamlClassType for PackageReflectImpl {
 
     fn array(vm: &mut BexVm, self_value: &Value) -> Value {
         let type_value = cloned_type_value(vm, *self_value);
-        alloc_runtime_type(
+        let array_ty = alloc_runtime_type(
             vm,
             bex_vm_types::RealizedTy::List(Box::new(type_value.ty), baml_type::TyAttr::default()),
-        )
+        );
+        super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Array, array_ty)
     }
 
     fn optional(vm: &mut BexVm, self_value: &Value) -> Value {
@@ -51,10 +52,11 @@ impl BamlClassType for PackageReflectImpl {
         if !members.iter().any(bex_vm_types::RealizedTy::is_null) {
             members.push(bex_vm_types::RealizedTy::null());
         }
-        alloc_runtime_type(
+        let union_ty = alloc_runtime_type(
             vm,
             bex_vm_types::RealizedTy::Union(members, baml_type::TyAttr::default()),
-        )
+        );
+        super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Union, union_ty)
     }
 
     fn to_baml(vm: &BexVm, self_value: &Value) -> bex_str::BexStr {
@@ -81,43 +83,46 @@ impl BamlClassType for PackageReflectImpl {
         )
     }
 
-    fn kind(_vm: &BexVm, self_value: &Value) -> Value {
-        *self_value
+    fn kind(vm: &mut BexVm, self_value: &Value) -> Value {
+        let ty = type_value_ty(vm, *self_value)
+            .unwrap_or_else(|| unreachable!("kind receiver must be Object::Type"));
+        let kind = baml_type::type_kind::classify_type(&ty);
+        super::type_kinds::alloc_kind_view(vm, kind, *self_value)
     }
 
-    fn as_class(vm: &BexVm, self_value: &Value) -> Option<Value> {
+    fn as_class(vm: &mut BexVm, self_value: &Value) -> Option<Value> {
         as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Class)
     }
 
-    fn as_enum(vm: &BexVm, self_value: &Value) -> Option<Value> {
+    fn as_enum(vm: &mut BexVm, self_value: &Value) -> Option<Value> {
         as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Enum)
     }
 
-    fn as_union(vm: &BexVm, self_value: &Value) -> Option<Value> {
+    fn as_union(vm: &mut BexVm, self_value: &Value) -> Option<Value> {
         as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Union)
     }
 
-    fn as_literal(vm: &BexVm, self_value: &Value) -> Option<Value> {
+    fn as_literal(vm: &mut BexVm, self_value: &Value) -> Option<Value> {
         as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Literal)
     }
 
-    fn as_array(vm: &BexVm, self_value: &Value) -> Option<Value> {
+    fn as_array(vm: &mut BexVm, self_value: &Value) -> Option<Value> {
         as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Array)
     }
 
-    fn as_map(vm: &BexVm, self_value: &Value) -> Option<Value> {
+    fn as_map(vm: &mut BexVm, self_value: &Value) -> Option<Value> {
         as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Map)
     }
 
-    fn as_interface(vm: &BexVm, self_value: &Value) -> Option<Value> {
+    fn as_interface(vm: &mut BexVm, self_value: &Value) -> Option<Value> {
         as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Interface)
     }
 
-    fn as_primitive(vm: &BexVm, self_value: &Value) -> Option<Value> {
+    fn as_primitive(vm: &mut BexVm, self_value: &Value) -> Option<Value> {
         as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Primitive)
     }
 
-    fn as_function(vm: &BexVm, self_value: &Value) -> Option<Value> {
+    fn as_function(vm: &mut BexVm, self_value: &Value) -> Option<Value> {
         as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Function)
     }
 
@@ -1251,9 +1256,14 @@ pub(super) fn type_value_ty(vm: &BexVm, value: Value) -> Option<bex_vm_types::Re
     }
 }
 
-fn as_kind(vm: &BexVm, value: Value, expected: baml_type::type_kind::TypeKind) -> Option<Value> {
+fn as_kind(
+    vm: &mut BexVm,
+    value: Value,
+    expected: baml_type::type_kind::TypeKind,
+) -> Option<Value> {
     let ty = type_value_ty(vm, value)?;
-    (baml_type::type_kind::classify_type(&ty) == expected).then_some(value)
+    (baml_type::type_kind::classify_type(&ty) == expected)
+        .then(|| super::type_kinds::alloc_kind_view(vm, expected, value))
 }
 
 /// A realized interface instantiation as reflected off a `type` value: which

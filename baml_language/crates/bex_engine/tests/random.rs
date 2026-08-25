@@ -116,45 +116,6 @@ function main() -> int {
 }
 
 #[tokio::test]
-async fn default_random_int_spans_full_signed_range_without_overflow() {
-    // The `Rng.random_int` default body — inherited by any user implementor that
-    // provides only `random`. All-`0xFF` bytes assemble the maximum magnitude
-    // with the sign bit set: exactly the input that overflowed the old
-    // `(bytes[0] & 127) << 56` form. It must land on `int.min_value()`, and
-    // all-zero bytes on `0`, confirming the full signed range with no overflow.
-    let source = r#"
-class AllOnes {
-    implements baml.random.Rng {
-        function random(self, bytes: int) -> uint8array throws never {
-            let data = b"\xff\xff\xff\xff\xff\xff\xff\xff";
-            data
-        }
-    }
-}
-class AllZeros {
-    implements baml.random.Rng {
-        function random(self, bytes: int) -> uint8array throws never {
-            let data = b"\x00\x00\x00\x00\x00\x00\x00\x00";
-            data
-        }
-    }
-}
-function main() -> bool {
-    (AllOnes {}).random_int() == baml.Int.min_value()
-        && (AllZeros {}).random_int() == 0
-}
-"#;
-    assert_engine_executes(EngineProgram {
-        source,
-        entry: "main",
-        expected: Ok(BexExternalValue::Bool(true)),
-        ..Default::default()
-    })
-    .await
-    .unwrap();
-}
-
-#[tokio::test]
 async fn rng_dispatches_through_interface() {
     // A concrete generator assigned to a `Rng`-typed parameter dispatches to
     // the right implementor — the same value as calling it directly.

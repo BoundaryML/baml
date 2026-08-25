@@ -28,6 +28,17 @@ interface ToString {
   }
 }
 
+/// Renders a reflected type's name. Declared here, beside the interface it
+/// implements, rather than in the `reflect` package: `reflect.Type` is the
+/// compiler metatype (no package dependency arises from naming it), while
+/// `reflect` deliberately references nothing from `baml`, keeping the stdlib
+/// dependency graph acyclic by construction.
+implement root.ToString for reflect.Type {
+  function to_string(self) -> string throws never {
+    self._to_string_impl()
+  }
+}
+
 /// Internal: default structural rendering used by `string.from` for values
 /// whose runtime type does not implement `baml.ToString`. Primitives render
 /// naturally (`5`, `true`, `null`); containers and class instances render

@@ -72,14 +72,14 @@ NUGET_NORMALIZER = (
     / "Baml.NuGetNormalizer"
     / "Program.cs"
 )
-PRIMITIVE_CONSUMER = (
+NUGET_PACKAGE_SMOKE = (
     ROOT
     / "baml_language"
     / "sdks"
     / "csharp"
     / "bridge_csharp"
     / "tests"
-    / "Baml.Bridge.PrimitivePackageConsumer"
+    / "Baml.Bridge.NuGetPackageSmoke"
     / "verify.sh"
 )
 PKG_BOUNDARYML_COM_STACK = (
@@ -116,7 +116,7 @@ class CSharpReleaseContractTests(unittest.TestCase):
         sources = {
             "Baml/Generated/BamlProgram.g.cs": "program",
             "Baml/Http/Request.g.cs": "request",
-            "CsharpSlice/Functions.g.cs": "functions",
+            "CsharpBasicCalls/Functions.g.cs": "functions",
         }
         for relative, content in sources.items():
             path = generated / relative
@@ -151,7 +151,7 @@ class CSharpReleaseContractTests(unittest.TestCase):
                 [
                     "Baml/Generated/BamlProgram.g.cs",
                     "Baml/Http/Request.g.cs",
-                    "CsharpSlice/Functions.g.cs",
+                    "CsharpBasicCalls/Functions.g.cs",
                 ],
             )
 
@@ -201,7 +201,7 @@ class CSharpReleaseContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             generated = self.write_generated_sources(root)
-            (generated / "CsharpSlice/Functions.g.cs").unlink()
+            (generated / "CsharpBasicCalls/Functions.g.cs").unlink()
             result = self.run_tool(
                 "write-generated-manifest",
                 "--root",
@@ -1224,7 +1224,7 @@ class WorkflowGraphTests(unittest.TestCase):
         publisher = NUGET_PUBLISHER.read_text(encoding="utf-8")
         preparer = CSHARP_PREPARER.read_text(encoding="utf-8")
         verifier = CSHARP_VERIFIER.read_text(encoding="utf-8")
-        primitive_consumer = PRIMITIVE_CONSUMER.read_text(encoding="utf-8")
+        nuget_package_smoke = NUGET_PACKAGE_SMOKE.read_text(encoding="utf-8")
         release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         cargo_tests = CARGO_TESTS.read_text(encoding="utf-8")
         pack = PACK_PRODUCT.read_text(encoding="utf-8")
@@ -1253,9 +1253,9 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("verify-generated-sources", publisher)
         self.assertNotIn("Baml/Csv/CsvError.g.cs", preparer)
         self.assertNotIn("Baml/Csv/CsvError.g.cs", verifier)
-        self.assertNotIn("Baml/Csv/CsvError.g.cs", primitive_consumer)
-        self.assertIn("list_generated_sources", primitive_consumer)
-        self.assertNotIn("-printf", primitive_consumer)
+        self.assertNotIn("Baml/Csv/CsvError.g.cs", nuget_package_smoke)
+        self.assertIn("list_generated_sources", nuget_package_smoke)
+        self.assertNotIn("-printf", nuget_package_smoke)
 
         self.assertIn(".registry_versions.nuget", pack)
         self.assertIn('-p:PackageVersion="$nuget_version"', pack)
@@ -1287,20 +1287,20 @@ class WorkflowGraphTests(unittest.TestCase):
                 self.assertNotEqual(inputs.get("cache"), "pnpm")
 
     def test_csharp_consumer_repository_path_scan_requires_a_separator(self) -> None:
-        primitive_consumer = PRIMITIVE_CONSUMER.read_text(encoding="utf-8")
+        nuget_package_smoke = NUGET_PACKAGE_SMOKE.read_text(encoding="utf-8")
         self.assertIn(
             'repository_path_prefix="${repository_root%/}/"',
-            primitive_consumer,
+            nuget_package_smoke,
         )
         self.assertIn(
             'grep -r -a -F -l -- "$repository_path_prefix" "$publish"',
-            primitive_consumer,
+            nuget_package_smoke,
         )
         self.assertNotIn(
             'grep -r -a -F -l -- "$repository_root" "$publish"',
-            primitive_consumer,
+            nuget_package_smoke,
         )
-        self.assertNotIn("rg -a", primitive_consumer)
+        self.assertNotIn("rg -a", nuget_package_smoke)
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -1317,7 +1317,7 @@ class WorkflowGraphTests(unittest.TestCase):
 
             benign_result = subprocess.run(
                 [
-                    str(PRIMITIVE_CONSUMER),
+                    str(NUGET_PACKAGE_SMOKE),
                     "--verify-repository-paths",
                     "/work",
                     str(benign_publish),
@@ -1331,7 +1331,7 @@ class WorkflowGraphTests(unittest.TestCase):
 
             leaked_result = subprocess.run(
                 [
-                    str(PRIMITIVE_CONSUMER),
+                    str(NUGET_PACKAGE_SMOKE),
                     "--verify-repository-paths",
                     "/work",
                     str(leaked_publish),

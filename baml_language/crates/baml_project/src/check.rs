@@ -247,7 +247,10 @@ pub fn collect_package_level_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic
 /// Package-level diagnostics (cross-file name conflicts and namespace shadows),
 /// emitted outside `check_file` and therefore recomputed on every compile —
 /// never served from the per-file diagnostics cache.
-fn package_level_diagnostics(db: &ProjectDatabase, source_files: &[SourceFile]) -> Vec<Diagnostic> {
+pub(crate) fn package_level_diagnostics(
+    db: &ProjectDatabase,
+    source_files: &[SourceFile],
+) -> Vec<Diagnostic> {
     let mut seen_packages = std::collections::HashSet::new();
     for file in source_files {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
@@ -281,7 +284,7 @@ fn package_level_diagnostics(db: &ProjectDatabase, source_files: &[SourceFile]) 
 /// byte-identical output regardless of thread scheduling. They only run on
 /// exact (file, start, message) ties, so non-tied output is untouched and the
 /// `Debug` formatting cost is not paid in the common case.
-fn sort_diagnostics(diagnostics: &mut [Diagnostic]) {
+pub(crate) fn sort_diagnostics(diagnostics: &mut [Diagnostic]) {
     use std::cmp::Ordering;
     diagnostics.sort_by(|a, b| {
         let a_span = a.primary_span();

@@ -171,7 +171,7 @@ fn push_impls(out: &mut String, db: &ProjectDatabase, impls: &[Impl<'_>], allows
             allows_any_class
                 || imp
                     .interface(db)
-                    .is_none_or(|iface| !iface.qualified_name(db).is_builtin_root_type("AnyClass"))
+                    .is_none_or(|iface| !iface.qualified_name(db).is_reflect_root_type("AnyClass"))
         })
         .collect();
     if !blankets.is_empty() {
@@ -241,9 +241,7 @@ fn render_class(db: &ProjectDatabase, class: Class<'_>) -> String {
     if hidden > 0 {
         let _ = writeln!(out, "  ({hidden} compiler-synthesized method(s) hidden)");
     }
-    let allows_any_class =
-        baml_type::type_kind::class_inhabits_any_class(&class.qualified_name(db));
-    push_impls(&mut out, db, &class.trait_impls(db), allows_any_class);
+    push_impls(&mut out, db, &class.trait_impls(db), true);
     out
 }
 
@@ -570,8 +568,10 @@ mod tests {
     fn renders_builtin_class_with_impls() {
         let db = make_db();
         insta::assert_snapshot!(render(&db, "baml.time.Duration"));
-        assert!(render(&db, "reflect.class.Type").contains("baml.AnyClass"));
-        assert!(!render(&db, "reflect.enum.Type").contains("baml.AnyClass"));
+        // Every kind view is an ordinary wrapper class, so all nine render
+        // the `reflect.AnyClass` blanket row.
+        assert!(render(&db, "reflect.class.Type").contains("reflect.AnyClass"));
+        assert!(render(&db, "reflect.enum.Type").contains("reflect.AnyClass"));
     }
 
     #[test]

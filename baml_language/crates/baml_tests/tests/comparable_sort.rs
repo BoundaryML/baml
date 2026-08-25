@@ -22,8 +22,10 @@
 use std::collections::HashSet;
 
 use baml_compiler_diagnostics::Severity;
-use baml_project::{collect_diagnostics, testing::setup_test_db};
-use baml_tests::baml_test;
+use baml_tests::{
+    baml_test,
+    stdlib_prefix::{check_user_files, setup_test_db},
+};
 use bex_engine::BexExternalValue;
 
 fn collect_compile_errors(source: &str) -> Vec<String> {
@@ -31,7 +33,7 @@ fn collect_compile_errors(source: &str) -> Vec<String> {
     let all_files = db.get_source_files();
     let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(&db)).collect();
 
-    collect_diagnostics(&db)
+    check_user_files(&db)
         .into_iter()
         .filter(|d| matches!(d.severity, Severity::Error))
         .filter(|d| {

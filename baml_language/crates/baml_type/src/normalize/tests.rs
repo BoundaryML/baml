@@ -182,7 +182,10 @@ fn projection_reduces_to_its_binding() {
 // ── BEP-066 shared runtime-type algebra ──────────────────────────────────
 
 #[test]
-fn reflection_kind_classes_are_sealed_type_subtypes_in_both_entries() {
+fn reflection_kind_classes_are_ordinary_classes_disjoint_from_the_carrier() {
+    // The nine kind views are wrapper classes holding `_ty: reflect.Type` —
+    // no subtyping edge relates them to the `type` carrier in either
+    // direction, and as nominal classes they are head-disjoint from it.
     let ctx = Ctx::default();
     let carrier = Ty::Type {
         attr: TyAttr::default(),
@@ -191,38 +194,26 @@ fn reflection_kind_classes_are_sealed_type_subtypes_in_both_entries() {
     for kind in crate::type_kind::TypeKind::ALL {
         let view = Ty::Class(kind.class_name(), Vec::new(), TyAttr::default());
         assert!(
-            is_subtype(&view, &carrier, &ctx),
-            "plain subtype entry rejected {kind:?}"
+            !is_subtype(&view, &carrier, &ctx),
+            "plain subtype entry admitted {kind:?} beneath the carrier"
         );
         assert!(
-            is_subtype_interned(
+            !is_subtype_interned(
                 &interned::Ty::from_plain(&view),
                 &interned::Ty::from_plain(&carrier),
                 &ctx,
             ),
-            "interned subtype entry rejected {kind:?}"
+            "interned subtype entry admitted {kind:?} beneath the carrier"
         );
         assert!(
-            !definitely_disjoint(&view, &carrier, &ctx),
-            "reflection view and type carrier cannot be head-disjoint"
+            !is_subtype(&carrier, &view, &ctx),
+            "the carrier is not a subtype of {kind:?}"
+        );
+        assert!(
+            definitely_disjoint(&view, &carrier, &ctx),
+            "a kind view is an ordinary class, head-disjoint from the carrier"
         );
     }
-
-    let user_lookalike = Ty::Class(
-        QualifiedTypeName::new(
-            Name::new("user"),
-            vec![Name::new("reflect"), Name::new("class")],
-            Name::new("Type"),
-        ),
-        Vec::new(),
-        TyAttr::default(),
-    );
-    assert!(!is_subtype(&user_lookalike, &carrier, &ctx));
-    assert!(!is_subtype_interned(
-        &interned::Ty::from_plain(&user_lookalike),
-        &interned::Ty::from_plain(&carrier),
-        &ctx,
-    ));
 }
 
 #[test]
@@ -1386,11 +1377,11 @@ fn equal_requires_singleton_with_unoverridable_eq() {
     assert!(!definitely_equal(&class("Dog"), &class("Dog"), &ctx));
 }
 
-// ── baml.AnyClass ──────────────────────────────────────────────────────────
+// ── reflect.AnyClass ──────────────────────────────────────────────────────────
 
 fn any_class() -> Ty {
     Ty::Interface(
-        QualifiedTypeName::new(Name::new("baml"), vec![], Name::new("AnyClass")),
+        QualifiedTypeName::new(Name::new("reflect"), vec![], Name::new("AnyClass")),
         vec![],
         vec![],
         TyAttr::default(),
@@ -1421,27 +1412,28 @@ fn any_class_membership_is_derived_for_classes_only() {
 }
 
 #[test]
-fn any_class_admits_only_the_class_reflection_kind_view() {
+fn any_class_admits_every_reflection_kind_view() {
+    // The kind views are ordinary classes with an ordinary field, so they
+    // inhabit `AnyClass` like any other class — no carve-out.
     let ctx = Ctx::default();
     let target = any_class();
     for kind in crate::type_kind::TypeKind::ALL {
         let view = Ty::Class(kind.class_name(), vec![], TyAttr::default());
-        assert_eq!(
+        assert!(
             is_subtype(&view, &target, &ctx),
-            kind == crate::type_kind::TypeKind::Class,
-            "unexpected AnyClass membership for {kind:?}"
+            "AnyClass rejected {kind:?}"
         );
     }
 }
 
-// ── BEP-062: baml.AnyFunction ──────────────────────────────────────────────
+// ── BEP-062: reflect.AnyFunction ──────────────────────────────────────────────
 
-/// `baml.AnyFunction<...pins>` with the given associated-type pins. An empty
+/// `reflect.AnyFunction<...pins>` with the given associated-type pins. An empty
 /// list models a pre-default-fill existential (lowering normally fills
 /// `Returns`/`Throws` with `unknown`).
 fn any_function(pins: Vec<(&str, Ty)>) -> Ty {
     Ty::Interface(
-        QualifiedTypeName::new(Name::new("baml"), vec![], Name::new("AnyFunction")),
+        QualifiedTypeName::new(Name::new("reflect"), vec![], Name::new("AnyFunction")),
         vec![],
         pins.into_iter().map(|(n, t)| (Name::new(n), t)).collect(),
         TyAttr::default(),
@@ -1903,8 +1895,8 @@ fn unguarded_mu_disjointness_terminates_conservatively() {
             NormalTy::List(Box::new(NormalTy::RecVar(0))),
         ])),
     };
-    assert!(!unguarded.is_disjoint_from(&NormalTy::String, &Ctx::default()));
-    assert!(!NormalTy::String.is_disjoint_from(&unguarded, &Ctx::default()));
+    assert!(!unguarded.is_disjoint_from(&NormalTy::String));
+    assert!(!NormalTy::String.is_disjoint_from(&unguarded));
 }
 
 #[test]

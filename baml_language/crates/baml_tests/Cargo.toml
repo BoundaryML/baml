@@ -20,6 +20,7 @@ baml_compiler2_ppir = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_db = { workspace = true }
 baml_project = { workspace = true, features = [ "testing" ] }
+baml_version = { workspace = true }
 baml_workspace = { workspace = true }
 bex_engine = { workspace = true }
 bex_heap = { workspace = true }
@@ -36,6 +37,8 @@ similar = { workspace = true }
 text-size = { workspace = true }
 
 [build-dependencies]
+baml_project = { workspace = true, features = [ "testing" ] }
+baml_version = { workspace = true }
 prettyplease = { workspace = true }
 proc-macro2 = { workspace = true }
 quote = { workspace = true }

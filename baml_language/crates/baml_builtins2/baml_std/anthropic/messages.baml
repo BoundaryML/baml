@@ -100,6 +100,10 @@ class AnthropicClient {
     // Extra URL query parameters, appended verbatim (no percent-encoding —
     // there is no encoder in the stdlib yet; keep values URL-safe).
     query_params: map<string, string>?,
+    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // records delivered through on_event. Status, headers, and timing are
+    // always recorded; this flag only gates the bodies.
+    capture_wire: bool,
 
     // NOTE: the task spec named "claude-3-5-haiku-latest" as the default, but
     // that model was retired (the API 404s on it); claude-haiku-4-5 is the
@@ -124,6 +128,7 @@ class AnthropicClient {
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
+        capture_wire: bool = true,
     ) -> AnthropicClient {
         AnthropicClient {
             model: model,
@@ -141,6 +146,7 @@ class AnthropicClient {
             request_body: request_body,
             headers: headers,
             query_params: query_params,
+            capture_wire: capture_wire,
         }
     }
 

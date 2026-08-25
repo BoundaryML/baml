@@ -20,7 +20,7 @@ function parse_companions.$init_test_ns_parse_companions_parse_companions(regist
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload(client: ai.Client | null) -> parse_companions.ParseCompanionsAliasPayload {
+function parse_companions.ParseCompanionsParseAliasPayload(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> parse_companions.ParseCompanionsAliasPayload {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -29,22 +29,27 @@ function parse_companions.ParseCompanionsParseAliasPayload(client: ai.Client | n
     store_var client
 
   L0:
-    load_type parse_companions.ParseCompanionsAliasPayload
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _4
-    call user.parse_companions.ParseCompanionsParseAliasPayload$spec
     store_var _6
+    call user.parse_companions.ParseCompanionsParseAliasPayload$spec
+    store_var _8
+    load_type parse_companions.ParseCompanionsAliasPayload
     load_var2 3 4
-    load_type ai.Runner<parse_companions.ParseCompanionsAliasPayload, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<parse_companions.ParseCompanionsAliasPayload>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -104,7 +109,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$spec() -> ai.Function
     return
 }
 
-function parse_companions.ParseCompanionsParseAliasPayload$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<parse_companions.ParseCompanionsAliasPayload$stream | null, parse_companions.ParseCompanionsAliasPayload> {
+function parse_companions.ParseCompanionsParseAliasPayload$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<parse_companions.ParseCompanionsAliasPayload$stream | null, parse_companions.ParseCompanionsAliasPayload> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -113,16 +118,25 @@ function parse_companions.ParseCompanionsParseAliasPayload$stream(client: ai.str
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     call user.parse_companions.ParseCompanionsParseAliasPayload$spec
-    store_var _3
+    store_var _5
     load_type parse_companions.ParseCompanionsAliasPayload$stream | null
     load_type parse_companions.ParseCompanionsAliasPayload
-    load_var2 2 1
+    load_var2 3 1
+    load_var on_event
     call ai.stream.from_spec
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload(client: ai.Client | null) -> parse_companions.ParseCompanionsOptPayload {
+function parse_companions.ParseCompanionsParseOptPayload(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> parse_companions.ParseCompanionsOptPayload {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -131,22 +145,27 @@ function parse_companions.ParseCompanionsParseOptPayload(client: ai.Client | nul
     store_var client
 
   L0:
-    load_type parse_companions.ParseCompanionsOptPayload
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _4
-    call user.parse_companions.ParseCompanionsParseOptPayload$spec
     store_var _6
+    call user.parse_companions.ParseCompanionsParseOptPayload$spec
+    store_var _8
+    load_type parse_companions.ParseCompanionsOptPayload
     load_var2 3 4
-    load_type ai.Runner<parse_companions.ParseCompanionsOptPayload, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<parse_companions.ParseCompanionsOptPayload>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -206,7 +225,7 @@ function parse_companions.ParseCompanionsParseOptPayload$spec() -> ai.FunctionSp
     return
 }
 
-function parse_companions.ParseCompanionsParseOptPayload$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<parse_companions.ParseCompanionsOptPayload$stream | null, parse_companions.ParseCompanionsOptPayload> {
+function parse_companions.ParseCompanionsParseOptPayload$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<parse_companions.ParseCompanionsOptPayload$stream | null, parse_companions.ParseCompanionsOptPayload> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -215,11 +234,20 @@ function parse_companions.ParseCompanionsParseOptPayload$stream(client: ai.strea
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     call user.parse_companions.ParseCompanionsParseOptPayload$spec
-    store_var _3
+    store_var _5
     load_type parse_companions.ParseCompanionsOptPayload$stream | null
     load_type parse_companions.ParseCompanionsOptPayload
-    load_var2 2 1
+    load_var2 3 1
+    load_var on_event
     call ai.stream.from_spec
     return
 }

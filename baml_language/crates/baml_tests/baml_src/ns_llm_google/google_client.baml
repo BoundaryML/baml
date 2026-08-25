@@ -64,7 +64,7 @@ function google_request_shape() -> string {
                     google.SafetySetting.new("HARM_CATEGORY_HARASSMENT", "BLOCK_ONLY_HIGH"),
                 ],
             );
-            let result = ai.Agent<string>.new(client = cl).run(GoogleEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(GoogleEcho@spec("Say pong."));
             let sent = mock.last_request();
             let body = sent.json();
             [
@@ -111,7 +111,7 @@ function google_request_omits_unset_fields() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let _ = ai.Agent<string>.new(client = cl).run(GoogleEcho@spec("Say pong."));
+            let _ = ai.Agent.new(client = cl).run(GoogleEcho@spec("Say pong."));
             mock.last_request().body
         },
     )
@@ -144,7 +144,7 @@ function google_request_body_passthrough() -> string {
                 temperature = 0.5,
                 top_k = 40,
             );
-            let _ = ai.Agent<string>.new(client = cl).run(GoogleEcho@spec("Say pong."));
+            let _ = ai.Agent.new(client = cl).run(GoogleEcho@spec("Say pong."));
             let body = mock.last_request().json();
             [
                 baml.json.path<float>(body, ".generationConfig.temperature").to_string(),
@@ -175,7 +175,7 @@ function google_tool_declarations() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let _ = ai.Agent<string>.new(client = cl).run(GoogleToolEcho@spec("Weather in NYC?"));
+            let _ = ai.Agent.new(client = cl).run(GoogleToolEcho@spec("Weather in NYC?"));
             let body = mock.last_request().json();
             [
                 baml.json.path<string>(body, ".tools[0].functionDeclarations[0].name"),
@@ -338,7 +338,7 @@ function google_empty_response_e2e() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            ai.Agent<string>.new(client = cl).run(GoogleEcho@spec("Say pong.")).value
+            ai.Agent.new(client = cl).run(GoogleEcho@spec("Say pong.")).value
                 catch_all (e) {
                 _ => {
                     match (e) {
@@ -394,7 +394,7 @@ function google_tool_loop_replays_signature(signature_json: string) -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(
+            let result = ai.Agent.new(client = cl).run(
                 GoogleToolEcho@spec("Weather in NYC?"),
             );
             let replay = mock.last_request().json();
@@ -723,7 +723,7 @@ function vertex_request_shape() -> string {
                 base_url = mock.base_url(),
                 temperature = 0.25,
             );
-            let result = ai.Agent<string>.new(client = cl).run(GoogleEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(GoogleEcho@spec("Say pong."));
             let sent = mock.last_request();
             let body = sent.json();
             [
@@ -972,7 +972,7 @@ function google_error_taxonomy() -> string {
                     api_key = "test-key",
                     base_url = mock.base_url(),
                 );
-                ai.Agent<string>.new(client = cl).run(GoogleEcho@spec("Say pong.")).value
+                ai.Agent.new(client = cl).run(GoogleEcho@spec("Say pong.")).value
                     catch_all (e) {
                     _ => {
                         match (e) {
@@ -1104,7 +1104,7 @@ function live_vertex_answers() -> bool {
         credentials_json = baml.env.get("INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT"),
         location = baml.env.get("GOOGLE_CLOUD_LOCATION") ?? "us-central1",
     );
-    let result = ai.Agent<string>.new(client = cl).run(LiveGeminiEcho@spec("Say pong."));
+    let result = ai.Agent.new(client = cl).run(LiveGeminiEcho@spec("Say pong."));
     result.value.trim().length() > 0
 }
 

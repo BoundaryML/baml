@@ -359,9 +359,11 @@ fn extract_from_class(
         };
         let receiver = Some(Receiver {
             class_name: class_name.to_string(),
+            // The prefix's first segment is the PACKAGE (`baml.media`,
+            // `reflect.array`); the receiver namespace is everything after it.
             namespace: namespace_prefix
-                .strip_prefix("baml.")
-                .unwrap_or("")
+                .split_once('.')
+                .map_or("", |(_, namespaces)| namespaces)
                 .to_string(),
             // Mirrors `extract_class_fields`: dedicated-variant types and
             // field-less (opaque/marker) classes get no `view::` struct.
@@ -655,9 +657,11 @@ fn extract_from_implements_for(
 
         let receiver = Some(Receiver {
             class_name: recv_class.to_string(),
+            // The prefix's first segment is the PACKAGE (`baml.media`,
+            // `reflect.array`); the receiver namespace is everything after it.
             namespace: namespace_prefix
-                .strip_prefix("baml.")
-                .unwrap_or("")
+                .split_once('.')
+                .map_or("", |(_, namespaces)| namespaces)
                 .to_string(),
             instance_backed: false,
             class_generics: impl_generics.clone(),

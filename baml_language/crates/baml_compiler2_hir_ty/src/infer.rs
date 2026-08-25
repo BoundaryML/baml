@@ -40,7 +40,7 @@ use baml_compiler2_hir::{
     },
 };
 use baml_type::{
-    Freshness, Literal, TyAttr,
+    Freshness, Int63, Literal, TyAttr,
     interned::{InterfaceRef, Ty, TyKind},
     normalize::{canonical_union_interned, equivalent_interned, is_subtype_interned},
 };
@@ -110,7 +110,7 @@ fn is_spawn_params_qtn(qtn: &baml_type::TypeName) -> bool {
 /// Negate a numeric literal into the negative literal TYPE (ruling 2:
 /// `-1` is a type, TS parity). Freshness carries through. `None` skips
 /// the fold: non-numeric literals, and an int result outside BAML's i63
-/// value range (`-INT_MIN` = 2^62) - the unfolded dispatch result stands
+/// value range (`-int.min_value()` = 2^62) - the unfolded dispatch result stands
 /// and the VM raises the catchable overflow, identical to the
 /// through-a-variable path (TIR's `fold_int` rule).
 /// Where a type-qualified reference's OWN generic args come from -
@@ -132,21 +132,11 @@ struct WrittenQualifier<'a> {
     realized: &'a baml_type::Interface,
 }
 
-/// BAML's int value range: i63 (the VM tags the low bit). One
-/// crate-level pair, mirroring TIR's layout and the
-/// `baml_type::MAX_BIGINT_BITS` precedent; a folded result outside it
-/// defers to the runtime overflow.
-const INT_MIN: i64 = -(1 << 62);
-const INT_MAX: i64 = (1 << 62) - 1;
-
 fn negate_literal(lit: &Literal, freshness: Freshness) -> Option<Ty> {
     let negated = match lit {
         Literal::Int(n) => {
-            let v = n.checked_neg()?;
-            if !(INT_MIN..=INT_MAX).contains(&v) {
-                return None;
-            }
-            Literal::Int(v)
+            let v = Int63::new(n.checked_neg()?)?;
+            Literal::Int(v.get())
         }
         Literal::Bigint(n) => Literal::Bigint(-n.clone()),
         // The float's WRITTEN digits are preserved exactly: negation is a
@@ -187,11 +177,7 @@ fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Op
     };
     let lit = |value: Literal| Ty::intern(TyKind::Literal(value, freshness, TyAttr::default()));
     let boolean = |value: bool| Some(lit(Literal::Bool(value)));
-    let int = |value: i64| {
-        (INT_MIN..=INT_MAX)
-            .contains(&value)
-            .then(|| lit(Literal::Int(value)))
-    };
+    let int = |value: i64| Int63::new(value).map(|value| lit(Literal::Int(value.get())));
     match (a, b) {
         (Literal::Int(a), Literal::Int(b)) => {
             let (a, b) = (*a, *b);
@@ -204,10 +190,11 @@ fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Op
                 BinaryOp::BitAnd => Some(lit(Literal::Int(a & b))),
                 BinaryOp::BitOr => Some(lit(Literal::Int(a | b))),
                 BinaryOp::BitXor => Some(lit(Literal::Int(a ^ b))),
-                // Shifts range-check the RESULT too (`1 << 62` escapes
-                // i63); bad counts defer to the runtime throw.
-                BinaryOp::Shl => int(a.checked_shl(u32::try_from(b).ok()?)?),
-                BinaryOp::Shr => int(a.checked_shr(u32::try_from(b).ok()?)?),
+                // The same semantic value used by the VM defines folding.
+                // Negative counts remain unfolded so runtime dispatch raises
+                // the typed `NegativeBitShift` panic.
+                BinaryOp::Shl => Some(lit(Literal::Int(Int63::new(a)?.shift_left(b).ok()?.get()))),
+                BinaryOp::Shr => Some(lit(Literal::Int(Int63::new(a)?.shift_right(b).ok()?.get()))),
                 BinaryOp::Eq => boolean(a == b),
                 BinaryOp::Ne => boolean(a != b),
                 BinaryOp::Lt => boolean(a < b),
@@ -1988,7 +1975,7 @@ impl<'db> InferenceContext<'db> {
                 // placeholder so a failed compile can't carry the bad value
                 // forward - TIR's rule verbatim.
                 let lit = if let Literal::Int(v) = lit
-                    && !(INT_MIN..=INT_MAX).contains(v)
+                    && Int63::new(*v).is_none()
                 {
                     self.pending_diags
                         .push(PendingDiag::IntLiteralOutOfRange { expr, value: *v });
@@ -3438,7 +3425,7 @@ impl<'db> InferenceContext<'db> {
                 ok &= self.sub(&throws.0, &throws.1);
                 ok
             }
-            // `baml.AnyFunction` is compiler-derived for concrete function
+            // `reflect.AnyFunction` is compiler-derived for concrete function
             // values, rather than an ordinary impl obligation.  When a
             // generic consumer such as `reflect.call_any<R, E>` receives a
             // function value directly, carry its output channels into the
@@ -3453,7 +3440,7 @@ impl<'db> InferenceContext<'db> {
                     ..
                 },
                 TyKind::Interface(name, _, expected_pins, _),
-            ) if name.is_builtin_root_type("AnyFunction") => {
+            ) if name.is_reflect_root_type("AnyFunction") => {
                 let mut ok = true;
                 for (pin, expected_pin) in expected_pins {
                     let Some(actual_pin) = (match pin.as_str() {
@@ -3489,7 +3476,7 @@ impl<'db> InferenceContext<'db> {
                     ) = (actual.kind(), expected.kind())
                         && a_name == b_name
                         && a_args.len() == b_args.len()
-                        && (a_name.is_builtin_root_type("AnyFunction")
+                        && (a_name.is_reflect_root_type("AnyFunction")
                             || b_pins
                                 .iter()
                                 .all(|(pin, _)| a_pins.iter().any(|(a_pin, _)| a_pin == pin)))
@@ -4697,9 +4684,25 @@ impl<'db> InferenceContext<'db> {
         {
             return;
         }
-        let expected = Ty::intern(TyKind::Type {
-            attr: TyAttr::default(),
-        });
+        // The operand contract is `reflect.Type | reflect.TypeView`: a kind
+        // view is accepted and converts to the `type` value it wraps at the
+        // VM's type-operand boundary — the same explicit-computation-point
+        // model as `int + float`, never a subtyping edge.
+        let expected = Ty::intern(TyKind::Union(
+            vec![
+                Ty::intern(TyKind::Type {
+                    attr: TyAttr::default(),
+                }),
+                Ty::intern(TyKind::Interface(
+                    baml_type::QualifiedTypeName::from_dotted_path("reflect.TypeView"),
+                    Box::new([]),
+                    Box::new([]),
+                    TyAttr::default(),
+                )),
+            ]
+            .into(),
+            TyAttr::default(),
+        ));
         let saved_anchor = self.obligation_anchor.replace(operand);
         let fits = self.sub(&got, &expected);
         self.obligation_anchor = saved_anchor;

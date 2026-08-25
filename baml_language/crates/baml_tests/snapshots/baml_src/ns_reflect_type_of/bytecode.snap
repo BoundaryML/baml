@@ -193,7 +193,7 @@ function reflect_type_of.$init_test_ns_reflect_type_of_reflect_type_of(registry:
     pop 1
     load_var registry
     load_const "root.reflect_type_of"
-    load_const "of_value_of_a_type_value_is_precise_kind"
+    load_const "of_value_of_a_type_value_is_the_carrier"
     make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 27)>, 0
     load_const null
     call testing.TestCollector.register_test_at
