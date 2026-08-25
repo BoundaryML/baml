@@ -1430,6 +1430,78 @@ impl std::fmt::Display for Dot {
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Spawn {
+    pub token_span: TextRange,
+}
+impl Spawn {
+    #[must_use]
+    pub const fn new(token_span: TextRange) -> Self {
+        Self { token_span }
+    }
+    #[must_use]
+    pub const fn new_from_span(token_span: TextRange) -> Self {
+        Self::new(token_span)
+    }
+}
+impl ValidatedToken for Spawn {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for Spawn {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::KW_SPAWN
+    }
+}
+impl FromCST for Spawn {
+    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(element)?;
+        StrongAstError::assert_kind_token(&token, SyntaxKind::KW_SPAWN)?;
+        Ok(Self::new(token.text_range()))
+    }
+}
+impl std::fmt::Display for Spawn {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("spawn")
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Await {
+    pub token_span: TextRange,
+}
+impl Await {
+    #[must_use]
+    pub const fn new(token_span: TextRange) -> Self {
+        Self { token_span }
+    }
+    #[must_use]
+    pub const fn new_from_span(token_span: TextRange) -> Self {
+        Self::new(token_span)
+    }
+}
+impl ValidatedToken for Await {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for Await {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::KW_AWAIT
+    }
+}
+impl FromCST for Await {
+    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(element)?;
+        StrongAstError::assert_kind_token(&token, SyntaxKind::KW_AWAIT)?;
+        Ok(Self::new(token.text_range()))
+    }
+}
+impl std::fmt::Display for Await {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("await")
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Question {
     pub token_span: TextRange,
 }
@@ -1571,78 +1643,6 @@ impl FromCST for AtAt {
 impl std::fmt::Display for AtAt {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("@@")
-    }
-}
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Spawn {
-    pub token_span: TextRange,
-}
-impl Spawn {
-    #[must_use]
-    pub const fn new(token_span: TextRange) -> Self {
-        Self { token_span }
-    }
-    #[must_use]
-    pub const fn new_from_span(token_span: TextRange) -> Self {
-        Self::new(token_span)
-    }
-}
-impl ValidatedToken for Spawn {
-    fn span(&self) -> TextRange {
-        self.token_span
-    }
-}
-impl KnownKind for Spawn {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::KW_SPAWN
-    }
-}
-impl FromCST for Spawn {
-    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
-        let token = StrongAstError::assert_is_token(element)?;
-        StrongAstError::assert_kind_token(&token, SyntaxKind::KW_SPAWN)?;
-        Ok(Self::new(token.text_range()))
-    }
-}
-impl std::fmt::Display for Spawn {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("spawn")
-    }
-}
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Await {
-    pub token_span: TextRange,
-}
-impl Await {
-    #[must_use]
-    pub const fn new(token_span: TextRange) -> Self {
-        Self { token_span }
-    }
-    #[must_use]
-    pub const fn new_from_span(token_span: TextRange) -> Self {
-        Self::new(token_span)
-    }
-}
-impl ValidatedToken for Await {
-    fn span(&self) -> TextRange {
-        self.token_span
-    }
-}
-impl KnownKind for Await {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::KW_AWAIT
-    }
-}
-impl FromCST for Await {
-    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
-        let token = StrongAstError::assert_is_token(element)?;
-        StrongAstError::assert_kind_token(&token, SyntaxKind::KW_AWAIT)?;
-        Ok(Self::new(token.text_range()))
-    }
-}
-impl std::fmt::Display for Await {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("await")
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -787,12 +787,28 @@ impl Walk<'_> {
     /// a `Class`; the `GENERIC_ARGS` dispatched so their type args resolve.
     fn object_type_path(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
         let mut named = false;
-        self.tokens(node, out, |t| {
-            (!named && t.kind() == SyntaxKind::WORD).then(|| {
-                named = true;
-                plain(SemanticTokenType::Class)
-            })
-        });
+        self.object_type_path_inner(node, &mut named, out);
+    }
+
+    fn object_type_path_inner(
+        &self,
+        node: &SyntaxNode,
+        named: &mut bool,
+        out: &mut Vec<SemanticToken>,
+    ) {
+        for child in node.children_with_tokens() {
+            match child {
+                NodeOrToken::Node(n) if n.kind() == SyntaxKind::PATH_EXPR => {
+                    self.object_type_path_inner(&n, named, out);
+                }
+                NodeOrToken::Node(n) => self.run(&n, out),
+                NodeOrToken::Token(t) if !*named && t.kind() == SyntaxKind::WORD => {
+                    *named = true;
+                    emit(t.text_range(), plain(SemanticTokenType::Class), out);
+                }
+                NodeOrToken::Token(t) => self.token(&t, out),
+            }
+        }
     }
 
     /// A `BACKTICK_STRING_LITERAL` (BEP-049 interpolated string) — literal content

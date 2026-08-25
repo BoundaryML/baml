@@ -30,7 +30,7 @@ use rowan::{TextRange, ast::AstNode};
 use crate::{
     ast::Token,
     printer::{PrintInfo, Printable, Printer, Shape},
-    trivia_classifier::EmittableTrivia,
+    trivia_classifier::{EmittableTrivia, TriviaSliceExt},
 };
 
 impl Printable for Validated<'_, raw_ast::Pattern> {
@@ -585,13 +585,26 @@ impl Printable for Validated<'_, raw_ast::UnionPattern> {
                 let mut info = first.print(shape.clone(), printer);
                 let inner_indent = shape.indent + printer.config.indent_width;
                 let mut previous = first.rightmost_token();
-                for (pipe, item) in self.pipe_tokens().zip(self.rest()) {
+                let rest = self.pipe_tokens().zip(self.rest()).collect::<Vec<_>>();
+                for (index, (pipe, item)) in rest.iter().copied().enumerate() {
                     printer.print_trivia_all_trailing_for(previous);
                     printer.print_newline();
+                    let (pipe_leading, pipe_trailing) =
+                        printer.trivia.get_for_range_split(pipe.span());
+                    printer.print_trivia_with_newline(pipe_leading.trim_blanks(), inner_indent);
                     printer.print_spaces(inner_indent);
                     printer.print_raw_token(&pipe);
-                    printer.print_str(" ");
+                    let mut post_pipe = printer.print_trivia_squished(pipe_trailing);
+                    post_pipe += printer
+                        .print_trivia_squished(printer.trivia.get_leading_for_element(&item));
+                    if post_pipe == 0 {
+                        printer.print_str(" ");
+                    }
                     item.print(shape.clone(), printer);
+                    if index + 1 < rest.len() {
+                        printer
+                            .print_trivia_trailing(printer.trivia.get_trailing_for_element(&item));
+                    }
                     previous = item.rightmost_token();
                     info.multi_lined = true;
                 }
@@ -687,11 +700,19 @@ fn print_validated_destructure_single_line(
         try_print_trivia_single_line_spaced(printer, trailing, true, false)?;
         if index + 1 < fields.len() {
             if let Some(comma) = comma {
+                let (comma_leading, comma_trailing) =
+                    printer.trivia.get_for_range_split(comma.span());
+                try_print_trivia_single_line_spaced(printer, comma_leading, true, false)?;
                 printer.print_raw_token(comma);
+                try_print_trivia_single_line_spaced(printer, comma_trailing, true, false)?;
             } else {
                 printer.print_str(",");
             }
             printer.print_str(" ");
+        } else if let Some(comma) = comma {
+            let (comma_leading, comma_trailing) = printer.trivia.get_for_range_split(comma.span());
+            try_print_trivia_single_line_spaced(printer, comma_leading, true, false)?;
+            try_print_trivia_single_line_spaced(printer, comma_trailing, true, false)?;
         }
     }
     try_print_trivia_single_line_spaced(
@@ -728,8 +749,18 @@ impl Printable for Validated<'_, raw_ast::DestructurePattern> {
                         Shape::standalone(printer.config.line_width, inner_indent),
                         printer,
                     );
+                    print_trivia_squished_spaced(
+                        printer,
+                        printer.trivia.get_trailing_for_element(&field),
+                        true,
+                        false,
+                    );
                     if let Some(comma) = comma {
+                        let (comma_leading, comma_trailing) =
+                            printer.trivia.get_for_range_split(comma.span());
+                        print_trivia_squished_spaced(printer, comma_leading, true, false);
                         printer.print_raw_token(&comma);
+                        printer.print_trivia_trailing(comma_trailing);
                     } else {
                         printer.print_str(",");
                     }

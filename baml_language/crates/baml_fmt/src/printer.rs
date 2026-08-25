@@ -383,7 +383,7 @@ impl PrintInfo {
 /// (leading trivia on `Self::leftmost_token` and trailing trivia on `Self::rightmost_token`).
 /// The outer trivia is handled by whichever parent node has it as internal trivia.
 ///
-/// The only exception is [`crate::ast::SourceFile`]: it can print EOF-attached trivia.
+/// The only exception is the source-file root: it can print EOF-attached trivia.
 pub trait Printable {
     /// Prints to the printer.
     ///

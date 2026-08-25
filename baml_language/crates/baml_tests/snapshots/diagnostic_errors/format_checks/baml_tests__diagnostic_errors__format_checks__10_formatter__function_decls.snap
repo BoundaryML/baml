@@ -334,10 +334,8 @@ function NestedLoops(matrix: int[][]) -> int {
                 _ => val,
             };
             total += processed;
-        }
-        ;
-    }
-    ;
+        };
+    };
     return total;
 }
 

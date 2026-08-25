@@ -5407,42 +5407,7 @@ impl LoweringContext {
         // so selecting the first arbitrary child is not expression-safe.
         let value = node
             .children()
-            .find(|child| {
-                matches!(
-                    child.kind(),
-                    SyntaxKind::BINARY_EXPR
-                        | SyntaxKind::IS_EXPR
-                        | SyntaxKind::UNARY_EXPR
-                        | SyntaxKind::CALL_EXPR
-                        | SyntaxKind::IF_EXPR
-                        | SyntaxKind::IF_LET_EXPR
-                        | SyntaxKind::MATCH_EXPR
-                        | SyntaxKind::CATCH_EXPR
-                        | SyntaxKind::THROW_EXPR
-                        | SyntaxKind::RETURN_EXPR
-                        | SyntaxKind::BLOCK_EXPR
-                        | SyntaxKind::PATH_EXPR
-                        | SyntaxKind::FIELD_ACCESS_EXPR
-                        | SyntaxKind::UPCAST_EXPR
-                        | SyntaxKind::QUALIFIED_PATH_EXPR
-                        | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
-                        | SyntaxKind::ENV_ACCESS_EXPR
-                        | SyntaxKind::INDEX_EXPR
-                        | SyntaxKind::OPTIONAL_INDEX_EXPR
-                        | SyntaxKind::OPTIONAL_CALL_EXPR
-                        | SyntaxKind::TAGGED_TEMPLATE_EXPR
-                        | SyntaxKind::PAREN_EXPR
-                        | SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::BACKTICK_STRING_LITERAL
-                        | SyntaxKind::BYTE_STRING_LITERAL
-                        | SyntaxKind::ARRAY_LITERAL
-                        | SyntaxKind::OBJECT_LITERAL
-                        | SyntaxKind::MAP_LITERAL
-                        | SyntaxKind::LAMBDA_EXPR
-                        | SyntaxKind::SPAWN_EXPR
-                        | SyntaxKind::AWAIT_EXPR
-                )
-            })
+            .find(|child| baml_compiler_syntax::ast::ExprNode::can_cast(child.kind()))
             .map(|child| self.lower_expr(&child))
             .or_else(|| {
                 let mut inside_operand = false;

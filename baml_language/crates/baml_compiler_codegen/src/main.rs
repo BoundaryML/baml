@@ -356,20 +356,20 @@ fn generate_schema(grammar: &Grammar) -> Result<String> {
                      vec![state]\n\
                  }\n\
                  SchemaRule::Node(kinds) => {\n\
-                     let Some((offset, element)) = input[state.position..].iter().enumerate().find(|(_, element)| {\n\
+                     let Some(element) = input.get(state.position).filter(|element| {\n\
                          element_is_node(elements, **element) && kinds.contains(&element_kind(elements, **element))\n\
                      }) else { return Vec::new() };\n\
                      let mut state = state;\n\
-                     state.position += offset + 1;\n\
+                     state.position += 1;\n\
                      state.matched.push(*element);\n\
                      vec![state]\n\
                  }\n\
                  SchemaRule::Token(kind) => {\n\
-                     let Some((offset, element)) = input[state.position..].iter().enumerate().find(|(_, element)| {\n\
+                     let Some(element) = input.get(state.position).filter(|element| {\n\
                          !element_is_node(elements, **element) && element_kind(elements, **element) == *kind\n\
                      }) else { return Vec::new() };\n\
                      let mut state = state;\n\
-                     state.position += offset + 1;\n\
+                     state.position += 1;\n\
                      state.matched.push(*element);\n\
                      vec![state]\n\
                  }\n\
@@ -433,7 +433,7 @@ fn generate_schema(grammar: &Grammar) -> Result<String> {
              };\n\
              apply_rule(schema.rule, input, elements, initial)\n\
                  .into_iter()\n\
-                 .find(|state| input.iter().all(|element| state.matched.contains(element)))\n\
+             .find(|state| state.position == input.len())\n\
                  .map(|state| state.captures)\n\
                  .ok_or(StrongAstError::InvalidStructure {\n\
                      kind: syntax.kind(),\n\

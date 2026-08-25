@@ -647,7 +647,7 @@ fn print_validated_match_condition(
 ) -> PrintInfo {
     let pattern = arm.pattern();
     let pattern_info = pattern.print(shape.clone(), printer);
-    let mut multi_lined = pattern_info.multi_lined;
+    let multi_lined = pattern_info.multi_lined;
     if let Some(guard) = arm.match_guard() {
         let mut probe = printer.sub_printer();
         let guard_info = guard.print(Shape::unlimited_single_line(), &mut probe);
@@ -664,7 +664,6 @@ fn print_validated_match_condition(
                 ),
                 printer,
             );
-            multi_lined = true;
         } else {
             printer.print_str(" ");
             printer.append_from_printer(probe);
@@ -733,6 +732,32 @@ impl Printable for Validated<'_, raw_ast::MatchArm> {
             );
             printer.print_str(",");
             return info;
+        }
+        if let ValidatedExprNode::MatchExpr(expression) = body.as_variant() {
+            let mut probe = printer.sub_printer();
+            probe.print_raw_token(&expression.match_token());
+            probe.print_str(" ");
+            let header_fits = print_validated_match_scrutinee_single_line(
+                expression,
+                &Shape::unlimited_single_line(),
+                &mut probe,
+            )
+            .is_some_and(|_| probe.output.len() + const { " {".len() } <= remaining);
+            if header_fits {
+                let info = expression.print(
+                    Shape {
+                        width: remaining,
+                        indent: shape.indent,
+                        first_line_offset: printer
+                            .config
+                            .line_width
+                            .saturating_sub(shape.indent + remaining),
+                    },
+                    printer,
+                );
+                printer.print_str(",");
+                return info;
+            }
         }
         let mut probe = printer.sub_printer();
         let body_info = body.print(Shape::unlimited_single_line(), &mut probe);
@@ -818,8 +843,10 @@ impl Printable for Validated<'_, raw_ast::CatchExpr> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let body = self.body();
         let mut info = body.print(shape.clone(), printer);
-        printer.print_str(" ");
-        info.multi_lined |= self.catch_clause().print(shape, printer).multi_lined;
+        for clause in self.catch_clause() {
+            printer.print_str(" ");
+            info.multi_lined |= clause.print(shape.clone(), printer).multi_lined;
+        }
         info
     }
 
@@ -828,7 +855,10 @@ impl Printable for Validated<'_, raw_ast::CatchExpr> {
     }
 
     fn rightmost_token(&self) -> TextRange {
-        self.catch_clause().rightmost_token()
+        self.catch_clause()
+            .last()
+            .expect("validated catch clause")
+            .rightmost_token()
     }
 }
 

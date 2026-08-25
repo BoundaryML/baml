@@ -5,7 +5,11 @@ source: crates/baml_tests/src/generated_tests.rs
 
 function UnicodeHeaders() -> string {
     //# 你好世界
+    // Unicode header test
+
     //## Émojis 🎉🎊
+    // Headers with emojis
+
     //### Special «Characters» ™
 
     "test"
@@ -31,6 +35,7 @@ function HeadersWithWhitespace() -> string {
     //###			All Tabs
 
     let x = "whitespace test";
+
     //# Trailing Spaces
     //## Multiple  Spaces  Between  Words
 
@@ -42,7 +47,11 @@ function HeadersAndComments() -> string {
     // This is a regular comment
 
     let x = "test";
+
+    // Comment before header
     //## Header After Comment
+
+    /// Doc comment before header
     //### Header After Doc Comment
 
     x
@@ -61,15 +70,18 @@ function HeadersInComplexNesting() -> string {
                 //#### Very Deep Block
                 "deep value"
             };
+
             //### Back to If Level
             deep
         } else {
             //### Inside Else
             "else value"
         };
+
         //## Back to Block Level
         inner
     };
+
     //# Back to Function Level
     result
 }
@@ -89,6 +101,7 @@ function ConsecutiveHeaders() -> string {
     //# First Header
     //# Second Header
     //# Third Header
+
     //## Subsection A
     //## Subsection B
     //## Subsection C
@@ -100,6 +113,7 @@ function HeadersAroundExpressions() -> string {
     //# Before Let
     let x = 5;
     //## After Let
+
     //### Before If
     if (x > 0) {
         //#### Inside If
@@ -109,18 +123,21 @@ function HeadersAroundExpressions() -> string {
         0
     }
     //### After If
+
     //## Before For
     for (let i in [1, 2, 3]) {
         //### Inside For
         i
     }
     //## After For
+
     //# Final Section
     x
 }
 
 function VeryLongHeaderTitle() -> string {
     //# This Is An Extremely Long Header Title That Goes On And On And On And Contains Many Words To Test How The Parser Handles Very Long Header Titles That Might Span Multiple Lines In Some Editors But Should Still Be Parsed As A Single Header
+
     //## Another Long Title With Special Characters !@#$%^&*()_+-=[]{}|;':",./<>? And Numbers 1234567890
 
     "long headers"

@@ -283,6 +283,9 @@ impl InterfaceDef {
     pub fn method_sig(&self) -> AstChildren<MethodSig> {
         support::children(&self.syntax)
     }
+    pub fn function_def(&self) -> AstChildren<FunctionDef> {
+        support::children(&self.syntax)
+    }
     pub fn associated_type_decl(&self) -> AstChildren<AssociatedTypeDecl> {
         support::children(&self.syntax)
     }
@@ -776,6 +779,9 @@ impl TemplateStringDef {
     pub fn raw_string_literal(&self) -> Option<RawStringLiteral> {
         support::child(&self.syntax)
     }
+    pub fn backtick_string_literal(&self) -> Option<BacktickStringLiteral> {
+        support::child(&self.syntax)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -835,6 +841,68 @@ impl TypeAliasDef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LetStmt {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for LetStmt {}
+
+impl AstNode for LetStmt {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::LET_STMT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl LetStmt {
+    pub fn let_token(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_LET))
+    }
+    pub fn const_token(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CONST))
+    }
+    pub fn pattern(&self) -> Option<Pattern> {
+        support::child(&self.syntax)
+    }
+    pub fn equals_token(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::EQUALS))
+    }
+    pub fn value(&self) -> Option<ExprNode> {
+        support::child(&self.syntax)
+    }
+    pub fn else_token(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_ELSE))
+    }
+    pub fn block_expr(&self) -> Option<BlockExpr> {
+        support::child(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BlockAttribute {
     pub(super) syntax: SyntaxNode,
 }
@@ -866,6 +934,18 @@ impl BlockAttribute {
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| matches!(token.kind(), SyntaxKind::WORD))
+    }
+    pub fn dot_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::DOT))
+    }
+    pub fn path_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn attribute_args(&self) -> Option<AttributeArgs> {
         support::child(&self.syntax)
@@ -1038,6 +1118,42 @@ impl TypeExpr {
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| matches!(token.kind(), SyntaxKind::DOT))
     }
+    pub fn spawn_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_SPAWN))
+    }
+    pub fn await_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_AWAIT))
+    }
+    pub fn class_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_CLASS))
+    }
+    pub fn enum_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_ENUM))
+    }
+    pub fn interface_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_INTERFACE))
+    }
+    pub fn function_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_FUNCTION))
+    }
     pub fn l_paren_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
@@ -1089,14 +1205,14 @@ impl TypeExpr {
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| matches!(token.kind(), SyntaxKind::QUESTION))
     }
+    pub fn attribute(&self) -> AstChildren<Attribute> {
+        support::children(&self.syntax)
+    }
     pub fn pipe_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| matches!(token.kind(), SyntaxKind::PIPE))
-    }
-    pub fn attribute(&self) -> AstChildren<Attribute> {
-        support::children(&self.syntax)
     }
 }
 
@@ -1792,6 +1908,18 @@ impl Attribute {
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
+    pub fn dot_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::DOT))
+    }
+    pub fn path_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD))
+    }
     pub fn attribute_args(&self) -> Option<AttributeArgs> {
         support::child(&self.syntax)
     }
@@ -2002,6 +2130,12 @@ impl ConfigValue {
     pub fn expr(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
+    pub fn unquoted_token(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
+    }
     pub fn config_array(&self) -> Option<ConfigArray> {
         support::child(&self.syntax)
     }
@@ -2086,6 +2220,34 @@ impl RawStringLiteral {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BacktickStringLiteral {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for BacktickStringLiteral {}
+
+impl AstNode for BacktickStringLiteral {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::BACKTICK_STRING_LITERAL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl BacktickStringLiteral {
+    pub fn any_element(&self) -> impl Iterator<Item = SyntaxElement> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter(|element| !element.kind().is_trivia())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GenericParam {
     pub(super) syntax: SyntaxNode,
 }
@@ -2156,6 +2318,50 @@ impl GenericParamBounds {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FunctionTypeParam {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for FunctionTypeParam {}
+
+impl AstNode for FunctionTypeParam {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::FUNCTION_TYPE_PARAM
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl FunctionTypeParam {
+    pub fn name_token(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
+    }
+    pub fn question_token(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::QUESTION))
+    }
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COLON))
+    }
+    pub fn type_expr(&self) -> Option<TypeExpr> {
+        support::child(&self.syntax)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeArgs {
     pub(super) syntax: SyntaxNode,
 }
@@ -2199,50 +2405,6 @@ impl TypeArgs {
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| matches!(token.kind(), SyntaxKind::GREATER))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FunctionTypeParam {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for FunctionTypeParam {}
-
-impl AstNode for FunctionTypeParam {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::FUNCTION_TYPE_PARAM
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl FunctionTypeParam {
-    pub fn name_token(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
-    }
-    pub fn question_token(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::QUESTION))
-    }
-    pub fn colon_token(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::COLON))
-    }
-    pub fn type_expr(&self) -> Option<TypeExpr> {
-        support::child(&self.syntax)
     }
 }
 
@@ -2470,34 +2632,6 @@ impl PathExpr {
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| matches!(token.kind(), SyntaxKind::DOUBLE_COLON))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct BacktickStringLiteral {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for BacktickStringLiteral {}
-
-impl AstNode for BacktickStringLiteral {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::BACKTICK_STRING_LITERAL
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl BacktickStringLiteral {
-    pub fn any_element(&self) -> impl Iterator<Item = SyntaxElement> + '_ {
-        self.syntax
-            .children_with_tokens()
-            .filter(|element| !element.kind().is_trivia())
     }
 }
 
@@ -3527,8 +3661,8 @@ impl CatchExpr {
     pub fn body(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
-    pub fn catch_clause(&self) -> Option<CatchClause> {
-        support::child(&self.syntax)
+    pub fn catch_clause(&self) -> AstChildren<CatchClause> {
+        support::children(&self.syntax)
     }
 }
 
@@ -4074,68 +4208,6 @@ impl WhileLetStmt {
     }
     pub fn body(&self) -> Option<BlockExpr> {
         support::child(&self.syntax)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct LetStmt {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for LetStmt {}
-
-impl AstNode for LetStmt {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::LET_STMT
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl LetStmt {
-    pub fn let_token(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::KW_LET))
-    }
-    pub fn const_token(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::KW_CONST))
-    }
-    pub fn pattern(&self) -> Option<Pattern> {
-        support::child(&self.syntax)
-    }
-    pub fn equals_token(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::EQUALS))
-    }
-    pub fn value(&self) -> Option<ExprNode> {
-        support::child(&self.syntax)
-    }
-    pub fn else_token(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::KW_ELSE))
-    }
-    pub fn block_expr(&self) -> Option<BlockExpr> {
-        support::child(&self.syntax)
-    }
-    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
 }
 
@@ -5742,20 +5814,8 @@ impl BacktickIfOpen {
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| matches!(token.kind(), SyntaxKind::KW_IF))
     }
-    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
-    }
-    pub fn expr_node(&self) -> Option<ExprNode> {
+    pub fn paren_expr(&self) -> Option<ParenExpr> {
         support::child(&self.syntax)
-    }
-    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         self.syntax
@@ -5810,20 +5870,8 @@ impl BacktickElseIf {
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| matches!(token.kind(), SyntaxKind::KW_IF))
     }
-    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
-    }
-    pub fn expr_node(&self) -> Option<ExprNode> {
+    pub fn paren_expr(&self) -> Option<ParenExpr> {
         support::child(&self.syntax)
-    }
-    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         self.syntax
@@ -5944,6 +5992,7 @@ pub enum TopLevelDeclaration {
     RetryPolicyDef(RetryPolicyDef),
     TemplateStringDef(TemplateStringDef),
     TypeAliasDef(TypeAliasDef),
+    LetStmt(LetStmt),
 }
 
 impl AstNode for TopLevelDeclaration {
@@ -5966,6 +6015,7 @@ impl AstNode for TopLevelDeclaration {
                 | SyntaxKind::RETRY_POLICY_DEF
                 | SyntaxKind::TEMPLATE_STRING_DEF
                 | SyntaxKind::TYPE_ALIAS_DEF
+                | SyntaxKind::LET_STMT
         )
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -5987,6 +6037,7 @@ impl AstNode for TopLevelDeclaration {
                 Some(Self::TemplateStringDef(TemplateStringDef { syntax }))
             }
             SyntaxKind::TYPE_ALIAS_DEF => Some(Self::TypeAliasDef(TypeAliasDef { syntax })),
+            SyntaxKind::LET_STMT => Some(Self::LetStmt(LetStmt { syntax })),
             _ => None,
         }
     }
@@ -6007,6 +6058,7 @@ impl AstNode for TopLevelDeclaration {
             Self::RetryPolicyDef(node) => node.syntax(),
             Self::TemplateStringDef(node) => node.syntax(),
             Self::TypeAliasDef(node) => node.syntax(),
+            Self::LetStmt(node) => node.syntax(),
         }
     }
 }
@@ -6098,6 +6150,12 @@ impl From<TemplateStringDef> for TopLevelDeclaration {
 impl From<TypeAliasDef> for TopLevelDeclaration {
     fn from(node: TypeAliasDef) -> Self {
         Self::TypeAliasDef(node)
+    }
+}
+
+impl From<LetStmt> for TopLevelDeclaration {
+    fn from(node: LetStmt) -> Self {
+        Self::LetStmt(node)
     }
 }
 

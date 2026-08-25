@@ -81,6 +81,22 @@ struct GeneratedTypeArgs {
     close_angle: RawToken,
 }
 
+struct GeneratedFunctionType {
+    open_paren: RawToken,
+    params: Vec<(raw_ast::FunctionTypeParam, Option<RawToken>)>,
+    close_paren: RawToken,
+    arrow: RawToken,
+    return_type: raw_ast::TypeExpr,
+    throws: Option<raw_ast::ThrowsClause>,
+}
+
+struct GeneratedParenType {
+    open_paren: RawToken,
+    ty: raw_ast::TypeExpr,
+    close_paren: RawToken,
+    suffix: Vec<SyntaxElement>,
+}
+
 impl TryPrintSingleLine for GeneratedTypeArgs {
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         printer.print_raw_token(&self.open_angle);
@@ -138,6 +154,7 @@ impl PrintMultiLine for GeneratedTypeArgs {
             printer.print_spaces(inner_indent);
             printer.print(arg, inner_shape.clone());
             if index + 1 < self.args.len() {
+                let _ = printer.try_print_trivia_single_line_squished(trailing);
                 if let Some(comma) = self.commas.get(index) {
                     let (comma_leading, comma_trailing) =
                         printer.trivia.get_for_range_split(comma.span());
@@ -227,6 +244,17 @@ fn type_gap_has_space(previous: SyntaxKind, next: SyntaxKind) -> bool {
     )
 }
 
+fn type_elements_attach(_previous: SyntaxKind, next: SyntaxKind) -> bool {
+    matches!(
+        next,
+        SyntaxKind::TYPE_ARGS
+            | SyntaxKind::QUESTION
+            | SyntaxKind::L_BRACKET
+            | SyntaxKind::R_BRACKET
+            | SyntaxKind::DOT
+    )
+}
+
 fn try_print_type_gap(
     previous: &SyntaxElement,
     next: &SyntaxElement,
@@ -242,6 +270,36 @@ fn try_print_type_gap(
         printer.print_str(" ");
     }
     Some(())
+}
+
+fn print_type_gap(
+    previous: &SyntaxElement,
+    next: &SyntaxElement,
+    indent: usize,
+    printer: &mut Printer,
+) {
+    let (_, trailing) = printer
+        .trivia
+        .get_for_range_split(element_rightmost(previous));
+    let (leading, _) = printer.trivia.get_for_range_split(element_leftmost(next));
+    let single_line = trailing
+        .iter()
+        .chain(leading)
+        .all(|trivia| trivia.single_line_len(printer.input).is_some());
+
+    if single_line {
+        let trivia_len =
+            printer.print_trivia_squished(trailing) + printer.print_trivia_squished(leading);
+        if trivia_len == 0 && type_gap_has_space(previous.kind(), next.kind()) {
+            printer.print_str(" ");
+        }
+        return;
+    }
+
+    printer.print_trivia_trailing(trailing);
+    printer.print_newline();
+    printer.print_trivia_with_newline(leading.trim_blanks(), indent);
+    printer.print_spaces(indent);
 }
 
 fn print_type_element(element: &SyntaxElement, shape: Shape, printer: &mut Printer) -> PrintInfo {
@@ -290,7 +348,9 @@ fn try_print_type_elements(
     let mut multi_lined = false;
     for (index, element) in elements.iter().enumerate() {
         if let Some(previous) = index.checked_sub(1).and_then(|index| elements.get(index)) {
-            try_print_type_gap(previous, element, printer)?;
+            if !type_elements_attach(previous.kind(), element.kind()) {
+                try_print_type_gap(previous, element, printer)?;
+            }
         }
         multi_lined |=
             print_type_element(element, Shape::unlimited_single_line(), printer).multi_lined;
@@ -299,6 +359,282 @@ fn try_print_type_elements(
         }
     }
     Some(PrintInfo::default_single_line())
+}
+
+impl GeneratedFunctionType {
+    fn new(elements: &[SyntaxElement]) -> Option<Self> {
+        let open_paren = elements.first()?.as_token()?;
+        if open_paren.kind() != SyntaxKind::L_PAREN {
+            return None;
+        }
+        let arrow_index = elements
+            .iter()
+            .position(|element| element.kind() == SyntaxKind::ARROW)?;
+        let close_paren = elements.get(arrow_index.checked_sub(1)?)?.as_token()?;
+        if close_paren.kind() != SyntaxKind::R_PAREN {
+            return None;
+        }
+
+        let mut params = Vec::new();
+        for element in &elements[1..arrow_index - 1] {
+            match element {
+                rowan::NodeOrToken::Node(node)
+                    if node.kind() == SyntaxKind::FUNCTION_TYPE_PARAM =>
+                {
+                    params.push((raw_ast::FunctionTypeParam::cast(node.clone())?, None));
+                }
+                rowan::NodeOrToken::Token(token) if token.kind() == SyntaxKind::COMMA => {
+                    params.last_mut()?.1 = Some(RawToken(token.clone()));
+                }
+                _ => return None,
+            }
+        }
+
+        let arrow = elements.get(arrow_index)?.as_token()?;
+        let return_type = elements.get(arrow_index + 1)?.as_node()?;
+        let return_type = raw_ast::TypeExpr::cast(return_type.clone())?;
+        let throws = elements
+            .get(arrow_index + 2)
+            .and_then(SyntaxElement::as_node)
+            .and_then(|node| raw_ast::ThrowsClause::cast(node.clone()));
+        let consumed = arrow_index + 2 + usize::from(throws.is_some());
+        if consumed != elements.len() {
+            return None;
+        }
+
+        Some(Self {
+            open_paren: RawToken(open_paren.clone()),
+            params,
+            close_paren: RawToken(close_paren.clone()),
+            arrow: RawToken(arrow.clone()),
+            return_type,
+            throws,
+        })
+    }
+}
+
+impl TryPrintSingleLine for GeneratedFunctionType {
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        printer.print_raw_token(&self.open_paren);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
+
+        for (index, (param, comma)) in self.params.iter().enumerate() {
+            if printer.len() > shape.width {
+                return None;
+            }
+            let (leading, trailing) = printer.trivia.get_for_element(param);
+            printer.try_print_trivia_single_line_squished(leading)?;
+            if printer
+                .print(param, Shape::unlimited_single_line())
+                .multi_lined
+            {
+                return None;
+            }
+            printer.try_print_trivia_single_line_squished(trailing)?;
+            if index + 1 < self.params.len() {
+                if let Some(comma) = comma {
+                    let (leading, trailing) = printer.trivia.get_for_range_split(comma.span());
+                    printer.try_print_trivia_single_line_squished(leading)?;
+                    printer.print_raw_token(comma);
+                    printer.try_print_trivia_single_line_squished(trailing)?;
+                } else {
+                    printer.print_str(",");
+                }
+                printer.print_str(" ");
+            } else if let Some(comma) = comma {
+                let (leading, trailing) = printer.trivia.get_for_range_split(comma.span());
+                printer.try_print_trivia_single_line_squished(leading)?;
+                printer.try_print_trivia_single_line_squished(trailing)?;
+            }
+        }
+
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.try_print_trivia_single_line_squished(close_leading)?;
+        printer.print_raw_token(&self.close_paren);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.arrow);
+        printer.print_str(" ");
+        if printer
+            .print(&self.return_type, Shape::unlimited_single_line())
+            .multi_lined
+        {
+            return None;
+        }
+        if let Some(throws) = &self.throws {
+            printer.print_str(" ");
+            if printer
+                .print(throws, Shape::unlimited_single_line())
+                .multi_lined
+            {
+                return None;
+            }
+        }
+
+        (printer.len() <= shape.width).then(PrintInfo::default_single_line)
+    }
+}
+
+impl PrintMultiLine for GeneratedFunctionType {
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+        printer.print_raw_token(&self.open_paren);
+        printer.print_trivia_all_trailing_for(self.open_paren.span());
+        printer.print_newline();
+
+        for (param, comma) in &self.params {
+            printer.print_trivia_all_leading_with_newline_for(
+                param.leftmost_token(),
+                inner_shape.indent,
+            );
+            printer.print_spaces(inner_shape.indent);
+            printer.print(param, inner_shape.clone());
+            if let Some(comma) = comma {
+                printer.print_raw_token(comma);
+                printer.print_trivia_all_trailing_for(comma.span());
+            } else {
+                printer.print_str(",");
+                printer.print_trivia_all_trailing_for(param.rightmost_token());
+            }
+            printer.print_newline();
+        }
+
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.print_trivia_with_newline(close_leading.trim_blanks(), inner_shape.indent);
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_paren);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.arrow);
+        printer.print_str(" ");
+        printer.print(&self.return_type, shape.clone());
+        if let Some(throws) = &self.throws {
+            printer.print_str(" ");
+            printer.print(throws, shape);
+        }
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for GeneratedFunctionType {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer
+            .try_sub_printer(|sub| self.try_print_single_line(&shape, sub))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.throws.as_ref().map_or_else(
+            || self.return_type.rightmost_token(),
+            Printable::rightmost_token,
+        )
+    }
+}
+
+impl GeneratedParenType {
+    fn new(elements: &[SyntaxElement]) -> Option<Self> {
+        let open_paren = elements.first()?.as_token()?;
+        if open_paren.kind() != SyntaxKind::L_PAREN {
+            return None;
+        }
+        let close_index = elements
+            .iter()
+            .position(|element| element.kind() == SyntaxKind::R_PAREN)?;
+        if close_index != 2 {
+            return None;
+        }
+        let param = elements.get(1)?.as_node()?;
+        let param = raw_ast::FunctionTypeParam::cast(param.clone())?;
+        if param.colon_token().is_some() {
+            return None;
+        }
+        let close_paren = elements.get(close_index)?.as_token()?;
+        let suffix = elements[close_index + 1..].to_vec();
+        if suffix.iter().any(|element| {
+            !matches!(
+                element.kind(),
+                SyntaxKind::QUESTION | SyntaxKind::L_BRACKET | SyntaxKind::R_BRACKET
+            )
+        }) {
+            return None;
+        }
+        Some(Self {
+            open_paren: RawToken(open_paren.clone()),
+            ty: param.ty()?,
+            close_paren: RawToken(close_paren.clone()),
+            suffix,
+        })
+    }
+
+    fn print_suffix(&self, printer: &mut Printer) {
+        for element in &self.suffix {
+            print_type_element(element, Shape::unlimited_single_line(), printer);
+        }
+    }
+}
+
+impl TryPrintSingleLine for GeneratedParenType {
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        printer.print_raw_token(&self.open_paren);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
+        let (leading, trailing) = printer.trivia.get_for_element(&self.ty);
+        printer.try_print_trivia_single_line_squished(leading)?;
+        if printer
+            .print(&self.ty, Shape::unlimited_single_line())
+            .multi_lined
+        {
+            return None;
+        }
+        printer.try_print_trivia_single_line_squished(trailing)?;
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.try_print_trivia_single_line_squished(close_leading)?;
+        printer.print_raw_token(&self.close_paren);
+        self.print_suffix(printer);
+        (printer.len() <= shape.width).then(PrintInfo::default_single_line)
+    }
+}
+
+impl PrintMultiLine for GeneratedParenType {
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_indent = shape.indent + printer.config.indent_width;
+        printer.print_raw_token(&self.open_paren);
+        printer.print_trivia_all_trailing_for(self.open_paren.span());
+        printer.print_newline();
+        printer.print_standalone_with_trivia(&self.ty, inner_indent);
+        printer.print_newline();
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.print_trivia_with_newline(close_leading.trim_blanks(), inner_indent);
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_paren);
+        self.print_suffix(printer);
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for GeneratedParenType {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer
+            .try_sub_printer(|sub| self.try_print_single_line(&shape, sub))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.suffix
+            .last()
+            .map_or_else(|| self.close_paren.span(), element_rightmost)
+    }
 }
 
 fn print_union_type(elements: &[SyntaxElement], shape: &Shape, printer: &mut Printer) -> PrintInfo {
@@ -329,9 +665,15 @@ fn print_union_type(elements: &[SyntaxElement], shape: &Shape, printer: &mut Pri
         for (index, element) in elements[start..end].iter().enumerate() {
             if index > 0 {
                 let previous = &elements[start + index - 1];
-                let _ = try_print_type_gap(previous, element, printer);
+                print_type_gap(previous, element, inner_indent, printer);
             }
             print_type_element(element, shape.clone(), printer);
+        }
+        if pipe.is_some()
+            && let Some(last) = elements.get(end.saturating_sub(1))
+        {
+            let (_, trailing) = printer.trivia.get_for_range_split(element_rightmost(last));
+            printer.print_trivia_trailing(trailing);
         }
         first = false;
         let Some(pipe) = pipe else { break };
@@ -340,10 +682,14 @@ fn print_union_type(elements: &[SyntaxElement], shape: &Shape, printer: &mut Pri
     PrintInfo::default_multi_lined()
 }
 
-fn print_generated_type(ty: &raw_ast::TypeExpr, shape: &Shape, printer: &mut Printer) -> PrintInfo {
-    let elements = non_trivia_elements(ty.syntax());
-    if let Some(info) =
-        printer.try_sub_printer(|sub| try_print_type_elements(&elements, shape, sub))
+fn print_type_core(elements: &[SyntaxElement], shape: &Shape, printer: &mut Printer) -> PrintInfo {
+    if let Some(function) = GeneratedFunctionType::new(elements) {
+        return function.print(shape.clone(), printer);
+    }
+    if let Some(paren) = GeneratedParenType::new(elements) {
+        return paren.print(shape.clone(), printer);
+    }
+    if let Some(info) = printer.try_sub_printer(|sub| try_print_type_elements(elements, shape, sub))
     {
         return info;
     }
@@ -351,17 +697,124 @@ fn print_generated_type(ty: &raw_ast::TypeExpr, shape: &Shape, printer: &mut Pri
         .iter()
         .any(|element| element.kind() == SyntaxKind::PIPE)
     {
-        return print_union_type(&elements, shape, printer);
+        return print_union_type(elements, shape, printer);
     }
     let mut multi_lined = false;
     for (index, element) in elements.iter().enumerate() {
         if index > 0 {
             let previous = &elements[index - 1];
-            let _ = try_print_type_gap(previous, element, printer);
+            if !type_elements_attach(previous.kind(), element.kind()) {
+                print_type_gap(
+                    previous,
+                    element,
+                    shape.indent + printer.config.indent_width,
+                    printer,
+                );
+            }
         }
         multi_lined |= print_type_element(element, shape.clone(), printer).multi_lined;
     }
     PrintInfo { multi_lined }
+}
+
+fn try_print_constrained_type(
+    base: &[SyntaxElement],
+    attrs: &[raw_ast::Attribute],
+    shape: &Shape,
+    printer: &mut Printer,
+) -> Option<PrintInfo> {
+    if print_type_core(base, &Shape::unlimited_single_line(), printer).multi_lined {
+        return None;
+    }
+    let last = base.last()?;
+    let (_, trailing) = printer.trivia.get_for_range_split(element_rightmost(last));
+    let mut trivia_len = printer.try_print_trivia_single_line_squished(trailing)?;
+    for (index, attr) in attrs.iter().enumerate() {
+        let (leading, trailing) = printer.trivia.get_for_element(attr);
+        trivia_len += printer.try_print_trivia_single_line_squished(leading)?;
+        if trivia_len == 0 {
+            printer.print_str(" ");
+        }
+        if printer
+            .print(attr, Shape::unlimited_single_line())
+            .multi_lined
+        {
+            return None;
+        }
+        if index + 1 < attrs.len() {
+            trivia_len = printer.try_print_trivia_single_line_squished(trailing)?;
+        }
+    }
+    (printer.len() <= shape.width).then(PrintInfo::default_single_line)
+}
+
+fn print_constrained_type(
+    base: &[SyntaxElement],
+    attrs: &[raw_ast::Attribute],
+    shape: &Shape,
+    printer: &mut Printer,
+) -> PrintInfo {
+    if let Some(info) =
+        printer.try_sub_printer(|sub| try_print_constrained_type(base, attrs, shape, sub))
+    {
+        return info;
+    }
+
+    let base_info = print_type_core(base, shape, printer);
+    let trailing_count = base.last().map_or(0, |last| {
+        printer
+            .print_trivia_all_trailing_for(element_rightmost(last))
+            .0
+    });
+    if !base_info.multi_lined && trailing_count == 0 && attrs.len() == 1 {
+        let remaining = printer.current_line_remaining_width();
+        let prefix_len = attrs[0]
+            .syntax()
+            .children_with_tokens()
+            .take_while(|element| element.kind() != SyntaxKind::ATTRIBUTE_ARGS)
+            .filter(|element| !element.kind().is_trivia())
+            .map(|element| usize::from(element.text_range().len()))
+            .sum::<usize>();
+        if prefix_len < remaining {
+            printer.print_str(" ");
+            let attr_shape = Shape {
+                width: remaining.saturating_sub(1),
+                indent: shape.indent,
+                first_line_offset: printer.current_line_len().saturating_sub(shape.indent),
+            };
+            return printer.print(&attrs[0], attr_shape);
+        }
+    }
+
+    let attr_indent = shape.indent + printer.config.indent_width;
+    let attr_shape = Shape::standalone(printer.config.line_width, attr_indent);
+    for attr in attrs {
+        printer.print_newline();
+        printer.print_spaces(attr_indent);
+        printer.print(attr, attr_shape.clone());
+    }
+    PrintInfo::default_multi_lined()
+}
+
+fn print_generated_type(ty: &raw_ast::TypeExpr, shape: &Shape, printer: &mut Printer) -> PrintInfo {
+    let elements = non_trivia_elements(ty.syntax());
+    if let Some(attr_index) = elements
+        .iter()
+        .position(|element| element.kind() == SyntaxKind::ATTRIBUTE)
+        .filter(|&index| {
+            elements[index..]
+                .iter()
+                .all(|element| element.kind() == SyntaxKind::ATTRIBUTE)
+        })
+    {
+        let attrs = elements[attr_index..]
+            .iter()
+            .filter_map(SyntaxElement::as_node)
+            .filter_map(|node| raw_ast::Attribute::cast(node.clone()))
+            .collect::<Vec<_>>();
+        return print_constrained_type(&elements[..attr_index], &attrs, shape, printer);
+    }
+    print_type_core(&elements, shape, printer)
 }
 
 impl Printable for raw_ast::FunctionTypeParam {

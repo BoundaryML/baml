@@ -28,6 +28,23 @@ fn non_trivia_range(node: &SyntaxNode) -> TextRange {
     TextRange::new(first.text_range().start(), last.text_range().end())
 }
 
+fn first_non_trivia_range(node: &SyntaxNode) -> TextRange {
+    node.descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .find(|token| !token.kind().is_trivia())
+        .expect("validated syntax node")
+        .text_range()
+}
+
+fn last_non_trivia_range(node: &SyntaxNode) -> TextRange {
+    node.descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+        .filter(|token| !token.kind().is_trivia())
+        .last()
+        .expect("validated syntax node")
+        .text_range()
+}
+
 fn print_raw_attribute(
     syntax: &SyntaxNode,
     args: Option<&syntax_ast::AttributeArgs>,
@@ -62,11 +79,11 @@ impl Printable for syntax_ast::BlockAttribute {
     }
 
     fn leftmost_token(&self) -> TextRange {
-        non_trivia_range(self.syntax())
+        first_non_trivia_range(self.syntax())
     }
 
     fn rightmost_token(&self) -> TextRange {
-        non_trivia_range(self.syntax())
+        last_non_trivia_range(self.syntax())
     }
 }
 
@@ -81,11 +98,11 @@ impl Printable for syntax_ast::Attribute {
     }
 
     fn leftmost_token(&self) -> TextRange {
-        non_trivia_range(self.syntax())
+        first_non_trivia_range(self.syntax())
     }
 
     fn rightmost_token(&self) -> TextRange {
-        non_trivia_range(self.syntax())
+        last_non_trivia_range(self.syntax())
     }
 }
 
@@ -153,11 +170,11 @@ impl Printable for RawAttributeArg {
     }
 
     fn leftmost_token(&self) -> TextRange {
-        non_trivia_range(&self.0)
+        first_non_trivia_range(&self.0)
     }
 
     fn rightmost_token(&self) -> TextRange {
-        non_trivia_range(&self.0)
+        last_non_trivia_range(&self.0)
     }
 }
 
@@ -245,6 +262,11 @@ impl Printable for syntax_ast::AttributeArgs {
                             subprinter.print_str(",");
                         }
                         subprinter.print_str(" ");
+                    } else if let Some(comma) = comma {
+                        let (leading, trailing) =
+                            subprinter.trivia.get_for_range_split(comma.span());
+                        subprinter.try_print_trivia_single_line_squished(leading)?;
+                        subprinter.try_print_trivia_single_line_squished(trailing)?;
                     }
                 }
                 subprinter.try_print_trivia_single_line_squished(

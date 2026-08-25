@@ -18,7 +18,6 @@ function standalone_block_does_not_leak() -> int {
 function for_binding_does_not_leak() -> int {
     for (let x in [1, 2]) {
         x;
-    }
-    ;
+    };
     x
 }

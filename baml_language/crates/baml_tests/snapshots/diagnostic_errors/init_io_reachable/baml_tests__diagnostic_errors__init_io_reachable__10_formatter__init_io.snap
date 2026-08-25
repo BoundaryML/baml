@@ -32,10 +32,7 @@ function load_secret() -> string {
     baml.env.get_or_panic("OPENAI_API_KEY")
 }
 
-client ViaHelper = openai.ResponsesClient.new(
-    model = "gpt-4o-mini",
-    api_key = load_secret(),
-);
+client ViaHelper = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = load_secret());
 
 // ── Tainted: a network read, to show the rule is about io, not about env ─────
 client ViaFetch = openai.ResponsesClient.new(
@@ -48,7 +45,11 @@ client ViaFetch = openai.ResponsesClient.new(
 // helps when nothing calls the lambda. Here the call is right there.
 client InvokedThunk = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
-    api_key = (() -> { baml.env.get_or_panic("OPENAI_API_KEY") })(),
+    api_key = (
+        () -> {
+            baml.env.get_or_panic("OPENAI_API_KEY")
+        }
+    )(),
 );
 
 // ── Tainted: a `spawn { … }` body runs during `$init` too ────────────────────
@@ -60,10 +61,7 @@ function spawned_secret() -> string {
     await spawn { baml.env.get_or_panic("OPENAI_API_KEY") }
 }
 
-client ViaSpawn = openai.ResponsesClient.new(
-    model = "gpt-4o-mini",
-    api_key = spawned_secret(),
-);
+client ViaSpawn = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = spawned_secret());
 
 // ── CLEAN: `env.X` is a late-bound reference, not a read ─────────────────────
 // `env.X` desugars to `baml.env.ref("X")`, which only constructs a
@@ -89,11 +87,10 @@ function pick_eager(
 
 client StoredThunk = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
-    api_key = pick_eager("literal-key", () -> { baml.env.get_or_panic("OPENAI_API_KEY") }),
+    api_key = pick_eager("literal-key", () -> {
+        baml.env.get_or_panic("OPENAI_API_KEY")
+    }),
 );
 
 // ── CLEAN: a plain literal, the baseline ─────────────────────────────────────
-client LiteralKey = openai.ResponsesClient.new(
-    model = "gpt-4o-mini",
-    api_key = "literal-key",
-);
+client LiteralKey = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "literal-key");

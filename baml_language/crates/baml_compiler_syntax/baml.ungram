@@ -22,6 +22,7 @@ TopLevelDeclaration =
 | RetryPolicyDef
 | TemplateStringDef
 | TypeAliasDef
+| LetStmt
 
 FunctionDef =
   BlockAttribute*
@@ -80,7 +81,7 @@ InterfaceDef =
   GenericParamList?
   RequiresClause?
   '{'
-  (MethodSig | AssociatedTypeDecl | Field | BlockAttribute | ',' | ';')*
+  (MethodSig | FunctionDef | AssociatedTypeDecl | Field | BlockAttribute | ',' | ';')*
   '}'
 
 RequiresClause = 'requires' TypeExpr (',' TypeExpr)* ','?
@@ -164,7 +165,7 @@ ConfigItem =
   ':'?
   (ConfigValue | ConfigBlock)
   Attribute*
-ConfigValue = (expr:ExprNode | config_array:ConfigArray | config_block:ConfigBlock)
+ConfigValue = (expr:ExprNode | unquoted_token:'#word' | config_array:ConfigArray | config_block:ConfigBlock)
 ConfigArray = '[' (ConfigValue | ConfigBlock | ',')* ']'
 
 TestDef = BlockAttribute* 'test' name_token:'#word' ConfigBlock
@@ -174,7 +175,7 @@ TemplateStringDef =
   'template_string'
   name_token:'#word'
   ParameterList
-  RawStringLiteral
+  (RawStringLiteral | BacktickStringLiteral)
 
 TypeAliasDef =
   BlockAttribute*
@@ -197,19 +198,18 @@ TypeExpr =
   | RawStringLiteral
   | ('-'? ('#bigint' | '#integer' | '#float'))
   | ('true' | 'false' | 'null')
-  | ('#word' ('.' '#word')* TypeArgs?)
+  | ('#word' ('.' ('#word' | 'spawn' | 'await' | 'class' | 'enum' | 'interface' | 'function'))*)
   | ('(' (FunctionTypeParam | ',')* ')' ('->' TypeExpr ThrowsClause?)?)
   )
-  (TypeArgs | '[' ']' | '?')*
+  (TypeArgs | '[' ']' | '?' | Attribute)*
   ('|' (
     StringLiteral
   | RawStringLiteral
   | ('-'? ('#bigint' | '#integer' | '#float'))
   | ('true' | 'false' | 'null')
-  | ('#word' ('.' '#word')* TypeArgs?)
+  | ('#word' ('.' ('#word' | 'spawn' | 'await' | 'class' | 'enum' | 'interface' | 'function'))*)
   | ('(' (FunctionTypeParam | ',')* ')' ('->' TypeExpr ThrowsClause?)?)
-  ) (TypeArgs | '[' ']' | '?')*)*
-  Attribute*
+  ) (TypeArgs | '[' ']' | '?' | Attribute)*)*
 
 FunctionTypeParam =
   (name_token:('#word' | 'client') '?'? ':')?
@@ -217,8 +217,8 @@ FunctionTypeParam =
 
 TypeArgs = '<' (TypeExpr | AssociatedTypeDecl | ',')* '>'
 
-Attribute = '@' name_token:'#word' AttributeArgs?
-BlockAttribute = '@@' name_token:'#word' AttributeArgs?
+Attribute = '@' name_token:'#word' ('.' path_token:'#word')* AttributeArgs?
+BlockAttribute = '@@' name_token:'#word' ('.' path_token:'#word')* AttributeArgs?
 AttributeArgs = '(' (ExprNode | ',')* ')'
 
 AnyElement = Error
@@ -355,7 +355,7 @@ MatchArm = Pattern MatchGuard? '=>' value:ExprNode ','?
 MatchPattern = Pattern
 MatchGuard = 'if' condition:ExprNode
 
-CatchExpr = body:ExprNode CatchClause
+CatchExpr = body:ExprNode CatchClause CatchClause*
 CatchClause =
   ('catch' | 'catch_all' | 'catch_all_panics')
   '('
@@ -456,8 +456,8 @@ BacktickText = AnyElement*
 BacktickInterpolation = '$' (ExprNode | LetStmt)
 BacktickForOpen = '$' '{' 'for' '(' LetStmt 'in' ExprNode ')' '}'
 BacktickEndfor = '$' '{' endfor_token:'#word' '}'
-BacktickIfOpen = '$' '{' 'if' '(' ExprNode ')' '}'
-BacktickElseIf = '$' '{' 'else' 'if' '(' ExprNode ')' '}'
+BacktickIfOpen = '$' '{' 'if' ParenExpr '}'
+BacktickElseIf = '$' '{' 'else' 'if' ParenExpr '}'
 BacktickElse = '$' '{' 'else' '}'
 BacktickEndif = '$' '{' endif_token:'#word' '}'
 

@@ -33,7 +33,7 @@ struct NodeSchema {
 }
 
 #[rustfmt::skip]
-const RULE_SOURCE_FILE: SchemaRule = SchemaRule::Repeated(&SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::FUNCTION_DEF, SyntaxKind::CLASS_DEF, SyntaxKind::ENUM_DEF, SyntaxKind::INTERFACE_DEF, SyntaxKind::IMPLEMENTS_FOR, SyntaxKind::CLIENT_DEF, SyntaxKind::CLIENT_VALUE_DEF, SyntaxKind::TEST_DEF, SyntaxKind::TEST_EXPR_DEF, SyntaxKind::TESTSET_DEF, SyntaxKind::HEADER_COMMENT, SyntaxKind::GENERATOR_DEF, SyntaxKind::RETRY_POLICY_DEF, SyntaxKind::TEMPLATE_STRING_DEF, SyntaxKind::TYPE_ALIAS_DEF]) });
+const RULE_SOURCE_FILE: SchemaRule = SchemaRule::Repeated(&SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::FUNCTION_DEF, SyntaxKind::CLASS_DEF, SyntaxKind::ENUM_DEF, SyntaxKind::INTERFACE_DEF, SyntaxKind::IMPLEMENTS_FOR, SyntaxKind::CLIENT_DEF, SyntaxKind::CLIENT_VALUE_DEF, SyntaxKind::TEST_DEF, SyntaxKind::TEST_EXPR_DEF, SyntaxKind::TESTSET_DEF, SyntaxKind::HEADER_COMMENT, SyntaxKind::GENERATOR_DEF, SyntaxKind::RETRY_POLICY_DEF, SyntaxKind::TEMPLATE_STRING_DEF, SyntaxKind::TYPE_ALIAS_DEF, SyntaxKind::LET_STMT]) });
 #[rustfmt::skip]
 const RULE_FUNCTION_DEF: SchemaRule = SchemaRule::Seq(&[SchemaRule::Repeated(&SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_ATTRIBUTE]) }), SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_FUNCTION) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::GENERIC_PARAM_LIST]) }), SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::PARAMETER_LIST]) }, SchemaRule::Alt(&[SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::ARROW) }, SchemaRule::Capture { slot: 6, rule: &SchemaRule::Token(SyntaxKind::FAT_ARROW) }]), SchemaRule::Capture { slot: 7, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 8, rule: &SchemaRule::Node(&[SyntaxKind::THROWS_CLAUSE]) }), SchemaRule::Capture { slot: 9, rule: &SchemaRule::Node(&[SyntaxKind::LLM_FUNCTION_BODY, SyntaxKind::EXPR_FUNCTION_BODY]) }]);
 #[rustfmt::skip]
@@ -41,7 +41,7 @@ const RULE_CLASS_DEF: SchemaRule = SchemaRule::Seq(&[SchemaRule::Repeated(&Schem
 #[rustfmt::skip]
 const RULE_ENUM_DEF: SchemaRule = SchemaRule::Seq(&[SchemaRule::Repeated(&SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_ATTRIBUTE]) }), SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_ENUM) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::GENERIC_PARAM_LIST]) }), SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::L_BRACE) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 5, rule: &SchemaRule::Node(&[SyntaxKind::ENUM_VARIANT]) }, SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_ATTRIBUTE]) }, SchemaRule::Capture { slot: 6, rule: &SchemaRule::Token(SyntaxKind::COMMA) }, SchemaRule::Capture { slot: 7, rule: &SchemaRule::Token(SyntaxKind::SEMICOLON) }])), SchemaRule::Capture { slot: 8, rule: &SchemaRule::Token(SyntaxKind::R_BRACE) }]);
 #[rustfmt::skip]
-const RULE_INTERFACE_DEF: SchemaRule = SchemaRule::Seq(&[SchemaRule::Repeated(&SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_ATTRIBUTE]) }), SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_INTERFACE) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::GENERIC_PARAM_LIST]) }), SchemaRule::Optional(&SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::REQUIRES_CLAUSE]) }), SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::L_BRACE) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 6, rule: &SchemaRule::Node(&[SyntaxKind::METHOD_SIG]) }, SchemaRule::Capture { slot: 7, rule: &SchemaRule::Node(&[SyntaxKind::ASSOCIATED_TYPE_DECL]) }, SchemaRule::Capture { slot: 8, rule: &SchemaRule::Node(&[SyntaxKind::FIELD]) }, SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_ATTRIBUTE]) }, SchemaRule::Capture { slot: 9, rule: &SchemaRule::Token(SyntaxKind::COMMA) }, SchemaRule::Capture { slot: 10, rule: &SchemaRule::Token(SyntaxKind::SEMICOLON) }])), SchemaRule::Capture { slot: 11, rule: &SchemaRule::Token(SyntaxKind::R_BRACE) }]);
+const RULE_INTERFACE_DEF: SchemaRule = SchemaRule::Seq(&[SchemaRule::Repeated(&SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_ATTRIBUTE]) }), SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_INTERFACE) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::GENERIC_PARAM_LIST]) }), SchemaRule::Optional(&SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::REQUIRES_CLAUSE]) }), SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::L_BRACE) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 6, rule: &SchemaRule::Node(&[SyntaxKind::METHOD_SIG]) }, SchemaRule::Capture { slot: 7, rule: &SchemaRule::Node(&[SyntaxKind::FUNCTION_DEF]) }, SchemaRule::Capture { slot: 8, rule: &SchemaRule::Node(&[SyntaxKind::ASSOCIATED_TYPE_DECL]) }, SchemaRule::Capture { slot: 9, rule: &SchemaRule::Node(&[SyntaxKind::FIELD]) }, SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_ATTRIBUTE]) }, SchemaRule::Capture { slot: 10, rule: &SchemaRule::Token(SyntaxKind::COMMA) }, SchemaRule::Capture { slot: 11, rule: &SchemaRule::Token(SyntaxKind::SEMICOLON) }])), SchemaRule::Capture { slot: 12, rule: &SchemaRule::Token(SyntaxKind::R_BRACE) }]);
 #[rustfmt::skip]
 const RULE_IMPLEMENTS_FOR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Alt(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_IMPLEMENTS) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_IMPLEMENT) }]), SchemaRule::Optional(&SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::GENERIC_PARAM_LIST]) }), SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::IMPLEMENTS_TARGET]) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::KW_FOR) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Node(&[SyntaxKind::IMPLEMENTS_FOR_TARGET]) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 6, rule: &SchemaRule::Node(&[SyntaxKind::REQUIRES_CLAUSE]) }), SchemaRule::Capture { slot: 7, rule: &SchemaRule::Token(SyntaxKind::L_BRACE) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 8, rule: &SchemaRule::Node(&[SyntaxKind::FUNCTION_DEF]) }, SchemaRule::Capture { slot: 9, rule: &SchemaRule::Node(&[SyntaxKind::ASSOCIATED_TYPE_DECL]) }, SchemaRule::Capture { slot: 10, rule: &SchemaRule::Node(&[SyntaxKind::INTERFACE_FIELD_LINK]) }, SchemaRule::Capture { slot: 11, rule: &SchemaRule::Node(&[SyntaxKind::FIELD]) }, SchemaRule::Capture { slot: 12, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_ATTRIBUTE]) }, SchemaRule::Capture { slot: 13, rule: &SchemaRule::Token(SyntaxKind::COMMA) }, SchemaRule::Capture { slot: 14, rule: &SchemaRule::Token(SyntaxKind::SEMICOLON) }])), SchemaRule::Capture { slot: 15, rule: &SchemaRule::Token(SyntaxKind::R_BRACE) }]);
 #[rustfmt::skip]
@@ -61,17 +61,19 @@ const RULE_GENERATOR_DEF: SchemaRule = SchemaRule::Seq(&[SchemaRule::Repeated(&S
 #[rustfmt::skip]
 const RULE_RETRY_POLICY_DEF: SchemaRule = SchemaRule::Seq(&[SchemaRule::Repeated(&SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_ATTRIBUTE]) }), SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_RETRY_POLICY) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::CONFIG_BLOCK]) }]);
 #[rustfmt::skip]
-const RULE_TEMPLATE_STRING_DEF: SchemaRule = SchemaRule::Seq(&[SchemaRule::Repeated(&SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_ATTRIBUTE]) }), SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_TEMPLATE_STRING) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::PARAMETER_LIST]) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::RAW_STRING_LITERAL]) }]);
+const RULE_TEMPLATE_STRING_DEF: SchemaRule = SchemaRule::Seq(&[SchemaRule::Repeated(&SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_ATTRIBUTE]) }), SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_TEMPLATE_STRING) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::PARAMETER_LIST]) }, SchemaRule::Alt(&[SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::RAW_STRING_LITERAL]) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Node(&[SyntaxKind::BACKTICK_STRING_LITERAL]) }])]);
 #[rustfmt::skip]
 const RULE_TYPE_ALIAS_DEF: SchemaRule = SchemaRule::Seq(&[SchemaRule::Repeated(&SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_ATTRIBUTE]) }), SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_TYPE) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::GENERIC_PARAM_LIST]) }), SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::EQUALS) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 6, rule: &SchemaRule::Token(SyntaxKind::SEMICOLON) })]);
 #[rustfmt::skip]
-const RULE_BLOCK_ATTRIBUTE: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::AT_AT) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::ATTRIBUTE_ARGS]) })]);
+const RULE_LET_STMT: SchemaRule = SchemaRule::Seq(&[SchemaRule::Optional(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_LET) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_CONST) }])), SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::PATTERN]) }, SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::EQUALS) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }])), SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::KW_ELSE) }, SchemaRule::Capture { slot: 6, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_EXPR]) }])), SchemaRule::Optional(&SchemaRule::Capture { slot: 7, rule: &SchemaRule::Token(SyntaxKind::SEMICOLON) })]);
+#[rustfmt::skip]
+const RULE_BLOCK_ATTRIBUTE: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::AT_AT) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::DOT) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::WORD) }])), SchemaRule::Optional(&SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::ATTRIBUTE_ARGS]) })]);
 #[rustfmt::skip]
 const RULE_GENERIC_PARAM_LIST: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::LESS) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::GENERIC_PARAM]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::COMMA) }])), SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::GREATER) }]);
 #[rustfmt::skip]
 const RULE_PARAMETER_LIST: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::PARAMETER]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::COMMA) }])), SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }]);
 #[rustfmt::skip]
-const RULE_TYPE_EXPR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Alt(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::STRING_LITERAL]) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::RAW_STRING_LITERAL]) }, SchemaRule::Seq(&[SchemaRule::Optional(&SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::MINUS) }), SchemaRule::Alt(&[SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::BIGINT_LITERAL) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::INTEGER_LITERAL) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::FLOAT_LITERAL) }])]), SchemaRule::Alt(&[SchemaRule::Capture { slot: 6, rule: &SchemaRule::Token(SyntaxKind::KW_TRUE) }, SchemaRule::Capture { slot: 7, rule: &SchemaRule::Token(SyntaxKind::KW_FALSE) }, SchemaRule::Capture { slot: 8, rule: &SchemaRule::Token(SyntaxKind::KW_NULL) }]), SchemaRule::Seq(&[SchemaRule::Capture { slot: 9, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 10, rule: &SchemaRule::Token(SyntaxKind::DOT) }, SchemaRule::Capture { slot: 9, rule: &SchemaRule::Token(SyntaxKind::WORD) }])), SchemaRule::Optional(&SchemaRule::Capture { slot: 11, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_ARGS]) })]), SchemaRule::Seq(&[SchemaRule::Capture { slot: 12, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 13, rule: &SchemaRule::Node(&[SyntaxKind::FUNCTION_TYPE_PARAM]) }, SchemaRule::Capture { slot: 14, rule: &SchemaRule::Token(SyntaxKind::COMMA) }])), SchemaRule::Capture { slot: 15, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }, SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 16, rule: &SchemaRule::Token(SyntaxKind::ARROW) }, SchemaRule::Capture { slot: 17, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 18, rule: &SchemaRule::Node(&[SyntaxKind::THROWS_CLAUSE]) })]))])]), SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 11, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_ARGS]) }, SchemaRule::Seq(&[SchemaRule::Capture { slot: 19, rule: &SchemaRule::Token(SyntaxKind::L_BRACKET) }, SchemaRule::Capture { slot: 20, rule: &SchemaRule::Token(SyntaxKind::R_BRACKET) }]), SchemaRule::Capture { slot: 21, rule: &SchemaRule::Token(SyntaxKind::QUESTION) }])), SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 22, rule: &SchemaRule::Token(SyntaxKind::PIPE) }, SchemaRule::Alt(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::STRING_LITERAL]) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::RAW_STRING_LITERAL]) }, SchemaRule::Seq(&[SchemaRule::Optional(&SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::MINUS) }), SchemaRule::Alt(&[SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::BIGINT_LITERAL) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::INTEGER_LITERAL) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::FLOAT_LITERAL) }])]), SchemaRule::Alt(&[SchemaRule::Capture { slot: 6, rule: &SchemaRule::Token(SyntaxKind::KW_TRUE) }, SchemaRule::Capture { slot: 7, rule: &SchemaRule::Token(SyntaxKind::KW_FALSE) }, SchemaRule::Capture { slot: 8, rule: &SchemaRule::Token(SyntaxKind::KW_NULL) }]), SchemaRule::Seq(&[SchemaRule::Capture { slot: 9, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 10, rule: &SchemaRule::Token(SyntaxKind::DOT) }, SchemaRule::Capture { slot: 9, rule: &SchemaRule::Token(SyntaxKind::WORD) }])), SchemaRule::Optional(&SchemaRule::Capture { slot: 11, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_ARGS]) })]), SchemaRule::Seq(&[SchemaRule::Capture { slot: 12, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 13, rule: &SchemaRule::Node(&[SyntaxKind::FUNCTION_TYPE_PARAM]) }, SchemaRule::Capture { slot: 14, rule: &SchemaRule::Token(SyntaxKind::COMMA) }])), SchemaRule::Capture { slot: 15, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }, SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 16, rule: &SchemaRule::Token(SyntaxKind::ARROW) }, SchemaRule::Capture { slot: 17, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 18, rule: &SchemaRule::Node(&[SyntaxKind::THROWS_CLAUSE]) })]))])]), SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 11, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_ARGS]) }, SchemaRule::Seq(&[SchemaRule::Capture { slot: 19, rule: &SchemaRule::Token(SyntaxKind::L_BRACKET) }, SchemaRule::Capture { slot: 20, rule: &SchemaRule::Token(SyntaxKind::R_BRACKET) }]), SchemaRule::Capture { slot: 21, rule: &SchemaRule::Token(SyntaxKind::QUESTION) }]))])), SchemaRule::Repeated(&SchemaRule::Capture { slot: 23, rule: &SchemaRule::Node(&[SyntaxKind::ATTRIBUTE]) })]);
+const RULE_TYPE_EXPR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Alt(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::STRING_LITERAL]) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::RAW_STRING_LITERAL]) }, SchemaRule::Seq(&[SchemaRule::Optional(&SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::MINUS) }), SchemaRule::Alt(&[SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::BIGINT_LITERAL) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::INTEGER_LITERAL) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::FLOAT_LITERAL) }])]), SchemaRule::Alt(&[SchemaRule::Capture { slot: 6, rule: &SchemaRule::Token(SyntaxKind::KW_TRUE) }, SchemaRule::Capture { slot: 7, rule: &SchemaRule::Token(SyntaxKind::KW_FALSE) }, SchemaRule::Capture { slot: 8, rule: &SchemaRule::Token(SyntaxKind::KW_NULL) }]), SchemaRule::Seq(&[SchemaRule::Capture { slot: 9, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 10, rule: &SchemaRule::Token(SyntaxKind::DOT) }, SchemaRule::Alt(&[SchemaRule::Capture { slot: 9, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 11, rule: &SchemaRule::Token(SyntaxKind::KW_SPAWN) }, SchemaRule::Capture { slot: 12, rule: &SchemaRule::Token(SyntaxKind::KW_AWAIT) }, SchemaRule::Capture { slot: 13, rule: &SchemaRule::Token(SyntaxKind::KW_CLASS) }, SchemaRule::Capture { slot: 14, rule: &SchemaRule::Token(SyntaxKind::KW_ENUM) }, SchemaRule::Capture { slot: 15, rule: &SchemaRule::Token(SyntaxKind::KW_INTERFACE) }, SchemaRule::Capture { slot: 16, rule: &SchemaRule::Token(SyntaxKind::KW_FUNCTION) }])]))]), SchemaRule::Seq(&[SchemaRule::Capture { slot: 17, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 18, rule: &SchemaRule::Node(&[SyntaxKind::FUNCTION_TYPE_PARAM]) }, SchemaRule::Capture { slot: 19, rule: &SchemaRule::Token(SyntaxKind::COMMA) }])), SchemaRule::Capture { slot: 20, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }, SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 21, rule: &SchemaRule::Token(SyntaxKind::ARROW) }, SchemaRule::Capture { slot: 22, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 23, rule: &SchemaRule::Node(&[SyntaxKind::THROWS_CLAUSE]) })]))])]), SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 24, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_ARGS]) }, SchemaRule::Seq(&[SchemaRule::Capture { slot: 25, rule: &SchemaRule::Token(SyntaxKind::L_BRACKET) }, SchemaRule::Capture { slot: 26, rule: &SchemaRule::Token(SyntaxKind::R_BRACKET) }]), SchemaRule::Capture { slot: 27, rule: &SchemaRule::Token(SyntaxKind::QUESTION) }, SchemaRule::Capture { slot: 28, rule: &SchemaRule::Node(&[SyntaxKind::ATTRIBUTE]) }])), SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 29, rule: &SchemaRule::Token(SyntaxKind::PIPE) }, SchemaRule::Alt(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::STRING_LITERAL]) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::RAW_STRING_LITERAL]) }, SchemaRule::Seq(&[SchemaRule::Optional(&SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::MINUS) }), SchemaRule::Alt(&[SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::BIGINT_LITERAL) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::INTEGER_LITERAL) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::FLOAT_LITERAL) }])]), SchemaRule::Alt(&[SchemaRule::Capture { slot: 6, rule: &SchemaRule::Token(SyntaxKind::KW_TRUE) }, SchemaRule::Capture { slot: 7, rule: &SchemaRule::Token(SyntaxKind::KW_FALSE) }, SchemaRule::Capture { slot: 8, rule: &SchemaRule::Token(SyntaxKind::KW_NULL) }]), SchemaRule::Seq(&[SchemaRule::Capture { slot: 9, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 10, rule: &SchemaRule::Token(SyntaxKind::DOT) }, SchemaRule::Alt(&[SchemaRule::Capture { slot: 9, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 11, rule: &SchemaRule::Token(SyntaxKind::KW_SPAWN) }, SchemaRule::Capture { slot: 12, rule: &SchemaRule::Token(SyntaxKind::KW_AWAIT) }, SchemaRule::Capture { slot: 13, rule: &SchemaRule::Token(SyntaxKind::KW_CLASS) }, SchemaRule::Capture { slot: 14, rule: &SchemaRule::Token(SyntaxKind::KW_ENUM) }, SchemaRule::Capture { slot: 15, rule: &SchemaRule::Token(SyntaxKind::KW_INTERFACE) }, SchemaRule::Capture { slot: 16, rule: &SchemaRule::Token(SyntaxKind::KW_FUNCTION) }])]))]), SchemaRule::Seq(&[SchemaRule::Capture { slot: 17, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 18, rule: &SchemaRule::Node(&[SyntaxKind::FUNCTION_TYPE_PARAM]) }, SchemaRule::Capture { slot: 19, rule: &SchemaRule::Token(SyntaxKind::COMMA) }])), SchemaRule::Capture { slot: 20, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }, SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 21, rule: &SchemaRule::Token(SyntaxKind::ARROW) }, SchemaRule::Capture { slot: 22, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 23, rule: &SchemaRule::Node(&[SyntaxKind::THROWS_CLAUSE]) })]))])]), SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 24, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_ARGS]) }, SchemaRule::Seq(&[SchemaRule::Capture { slot: 25, rule: &SchemaRule::Token(SyntaxKind::L_BRACKET) }, SchemaRule::Capture { slot: 26, rule: &SchemaRule::Token(SyntaxKind::R_BRACKET) }]), SchemaRule::Capture { slot: 27, rule: &SchemaRule::Token(SyntaxKind::QUESTION) }, SchemaRule::Capture { slot: 28, rule: &SchemaRule::Node(&[SyntaxKind::ATTRIBUTE]) }]))]))]);
 #[rustfmt::skip]
 const RULE_THROWS_CLAUSE: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_THROWS) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }]);
 #[rustfmt::skip]
@@ -107,7 +109,7 @@ const RULE_IMPLEMENTS_FOR_TARGET: SchemaRule = SchemaRule::Capture { slot: 0, ru
 #[rustfmt::skip]
 const RULE_ENUM_VARIANT: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Repeated(&SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::ATTRIBUTE]) })]);
 #[rustfmt::skip]
-const RULE_ATTRIBUTE: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::AT) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::ATTRIBUTE_ARGS]) })]);
+const RULE_ATTRIBUTE: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::AT) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::DOT) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::WORD) }])), SchemaRule::Optional(&SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::ATTRIBUTE_ARGS]) })]);
 #[rustfmt::skip]
 const RULE_CLIENT_TYPE: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::LESS) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::GREATER) }]);
 #[rustfmt::skip]
@@ -117,19 +119,21 @@ const RULE_CONFIG_ITEM: SchemaRule = SchemaRule::Seq(&[SchemaRule::Alt(&[SchemaR
 #[rustfmt::skip]
 const RULE_STRING_LITERAL: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::QUOTE) }, SchemaRule::Repeated(&SchemaRule::Capture { slot: 1, rule: &SchemaRule::Any }), SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::QUOTE) }]);
 #[rustfmt::skip]
-const RULE_CONFIG_VALUE: SchemaRule = SchemaRule::Alt(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::CONFIG_ARRAY]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::CONFIG_BLOCK]) }]);
+const RULE_CONFIG_VALUE: SchemaRule = SchemaRule::Alt(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::CONFIG_ARRAY]) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::CONFIG_BLOCK]) }]);
 #[rustfmt::skip]
 const RULE_CONFIG_ARRAY: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::L_BRACKET) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::CONFIG_VALUE]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::CONFIG_BLOCK]) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::COMMA) }])), SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::R_BRACKET) }]);
 #[rustfmt::skip]
 const RULE_RAW_STRING_LITERAL: SchemaRule = SchemaRule::Repeated(&SchemaRule::Capture { slot: 0, rule: &SchemaRule::Any });
 #[rustfmt::skip]
+const RULE_BACKTICK_STRING_LITERAL: SchemaRule = SchemaRule::Repeated(&SchemaRule::Capture { slot: 0, rule: &SchemaRule::Any });
+#[rustfmt::skip]
 const RULE_GENERIC_PARAM: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::GENERIC_PARAM_BOUNDS]) })]);
 #[rustfmt::skip]
 const RULE_GENERIC_PARAM_BOUNDS: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_EXTENDS) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }, SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::AND) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }]))]);
 #[rustfmt::skip]
-const RULE_TYPE_ARGS: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::LESS) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::ASSOCIATED_TYPE_DECL]) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::COMMA) }])), SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::GREATER) }]);
-#[rustfmt::skip]
 const RULE_FUNCTION_TYPE_PARAM: SchemaRule = SchemaRule::Seq(&[SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Alt(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_CLIENT) }]), SchemaRule::Optional(&SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::QUESTION) }), SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::COLON) }])), SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }]);
+#[rustfmt::skip]
+const RULE_TYPE_ARGS: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::LESS) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::ASSOCIATED_TYPE_DECL]) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::COMMA) }])), SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::GREATER) }]);
 #[rustfmt::skip]
 const RULE_ATTRIBUTE_ARGS: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::COMMA) }])), SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }]);
 #[rustfmt::skip]
@@ -138,8 +142,6 @@ const RULE_ERROR: SchemaRule = SchemaRule::Repeated(&SchemaRule::Capture { slot:
 const RULE_LITERAL_EXPR: SchemaRule = SchemaRule::Alt(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::BIGINT_LITERAL) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::INTEGER_LITERAL) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::FLOAT_LITERAL) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::KW_TRUE) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::KW_FALSE) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::KW_NULL) }]);
 #[rustfmt::skip]
 const RULE_PATH_EXPR: SchemaRule = SchemaRule::Alt(&[SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::PATH_EXPR]) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::GENERIC_ARGS]) }]), SchemaRule::Seq(&[SchemaRule::Alt(&[SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::KW_CLIENT) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::KW_CLASS) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::KW_ENUM) }, SchemaRule::Capture { slot: 6, rule: &SchemaRule::Token(SyntaxKind::KW_INTERFACE) }, SchemaRule::Capture { slot: 7, rule: &SchemaRule::Token(SyntaxKind::KW_FUNCTION) }, SchemaRule::Capture { slot: 8, rule: &SchemaRule::Token(SyntaxKind::KW_IMPLEMENTS) }, SchemaRule::Capture { slot: 9, rule: &SchemaRule::Token(SyntaxKind::KW_SPAWN) }, SchemaRule::Capture { slot: 10, rule: &SchemaRule::Token(SyntaxKind::KW_AWAIT) }]), SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Alt(&[SchemaRule::Capture { slot: 11, rule: &SchemaRule::Token(SyntaxKind::DOT) }, SchemaRule::Capture { slot: 12, rule: &SchemaRule::Token(SyntaxKind::DOUBLE_COLON) }]), SchemaRule::Alt(&[SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::KW_CLIENT) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::KW_CLASS) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::KW_ENUM) }, SchemaRule::Capture { slot: 6, rule: &SchemaRule::Token(SyntaxKind::KW_INTERFACE) }, SchemaRule::Capture { slot: 7, rule: &SchemaRule::Token(SyntaxKind::KW_FUNCTION) }, SchemaRule::Capture { slot: 8, rule: &SchemaRule::Token(SyntaxKind::KW_IMPLEMENTS) }, SchemaRule::Capture { slot: 9, rule: &SchemaRule::Token(SyntaxKind::KW_SPAWN) }, SchemaRule::Capture { slot: 10, rule: &SchemaRule::Token(SyntaxKind::KW_AWAIT) }])]))])]);
-#[rustfmt::skip]
-const RULE_BACKTICK_STRING_LITERAL: SchemaRule = SchemaRule::Repeated(&SchemaRule::Capture { slot: 0, rule: &SchemaRule::Any });
 #[rustfmt::skip]
 const RULE_BYTE_STRING_LITERAL: SchemaRule = SchemaRule::Repeated(&SchemaRule::Capture { slot: 0, rule: &SchemaRule::Any });
 #[rustfmt::skip]
@@ -179,7 +181,7 @@ const RULE_IF_LET_EXPR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slo
 #[rustfmt::skip]
 const RULE_MATCH_EXPR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_MATCH) }, SchemaRule::Alt(&[SchemaRule::Seq(&[SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::COLON) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }])), SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }]), SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }]), SchemaRule::Capture { slot: 6, rule: &SchemaRule::Token(SyntaxKind::L_BRACE) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 7, rule: &SchemaRule::Node(&[SyntaxKind::MATCH_ARM]) }, SchemaRule::Capture { slot: 8, rule: &SchemaRule::Node(&[SyntaxKind::HEADER_COMMENT]) }])), SchemaRule::Capture { slot: 9, rule: &SchemaRule::Token(SyntaxKind::R_BRACE) }]);
 #[rustfmt::skip]
-const RULE_CATCH_EXPR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::CATCH_CLAUSE]) }]);
+const RULE_CATCH_EXPR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::CATCH_CLAUSE]) }, SchemaRule::Repeated(&SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::CATCH_CLAUSE]) })]);
 #[rustfmt::skip]
 const RULE_THROW_EXPR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_THROW) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }]);
 #[rustfmt::skip]
@@ -206,8 +208,6 @@ const RULE_MAP_LITERAL: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slo
 const RULE_WHILE_STMT: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_WHILE) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_EXPR]) }]);
 #[rustfmt::skip]
 const RULE_WHILE_LET_STMT: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_WHILE) }, SchemaRule::Optional(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_LET) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::KW_CONST) }])), SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::PATTERN]) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::EQUALS) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 6, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_EXPR]) }]);
-#[rustfmt::skip]
-const RULE_LET_STMT: SchemaRule = SchemaRule::Seq(&[SchemaRule::Optional(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_LET) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_CONST) }])), SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::PATTERN]) }, SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::EQUALS) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }])), SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::KW_ELSE) }, SchemaRule::Capture { slot: 6, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_EXPR]) }])), SchemaRule::Optional(&SchemaRule::Capture { slot: 7, rule: &SchemaRule::Token(SyntaxKind::SEMICOLON) })]);
 #[rustfmt::skip]
 const RULE_TYPE_BINDING_STMT: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_TYPE) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::EQUALS) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 6, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }, SchemaRule::Optional(&SchemaRule::Capture { slot: 7, rule: &SchemaRule::Token(SyntaxKind::SEMICOLON) })]);
 #[rustfmt::skip]
@@ -287,9 +287,9 @@ const RULE_BACKTICK_FOR_OPEN: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture
 #[rustfmt::skip]
 const RULE_BACKTICK_ENDFOR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::DOLLAR) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::L_BRACE) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::R_BRACE) }]);
 #[rustfmt::skip]
-const RULE_BACKTICK_IF_OPEN: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::DOLLAR) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::L_BRACE) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::KW_IF) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }, SchemaRule::Capture { slot: 6, rule: &SchemaRule::Token(SyntaxKind::R_BRACE) }]);
+const RULE_BACKTICK_IF_OPEN: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::DOLLAR) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::L_BRACE) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::KW_IF) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::PAREN_EXPR]) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::R_BRACE) }]);
 #[rustfmt::skip]
-const RULE_BACKTICK_ELSE_IF: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::DOLLAR) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::L_BRACE) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::KW_ELSE) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::KW_IF) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 6, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }, SchemaRule::Capture { slot: 7, rule: &SchemaRule::Token(SyntaxKind::R_BRACE) }]);
+const RULE_BACKTICK_ELSE_IF: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::DOLLAR) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::L_BRACE) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::KW_ELSE) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::KW_IF) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::PAREN_EXPR]) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::R_BRACE) }]);
 #[rustfmt::skip]
 const RULE_BACKTICK_ELSE: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::DOLLAR) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::L_BRACE) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::KW_ELSE) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::R_BRACE) }]);
 #[rustfmt::skip]
@@ -318,7 +318,7 @@ const SCHEMAS: &[NodeSchema] = &[
     },
     NodeSchema {
         kind: SyntaxKind::INTERFACE_DEF,
-        field_count: 12,
+        field_count: 13,
         rule: &RULE_INTERFACE_DEF,
     },
     NodeSchema {
@@ -368,7 +368,7 @@ const SCHEMAS: &[NodeSchema] = &[
     },
     NodeSchema {
         kind: SyntaxKind::TEMPLATE_STRING_DEF,
-        field_count: 5,
+        field_count: 6,
         rule: &RULE_TEMPLATE_STRING_DEF,
     },
     NodeSchema {
@@ -377,8 +377,13 @@ const SCHEMAS: &[NodeSchema] = &[
         rule: &RULE_TYPE_ALIAS_DEF,
     },
     NodeSchema {
+        kind: SyntaxKind::LET_STMT,
+        field_count: 8,
+        rule: &RULE_LET_STMT,
+    },
+    NodeSchema {
         kind: SyntaxKind::BLOCK_ATTRIBUTE,
-        field_count: 3,
+        field_count: 5,
         rule: &RULE_BLOCK_ATTRIBUTE,
     },
     NodeSchema {
@@ -393,7 +398,7 @@ const SCHEMAS: &[NodeSchema] = &[
     },
     NodeSchema {
         kind: SyntaxKind::TYPE_EXPR,
-        field_count: 24,
+        field_count: 30,
         rule: &RULE_TYPE_EXPR,
     },
     NodeSchema {
@@ -483,7 +488,7 @@ const SCHEMAS: &[NodeSchema] = &[
     },
     NodeSchema {
         kind: SyntaxKind::ATTRIBUTE,
-        field_count: 3,
+        field_count: 5,
         rule: &RULE_ATTRIBUTE,
     },
     NodeSchema {
@@ -508,7 +513,7 @@ const SCHEMAS: &[NodeSchema] = &[
     },
     NodeSchema {
         kind: SyntaxKind::CONFIG_VALUE,
-        field_count: 3,
+        field_count: 4,
         rule: &RULE_CONFIG_VALUE,
     },
     NodeSchema {
@@ -522,6 +527,11 @@ const SCHEMAS: &[NodeSchema] = &[
         rule: &RULE_RAW_STRING_LITERAL,
     },
     NodeSchema {
+        kind: SyntaxKind::BACKTICK_STRING_LITERAL,
+        field_count: 1,
+        rule: &RULE_BACKTICK_STRING_LITERAL,
+    },
+    NodeSchema {
         kind: SyntaxKind::GENERIC_PARAM,
         field_count: 2,
         rule: &RULE_GENERIC_PARAM,
@@ -532,14 +542,14 @@ const SCHEMAS: &[NodeSchema] = &[
         rule: &RULE_GENERIC_PARAM_BOUNDS,
     },
     NodeSchema {
-        kind: SyntaxKind::TYPE_ARGS,
-        field_count: 5,
-        rule: &RULE_TYPE_ARGS,
-    },
-    NodeSchema {
         kind: SyntaxKind::FUNCTION_TYPE_PARAM,
         field_count: 4,
         rule: &RULE_FUNCTION_TYPE_PARAM,
+    },
+    NodeSchema {
+        kind: SyntaxKind::TYPE_ARGS,
+        field_count: 5,
+        rule: &RULE_TYPE_ARGS,
     },
     NodeSchema {
         kind: SyntaxKind::ATTRIBUTE_ARGS,
@@ -560,11 +570,6 @@ const SCHEMAS: &[NodeSchema] = &[
         kind: SyntaxKind::PATH_EXPR,
         field_count: 13,
         rule: &RULE_PATH_EXPR,
-    },
-    NodeSchema {
-        kind: SyntaxKind::BACKTICK_STRING_LITERAL,
-        field_count: 1,
-        rule: &RULE_BACKTICK_STRING_LITERAL,
     },
     NodeSchema {
         kind: SyntaxKind::BYTE_STRING_LITERAL,
@@ -730,11 +735,6 @@ const SCHEMAS: &[NodeSchema] = &[
         kind: SyntaxKind::WHILE_LET_STMT,
         field_count: 7,
         rule: &RULE_WHILE_LET_STMT,
-    },
-    NodeSchema {
-        kind: SyntaxKind::LET_STMT,
-        field_count: 8,
-        rule: &RULE_LET_STMT,
     },
     NodeSchema {
         kind: SyntaxKind::TYPE_BINDING_STMT,
@@ -933,12 +933,12 @@ const SCHEMAS: &[NodeSchema] = &[
     },
     NodeSchema {
         kind: SyntaxKind::BACKTICK_IF_OPEN,
-        field_count: 7,
+        field_count: 5,
         rule: &RULE_BACKTICK_IF_OPEN,
     },
     NodeSchema {
         kind: SyntaxKind::BACKTICK_ELSE_IF,
-        field_count: 8,
+        field_count: 6,
         rule: &RULE_BACKTICK_ELSE_IF,
     },
     NodeSchema {
@@ -977,36 +977,25 @@ fn apply_rule(
             vec![state]
         }
         SchemaRule::Node(kinds) => {
-            let Some((offset, element)) =
-                input[state.position..]
-                    .iter()
-                    .enumerate()
-                    .find(|(_, element)| {
-                        element_is_node(elements, **element)
-                            && kinds.contains(&element_kind(elements, **element))
-                    })
-            else {
+            let Some(element) = input.get(state.position).filter(|element| {
+                element_is_node(elements, **element)
+                    && kinds.contains(&element_kind(elements, **element))
+            }) else {
                 return Vec::new();
             };
             let mut state = state;
-            state.position += offset + 1;
+            state.position += 1;
             state.matched.push(*element);
             vec![state]
         }
         SchemaRule::Token(kind) => {
-            let Some((offset, element)) =
-                input[state.position..]
-                    .iter()
-                    .enumerate()
-                    .find(|(_, element)| {
-                        !element_is_node(elements, **element)
-                            && element_kind(elements, **element) == *kind
-                    })
-            else {
+            let Some(element) = input.get(state.position).filter(|element| {
+                !element_is_node(elements, **element) && element_kind(elements, **element) == *kind
+            }) else {
                 return Vec::new();
             };
             let mut state = state;
-            state.position += offset + 1;
+            state.position += 1;
             state.matched.push(*element);
             vec![state]
         }
@@ -1071,7 +1060,7 @@ pub(super) fn validate_node(
     };
     apply_rule(schema.rule, input, elements, initial)
         .into_iter()
-        .find(|state| input.iter().all(|element| state.matched.contains(element)))
+        .find(|state| state.position == input.len())
         .map(|state| state.captures)
         .ok_or(StrongAstError::InvalidStructure {
             kind: syntax.kind(),
@@ -1206,20 +1195,23 @@ impl<'tree> Validated<'tree, ast::InterfaceDef> {
     pub fn method_sig(&self) -> ValidatedChildren<'tree, ast::MethodSig> {
         self.children(6)
     }
-    pub fn associated_type_decl(&self) -> ValidatedChildren<'tree, ast::AssociatedTypeDecl> {
+    pub fn function_def(&self) -> ValidatedChildren<'tree, ast::FunctionDef> {
         self.children(7)
     }
-    pub fn field(&self) -> ValidatedChildren<'tree, ast::Field> {
+    pub fn associated_type_decl(&self) -> ValidatedChildren<'tree, ast::AssociatedTypeDecl> {
         self.children(8)
     }
-    pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(9).filter_map(|element| element.token())
+    pub fn field(&self) -> ValidatedChildren<'tree, ast::Field> {
+        self.children(9)
     }
-    pub fn semicolon_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+    pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
         self.elements(10).filter_map(|element| element.token())
     }
+    pub fn semicolon_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(11).filter_map(|element| element.token())
+    }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(11).expect("validated required token")
+        self.token(12).expect("validated required token")
     }
 }
 
@@ -1419,8 +1411,11 @@ impl<'tree> Validated<'tree, ast::TemplateStringDef> {
     pub fn parameter_list(&self) -> Validated<'tree, ast::ParameterList> {
         self.child(3).expect("validated required field")
     }
-    pub fn raw_string_literal(&self) -> Validated<'tree, ast::RawStringLiteral> {
-        self.child(4).expect("validated required field")
+    pub fn raw_string_literal(&self) -> Option<Validated<'tree, ast::RawStringLiteral>> {
+        self.child(4)
+    }
+    pub fn backtick_string_literal(&self) -> Option<Validated<'tree, ast::BacktickStringLiteral>> {
+        self.child(5)
     }
 }
 
@@ -1448,6 +1443,33 @@ impl<'tree> Validated<'tree, ast::TypeAliasDef> {
     }
 }
 
+impl<'tree> Validated<'tree, ast::LetStmt> {
+    pub fn let_token(&self) -> Option<ValidatedSyntaxToken> {
+        self.token(0)
+    }
+    pub fn const_token(&self) -> Option<ValidatedSyntaxToken> {
+        self.token(1)
+    }
+    pub fn pattern(&self) -> Validated<'tree, ast::Pattern> {
+        self.child(2).expect("validated required field")
+    }
+    pub fn equals_token(&self) -> Option<ValidatedSyntaxToken> {
+        self.token(3)
+    }
+    pub fn value(&self) -> Option<Validated<'tree, ast::ExprNode>> {
+        self.child(4)
+    }
+    pub fn else_token(&self) -> Option<ValidatedSyntaxToken> {
+        self.token(5)
+    }
+    pub fn block_expr(&self) -> Option<Validated<'tree, ast::BlockExpr>> {
+        self.child(6)
+    }
+    pub fn semicolon_token(&self) -> Option<ValidatedSyntaxToken> {
+        self.token(7)
+    }
+}
+
 impl<'tree> Validated<'tree, ast::BlockAttribute> {
     pub fn at_at_token(&self) -> ValidatedSyntaxToken {
         self.token(0).expect("validated required token")
@@ -1455,8 +1477,14 @@ impl<'tree> Validated<'tree, ast::BlockAttribute> {
     pub fn name_token(&self) -> ValidatedSyntaxToken {
         self.token(1).expect("validated required token")
     }
+    pub fn dot_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(2).filter_map(|element| element.token())
+    }
+    pub fn path_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(3).filter_map(|element| element.token())
+    }
     pub fn attribute_args(&self) -> Option<Validated<'tree, ast::AttributeArgs>> {
-        self.child(2)
+        self.child(4)
     }
 }
 
@@ -1524,44 +1552,62 @@ impl<'tree> Validated<'tree, ast::TypeExpr> {
     pub fn dot_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
         self.elements(10).filter_map(|element| element.token())
     }
-    pub fn type_args(&self) -> ValidatedChildren<'tree, ast::TypeArgs> {
-        self.children(11)
+    pub fn spawn_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(11).filter_map(|element| element.token())
     }
-    pub fn l_paren_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+    pub fn await_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
         self.elements(12).filter_map(|element| element.token())
     }
-    pub fn function_type_param(&self) -> ValidatedChildren<'tree, ast::FunctionTypeParam> {
-        self.children(13)
+    pub fn class_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(13).filter_map(|element| element.token())
     }
-    pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+    pub fn enum_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
         self.elements(14).filter_map(|element| element.token())
     }
-    pub fn r_paren_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+    pub fn interface_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
         self.elements(15).filter_map(|element| element.token())
     }
-    pub fn arrow_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+    pub fn function_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
         self.elements(16).filter_map(|element| element.token())
     }
-    pub fn type_expr(&self) -> ValidatedChildren<'tree, ast::TypeExpr> {
-        self.children(17)
+    pub fn l_paren_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(17).filter_map(|element| element.token())
     }
-    pub fn throws_clause(&self) -> ValidatedChildren<'tree, ast::ThrowsClause> {
+    pub fn function_type_param(&self) -> ValidatedChildren<'tree, ast::FunctionTypeParam> {
         self.children(18)
     }
-    pub fn l_bracket_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+    pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
         self.elements(19).filter_map(|element| element.token())
     }
-    pub fn r_bracket_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+    pub fn r_paren_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
         self.elements(20).filter_map(|element| element.token())
     }
-    pub fn question_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+    pub fn arrow_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
         self.elements(21).filter_map(|element| element.token())
     }
-    pub fn pipe_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(22).filter_map(|element| element.token())
+    pub fn type_expr(&self) -> ValidatedChildren<'tree, ast::TypeExpr> {
+        self.children(22)
+    }
+    pub fn throws_clause(&self) -> ValidatedChildren<'tree, ast::ThrowsClause> {
+        self.children(23)
+    }
+    pub fn type_args(&self) -> ValidatedChildren<'tree, ast::TypeArgs> {
+        self.children(24)
+    }
+    pub fn l_bracket_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(25).filter_map(|element| element.token())
+    }
+    pub fn r_bracket_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(26).filter_map(|element| element.token())
+    }
+    pub fn question_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(27).filter_map(|element| element.token())
     }
     pub fn attribute(&self) -> ValidatedChildren<'tree, ast::Attribute> {
-        self.children(23)
+        self.children(28)
+    }
+    pub fn pipe_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(29).filter_map(|element| element.token())
     }
 }
 
@@ -1827,8 +1873,14 @@ impl<'tree> Validated<'tree, ast::Attribute> {
     pub fn name_token(&self) -> ValidatedSyntaxToken {
         self.token(1).expect("validated required token")
     }
+    pub fn dot_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(2).filter_map(|element| element.token())
+    }
+    pub fn path_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(3).filter_map(|element| element.token())
+    }
     pub fn attribute_args(&self) -> Option<Validated<'tree, ast::AttributeArgs>> {
-        self.child(2)
+        self.child(4)
     }
 }
 
@@ -1899,11 +1951,14 @@ impl<'tree> Validated<'tree, ast::ConfigValue> {
     pub fn expr(&self) -> Option<Validated<'tree, ast::ExprNode>> {
         self.child(0)
     }
+    pub fn unquoted_token(&self) -> Option<ValidatedSyntaxToken> {
+        self.token(1)
+    }
     pub fn config_array(&self) -> Option<Validated<'tree, ast::ConfigArray>> {
-        self.child(1)
+        self.child(2)
     }
     pub fn config_block(&self) -> Option<Validated<'tree, ast::ConfigBlock>> {
-        self.child(2)
+        self.child(3)
     }
 }
 
@@ -1931,6 +1986,12 @@ impl<'tree> Validated<'tree, ast::RawStringLiteral> {
     }
 }
 
+impl<'tree> Validated<'tree, ast::BacktickStringLiteral> {
+    pub fn any_element(&self) -> super::arena::ValidatedElements<'tree> {
+        self.elements(0)
+    }
+}
+
 impl<'tree> Validated<'tree, ast::GenericParam> {
     pub fn name_token(&self) -> ValidatedSyntaxToken {
         self.token(0).expect("validated required token")
@@ -1952,6 +2013,21 @@ impl<'tree> Validated<'tree, ast::GenericParamBounds> {
     }
 }
 
+impl<'tree> Validated<'tree, ast::FunctionTypeParam> {
+    pub fn name_token(&self) -> Option<ValidatedSyntaxToken> {
+        self.token(0)
+    }
+    pub fn question_token(&self) -> Option<ValidatedSyntaxToken> {
+        self.token(1)
+    }
+    pub fn colon_token(&self) -> Option<ValidatedSyntaxToken> {
+        self.token(2)
+    }
+    pub fn type_expr(&self) -> Validated<'tree, ast::TypeExpr> {
+        self.child(3).expect("validated required field")
+    }
+}
+
 impl<'tree> Validated<'tree, ast::TypeArgs> {
     pub fn less_token(&self) -> ValidatedSyntaxToken {
         self.token(0).expect("validated required token")
@@ -1967,21 +2043,6 @@ impl<'tree> Validated<'tree, ast::TypeArgs> {
     }
     pub fn greater_token(&self) -> ValidatedSyntaxToken {
         self.token(4).expect("validated required token")
-    }
-}
-
-impl<'tree> Validated<'tree, ast::FunctionTypeParam> {
-    pub fn name_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0)
-    }
-    pub fn question_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1)
-    }
-    pub fn colon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2)
-    }
-    pub fn type_expr(&self) -> Validated<'tree, ast::TypeExpr> {
-        self.child(3).expect("validated required field")
     }
 }
 
@@ -2066,12 +2127,6 @@ impl<'tree> Validated<'tree, ast::PathExpr> {
     }
     pub fn double_colon_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
         self.elements(12).filter_map(|element| element.token())
-    }
-}
-
-impl<'tree> Validated<'tree, ast::BacktickStringLiteral> {
-    pub fn any_element(&self) -> super::arena::ValidatedElements<'tree> {
-        self.elements(0)
     }
 }
 
@@ -2457,8 +2512,8 @@ impl<'tree> Validated<'tree, ast::CatchExpr> {
     pub fn body(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(0).expect("validated required field")
     }
-    pub fn catch_clause(&self) -> Validated<'tree, ast::CatchClause> {
-        self.child(1).expect("validated required field")
+    pub fn catch_clause(&self) -> ValidatedChildren<'tree, ast::CatchClause> {
+        self.children(1)
     }
 }
 
@@ -2657,33 +2712,6 @@ impl<'tree> Validated<'tree, ast::WhileLetStmt> {
     }
     pub fn body(&self) -> Validated<'tree, ast::BlockExpr> {
         self.child(6).expect("validated required field")
-    }
-}
-
-impl<'tree> Validated<'tree, ast::LetStmt> {
-    pub fn let_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0)
-    }
-    pub fn const_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1)
-    }
-    pub fn pattern(&self) -> Validated<'tree, ast::Pattern> {
-        self.child(2).expect("validated required field")
-    }
-    pub fn equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(3)
-    }
-    pub fn value(&self) -> Option<Validated<'tree, ast::ExprNode>> {
-        self.child(4)
-    }
-    pub fn else_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(5)
-    }
-    pub fn block_expr(&self) -> Option<Validated<'tree, ast::BlockExpr>> {
-        self.child(6)
-    }
-    pub fn semicolon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(7)
     }
 }
 
@@ -3223,17 +3251,11 @@ impl<'tree> Validated<'tree, ast::BacktickIfOpen> {
     pub fn if_token(&self) -> ValidatedSyntaxToken {
         self.token(2).expect("validated required token")
     }
-    pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(3).expect("validated required token")
-    }
-    pub fn expr_node(&self) -> Validated<'tree, ast::ExprNode> {
-        self.child(4).expect("validated required field")
-    }
-    pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(5).expect("validated required token")
+    pub fn paren_expr(&self) -> Validated<'tree, ast::ParenExpr> {
+        self.child(3).expect("validated required field")
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(6).expect("validated required token")
+        self.token(4).expect("validated required token")
     }
 }
 
@@ -3250,17 +3272,11 @@ impl<'tree> Validated<'tree, ast::BacktickElseIf> {
     pub fn if_token(&self) -> ValidatedSyntaxToken {
         self.token(3).expect("validated required token")
     }
-    pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(4).expect("validated required token")
-    }
-    pub fn expr_node(&self) -> Validated<'tree, ast::ExprNode> {
-        self.child(5).expect("validated required field")
-    }
-    pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(6).expect("validated required token")
+    pub fn paren_expr(&self) -> Validated<'tree, ast::ParenExpr> {
+        self.child(4).expect("validated required field")
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(7).expect("validated required token")
+        self.token(5).expect("validated required token")
     }
 }
 
@@ -3311,6 +3327,7 @@ pub enum ValidatedTopLevelDeclaration<'tree> {
     RetryPolicyDef(Validated<'tree, ast::RetryPolicyDef>),
     TemplateStringDef(Validated<'tree, ast::TemplateStringDef>),
     TypeAliasDef(Validated<'tree, ast::TypeAliasDef>),
+    LetStmt(Validated<'tree, ast::LetStmt>),
 }
 
 impl<'tree> Validated<'tree, ast::TopLevelDeclaration> {
@@ -3361,6 +3378,9 @@ impl<'tree> Validated<'tree, ast::TopLevelDeclaration> {
             SyntaxKind::TYPE_ALIAS_DEF => ValidatedTopLevelDeclaration::TypeAliasDef(
                 self.cast().expect("validated enum variant"),
             ),
+            SyntaxKind::LET_STMT => {
+                ValidatedTopLevelDeclaration::LetStmt(self.cast().expect("validated enum variant"))
+            }
             _ => unreachable!("validated enum kind"),
         }
     }

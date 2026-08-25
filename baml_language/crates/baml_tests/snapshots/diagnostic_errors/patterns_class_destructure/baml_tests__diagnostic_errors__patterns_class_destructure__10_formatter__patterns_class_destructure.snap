@@ -128,8 +128,7 @@ function let_top_level_class_narrows_union_scrutinee_is_refutable(v: Person | in
 function for_top_level_class_narrows_union_element_is_refutable() -> int {
     for (let Person { age } in [Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }, 2]) {
         age
-    }
-    ;
+    };
     1
 }
 
@@ -155,8 +154,7 @@ function for_class_field_type_narrower_than_field_is_refutable() -> int {
         ]
     ) {
         1
-    }
-    ;
+    };
     1
 }
 

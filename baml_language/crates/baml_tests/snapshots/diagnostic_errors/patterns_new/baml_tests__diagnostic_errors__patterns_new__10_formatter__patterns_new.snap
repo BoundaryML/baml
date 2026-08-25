@@ -82,8 +82,7 @@ function refutable_for_array_prefix(rows: int[][]) -> int {
     let total = 0;
     for (let [let first, ..] in rows) {
         total += first
-    }
-    ;
+    };
     total
 }
 
@@ -92,8 +91,7 @@ function refutable_for_class_field_array_prefix(teams: Team[]) -> int {
     let total = 0;
     for (let Team { scores: [let first, ..] } in teams) {
         total += first
-    }
-    ;
+    };
     total
 }
 

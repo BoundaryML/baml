@@ -43,6 +43,10 @@ impl Printable for Validated<'_, syntax_ast::TopLevelDeclaration> {
                 .cast::<syntax_ast::ClientDef>()
                 .expect("validated client")
                 .print(shape, printer),
+            SyntaxKind::CLIENT_VALUE_DEF => self
+                .cast::<syntax_ast::ClientValueDef>()
+                .expect("validated client value")
+                .print(shape, printer),
             SyntaxKind::TEST_DEF => self
                 .cast::<syntax_ast::TestDef>()
                 .expect("validated test")
@@ -79,10 +83,20 @@ impl Printable for Validated<'_, syntax_ast::TopLevelDeclaration> {
         }
     }
     fn leftmost_token(&self) -> TextRange {
-        self.first_token_range()
+        match self.syntax().kind() {
+            SyntaxKind::INTERFACE_DEF | SyntaxKind::IMPLEMENTS_FOR | SyntaxKind::HEADER_COMMENT => {
+                self.text_range()
+            }
+            _ => self.first_token_range(),
+        }
     }
     fn rightmost_token(&self) -> TextRange {
-        self.last_token_range()
+        match self.syntax().kind() {
+            SyntaxKind::INTERFACE_DEF | SyntaxKind::IMPLEMENTS_FOR | SyntaxKind::HEADER_COMMENT => {
+                self.text_range()
+            }
+            _ => self.last_token_range(),
+        }
     }
 }
 
@@ -1444,6 +1458,68 @@ impl Printable for Validated<'_, syntax_ast::ClientDef> {
     }
 }
 
+impl Printable for Validated<'_, syntax_ast::ClientValueDef> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let keyword = self.client_token();
+        let name = self.name_token();
+        let equals = self.equals_token();
+        let value = self.value();
+        let semicolon = self.semicolon_token();
+
+        printer.print_raw_token(&keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&name);
+        printer.print_str(" ");
+        printer.print_raw_token(&equals);
+        printer.print_str(" ");
+
+        let (_, equals_trailing) = printer.trivia.get_for_range_split(equals.span());
+        let (value_leading, value_trailing) = printer.trivia.get_for_element(&value);
+        let mut value_leading_len = printer.print_trivia_squished(equals_trailing);
+        value_leading_len += printer.print_trivia_squished(value_leading);
+        let value_offset = usize::from(keyword.span().len() + name.span().len())
+            + const { "  = ".len() }
+            + value_leading_len;
+
+        if let Some(semicolon) = semicolon {
+            let (semicolon_leading, _) = printer.trivia.get_for_range_split(semicolon.span());
+            let trailing_len = value_trailing.squished_len(printer.input)
+                + semicolon_leading.squished_len(printer.input);
+            let value_shape = Shape {
+                width: shape
+                    .width
+                    .saturating_sub(value_offset + trailing_len + const { ";".len() }),
+                indent: shape.indent,
+                first_line_offset: shape.first_line_offset + value_offset,
+            };
+            let info = printer.print(&value, value_shape);
+            printer.print_trivia_squished(value_trailing);
+            printer.print_trivia_squished(semicolon_leading);
+            printer.print_raw_token(&semicolon);
+            info
+        } else {
+            let value_shape = Shape {
+                width: shape
+                    .width
+                    .saturating_sub(value_offset + const { ";".len() }),
+                indent: shape.indent,
+                first_line_offset: shape.first_line_offset + value_offset,
+            };
+            let info = printer.print(&value, value_shape);
+            printer.print_str(";");
+            info
+        }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.first_token_range()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.last_token_range()
+    }
+}
+
 impl Printable for Validated<'_, syntax_ast::ClientType> {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.less_token());
@@ -1490,7 +1566,7 @@ fn config_block_items<'tree>(
 }
 
 impl Printable for Validated<'_, syntax_ast::ConfigBlock> {
-    /// [`ConfigBlock`] prints multi-line unless empty.
+    /// A config block prints multi-line unless empty.
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let inner_indent = shape.indent + printer.config.indent_width;
 
@@ -1742,6 +1818,10 @@ impl Printable for Validated<'_, syntax_ast::ConfigValue> {
         }
         if let Some(block) = self.config_block() {
             return block.print(shape, printer);
+        }
+        if let Some(unquoted) = self.unquoted_token() {
+            printer.print_raw_token(&unquoted);
+            return PrintInfo::default_single_line();
         }
         let expr = self.expr().expect("validated config expression");
         expr.print(shape, printer)
@@ -2013,10 +2093,6 @@ impl Printable for Validated<'_, syntax_ast::RetryPolicyDef> {
 impl Printable for Validated<'_, syntax_ast::TemplateStringDef> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let args = self.parameter_list();
-        let body = t::RawString::from_cst(SyntaxElement::Node(
-            self.raw_string_literal().syntax().clone(),
-        ))
-        .expect("validated template body");
         let mut multi_lined = false;
 
         printer.print_raw_token(&self.template_string_token());
@@ -2024,9 +2100,22 @@ impl Printable for Validated<'_, syntax_ast::TemplateStringDef> {
         printer.print_raw_token(&self.name_token());
         multi_lined |= printer.print(&args, shape).multi_lined;
         printer.print_str(" ");
-        multi_lined |= printer
-            .print(&body, Shape::unlimited_single_line())
-            .multi_lined;
+        if let Some(body) = self.raw_string_literal() {
+            let body = t::RawString::from_cst(SyntaxElement::Node(body.syntax().clone()))
+                .expect("validated raw template body");
+            multi_lined |= printer
+                .print(&body, Shape::unlimited_single_line())
+                .multi_lined;
+        } else {
+            let body = self
+                .backtick_string_literal()
+                .expect("validated template body");
+            let body = t::BacktickString::from_cst(SyntaxElement::Node(body.syntax().clone()))
+                .expect("validated backtick template body");
+            multi_lined |= printer
+                .print(&body, Shape::unlimited_single_line())
+                .multi_lined;
+        }
         PrintInfo { multi_lined }
     }
     fn leftmost_token(&self) -> TextRange {

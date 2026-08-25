@@ -77,17 +77,19 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
     // ===== Trivia between operands (line comments) =====
     // 1 left leading
     a // 2 left trailing
-        + b;
+        + b // 6 right trailing
+    ;
 
     // ===== Trivia between operands (block comments) =====
     /* 1 left leading */
-    a/* 2 left trailing *//* 3 operator leading */+/* 4 operator trailing *//* 5 right leading */b/* 6 right trailing */;
+    a/* 2 left trailing *//* 3 operator leading */+/* 4 operator trailing *//* 5 right leading */b /* 6 right trailing */;
 
     // ===== Trivia in chained binary (line comments) =====
     // 1 first leading
     a // 2 first trailing
         + b // 6 second trailing
-        + c;
+        + c // 10 third trailing
+    ;
 
     // ===== Long arithmetic chain exceeding limit =====
     a
@@ -181,7 +183,8 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
         + a // 34 trailing
         + b // 38 trailing
         + c // 42 trailing
-        + d;
+        + d // 46 trailing
+    ;
 
     // ===== Trivia in long wrapping chain (block comments) =====
     /* 1 leading */
@@ -196,7 +199,7 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
         + a /* 34 trailing */
         + b /* 38 trailing */
         + c /* 42 trailing */
-        + d/* 46 trailing */;
+        + d /* 46 trailing */;
 
     // ===== Trivia in long wrapping logical chain (line comments) =====
     // 1 leading
@@ -206,7 +209,8 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
         && d > 0 // 14 trailing
         && a != b // 18 trailing
         && b != c // 22 trailing
-        && c != d;
+        && c != d // 26 trailing
+    ;
 
     // ===== Short expressions (should stay single line) =====
     a + b;

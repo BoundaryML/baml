@@ -68,35 +68,42 @@ function LoopStmts(items: int[], flag: bool) -> int {
     let result = 0;
     for (let i = 0; i < 10; i += 1) {
         result += i;
-    }
-    ;
+    };
 
     // ===== C-style for with complex expressions =====
     for (let i = 0; i < 100 && flag; i += 2) {
         result += i;
-    }
-    ;
+    };
+
+    // ===== C-style for with omitted expressions =====
+    for (;;) {
+        break;
+    };
+
+    for (; flag;) {
+        break;
+    };
+
+    for (let i = 0;; i += 1) {
+        break;
+    };
 
     // ===== Iterator-style for loop =====
     for (let item in items) {
         result += item;
-    }
-    ;
+    };
 
     // ===== For-in with array literal =====
     for (let x in [1, 2, 3, 4, 5]) {
         result += x;
-    }
-    ;
+    };
 
     // ===== Nested for loops =====
     for (let i in [1, 2, 3]) {
         for (let j in [4, 5, 6]) {
             result += i * j;
-        }
-        ;
-    }
-    ;
+        };
+    };
 
     // ===== Trivia on C-style for (line comments) =====
     // 1 for keyword leading
@@ -129,8 +136,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
     ) { /* 21 body open trailing */
         result += i;
         /* 22 body close leading */
-    } /* 23 body close trailing */
-    ;
+    } /* 23 body close trailing */;
 
     ///////////////////
 
@@ -155,8 +161,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
     ) { /* 16 body open trailing */
         result += item;
         /* 17 body close leading */
-    } /* 18 body close trailing */
-    ;
+    } /* 18 body close trailing */;
 
     // ===== Long while condition exceeding limit =====
     while (
@@ -196,8 +201,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
         very_long_variable_name += 1
     ) {
         result += very_long_variable_name;
-    }
-    ;
+    };
 
     // ===== Very long C-style for far exceeding limit =====
     for (
@@ -206,8 +210,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
         extremely_long_loop_counter_variable += a + result
     ) {
         result += extremely_long_loop_counter_variable;
-    }
-    ;
+    };
 
     // ===== Long for-in with long array exceeding limit =====
     for (
@@ -219,8 +222,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
         ]
     ) {
         result += 1;
-    }
-    ;
+    };
 
     // ===== Very long for-in with complex iterator exceeding limit =====
     for (
@@ -234,8 +236,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
         ]
     ) {
         result += 1;
-    }
-    ;
+    };
 
     // ===== Trivia on wrapping while condition (line comments) =====
     // 1 while leading
@@ -308,8 +309,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
     ) { /* 21 body open trailing */
         result += extremely_long_loop_counter_variable;
         /* 22 close leading */
-    } /* 23 close trailing */
-    ;
+    } /* 23 close trailing */;
 
     ///////////////////
 
@@ -350,8 +350,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
     ) { /* 16 body open trailing */
         result += 1;
         /* 17 close leading */
-    } /* 18 close trailing */
-    ;
+    } /* 18 close trailing */;
 
     ///////////////////
 
@@ -360,12 +359,9 @@ function LoopStmts(items: int[], flag: bool) -> int {
         for (let j in [4, 5, 6]) {
             for (let k in [7, 8, 9]) {
                 result += i * j * k;
-            }
-            ;
-        }
-        ;
-    }
-    ;
+            };
+        };
+    };
 
     // ===== Deeply nested while loops (3 levels) =====
     let outer = 0;
@@ -403,10 +399,8 @@ function LoopStmts(items: int[], flag: bool) -> int {
                 let n: int => n,
             };
             result += val;
-        }
-        ;
-    }
-    ;
+        };
+    };
 
     // ===== Very deeply nested (4 levels) with mixed loop types =====
     let lvl1 = 0;
@@ -419,10 +413,8 @@ function LoopStmts(items: int[], flag: bool) -> int {
                     lvl4 += 1;
                 }
                 ;
-            }
-            ;
-        }
-        ;
+            };
+        };
         lvl1 += 1;
     }
     ;
@@ -435,10 +427,8 @@ function LoopStmts(items: int[], flag: bool) -> int {
             j += i + result + 1
         ) {
             result += j;
-        }
-        ;
-    }
-    ;
+        };
+    };
 
     // ===== Deeply nested with if/match in body exceeding limit =====
     for (let i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
@@ -453,10 +443,8 @@ function LoopStmts(items: int[], flag: bool) -> int {
                 0
             };
             result += computation;
-        }
-        ;
-    }
-    ;
+        };
+    };
 
     // ===== Extraneous whitespace =====
     while (a < 10) {
@@ -466,13 +454,11 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     for (let i = 0; i < 10; i += 1) {
         result += i;
-    }
-    ;
+    };
 
     for (let item in items) {
         result += item;
-    }
-    ;
+    };
 
     // ===== Let statement variations =====
     let plain = 1;
@@ -559,13 +545,14 @@ function AssertStmts(x: int, y: int) -> int {
     // 1 assert keyword leading
     assert; // 2 assert keyword trailing
     // 3 condition leading
-    x > 0; // 5 semicolon trailing
+    x > 0 // 4 condition trailing
+    ; // 5 semicolon trailing
 
     // ===== Trivia on assert (block comments) =====
     /* 1 assert keyword leading */
     assert; /* 2 assert keyword trailing */
     /* 3 condition leading */
-    x > 0/* 4 condition trailing */; /* 5 semicolon trailing */
+    x > 0 /* 4 condition trailing */; /* 5 semicolon trailing */
 
     // ===== Long assert condition exceeding limit =====
     assert;
@@ -606,7 +593,8 @@ function AssertStmts(x: int, y: int) -> int {
         && x + y < 150
         && x * y > 10
         && x - y != 42
-        && x % 7 == 0; // 5 semicolon trailing
+        && x % 7 == 0 // 4 condition trailing
+    ; // 5 semicolon trailing
 
     ///////////////////
 
@@ -622,7 +610,7 @@ function AssertStmts(x: int, y: int) -> int {
         && x + y < 150
         && x * y > 10
         && x - y != 42
-        && x % 7 == 0/* 4 condition trailing */; /* 5 semicolon trailing */
+        && x % 7 == 0 /* 4 condition trailing */; /* 5 semicolon trailing */
 
     ///////////////////
 
