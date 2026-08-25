@@ -2,8 +2,10 @@
 //! coercion carried to runtime, `reflect.signature`, and `reflect.call_any`
 //! (argument checking, callee defaults, error propagation).
 
-use baml_project::{collect_diagnostics, testing::setup_test_db};
-use baml_tests::baml_test;
+use baml_tests::{
+    baml_test,
+    stdlib_prefix::{check_user_files, setup_test_db},
+};
 use bex_engine::BexExternalValue;
 
 #[tokio::test]
@@ -788,7 +790,7 @@ fn runtime_type_arguments_are_rejected_on_streaming_companions() {
         }
         "##,
     );
-    let diagnostics = collect_diagnostics(&db);
+    let diagnostics = check_user_files(&db);
     assert!(
         diagnostics
             .iter()
