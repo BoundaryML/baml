@@ -123,23 +123,31 @@ class ReproRun {
 
 class CompileAttempt {
     pkg: baml.reflect.Package?,
+    /// Compiler diagnostics when the sources were rejected.
     error: string?,
-    /// True when the host running us has no runtime compiler (e.g. the
-    /// `baml test` VM) — the check is impossible, not failed.
-    unavailable: bool,
+    /// Why the check could not run at all (repro needs a human, command is
+    /// not verifiable in-process, host has no runtime compiler); null when
+    /// the attempt is a real verdict on the sources.
+    blocked: string?,
+}
+
+function blocked(reason: string) -> CompileAttempt {
+    CompileAttempt { pkg: null, error: null, blocked: reason }
 }
 
 function try_compile(files: map<string, string>) -> CompileAttempt {
     compile_ok(files) catch (e) {
         baml.reflect.errors.CompilationError => {
-            CompileAttempt { pkg: null, error: e.message, unavailable: false }
+            CompileAttempt { pkg: null, error: e.message, blocked: null }
         },
-        baml.errors.Unsupported => CompileAttempt { pkg: null, error: e.message, unavailable: true },
+        baml.errors.Unsupported => {
+            blocked("runtime compiler unavailable in this host: " + e.message)
+        },
         _ => {
             CompileAttempt {
                 pkg: null,
                 error: "compilation failed for an unexpected reason",
-                unavailable: false,
+                blocked: null,
             }
         },
     }
@@ -147,7 +155,34 @@ function try_compile(files: map<string, string>) -> CompileAttempt {
 
 function compile_ok(files: map<string, string>) -> CompileAttempt throws unknown {
     let pkg = baml.reflect.Package.compile(files);
-    CompileAttempt { pkg: pkg, error: null, unavailable: false }
+    CompileAttempt { pkg: pkg, error: null, blocked: null }
+}
+
+/// The in-process check compiles (and, for should_evaluate_to, evaluates)
+/// the repro's files. That covers `baml check` / `baml run` / `baml build`
+/// surfaces; `baml generate`, `baml test`, `baml fmt`, `baml pack` ... can
+/// fail even when the sources compile, so they are never auto-verdicted.
+function command_covered_by_compile(command: string) -> bool {
+    let c = command.trim();
+    c.starts_with("baml check") || c.starts_with("baml run") || c.starts_with("baml build")
+}
+
+/// Compile the repro, unless something rules the check out first.
+function attempt_repro(repro: Repro) -> CompileAttempt {
+    match (repro.expectation) {
+        let e: RequiresInspection => blocked("requires inspection: " + e.instructions),
+        _ => {
+            if (command_covered_by_compile(repro.command)) {
+                try_compile(repro.files)
+            } else {
+                blocked(
+                    "command-dependent repro ("
+                        + repro.command.trim()
+                        + ") is not verifiable by an in-process compile; requires inspection",
+                )
+            }
+        },
+    }
 }
 
 type ReproMain = () -> json throws unknown;
@@ -167,109 +202,63 @@ function repro_main_output(pkg: baml.reflect.Package) -> string {
 }
 
 /// Run a repro against the toolchain executing this program.
-/// The in-process check compiles (and, for should_evaluate_to, evaluates)
-/// the repro's files. That covers `baml check` / `baml run` / `baml build`
-/// surfaces; `baml generate`, `baml test`, `baml fmt`, `baml pack` ... can
-/// fail even when the sources compile, so they are never auto-verdicted.
-function command_covered_by_compile(command: string) -> bool {
-    let c = command.trim();
-    c.starts_with("baml check") || c.starts_with("baml run") || c.starts_with("baml build")
-}
-
 function run_repro(repro: Repro) -> ReproRun {
-    if (!command_covered_by_compile(repro.command)) {
-        match (repro.expectation) {
-            let e: RequiresInspection => null,
-            _ => {
-                return ReproRun {
-                    verdict: Verdict.Inconclusive,
-                    observed: "command-dependent repro ("
-                        + repro.command.trim()
-                        + ") is not verifiable by an in-process compile; requires inspection",
-                };
-            },
-        };
+    let attempt = attempt_repro(repro);
+    if (attempt.blocked != null) {
+        return ReproRun { verdict: Verdict.Inconclusive, observed: attempt.blocked ?? "" };
     };
     match (repro.expectation) {
-        let e: RequiresInspection => {
-            ReproRun {
-                verdict: Verdict.Inconclusive,
-                observed: "requires inspection: " + e.instructions,
-            }
+        let e: ShouldCompile => match (attempt.error) {
+            null => ReproRun { verdict: Verdict.Fixed, observed: "compiles cleanly" },
+            let msg: string => {
+                ReproRun { verdict: Verdict.StillBroken, observed: "still rejected: " + msg }
+            },
         },
-        let e: ShouldCompile => {
-            let attempt = try_compile(repro.files);
-            if (attempt.unavailable) {
-                return ReproRun {
-                    verdict: Verdict.Inconclusive,
-                    observed: "runtime compiler unavailable in this host: " + (attempt.error ?? ""),
-                };
-            };
-            match (attempt.error) {
-                null => ReproRun { verdict: Verdict.Fixed, observed: "compiles cleanly" },
-                let msg: string => {
-                    ReproRun { verdict: Verdict.StillBroken, observed: "still rejected: " + msg }
-                },
-            }
-        },
-        let e: ShouldNotCompile => {
-            let attempt = try_compile(repro.files);
-            if (attempt.unavailable) {
-                return ReproRun {
-                    verdict: Verdict.Inconclusive,
-                    observed: "runtime compiler unavailable in this host: " + (attempt.error ?? ""),
-                };
-            };
-            match (attempt.error) {
-                null => {
-                    ReproRun {
-                        verdict: Verdict.StillBroken,
-                        observed: "still accepted (compiles cleanly)",
-                    }
-                },
-                let msg: string => {
-                    let wanted = e.diagnostic_contains;
-                    if (wanted != null && !msg.includes(wanted ?? "")) {
-                        return ReproRun {
-                            verdict: Verdict.Inconclusive,
-                            observed: "rejected, but diagnostic differs: " + msg,
-                        };
-                    };
-                    ReproRun { verdict: Verdict.Fixed, observed: "now rejected: " + msg }
-                },
-            }
-        },
-        let e: ShouldEvaluateTo => {
-            let attempt = try_compile(repro.files);
-            if (attempt.unavailable) {
-                return ReproRun {
-                    verdict: Verdict.Inconclusive,
-                    observed: "runtime compiler unavailable in this host: " + (attempt.error ?? ""),
-                };
-            };
-            match (attempt.pkg) {
-                null => {
+        let e: ShouldNotCompile => match (attempt.error) {
+            null => {
+                ReproRun {
+                    verdict: Verdict.StillBroken,
+                    observed: "still accepted (compiles cleanly)",
+                }
+            },
+            let msg: string => {
+                let wanted = e.diagnostic_contains;
+                if (wanted != null && !msg.includes(wanted ?? "")) {
                     ReproRun {
                         verdict: Verdict.Inconclusive,
-                        observed: "repro no longer compiles: " + (attempt.error ?? "unknown error"),
+                        observed: "rejected, but diagnostic differs: " + msg,
                     }
-                },
-                let pkg: baml.reflect.Package => {
-                    let observed = repro_main_output(pkg);
-                    let expected = baml.json.stringify(e.expected);
-                    if (observed == expected) {
-                        ReproRun {
-                            verdict: Verdict.Fixed,
-                            observed: "evaluates to expected " + observed,
-                        }
-                    } else {
-                        ReproRun {
-                            verdict: Verdict.StillBroken,
-                            observed: "expected " + expected + " but got " + observed,
-                        }
+                } else {
+                    ReproRun { verdict: Verdict.Fixed, observed: "now rejected: " + msg }
+                }
+            },
+        },
+        let e: ShouldEvaluateTo => match (attempt.pkg) {
+            null => {
+                ReproRun {
+                    verdict: Verdict.Inconclusive,
+                    observed: "repro no longer compiles: " + (attempt.error ?? "unknown error"),
+                }
+            },
+            let pkg: baml.reflect.Package => {
+                let observed = repro_main_output(pkg);
+                let expected = baml.json.stringify(e.expected);
+                if (observed == expected) {
+                    ReproRun {
+                        verdict: Verdict.Fixed,
+                        observed: "evaluates to expected " + observed,
                     }
-                },
-            }
+                } else {
+                    ReproRun {
+                        verdict: Verdict.StillBroken,
+                        observed: "expected " + expected + " but got " + observed,
+                    }
+                }
+            },
+        },
+        // handled by attempt_repro (blocked above)
+        let e: RequiresInspection => {
+            ReproRun { verdict: Verdict.Inconclusive, observed: e.instructions }
         },
     }
 }
