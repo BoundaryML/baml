@@ -230,31 +230,100 @@ fn float_eq(x: f64, y: f64) -> bool {
 /// Scalar ordering for comparable kinds. `None` = incomparable (NULL-like
 /// non-match). NaN orders against nothing (equality handled separately).
 fn scalar_ord(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
-    let num = |v: &Value| -> Option<f64> {
-        match v {
-            Value::Int(i) =>
-            {
-                #[expect(clippy::cast_precision_loss, reason = "numeric cross-compare")]
-                Some(*i as f64)
-            }
-            Value::Float(f) => Some(*f),
-            Value::BigInt(s) => s.parse::<f64>().ok(),
-            _ => None,
-        }
-    };
+    use std::cmp::Ordering;
     match (a, b) {
-        // Exact integer fast path avoids f64 rounding at the extremes.
+        // Every numeric pair compares EXACTLY — no operand is ever routed
+        // through a lossy f64 (an `as f64` fast path would make distinct
+        // values equal past 2^53).
         (Value::Int(x), Value::Int(y)) => Some(x.cmp(y)),
+        (Value::Int(x), Value::BigInt(y)) => cmp_decimal_ints(&x.to_string(), y),
+        (Value::BigInt(x), Value::Int(y)) => cmp_decimal_ints(x, &y.to_string()),
+        (Value::BigInt(x), Value::BigInt(y)) => cmp_decimal_ints(x, y),
+        (Value::Int(x), Value::Float(y)) => cmp_decimal_int_f64(&x.to_string(), *y),
+        (Value::Float(x), Value::Int(y)) => {
+            cmp_decimal_int_f64(&y.to_string(), *x).map(Ordering::reverse)
+        }
+        (Value::BigInt(x), Value::Float(y)) => cmp_decimal_int_f64(x, *y),
+        (Value::Float(x), Value::BigInt(y)) => cmp_decimal_int_f64(y, *x).map(Ordering::reverse),
+        (Value::Float(x), Value::Float(y)) => {
+            if x.is_nan() || y.is_nan() {
+                None
+            } else {
+                x.partial_cmp(y)
+            }
+        }
         (Value::String(x), Value::String(y)) => Some(x.as_bytes().cmp(y.as_bytes())),
         (Value::Bool(x), Value::Bool(y)) => Some(x.cmp(y)),
-        _ => {
-            let (x, y) = (num(a)?, num(b)?);
-            if x.is_nan() || y.is_nan() {
-                return None;
-            }
-            x.partial_cmp(&y)
-        }
+        _ => None,
     }
+}
+
+/// Exact ordering of two canonical decimal integers (optional `-`, minimal
+/// digits): sign, then magnitude by length, then lexicographic.
+fn cmp_decimal_ints(a: &str, b: &str) -> Option<std::cmp::Ordering> {
+    use std::cmp::Ordering;
+    let sign = |s: &str| -> Option<(bool, usize)> {
+        let negative = s.starts_with('-');
+        let digits = &s[usize::from(negative)..];
+        if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        // Canonical form has no leading zeros; "0" is non-negative.
+        Some((negative && digits != "0", usize::from(negative)))
+    };
+    let (a_negative, a_start) = sign(a)?;
+    let (b_negative, b_start) = sign(b)?;
+    let ord = match (a_negative, b_negative) {
+        (false, true) => Ordering::Greater,
+        (true, false) => Ordering::Less,
+        (negative, _) => {
+            let (x, y) = (&a[a_start..], &b[b_start..]);
+            let magnitude = x.len().cmp(&y.len()).then_with(|| x.cmp(y));
+            if negative {
+                magnitude.reverse()
+            } else {
+                magnitude
+            }
+        }
+    };
+    Some(ord)
+}
+
+/// Exact ordering of a canonical decimal integer against an f64. The float's
+/// integral part converts to its exact decimal digits (`{:.0}` renders the
+/// true binary value), so no width of either operand loses precision.
+fn cmp_decimal_int_f64(int: &str, float: f64) -> Option<std::cmp::Ordering> {
+    use std::cmp::Ordering;
+    if float.is_nan() {
+        return None;
+    }
+    if float == f64::INFINITY {
+        return Some(Ordering::Less);
+    }
+    if float == f64::NEG_INFINITY {
+        return Some(Ordering::Greater);
+    }
+    let truncated = float.trunc();
+    // An integral f64 formats with precision 0 to its exact value; the
+    // only non-canonical artifact is "-0", which normalizes to "0".
+    let mut truncated_digits = format!("{truncated:.0}");
+    if truncated_digits == "-0" {
+        truncated_digits = "0".to_string();
+    }
+    let ord = cmp_decimal_ints(int, &truncated_digits)?;
+    if ord != Ordering::Equal {
+        return Some(ord);
+    }
+    // Equal integral parts: any fractional remainder decides. trunc() moves
+    // toward zero, so the remainder carries the float's sign.
+    let fraction = float - truncated;
+    Some(if fraction > 0.0 {
+        Ordering::Less
+    } else if fraction < 0.0 {
+        Ordering::Greater
+    } else {
+        Ordering::Equal
+    })
 }
 
 /// Evaluate one comparison with the frozen semantics. `None` = NULL-like
@@ -395,6 +464,100 @@ mod tests {
                 .map(|(k, v)| ((*k).to_string(), v.clone()))
                 .collect(),
         )
+    }
+
+    /// Distinct values past 2^53 must never compare equal: an `as f64`
+    /// path would collapse them (review finding, PR #4563).
+    #[test]
+    fn integral_float_comparison_is_exact_at_the_precision_boundary() {
+        use std::cmp::Ordering;
+        let boundary = 9_007_199_254_740_992i64; // 2^53, exact in f64
+        let above = boundary + 1; // NOT representable in f64
+
+        // 2^53 really equals 2^53.0; 2^53 + 1 does not.
+        assert_eq!(
+            compare(
+                CmpOp::Eq,
+                &Value::Int(boundary),
+                &Value::Float(9_007_199_254_740_992.0)
+            ),
+            Some(true)
+        );
+        assert_eq!(
+            compare(
+                CmpOp::Eq,
+                &Value::Int(above),
+                &Value::Float(9_007_199_254_740_992.0)
+            ),
+            Some(false)
+        );
+        assert_eq!(
+            scalar_ord(&Value::Int(above), &Value::Float(9_007_199_254_740_992.0)),
+            Some(Ordering::Greater)
+        );
+        assert_eq!(
+            scalar_ord(&Value::Float(9_007_199_254_740_992.0), &Value::Int(above)),
+            Some(Ordering::Less)
+        );
+
+        // Same boundary through the BigInt lane.
+        let big_above = Value::BigInt(above.to_string());
+        assert_eq!(
+            compare(
+                CmpOp::Eq,
+                &big_above,
+                &Value::Float(9_007_199_254_740_992.0)
+            ),
+            Some(false)
+        );
+        assert_eq!(
+            scalar_ord(&big_above, &Value::Float(9_007_199_254_740_992.0)),
+            Some(Ordering::Greater)
+        );
+
+        // Negative mirror.
+        assert_eq!(
+            compare(
+                CmpOp::Eq,
+                &Value::Int(-above),
+                &Value::Float(-9_007_199_254_740_992.0)
+            ),
+            Some(false)
+        );
+        assert_eq!(
+            scalar_ord(&Value::Int(-above), &Value::Float(-9_007_199_254_740_992.0)),
+            Some(Ordering::Less)
+        );
+
+        // BigInt beyond i64 orders exactly against both floats and ints.
+        let huge = Value::BigInt("170141183460469231731687303715884105728".to_string()); // 2^127
+        assert_eq!(
+            scalar_ord(&huge, &Value::Float(1e38)),
+            Some(Ordering::Greater)
+        );
+        assert_eq!(
+            scalar_ord(&huge, &Value::Float(f64::INFINITY)),
+            Some(Ordering::Less)
+        );
+        assert_eq!(
+            scalar_ord(&Value::Int(i64::MAX), &huge),
+            Some(Ordering::Less)
+        );
+
+        // Fractions, signed zero, and NaN keep their semantics.
+        assert_eq!(
+            scalar_ord(&Value::Int(3), &Value::Float(3.5)),
+            Some(Ordering::Less)
+        );
+        assert_eq!(
+            scalar_ord(&Value::Int(-3), &Value::Float(-3.5)),
+            Some(Ordering::Greater)
+        );
+        assert_eq!(
+            scalar_ord(&Value::Int(0), &Value::Float(-0.0)),
+            Some(Ordering::Equal)
+        );
+        assert_eq!(scalar_ord(&Value::Int(1), &Value::Float(f64::NAN)), None);
     }
 
     #[test]

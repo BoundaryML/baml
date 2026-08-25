@@ -357,16 +357,23 @@ impl RunArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
         let outcome = self.run_with_reporter(&reporter);
-        // A profiling failure never breaks the run, so by default it is
-        // invisible; verbose is the window into why a store is absent —
-        // or where an active one actually wrote.
-        if crate::reporter::verbose() {
-            let status = bex_events::prof::backend::ProfilerSession::global().status_line();
-            crate::reporter::print_verbose(format_args!("profiling: {status}"));
-        }
+        emit_profiling_status();
         outcome
     }
+}
 
+/// A profiling failure never breaks the run, so by default it is invisible;
+/// verbose is the window into why a store is absent — or where an active one
+/// actually wrote. Must run on EVERY exit path, including the
+/// `std::process::exit` branches for program-controlled exit codes.
+fn emit_profiling_status() {
+    if crate::reporter::verbose() {
+        let status = bex_events::prof::backend::ProfilerSession::global().status_line();
+        crate::reporter::print_verbose(format_args!("profiling: {status}"));
+    }
+}
+
+impl RunArgs {
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         // Dispatch modes are mutually exclusive. Positional target /
         // `-f` (one or many) / `-e` all replace each other.
@@ -719,6 +726,7 @@ impl RunArgs {
                 // Streams spec §7.5: the profiler's durability window ends
                 // here — flush before the process exits.
                 bex_events::prof::flush_and_join(std::time::Duration::from_secs(5));
+                emit_profiling_status();
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
             Err(e) => {
@@ -1092,6 +1100,7 @@ impl RunArgs {
                 // Streams spec §7.5: the profiler's durability window ends
                 // here — flush before the process exits.
                 bex_events::prof::flush_and_join(std::time::Duration::from_secs(5));
+                emit_profiling_status();
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
             Err(e) => {

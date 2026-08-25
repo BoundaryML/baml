@@ -125,8 +125,9 @@ All ordinary and detached spawned descendants remain in their parent's
 profiling execution. `detach = true` changes only cancellation-token behavior.
 Each child acquires a generation-tagged execution lease before scheduling and
 releases it after its final profiler facts. Root return records status and
-releases without waiting; the last descendant release submits the terminal
-barrier. The profiler does not cancel or join work to finish an artifact.
+releases without waiting; the last descendant release marks the execution
+finish-ready and wakes the central consumer. The profiler does not cancel
+or join work to finish an artifact.
 
 `BAML_PROFILE=0` creates one shared, immutable off session with no profiler
 ring, consumer, CCT/evidence state, value heap, capture hooks, CAS/store handle,
@@ -669,9 +670,8 @@ Terminal sealing follows this barrier:
 5. the central consumer snapshots the committed tail of every registered ring
    after execution producers are quiescent;
 6. it drains and decodes each ring through that captured tail;
-7. it waits for the decoder/evidence writer to acknowledge that barrier token;
-8. it converts remaining execution-owned unresolved facts to terminal health;
-9. it hands the sealed epoch and remaining evidence to the stream writer as
+7. it converts remaining execution-owned unresolved facts to terminal health;
+8. it hands the sealed epoch and remaining evidence to the stream writer as
    one group, enqueues `RootEnded`, and releases the generation-tagged slot
    to `Released` immediately; publication is batched by the writer's cycle
    (superseded by TASK/profiling-backend-streams.md §5.6).

@@ -157,10 +157,13 @@ No format changes: `EngineStarted.program_id` stays 16 bytes; identical
 builds now also dedupe their `FunctionTableV1` CAS object across processes
 for free. Producers of the hash: the `bex_project` compile pipeline
 (`SourceState` holds the `FsPath → String` file map,
-`bex_project/src/project.rs:1122`), the pack pipeline (embed the hash in the
-packed artifact at pack time), and `bex_engine/tests/common/mod.rs::
+`bex_project/src/project.rs:1122`) and `bex_engine/tests/common/mod.rs::
 compile_for_engine` (hash the single in-memory source the same way, path
-`"<test>"`).
+`"<test>"`). The pack pipeline does NOT embed the hash yet (landed
+behavior): a packed binary materializes with `source_content_hash = None`
+and each engine falls back to a random `ProgramId`, so packed runs are not
+comparable across processes. Tracked gap; the fix is a pack-manifest hash
+embedded at pack time.
 
 Engine id (`EngineId`) is unchanged.
 
