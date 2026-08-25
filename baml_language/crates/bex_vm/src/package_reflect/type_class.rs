@@ -1074,6 +1074,18 @@ fn render_meta_suffix(alias: Option<&str>, description: Option<&str>) -> String 
     out
 }
 
+fn push_docstring(out: &mut String, docstring: Option<&str>, indent: &str) {
+    let Some(docstring) = docstring.map(str::trim).filter(|docs| !docs.is_empty()) else {
+        return;
+    };
+    for line in docstring.lines() {
+        out.push_str(indent);
+        out.push_str("/// ");
+        out.push_str(line);
+        out.push('\n');
+    }
+}
+
 fn render_ty_source(
     ty: &bex_vm_types::RealizedTy,
     spellings: &indexmap::IndexMap<baml_type::typetag::TypeTag, String>,
@@ -1313,9 +1325,15 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
         if !rendered_declarations.insert(name.clone()) {
             continue;
         }
-        let mut source = format!("enum {name} {{");
+        let mut source = String::new();
+        push_docstring(&mut source, enm.docstring.as_deref(), "");
+        source.push_str("enum ");
+        source.push_str(&name);
+        source.push_str(" {");
         for variant in &enm.variants {
-            source.push_str("\n  ");
+            source.push('\n');
+            push_docstring(&mut source, variant.docstring.as_deref(), "  ");
+            source.push_str("  ");
             source.push_str(&variant.name);
             source.push_str(&render_meta_suffix(
                 variant.alias.as_deref(),
@@ -1345,9 +1363,15 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
         if !rendered_declarations.insert(name.clone()) {
             continue;
         }
-        let mut source = format!("class {name} {{");
+        let mut source = String::new();
+        push_docstring(&mut source, class.docstring.as_deref(), "");
+        source.push_str("class ");
+        source.push_str(&name);
+        source.push_str(" {");
         for field in &class.fields {
-            source.push_str("\n  ");
+            source.push('\n');
+            push_docstring(&mut source, field.docstring.as_deref(), "  ");
+            source.push_str("  ");
             source.push_str(&field.name);
             source.push(' ');
             if let Some(field_type) = &field.runtime_type {

@@ -720,6 +720,7 @@ pub type SapTyTemplate = baml_type::TyTemplate<baml_type::TaggedTypeName>;
 pub struct ClassDefinition {
     pub name: String,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub alias: Option<String>,
     pub fields: Vec<ClassFieldDefinition>,
 }
@@ -737,6 +738,7 @@ pub struct ClassFieldDefinition {
     /// definitions that only provide an already-realized `field_type`.
     pub field_template: Option<SapTyTemplate>,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub alias: Option<String>,
     pub skip: bool,
 }
@@ -746,6 +748,7 @@ pub struct ClassFieldDefinition {
 pub struct EnumDefinition {
     pub name: String,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub alias: Option<String>,
     pub variants: Vec<EnumVariantDefinition>,
 }
@@ -755,6 +758,7 @@ pub struct EnumDefinition {
 pub struct EnumVariantDefinition {
     pub name: String,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub alias: Option<String>,
 }
 

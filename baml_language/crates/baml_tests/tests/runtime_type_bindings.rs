@@ -968,6 +968,96 @@ function Items() -> Item[] { [Item { value: "bound", next: null }] }
     );
 }
 
+#[tokio::test]
+async fn docstrings_render_for_static_minted_and_mounted_types() {
+    let output = baml_test!(
+        r####"
+/// Static class docs
+class StaticDoc {
+  /// Static field docs
+  value string @description("Static field description")
+}
+
+enum StaticState {
+  /// Static enum value docs
+  READY
+}
+
+interface DocAnchor {
+  value string
+}
+
+function main() -> string throws unknown {
+  let anchor = reflect.interface.implementation<DocAnchor>().field("value")
+  let minted = reflect.class.new("Minted", {
+    "value": reflect.Type.of<string>().meta(
+      description = "Minted field description",
+      docstring = "Minted field docs",
+    ),
+  }, implementations = [anchor])
+  let app = reflect.Package.current().with_types({ "Minted": minted })
+  let compiled = reflect.Package.compile({ "wrapper.baml": `
+function make_mounted() -> app.Minted {
+  app.Minted { value: "ok" }
+}
+` }, packages = { "app": app })
+  let make_mounted = compiled.get_function<() -> DocAnchor>("root.make_mounted")
+    ?? throw "missing make_mounted"
+  let mounted = reflect.Type.of_value(make_mounted())
+
+  `${reflect.Type.of<StaticDoc>().to_baml()}~~${reflect.Type.of<StaticState>().to_baml()}~~${ai.wire.render_output_format(reflect.Type.of<StaticDoc>())}~~${ai.wire.render_output_format(reflect.Type.of<StaticState>())}~~${minted.as_type().to_baml()}~~${ai.wire.render_output_format(minted.as_type())}~~${mounted.to_baml()}~~${ai.wire.render_output_format(mounted)}`
+}
+"####
+    );
+    let BexExternalValue::String(rendered) = output.result.expect("main must return") else {
+        panic!("main returns a string");
+    };
+    let parts = rendered.splitn(8, "~~").collect::<Vec<_>>();
+    assert_eq!(parts.len(), 8, "{rendered}");
+
+    assert!(
+        parts[0].starts_with("/// Static class docs\nclass StaticDoc"),
+        "{}",
+        parts[0]
+    );
+    assert!(
+        parts[0].contains("  /// Static field docs\n  value string"),
+        "{}",
+        parts[0]
+    );
+    assert!(
+        parts[1].contains("  /// Static enum value docs\n  READY"),
+        "{}",
+        parts[1]
+    );
+
+    let static_description = parts[2]
+        .find("/// Static field description")
+        .expect("static description renders");
+    let static_docstring = parts[2]
+        .find("/// Static field docs")
+        .expect("static docstring renders");
+    assert!(static_description < static_docstring, "{}", parts[2]);
+    assert!(parts[2].contains("/// Static class docs"), "{}", parts[2]);
+    assert!(
+        parts[3].contains("READY: Static enum value docs"),
+        "{}",
+        parts[3]
+    );
+
+    assert!(parts[4].contains("  /// Minted field docs\n  value string"));
+    let minted_description = parts[5]
+        .find("/// Minted field description")
+        .expect("minted description renders");
+    let minted_docstring = parts[5]
+        .find("/// Minted field docs")
+        .expect("minted docstring renders");
+    assert!(minted_description < minted_docstring, "{}", parts[5]);
+
+    assert!(parts[6].contains("/// Minted field docs"), "{}", parts[6]);
+    assert!(parts[7].contains("/// Minted field docs"), "{}", parts[7]);
+}
+
 /// Binds `item_type` to a class named `Item`, compiled into a runtime package.
 /// Both origins below create runtime declarations, so both must render them
 /// the same way. Two fields, so a coercion failure is reported against the

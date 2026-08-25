@@ -109,6 +109,7 @@ pub enum ExportedType {
 pub struct ExportedFieldAttrs {
     pub alias: Option<String>,
     pub description: Option<String>,
+    pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
@@ -478,8 +479,14 @@ fn external_target<'db>(
     }
 }
 
-fn exported_field_attrs(attrs: &[baml_compiler2_hir::item_tree::Attribute]) -> ExportedFieldAttrs {
-    let mut result = ExportedFieldAttrs::default();
+fn exported_field_attrs(
+    attrs: &[baml_compiler2_hir::item_tree::Attribute],
+    docstring: Option<&str>,
+) -> ExportedFieldAttrs {
+    let mut result = ExportedFieldAttrs {
+        docstring: docstring.map(str::to_owned),
+        ..Default::default()
+    };
     for attr in attrs {
         if attr.args.len() != 1 {
             continue;
@@ -682,7 +689,7 @@ fn lower_class_export<'db>(
         fields.push((
             field.name.clone(),
             field_ty,
-            exported_field_attrs(&field.attributes),
+            exported_field_attrs(&field.attributes, field.docstring.as_deref()),
         ));
     }
 
@@ -809,8 +816,8 @@ fn lower_interface_export<'db>(
         .iter()
         .zip(&data.fields)
         .map(|((field, ty, attrs), field_data)| {
-            let mut exported = exported_field_attrs(attrs);
-            let type_attrs = exported_field_attrs(&data.type_refs[field_data.type_ref].attrs);
+            let mut exported = exported_field_attrs(attrs, field_data.docstring.as_deref());
+            let type_attrs = exported_field_attrs(&data.type_refs[field_data.type_ref].attrs, None);
             exported.alias = exported.alias.or(type_attrs.alias);
             exported.description = exported.description.or(type_attrs.description);
             (field.clone(), ty.clone(), exported)

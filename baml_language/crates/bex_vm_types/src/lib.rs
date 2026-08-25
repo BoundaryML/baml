@@ -37,7 +37,7 @@ pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{
     ArtifactKind, RuntimeCompileArtifact, RuntimeCompileArtifactSlot, RuntimeCompileDiagnostic,
     RuntimeCompileMode, RuntimeCompileRequest, RuntimeDiagnosticSeverity, RuntimeMountedClass,
-    RuntimeMountedEnum, RuntimeMountedFieldAttrs, RuntimePackageMount,
+    RuntimeMountedEnum, RuntimeMountedFieldAttrs, RuntimeMountedVariantAttrs, RuntimePackageMount,
     RuntimeSessionCompileArtifact, RuntimeSessionCompileRequest, RuntimeSessionInitializer,
     RuntimeSessionStep, RuntimeSessionStepKind, RuntimeSourceSpan, RuntimeTypeMount,
     SessionContract, SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,

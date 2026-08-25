@@ -110,6 +110,7 @@ impl TypeCtx {
                 let class = ClassDefinition {
                     name: v.name.clone(),
                     description: v.description.clone(),
+                    docstring: v.docstring.clone(),
                     alias: v.alias.clone(),
                     fields: fields.collect(),
                 };

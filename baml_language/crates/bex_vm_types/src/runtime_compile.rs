@@ -25,6 +25,7 @@ use crate::CompilationUnit;
 pub struct RuntimeMountedClass {
     pub name: Name,
     pub tag: baml_type::typetag::TypeTag,
+    pub docstring: Option<String>,
     pub fields: Vec<(Name, Ty, RuntimeMountedFieldAttrs)>,
 }
 
@@ -32,13 +33,20 @@ pub struct RuntimeMountedClass {
 pub struct RuntimeMountedEnum {
     pub name: Name,
     pub tag: baml_type::typetag::TypeTag,
-    pub variants: Vec<Name>,
+    pub docstring: Option<String>,
+    pub variants: Vec<(Name, RuntimeMountedVariantAttrs)>,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct RuntimeMountedFieldAttrs {
     pub alias: Option<String>,
     pub description: Option<String>,
+    pub docstring: Option<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct RuntimeMountedVariantAttrs {
+    pub docstring: Option<String>,
 }
 
 /// One exact type value mounted under a source-visible export name.
