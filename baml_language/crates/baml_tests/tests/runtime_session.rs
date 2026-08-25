@@ -383,6 +383,60 @@ async fn session_reimports_instance_fields_without_changing_the_value() {
 }
 
 #[tokio::test]
+async fn session_reads_fields_from_mounted_return_types_inline_and_after_binding() {
+    let output = baml_test!(
+        r####"
+class Ticket {
+  subject string
+}
+
+class Envelope {
+  ticket Ticket
+}
+
+function GetTicket() -> Ticket {
+  Ticket { subject: "hello" }
+}
+
+function GetEnvelope() -> Envelope {
+  Envelope { ticket: GetTicket() }
+}
+
+function main() -> string throws unknown {
+  let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
+  let inline = s.eval(`app.GetTicket().subject`)
+  s.eval(`let ticket = app.GetTicket()`)
+  let rebound = s.eval(`ticket.subject`)
+  let nested = s.eval(`app.GetEnvelope().ticket.subject`)
+  `${inline}|${rebound}|${nested}`
+}
+"####
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hello|hello|hello".into()))
+    );
+}
+
+#[tokio::test]
+async fn session_compiler_sees_with_types_exports_from_dependencies() {
+    let output = baml_test!(
+        r####"
+function main() -> bool throws unknown {
+  let mounted = reflect.class.new("MountedTicket", {
+    "subject": reflect.Type.of<string>(),
+  })
+  let app = reflect.Package.current().with_types({ "MountedTicket": mounted })
+  let s = reflect.Session.new(packages = { "app": app })
+  s.eval(#"let ticket = app.MountedTicket { subject: "visible" }
+ticket.subject"#) == "visible"
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
 async fn scenario_7_verbatim_semantics_and_containment() {
     let output = baml_test!(baml: SCENARIO_7, entry: "scenario_7");
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));

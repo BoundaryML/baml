@@ -120,3 +120,46 @@ pub fn runtime_nominals_under_permit(
     }
     (classes, enums)
 }
+
+/// Every class and enum `ty` reaches, including compile-time declarations.
+///
+/// Most runtime consumers intentionally stop at the immutable program image,
+/// but source rendering must emit a standalone graph: a runtime class field
+/// that names a static class needs that static declaration in the output too.
+#[must_use]
+pub fn all_nominals(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> (Vec<HeapPtr>, Vec<HeapPtr>) {
+    let mut found = Vec::new();
+    let mut pending = Vec::new();
+    ty.visit_heads(&mut |head| {
+        if head.is_resolved() {
+            pending.push(head.ptr());
+        }
+    });
+    pending.reverse();
+    while let Some(ptr) = pending.pop() {
+        if found.contains(&ptr) {
+            continue;
+        }
+        found.push(ptr);
+        let mut next = Vec::new();
+        let object = vm.get_object(ptr);
+        bex_vm_types::head_walk::visit_object_heads(object, &mut |head| {
+            if head.is_resolved() {
+                next.push(head.ptr());
+            }
+        });
+        next.reverse();
+        pending.extend(next);
+    }
+
+    let mut classes = Vec::new();
+    let mut enums = Vec::new();
+    for ptr in found {
+        match vm.get_object(ptr) {
+            Object::Class(_) => classes.push(ptr),
+            Object::Enum(_) => enums.push(ptr),
+            _ => {}
+        }
+    }
+    (classes, enums)
+}

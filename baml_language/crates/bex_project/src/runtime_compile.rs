@@ -188,6 +188,35 @@ fn enrich_runtime_mount(
             && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
     }
 
+    fn relocated_name(
+        name: &baml_type::QualifiedTypeName,
+        alias: &Name,
+    ) -> baml_type::QualifiedTypeName {
+        if name.is_local() {
+            baml_type::QualifiedTypeName::new(
+                alias.clone(),
+                name.namespace().clone(),
+                name.name().clone(),
+            )
+        } else {
+            name.clone()
+        }
+    }
+
+    fn relocate_ty(ty: &mut baml_type::Ty, alias: &Name) {
+        *ty = ty.map_heads(&mut |name| relocated_name(name, alias));
+    }
+
+    fn relocate_interface(interface: &mut baml_type::Interface, alias: &Name) {
+        *interface = interface.map_heads(&mut |name| relocated_name(name, alias));
+    }
+
+    fn relocate_bounds(bounds: &mut [Vec<baml_type::Interface>], alias: &Name) {
+        for interface in bounds.iter_mut().flatten() {
+            relocate_interface(interface, alias);
+        }
+    }
+
     fn relocate_function(
         function: &mut ExportedFunction,
         alias: &Name,
@@ -195,6 +224,17 @@ fn enrich_runtime_mount(
         stubs: &mut Vec<(Vec<Name>, Name, String)>,
     ) {
         use baml_compiler2_hir_ty::callable::{ExternalCallTarget, ExternalLinkability};
+
+        for param in &mut function.params {
+            *param = param.map_heads(&mut |name| relocated_name(name, alias));
+        }
+        relocate_ty(&mut function.return_type, alias);
+        if let Some(throws) = &mut function.declared_throws {
+            relocate_ty(throws, alias);
+        }
+        relocate_ty(&mut function.callable_throws, alias);
+        relocate_bounds(&mut function.generic_param_bounds, alias);
+
         if !matches!(function.linkability, ExternalLinkability::Linkable) {
             return;
         }
@@ -305,6 +345,20 @@ fn enrich_runtime_mount(
     let alias = Name::new(alias);
     let viewpoint = StubViewpoint { aliases };
     let mut stubs = Vec::new();
+    for throw_set in interface
+        .throw_sets
+        .direct
+        .values_mut()
+        .chain(interface.throw_sets.transitive.values_mut())
+    {
+        *throw_set = std::mem::take(throw_set)
+            .into_iter()
+            .map(|mut ty| {
+                relocate_ty(&mut ty, &alias);
+                ty
+            })
+            .collect();
+    }
     for function in interface
         .functions
         .values_mut()
@@ -316,11 +370,17 @@ fn enrich_runtime_mount(
         for (export_name, exported) in exported_types {
             match exported {
                 ExportedType::Class {
+                    qtn,
                     fields,
                     methods,
                     generic_params,
-                    ..
+                    generic_param_bounds,
                 } => {
+                    *qtn = relocated_name(qtn, &alias);
+                    for (_, ty, _) in fields.iter_mut() {
+                        relocate_ty(ty, &alias);
+                    }
+                    relocate_bounds(generic_param_bounds, &alias);
                     // The emitter needs a concrete class object in the mounted
                     // package's discarded source units so a consumer literal
                     // decomposes to an external object reference. At runtime
@@ -342,12 +402,18 @@ fn enrich_runtime_mount(
                             format!("<{}>", generics.join(", "))
                         };
                         let mut source = format!("class {export_name}{generic_suffix} {{\n");
-                        for (field, ..) in fields.iter() {
-                            // Mounted inference owns the exact field type. The
-                            // source stub exists only to allocate/link the
-                            // positional class object, so `unknown` avoids
-                            // re-spelling hidden runtime-qualified names.
-                            writeln!(&mut source, "  {field} unknown")
+                        for (field, ty, _) in fields.iter() {
+                            // Source-backed lookup wins before the mounted
+                            // interface in HIR. Preserve every spellable field
+                            // type here so nested projections see the same ABI;
+                            // only genuinely hidden package names degrade to
+                            // `unknown` in the link-only source.
+                            let ty = if viewpoint.hides_type(ty) {
+                                "unknown".to_string()
+                            } else {
+                                ty.to_string()
+                            };
+                            writeln!(&mut source, "  {field} {ty}")
                                 .expect("writing to String is infallible");
                         }
                         source.push_str("}\n");
@@ -360,12 +426,29 @@ fn enrich_runtime_mount(
                 ExportedType::Interface {
                     qtn,
                     generic_params,
+                    param_bounds,
+                    requires,
                     associated_types,
                     fields,
                     required_methods,
                     default_methods,
                     ..
                 } => {
+                    relocate_bounds(param_bounds, &alias);
+                    for interface in requires {
+                        relocate_interface(interface, &alias);
+                    }
+                    for associated in associated_types.iter_mut() {
+                        if let Some(bound) = &mut associated.bound {
+                            relocate_interface(bound, &alias);
+                        }
+                        if let Some(default) = &mut associated.default {
+                            relocate_ty(default, &alias);
+                        }
+                    }
+                    for (_, ty, _) in fields.iter_mut() {
+                        relocate_ty(ty, &alias);
+                    }
                     for function in required_methods.iter_mut().chain(default_methods) {
                         relocate_function(function, &alias, &viewpoint, &mut stubs);
                     }
@@ -405,7 +488,8 @@ fn enrich_runtime_mount(
                     source.push_str("}\n");
                     stubs.push((namespace, name, source));
                 }
-                ExportedType::Enum { variants, .. } => {
+                ExportedType::Enum { qtn, variants } => {
+                    *qtn = relocated_name(qtn, &alias);
                     if source_identifier(export_name)
                         && export_namespace.iter().all(source_identifier)
                         && variants.iter().all(source_identifier)
@@ -419,11 +503,23 @@ fn enrich_runtime_mount(
                         stubs.push((export_namespace.clone(), export_name.clone(), source));
                     }
                 }
-                ExportedType::TypeAlias { .. } => {}
+                ExportedType::TypeAlias { qtn, resolved } => {
+                    *qtn = relocated_name(qtn, &alias);
+                    relocate_ty(resolved, &alias);
+                }
             }
         }
     }
     for implementation in &mut interface.impls {
+        relocate_interface(&mut implementation.interface, &alias);
+        relocate_ty(&mut implementation.for_ty_pattern, &alias);
+        relocate_bounds(&mut implementation.param_bounds, &alias);
+        for (_, ty) in &mut implementation.associated_types {
+            relocate_ty(ty, &alias);
+        }
+        if let ExportedImplOrigin::InBodyClass { class_qtn } = &mut implementation.origin {
+            *class_qtn = relocated_name(class_qtn, &alias);
+        }
         for function in &mut implementation.methods {
             relocate_function(function, &alias, &viewpoint, &mut stubs);
         }
@@ -518,8 +614,8 @@ fn enrich_runtime_mount(
     }
     // Every mounted row gets a source link stub so a consumer literal can
     // decompose to an external object reference; runtime linking resolves it
-    // to the live declaration. Mounted inference owns the real field types, so
-    // stub fields are `unknown`.
+    // to the live declaration. Source-backed lookup wins before the mounted
+    // interface in HIR, so preserve spellable field types here as well.
     for (name, row) in &minted_rows {
         match row {
             ExportedType::Class { fields, .. }
@@ -527,8 +623,13 @@ fn enrich_runtime_mount(
                     && fields.iter().all(|(field, ..)| source_identifier(field)) =>
             {
                 let mut source = format!("class {name} {{\n");
-                for (field, ..) in fields {
-                    writeln!(&mut source, "  {field} unknown")
+                for (field, ty, _) in fields {
+                    let ty = if viewpoint.hides_type(ty) {
+                        "unknown".to_string()
+                    } else {
+                        ty.to_string()
+                    };
+                    writeln!(&mut source, "  {field} {ty}")
                         .expect("writing to String is infallible");
                 }
                 source.push_str("}\n");
@@ -1859,8 +1960,20 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 .result_global
                 .strip_prefix("user.")
                 .unwrap_or(session.result_global.as_str());
-            let actual =
-                let_initializer_type(&db, result_name).unwrap_or_else(baml_type::Ty::unknown);
+            let Some(actual) = let_initializer_type(&db, result_name) else {
+                return Err(vec![RuntimeCompileDiagnostic {
+                    code: "E_RUNTIME_SESSION".to_string(),
+                    message: format!(
+                        "internal compiler error: Session result binding `{result_name}` has no initializer type"
+                    ),
+                    severity: RuntimeDiagnosticSeverity::Error,
+                    span: Some(RuntimeSourceSpan {
+                        file: file.to_string(),
+                        start: 0,
+                        end: 0,
+                    }),
+                }]);
+            };
             // The check runs in the compiler's context, which names declarations
             // rather than pointing at them. `eval<T>` can be handed a
             // runtime-created type, which has no name to recover — the engine

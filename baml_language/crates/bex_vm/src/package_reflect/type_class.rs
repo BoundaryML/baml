@@ -1023,47 +1023,67 @@ fn render_meta_suffix(alias: Option<&str>, description: Option<&str>) -> String 
     out
 }
 
-fn render_ty_source(ty: &bex_vm_types::RealizedTy) -> String {
+fn render_ty_source(
+    ty: &bex_vm_types::RealizedTy,
+    spellings: &indexmap::IndexMap<baml_type::typetag::TypeTag, String>,
+) -> String {
+    let ty = ty.map_heads(&mut |head| {
+        let name = spellings.get(&head.tag()).map_or_else(
+            || {
+                head.tagged_name()
+                    .map(|tagged| tagged.name().clone())
+                    .unwrap_or_else(|| unreachable!("a live type head names a declaration"))
+            },
+            |name| baml_type::DeclarationName::Anonymous(baml_type::Name::new(name)),
+        );
+        baml_type::TaggedTypeName::new(head.tag(), name)
+    });
+    render_named_ty_source(&ty)
+}
+
+fn render_named_ty_source(ty: &baml_type::RealizedTy<baml_type::TaggedTypeName>) -> String {
     match ty {
-        bex_vm_types::RealizedTy::Union(members, _) => {
+        baml_type::RealizedTy::Union(members, _) => {
             let mut non_null: Vec<_> = members.iter().filter(|member| !member.is_null()).collect();
             let has_null = non_null.len() != members.len();
             if has_null && non_null.len() == 1 {
                 let member = non_null
                     .pop()
                     .unwrap_or_else(|| unreachable!("length checked"));
-                let rendered = render_ty_source(member);
-                if matches!(member, bex_vm_types::RealizedTy::Function { .. }) {
+                let rendered = render_named_ty_source(member);
+                if matches!(member, baml_type::RealizedTy::Function { .. }) {
                     format!("({rendered})?")
                 } else {
                     format!("{rendered}?")
                 }
             } else {
                 let mut rendered: Vec<String> =
-                    non_null.into_iter().map(render_ty_source).collect();
+                    non_null.into_iter().map(render_named_ty_source).collect();
                 if has_null {
                     rendered.push("null".to_string());
                 }
                 rendered.join(" | ")
             }
         }
-        bex_vm_types::RealizedTy::List(element, _) => {
-            let rendered = render_ty_source(element);
-            if matches!(element.as_ref(), bex_vm_types::RealizedTy::Union(..)) {
+        baml_type::RealizedTy::List(element, _) => {
+            let rendered = render_named_ty_source(element);
+            if matches!(element.as_ref(), baml_type::RealizedTy::Union(..)) {
                 format!("({rendered})[]")
             } else {
                 format!("{rendered}[]")
             }
         }
-        bex_vm_types::RealizedTy::Map { key, value, .. } => {
+        baml_type::RealizedTy::Map { key, value, .. } => {
             format!(
                 "map<{}, {}>",
-                render_ty_source(key),
-                render_ty_source(value)
+                render_named_ty_source(key),
+                render_named_ty_source(value)
             )
         }
-        bex_vm_types::RealizedTy::Class(head, args, _) if args.is_empty() => head_name(head),
-        bex_vm_types::RealizedTy::Enum(head, _) => head_name(head),
+        baml_type::RealizedTy::Class(head, args, _) if args.is_empty() => {
+            head.display_name().to_string()
+        }
+        baml_type::RealizedTy::Enum(head, _) => head.display_name().to_string(),
         other => other.to_string(),
     }
 }
@@ -1075,7 +1095,12 @@ fn render_ty_source(ty: &bex_vm_types::RealizedTy) -> String {
 /// instead, so what this prints and what a virtual call resolves cannot
 /// disagree. A rule's `field_links` are physical field slots, so the interface's
 /// declared field order supplies the left-hand names and `class` the right.
-fn render_witness_sources(vm: &BexVm, source: &mut String, class_ptr: bex_vm_types::HeapPtr) {
+fn render_witness_sources(
+    vm: &BexVm,
+    source: &mut String,
+    class_ptr: bex_vm_types::HeapPtr,
+    spellings: &indexmap::IndexMap<baml_type::typetag::TypeTag, String>,
+) {
     let Object::Class(class) = vm.get_object(class_ptr) else {
         return;
     };
@@ -1092,7 +1117,7 @@ fn render_witness_sources(vm: &BexVm, source: &mut String, class_ptr: bex_vm_typ
             .interface_args
             .iter()
             .filter_map(|arg| bex_vm_types::RealizedTy::try_from(arg).ok())
-            .map(|arg| render_ty_source(&arg))
+            .map(|arg| render_ty_source(&arg, spellings))
             .collect::<Vec<_>>();
         if !args.is_empty() {
             source.push('<');
@@ -1117,7 +1142,7 @@ fn render_witness_sources(vm: &BexVm, source: &mut String, class_ptr: bex_vm_typ
             source.push_str("\n    type ");
             source.push_str(name.as_str());
             source.push_str(" = ");
-            source.push_str(&render_ty_source(&ty));
+            source.push_str(&render_ty_source(&ty, spellings));
         }
         for (declared, slot) in interface.fields.iter().zip(&*rule.field_links) {
             let Some(field) = class.fields.get(*slot as usize) else {
@@ -1138,18 +1163,18 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
     // to render is a walk, not a table. A package contributes its whole surface
     // (a `Package.compile` result renders as the source it was compiled from),
     // minus the `$stream` companions, which are synthesized rather than written.
-    let (mut class_ptrs, mut enum_ptrs) = crate::reachable::runtime_nominals(vm, &type_value.ty);
-    let mut owners = class_ptrs
+    let (mut class_ptrs, mut enum_ptrs) = crate::reachable::all_nominals(vm, &type_value.ty);
+    let owners = class_ptrs
         .iter()
         .chain(&enum_ptrs)
+        .filter(|ptr| !vm.heap.is_compile_time_ptr(**ptr))
         .filter_map(|ptr| match vm.get_object(*ptr) {
             Object::Class(class) => Some(class.owner),
             Object::Enum(enm) => Some(enm.owner),
             _ => None,
         })
         .filter(|owner| !owner.is_null())
-        .collect::<Vec<_>>();
-    owners.dedup();
+        .collect::<indexmap::IndexSet<_>>();
     for owner in owners {
         let Object::Package(package) = vm.get_object(owner) else {
             continue;
@@ -1171,12 +1196,74 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
         }
     }
 
+    // Package expansion can add declarations whose fields reach static
+    // classes. Close that graph too so every rendered reference has a block.
+    let mut class_index = 0;
+    while class_index < class_ptrs.len() {
+        let ptr = class_ptrs[class_index];
+        class_index += 1;
+        let Object::Class(class) = vm.get_object(ptr) else {
+            continue;
+        };
+        for field in &class.fields {
+            let field_ty = field
+                .runtime_type
+                .as_ref()
+                .map(|runtime| runtime.ty.clone())
+                .or_else(|| bex_vm_types::RealizedTy::try_from(&field.field_type).ok());
+            let Some(field_ty) = field_ty else {
+                continue;
+            };
+            let (reached_classes, reached_enums) = crate::reachable::all_nominals(vm, &field_ty);
+            for reached in reached_classes {
+                if !class_ptrs.contains(&reached) {
+                    class_ptrs.push(reached);
+                }
+            }
+            for reached in reached_enums {
+                if !enum_ptrs.contains(&reached) {
+                    enum_ptrs.push(reached);
+                }
+            }
+        }
+    }
+
+    let mut spellings = indexmap::IndexMap::new();
+    let mut used = std::collections::HashSet::new();
+    let mut next_suffix = indexmap::IndexMap::<String, usize>::new();
+    for ptr in enum_ptrs.iter().chain(&class_ptrs) {
+        let (tag, base) = match vm.get_object(*ptr) {
+            Object::Class(class) => (class.type_tag, class.name.display_name().to_string()),
+            Object::Enum(enm) => (enm.type_tag, enm.name.display_name().to_string()),
+            _ => continue,
+        };
+        if spellings.contains_key(&tag) {
+            continue;
+        }
+        let next = next_suffix.entry(base.clone()).or_insert(1);
+        let mut candidate = if *next == 1 {
+            base.clone()
+        } else {
+            format!("{base}_{next}")
+        };
+        while used.contains(&candidate) {
+            *next += 1;
+            candidate = format!("{base}_{next}");
+        }
+        *next += 1;
+        used.insert(candidate.clone());
+        spellings.insert(tag, candidate);
+    }
+
     let mut declarations = Vec::new();
     for ptr in &enum_ptrs {
         let Object::Enum(enm) = vm.get_object(*ptr) else {
             continue;
         };
-        let mut source = format!("enum {} {{", enm.name.display_name());
+        let name = spellings
+            .get(&enm.type_tag)
+            .map_or_else(|| enm.name.display_name().to_string(), Clone::clone);
+        let mut source = format!("enum {name} {{");
         for variant in &enm.variants {
             source.push_str("\n  ");
             source.push_str(&variant.name);
@@ -1202,15 +1289,18 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
         let Object::Class(class) = vm.get_object(*ptr) else {
             continue;
         };
-        let mut source = format!("class {} {{", class.name.display_name());
+        let name = spellings
+            .get(&class.type_tag)
+            .map_or_else(|| class.name.display_name().to_string(), Clone::clone);
+        let mut source = format!("class {name} {{");
         for field in &class.fields {
             source.push_str("\n  ");
             source.push_str(&field.name);
             source.push(' ');
             if let Some(field_type) = &field.runtime_type {
-                source.push_str(&render_ty_source(&field_type.ty));
+                source.push_str(&render_ty_source(&field_type.ty, &spellings));
             } else if let Ok(field_type) = bex_vm_types::RealizedTy::try_from(&field.field_type) {
-                source.push_str(&render_ty_source(&field_type));
+                source.push_str(&render_ty_source(&field_type, &spellings));
             } else {
                 source.push_str(&field.field_type.to_string());
             }
@@ -1219,7 +1309,7 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
                 field.description.as_deref(),
             ));
         }
-        render_witness_sources(vm, &mut source, *ptr);
+        render_witness_sources(vm, &mut source, *ptr, &spellings);
         if let Some(alias) = class.alias.as_deref() {
             source.push_str("\n  @@alias(");
             source.push_str(&quoted(alias));
@@ -1241,7 +1331,7 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
     if !root_is_declared {
         declarations.push(format!(
             "type RuntimeType = {}",
-            render_ty_source(&type_value.ty)
+            render_ty_source(&type_value.ty, &spellings)
         ));
     }
     declarations.join("\n\n")
