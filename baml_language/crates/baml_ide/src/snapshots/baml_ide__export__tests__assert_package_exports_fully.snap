@@ -185,7 +185,7 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
       "source": {
         "file": "<builtin>/assert/assert.baml",
         "start": 3330,
-        "end": 3588
+        "end": 3604
       },
       "detail": "function",
       "signature": {

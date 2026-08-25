@@ -71,30 +71,81 @@ pub fn resolved_aliases_for_package(
     db: &dyn crate::Db,
     pkg_id: baml_compiler2_hir::package::PackageId,
 ) -> ResolvedAliases {
-    use baml_compiler2_hir::package::{package_dependencies, package_items};
+    use baml_compiler2_hir::package::package_dependencies;
 
-    let pkg_items = package_items(db, pkg_id);
-    let mut aliases = collect_type_aliases(db, pkg_items);
+    let mut aliases = collect_type_aliases(db, pkg_id);
     for &dep_id in package_dependencies(db, pkg_id) {
-        aliases.extend(collect_type_aliases(db, package_items(db, dep_id)));
+        aliases.extend(collect_type_aliases(db, dep_id));
+    }
+    // A *mounted* dependency (a runtime compile's world) has no source files
+    // or HIR items to walk — its aliases arrive through the package-interface
+    // blob, already resolved. Source-declared entries win a name collision;
+    // blob entries only fill the gaps. Without these, every reference to a
+    // mounted alias would be a name the environment cannot see, which
+    // `lower_to_runtime` rejects rather than carrying opaque.
+    for package in baml_compiler2_hir::package::external_package_names(db) {
+        let Some(interface) =
+            baml_compiler2_hir_ty::package_interface::mounted_interface(db, &package)
+        else {
+            continue;
+        };
+        for exported in interface
+            .types
+            .values()
+            .flat_map(|namespace| namespace.values())
+        {
+            if let baml_compiler2_hir_ty::package_interface::ExportedType::TypeAlias {
+                qtn,
+                resolved,
+            } = exported
+            {
+                aliases
+                    .entry(qtn.clone())
+                    .or_insert_with(|| resolved.clone());
+            }
+        }
     }
     ResolvedAliases::from_aliases(aliases)
 }
 
 /// Every type alias a package declares, resolved to its (one-level) value
 /// through `hir_ty`'s lowering, keyed by qualified name.
+///
+/// Two enumerations, deliberately unioned. HIR's `package_items` is the only
+/// view that covers a *mounted* package (a runtime compile's dependencies have
+/// no source files to walk), but it predates ppir's synthesis. ppir's
+/// `file_type_aliases` adds the synthesized `*$stream` companion aliases,
+/// which exist only in the expansion set. An alias this map is missing cannot
+/// be classified (recursive → pooled as a declaration) or expanded
+/// (non-recursive → inlined) — it survives as a name nothing declares, which
+/// `lower_to_runtime` now rejects.
 fn collect_type_aliases<'db>(
     db: &'db dyn crate::Db,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+    pkg_id: baml_compiler2_hir::package::PackageId<'db>,
 ) -> HashMap<QualifiedTypeName, Tir2Ty> {
     use baml_compiler2_hir::contributions::Definition;
     let mut aliases = HashMap::new();
+    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
     for ns in pkg_items.namespaces.values() {
         for (name, def) in &ns.types {
             if let Definition::TypeAlias(loc) = def {
                 let value = baml_compiler2_hir_ty::lower::type_alias_value(db, *loc).to_plain();
                 aliases.insert(qualify_def(db, Definition::TypeAlias(*loc), name), value);
             }
+        }
+    }
+    let package_name = pkg_id.name(db);
+    for file in baml_compiler2_hir::compiler2_all_files(db) {
+        if baml_compiler2_hir::file_package::file_package(db, file).package != package_name {
+            continue;
+        }
+        for &loc in baml_compiler2_ppir::item_data::file_type_aliases(db, file) {
+            let data = baml_compiler2_ppir::item_data::type_alias_data(db, loc);
+            let value = baml_compiler2_hir_ty::lower::type_alias_value(db, loc).to_plain();
+            aliases.insert(
+                qualify_def(db, Definition::TypeAlias(loc), &data.name),
+                value,
+            );
         }
     }
     aliases
@@ -1529,6 +1580,25 @@ fn package_lowering_data<'db>(
             );
         }
 
+        // `baml.AnyClass` keeps its ratified reflection-backed default methods
+        // in the `baml` package, while `reflect` depends on `baml` for the
+        // interface and core error types. Avoiding a dependency cycle is
+        // intentional, but MIR still needs the root reflect package's concrete
+        // field layouts when lowering those default bodies. Populate that
+        // schema as a lowering-only view; this adds no package dependency and
+        // does not make `reflect` a namespace inside `baml`.
+        if pkg_id.name(db).as_str() == "baml" {
+            let reflect_id = PackageId::new(db, Name::new("reflect"));
+            let reflect_items = package_items(db, reflect_id);
+            LoweringContext::populate_from_package(
+                db,
+                reflect_items,
+                &reflect_id.name(db),
+                &mut population,
+                &resolved_aliases,
+            );
+        }
+
         let pkg_items = package_items(db, pkg_id);
         let pkg_name = pkg_id.name(db);
         LoweringContext::populate_from_package(
@@ -1735,7 +1805,7 @@ struct LoweringContext<'db> {
     // Generic params of the enclosing lambda(s), accumulated outermost-first.
     // Empty at top-level; `lower_lambda` extends it with the lambda's own
     // `generic_params` while lowering its body and restores it afterward.
-    // `enclosing_generic_params()` appends this so that `reflect.type_of<T>`
+    // `enclosing_generic_params()` appends this so that `reflect.Type.of<T>`
     // (and other type-arg resolution) inside a generic lambda body resolves the
     // lambda's `T` to the correct `TypeArgRef` slot — `func_loc` only knows the
     // enclosing top-level function's (and class's) params, never a lambda's.
@@ -9243,7 +9313,7 @@ impl<'db> LoweringContext<'db> {
         let target = self.builder.create_block();
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
 
-        // Check if callee is `reflect.type_of<T>()` — a value-producing intrinsic.
+        // Check if callee is `reflect.Type.of<T>()` — a value-producing intrinsic.
         // Unlike void intrinsics (log.*), this emits an assignment
         // of `Rvalue::LoadType(template)` to `dest` rather than a StatementKind::Intrinsic.
         if let Some(template) = self.check_type_of_intrinsic(callee, expr_id) {
@@ -9253,13 +9323,13 @@ impl<'db> LoweringContext<'db> {
             return;
         }
 
-        // `Package.current()` is lexical, like `type.of`: bake the enclosing
+        // `Package.current()` is lexical, like `reflect.Type.of`: bake the enclosing
         // package identity at this call site instead of emitting a callable
         // reference to the compiler-owned declaration.
         if matches!(
             &callee_operand,
             Operand::Constant(Constant::Function(item))
-                if item.to_string() == "baml.reflect.Package.current"
+                if item.to_string() == "reflect.Package.current"
         ) {
             let package = file_package(self.db, self.file).package.to_string();
             self.builder.assign(dest, Rvalue::CurrentPackage(package));
@@ -9314,7 +9384,7 @@ impl<'db> LoweringContext<'db> {
         // or inferred by TIR, materialise each as a `type` value on the stack
         // before the regular value args.
         // The VM pops these `ntypeargs` Object::Type values into the new frame's
-        // `type_args` vec so that inner `reflect.type_of<T>()` calls can
+        // `type_args` vec so that inner `reflect.Type.of<T>()` calls can
         // substitute them at runtime.
         // Check if callee resolves to a builtin IO function (sys-op). Sys-op
         // glue reads only its declared value args plus any synthetic trailing
@@ -9875,14 +9945,14 @@ impl<'db> LoweringContext<'db> {
     }
 }
 
-// ─── 3.6: reflect.type_of intrinsic ─────────────────────────────────────────
+// ─── 3.6: reflect.Type.of intrinsic ─────────────────────────────────────────
 
 impl LoweringContext<'_> {
-    /// Detect a `reflect.type_of<T>()` call and, if found, resolve the type
+    /// Detect a `reflect.Type.of<T>()` call and, if found, resolve the type
     /// argument and return the corresponding `TyTemplate`.
     ///
     /// Returns `Some(template)` when:
-    /// - The callee is the `baml.reflect.type_of` `$compiler_intrinsic`.
+    /// - The callee is the `reflect.Type.of` `$compiler_intrinsic`.
     /// - The call carries exactly one type argument.
     /// - The type argument resolves to a concrete `RuntimeTy` (no `TypeVar` leaves).
     ///
@@ -9898,18 +9968,19 @@ impl LoweringContext<'_> {
     ) -> Option<TyTemplate> {
         use baml_compiler2_ast::BuiltinKind;
 
-        // ── 1. Check the callee resolves to `baml.reflect.type_of` ──────────
+        // ── 1. Check the callee resolves to `reflect.Type.of` ──────────
         let external_type_of = self.external_callee(callee).is_some_and(|external| {
             external.builtin_kind == Some(BuiltinKind::Intrinsic)
                 && matches!(
                     &external.target,
-                    baml_compiler2_hir_ty::callable::ExternalCallTarget::Free {
+                    baml_compiler2_hir_ty::callable::ExternalCallTarget::Method {
                         package,
                         namespace,
+                        class,
                         name,
-                    } if package.as_str() == "baml"
-                        && baml_compiler2_hir::package::is_precompiled_package(self.db, package)
-                        && namespace.as_slice() == [baml_type::Name::new("type")]
+                    } if package.as_str() == "reflect"
+                        && namespace.is_empty()
+                        && class.as_str() == "Type"
                         && name.as_str() == "of"
                 )
         });
@@ -9969,7 +10040,7 @@ impl LoweringContext<'_> {
                 self.db,
                 baml_compiler2_hir::contributions::Definition::Function(func_loc),
             );
-            if item_ref.to_string().as_str() != "baml.type.of" {
+            if item_ref.to_string().as_str() != "reflect.Type.of" {
                 return None;
             }
         }
@@ -9986,7 +10057,7 @@ impl LoweringContext<'_> {
         };
 
         // Include the enclosing class + function generic params so that `T`
-        // in `reflect.type_of<T>()` resolves to `Tir2Ty::TypeVar("T")` rather
+        // in `reflect.Type.of<T>()` resolves to `Tir2Ty::TypeVar("T")` rather
         // than an unresolved-type error — both for free generic functions and
         // for methods on generic classes.  The order (class params first,
         // then function params) mirrors TIR's `enclosing_class_generic_params
@@ -10087,6 +10158,10 @@ impl LoweringContext<'_> {
     /// Fixing that needs the callee's declared params here, or effect-position
     /// classification for user-written params in inference; either way it is a
     /// wrong ANSWER rather than the ICE this guard removes.
+    // BUG: widening an Error-recovery sentinel to `BuiltinUnknown` launders a
+    // compile error into the top type (an unrecoverable check must stay
+    // `Error` so downstream diagnostics stay suppressed). The deferred slot
+    // deserves its own marker realized at the runtime gate, not `unknown`.
     fn inferred_ty_to_template(&self, ty: &Tir2Ty, generic_params: &[ParamTy]) -> TyTemplate {
         let widened = if baml_type_runtime::contains_error_recovery(ty)
             || baml_type_runtime::contains_typevar_where(ty, &|name| {
@@ -10240,6 +10315,8 @@ impl LoweringContext<'_> {
             // An unsolved slot finalizes to an error-recovery sentinel; that
             // is the same "no static answer" case as an out-of-scope type
             // variable (see `inferred_ty_to_template`), so widen it here too.
+            // BUG: same Error→Unknown laundering as `inferred_ty_to_template`;
+            // both sites should carry a deferred-slot marker instead.
             if baml_type_runtime::contains_error_recovery(ty)
                 || baml_type_runtime::contains_typevar_where(ty, &|name| {
                     !caller_generic_params.iter().any(|param| param == name)
@@ -10259,7 +10336,7 @@ impl LoweringContext<'_> {
         // out-of-range ref as a frame-layout error), so a generic callee's
         // frame is always seeded at full declared width; a `T` inferred to the
         // top type is an explicit `unknown` slot, which is how
-        // `reflect.type_of<T>()` under an unknown-typed call still reflects
+        // `reflect.Type.of<T>()` under an unknown-typed call still reflects
         // the honest top type.
         self.emit_frame_type_arg_ops(&inferred_type_args)
     }
@@ -10635,16 +10712,7 @@ impl<'db> LoweringContext<'db> {
         // synthetic Object exprs from `lower_cst.rs` that already use registry-
         // matching dotted forms like "ai.Prompt".
         let class_name = if let Some(tn) = &type_name_key {
-            if tn.is_runtime_minted() {
-                // A mounted runtime type keeps its hidden mint-qualified QTN
-                // in the value type, but its class object is linked through
-                // the source-visible package alias written at this literal
-                // (`app.Export`). The runtime linker resolves that symbol to
-                // the dependency's minted class object.
-                type_name.to_string()
-            } else {
-                tn.render_dotted(false)
-            }
+            tn.render_dotted(false)
         } else {
             type_name.to_string()
         };
@@ -15399,7 +15467,7 @@ fn format_type_tag_name(tag: i64) -> String {
         baml_type::typetag::ENUM => "enum".to_string(),
         baml_type::typetag::FUNCTION => "function".to_string(),
         baml_type::typetag::FUTURE => "future".to_string(),
-        baml_type::typetag::TYPE => "type".to_string(),
+        baml_type::typetag::TYPE => "reflect.Type".to_string(),
         baml_type::typetag::COLLECTOR => "collector".to_string(),
         baml_type::typetag::UINT8ARRAY => "uint8array".to_string(),
         tag if tag >= baml_type::typetag::CLASS_BASE => {

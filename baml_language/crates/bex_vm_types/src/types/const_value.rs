@@ -27,7 +27,7 @@ pub enum ConstValue {
     /// Unlike the other variants, this constant is **not** pre-resolved at load
     /// time — `LoadType` reads the template here and performs substitution at
     /// runtime (using the current frame's `type_args`).
-    Type(baml_type::TyTemplate),
+    Type(crate::TyTemplate),
     /// A parametric-class `IsType` check constant.
     ///
     /// Used by `Instruction::IsType` when the expected type is a generic class
@@ -42,7 +42,7 @@ pub enum ConstValue {
         /// order. `TypeArgRef(n)` refers to `frame.type_args[n]`; each
         /// position denotes exactly one type per frame (`TyTemplate` carries
         /// no match-any holes).
-        type_args_templates: Vec<baml_type::TyTemplate>,
+        type_args_templates: Vec<crate::TyTemplate>,
     },
     /// A singleton-type `IsType` check constant: membership in the literal
     /// type `1`, `"go"`, `true`, `1n`.

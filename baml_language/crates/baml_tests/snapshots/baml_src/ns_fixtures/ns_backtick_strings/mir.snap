@@ -192,7 +192,7 @@ fn user.fixtures.backtick_strings.BacktickInterpSimple(name: string) -> string {
     let _1: string // name // param
     let _2: string
     let _3: string
-    let _4: type
+    let _4: reflect.Type
 
     bb0: {
         _4 = load_type(string);
@@ -217,9 +217,9 @@ fn user.fixtures.backtick_strings.BacktickInterpMultiple(first: string, last: st
     let _2: string // last // param
     let _3: string
     let _4: string
-    let _5: type
+    let _5: reflect.Type
     let _6: string
-    let _7: type
+    let _7: reflect.Type
 
     bb0: {
         _5 = load_type(string);
@@ -247,7 +247,7 @@ fn user.fixtures.backtick_strings.BacktickInterpInt(n: int) -> string {
     let _0: string // _0 // return
     let _1: int // n // param
     let _2: string
-    let _3: type
+    let _3: reflect.Type
 
     bb0: {
         _3 = load_type(int);
@@ -269,7 +269,7 @@ fn user.fixtures.backtick_strings.BacktickInterpBool(b: bool) -> string {
     let _0: string // _0 // return
     let _1: bool // b // param
     let _2: string
-    let _3: type
+    let _3: reflect.Type
 
     bb0: {
         _3 = load_type(bool);
@@ -291,7 +291,7 @@ fn user.fixtures.backtick_strings.BacktickInterpFloat(x: float) -> string {
     let _0: string // _0 // return
     let _1: float // x // param
     let _2: string
-    let _3: type
+    let _3: reflect.Type
 
     bb0: {
         _3 = load_type(float);
@@ -317,7 +317,7 @@ fn user.fixtures.backtick_strings.BacktickInterpBlockBody(items: int[]) -> strin
     let _4: int // first
     let _5: int[]
     let _6: 0
-    let _7: type
+    let _7: reflect.Type
 
     bb0: {
         _5 = copy _1;
@@ -376,7 +376,7 @@ fn user.fixtures.backtick_strings.BacktickInterpCallsFn() -> string {
     let _0: string // _0 // return
     let _1: string
     let _2: string
-    let _3: type
+    let _3: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.backtick_strings.bangs(const 3_i64) -> [bb1];
@@ -405,9 +405,9 @@ fn user.fixtures.backtick_strings.BacktickInterpMultiline(name: string, count: i
     let _3: string
     let _4: string
     let _5: string
-    let _6: type
+    let _6: reflect.Type
     let _7: string
-    let _8: type
+    let _8: reflect.Type
 
     bb0: {
         _6 = load_type(string);
@@ -460,7 +460,7 @@ fn user.fixtures.backtick_strings.BacktickM3ForLoop(xs: string[]) -> string {
     let _10: string
     let _11: string
     let _12: string
-    let _13: type
+    let _13: reflect.Type
 
     bb0: {
         _2 = const "";

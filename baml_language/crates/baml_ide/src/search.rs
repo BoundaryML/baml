@@ -21,8 +21,10 @@ use baml_compiler2_hir::{
 use baml_compiler2_ppir::item_data;
 use text_size::TextRange;
 
-use crate::outline::{OutlineItem, file_outline};
-use crate::symbols::is_synthesized;
+use crate::{
+    outline::{OutlineItem, file_outline},
+    symbols::is_synthesized,
+};
 
 // ── Substring mode (workspace/symbol) ────────────────────────────────────────
 

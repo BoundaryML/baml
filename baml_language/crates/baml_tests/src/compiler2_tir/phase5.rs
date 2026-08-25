@@ -24,9 +24,9 @@ fn lower_type_expr_hir_in(
     let mut builder = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
     let id = builder.lower(expr);
     let (store, _spans) = builder.finish();
-    let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file).with_diagnostics();
-    let ty = ctx.lower_type_ref(&store, id).to_plain();
-    (ty, ctx.take_diagnostics())
+    let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file);
+    let (ty, diagnostics) = ctx.lower_type_ref_with_diagnostics(&store, id);
+    (ty.to_plain(), diagnostics)
 }
 
 fn lower_type_expr_hir(

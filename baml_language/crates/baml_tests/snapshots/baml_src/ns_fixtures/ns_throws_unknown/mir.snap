@@ -103,7 +103,7 @@ fn user.fixtures.throws_unknown.callback_boundary(callback: () -> null throws un
     let _2: unknown // error
     let _3: baml.errors.UnknownError
     let _4: unknown
-    let _5: type
+    let _5: reflect.Type
 
     bb0: {
         _0 = call copy _1() -> [bb1, unwind: bb2];

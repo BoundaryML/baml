@@ -1,6 +1,7 @@
-//! Function-context pins for BEP-066 minted equality on `type` values.
+//! Function-context pins for equality on `type` values.
 //!
-//! Equivalent static spellings receive the same canonical mint.
+//! A `type` value denotes a type and nothing more, so `==` is equivalence:
+//! spellings that denote the same type are equal.
 //! Matching test-block pins live in
 //! `baml_src/ns_type_reflection/type_reflection.baml`.
 
@@ -12,8 +13,8 @@ async fn permuted_union_double_equals_is_canonical() {
     let output = baml_test!(
         r#"
         function main() -> bool {
-            let a = type.of<int | string>();
-            let b = type.of<string | int>();
+            let a = reflect.Type.of<int | string>();
+            let b = reflect.Type.of<string | int>();
             a == b
         }
         "#
@@ -23,17 +24,17 @@ async fn permuted_union_double_equals_is_canonical() {
 }
 
 #[tokio::test]
-async fn permuted_union_equality_operators_use_the_canonical_mint() {
+async fn permuted_union_equality_operators_agree() {
     let output = baml_test!(
         r#"
         function main() -> bool {
-            let a = type.of<int | string>();
-            let b = type.of<string | int>();
+            let a = reflect.Type.of<int | string>();
+            let b = reflect.Type.of<string | int>();
             a == b && !(a != b)
         }
         "#
     );
-    // Both equality operators compare the same canonical static mint.
+    // Both equality operators decide the same equivalence.
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
@@ -43,13 +44,13 @@ async fn static_declaration_identity_survives_re_evaluation_and_a_helper_boundar
         r#"
         class Foo { value int }
 
-        function foo_type() -> type {
-            type.of<Foo>()
+        function foo_type() -> reflect.Type {
+            reflect.Type.of<Foo>()
         }
 
         function main() -> bool {
-            type.of<Foo>() == type.of<Foo>()
-                && type.of<Foo>() == foo_type()
+            reflect.Type.of<Foo>() == reflect.Type.of<Foo>()
+                && reflect.Type.of<Foo>() == foo_type()
                 && foo_type() == foo_type()
         }
         "#
@@ -65,7 +66,7 @@ async fn of_value_reuses_the_static_class_identity() {
 
         function main() -> bool {
             let foo = Foo { value: 1 };
-            type.of_value(foo) == type.of<Foo>()
+            reflect.Type.of_value(foo) == reflect.Type.of<Foo>()
         }
         "#
     );
@@ -77,7 +78,7 @@ async fn optional_and_explicit_null_union_share_a_static_identity() {
     let output = baml_test!(
         r#"
         function main() -> bool {
-            type.of<string?>() == type.of<string | null>()
+            reflect.Type.of<string?>() == reflect.Type.of<string | null>()
         }
         "#
     );

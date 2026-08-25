@@ -938,7 +938,7 @@ implements<T extends Named> Printable for Box<T> {
 
     #[test]
     fn test_runtime_type_syntax_formatting_is_idempotent() {
-        let source = r#"function f(t: type, value: int) -> int {
+        let source = r#"function f(t: reflect.Type, value: int) -> int {
     type T = unreflect(t)
     let result = identity<unreflect(t), string>(value)
     match (value) {
@@ -1233,7 +1233,7 @@ mod contextual_keyword_name_tests {
         // while the
         // reflection API uses `implements` as a method name.
         assert_round_trips(
-            "function f(dog_t: type, animal_t: type) -> bool {\n    let views = dog_t.class.enum.function.interface;\n    dog_t.implements(animal_t)\n}\n",
+            "function f(dog_t: reflect.Type, animal_t: reflect.Type) -> bool {\n    let views = dog_t.class.enum.function.interface;\n    dog_t.implements(animal_t)\n}\n",
         );
     }
 }

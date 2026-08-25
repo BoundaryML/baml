@@ -117,10 +117,19 @@ fn thrown_parameter_named_like_a_catch_binding_is_not_a_rethrow() {
     let Some(bex_vm_types::Object::Function(func)) = program.objects.get(idx) else {
         panic!("user.f should resolve to a function object");
     };
-    let throws = format!("{:?}", func.throws_type);
+    // An emitted program's heads are tag-only until the loader binds them, so
+    // the throws type is checked by identity rather than by rendered name.
+    let expected = baml_type::typetag::TypeTag::of_head("user.MyError");
+    let mut found = false;
+    func.throws_type.visit_heads(&mut |head| {
+        if head.tag() == expected {
+            found = true;
+        }
+    });
     assert!(
-        throws.contains("MyError"),
+        found,
         "f throws its `MyError` parameter outside the catch arm, but the throws \
-         metadata omitted it: {throws}"
+         metadata omitted it: {:?}",
+        func.throws_type
     );
 }

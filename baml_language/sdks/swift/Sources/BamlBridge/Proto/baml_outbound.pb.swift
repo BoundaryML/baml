@@ -337,7 +337,7 @@ nonisolated struct BamlBridge_Cffi_V1_BamlOutboundValue: @unchecked Sendable {
     set {_uniqueStorage()._value = .bigintValue(newValue)}
   }
 
-  /// A reflected BAML type returned as a value (e.g. `reflect.type_of<T>()`).
+  /// A reflected BAML type returned as a value (e.g. `reflect.Type.of<T>()`).
   /// Shares the `BamlTy` representation with the inbound side.
   var tyValue: BamlBridge_Cffi_V1_BamlTy {
     get {
@@ -382,7 +382,7 @@ nonisolated struct BamlBridge_Cffi_V1_BamlOutboundValue: @unchecked Sendable {
     case promptAstValue(BamlBridge_Cffi_V1_BamlValuePromptAst)
     case uint8ArrayValue(Data)
     case bigintValue(String)
-    /// A reflected BAML type returned as a value (e.g. `reflect.type_of<T>()`).
+    /// A reflected BAML type returned as a value (e.g. `reflect.Type.of<T>()`).
     /// Shares the `BamlTy` representation with the inbound side.
     case tyValue(BamlBridge_Cffi_V1_BamlTy)
     /// Definition-carrying type handle. Identity is intentionally not encoded.

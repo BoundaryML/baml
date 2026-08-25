@@ -34,8 +34,10 @@ use borsh::{BorshDeserialize, BorshSerialize};
 mod attr;
 mod codegen_ty;
 pub mod decl_cycles;
+mod declaration_name;
 mod defs;
 mod family;
+mod head;
 pub mod interned;
 mod names;
 pub mod normalize;
@@ -43,7 +45,6 @@ mod param;
 pub mod pattern_overlap;
 mod primitive;
 mod realized_ty;
-mod rename;
 mod runtime_ty;
 pub mod simplify_sap;
 pub mod template;
@@ -53,12 +54,13 @@ pub mod typetag;
 pub mod unify;
 pub mod user_facing;
 pub use attr::*;
+pub use declaration_name::DeclarationName;
 pub use defs::*;
 pub use family::*;
+pub use head::{Head, TaggedTypeName};
 pub use names::*;
 pub use param::*;
 pub use primitive::*;
-pub use rename::RenameTypeName;
 pub use runtime_ty::*;
 pub use template::SubstituteError;
 
@@ -555,8 +557,8 @@ impl Ty {
         }
     }
 
-    /// Meta-type — a runtime value that wraps a `Ty`. Renders as the `type`
-    /// keyword though its qualified name is `baml.reflect.Type`.
+    /// Meta-type — a runtime value that wraps a `Ty`. Renders as
+    /// `reflect.Type`.
     pub fn type_type() -> Self {
         Ty::Type {
             attr: TyAttr::default(),
@@ -650,7 +652,9 @@ impl Ty {
             | Ty::PromptAst { .. } => Ok(()),
         }
     }
+}
 
+impl<N: Clone> Ty<N> {
     fn needs_postfix_parens(&self) -> bool {
         matches!(self, Ty::Union(..) | Ty::Function { .. })
     }
@@ -658,7 +662,9 @@ impl Ty {
     fn needs_function_result_parens(&self) -> bool {
         matches!(self, Ty::Function { .. })
     }
+}
 
+impl<N: Clone + HeadDisplay> Ty<N> {
     fn fmt_as_postfix_base(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.needs_postfix_parens() {
             write!(f, "({self})")
@@ -678,6 +684,41 @@ impl Ty {
 
 // ── Strategy-based rendering ─────────────────────────────────────────────────
 
+/// A head that can name itself without outside help — what [`Display`](fmt::Display)
+/// on a [`Ty`] needs, since a formatter carries no context to look anything up in.
+///
+/// Deliberately *not* folded into [`Head`]: the algebra is written so a head is
+/// opaque to it, and requiring name recovery there would force every
+/// representation to understand names. This is the opt-in for representations
+/// that happen to be able to. A compiler head answers from the name it already
+/// is; a runtime head answers by reaching its declaration.
+///
+/// Note this is the compact spelling used by `Display` — the short/dotted
+/// `display_name`, *not* the fully-qualified [`Ty::render_canonical`] form.
+/// The two renderings differ on purpose and are not interchangeable.
+pub trait HeadDisplay {
+    /// This head's compact display name.
+    fn head_display_name(&self) -> String;
+}
+
+impl HeadDisplay for QualifiedTypeName {
+    fn head_display_name(&self) -> String {
+        self.display_name().to_string()
+    }
+}
+
+impl HeadDisplay for crate::head::TaggedTypeName {
+    fn head_display_name(&self) -> String {
+        self.name().display_name().to_string()
+    }
+}
+
+impl HeadDisplay for crate::DeclarationName {
+    fn head_display_name(&self) -> String {
+        self.display_name().to_string()
+    }
+}
+
 /// Strategy controlling how a [`Ty`] renders its leaf names plus a couple of
 /// presentation choices. A single recursive renderer ([`Ty::render_with`])
 /// walks the structure; everything package-, type-var-, or context-specific
@@ -685,10 +726,16 @@ impl Ty {
 /// into text — the canonical dump renderer, user-facing diagnostics, and the
 /// LSP's context-aware hover all implement this trait instead of re-walking
 /// `Ty` (the former "~10 renderers").
-pub trait TyRenderStrategy {
-    /// Render a qualified name's dotted path (package/namespace/name) *without*
+///
+/// Parameterized by the head so one renderer serves both spellings: the
+/// compiler's `QualifiedTypeName` and the runtime's heap handle. Naming a head
+/// is the *only* head-specific decision in the walk, and it already lives behind
+/// [`qtn`](TyRenderStrategy::qtn) — so the structure below stays a single
+/// implementation rather than gaining a runtime twin.
+pub trait TyRenderStrategy<N = QualifiedTypeName> {
+    /// Render a head's dotted path (package/namespace/name) *without*
     /// any `<...>` suffix; the renderer appends any type args separately.
-    fn qtn(&self, qtn: &QualifiedTypeName) -> String;
+    fn qtn(&self, qtn: &N) -> String;
 
     /// Render a type-variable name (`T`, or a synthetic effect param).
     fn type_var(&self, name: &Name) -> String;
@@ -716,9 +763,11 @@ impl Ty {
     pub fn render_canonical(&self) -> String {
         self.render_with(&CanonicalTyRender { user_facing: false })
     }
+}
 
+impl<N: Clone> Ty<N> {
     /// Render with parentheses if needed for postfix (`[]`/`?`) context.
-    fn render_as_postfix_base(&self, s: &dyn TyRenderStrategy) -> String {
+    fn render_as_postfix_base(&self, s: &dyn TyRenderStrategy<N>) -> String {
         let inner = self.render_with(s);
         if self.needs_postfix_parens() {
             format!("({inner})")
@@ -728,7 +777,7 @@ impl Ty {
     }
 
     /// Render with parentheses if needed in a function-return position.
-    fn render_as_function_result(&self, s: &dyn TyRenderStrategy) -> String {
+    fn render_as_function_result(&self, s: &dyn TyRenderStrategy<N>) -> String {
         let inner = self.render_with(s);
         if self.needs_function_result_parens() {
             format!("({inner})")
@@ -741,7 +790,7 @@ impl Ty {
     /// package-, type-var-, and presentation-policy decision to `s`. All type
     /// rendering — canonical dumps, user-facing diagnostics, LSP hover —
     /// funnels through here so the structure is described in exactly one place.
-    pub fn render_with(&self, s: &dyn TyRenderStrategy) -> String {
+    pub fn render_with(&self, s: &dyn TyRenderStrategy<N>) -> String {
         match self {
             Ty::Class(qn, type_args, _) => {
                 let mut out = s.qtn(qn);
@@ -863,7 +912,7 @@ impl Ty {
             // The wildcard hole renders as the `_` the user wrote.
             Ty::Infer { .. } => "_".to_string(),
             Ty::RustType { .. } => "$rust_type".to_string(),
-            Ty::Type { .. } => "type".to_string(),
+            Ty::Type { .. } => "reflect.Type".to_string(),
             // Opaque leaf types render as their fixed qualified names; these
             // strings feed canonical dumps and must stay byte-identical.
             Ty::Resource { .. } => "ai.Resource".to_string(),
@@ -886,7 +935,7 @@ pub struct CanonicalTyRender {
     pub user_facing: bool,
 }
 
-impl TyRenderStrategy for CanonicalTyRender {
+impl TyRenderStrategy<QualifiedTypeName> for CanonicalTyRender {
     fn qtn(&self, qtn: &QualifiedTypeName) -> String {
         qtn.render_dotted(self.user_facing)
     }
@@ -903,7 +952,7 @@ impl TyRenderStrategy for CanonicalTyRender {
     }
 }
 
-impl Interface {
+impl<N: Clone> Interface<N> {
     /// The interface *existential* type ([`Ty::Interface`]) denoted by this
     /// constraint, with default attributes. The inverse of
     /// [`Ty::as_interface`].
@@ -911,7 +960,7 @@ impl Interface {
     /// A constraint may pin only some associated types whereas a fully-specified
     /// existential pins all of them; this lifts the constraint verbatim, so the
     /// result carries exactly the bindings the constraint holds.
-    pub fn to_ty(&self) -> Ty {
+    pub fn to_ty(&self) -> Ty<N> {
         Ty::Interface(
             self.name.clone(),
             self.generics.clone(),
@@ -924,7 +973,7 @@ impl Interface {
     /// followed by the type of each associated-type binding (the names are not
     /// yielded). Lets generic `Ty`-walkers descend into a constraint without
     /// re-deriving its shape.
-    pub fn tys(&self) -> impl Iterator<Item = &Ty> {
+    pub fn tys(&self) -> impl Iterator<Item = &Ty<N>> {
         self.generics
             .iter()
             .chain(self.associated_types.iter().map(|(_, ty)| ty))
@@ -934,7 +983,7 @@ impl Interface {
     /// associated-type bindings) mapped through `f`. The name and the binding
     /// names are preserved. The structure-preserving companion to [`tys`](Self::tys),
     /// for substitution/erasure/normalization passes.
-    pub fn map_tys(&self, mut f: impl FnMut(&Ty) -> Ty) -> Interface {
+    pub fn map_tys(&self, mut f: impl FnMut(&Ty<N>) -> Ty<N>) -> Interface<N> {
         // Route through `new` so the sort invariant is self-enforcing. `f` maps
         // only the binding *types*, never the names, so on an already-sorted
         // constraint the re-sort is a no-op — but it removes the dependence on
@@ -960,7 +1009,7 @@ impl Interface {
 // The fix is to converge `Display` onto `render_user_facing` (or delete it and
 // force an explicit renderer at every site); until then, diagnostics must call
 // `render_user_facing()` rather than interpolate.
-impl fmt::Display for Ty {
+impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Ty::Int { .. } => write!(f, "int"),
@@ -979,7 +1028,7 @@ impl fmt::Display for Ty {
             },
             Ty::Bigint { .. } => write!(f, "bigint"),
             Ty::Class(tn, args, _) => {
-                write!(f, "{}", tn.display_name())?;
+                write!(f, "{}", tn.head_display_name())?;
                 if !args.is_empty() {
                     write!(f, "<")?;
                     for (i, arg) in args.iter().enumerate() {
@@ -993,7 +1042,7 @@ impl fmt::Display for Ty {
                 Ok(())
             }
             Ty::Interface(tn, args, associated_bindings, _) => {
-                write!(f, "{}", tn.display_name())?;
+                write!(f, "{}", tn.head_display_name())?;
                 if !args.is_empty() || !associated_bindings.is_empty() {
                     write!(f, "<")?;
                     let mut first = true;
@@ -1015,9 +1064,9 @@ impl fmt::Display for Ty {
                 }
                 Ok(())
             }
-            Ty::Enum(tn, _) => write!(f, "{}", tn.display_name()),
-            Ty::EnumVariant(tn, variant, _) => write!(f, "{}.{variant}", tn.display_name()),
-            Ty::TypeAlias(tn, _) => write!(f, "{}", tn.display_name()),
+            Ty::Enum(tn, _) => write!(f, "{}", tn.head_display_name()),
+            Ty::EnumVariant(tn, variant, _) => write!(f, "{}.{variant}", tn.head_display_name()),
+            Ty::TypeAlias(tn, _) => write!(f, "{}", tn.head_display_name()),
             Ty::List(inner, _) => {
                 inner.fmt_as_postfix_base(f)?;
                 write!(f, "[]")
@@ -1075,10 +1124,9 @@ impl fmt::Display for Ty {
             Ty::EvolvingList(inner, _) => write!(f, "{inner}[]"),
             Ty::EvolvingMap(key, value, _) => write!(f, "map<{key}, {value}>"),
             // Opaque leaf types: render identically to `render_with` so the two
-            // renderers never diverge. (`type`/`$rust_type` are keywords; the
-            // resource/prompt handles render as their fixed qualified names.)
+            // renderers never diverge.
             Ty::RustType { .. } => write!(f, "$rust_type"),
-            Ty::Type { .. } => write!(f, "type"),
+            Ty::Type { .. } => write!(f, "reflect.Type"),
             Ty::Resource { .. } => write!(f, "ai.Resource"),
             Ty::PromptAst { .. } => write!(f, "ai.Prompt"),
         }
@@ -1325,7 +1373,7 @@ mod tests {
     fn test_display_opaque_types() {
         assert_eq!(Ty::resource().to_string(), "ai.Resource");
         assert_eq!(Ty::prompt_ast().to_string(), "ai.Prompt");
-        assert_eq!(Ty::type_type().to_string(), "type");
+        assert_eq!(Ty::type_type().to_string(), "reflect.Type");
     }
 
     #[test]

@@ -345,18 +345,18 @@ interface Stamper {
 class Press {
     implements Stamper {
         function stamp<U>(self, u: U) -> string throws never {
-            "stamp " + type.of<U>().to_string()
+            "stamp " + reflect.Type.of<U>().to_string()
         }
 
         function emboss<U>(u: U) -> string throws never {
-            "emboss " + type.of<U>().to_string()
+            "emboss " + reflect.Type.of<U>().to_string()
         }
     }
 }
 
 test "runtime_type_arguments_flow_through_qualified_spellings" {
     let p = Press {}
-    let t = type.of<int>()
+    let t = reflect.Type.of<int>()
     assert.equal(Stamper.stamp<unreflect(t)>(p, 5), "stamp int")
     assert.equal((Press as Stamper).stamp<unreflect(t)>(p, 5), "stamp int")
     assert.equal((Press as Stamper).emboss<unreflect(t)>(5), "emboss int")
@@ -409,7 +409,7 @@ class Plate<T> {
 
     implements Embosser {
         function emboss<U>(u: U) -> string throws never {
-            "emboss " + type.of<U>().to_string()
+            "emboss " + reflect.Type.of<U>().to_string()
         }
 
         function fresh(seed: int) -> Self throws never {

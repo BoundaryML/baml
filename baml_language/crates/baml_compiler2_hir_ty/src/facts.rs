@@ -112,6 +112,12 @@ pub(crate) fn uncached_enum_variants(
 }
 
 impl TypeContext for Facts<'_> {
+    /// A name-based context represents a declaration by its own name, so this
+    /// is the identity — no resolution step, and never `None`.
+    fn head_lookup(&self, qtn: &QualifiedTypeName) -> Option<QualifiedTypeName> {
+        Some(qtn.clone())
+    }
+
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
         if let Some(cached) = self.alias_defs.borrow().get(name) {
             return cached.clone();

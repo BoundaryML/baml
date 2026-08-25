@@ -6,6 +6,6 @@ hir_ty error-channel entries: 3
 panics: 0
 
 == hir_ty error channel
-ns_optional_chain_type_args/optional_chain_type_args.baml:8148..8175 `animal(whi...peak<int>()`: expected user.optional_chain_type_args.Speaker, got user.optional_chain_type_args.Cat | user.optional_chain_type_args.Dog
-ns_optional_chain_type_args/optional_chain_type_args.baml:8566..8590 `pair(which)?.tag<bool>()`: expected user.optional_chain_type_args.Tagged, got user.optional_chain_type_args.Pair<int> | user.optional_chain_type_args.Pair<string>
-ns_runtime_type_binding_generic_calls/runtime_type_binding_generic_calls.baml:3069..3085 `EmptyOf<Bound>()`: expected Bound[], got Bound[]
+ns_optional_chain_type_args/optional_chain_type_args.baml:8220..8247 `animal(whi...peak<int>()`: expected user.optional_chain_type_args.Speaker, got user.optional_chain_type_args.Cat | user.optional_chain_type_args.Dog
+ns_optional_chain_type_args/optional_chain_type_args.baml:8638..8662 `pair(which)?.tag<bool>()`: expected user.optional_chain_type_args.Tagged, got user.optional_chain_type_args.Pair<int> | user.optional_chain_type_args.Pair<string>
+ns_runtime_type_binding_generic_calls/runtime_type_binding_generic_calls.baml:3109..3125 `EmptyOf<Bound>()`: expected Bound[], got Bound[]

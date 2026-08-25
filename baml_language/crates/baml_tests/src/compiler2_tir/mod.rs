@@ -1257,7 +1257,7 @@ pub(crate) mod support {
                 let type_ref_spans = baml_compiler2_ppir::body_type_ref_spans(db, owner);
                 let mut rendered = Vec::new();
                 for diagnostic in &inference.diagnostics {
-                    rendered.push(diagnostic.render_with_type_refs(
+                    rendered.push(diagnostic.render_with_body_type_refs(
                         db,
                         file,
                         source_map.as_ref(),
@@ -1272,7 +1272,7 @@ pub(crate) mod support {
                     let defaults_spans =
                         baml_compiler2_ppir::body_type_ref_spans(db, defaults_owner);
                     for diagnostic in &defaults.diagnostics {
-                        rendered.push(diagnostic.render_with_type_refs(
+                        rendered.push(diagnostic.render_with_body_type_refs(
                             db,
                             file,
                             defaults_map.as_ref(),
@@ -1481,7 +1481,7 @@ pub(crate) mod support {
                         format!("{base}.{member}")
                     }
                 }
-                baml_compiler2_ast::TypeExprKind::Type { .. } => "type".into(),
+                baml_compiler2_ast::TypeExprKind::Type { .. } => "reflect.Type".into(),
                 baml_compiler2_ast::TypeExprKind::Rust { .. } => "$rust_type".into(),
                 baml_compiler2_ast::TypeExprKind::Error { .. } => "error".into(),
                 baml_compiler2_ast::TypeExprKind::Unknown { .. } => "?".into(),
@@ -1636,7 +1636,7 @@ pub(crate) mod support {
                         format!("{base}.{member}")
                     }
                 }
-                K::Type => "type".into(),
+                K::Type => "reflect.Type".into(),
                 K::Rust => "$rust_type".into(),
                 K::Error => "error".into(),
                 K::Unknown => "?".into(),

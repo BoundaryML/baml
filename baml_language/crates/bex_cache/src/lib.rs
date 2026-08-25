@@ -56,7 +56,35 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 5: `FunctionMeta::Llm` removed the Borsh-serialized
 /// `prompt_template` field.
-pub const FORMAT_VERSION: u32 = 5;
+///
+/// Version 6: `Enum` and `InterfaceDef` gained a borsh-serialized `type_tag`,
+/// so every declaration that can head a nominal type now carries its identity
+/// (previously only `Class` did). `Class::type_tag` changed from `i64` to the
+/// `TypeTag` newtype, which is wire-identical — that part needed no bump.
+/// Also: type aliases became `Object::TypeAlias` declarations, so `Package` /
+/// `ProgramPackage` replaced the inline `recursive_type_aliases` map with a
+/// `type_aliases` map of references to them. And `InterfaceMethodDef` replaced
+/// the (never-populated) `default_fqn: Option<String>` with `default:
+/// Option<ObjectIndex>` — a default method's pooled body, relocated by the
+/// linker like any other object operand and bound to a pointer at load, so
+/// runtime implementors inherit defaults without naming anything.
+///
+/// Version 7: every type-bearing wire field is head-inline rather than
+/// name-headed, and the bytecode gained `OpCode::Truthy` plus
+/// `ConstValue::Literal`. Both landed while 6 was current — on different
+/// branches — so a 6 image can be either shape and neither can be told from
+/// the other. The bump is what makes the ambiguity unreachable.
+///
+/// Version 8: `Class.name` / `Enum.name` are `DeclarationName` (an enum over
+/// declared and anonymous), so both gained a leading discriminant byte. A 7
+/// image would decode that discriminant out of the old `TypeName` bytes.
+///
+/// Version 9: the bytecode gained `OpCode::MakeVirtualFunction` (appended, so
+/// discriminants did not shift), which landed on canary while 8 was current on
+/// a branch — the same both-sides-of-a-merge ambiguity version 7 records. An
+/// 8 image without the opcode would decode fine, but one version must mean one
+/// format.
+pub const FORMAT_VERSION: u32 = 9;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

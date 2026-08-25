@@ -64,7 +64,7 @@ pub enum SyntaxKind {
 
     // String delimiters (parser assembles strings)
     QUOTE,    // "
-    HASH,     // # (for raw strings)
+    HASH,     // # (for removed hash string recovery)
     BACKTICK, // ` (for BEP-049 interpolated strings)
 
     // Brackets

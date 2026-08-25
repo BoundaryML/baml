@@ -17,23 +17,23 @@ async fn builder_build_with_implementations_validates_then_freezes_atomically() 
             let address = reflect.class.builder("BuiltAddress")
             let person_pending = person.type()
             let address_pending = address.type()
-            person.field("name", type.of<string>())
+            person.field("name", reflect.Type.of<string>())
             person.field("address", address_pending)
             address.field("owner", person_pending.optional())
 
             let incomplete = reflect.interface.implementation<Named>()
             let failed = person.build(implementations = [incomplete]) catch (e) {
-                baml.reflect.errors.CompilationError => e.diagnostics[0].code
+                reflect.errors.CompilationError => e.diagnostics[0].code
             }
             // Failed witness validation must not freeze any member of the group.
-            address.field("zip", type.of<int>())
+            address.field("zip", reflect.Type.of<int>())
 
             let complete = incomplete.field("name")
             let person_t = person.build(implementations = [complete])
             let address_t = address.build()
             let person_again = person.build(implementations = [complete])
-            let frozen_error = address.field("late", type.of<bool>()) catch (e) {
-                baml.reflect.errors.CompilationError => e.diagnostics[0].message
+            let frozen_error = address.field("late", reflect.Type.of<bool>()) catch (e) {
+                reflect.errors.CompilationError => e.diagnostics[0].message
             }
 
             let failure_code = "missing witness did not fail"
@@ -45,7 +45,7 @@ async fn builder_build_with_implementations_validates_then_freezes_atomically() 
                 frozen_message = frozen_error
             }
             return failure_code
-                + "|" + person_t.as_type().implements(type.of<Named>()).to_string()
+                + "|" + person_t.as_type().implements(reflect.Type.of<Named>()).to_string()
                 + "|" + (person_pending.resolved() == person_t.as_type()).to_string()
                 + "|" + (address_pending.resolved() == address_t.as_type()).to_string()
                 + "|" + (person_again.as_type() == person_t.as_type()).to_string()
@@ -82,20 +82,20 @@ async fn map_and_builder_witnessed_classes_are_definition_equal() {
             let witness = reflect.interface.implementation<Named>()
                 .field("name", class_field = "display_name")
             let map_t = reflect.class.new("Person", {
-                "display_name": type.of<string>().meta(description = "public name"),
+                "display_name": reflect.Type.of<string>().meta(description = "public name"),
             }, implementations = [witness])
 
             let builder = reflect.class.builder("Person")
             builder.field(
                 "display_name",
-                type.of<string>().meta(description = "public name"),
+                reflect.Type.of<string>().meta(description = "public name"),
             )
             let builder_t = builder.build(implementations = [witness])
 
             return map_t.as_type() != builder_t.as_type()
                 && map_t.as_type().to_baml() == builder_t.as_type().to_baml()
-                && map_t.as_type().implements(type.of<Named>())
-                && builder_t.as_type().implements(type.of<Named>())
+                && map_t.as_type().implements(reflect.Type.of<Named>())
+                && builder_t.as_type().implements(reflect.Type.of<Named>())
         }
         "#
     );
@@ -110,7 +110,7 @@ async fn resolved_pending_from_frozen_group_is_accepted_by_another_builder() {
         function main() -> bool {
             let child = reflect.class.builder("ResolvedChild")
             let child_pending = child.type()
-            child.field("value", type.of<string>())
+            child.field("value", reflect.Type.of<string>())
             let child_t = child.build()
 
             let parent = reflect.class.builder("Parent")

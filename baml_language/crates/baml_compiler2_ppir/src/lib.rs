@@ -777,7 +777,7 @@ pub fn function_body_type_refs<'db>(
 pub fn body_type_ref_spans(
     db: &dyn Db,
     owner: baml_compiler2_hir::body::BodyOwnerId<'_>,
-) -> Option<baml_compiler2_hir::type_ref::TypeRefSourceMap> {
+) -> Option<baml_compiler2_hir::body_type_refs::BodyTypeRefSourceMap> {
     use baml_compiler2_hir::body::{BodyOwnerId, FunctionBody, LetBody};
     match owner {
         BodyOwnerId::Function(function) => match function_body(db, function).as_ref() {
@@ -794,7 +794,12 @@ pub fn body_type_ref_spans(
                 LetBody::Missing => None,
             }
         }
-        BodyOwnerId::ParameterDefaults(_) => None,
+        BodyOwnerId::ParameterDefaults(function) => Some(
+            baml_compiler2_hir::body_type_refs::collect_body_type_refs(
+                &function_parameter_defaults(db, function).defaults.exprs,
+            )
+            .1,
+        ),
     }
 }
 

@@ -610,14 +610,18 @@ pub fn package_dependencies<'db>(
         // a primitive string.
         "boundary" => vec![],
         // "baml" depends on "log" so stdlib code can call log.info/debug/etc.
-        // Reflection lives inside "baml" itself (`baml.reflect` / `baml.type`,
-        // BEP-066), so it is no dependency.
         "baml" => vec![PackageId::new(db, Name::new("log"))],
+        // Reflection is a true root package. It uses the core baml interfaces
+        // and errors, while `reflect.Type` annotations lower directly to the
+        // compiler metatype and therefore do not create a baml -> reflect edge.
+        "reflect" => vec![PackageId::new(db, Name::new("baml"))],
         // The "testing" and "assert" packages depend on "baml" only.
         "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
-        // The "ai" package uses BAML primitives, runtime type reflection, and
-        // prompt schema rendering, all of which now live in the "baml" package.
-        "ai" => vec![PackageId::new(db, Name::new("baml"))],
+        // The "ai" package uses BAML primitives and runtime type reflection.
+        "ai" => vec![
+            PackageId::new(db, Name::new("baml")),
+            PackageId::new(db, Name::new("reflect")),
+        ],
         // Provider packages implement `ai.Client`; claude_code also logs its
         // own event stream.
         "openai" | "anthropic" | "google" | "claude_code" => vec![
@@ -636,6 +640,7 @@ pub fn package_dependencies<'db>(
         name => {
             let mut deps = vec![
                 PackageId::new(db, Name::new("baml")),
+                PackageId::new(db, Name::new("reflect")),
                 PackageId::new(db, Name::new("boundary")),
                 PackageId::new(db, Name::new("testing")),
                 PackageId::new(db, Name::new("assert")),

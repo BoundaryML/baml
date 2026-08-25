@@ -594,7 +594,7 @@ function main() -> int { 0 }
     let class = (*program.objects)
         .iter()
         .find_map(|obj| match obj {
-            bex_vm_types::Object::Class(c) if c.name.name().as_str() == "Book" => Some(c),
+            bex_vm_types::Object::Class(c) if c.name.item_name().as_str() == "Book" => Some(c),
             _ => None,
         })
         .expect("Book class object should be emitted");

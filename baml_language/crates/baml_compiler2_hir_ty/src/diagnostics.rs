@@ -246,6 +246,20 @@ pub enum TirTypeError {
         /// "Did you mean" candidates, each a fully qualified `root.…` path.
         suggestions: Box<[Name]>,
     },
+    /// A spelling that reflection used before it became its own package:
+    /// `baml.reflect.X`, `type.of<T>()`, or a bare `type` annotation. These
+    /// resolve nowhere now, so say what replaces them instead of reporting an
+    /// ordinary unknown name.
+    RemovedReflectSpelling {
+        /// What the source wrote.
+        written: Name,
+        /// What it should say now.
+        replacement: Name,
+        /// Set when the message should add that the `type` keyword itself is
+        /// still around — only the `type.` value prefix and the bare `type`
+        /// annotation went away.
+        mentions_type_keyword: bool,
+    },
     /// An associated-type projection's explicit `as X` qualifier resolved to a
     /// non-interface type (a class, alias, etc.). The qualifier must name an
     /// interface; without one the projection cannot be resolved, so it must not
@@ -1168,6 +1182,31 @@ impl fmt::Display for TirTypeError {
                     "ambiguous associated type `{member}`: declared by multiple interfaces \
                      ({names}); qualify the projection with `(... as Interface).{member}`"
                 )
+            }
+            TirTypeError::RemovedReflectSpelling {
+                written,
+                replacement,
+                mentions_type_keyword,
+            } => {
+                if *mentions_type_keyword {
+                    if written.as_str() == "type" {
+                        write!(f, "`type` no longer names a runtime type value — ")?;
+                    } else {
+                        write!(f, "`{written}` no longer exists — ")?;
+                    }
+                    write!(
+                        f,
+                        "write `{replacement}` instead. The `type` keyword itself is unchanged: \
+                         it still names aliases (`type UserId = string`) and scoped type \
+                         bindings (`type T = unreflect(t)`)"
+                    )
+                } else {
+                    write!(
+                        f,
+                        "`{written}` no longer exists — reflection is its own package now, so \
+                         write `{replacement}` instead"
+                    )
+                }
             }
             TirTypeError::UnresolvedType { name, suggestions } => {
                 if suggestions.is_empty() {
@@ -2132,6 +2171,37 @@ impl<'db> RelatedNote<'db> {
     }
 }
 
+/// Recognize a path that reflection used to answer to and no longer does.
+///
+/// `reflect` used to sit inside the `baml` stdlib, and runtime type values
+/// used to hang off a bare `type` prefix. Both moved: reflection is a root
+/// package, and the type-value API is `reflect.Type`. Every old spelling now
+/// resolves nowhere, which would otherwise read as an ordinary typo. Returns
+/// the error that names the replacement, or `None` for a genuinely unknown
+/// name.
+///
+/// Only failed lookups reach this: a local, parameter, or field actually named
+/// `type` still resolves normally and never gets here.
+pub fn removed_reflect_spelling(name: &Name) -> Option<TirTypeError> {
+    let written = name.as_str();
+    let (replacement, mentions_type_keyword) = if written == "type" {
+        ("reflect.Type".to_string(), true)
+    } else if let Some(rest) = written.strip_prefix("type.") {
+        (format!("reflect.Type.{rest}"), true)
+    } else if written == "baml.reflect" {
+        ("reflect".to_string(), false)
+    } else if let Some(rest) = written.strip_prefix("baml.reflect.") {
+        (format!("reflect.{rest}"), false)
+    } else {
+        return None;
+    };
+    Some(TirTypeError::RemovedReflectSpelling {
+        written: name.clone(),
+        replacement: Name::new(replacement),
+        mentions_type_keyword,
+    })
+}
+
 /// Primary location for a diagnostic — either an expression, a statement,
 /// or a raw source span (for type annotations that lack an `ExprId`).
 /// "Did you mean" candidates for an unknown member/field name: fuzzy-scored
@@ -2180,9 +2250,10 @@ pub enum DiagnosticLocation {
     /// A pattern's span (`hir_ty`'s emissions stay arena-anchored; TIR
     /// resolved pattern spans eagerly through its held source map).
     Pat(baml_compiler2_ast::PatId),
-    /// A written type reference (body annotation), resolved through the
-    /// body's `TypeRefSourceMap` at render time.
-    TypeRef(baml_compiler2_hir::type_ref::TypeRefId),
+    /// A written body type reference, resolved through the owning body's
+    /// source map at render time. Declaration type-reference ids have a
+    /// distinct type and cannot inhabit this location.
+    BodyTypeRef(baml_compiler2_hir::body_type_refs::BodyTypeRefId),
     /// The field-NAME portion of an object-literal entry:
     /// `(object_expr, field_value_expr)` resolves through
     /// `object_field_name_span` at render time.
@@ -2223,17 +2294,17 @@ impl<'db> TirDiagnostic<'db> {
         scope_file: SourceFile,
         source_map: Option<&AstSourceMap>,
     ) -> RenderedTirDiagnostic {
-        self.render_with_type_refs(db, scope_file, source_map, None)
+        self.render_with_body_type_refs(db, scope_file, source_map, None)
     }
 
     /// [`Self::render`] with the body's type-ref span map, for the
-    /// annotation-anchored diagnostics (`DiagnosticLocation::TypeRef`).
-    pub fn render_with_type_refs(
+    /// annotation-anchored diagnostics (`DiagnosticLocation::BodyTypeRef`).
+    pub fn render_with_body_type_refs(
         &self,
         db: &'db dyn baml_compiler2_ppir::Db,
         scope_file: SourceFile,
         source_map: Option<&AstSourceMap>,
-        type_ref_spans: Option<&baml_compiler2_hir::type_ref::TypeRefSourceMap>,
+        type_ref_spans: Option<&baml_compiler2_hir::body_type_refs::BodyTypeRefSourceMap>,
     ) -> RenderedTirDiagnostic {
         let primary_range = match &self.primary {
             DiagnosticLocation::Expr(id) => {
@@ -2257,7 +2328,7 @@ impl<'db> TirDiagnostic<'db> {
             DiagnosticLocation::Pat(id) => source_map
                 .map(|sm| sm.pattern_span(*id))
                 .unwrap_or_default(),
-            DiagnosticLocation::TypeRef(id) => type_ref_spans
+            DiagnosticLocation::BodyTypeRef(id) => type_ref_spans
                 .map(|spans| spans.span(*id))
                 .unwrap_or_default(),
             DiagnosticLocation::UnreflectArg { carrier, .. } => source_map

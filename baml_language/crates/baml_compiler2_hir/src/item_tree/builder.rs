@@ -423,13 +423,11 @@ impl ItemTreeBuilder {
                 span: p.span,
             })
             .collect();
-        let body = ts.body.as_ref().map(|b| b.text.clone());
         self.tree.template_strings.insert(
             id,
             TemplateString {
                 name: ts.name.clone(),
                 params,
-                body,
                 span: ts.span,
             },
         );

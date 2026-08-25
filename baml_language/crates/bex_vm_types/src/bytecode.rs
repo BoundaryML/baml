@@ -707,7 +707,7 @@ pub enum Instruction {
     LoadType(usize),
 
     /// Pop an exact `Object::Type` and bind it to a frame type-argument slot.
-    /// Later `LoadType(TypeArgRef(slot))` reproduces the same mint and defs.
+    /// Later `LoadType(TypeArgRef(slot))` reproduces the same type and defs.
     BindType(usize),
 
     /// Remap a sparse type tag to a dense index via perfect hash lookup.
@@ -911,7 +911,7 @@ pub enum Instruction {
     /// (`CPython` `STORE_FAST_STORE_FAST`.)
     StoreVar2(usize, usize),
 
-    /// Compare a value's runtime nominal mint with an `Object::Type` mint.
+    /// Test whether a value's declaration is the one an `Object::Type` names.
     /// Stack: `[value, type_value] -> [bool]`.
     ///
     /// Appended to preserve the serialized discriminants of existing

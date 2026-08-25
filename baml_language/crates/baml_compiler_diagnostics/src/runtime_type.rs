@@ -95,19 +95,21 @@ pub fn expected_class_instance(callee: &str, got: &str) -> Diagnostic {
 /// `call_any` has no package context and supplies the callable's bare declared
 /// name. The difference is intentional and keeps both diagnostics actionable.
 ///
-/// A by-name lookup has nowhere to put type arguments, so it is still refused;
-/// the message names the descriptor route that does accept them.
+/// A by-name lookup has nowhere to put type arguments, so an unspecialized
+/// generic is refused. (No route supplies them today; when descriptor
+/// specialization lands on the reflection kind views, the message should
+/// name it again.)
 pub fn unspecialized_reflected_generic(name: &str) -> Diagnostic {
     Diagnostic::error(
         DiagnosticId::UnspecializedReflectedGeneric,
         format!(
-            "generic function `{name}` cannot be extracted by name through reflection: look it up \
-             in `Package.functions()` and `specialize` it first"
+            "generic function `{name}` cannot be extracted through reflection: its signature \
+             still mentions its own type parameters"
         ),
     )
 }
 
-/// E0165 — a reflected generic callable was invoked without specialization.
+/// E0165 — a reflected generic callable was invoked without its type arguments.
 ///
 /// The sibling above covers *extraction*: a callable whose signature still
 /// mentions its own type parameters cannot even be handed out. This one covers
@@ -118,111 +120,10 @@ pub fn unspecialized_reflected_generic_call(name: &str) -> Diagnostic {
     Diagnostic::error(
         DiagnosticId::UnspecializedReflectedGeneric,
         format!(
-            "generic function `{name}` cannot be invoked through reflection until it is \
-             specialized: its body needs type arguments — look it up in `Package.functions()` \
-             and `specialize` it first"
+            "generic function `{name}` cannot be invoked through reflection: its body needs \
+             type arguments"
         ),
     )
-}
-
-/// E0165 — a signature-shaped read of a descriptor that has no signature yet.
-///
-/// A generic function whose declared surface mentions its own type parameters
-/// has no realized function type at all, so `params`/`return_type` have nothing
-/// to decompose. The two siblings above refuse to hand out or invoke such a
-/// callable; this one refuses to read its shape.
-pub fn unspecialized_reflected_generic_signature(name: &str) -> Diagnostic {
-    Diagnostic::error(
-        DiagnosticId::UnspecializedReflectedGeneric,
-        format!(
-            "generic function `{name}` has no signature until it is specialized: its parameter \
-             and return types still mention its own type parameters"
-        ),
-    )
-}
-
-/// E0169 — `specialize` was given the wrong number of type arguments.
-pub fn specialize_arity_mismatch(name: &str, expected: usize, supplied: usize) -> Diagnostic {
-    Diagnostic::error(
-        DiagnosticId::ReflectSpecializationFailed,
-        format!(
-            "cannot specialize generic function `{name}`: it declares {}, but {} {} supplied",
-            count_of(expected, "type parameter"),
-            count_of(supplied, "type argument"),
-            if supplied == 1 { "was" } else { "were" },
-        ),
-    )
-}
-
-/// E0169 — a supplied type argument fails one of its parameter's bounds.
-pub fn specialize_bound_violation(
-    name: &str,
-    parameter: &str,
-    bound: &str,
-    supplied: &str,
-) -> Diagnostic {
-    Diagnostic::error(
-        DiagnosticId::ReflectSpecializationFailed,
-        format!(
-            "cannot specialize generic function `{name}`: type argument `{supplied}` does not \
-             satisfy the bound `{parameter} extends {bound}`"
-        ),
-    )
-}
-
-/// E0169 — `specialize` was called on a callable that declares no type
-/// parameters. `is_generic` is the guard.
-pub fn specialize_non_generic(name: &str) -> Diagnostic {
-    Diagnostic::error(
-        DiagnosticId::ReflectSpecializationFailed,
-        format!("function `{name}` is not generic; there is nothing to specialize"),
-    )
-}
-
-/// E0169 — `specialize` was called on a descriptor whose type parameters are
-/// already bound. Distinct from the sibling above: the callable *is* generic,
-/// it just has nothing left to bind, and specialization is not incremental.
-pub fn specialize_already_specialized(name: &str) -> Diagnostic {
-    Diagnostic::error(
-        DiagnosticId::ReflectSpecializationFailed,
-        format!("generic function `{name}` is already specialized; every type parameter is bound"),
-    )
-}
-
-/// E0169 — a fully supplied frame still did not reconstruct a signature.
-///
-/// Nothing known produces this: every slot is bound, so every template
-/// realizes. It exists so the impossible case is a catchable diagnostic rather
-/// than a descriptor that silently reports `unknown` and denies being generic.
-pub fn specialize_signature_unreconstructible(name: &str) -> Diagnostic {
-    Diagnostic::error(
-        DiagnosticId::ReflectSpecializationFailed,
-        format!(
-            "cannot specialize generic function `{name}`: its signature does not reconstruct \
-             even with every type argument supplied"
-        ),
-    )
-}
-
-/// E0169 — `specialize` was called on a function type that reflection did not
-/// hand out, so there is no callable behind it to specialize.
-pub fn specialize_without_descriptor() -> Diagnostic {
-    Diagnostic::error(
-        DiagnosticId::ReflectSpecializationFailed,
-        "this function type is not a reflected function descriptor: only the entries of \
-         `Package.functions()` carry the callable `specialize` needs"
-            .to_string(),
-    )
-}
-
-/// `3 type parameters` / `1 type parameter`, so a diagnostic never reads
-/// "declares 1 type parameters".
-fn count_of(count: usize, noun: &str) -> String {
-    if count == 1 {
-        format!("{count} {noun}")
-    } else {
-        format!("{count} {noun}s")
-    }
 }
 
 /// E0002 — a value-shaped generic argument omitted the required marker.
@@ -469,52 +370,12 @@ mod tests {
             (
                 unspecialized_reflected_generic("root.Extract"),
                 "E0165",
-                "generic function `root.Extract` cannot be extracted by name through reflection: look it up in `Package.functions()` and `specialize` it first",
+                "generic function `root.Extract` cannot be extracted through reflection: its signature still mentions its own type parameters",
             ),
             (
                 unspecialized_reflected_generic_call("GenericList$render_prompt"),
                 "E0165",
-                "generic function `GenericList$render_prompt` cannot be invoked through reflection until it is specialized: its body needs type arguments — look it up in `Package.functions()` and `specialize` it first",
-            ),
-            (
-                unspecialized_reflected_generic_signature("root.Extract"),
-                "E0165",
-                "generic function `root.Extract` has no signature until it is specialized: its parameter and return types still mention its own type parameters",
-            ),
-            (
-                specialize_arity_mismatch("root.Extract", 1, 2),
-                "E0169",
-                "cannot specialize generic function `root.Extract`: it declares 1 type parameter, but 2 type arguments were supplied",
-            ),
-            (
-                specialize_arity_mismatch("root.Pair", 2, 1),
-                "E0169",
-                "cannot specialize generic function `root.Pair`: it declares 2 type parameters, but 1 type argument was supplied",
-            ),
-            (
-                specialize_bound_violation("root.Extract", "T", "baml.AnyClass", "int"),
-                "E0169",
-                "cannot specialize generic function `root.Extract`: type argument `int` does not satisfy the bound `T extends baml.AnyClass`",
-            ),
-            (
-                specialize_non_generic("root.Present"),
-                "E0169",
-                "function `root.Present` is not generic; there is nothing to specialize",
-            ),
-            (
-                specialize_already_specialized("root.Extract"),
-                "E0169",
-                "generic function `root.Extract` is already specialized; every type parameter is bound",
-            ),
-            (
-                specialize_signature_unreconstructible("root.Extract"),
-                "E0169",
-                "cannot specialize generic function `root.Extract`: its signature does not reconstruct even with every type argument supplied",
-            ),
-            (
-                specialize_without_descriptor(),
-                "E0169",
-                "this function type is not a reflected function descriptor: only the entries of `Package.functions()` carry the callable `specialize` needs",
+                "generic function `GenericList$render_prompt` cannot be invoked through reflection: its body needs type arguments",
             ),
             (
                 computed_generic_argument_requires_unreflect("runtime_t"),
@@ -532,9 +393,9 @@ mod tests {
                 "duplicate field `Collision.wire`",
             ),
             (
-                cannot_construct_reflection_kind("baml.reflect.class.Type"),
+                cannot_construct_reflection_kind("reflect.class.Type"),
                 "E0001",
-                "reflection kind `baml.reflect.class.Type` cannot be constructed; obtain it from a type value",
+                "reflection kind `reflect.class.Type` cannot be constructed; obtain it from a type value",
             ),
             (
                 cannot_construct_builtin_companion("baml.Int", "int", "literals", true),

@@ -2084,7 +2084,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                         continue;
                     }
                     let value = attr.args[0].value.as_str();
-                    if !is_string_literal(value) {
+                    if !is_string_literal(value) && !is_removed_hash_string(value) {
                         self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
                             diagnostic_id: DiagnosticId::InvalidAttributeArg,
                             message: format!(
@@ -2335,17 +2335,16 @@ impl<'db> SemanticIndexBuilder<'db> {
                 ..
             } => {
                 // Allow `baml.errors.*`, `root.errors.*`, `baml.json.*`, and
-                // BEP-066's `baml.reflect.errors.*` (fully qualified).
+                // BEP-066's `reflect.errors.*` (fully qualified).
                 // `baml.json.JsonParseError` / `baml.json.JsonDecodeError` /
                 // `baml.json.JsonSerializationError` are stdlib error types just like
                 // `baml.errors.*` ones; they need the same exemption.
                 let is_core_builtin_error = segments.len() >= 3
                     && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
                     && (segments[1].as_str() == "errors" || segments[1].as_str() == "json");
-                let is_reflection_error = segments.len() >= 4
-                    && segments[0].as_str() == "baml"
-                    && segments[1].as_str() == "reflect"
-                    && segments[2].as_str() == "errors";
+                let is_reflection_error = segments.len() >= 3
+                    && segments[0].as_str() == "reflect"
+                    && segments[1].as_str() == "errors";
                 let is_builtin_error = is_core_builtin_error || is_reflection_error;
                 // Allow single-segment class names (e.g. `JsonParseError`) in
                 // builtin files — the class is resolvable in the current namespace
@@ -2475,7 +2474,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 )
             }
             ast::TypeExprKind::BuiltinUnknown { .. } => "unknown".to_string(),
-            ast::TypeExprKind::Type { .. } => "type".to_string(),
+            ast::TypeExprKind::Type { .. } => "reflect.Type".to_string(),
             ast::TypeExprKind::Rust { .. } => "$rust_type".to_string(),
             ast::TypeExprKind::Error { .. } => "<error>".to_string(),
             ast::TypeExprKind::Unknown { .. } => "<unknown>".to_string(),
@@ -2484,10 +2483,9 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 }
 
-/// Check if a raw attribute argument value is a valid string literal.
+/// Check if an attribute argument value is a valid quoted string literal.
 ///
-/// Accepts double-quoted (`"text"`), single-quoted (`'text'`), and raw strings
-/// (`#"text"#`, `##"text"##`, etc.).
+/// Accepts double-quoted (`"text"`) and single-quoted (`'text'`) strings.
 fn is_string_literal(value: &str) -> bool {
     // Double-quoted
     if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
@@ -2497,12 +2495,15 @@ fn is_string_literal(value: &str) -> bool {
     if value.starts_with('\'') && value.ends_with('\'') && value.len() >= 2 {
         return true;
     }
-    // Raw string: #"text"#, ##"text"##, etc.
-    let hashes = value.bytes().take_while(|&b| b == b'#').count();
-    if hashes > 0 && value.len() >= hashes * 2 + 2 {
-        let rest = &value[hashes..];
-        let closing = format!("\"{}", &value[..hashes]);
-        return rest.starts_with('"') && rest.ends_with(&closing);
-    }
     false
+}
+
+fn is_removed_hash_string(value: &str) -> bool {
+    let hashes = value.bytes().take_while(|&b| b == b'#').count();
+    if hashes == 0 || value.len() < hashes * 2 + 2 {
+        return false;
+    }
+    let rest = &value[hashes..];
+    let closing = format!("\"{}", &value[..hashes]);
+    rest.starts_with('"') && rest.ends_with(&closing)
 }

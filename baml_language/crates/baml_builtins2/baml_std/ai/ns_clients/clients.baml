@@ -475,7 +475,7 @@ class StreamRelay {
                 self.close_current();
                 throw unknown_error
             },
-            let compilation: baml.reflect.errors.CompilationError => {
+            let compilation: reflect.errors.CompilationError => {
                 self.close_current();
                 throw compilation
             },

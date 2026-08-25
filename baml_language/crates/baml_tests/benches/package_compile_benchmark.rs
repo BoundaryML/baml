@@ -35,7 +35,7 @@ function static_stdlib_dispatch(n: int) -> int throws never {
 }
 
 function runtime_stdlib_dispatch(n: int) -> int throws unknown {
-  let package = reflect.Package.compile({ "dispatch.baml": #"
+  let package = reflect.Package.compile({ "dispatch.baml": `
 function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws never {
   let count = 0
   for (let i = 0; i < n; i += 1) {
@@ -44,7 +44,7 @@ function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws
   count
 }
 function run(n: int) -> int throws never { compare_hot<int>(7, n) }
-"# })
+` })
   let run = package.get_function<(int) -> int>("root.run") ?? throw "missing run"
   run(n)
 }

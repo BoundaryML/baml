@@ -109,17 +109,17 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
 
     // Add a synthetic class to the object pool.
     let class_ptr_idx = program.add_object(Object::Class(Box::new(Class {
-        name: TypeName::local(Name::new("TestBox")),
+        name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("TestBox"))),
         fields: vec![],
         description: None,
         alias: None,
         docstring: None,
         other: indexmap::IndexMap::new(),
-        type_tag: 100,
+        type_tag: baml_type::typetag::TypeTag::from_i64(100),
         ty_attr: TyAttr::default(),
         has_cleanup: false,
         generic_param_count: 0,
-        runtime_type: None,
+        owner: bex_vm_types::HeapPtr::null(),
     })));
 
     // Function: push RuntimeTy::int() as a type arg, then AllocInstance with ntypeargs=1.
@@ -164,17 +164,17 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
     let mut program = compile_source(STUB_SOURCE);
 
     let class_ptr_idx = program.add_object(Object::Class(Box::new(Class {
-        name: TypeName::local(Name::new("MonoClass")),
+        name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("MonoClass"))),
         fields: vec![],
         description: None,
         alias: None,
         docstring: None,
         other: indexmap::IndexMap::new(),
-        type_tag: 101,
+        type_tag: baml_type::typetag::TypeTag::from_i64(101),
         ty_attr: TyAttr::default(),
         has_cleanup: false,
         generic_param_count: 0,
-        runtime_type: None,
+        owner: bex_vm_types::HeapPtr::null(),
     })));
 
     let fn_name = "user.test_mono_alloc";

@@ -147,17 +147,6 @@ impl TypeRefStore {
         self.types.len()
     }
 
-    /// Whether `id` was allocated in THIS store.
-    ///
-    /// A [`TypeRefId`] is only meaningful relative to the store it came
-    /// from, and one lowering pass routinely reads several (a body's own
-    /// annotations, the signature's `throws` clause, an impl block's
-    /// for-target). Anywhere an id crosses a boundary, this is how the
-    /// receiving side states which store it believes the id belongs to.
-    pub fn contains(&self, id: TypeRefId) -> bool {
-        (id.into_raw().into_u32() as usize) < self.types.len()
-    }
-
     /// A [`Display`](std::fmt::Display) view of `id`, rendering BAML source-like text.
     ///
     /// Byte-identical to [`ast::TypeExpr`](baml_compiler2_ast::ast::TypeExpr)'s
@@ -318,7 +307,7 @@ impl std::fmt::Display for TypeRefDisplay<'_> {
                 Ok(())
             }
             TypeRefKind::BuiltinUnknown => write!(f, "unknown"),
-            TypeRefKind::Type => write!(f, "type"),
+            TypeRefKind::Type => write!(f, "reflect.Type"),
             TypeRefKind::Rust => write!(f, "$rust_type"),
             TypeRefKind::Error => write!(f, "error"),
             TypeRefKind::Unknown => write!(f, "?"),

@@ -87,14 +87,14 @@ fn forward_ptr(ptr: &mut HeapPtr, forwarding: &HashMap<HeapPtr, HeapPtr>) {
 /// `.first()` — that is the receiver's `T` — it is the first of the method's two
 /// own generics, i.e. the second-to-last arg. Counting from the back makes it
 /// correct whether or not the prepend fired (e.g. an `unknown`-typed receiver).
-fn map_result_element_ty(vm: &BexVm) -> baml_type::RealizedTy {
+fn map_result_element_ty(vm: &BexVm) -> bex_vm_types::RealizedTy {
     let type_args = vm.current_call_type_args();
     type_args
         .len()
         .checked_sub(2)
         .and_then(|u_index| type_args.get(u_index))
         .cloned()
-        .unwrap_or_else(baml_type::RealizedTy::unknown)
+        .unwrap_or_else(bex_vm_types::RealizedTy::unknown)
 }
 
 /// Extract the callback `HeapPtr` from a `Value` carrying a heap
@@ -413,7 +413,7 @@ struct MapContinuation {
     results: Vec<Value>,
     /// Result element type — the closure's return type `U` from
     /// `map<U, E>(self, f: (T) -> U) -> U[]`, captured at dispatch time.
-    element_ty: baml_type::RealizedTy,
+    element_ty: bex_vm_types::RealizedTy,
 }
 
 impl Continuation for MapContinuation {
@@ -447,7 +447,7 @@ struct FilterContinuation {
     results: Vec<Value>,
     /// The receiver array's element type `T`, captured at dispatch — `filter`
     /// preserves it (`T[] -> T[]`).
-    element_ty: baml_type::RealizedTy,
+    element_ty: bex_vm_types::RealizedTy,
 }
 
 impl Continuation for FilterContinuation {
@@ -663,7 +663,7 @@ struct FlatMapContinuation {
     results: Vec<Value>,
     /// Result element type — the closure's element return type `U` from
     /// `flat_map<U, E>(self, f: (T) -> U[]) -> U[]`, captured at dispatch time.
-    element_ty: baml_type::RealizedTy,
+    element_ty: bex_vm_types::RealizedTy,
 }
 
 impl Continuation for FlatMapContinuation {

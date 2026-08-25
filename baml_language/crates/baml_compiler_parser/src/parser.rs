@@ -499,7 +499,7 @@ impl<'a> Parser<'a> {
     fn is_at_type_start(&self) -> bool {
         self.at(TokenKind::Word)
             || self.at(TokenKind::Quote) // string literal type
-            || self.at(TokenKind::Hash) // raw string literal type
+            || self.at(TokenKind::Hash) // removed hash string recovery
             || self.at(TokenKind::BigintLiteral)
             || self.at(TokenKind::IntegerLiteral)
             || self.at(TokenKind::FloatLiteral)
@@ -1487,7 +1487,7 @@ impl<'a> Parser<'a> {
 
     /// Recover from a legacy `type_builder { ... }` / `type_builder: { ... }`
     /// block (BEP-066 removed the `TypeBuilder` feature; runtime type
-    /// construction is `baml.reflect` now). `type_builder` is a plain `Word`
+    /// construction is `reflect` now). `type_builder` is a plain `Word`
     /// today, so this is a cheap text check at positions where a declaration
     /// or config entry may start. Emits E0098 and consumes the whole block
     /// inside an ERROR node. Returns true if recovery was performed.
@@ -1510,7 +1510,7 @@ impl<'a> Parser<'a> {
         let span = self.current().map(|t| t.span).unwrap_or_default();
         self.events.push(Event::RemovedFeature {
             message: "`type_builder` blocks were removed; runtime type construction is \
-                      `baml.reflect` (BEP-066)"
+                      `reflect` (BEP-066)"
                 .to_string(),
             span,
         });
@@ -1525,7 +1525,7 @@ impl<'a> Parser<'a> {
 
     /// Recover from a legacy `dynamic class Name { ... }` / `dynamic enum
     /// Name { ... }` definition (BEP-066 removed the `TypeBuilder` feature;
-    /// runtime type construction is `baml.reflect` now). `dynamic` is a
+    /// runtime type construction is `reflect` now). `dynamic` is a
     /// plain `Word` today, so this is a cheap text check at positions where
     /// a declaration or config entry may start. Emits E0098 and consumes the
     /// whole definition inside an ERROR node. Returns true if recovery was
@@ -1544,7 +1544,7 @@ impl<'a> Parser<'a> {
         self.events.push(Event::RemovedFeature {
             message: format!(
                 "`dynamic {keyword}` definitions were removed; runtime type construction is \
-                 `baml.reflect` (BEP-066)"
+                 `reflect` (BEP-066)"
             ),
             span,
         });
@@ -2121,10 +2121,21 @@ impl<'a> Parser<'a> {
         true
     }
 
-    /// Parse a raw string literal with hash delimiters
+    /// Parse a removed hash string literal for lossless recovery.
     /// Lexer emits: Hash+, Quote, (content tokens), Quote, Hash+
     /// Parser assembles and validates matching hash counts
     pub(crate) fn parse_raw_string(&mut self) -> bool {
+        self.parse_raw_string_with_removed_feature_error(true)
+    }
+
+    fn parse_raw_string_without_removed_feature_error(&mut self) -> bool {
+        self.parse_raw_string_with_removed_feature_error(false)
+    }
+
+    fn parse_raw_string_with_removed_feature_error(
+        &mut self,
+        report_removed_feature: bool,
+    ) -> bool {
         if !self.at(TokenKind::Hash) {
             return false;
         }
@@ -2148,6 +2159,8 @@ impl<'a> Parser<'a> {
         // before starting the RAW_STRING_LITERAL node, handle all leading trivia
         while self.eat_trivia() {}
 
+        let start_span = self.current().map(|token| token.span).unwrap_or_default();
+
         self.with_node(SyntaxKind::RAW_STRING_LITERAL, |p| {
             // Consume opening hashes
             for _ in 0..opening_hashes {
@@ -2159,10 +2172,19 @@ impl<'a> Parser<'a> {
             p.parse_raw_string_content(opening_hashes);
         });
 
+        if report_removed_feature {
+            let end_span = self.previous_non_trivia_span().unwrap_or(start_span);
+            self.events.push(Event::RemovedFeature {
+                message: "Hash string literals like `#\"...\"#` are no longer supported. Use quoted strings or backtick strings instead."
+                    .to_string(),
+                span: Self::span_from_to(start_span, end_span),
+            });
+        }
+
         true
     }
 
-    /// Parse the content inside a raw string.
+    /// Parse the content inside a removed hash string.
     fn parse_raw_string_content(&mut self, opening_hashes: usize) {
         let mut loop_counter = 0;
 
@@ -2200,7 +2222,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a string or raw string (dispatches to correct method)
+    /// Parse a quoted, backtick, or removed hash string.
     pub(crate) fn parse_any_string(&mut self) -> bool {
         if self.at(TokenKind::Hash) {
             self.parse_raw_string()
@@ -2856,7 +2878,7 @@ impl<'a> Parser<'a> {
     fn parse_attribute_arg(&mut self) {
         // Attribute argument can be:
         // - String: @alias("user_name")
-        // - Raw string: @description(#"Multi-line\ndescription"#)
+        // - Removed hash string, parsed for a targeted diagnostic
         // - Expression: @some_attr({{ this > 0 }})
         // - Unquoted string: @alias(my_alias) - one WORD token
 
@@ -4376,8 +4398,14 @@ impl<'a> Parser<'a> {
             }
             p.expect(TokenKind::Colon);
 
-            // Prompt value (usually a raw string)
-            if !p.parse_any_string() {
+            // Keep the prompt-specific Jinja migration diagnostic emitted by
+            // lowering instead of also reporting the general hash-string error.
+            let parsed = if p.at(TokenKind::Hash) {
+                p.parse_raw_string_without_removed_feature_error()
+            } else {
+                p.parse_any_string()
+            };
+            if !parsed {
                 p.error_unexpected_token("prompt string".to_string());
             }
         });
@@ -6983,7 +7011,7 @@ impl<'a> Parser<'a> {
                 | IntegerLiteral
                 | FloatLiteral
                 | Quote   // string literal
-                | Hash    // raw string literal `#"..."#`
+                | Hash    // removed hash string recovery
                 | Word
                 | Client
                 | LParen
@@ -7820,7 +7848,8 @@ impl<'a> Parser<'a> {
         // config keys (e.g., `enum ["celsius", "fahrenheit"]`).
 
         self.with_node(SyntaxKind::CONFIG_ITEM, |p| {
-            // Config key: identifier, keyword-as-identifier, or quoted/raw string
+            // Config key: identifier, keyword-as-identifier, quoted string, or
+            // removed hash string parsed for a targeted diagnostic
             // Note: Some top-level keywords are also valid as config keys:
             // - RetryPolicy: `retry_policy MyPolicy` inside client blocks
             // - Enum: `enum ["celsius", "fahrenheit"]` inside nested option maps
@@ -7834,7 +7863,7 @@ impl<'a> Parser<'a> {
             {
                 p.bump();
             } else if p.at(TokenKind::Quote) || p.at(TokenKind::Hash) {
-                // Quoted or raw string key (e.g., "string key" or #"raw key"#)
+                // Quoted string or removed hash string key
                 if !p.parse_any_string() {
                     p.error_unexpected_token("config key".to_string());
                     if !p.at_end() {
@@ -8293,8 +8322,14 @@ impl<'a> Parser<'a> {
                 p.parse_parameter_list();
             }
 
-            // Template body (raw string)
-            if !p.parse_any_string() {
+            // The declaration-level removal diagnostic is more actionable than
+            // also reporting the general hash-string error for its body.
+            let parsed = if p.at(TokenKind::Hash) {
+                p.parse_raw_string_without_removed_feature_error()
+            } else {
+                p.parse_any_string()
+            };
+            if !parsed {
                 p.error_unexpected_token("template string body".to_string());
             }
         });
@@ -8587,35 +8622,31 @@ mod tests {
         );
     }
 
-    /// BEP-066 K-13 (M-9): `type` as an expression path head. `type` is a
-    /// contextual keyword, so in expression position `type.of<int>()` /
-    /// `type.of_value(x)` parse as ordinary member-call paths (a `Word` head).
-    /// Block statement dispatch uses the full `type Name =` lookahead.
+    /// `reflect.Type.of` and `reflect.Type.of_value` parse as ordinary
+    /// member-call paths while `type Name = ...` keeps its statement meaning.
     #[test]
-    fn type_as_expression_path_head_parses() {
-        let source = "function main() -> string {\n  let t = type.of<int>();\n  let u = type.of_value(1);\n  type.of<int[]>();\n  t.to_string()\n}\n";
+    fn reflect_type_expression_paths_parse() {
+        let source = "function main() -> string {\n  let t = reflect.Type.of<int>();\n  let u = reflect.Type.of_value(1);\n  reflect.Type.of<int[]>();\n  t.to_string()\n}\n";
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
-        // The heads lower as plain path segments: WORD("type") followed by DOT.
-        let type_head_paths = root
+        let type_segments = root
             .descendants_with_tokens()
             .filter(|elem| {
                 matches!(
                     elem,
                     rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::WORD
-                        && t.text() == "type"
+                        && t.text() == "Type"
                 )
             })
             .count();
-        assert_eq!(type_head_paths, 3, "all three `type.` heads parse as words");
+        assert_eq!(type_segments, 3, "all three `reflect.Type` paths parse");
     }
 
-    /// The `type.of` expression form must not steal top-level `type X = ...`
+    /// The `reflect.Type.of` expression form must not steal top-level `type X = ...`
     /// alias declarations (their dispatch is unchanged).
     #[test]
     fn type_alias_declarations_unaffected_by_type_of() {
-        let source =
-            "type MyAlias = int | string\nfunction main() -> type {\n  type.of<MyAlias>()\n}\n";
+        let source = "type MyAlias = int | string\nfunction main() -> reflect.Type {\n  reflect.Type.of<MyAlias>()\n}\n";
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
         let has_alias = root
@@ -8629,8 +8660,7 @@ mod tests {
 
     #[test]
     fn scoped_runtime_type_binding_parses_as_a_statement() {
-        let source =
-            "function main(t: type) -> type {\n  type T = unreflect(t);\n  type.of<T>()\n}\n";
+        let source = "function main(t: reflect.Type) -> reflect.Type {\n  type T = unreflect(t);\n  reflect.Type.of<T>()\n}\n";
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
         assert!(
@@ -8641,7 +8671,7 @@ mod tests {
 
     #[test]
     fn top_level_runtime_type_binding_has_an_explicit_diagnostic() {
-        let source = "type T = unreflect(type.of<string>())\n";
+        let source = "type T = unreflect(reflect.Type.of<string>())\n";
         let (_root, errors) = parse_source(source);
         assert!(errors.iter().any(|error| matches!(
             error,
@@ -9744,31 +9774,6 @@ client<llm> Foo {
     }
 
     #[test]
-    fn raw_string_keeps_template_markers_as_text() {
-        for marker in ["//", "*/", "{{ name }}", "{% if true %}", "{# note #}"] {
-            let source = format!(
-                r##"
-function Demo() -> string {{
-  #"{marker}"#
-}}
-"##
-            );
-
-            let (root, errors) = parse_source(&source);
-            assert_no_errors(&errors);
-
-            let raw_string = root
-                .descendants()
-                .find(|n| n.kind() == SyntaxKind::RAW_STRING_LITERAL)
-                .expect("expected raw string literal");
-            assert!(
-                raw_string.text().to_string().contains(marker),
-                "raw string should retain marker {marker:?}: {raw_string:?}"
-            );
-        }
-    }
-
-    #[test]
     fn parses_template_string_for_lowering_diagnostic() {
         let source = "template_string Greeting(name: string) `Hello ${name}`";
         let (root, errors) = parse_source(source);
@@ -10160,8 +10165,6 @@ function Foo() -> {
             "`the client sent nothing`",
             "`prompt: ${\"client\"}`",
             "``a `client` quote``",
-            // raw string
-            r##"#"the client sent nothing"#"##,
             // escaped quote inside the literal must not end it early
             r#""say \"client\" now""#,
             // an unbalanced brace inside a literal must not confuse depth
@@ -10282,31 +10285,6 @@ function Demo(x "hello") -> int {
   1
 }
 "#;
-
-        let (root, errors) = parse_source(source);
-
-        assert_no_errors(&errors);
-
-        let param = root
-            .descendants()
-            .find(|n| n.kind() == SyntaxKind::PARAMETER)
-            .expect("expected PARAMETER node");
-        let param_text = param.text().to_string();
-        assert!(
-            param_text.contains("hello"),
-            "parameter should contain parsed type, got: {param_text:?}"
-        );
-    }
-
-    #[test]
-    fn accepts_parameter_raw_string_type_without_colon() {
-        // BEP-019: colons are optional in function parameters.
-        // `x #"hello"#` is valid syntax.
-        let source = r##"
-function Demo(x #"hello"#) -> int {
-  1
-}
-"##;
 
         let (root, errors) = parse_source(source);
 

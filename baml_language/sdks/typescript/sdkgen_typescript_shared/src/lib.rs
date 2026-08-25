@@ -219,7 +219,7 @@ pub fn to_source_code_with_metadata(
         segments: vec!["baml".to_string()],
     });
     leaves.insert(LeafPath {
-        segments: vec!["baml".to_string(), "reflect".to_string()],
+        segments: vec!["reflect".to_string()],
     });
     leaves.insert(LeafPath {
         segments: Vec::new(),

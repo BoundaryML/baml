@@ -299,17 +299,17 @@
 /// candidates with different scoring behavior.
 use std::collections::{HashMap, HashSet};
 
-use crate::{Literal, RuntimeTy, TyAttr, TyAttrValue, TypeName};
+use crate::{Literal, RuntimeTy, TyAttr, TyAttrValue};
 
 /// Simplify a type for SAP processing.
 ///
 /// - `aliases`: map from alias name to its definition.
 /// - `recursive_aliases`: aliases that are recursive (left as `RuntimeTy::TypeAlias`).
-pub fn simplify(
-    ty: RuntimeTy,
-    aliases: &HashMap<TypeName, RuntimeTy>,
-    recursive_aliases: &HashSet<TypeName>,
-) -> RuntimeTy {
+pub fn simplify<N: crate::Head>(
+    ty: RuntimeTy<N>,
+    aliases: &HashMap<N, RuntimeTy<N>>,
+    recursive_aliases: &HashSet<N>,
+) -> RuntimeTy<N> {
     simplify_impl(ty, aliases, recursive_aliases, false)
 }
 
@@ -318,20 +318,20 @@ pub fn simplify(
 /// In addition to [`simplify`], this expands a recursive union alias when it
 /// appears directly as another union's member. This turns `json | null` into a
 /// flat union while retaining recursive `json` references below lists/maps.
-pub fn simplify_parse_target(
-    ty: RuntimeTy,
-    aliases: &HashMap<TypeName, RuntimeTy>,
-    recursive_aliases: &HashSet<TypeName>,
-) -> RuntimeTy {
+pub fn simplify_parse_target<N: crate::Head>(
+    ty: RuntimeTy<N>,
+    aliases: &HashMap<N, RuntimeTy<N>>,
+    recursive_aliases: &HashSet<N>,
+) -> RuntimeTy<N> {
     simplify_impl(ty, aliases, recursive_aliases, true)
 }
 
-fn simplify_impl(
-    ty: RuntimeTy,
-    aliases: &HashMap<TypeName, RuntimeTy>,
-    recursive: &HashSet<TypeName>,
+fn simplify_impl<N: crate::Head>(
+    ty: RuntimeTy<N>,
+    aliases: &HashMap<N, RuntimeTy<N>>,
+    recursive: &HashSet<N>,
     expand_recursive_alias_unions: bool,
-) -> RuntimeTy {
+) -> RuntimeTy<N> {
     match ty {
         RuntimeTy::TypeAlias(ref name, ref outer_attr) => {
             if recursive.contains(name) {
@@ -391,15 +391,15 @@ fn simplify_impl(
 // Union simplification
 // ---------------------------------------------------------------------------
 
-fn simplify_union(
-    variants: Vec<RuntimeTy>,
+fn simplify_union<N: crate::Head>(
+    variants: Vec<RuntimeTy<N>>,
     attr: TyAttr,
-    aliases: &HashMap<TypeName, RuntimeTy>,
-    recursive: &HashSet<TypeName>,
+    aliases: &HashMap<N, RuntimeTy<N>>,
+    recursive: &HashSet<N>,
     expand_recursive_alias_unions: bool,
-) -> RuntimeTy {
+) -> RuntimeTy<N> {
     // 1. Simplify each variant recursively.
-    let variants: Vec<RuntimeTy> = variants
+    let variants: Vec<RuntimeTy<N>> = variants
         .into_iter()
         .map(|v| simplify_impl(v, aliases, recursive, expand_recursive_alias_unions))
         .collect();
@@ -438,11 +438,11 @@ fn simplify_union(
     }
 }
 
-fn expand_recursive_union_aliases(
-    variants: Vec<RuntimeTy>,
-    aliases: &HashMap<TypeName, RuntimeTy>,
-    recursive: &HashSet<TypeName>,
-) -> Vec<RuntimeTy> {
+fn expand_recursive_union_aliases<N: crate::Head>(
+    variants: Vec<RuntimeTy<N>>,
+    aliases: &HashMap<N, RuntimeTy<N>>,
+    recursive: &HashSet<N>,
+) -> Vec<RuntimeTy<N>> {
     let mut out = Vec::new();
     let mut expanding = HashSet::new();
     for variant in variants {
@@ -451,12 +451,12 @@ fn expand_recursive_union_aliases(
     out
 }
 
-fn expand_recursive_union_alias_variant(
-    variant: RuntimeTy,
-    aliases: &HashMap<TypeName, RuntimeTy>,
-    recursive: &HashSet<TypeName>,
-    expanding: &mut HashSet<TypeName>,
-    out: &mut Vec<RuntimeTy>,
+fn expand_recursive_union_alias_variant<N: crate::Head>(
+    variant: RuntimeTy<N>,
+    aliases: &HashMap<N, RuntimeTy<N>>,
+    recursive: &HashSet<N>,
+    expanding: &mut HashSet<N>,
+    out: &mut Vec<RuntimeTy<N>>,
 ) {
     let RuntimeTy::TypeAlias(name, reference_attr) = variant else {
         out.push(variant);
@@ -506,7 +506,10 @@ fn merge_attr_nested(inner: &TyAttr, outer: &TyAttr) -> TyAttr {
 /// Distribute union-level attrs into each variant.
 ///
 /// SAP flags are or'd into each variant and preserved at the union level.
-fn distribute_attrs(variants: Vec<RuntimeTy>, union_attr: TyAttr) -> (Vec<RuntimeTy>, TyAttr) {
+fn distribute_attrs<N: crate::Head>(
+    variants: Vec<RuntimeTy<N>>,
+    union_attr: TyAttr,
+) -> (Vec<RuntimeTy<N>>, TyAttr) {
     let distributed = variants
         .into_iter()
         .map(|v| {
@@ -522,7 +525,7 @@ fn distribute_attrs(variants: Vec<RuntimeTy>, union_attr: TyAttr) -> (Vec<Runtim
 ///
 /// When an inner union is flattened, its union-level attr is merged (nesting
 /// semantics) into each of its variants.
-fn flatten_union(variants: Vec<RuntimeTy>) -> Vec<RuntimeTy> {
+fn flatten_union<N: crate::Head>(variants: Vec<RuntimeTy<N>>) -> Vec<RuntimeTy<N>> {
     let mut out = Vec::new();
     for v in variants {
         match v {
@@ -542,8 +545,8 @@ fn flatten_union(variants: Vec<RuntimeTy>) -> Vec<RuntimeTy> {
 ///
 /// If variant A is a subtype of variant B (considering attrs), A is dropped
 /// and B is kept.
-fn dedup_variants(variants: Vec<RuntimeTy>) -> Vec<RuntimeTy> {
-    let mut result: Vec<RuntimeTy> = Vec::new();
+fn dedup_variants<N: crate::Head>(variants: Vec<RuntimeTy<N>>) -> Vec<RuntimeTy<N>> {
+    let mut result: Vec<RuntimeTy<N>> = Vec::new();
     for candidate in variants {
         if result
             .iter()
@@ -560,7 +563,7 @@ fn dedup_variants(variants: Vec<RuntimeTy>) -> Vec<RuntimeTy> {
 }
 
 /// Push `null` variants to the end.
-fn null_to_end(variants: Vec<RuntimeTy>) -> Vec<RuntimeTy> {
+fn null_to_end<N: crate::Head>(variants: Vec<RuntimeTy<N>>) -> Vec<RuntimeTy<N>> {
     let mut non_null = Vec::new();
     let mut nulls = Vec::new();
     for v in variants {
@@ -588,7 +591,7 @@ fn null_to_end(variants: Vec<RuntimeTy>) -> Vec<RuntimeTy> {
 /// The one exception is `int → bigint`, which is permitted because it is
 /// lossless (any `int` fits in `bigint`). See the inline comment on the
 /// `RuntimeTy::Int → RuntimeTy::Bigint` arm of [`is_sap_structural_subtype`].
-fn is_subtype_with_attrs(sub: &RuntimeTy, sup: &RuntimeTy) -> bool {
+fn is_subtype_with_attrs<N: crate::Head>(sub: &RuntimeTy<N>, sup: &RuntimeTy<N>) -> bool {
     is_sap_structural_subtype(sub, sup) && attr_is_subtype(sub.attr(), sup.attr())
 }
 
@@ -596,7 +599,7 @@ fn is_subtype_with_attrs(sub: &RuntimeTy, sup: &RuntimeTy) -> bool {
 ///
 /// Returns `true` when `sub` and `sup` are the same type (ignoring attrs),
 /// or when `sub` is a literal whose base primitive matches `sup`.
-fn is_sap_structural_subtype(sub: &RuntimeTy, sup: &RuntimeTy) -> bool {
+fn is_sap_structural_subtype<N: crate::Head>(sub: &RuntimeTy<N>, sup: &RuntimeTy<N>) -> bool {
     let sub_s = sub.clone().with_attr(TyAttr::default());
     let sup_s = sup.clone().with_attr(TyAttr::default());
 

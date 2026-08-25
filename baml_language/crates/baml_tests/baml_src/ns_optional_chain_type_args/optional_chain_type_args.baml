@@ -14,12 +14,12 @@ class Holder {
     raw string
 
     function value<T>(self) -> string {
-        type.of<T>().to_string()
+        reflect.Type.of<T>().to_string()
     }
 
     /// Type arg inferred from the argument, never written at the call site.
     function ident<T>(self, v: T) -> string {
-        type.of<T>().to_string()
+        reflect.Type.of<T>().to_string()
     }
 
     function inner(self) -> Holder? {
@@ -42,13 +42,13 @@ class Boxed<T> {
     /// Reads only the class-level arg — the bound-method path already curried
     /// these, so this is the "was already working" control.
     function describe(self) -> string {
-        type.of<T>().to_string()
+        reflect.Type.of<T>().to_string()
     }
 
     /// Reads class arg then method arg: fails unless the frame is seeded
     /// `[class T, method U]` in that order.
     function both<U>(self) -> string {
-        type.of<T>().to_string() + "/" + type.of<U>().to_string()
+        reflect.Type.of<T>().to_string() + "/" + reflect.Type.of<U>().to_string()
     }
 }
 
@@ -61,7 +61,7 @@ class Dog {
 
     implements Speaker {
         function speak<T>(self) -> string {
-            type.of<T>().to_string()
+            reflect.Type.of<T>().to_string()
         }
     }
 }
@@ -71,7 +71,7 @@ class Cat {
 
     implements Speaker {
         function speak<T>(self) -> string {
-            "cat:" + type.of<T>().to_string()
+            "cat:" + reflect.Type.of<T>().to_string()
         }
     }
 }
@@ -87,7 +87,7 @@ class Pair<T> {
 
     implements Tagged {
         function tag<U>(self) -> string {
-            type.of<T>().to_string() + "/" + type.of<U>().to_string()
+            reflect.Type.of<T>().to_string() + "/" + reflect.Type.of<U>().to_string()
         }
     }
 }

@@ -330,8 +330,18 @@ retry_policy:
       }
     }
 
+env:
+  summary: "Names an environment variable to read later, without reading it now."
+  syntax: |
+    client MyClient = openai.ResponsesClient.new(
+      model = "gpt-4o-mini",
+      api_key = env.OPENAI_API_KEY,
+    )
+  details: |
+    `env.VAR_NAME` builds a `baml.env.Ref`, which carries the variable's name and nothing else. The value is read when the reference is used: `.get()` gives `null` for an unset variable, `.get_or_panic()` stops with an error, and `.or(fallback)` substitutes a default. Because nothing is read where the reference is written, a top-level `client` can name a variable the host only sets after startup, and the secret never ends up inside the client value. Write `baml.env.get("VAR_NAME")` to read a variable directly; there is no `env.get(...)` shorthand.
+
 type:
-  summary: "Creates a type alias, and declares associated type members inside interfaces."
+  summary: "Creates type bindings; runtime type values use reflect.Type."
   syntax: |
     type UserId = string
     type Result = string | int
@@ -345,8 +355,12 @@ type:
         type Item = int
       }
     }
+    function from_runtime(t: reflect.Type) -> reflect.Type {
+      type T = unreflect(t)
+      reflect.Type.of<T>()
+    }
   details: |
-    At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`.
+    At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`. Inside a function, `type T = unreflect(t)` creates a scoped type binding from a runtime value. The old `type.of<T>()` shorthand and bare `type` value annotation do not exist; write `reflect.Type.of<T>()` and `reflect.Type`.
 
 void:
   summary: "The return type of a function that produces no value."

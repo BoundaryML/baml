@@ -81,13 +81,20 @@ fn prompt_role(vm: &BexVm, value: Value) -> Option<PromptRole> {
         _ => return None,
     };
     let (name_index, metadata_index) = match vm.get_object(class_ptr) {
-        Object::Class(class) if class.name.render_dotted(false) == "ai.Role" => (
-            class.fields.iter().position(|field| field.name == "name")?,
-            class
-                .fields
-                .iter()
-                .position(|field| field.name == "metadata")?,
-        ),
+        Object::Class(class)
+            if class
+                .name
+                .declared()
+                .is_some_and(|qtn| qtn.render_dotted(false) == "ai.Role") =>
+        {
+            (
+                class.fields.iter().position(|field| field.name == "name")?,
+                class
+                    .fields
+                    .iter()
+                    .position(|field| field.name == "metadata")?,
+            )
+        }
         _ => return None,
     };
     let name = vm.as_string(fields.get(name_index)?).ok()?;
@@ -231,7 +238,8 @@ impl BamlClassPrompt for PackageAiImpl {
                 let role = Value::object(vm.alloc_string(role));
                 let readable = Value::object(vm.alloc_string(content.to_text()));
                 let parts = prompt_content_values(vm, content.as_ref());
-                let parts = Value::object(vm.alloc_array(baml_type::RealizedTy::unknown(), parts));
+                let parts =
+                    Value::object(vm.alloc_array(bex_vm_types::RealizedTy::unknown(), parts));
                 let metadata = prompt_metadata_value(vm, metadata);
                 Value::object(
                     vm.alloc_instance(message_class, vec![role, readable, parts, metadata]),

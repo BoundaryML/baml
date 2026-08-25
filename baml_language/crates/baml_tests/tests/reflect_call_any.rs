@@ -80,19 +80,19 @@ async fn call_any_rejects_missing_key_and_type_mismatches() {
             let f: baml.AnyFunction<Returns = string, Throws = never> = greet
             let missing = reflect.call_any(f, {}) catch (e) {
                 reflect.InvalidArgumentError => 1,
-                baml.reflect.errors.CompilationError => 100,
+                reflect.errors.CompilationError => 100,
             }
             let ty = reflect.call_any(f, { "name": 42 }) catch (e) {
                 reflect.InvalidArgumentError => 1,
-                baml.reflect.errors.CompilationError => 100,
+                reflect.errors.CompilationError => 100,
             }
             let key = reflect.call_any(f, { "name": "x", "volume": 11 }) catch (e) {
                 reflect.InvalidArgumentError => 1,
-                baml.reflect.errors.CompilationError => 100,
+                reflect.errors.CompilationError => 100,
             }
             let opt_ty = reflect.call_any(f, { "name": "x", "excited": "yes" }) catch (e) {
                 reflect.InvalidArgumentError => 1,
-                baml.reflect.errors.CompilationError => 100,
+                reflect.errors.CompilationError => 100,
             }
             let failures = 0
             if missing is int {
@@ -136,34 +136,34 @@ async fn call_any_widens_int_for_float_param() {
             // `float` parameter (JSON Schema's `number` admits integers)...
             let widened = reflect.call_any(g, { "budget": 150 }) catch (e) {
                 reflect.InvalidArgumentError => -1.0,
-                baml.reflect.errors.CompilationError => -100.0,
+                reflect.errors.CompilationError => -100.0,
             }
             // ...and for a `float?` parameter.
             let opt = reflect.call_any(g, { "budget": 2, "factor": 3 }) catch (e) {
                 reflect.InvalidArgumentError => -1.0,
-                baml.reflect.errors.CompilationError => -100.0,
+                reflect.errors.CompilationError => -100.0,
             }
             // Nothing else converts: a float does not narrow to `int`, and a
             // numeric string does not parse to `float`.
             let h: baml.AnyFunction<Returns = int, Throws = never> = takes_int
             let narrowed = reflect.call_any(h, { "n": 1.5 }) catch (e) {
                 reflect.InvalidArgumentError => -1,
-                baml.reflect.errors.CompilationError => -100,
+                reflect.errors.CompilationError => -100,
             }
             let stringy = reflect.call_any(g, { "budget": "150" }) catch (e) {
                 reflect.InvalidArgumentError => -2.0,
-                baml.reflect.errors.CompilationError => -100.0,
+                reflect.errors.CompilationError => -100.0,
             }
             // Widening is lossless-only: 2^53 is the last exactly
             // representable integer and widens; 2^53 + 1 would silently
             // round, so it stays an InvalidArgumentError.
             let exact = reflect.call_any(g, { "budget": 9007199254740992 }) catch (e) {
                 reflect.InvalidArgumentError => -1.0,
-                baml.reflect.errors.CompilationError => -100.0,
+                reflect.errors.CompilationError => -100.0,
             }
             let lossy = reflect.call_any(g, { "budget": 9007199254740993 }) catch (e) {
                 reflect.InvalidArgumentError => -3.0,
-                baml.reflect.errors.CompilationError => -100.0,
+                reflect.errors.CompilationError => -100.0,
             }
             let ok = 0
             if widened == 150.0 {
@@ -203,11 +203,11 @@ async fn call_any_invalid_argument_error_carries_types() {
             let f: baml.AnyFunction<Returns = string, Throws = never> = greet
             let bad_value = reflect.call_any(f, { "name": 42 }) catch (e) {
                 reflect.InvalidArgumentError => e.argument + ":" + e.expected.to_string() + "|" + e.got.to_string(),
-                baml.reflect.errors.CompilationError => "unexpected-compilation-error",
+                reflect.errors.CompilationError => "unexpected-compilation-error",
             }
             let missing = reflect.call_any(f, {}) catch (e) {
                 reflect.InvalidArgumentError => e.argument + ":" + e.expected.to_string() + "|" + e.got.to_string(),
-                baml.reflect.errors.CompilationError => "unexpected-compilation-error",
+                reflect.errors.CompilationError => "unexpected-compilation-error",
             }
             let out = "?"
             if bad_value is string {
@@ -248,7 +248,7 @@ async fn call_any_propagates_callee_typed_throw() {
             return reflect.call_any(f, { "q": "cats" }) catch (e) {
                 ToolError => e.message,
                 reflect.InvalidArgumentError => "iae",
-                baml.reflect.errors.CompilationError => "compilation-error",
+                reflect.errors.CompilationError => "compilation-error",
             }
         }
         "#
@@ -283,7 +283,7 @@ async fn call_any_heterogeneous_tool_map_dispatch() {
             return reflect.call_any(f, args) catch (e) {
                 ToolError => "err:" + e.message,
                 reflect.InvalidArgumentError => "iae",
-                baml.reflect.errors.CompilationError => "compilation-error",
+                reflect.errors.CompilationError => "compilation-error",
             }
         }
 
@@ -472,7 +472,7 @@ async fn call_any_reports_unspecialized_generic_function() {
         function main() -> string throws unknown {
             let f: baml.AnyFunction = ident
             let _ = reflect.call_any(f, { "x": 42 }) catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => throw e,
@@ -484,7 +484,7 @@ async fn call_any_reports_unspecialized_generic_function() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "E0165|generic function `ident` cannot be extracted by name through reflection: look it up in `Package.functions()` and `specialize` it first".into()
+            "E0165|generic function `ident` cannot be extracted through reflection: its signature still mentions its own type parameters".into()
         ))
     );
 }
@@ -500,7 +500,7 @@ async fn pinned_call_any_declares_unspecialized_generic_compilation_error() {
         function main() -> string throws never {
             let f: baml.AnyFunction<Returns = string, Throws = never> = ident
             let _ = reflect.call_any(f, { "x": "value" }) catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => return "wrong error",
@@ -512,7 +512,7 @@ async fn pinned_call_any_declares_unspecialized_generic_compilation_error() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "E0165|generic function `ident` cannot be extracted by name through reflection: look it up in `Package.functions()` and `specialize` it first".into()
+            "E0165|generic function `ident` cannot be extracted through reflection: its signature still mentions its own type parameters".into()
         ))
     );
 }
@@ -554,8 +554,8 @@ async fn signature_object_literal_construction() {
             let manual = reflect.Signature {
                 args: [],
                 opts: {},
-                returns: type.of<int>(),
-                errors: type.of<never>(),
+                returns: reflect.Type.of<int>(),
+                errors: reflect.Type.of<never>(),
                 docstring: null,
             }
             return manual.returns.to_string() + "|" + manual.errors.to_string()
@@ -577,10 +577,10 @@ async fn unreflect_reifies_the_runtime_type_argument() {
     let output = baml_test!(
         r#"
         function inspect<T>() -> string throws never {
-            return type.of<T>().to_string()
+            return reflect.Type.of<T>().to_string()
         }
 
-        function main() -> string throws baml.reflect.errors.CompilationError {
+        function main() -> string throws reflect.errors.CompilationError {
             let t = reflect.enum.new("Category", ["RED", "BLUE"])
             return inspect<unreflect(t)>()
         }
@@ -659,10 +659,10 @@ async fn runtime_enum_identity_and_metadata_are_preserved() {
         }
 
         function main() -> string {
-            // Widen explicitly to select `type.meta(...)`, rather than the
+            // Widen explicitly to select `reflect.Type.meta(...)`, rather than the
             // enum-kind view's zero-argument metadata reader.
-            let left: type = reflect.enum.new("Category", ["RED", "BLUE"])
-            let right: type = reflect.enum.new("Category", ["RED", "BLUE"])
+            let left: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"])
+            let right: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"])
             let left_prompt = Classify$render_prompt<unreflect(left)>("sample").text()
             let right_prompt = Classify$render_prompt<unreflect(right)>("sample").text()
             let tagged = left.meta(
@@ -697,7 +697,7 @@ async fn duplicate_runtime_enum_value_uses_compiler_diagnostic() {
         r#"
         function main() -> string throws never {
             let result = reflect.enum.new("Category", ["RED", "RED"]) catch (e) {
-                baml.reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message
+                reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message
             }
             if result is string {
                 return result
@@ -743,7 +743,7 @@ async fn empty_runtime_enum_fails_at_the_render_boundary() {
                 _ => return "constructor threw"
             }
             let rendered = Classify$render_prompt<unreflect(t)>("sample") catch (e) {
-                baml.reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+                reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                 _ => "wrong render error",
             }
             if rendered is string {
@@ -832,7 +832,7 @@ async fn get_function_refuses_an_unspecialized_generic_through_any_function() {
             let callable: AnyCallable = package.get_function<AnyCallable>(
                 "GenericList$render_prompt",
             ) catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => return "wrong error",
@@ -852,8 +852,7 @@ async fn get_function_refuses_an_unspecialized_generic_through_any_function() {
         output.result,
         Ok(BexExternalValue::String(
             "E0165|generic function `GenericList$render_prompt` cannot be invoked through \
-             reflection until it is specialized: its body needs type arguments — look it up in \
-             `Package.functions()` and `specialize` it first"
+             reflection: its body needs type arguments"
                 .into()
         ))
     );
@@ -923,7 +922,7 @@ async fn get_function_refuses_an_unspecialized_generic_companion() {
             let callable: PromptFn = package.get_function<PromptFn>(
                 "GenericList$render_prompt",
             ) catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => return "wrong error",
@@ -943,8 +942,7 @@ async fn get_function_refuses_an_unspecialized_generic_companion() {
         output.result,
         Ok(BexExternalValue::String(
             "E0165|generic function `GenericList$render_prompt` cannot be invoked through \
-             reflection until it is specialized: its body needs type arguments — look it up in \
-             `Package.functions()` and `specialize` it first"
+             reflection: its body needs type arguments"
                 .into()
         ))
     );

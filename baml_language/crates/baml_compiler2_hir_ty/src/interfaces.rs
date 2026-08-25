@@ -82,7 +82,6 @@ fn scope_ctx<'db>(scope: &LowerScope<'_, 'db>) -> crate::lower::LowerCtx<'db> {
                 .as_ref()
                 .map(baml_type::interned::Ty::from_plain),
         )
-        .with_diagnostics()
 }
 
 pub(crate) fn lower_ref_in(
@@ -111,13 +110,14 @@ pub(crate) fn lower_ref_in_at(
     diags: &mut Vec<TirTypeError>,
 ) -> Ty {
     let ctx = scope_ctx(scope);
-    let lowered = ctx.lower_type_ref_at(store, id, position).to_plain();
+    let (lowered, lowering_diagnostics) =
+        ctx.lower_type_ref_at_with_diagnostics(store, id, position);
     diags.extend(
-        ctx.take_diagnostics()
+        lowering_diagnostics
             .into_iter()
             .map(|diag| crate::lower::lowering_diag_error(&diag.kind)),
     );
-    lowered
+    lowered.to_plain()
 }
 
 /// [`lower_expr_in`] at an explicit [`crate::lower::TypePosition`].

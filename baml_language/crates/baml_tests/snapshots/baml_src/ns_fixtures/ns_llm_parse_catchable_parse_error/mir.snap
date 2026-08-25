@@ -10,7 +10,7 @@ fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice(text: string, cl
     let _3: bool
     let _4: ai.RunResult<fixtures.llm_parse_catchable_parse_error.Invoice>
     let _5: ai.Agent<fixtures.llm_parse_catchable_parse_error.Invoice>
-    let _6: type
+    let _6: reflect.Type
     let _7: ai.FunctionSpec<fixtures.llm_parse_catchable_parse_error.Invoice>
 
     bb0: {
@@ -33,7 +33,7 @@ fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice(text: string, cl
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<fixtures.llm_parse_catchable_parse_error.Invoice, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.llm_parse_catchable_parse_error.Invoice>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<fixtures.llm_parse_catchable_parse_error.Invoice, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.llm_parse_catchable_parse_error.Invoice>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -53,7 +53,7 @@ fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice$build_request(te
     let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.FunctionSpec<fixtures.llm_parse_catchable_parse_error.Invoice>
-    let _5: type
+    let _5: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -83,7 +83,7 @@ fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice$parse(json: stri
     // Locals:
     let _0: fixtures.llm_parse_catchable_parse_error.Invoice // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(fixtures.llm_parse_catchable_parse_error.Invoice);
@@ -101,8 +101,8 @@ fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice$render_prompt(te
     let _1: string // text // param
     let _2: ai.FunctionSpec<fixtures.llm_parse_catchable_parse_error.Invoice>
     let _3: string
-    let _4: type
-    let _5: type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice$spec(copy _1) -> [bb1];
@@ -171,15 +171,15 @@ fn .<lambda(ExtractInvoice$spec, 0)>( __spec_output_format: string) -> ai.Prompt
     let _7: int
     let _8: string[]
     let _9: string
-    let _10: type
+    let _10: reflect.Type
     let _11: int
     let _12: unknown[]
     let _13: string
-    let _14: type
+    let _14: reflect.Type
     let _15: int
     let _16: string[]
     let _17: ""
-    let _18: type
+    let _18: reflect.Type
     let _19: string[]
     let _20: unknown[]
     let _21: string[]
@@ -237,8 +237,8 @@ fn user.fixtures.llm_parse_catchable_parse_error.ExtractInvoice$stream(text: str
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
     let _4: ai.FunctionSpec<fixtures.llm_parse_catchable_parse_error.Invoice>
-    let _5: type
-    let _6: type
+    let _5: reflect.Type
+    let _6: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;

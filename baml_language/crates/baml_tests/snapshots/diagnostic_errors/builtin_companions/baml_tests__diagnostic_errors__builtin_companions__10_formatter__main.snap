@@ -26,7 +26,7 @@ function generic_carriers() -> int {
 }
 
 function type_carrier() -> int {
-    let t = baml.TypeValue {  };
+    let t = reflect.Type {  };
     0
 }
 

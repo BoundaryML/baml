@@ -132,7 +132,7 @@ export class BamlType {
     }
 }
 
-/** Runtime member installed as generated `reflect.type`. */
+/** Runtime member installed as generated `reflect.Type`. */
 export const reflectType = Object.freeze({
     of(token: BamlType | BamlTypeToken): BamlType {
         return BamlType.from(token);

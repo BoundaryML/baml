@@ -473,7 +473,7 @@ pub fn check_file(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<Dia
             let source_map = baml_compiler2_ppir::body_source_map(db, owner);
             let type_ref_spans = baml_compiler2_ppir::body_type_ref_spans(db, owner);
             for diagnostic in &result.diagnostics {
-                let rendered = diagnostic.render_with_type_refs(
+                let rendered = diagnostic.render_with_body_type_refs(
                     db,
                     file,
                     source_map.as_ref(),
@@ -1557,7 +1557,7 @@ fn new_tir_diagnostic(
         // slot says why the inline spelling cannot reach past this call —
         // naming whichever published type the runtime parameter reached, the
         // value or the error. The rewrite rides along as related info, built
-        // from the file text in `render_with_type_refs`.
+        // from the file text in `render_with_body_type_refs`.
         return runtime_type::runtime_type_must_be_named()
             .with_primary(span, escape.note())
             .with_phase(DiagnosticPhase::Type);
@@ -1853,6 +1853,7 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::ComparisonAlwaysDisjoint { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::InvalidUnaryOp { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnresolvedType { .. } => DiagnosticId::UnknownType,
+        TirTypeError::RemovedReflectSpelling { .. } => DiagnosticId::RemovedFeature,
         TirTypeError::NonInterfaceProjectionQualifier => DiagnosticId::TypeMismatch,
         TirTypeError::UnknownAssociatedType { .. } => DiagnosticId::UnknownType,
         TirTypeError::AmbiguousAssociatedTypeProjection { .. } => DiagnosticId::TypeMismatch,
@@ -2024,13 +2025,6 @@ struct TyDisplayContext<'db> {
 }
 
 impl TyDisplayContext<'_> {
-    /// Every namespace decision below reads
-    /// [`QualifiedTypeName::source_namespace`], not `namespace()`: a
-    /// runtime-minted declaration carries a hidden `$dyn.<mint>`
-    /// discriminator that keys its identity in the VM, and rendering it would
-    /// show a path nobody can write. Below the discriminator the name is the
-    /// one the source wrote, and that is what this path — every `check_file`
-    /// diagnostic, including the ones a runtime compile hands back — shows.
     fn display_qtn(&self, qtn: &QualifiedTypeName) -> String {
         if qtn.package() != &self.current_package {
             // Cross-package: keep the dependency package prefix to disambiguate,
@@ -2043,7 +2037,7 @@ impl TyDisplayContext<'_> {
         }
 
         let path = qtn
-            .source_namespace()
+            .namespace()
             .iter()
             .chain(std::iter::once(qtn.name()))
             .map(Name::as_str)
@@ -2053,11 +2047,11 @@ impl TyDisplayContext<'_> {
     }
 
     fn can_use_bare_name(&self, qtn: &QualifiedTypeName) -> bool {
-        if qtn.source_namespace() == self.current_namespace {
+        if qtn.namespace() == &self.current_namespace {
             return true;
         }
 
-        if qtn.source_namespace().is_empty() {
+        if qtn.namespace().is_empty() {
             return self
                 .package_items
                 .lookup_type(&self.current_namespace, qtn.name())
@@ -2259,6 +2253,28 @@ function demo() -> int throws never {
                 "the report underlines the clause itself"
             );
         }
+    }
+
+    #[test]
+    fn an_unresolved_type_in_a_parameter_default_anchors_at_its_own_span() {
+        // A parameter default is its own body owner whose annotations live
+        // in the DEFAULTS arena — the other place besides a `throws` clause
+        // where a diagnostic's anchor and the enclosing function's body
+        // arena could disagree (upstream B-1607's second case).
+        let source = r#"function parameter_default(
+  value: int = { let typed: MissingDefault = 1; 1 }
+) -> int {
+  value
+}
+"#;
+        let (db, file) = single_file(source);
+        let unresolved: Vec<_> = check_file(&db, file)
+            .into_iter()
+            .filter(|diag| diag.id == DiagnosticId::UnknownType)
+            .collect();
+        assert_eq!(unresolved.len(), 1, "{unresolved:?}");
+        let span = unresolved[0].annotations[0].span.range;
+        assert_eq!(&source[span], "MissingDefault");
     }
 
     #[test]

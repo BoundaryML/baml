@@ -277,6 +277,11 @@ impl<'db> AliasOnlyFacts<'db> {
 }
 
 impl TypeContext for AliasOnlyFacts<'_> {
+    /// A name-based context represents a declaration by its own name, so this
+    /// is the identity — no resolution step, and never `None`.
+    fn head_lookup(&self, qtn: &TypeName) -> Option<TypeName> {
+        Some(qtn.clone())
+    }
     fn alias_def(&self, name: &TypeName) -> Option<baml_type::Ty> {
         self.memoized.as_ref().map_or_else(
             || crate::facts::uncached_alias_def(self.db, name),

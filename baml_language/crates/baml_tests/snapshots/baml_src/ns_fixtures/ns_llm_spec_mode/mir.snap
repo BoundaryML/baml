@@ -44,7 +44,7 @@ fn user.fixtures.llm_spec_mode.PlainChat(q: string, client: null | ai.Client) ->
     let _3: bool
     let _4: ai.RunResult<string>
     let _5: ai.Agent<string>
-    let _6: type
+    let _6: reflect.Type
     let _7: ai.FunctionSpec<string>
 
     bb0: {
@@ -67,7 +67,7 @@ fn user.fixtures.llm_spec_mode.PlainChat(q: string, client: null | ai.Client) ->
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -87,7 +87,7 @@ fn user.fixtures.llm_spec_mode.PlainChat$build_request(q: string, client: null |
     let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.FunctionSpec<string>
-    let _5: type
+    let _5: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -117,7 +117,7 @@ fn user.fixtures.llm_spec_mode.PlainChat$parse(json: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(string);
@@ -135,8 +135,8 @@ fn user.fixtures.llm_spec_mode.PlainChat$render_prompt(q: string) -> ai.Prompt {
     let _1: string // q // param
     let _2: ai.FunctionSpec<string>
     let _3: string
-    let _4: type
-    let _5: type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.llm_spec_mode.PlainChat$spec(copy _1) -> [bb1];
@@ -206,23 +206,23 @@ fn .<lambda(PlainChat$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     let _8: int
     let _9: string[]
     let _10: string
-    let _11: type
+    let _11: reflect.Type
     let _12: int
     let _13: unknown[]
     let _14: string
-    let _15: type
+    let _15: reflect.Type
     let _16: int
     let _17: string[]
     let _18: "\n"
-    let _19: type
+    let _19: reflect.Type
     let _20: int
     let _21: unknown[]
     let _22: string
-    let _23: type
+    let _23: reflect.Type
     let _24: int
     let _25: string[]
     let _26: ""
-    let _27: type
+    let _27: reflect.Type
     let _28: string[]
     let _29: unknown[]
     let _30: string[]
@@ -297,8 +297,8 @@ fn user.fixtures.llm_spec_mode.PlainChat$stream(q: string, client: null | ai.str
     let _2: null | ai.stream.StreamingClient // client // param
     let _3: bool
     let _4: ai.FunctionSpec<string>
-    let _5: type
-    let _6: type
+    let _5: reflect.Type
+    let _6: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -333,7 +333,7 @@ fn user.fixtures.llm_spec_mode.SpecAgent(q: string, client: null | ai.Client) ->
     let _3: bool
     let _4: ai.RunResult<fixtures.llm_spec_mode.Answer>
     let _5: ai.Agent<fixtures.llm_spec_mode.Answer>
-    let _6: type
+    let _6: reflect.Type
     let _7: ai.FunctionSpec<fixtures.llm_spec_mode.Answer>
 
     bb0: {
@@ -356,7 +356,7 @@ fn user.fixtures.llm_spec_mode.SpecAgent(q: string, client: null | ai.Client) ->
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<fixtures.llm_spec_mode.Answer, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.llm_spec_mode.Answer>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<fixtures.llm_spec_mode.Answer, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.llm_spec_mode.Answer>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -376,7 +376,7 @@ fn user.fixtures.llm_spec_mode.SpecAgent$build_request(q: string, client: null |
     let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.FunctionSpec<fixtures.llm_spec_mode.Answer>
-    let _5: type
+    let _5: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -406,7 +406,7 @@ fn user.fixtures.llm_spec_mode.SpecAgent$parse(json: string) -> fixtures.llm_spe
     // Locals:
     let _0: fixtures.llm_spec_mode.Answer // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(fixtures.llm_spec_mode.Answer);
@@ -424,8 +424,8 @@ fn user.fixtures.llm_spec_mode.SpecAgent$render_prompt(q: string) -> ai.Prompt {
     let _1: string // q // param
     let _2: ai.FunctionSpec<fixtures.llm_spec_mode.Answer>
     let _3: string
-    let _4: type
-    let _5: type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.llm_spec_mode.SpecAgent$spec(copy _1) -> [bb1];
@@ -499,23 +499,23 @@ fn .<lambda(SpecAgent$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     let _7: int
     let _8: string[]
     let _9: string
-    let _10: type
+    let _10: reflect.Type
     let _11: int
     let _12: unknown[]
     let _13: string
-    let _14: type
+    let _14: reflect.Type
     let _15: int
     let _16: string[]
     let _17: "\n"
-    let _18: type
+    let _18: reflect.Type
     let _19: int
     let _20: unknown[]
     let _21: string
-    let _22: type
+    let _22: reflect.Type
     let _23: int
     let _24: string[]
     let _25: ""
-    let _26: type
+    let _26: reflect.Type
     let _27: string[]
     let _28: unknown[]
     let _29: string[]
@@ -589,7 +589,7 @@ fn user.fixtures.llm_spec_mode.NamedTools(q: string, client: null | ai.Client) -
     let _3: bool
     let _4: ai.RunResult<fixtures.llm_spec_mode.Answer>
     let _5: ai.Agent<fixtures.llm_spec_mode.Answer>
-    let _6: type
+    let _6: reflect.Type
     let _7: ai.FunctionSpec<fixtures.llm_spec_mode.Answer>
 
     bb0: {
@@ -612,7 +612,7 @@ fn user.fixtures.llm_spec_mode.NamedTools(q: string, client: null | ai.Client) -
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<fixtures.llm_spec_mode.Answer, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.llm_spec_mode.Answer>>(copy _5, copy _7) -> [bb5];
+        _4 = virtual_call run as ai.Runner<fixtures.llm_spec_mode.Answer, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.llm_spec_mode.Answer>>(copy _5, copy _7) -> [bb5];
     }
 
     bb5: {
@@ -632,7 +632,7 @@ fn user.fixtures.llm_spec_mode.NamedTools$build_request(q: string, client: null 
     let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.FunctionSpec<fixtures.llm_spec_mode.Answer>
-    let _5: type
+    let _5: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -662,7 +662,7 @@ fn user.fixtures.llm_spec_mode.NamedTools$parse(json: string) -> fixtures.llm_sp
     // Locals:
     let _0: fixtures.llm_spec_mode.Answer // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(fixtures.llm_spec_mode.Answer);
@@ -680,8 +680,8 @@ fn user.fixtures.llm_spec_mode.NamedTools$render_prompt(q: string) -> ai.Prompt 
     let _1: string // q // param
     let _2: ai.FunctionSpec<fixtures.llm_spec_mode.Answer>
     let _3: string
-    let _4: type
-    let _5: type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.llm_spec_mode.NamedTools$spec(copy _1) -> [bb1];
@@ -753,23 +753,23 @@ fn .<lambda(NamedTools$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     let _7: int
     let _8: string[]
     let _9: string
-    let _10: type
+    let _10: reflect.Type
     let _11: int
     let _12: unknown[]
     let _13: string
-    let _14: type
+    let _14: reflect.Type
     let _15: int
     let _16: string[]
     let _17: "\n"
-    let _18: type
+    let _18: reflect.Type
     let _19: int
     let _20: unknown[]
     let _21: string
-    let _22: type
+    let _22: reflect.Type
     let _23: int
     let _24: string[]
     let _25: ""
-    let _26: type
+    let _26: reflect.Type
     let _27: string[]
     let _28: unknown[]
     let _29: string[]

@@ -64,8 +64,8 @@ fn assert.format_operand(value: unknown) -> string {
     let _4: string
     let _5: string
     let _6: string
-    let _7: type
-    let _8: type
+    let _7: reflect.Type
+    let _8: reflect.Type
 
     bb0: {
         _2 = copy _1;
@@ -107,10 +107,10 @@ fn assert.equal(actual: unknown, expected: unknown) -> void {
     let _7: string
     let _8: string
     let _9: string
-    let _10: type
+    let _10: reflect.Type
     let _11: string
     let _12: string
-    let _13: type
+    let _13: reflect.Type
 
     bb0: {
         _4 = call const fn baml.ops.equals_equals(copy _1, copy _2) -> [bb1];
@@ -180,13 +180,13 @@ fn assert.approx_equal(actual: float, expected: float, eps: float) -> void {
     let _19: string
     let _20: string
     let _21: float
-    let _22: type
+    let _22: reflect.Type
     let _23: string
-    let _24: type
+    let _24: reflect.Type
     let _25: string
-    let _26: type
+    let _26: reflect.Type
     let _27: string
-    let _28: type
+    let _28: reflect.Type
 
     bb0: {
         _6 = copy _3 < const 0_f64;
@@ -312,16 +312,16 @@ fn assert.is_type(actual: unknown) -> T {
     let _0: T // _0 // return
     let _1: unknown // actual // param
     let _2: bool
-    let _3: type // t
+    let _3: reflect.Type // t
     let _4: string
     let _5: string
     let _6: string
     let _7: string
     let _8: string
-    let _9: type
-    let _10: type
+    let _9: reflect.Type
+    let _10: reflect.Type
     let _11: string
-    let _12: type
+    let _12: reflect.Type
 
     bb0: {
         _2 = is_type(copy _1, #0);
@@ -335,7 +335,7 @@ fn assert.is_type(actual: unknown) -> T {
 
     bb2: {
         _9 = copy _3;
-        _10 = load_type(type);
+        _10 = load_type(reflect.Type);
         _8 = call const fn baml.String.from<copy _10>(copy _9) -> [bb3];
     }
 

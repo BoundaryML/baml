@@ -4,9 +4,7 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::{
-    Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr, TyAttrValue,
-};
+use crate::{Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr};
 
 // ── stub context ───────────────────────────────────────────────────────────
 
@@ -50,6 +48,12 @@ fn primitive_name(ty: &Ty) -> Option<&'static str> {
 }
 
 impl TypeContext for Ctx {
+    /// A name-based context represents a declaration by its own name, so this
+    /// is the identity — no resolution step, and never `None`.
+    fn head_lookup(&self, qtn: &crate::QualifiedTypeName) -> Option<crate::QualifiedTypeName> {
+        Some(qtn.clone())
+    }
+
     fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
         self.aliases.get(name).cloned()
     }
@@ -219,29 +223,6 @@ fn reflection_kind_classes_are_sealed_type_subtypes_in_both_entries() {
         &interned::Ty::from_plain(&carrier),
         &ctx,
     ));
-}
-
-#[test]
-fn canonical_digest_is_stable_and_uses_canonical_plain_types() {
-    let ctx = Ctx::default();
-    let int = Ty::int();
-    let int_with_attr = Ty::Int {
-        attr: TyAttr {
-            sap_parse_without_null: TyAttrValue::Set,
-            ..TyAttr::default()
-        },
-    };
-    let ordered = union(vec![Ty::int(), Ty::string()]);
-    let permuted = union(vec![Ty::string(), Ty::int()]);
-
-    let int_digest = canonical_digest(&int, &ctx);
-    let union_digest = canonical_digest(&ordered, &ctx);
-    assert_eq!(int_digest, canonical_digest(&int, &ctx));
-    assert_eq!(int_digest, canonical_digest(&int_with_attr, &ctx));
-    assert_eq!(union_digest, canonical_digest(&permuted, &ctx));
-    assert_ne!(int_digest, union_digest);
-    assert_eq!(int_digest, 0xa8c7_f832_281a_39c5);
-    assert_eq!(union_digest, 0x9886_dba9_b789_ac56);
 }
 
 #[test]
@@ -1910,7 +1891,7 @@ fn unguarded_mu_disjointness_terminates_conservatively() {
     // The read-back bail keeps the pre-automaton spelling, whose μ spine can be
     // unguarded (`type A = A | A[]`); unfolding it re-injects the μ into its
     // own union spine forever, so the guard must answer first.
-    let unguarded = NormalTy::Mu {
+    let unguarded: NormalTy = NormalTy::Mu {
         binder: MuDisplay {
             name: None,
             rendered: Box::new(Ty::Never {
@@ -1922,8 +1903,8 @@ fn unguarded_mu_disjointness_terminates_conservatively() {
             NormalTy::List(Box::new(NormalTy::RecVar(0))),
         ])),
     };
-    assert!(!unguarded.is_disjoint_from(&NormalTy::String));
-    assert!(!NormalTy::String.is_disjoint_from(&unguarded));
+    assert!(!unguarded.is_disjoint_from(&NormalTy::String, &Ctx::default()));
+    assert!(!NormalTy::String.is_disjoint_from(&unguarded, &Ctx::default()));
 }
 
 #[test]

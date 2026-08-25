@@ -849,7 +849,7 @@ interface RtitAnimal {
     function speak(self) -> string throws never
 }
 function rtit_main() -> string {
-    return type.of<RtitAnimal>().to_string()
+    return reflect.Type.of<RtitAnimal>().to_string()
 }
 test "reflect_type_of_interface_to_string" {
     assert.equal(rtit_main(), "interfaces.RtitAnimal")
@@ -865,7 +865,7 @@ class RitfDog {
     }
 }
 function ritf_main() -> bool {
-    return type.of<RitfDog>().implements(type.of<RitfAnimal>())
+    return reflect.Type.of<RitfDog>().implements(reflect.Type.of<RitfAnimal>())
 }
 test "reflect_implements_true_for_implementor" {
     assert.is_true(ritf_main())
@@ -879,7 +879,7 @@ class RiffRock {
     mass: int
 }
 function riff_main() -> bool {
-    return type.of<RiffRock>().implements(type.of<RiffAnimal>())
+    return reflect.Type.of<RiffRock>().implements(reflect.Type.of<RiffAnimal>())
 }
 test "reflect_implements_false_for_non_implementor" {
     assert.is_true(riff_main() == false)
@@ -895,8 +895,8 @@ class RibiDog {
     }
 }
 function ribi_main() -> bool {
-    let direct = type.of<RibiDog>().implements(type.of<RibiAnimal>())
-    let reverse = type.of<RibiAnimal>().implemented_by(type.of<RibiDog>())
+    let direct = reflect.Type.of<RibiDog>().implements(reflect.Type.of<RibiAnimal>())
+    let reverse = reflect.Type.of<RibiAnimal>().implemented_by(reflect.Type.of<RibiDog>())
     return direct == reverse
 }
 test "reflect_implemented_by_inverse_runtime" {
@@ -916,7 +916,7 @@ class RitvEmployee {
     }
 }
 function ritv_main() -> bool {
-    return type.of<RitvEmployee>().implements(type.of<RitvNamed>())
+    return reflect.Type.of<RitvEmployee>().implements(reflect.Type.of<RitvNamed>())
 }
 test "reflect_implements_transitive_via_requires" {
     assert.is_true(ritv_main())
@@ -932,7 +932,7 @@ class RiigDog {
     }
 }
 function riig_is_animal<T>() -> bool {
-    return type.of<T>().implements(type.of<RiigAnimal>())
+    return reflect.Type.of<T>().implements(reflect.Type.of<RiigAnimal>())
 }
 function riig_main() -> bool {
     return riig_is_animal<RiigDog>() && riig_is_animal<int>() == false
@@ -946,7 +946,7 @@ interface RidnAnimal {
     function speak(self) -> string throws never
 }
 function ridn_main() -> bool {
-    return type.of<RidnAnimal>().implements(type.of<RidnAnimal>())
+    return reflect.Type.of<RidnAnimal>().implements(reflect.Type.of<RidnAnimal>())
 }
 test "reflect_interface_does_not_implement_itself" {
     assert.is_true(ridn_main() == false)
@@ -1758,8 +1758,8 @@ implements OobvAnimal for OobvDog {
     function speak(self) -> string { return "woof" }
 }
 function oobv_main() -> bool {
-    return type.of<OobvDog>().implements(type.of<OobvAnimal>())
-        && type.of<OobvAnimal>().implemented_by(type.of<OobvDog>())
+    return reflect.Type.of<OobvDog>().implements(reflect.Type.of<OobvAnimal>())
+        && reflect.Type.of<OobvAnimal>().implemented_by(reflect.Type.of<OobvDog>())
 }
 test "out_of_body_implements_is_visible_to_reflection_registry" {
     assert.is_true(oobv_main())
@@ -1836,7 +1836,7 @@ class GoopBox<T> {
 }
 implements<T> GoopDescriber<T> for GoopBox<T> {
     function describe<U>(self, value: U) -> string {
-        return type.of<T>().to_string() + ":" + type.of<U>().to_string()
+        return reflect.Type.of<T>().to_string() + ":" + reflect.Type.of<U>().to_string()
     }
 }
 function goop_main() -> string {
