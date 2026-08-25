@@ -591,7 +591,7 @@ function run_eval(dir: string = "eval") -> null {
             ?? baml.sys.panic("no ground truth for issue " + issue_number.to_string());
         let reference = truth.reference_repro ?? "";
 
-        let fb = baml.json.from_string<Feedback>(baml.fs.read("eval/feedback/" + fid + ".json"));
+        let fb = baml.json.from_string<Feedback>(baml.fs.read(dir + "/feedback/" + fid + ".json"));
         let repro = retry<Repro>(3, () -> Repro throws unknown {
             extract_repro(fb)
         });
@@ -657,7 +657,7 @@ function run_enrichment_eval(dir: string = "eval") -> null {
         let truth = gt.issues.get(issue_number.to_string())
             ?? baml.sys.panic("no ground truth for issue " + issue_number.to_string());
 
-        let fb = baml.json.from_string<Feedback>(baml.fs.read("eval/feedback/" + fid + ".json"));
+        let fb = baml.json.from_string<Feedback>(baml.fs.read(dir + "/feedback/" + fid + ".json"));
         let stub_repro = Repro {
             files: {},
             command: "baml run main.baml",
