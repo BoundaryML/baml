@@ -969,10 +969,14 @@ class baml.http.Response$stream {
 }
 class baml.http.SseStream {
   url: string
+  status_code: int
+  headers: map<string, string>
   _handle: $rust_type
 }
 class baml.http.SseStream$stream {
   url: string | null
+  status_code: int | null
+  headers: map<string, string>
   _handle: $rust_type
 }
 function baml.http._fetch(url: string, timeout_nanos: bigint) -> baml.http.Response  [builtin]

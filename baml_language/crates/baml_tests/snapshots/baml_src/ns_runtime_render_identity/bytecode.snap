@@ -62,7 +62,7 @@ function runtime_render_identity.$init_test_ns_runtime_render_identity_runtime_r
     return
 }
 
-function runtime_render_identity.Render(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> #0 {
+function runtime_render_identity.Render(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> #0 {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -155,7 +155,7 @@ function runtime_render_identity.Render$spec() -> ai.FunctionSpec<#0> {
     return
 }
 
-function runtime_render_identity.Render$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<#0 | null, #0> {
+function runtime_render_identity.Render$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<#0 | null, #0> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -183,7 +183,7 @@ function runtime_render_identity.Render$stream(client: ai.stream.StreamingClient
     return
 }
 
-function runtime_render_identity.RenderPair(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1> {
+function runtime_render_identity.RenderPair(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -280,7 +280,7 @@ function runtime_render_identity.RenderPair$spec() -> ai.FunctionSpec<runtime_re
     return
 }
 
-function runtime_render_identity.RenderPair$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<runtime_render_identity.BoxRec$stream<#0> | runtime_render_identity.BoxRec$stream<#1> | null, runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>> {
+function runtime_render_identity.RenderPair$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<runtime_render_identity.BoxRec$stream<#0> | runtime_render_identity.BoxRec$stream<#1> | null, runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>> {
     load_var client
     load_const <omitted>
     cmp_op ==

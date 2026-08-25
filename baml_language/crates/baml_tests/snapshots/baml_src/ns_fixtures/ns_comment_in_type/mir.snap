@@ -2,13 +2,13 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 === MIR2 ===
-fn user.fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string {
+fn user.fixtures.comment_in_type.FunctionWithComments(a: string, b: int, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // a // param
     let _2: int // b // param
     let _3: null | ai.Client // client // param
-    let _4: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _5: bool
     let _6: bool
     let _7: ai.RunResult<string>
@@ -225,13 +225,13 @@ fn .<lambda(FunctionWithComments$spec, 0)>( __spec_output_format: string) -> ai.
     }
 }
 
-fn user.fixtures.comment_in_type.FunctionWithComments$stream(a: string, b: int, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.comment_in_type.FunctionWithComments$stream(a: string, b: int, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: string // a // param
     let _2: int // b // param
     let _3: null | ai.stream.StreamingClient // client // param
-    let _4: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _5: bool
     let _6: bool
     let _7: ai.FunctionSpec<string>
@@ -273,11 +273,11 @@ fn user.fixtures.comment_in_type.FunctionWithComments$stream(a: string, b: int, 
     }
 }
 
-fn user.fixtures.comment_in_type.CommentAfterArrow(client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string {
+fn user.fixtures.comment_in_type.CommentAfterArrow(client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: null | ai.Client // client // param
-    let _2: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _2: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _3: bool
     let _4: bool
     let _5: ai.RunResult<string>
@@ -488,11 +488,11 @@ fn .<lambda(CommentAfterArrow$spec, 0)>( __spec_output_format: string) -> ai.Pro
     }
 }
 
-fn user.fixtures.comment_in_type.CommentAfterArrow$stream(client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.comment_in_type.CommentAfterArrow$stream(client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: null | ai.stream.StreamingClient // client // param
-    let _2: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _2: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _3: bool
     let _4: bool
     let _5: ai.FunctionSpec<string>

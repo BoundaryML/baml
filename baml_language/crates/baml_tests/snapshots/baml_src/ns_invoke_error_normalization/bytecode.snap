@@ -85,7 +85,7 @@ function invoke_error_normalization.TimeoutInvokeClient.ai.Client.render(self: i
     return
 }
 
-function invoke_error_normalization.TimeoutSpec(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function invoke_error_normalization.TimeoutSpec(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -176,6 +176,7 @@ function invoke_error_normalization.TimeoutSpec$spec() -> ai.FunctionSpec<string
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     store_var _5
     load_const "TimeoutSpec"
@@ -189,7 +190,7 @@ function invoke_error_normalization.TimeoutSpec$spec() -> ai.FunctionSpec<string
     return
 }
 
-function invoke_error_normalization.TimeoutSpec$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function invoke_error_normalization.TimeoutSpec$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==

@@ -36,12 +36,12 @@ fn user.fixtures.llm_spec_mode.more_tools() -> ai.tools.Tool[] {
     }
 }
 
-fn user.fixtures.llm_spec_mode.PlainChat(q: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string {
+fn user.fixtures.llm_spec_mode.PlainChat(q: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // q // param
     let _2: null | ai.Client // client // param
-    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
     let _6: ai.RunResult<string>
@@ -193,7 +193,7 @@ fn user.fixtures.llm_spec_mode.PlainChat$spec(q: string) -> ai.FunctionSpec<stri
     }
 
     bb1: {
-        _6 = call const fn openai.ResponsesClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
+        _6 = call const fn openai.ResponsesClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {
@@ -304,12 +304,12 @@ fn .<lambda(PlainChat$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     }
 }
 
-fn user.fixtures.llm_spec_mode.PlainChat$stream(q: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.llm_spec_mode.PlainChat$stream(q: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: string // q // param
     let _2: null | ai.stream.StreamingClient // client // param
-    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
     let _6: ai.FunctionSpec<string>
@@ -351,12 +351,12 @@ fn user.fixtures.llm_spec_mode.PlainChat$stream(q: string, client: null | ai.str
     }
 }
 
-fn user.fixtures.llm_spec_mode.SpecAgent(q: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> fixtures.llm_spec_mode.Answer {
+fn user.fixtures.llm_spec_mode.SpecAgent(q: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> fixtures.llm_spec_mode.Answer {
     // Locals:
     let _0: fixtures.llm_spec_mode.Answer // _0 // return
     let _1: string // q // param
     let _2: null | ai.Client // client // param
-    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
     let _6: ai.RunResult<fixtures.llm_spec_mode.Answer>
@@ -513,7 +513,7 @@ fn user.fixtures.llm_spec_mode.SpecAgent$spec(q: string) -> ai.FunctionSpec<fixt
     }
 
     bb2: {
-        _7 = call const fn openai.ResponsesClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
+        _7 = call const fn openai.ResponsesClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -621,12 +621,12 @@ fn .<lambda(SpecAgent$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     }
 }
 
-fn user.fixtures.llm_spec_mode.NamedTools(q: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> fixtures.llm_spec_mode.Answer {
+fn user.fixtures.llm_spec_mode.NamedTools(q: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> fixtures.llm_spec_mode.Answer {
     // Locals:
     let _0: fixtures.llm_spec_mode.Answer // _0 // return
     let _1: string // q // param
     let _2: null | ai.Client // client // param
-    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
     let _6: ai.RunResult<fixtures.llm_spec_mode.Answer>
@@ -781,7 +781,7 @@ fn user.fixtures.llm_spec_mode.NamedTools$spec(q: string) -> ai.FunctionSpec<fix
     }
 
     bb2: {
-        _6 = call const fn anthropic.AnthropicClient.new(const "claude-haiku-4-5", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
+        _6 = call const fn anthropic.AnthropicClient.new(const "claude-haiku-4-5", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {

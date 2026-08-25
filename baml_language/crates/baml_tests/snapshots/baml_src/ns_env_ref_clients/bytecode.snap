@@ -155,7 +155,7 @@ function env_ref_clients.$init_test_ns_env_ref_clients_env_ref_clients(registry:
     return
 }
 
-function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function env_ref_clients.EnvRefDynamicEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -264,7 +264,7 @@ function env_ref_clients.EnvRefDynamicEcho$spec(question: string) -> ai.Function
     return
 }
 
-function env_ref_clients.EnvRefDynamicEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.EnvRefDynamicEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -292,7 +292,7 @@ function env_ref_clients.EnvRefDynamicEcho$stream(question: string, client: ai.s
     return
 }
 
-function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function env_ref_clients.EnvRefEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -389,6 +389,7 @@ function env_ref_clients.EnvRefEcho$spec(question: string) -> ai.FunctionSpec<st
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     store_var _6
     load_const "EnvRefEcho"
@@ -405,7 +406,7 @@ function env_ref_clients.EnvRefEcho$spec(question: string) -> ai.FunctionSpec<st
     return
 }
 
-function env_ref_clients.EnvRefEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.EnvRefEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -433,7 +434,7 @@ function env_ref_clients.EnvRefEcho$stream(question: string, client: ai.stream.S
     return
 }
 
-function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function env_ref_clients.EnvRefResolvedEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -532,7 +533,7 @@ function env_ref_clients.EnvRefResolvedEcho$spec(question: string) -> ai.Functio
     return
 }
 
-function env_ref_clients.EnvRefResolvedEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.EnvRefResolvedEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -560,7 +561,7 @@ function env_ref_clients.EnvRefResolvedEcho$stream(question: string, client: ai.
     return
 }
 
-function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function env_ref_clients.LiveEnvRefEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -658,7 +659,7 @@ function env_ref_clients.LiveEnvRefEcho$spec(question: string) -> ai.FunctionSpe
     return
 }
 
-function env_ref_clients.LiveEnvRefEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.LiveEnvRefEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -686,7 +687,7 @@ function env_ref_clients.LiveEnvRefEcho$stream(question: string, client: ai.stre
     return
 }
 
-function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function env_ref_clients.LiveEnvRefFallbackEcho(question: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -795,7 +796,7 @@ function env_ref_clients.LiveEnvRefFallbackEcho$spec(question: string) -> ai.Fun
     return
 }
 
-function env_ref_clients.LiveEnvRefFallbackEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_clients.LiveEnvRefFallbackEcho$stream(question: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -1020,6 +1021,7 @@ function env_ref_clients.env_ref_keeps_the_secret_out_of_the_client() -> string 
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     store_var cl
     load_type openai.ResponsesClient
@@ -1126,6 +1128,7 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     call openai.ResponsesClient.resolved_api_key
     store_var _2
@@ -1134,6 +1137,7 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     store_var _8
     load_const "m"
     load_var _8
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -1174,6 +1178,7 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call openai.ImageClient.new
     call openai.ImageClient.resolved_api_key
     store_var _10
@@ -1183,6 +1188,7 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     load_const <omitted>
     load_const "sk-explicit"
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -1215,6 +1221,7 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call openai.OpenRouterClient.new
     call openai.OpenRouterClient.resolved_api_key
     store_var_load_var _18
@@ -1238,6 +1245,7 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call openai.OllamaClient.new
     call openai.OllamaClient.resolved_api_key
     store_var_load_var _23
@@ -1253,6 +1261,7 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const "m"
     load_const <omitted>
     load_const "sk-explicit"
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -1290,11 +1299,13 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call anthropic.AnthropicClient.new
     call anthropic.AnthropicClient.resolved_api_key
     store_var _32
     load_const "m"
     load_const "sk-explicit"
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -1328,6 +1339,7 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call google.VertexClient.new
     call google.VertexClient.resolved_api_key
     store_var_load_var _37
@@ -1342,6 +1354,7 @@ function env_ref_clients.explicit_credential_wins_per_client_family() -> string 
     store_var _36
     load_const "m"
     load_const "sk-explicit"
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -1618,6 +1631,7 @@ function env_ref_clients.resolve_of_a_client_value_is_identity() -> string {
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     store_var inner
     load_var inner
@@ -1789,6 +1803,7 @@ function env_ref_clients.unset_base_url_is_the_same_configuration_error() -> str
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call openai.GenericClient.new
     call openai.GenericClient.resolved_base_url
     jump L2
@@ -1815,6 +1830,7 @@ function env_ref_clients.unset_ref_base_url_is_a_configuration_error() -> string
     store_var _2
     load_const "m"
     load_var _2
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>

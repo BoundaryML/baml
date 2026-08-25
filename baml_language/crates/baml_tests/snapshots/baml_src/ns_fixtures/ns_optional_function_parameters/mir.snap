@@ -232,14 +232,14 @@ fn user.fixtures.optional_function_parameters.HostEntry(query: string, max_resul
     }
 }
 
-fn user.fixtures.optional_function_parameters.AskDocs(query: string, max_results: int, filter: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string {
+fn user.fixtures.optional_function_parameters.AskDocs(query: string, max_results: int, filter: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // query // param
     let _2: int // max_results // param
     let _3: string // filter // param
     let _4: null | ai.Client // client // param
-    let _5: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _5: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _6: bool
     let _7: bool
     let _8: ai.RunResult<string>
@@ -527,14 +527,14 @@ fn .<lambda(AskDocs$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     }
 }
 
-fn user.fixtures.optional_function_parameters.AskDocs$stream(query: string, max_results: int, filter: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.optional_function_parameters.AskDocs$stream(query: string, max_results: int, filter: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: string // query // param
     let _2: int // max_results // param
     let _3: string // filter // param
     let _4: null | ai.stream.StreamingClient // client // param
-    let _5: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _5: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _6: bool
     let _7: bool
     let _8: ai.FunctionSpec<string>

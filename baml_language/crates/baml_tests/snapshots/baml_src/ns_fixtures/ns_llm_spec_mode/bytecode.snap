@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.llm_spec_mode.NamedTools(q: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> fixtures.llm_spec_mode.Answer {
+function fixtures.llm_spec_mode.NamedTools(q: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> fixtures.llm_spec_mode.Answer {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -96,6 +96,7 @@ function fixtures.llm_spec_mode.NamedTools$spec(q: string) -> ai.FunctionSpec<fi
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call anthropic.AnthropicClient.new
     store_var _6
     load_const "NamedTools"
@@ -112,7 +113,7 @@ function fixtures.llm_spec_mode.NamedTools$spec(q: string) -> ai.FunctionSpec<fi
     return
 }
 
-function fixtures.llm_spec_mode.PlainChat(q: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function fixtures.llm_spec_mode.PlainChat(q: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -209,6 +210,7 @@ function fixtures.llm_spec_mode.PlainChat$spec(q: string) -> ai.FunctionSpec<str
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     store_var _6
     load_const "PlainChat"
@@ -225,7 +227,7 @@ function fixtures.llm_spec_mode.PlainChat$spec(q: string) -> ai.FunctionSpec<str
     return
 }
 
-function fixtures.llm_spec_mode.PlainChat$stream(q: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function fixtures.llm_spec_mode.PlainChat$stream(q: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -253,7 +255,7 @@ function fixtures.llm_spec_mode.PlainChat$stream(q: string, client: ai.stream.St
     return
 }
 
-function fixtures.llm_spec_mode.SpecAgent(q: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> fixtures.llm_spec_mode.Answer {
+function fixtures.llm_spec_mode.SpecAgent(q: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> fixtures.llm_spec_mode.Answer {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -340,6 +342,7 @@ function fixtures.llm_spec_mode.SpecAgent$spec(q: string) -> ai.FunctionSpec<fix
     call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-4o-mini"
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>

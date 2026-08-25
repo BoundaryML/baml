@@ -346,12 +346,12 @@ fn user.fixtures.anyfunction_reflect.typed_dispatch(name: string, args: map<stri
     }
 }
 
-fn user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> T {
+fn user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> T {
     // Locals:
     let _0: T // _0 // return
     let _1: string // input // param
     let _2: null | ai.Client // client // param
-    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
     let _6: ai.RunResult<T>
@@ -620,12 +620,12 @@ fn .<lambda(RuntimeClassify$spec, 0)>( __spec_output_format: string) -> ai.Promp
     }
 }
 
-fn user.fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<null | T, T> {
+fn user.fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<null | T, T> {
     // Locals:
     let _0: ai.stream.Stream<null | T, T> // _0 // return
     let _1: string // input // param
     let _2: null | ai.stream.StreamingClient // client // param
-    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
     let _4: bool
     let _5: bool
     let _6: ai.FunctionSpec<T>

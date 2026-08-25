@@ -90,7 +90,7 @@ function streaming_composite_clients.$init_test_ns_streaming_composite_clients_s
     return
 }
 
-function streaming_composite_clients.CompositeStreamSpec(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function streaming_composite_clients.CompositeStreamSpec(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -181,6 +181,7 @@ function streaming_composite_clients.CompositeStreamSpec$spec() -> ai.FunctionSp
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     store_var _5
     load_const "CompositeStreamSpec"
@@ -194,7 +195,7 @@ function streaming_composite_clients.CompositeStreamSpec$spec() -> ai.FunctionSp
     return
 }
 
-function streaming_composite_clients.CompositeStreamSpec$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function streaming_composite_clients.CompositeStreamSpec$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -251,7 +252,9 @@ function streaming_composite_clients.NonStreamingClient.ai.Client.invoke(self: s
     load_const ai.content.StopReason.Complete
     alloc_variant ai.content.StopReason
     load_const null
-    init_instance ai.ModelTurn .content, .stop_reason, .usage
+    load_type ai.events.LLMCall
+    alloc_array 0
+    init_instance ai.ModelTurn .content, .stop_reason, .usage, .calls
     return
 }
 
@@ -285,15 +288,17 @@ function streaming_composite_clients.ScriptedStreamClient.ai.Client.invoke(self:
     load_field .chunks
     load_const ""
     call baml.Array.join
-    store_var _5
-    load_var _5
+    store_var _6
+    load_var _6
     init_instance ai.content.Text .text
     load_type ai.content.Text | ai.content.Reasoning | ai.content.ToolUse | ai.content.Media
     alloc_array 1
     load_const ai.content.StopReason.Complete
     alloc_variant ai.content.StopReason
     load_const null
-    init_instance ai.ModelTurn .content, .stop_reason, .usage
+    load_type ai.events.LLMCall
+    alloc_array 0
+    init_instance ai.ModelTurn .content, .stop_reason, .usage, .calls
     return
 }
 
@@ -473,7 +478,8 @@ function streaming_composite_clients.ScriptedStreamClient.ai.stream.StreamingCli
     load_field .client_id
     load_const "failed while opening"
     load_const null
-    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    load_const null
+    init_instance ai.errors.NetworkFailure .provider, .detail, .status_code, .raw_body
     throw
 }
 
@@ -498,7 +504,8 @@ function streaming_composite_clients.SyntheticInvokeClient.ai.Client.invoke(self
     load_const "synthetic-invoke"
     load_const "retryable failure"
     load_const null
-    init_instance ai.errors.NetworkFailure .provider, .detail, .raw_body
+    load_const null
+    init_instance ai.errors.NetworkFailure .provider, .detail, .status_code, .raw_body
     throw
 
   L1:
@@ -533,7 +540,7 @@ function streaming_composite_clients.composite_input() -> ai.ModelTurnInput {
     call ai.FunctionSpec.output_type
     store_var _7
     load_var _2
-    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced
+    load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     alloc_array 0
     init_instance ai.Journal .log
     load_var2 3 4

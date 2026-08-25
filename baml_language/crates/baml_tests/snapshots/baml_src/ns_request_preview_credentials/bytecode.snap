@@ -41,7 +41,7 @@ function request_preview_credentials.$init_test_ns_request_preview_credentials_r
     return
 }
 
-function request_preview_credentials.PreviewShape(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function request_preview_credentials.PreviewShape(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -132,6 +132,7 @@ function request_preview_credentials.PreviewShape$spec() -> ai.FunctionSpec<stri
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     store_var _5
     load_const "PreviewShape"
@@ -145,7 +146,7 @@ function request_preview_credentials.PreviewShape$spec() -> ai.FunctionSpec<stri
     return
 }
 
-function request_preview_credentials.PreviewShape$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function request_preview_credentials.PreviewShape$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==

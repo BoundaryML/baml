@@ -13,7 +13,7 @@ function fixtures.testset_vibes_nested.$init_test_ns_fixtures_ns_testset_vibes_n
     return
 }
 
-function fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> fixtures.testset_vibes_nested.Sentiment {
+function fixtures.testset_vibes_nested.ClassifySentiment(text: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> fixtures.testset_vibes_nested.Sentiment {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -111,7 +111,7 @@ function fixtures.testset_vibes_nested.ClassifySentiment$spec(text: string) -> a
     return
 }
 
-function fixtures.testset_vibes_nested.ClassifySentiment$stream(text: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<fixtures.testset_vibes_nested.Sentiment$stream | null, fixtures.testset_vibes_nested.Sentiment> {
+function fixtures.testset_vibes_nested.ClassifySentiment$stream(text: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<fixtures.testset_vibes_nested.Sentiment$stream | null, fixtures.testset_vibes_nested.Sentiment> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -139,7 +139,7 @@ function fixtures.testset_vibes_nested.ClassifySentiment$stream(text: string, cl
     return
 }
 
-function fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string {
+function fixtures.testset_vibes_nested.ClassifySentiment2(text: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -237,7 +237,7 @@ function fixtures.testset_vibes_nested.ClassifySentiment2$spec(text: string) -> 
     return
 }
 
-function fixtures.testset_vibes_nested.ClassifySentiment2$stream(text: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
+function fixtures.testset_vibes_nested.ClassifySentiment2$stream(text: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -294,7 +294,7 @@ function fixtures.testset_vibes_nested.Foo() -> string | image {
     jump L0
 }
 
-function fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> string[] {
+function fixtures.testset_vibes_nested.GenerateTests(count: int, topic: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string[] {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -397,7 +397,7 @@ function fixtures.testset_vibes_nested.GenerateTests$spec(count: int, topic: str
     return
 }
 
-function fixtures.testset_vibes_nested.GenerateTests$stream(count: int, topic: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string[], string[]> {
+function fixtures.testset_vibes_nested.GenerateTests$stream(count: int, topic: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string[], string[]> {
     load_var client
     load_const <omitted>
     cmp_op ==
