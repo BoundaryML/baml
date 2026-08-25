@@ -185,6 +185,42 @@ impl std::fmt::Display for LParen {
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Comma {
+    pub token_span: TextRange,
+}
+impl Comma {
+    #[must_use]
+    pub const fn new(token_span: TextRange) -> Self {
+        Self { token_span }
+    }
+    #[must_use]
+    pub const fn new_from_span(token_span: TextRange) -> Self {
+        Self::new(token_span)
+    }
+}
+impl ValidatedToken for Comma {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for Comma {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::COMMA
+    }
+}
+impl FromCST for Comma {
+    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(element)?;
+        StrongAstError::assert_kind_token(&token, SyntaxKind::COMMA)?;
+        Ok(Self::new(token.text_range()))
+    }
+}
+impl std::fmt::Display for Comma {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(",")
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RParen {
     pub token_span: TextRange,
 }
@@ -437,6 +473,42 @@ impl std::fmt::Display for Class {
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Semicolon {
+    pub token_span: TextRange,
+}
+impl Semicolon {
+    #[must_use]
+    pub const fn new(token_span: TextRange) -> Self {
+        Self { token_span }
+    }
+    #[must_use]
+    pub const fn new_from_span(token_span: TextRange) -> Self {
+        Self::new(token_span)
+    }
+}
+impl ValidatedToken for Semicolon {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for Semicolon {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::SEMICOLON
+    }
+}
+impl FromCST for Semicolon {
+    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(element)?;
+        StrongAstError::assert_kind_token(&token, SyntaxKind::SEMICOLON)?;
+        Ok(Self::new(token.text_range()))
+    }
+}
+impl std::fmt::Display for Semicolon {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(";")
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Interface {
     pub token_span: TextRange,
 }
@@ -506,42 +578,6 @@ impl FromCST for Requires {
 impl std::fmt::Display for Requires {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("requires")
-    }
-}
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Comma {
-    pub token_span: TextRange,
-}
-impl Comma {
-    #[must_use]
-    pub const fn new(token_span: TextRange) -> Self {
-        Self { token_span }
-    }
-    #[must_use]
-    pub const fn new_from_span(token_span: TextRange) -> Self {
-        Self::new(token_span)
-    }
-}
-impl ValidatedToken for Comma {
-    fn span(&self) -> TextRange {
-        self.token_span
-    }
-}
-impl KnownKind for Comma {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::COMMA
-    }
-}
-impl FromCST for Comma {
-    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
-        let token = StrongAstError::assert_is_token(element)?;
-        StrongAstError::assert_kind_token(&token, SyntaxKind::COMMA)?;
-        Ok(Self::new(token.text_range()))
-    }
-}
-impl std::fmt::Display for Comma {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(",")
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -866,42 +902,6 @@ impl FromCST for Greater {
 impl std::fmt::Display for Greater {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(">")
-    }
-}
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Semicolon {
-    pub token_span: TextRange,
-}
-impl Semicolon {
-    #[must_use]
-    pub const fn new(token_span: TextRange) -> Self {
-        Self { token_span }
-    }
-    #[must_use]
-    pub const fn new_from_span(token_span: TextRange) -> Self {
-        Self::new(token_span)
-    }
-}
-impl ValidatedToken for Semicolon {
-    fn span(&self) -> TextRange {
-        self.token_span
-    }
-}
-impl KnownKind for Semicolon {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::SEMICOLON
-    }
-}
-impl FromCST for Semicolon {
-    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
-        let token = StrongAstError::assert_is_token(element)?;
-        StrongAstError::assert_kind_token(&token, SyntaxKind::SEMICOLON)?;
-        Ok(Self::new(token.text_range()))
-    }
-}
-impl std::fmt::Display for Semicolon {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(";")
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

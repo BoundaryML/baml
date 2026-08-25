@@ -409,7 +409,6 @@ impl GeneratedTypeArgs {
         let open_angle = RawToken(args.less_token().expect("validated type arguments"));
         let close_angle = RawToken(args.greater_token().expect("validated type arguments"));
         let mut values = Vec::new();
-        let mut commas = Vec::new();
         for element in args
             .syntax()
             .children_with_tokens()
@@ -428,12 +427,10 @@ impl GeneratedTypeArgs {
                     }
                     _ => unreachable!("validated type argument node"),
                 },
-                rowan::NodeOrToken::Token(token) if token.kind() == SyntaxKind::COMMA => {
-                    commas.push(RawToken(token));
-                }
                 rowan::NodeOrToken::Token(_) => {}
             }
         }
+        let commas = args.comma_tokens().map(RawToken).collect();
         Self {
             open_angle,
             args: values,
@@ -575,7 +572,8 @@ mod tests {
             param
                 .ty()
                 .expect("validated parameter type")
-                .question_token()
+                .question_tokens()
+                .next()
                 .is_some()
         );
 

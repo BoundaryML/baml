@@ -126,6 +126,18 @@ impl ClassDef {
     pub fn implements_block(&self) -> AstChildren<ImplementsBlock> {
         support::children(&self.syntax)
     }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
+    }
+    pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
+    }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
     }
@@ -169,6 +181,18 @@ impl EnumDef {
     }
     pub fn enum_variant(&self) -> AstChildren<EnumVariant> {
         support::children(&self.syntax)
+    }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
+    }
+    pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -219,6 +243,18 @@ impl InterfaceDef {
     }
     pub fn field(&self) -> AstChildren<Field> {
         support::children(&self.syntax)
+    }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
+    }
+    pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -284,6 +320,18 @@ impl ImplementsFor {
     }
     pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
         support::children(&self.syntax)
+    }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
+    }
+    pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -716,6 +764,12 @@ impl GenericParamList {
     pub fn generic_param(&self) -> AstChildren<GenericParam> {
         support::children(&self.syntax)
     }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
+    }
     pub fn greater_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::GREATER)
     }
@@ -747,6 +801,12 @@ impl ParameterList {
     }
     pub fn parameter(&self) -> AstChildren<Parameter> {
         support::children(&self.syntax)
+    }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_PAREN)
@@ -801,14 +861,23 @@ impl TypeExpr {
     pub fn word_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::WORD)
     }
-    pub fn dot_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOT)
+    pub fn dot_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::DOT)
     }
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_PAREN)
     }
     pub fn function_type_param(&self) -> AstChildren<FunctionTypeParam> {
         support::children(&self.syntax)
+    }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_PAREN)
@@ -822,17 +891,29 @@ impl TypeExpr {
     pub fn throws_clause(&self) -> Option<ThrowsClause> {
         support::child(&self.syntax)
     }
-    pub fn l_bracket_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACKET)
+    pub fn l_bracket_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::L_BRACKET)
     }
-    pub fn r_bracket_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACKET)
+    pub fn r_bracket_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::R_BRACKET)
     }
-    pub fn question_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::QUESTION)
+    pub fn question_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::QUESTION)
     }
-    pub fn pipe_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::PIPE)
+    pub fn pipe_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::PIPE)
     }
     pub fn attribute(&self) -> AstChildren<Attribute> {
         support::children(&self.syntax)
@@ -1075,6 +1156,12 @@ impl BlockExpr {
     pub fn block_item(&self) -> AstChildren<BlockItem> {
         support::children(&self.syntax)
     }
+    pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
+    }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
     }
@@ -1163,6 +1250,18 @@ impl ImplementsBlock {
     pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
         support::children(&self.syntax)
     }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
+    }
+    pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
+    }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
     }
@@ -1195,8 +1294,11 @@ impl RequiresClause {
     pub fn type_expr(&self) -> Option<TypeExpr> {
         support::child(&self.syntax)
     }
-    pub fn comma_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COMMA)
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
     }
 }
 
@@ -1481,6 +1583,18 @@ impl ConfigBlock {
     pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
         support::children(&self.syntax)
     }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
+    }
+    pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
+    }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
     }
@@ -1617,6 +1731,12 @@ impl ConfigArray {
     pub fn config_block(&self) -> AstChildren<ConfigBlock> {
         support::children(&self.syntax)
     }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
+    }
     pub fn r_bracket_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACKET)
     }
@@ -1706,8 +1826,11 @@ impl GenericParamBounds {
     pub fn type_expr(&self) -> Option<TypeExpr> {
         support::child(&self.syntax)
     }
-    pub fn and_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::AND)
+    pub fn and_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::AND)
     }
 }
 
@@ -1740,6 +1863,12 @@ impl TypeArgs {
     }
     pub fn associated_type_decl(&self) -> AstChildren<AssociatedTypeDecl> {
         support::children(&self.syntax)
+    }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
     }
     pub fn greater_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::GREATER)
@@ -1808,6 +1937,12 @@ impl AttributeArgs {
     pub fn expr_node(&self) -> AstChildren<ExprNode> {
         support::children(&self.syntax)
     }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
+    }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_PAREN)
     }
@@ -1834,8 +1969,11 @@ impl AstNode for Error {
 }
 
 impl Error {
-    pub fn error_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::ERROR_TOKEN)
+    pub fn error_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::ERROR_TOKEN)
     }
 }
 
@@ -1934,11 +2072,17 @@ impl PathExpr {
     pub fn await_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::KW_AWAIT)
     }
-    pub fn dot_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOT)
+    pub fn dot_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::DOT)
     }
-    pub fn double_colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOUBLE_COLON)
+    pub fn double_colon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::DOUBLE_COLON)
     }
 }
 
@@ -2899,8 +3043,11 @@ impl SpawnExpr {
     pub fn expr_node(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
-    pub fn comma_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COMMA)
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
     }
     pub fn body(&self) -> Option<BlockExpr> {
         support::child(&self.syntax)
@@ -3013,8 +3160,17 @@ impl ForExpr {
     pub fn expr_node(&self) -> AstChildren<ExprNode> {
         support::children(&self.syntax)
     }
-    pub fn in_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_IN)
+    pub fn in_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::KW_IN)
+    }
+    pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_PAREN)
@@ -3057,6 +3213,12 @@ impl ObjectLiteral {
     pub fn spread_element(&self) -> AstChildren<SpreadElement> {
         support::children(&self.syntax)
     }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
+    }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
     }
@@ -3089,6 +3251,12 @@ impl ArrayLiteral {
     pub fn expr_node(&self) -> AstChildren<ExprNode> {
         support::children(&self.syntax)
     }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
+    }
     pub fn r_bracket_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACKET)
     }
@@ -3120,6 +3288,12 @@ impl MapLiteral {
     }
     pub fn object_field(&self) -> AstChildren<ObjectField> {
         support::children(&self.syntax)
+    }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -3474,6 +3648,12 @@ impl GenericArgs {
     pub fn unreflect_arg(&self) -> AstChildren<UnreflectArg> {
         support::children(&self.syntax)
     }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
+    }
     pub fn greater_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::GREATER)
     }
@@ -3583,6 +3763,12 @@ impl CallArgs {
     }
     pub fn call_arg(&self) -> AstChildren<CallArg> {
         support::children(&self.syntax)
+    }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_PAREN)
@@ -3884,8 +4070,11 @@ impl ChainPattern {
     pub fn pattern(&self) -> Option<Pattern> {
         support::child(&self.syntax)
     }
-    pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COLON)
+    pub fn colon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COLON)
     }
 }
 
@@ -3915,8 +4104,11 @@ impl UnionPattern {
             .children_with_tokens()
             .find(|element| !element.kind().is_trivia())
     }
-    pub fn pipe_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::PIPE)
+    pub fn pipe_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::PIPE)
     }
 }
 
@@ -4018,6 +4210,12 @@ impl ArrayPattern {
     }
     pub fn array_pattern_element(&self) -> AstChildren<ArrayPatternElement> {
         support::children(&self.syntax)
+    }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
     }
     pub fn r_bracket_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACKET)

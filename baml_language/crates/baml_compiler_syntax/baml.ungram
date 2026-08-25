@@ -36,7 +36,7 @@ FunctionDef =
 
 FunctionBodyKind = LlmFunctionBody | ExprFunctionBody
 
-ParameterList = '(' Parameter* ')'
+ParameterList = '(' (Parameter | ',')* ')'
 
 Parameter =
   name_token:('#word' | 'client')
@@ -66,7 +66,7 @@ ClassDef =
   'class'
   name_token:'#word'
   GenericParamList?
-  ('{' (Field | FunctionDef | ImplementsBlock | BlockAttribute)* '}')
+  ('{' (Field | FunctionDef | ImplementsBlock | BlockAttribute | ',' | ';')* '}')
 
 Field =
   BlockAttribute*
@@ -80,7 +80,7 @@ InterfaceDef =
   GenericParamList?
   RequiresClause?
   '{'
-  (MethodSig | AssociatedTypeDecl | Field | BlockAttribute)*
+  (MethodSig | AssociatedTypeDecl | Field | BlockAttribute | ',' | ';')*
   '}'
 
 RequiresClause = 'requires' TypeExpr (',' TypeExpr)* ','?
@@ -107,7 +107,7 @@ ImplementsBlock =
   ImplementsTarget
   RequiresClause?
   '{'
-  (FunctionDef | AssociatedTypeDecl | InterfaceFieldLink | Field | BlockAttribute)*
+  (FunctionDef | AssociatedTypeDecl | InterfaceFieldLink | Field | BlockAttribute | ',' | ';')*
   '}'
 
 ImplementsTarget = TypeExpr
@@ -125,7 +125,7 @@ ImplementsFor =
   ImplementsForTarget
   RequiresClause?
   '{'
-  (FunctionDef | AssociatedTypeDecl | InterfaceFieldLink | Field | BlockAttribute)*
+  (FunctionDef | AssociatedTypeDecl | InterfaceFieldLink | Field | BlockAttribute | ',' | ';')*
   '}'
 
 ImplementsForTarget = TypeExpr
@@ -136,7 +136,7 @@ EnumDef =
   name_token:'#word'
   GenericParamList?
   '{'
-  (EnumVariant | BlockAttribute)*
+  (EnumVariant | BlockAttribute | ',' | ';')*
   '}'
 
 EnumVariant = name_token:'#word' Attribute*
@@ -158,14 +158,14 @@ ClientValueDef =
   value:ExprNode
   ';'?
 
-ConfigBlock = '{' (ConfigItem | BlockAttribute)* '}'
+ConfigBlock = '{' (ConfigItem | BlockAttribute | ',' | ';')* '}'
 ConfigItem =
   (StringLiteral | key_token:('#word' | 'client' | 'retry_policy' | 'enum' | 'class'))
   ':'?
   (ConfigValue | ConfigBlock)
   Attribute*
 ConfigValue = (expr:ExprNode | config_array:ConfigArray | config_block:ConfigBlock)
-ConfigArray = '[' (ConfigValue | ConfigBlock)* ']'
+ConfigArray = '[' (ConfigValue | ConfigBlock | ',')* ']'
 
 TestDef = BlockAttribute* 'test' name_token:'#word' ConfigBlock
 RetryPolicyDef = BlockAttribute* 'retry_policy' name_token:'#word' ConfigBlock
@@ -185,7 +185,7 @@ TypeAliasDef =
   TypeExpr
   ';'?
 
-GenericParamList = '<' GenericParam* '>'
+GenericParamList = '<' (GenericParam | ',')* '>'
 GenericParam = name_token:'#word' GenericParamBounds?
 GenericParamBounds = 'extends' TypeExpr ('&' TypeExpr)*
 
@@ -198,7 +198,7 @@ TypeExpr =
   | ('-'? ('#bigint' | '#integer' | '#float'))
   | ('true' | 'false' | 'null')
   | ('#word' ('.' '#word')* TypeArgs?)
-  | ('(' FunctionTypeParam* ')' ('->' TypeExpr ThrowsClause?)?)
+  | ('(' (FunctionTypeParam | ',')* ')' ('->' TypeExpr ThrowsClause?)?)
   )
   (TypeArgs | '[' ']' | '?')*
   ('|' (
@@ -207,7 +207,7 @@ TypeExpr =
   | ('-'? ('#bigint' | '#integer' | '#float'))
   | ('true' | 'false' | 'null')
   | ('#word' ('.' '#word')* TypeArgs?)
-  | ('(' FunctionTypeParam* ')' ('->' TypeExpr ThrowsClause?)?)
+  | ('(' (FunctionTypeParam | ',')* ')' ('->' TypeExpr ThrowsClause?)?)
   ) (TypeArgs | '[' ']' | '?')*)*
   Attribute*
 
@@ -215,11 +215,11 @@ FunctionTypeParam =
   (name_token:('#word' | 'client') '?'? ':')?
   TypeExpr
 
-TypeArgs = '<' (TypeExpr | AssociatedTypeDecl)* '>'
+TypeArgs = '<' (TypeExpr | AssociatedTypeDecl | ',')* '>'
 
 Attribute = '@' name_token:'#word' AttributeArgs?
 BlockAttribute = '@@' name_token:'#word' AttributeArgs?
-AttributeArgs = '(' ExprNode* ')'
+AttributeArgs = '(' (ExprNode | ',')* ')'
 
 AnyElement = Error
 
@@ -264,7 +264,7 @@ ExprNode =
 
 LiteralExpr = '#bigint' | '#integer' | '#float' | 'true' | 'false' | 'null'
 
-BlockExpr = '{' BlockItem* '}'
+BlockExpr = '{' (BlockItem | ';')* '}'
 BlockItem =
   ExprNode
 | HeaderComment
@@ -376,7 +376,7 @@ SpawnExpr = 'spawn' name:ExprNode? ('with' ExprNode (',' ExprNode)*)? body:Block
 AwaitExpr = 'await' value:ExprNode
 LambdaExpr = GenericParamList? ParameterList ('=>' | '->') TypeExpr? ThrowsClause? body:BlockExpr
 
-ForExpr = 'for' '('? (LetStmt | ExprNode | 'in')* ')'? body:BlockExpr
+ForExpr = 'for' '('? (LetStmt | ExprNode | 'in' | ';')* ')'? body:BlockExpr
 
 WhileStmt = 'while' condition:ExprNode body:BlockExpr
 WhileLetStmt = 'while' ('let' | 'const')? Pattern '=' scrutinee:ExprNode body:BlockExpr
@@ -405,23 +405,23 @@ UnionPattern = AnyElement ('|' AnyElement)*
 BindingPattern = ('let' | 'const') name_token:'#word' (':' Pattern)?
 DestructurePattern = ('let' | 'const')? AnyElement*
 FieldPattern = name_token:'#word' (':' Pattern)?
-ArrayPattern = '[' ArrayPatternElement* ']' (':' TypeExpr)?
+ArrayPattern = '[' (ArrayPatternElement | ',')* ']' (':' TypeExpr)?
 ArrayPatternElement = '..'? Pattern?
 TypePattern = TypeExpr
 UnreflectPattern = name_token:'#word' '(' value:AnyElement ')'
 ParenPattern = '(' Pattern ')'
 WildcardPattern = ('let' | 'const')? name_token:'#word'
 
-CallArgs = '(' CallArg* ')'
+CallArgs = '(' (CallArg | ',')* ')'
 CallArg = (name_token:('#word' | 'client') '=')? value:ExprNode
-GenericArgs = '<' (TypeExpr | UnreflectArg)* '>'
+GenericArgs = '<' (TypeExpr | UnreflectArg | ',')* '>'
 UnreflectArg = name_token:'#word' '(' value:ExprNode ')'
 
-ObjectLiteral = constructor:PathExpr? '{' (ObjectField | SpreadElement)* '}'
+ObjectLiteral = constructor:PathExpr? '{' (ObjectField | SpreadElement | ',')* '}'
 ObjectField = (key_token:('#word' | 'client') | StringLiteral) (':' value:ExprNode)?
 SpreadElement = '...' value:ExprNode
-ArrayLiteral = '[' ExprNode* ']'
-MapLiteral = '{' ObjectField* '}'
+ArrayLiteral = '[' (ExprNode | ',')* ']'
+MapLiteral = '{' (ObjectField | ',')* '}'
 
 ByteStringLiteral = AnyElement*
 UnquotedString = AnyElement*

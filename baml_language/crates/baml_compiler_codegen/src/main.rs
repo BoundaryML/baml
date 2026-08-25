@@ -433,10 +433,7 @@ fn generate_schema(grammar: &Grammar) -> Result<String> {
              };\n\
              apply_rule(schema.rule, input, elements, initial)\n\
                  .into_iter()\n\
-                 .find(|state| input.iter().all(|element| {\n\
-                     state.matched.contains(element)\n\
-                         || matches!(element_kind(elements, *element), SyntaxKind::COMMA | SyntaxKind::SEMICOLON)\n\
-                 }))\n\
+                 .find(|state| input.iter().all(|element| state.matched.contains(element)))\n\
                  .map(|state| state.captures)\n\
                  .ok_or(StrongAstError::InvalidStructure {\n\
                      kind: syntax.kind(),\n\
@@ -490,6 +487,14 @@ fn generate_schema(grammar: &Grammar) -> Result<String> {
                     "    pub fn {}(&self) -> Option<Validated<'tree, ast::{}>> {{ self.child({slot}) }}",
                     field.name, field.ty
                 )?,
+                Field::Token(field) if matches!(field.cardinality, Cardinality::Many) => {
+                    let method = field.name.replace("_token", "_tokens");
+                    writeln!(
+                        source,
+                        "    pub fn {method}(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {{ self.elements({slot}).filter_map(|element| element.token().filter(|token| token.kind() == SyntaxKind::{})) }}",
+                        field.kind
+                    )?;
+                }
                 Field::Token(field) if matches!(field.cardinality, Cardinality::Required) => {
                     writeln!(
                         source,
@@ -802,6 +807,14 @@ fn generate_node(node: &NodeDef, source: &mut String) -> Result<()> {
                             field.name, field.ty
                         )?;
                     }
+                }
+                Field::Token(field) if matches!(field.cardinality, Cardinality::Many) => {
+                    let method = field.name.replace("_token", "_tokens");
+                    writeln!(
+                        source,
+                        "    pub fn {method}(&self) -> impl Iterator<Item = SyntaxToken> + '_ {{ self.syntax.children_with_tokens().filter_map(rowan::NodeOrToken::into_token).filter(|token| token.kind() == SyntaxKind::{}) }}",
+                        field.kind
+                    )?;
                 }
                 Field::Token(field) => writeln!(
                     source,
