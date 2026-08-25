@@ -337,9 +337,11 @@ application-owned helpers but must not replace generated required properties
 or codecs.
 
 The repository's `Baml.Bridge.DocumentationConsumer` compiles these public
-patterns with nullable analysis and warnings as errors. Product verification
-runs that consumer from the exact assembled package, and the release workflow
-runs it again from a clean public NuGet cache after publication.
+patterns with nullable analysis and warnings as errors during normal C# CI.
+Product verification restores, publishes, and runs
+`Baml.Bridge.NuGetPackageSmoke` against the exact assembled package, and the
+release workflow runs that smoke again from a clean public NuGet cache after
+publication.
 
 ## Publishing and trimming
 
