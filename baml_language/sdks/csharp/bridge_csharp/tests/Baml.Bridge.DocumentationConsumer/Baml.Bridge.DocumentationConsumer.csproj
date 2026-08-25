@@ -11,7 +11,7 @@
     <BamlBridgePackageVersion
       Condition="'$(BamlBridgePackageVersion)' == ''">0.15.0</BamlBridgePackageVersion>
     <BamlGeneratedSourceRoot
-      Condition="'$(BamlGeneratedSourceRoot)' == ''">../../../../../sdk_tests/crates/csharp/primitive_slice/baml_sdk</BamlGeneratedSourceRoot>
+      Condition="'$(BamlGeneratedSourceRoot)' == ''">../../../../../sdk_tests/crates/csharp/basic_calls/baml_sdk</BamlGeneratedSourceRoot>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(BamlBridgeProjectReference)' != ''">

@@ -13,7 +13,7 @@ documentation_project="$test_dir/../Baml.Bridge.DocumentationConsumer/Baml.Bridg
 generated_contract_project="$test_dir/../Baml.Bridge.GeneratedContract.Tests/Baml.Bridge.GeneratedContract.Tests.csproj"
 emitter_project="$test_dir/../../tools/Baml.BytecodeCarrierEmitter/Baml.BytecodeCarrierEmitter.csproj"
 runtime_project="$test_dir/../../src/Baml.Bridge.csproj"
-generated_source_root="$repo_root/baml_language/sdk_tests/crates/csharp/primitive_slice/baml_sdk"
+generated_source_root="$repo_root/baml_language/sdk_tests/crates/csharp/basic_calls/baml_sdk"
 
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "Baml.Bridge.Tests native loader matrix currently requires Linux." >&2
