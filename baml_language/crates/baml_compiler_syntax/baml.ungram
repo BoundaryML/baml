@@ -392,6 +392,19 @@ Pattern = PatternKind
 PatternKind =
   ChainPattern
 | UnionPattern
+| PatternAtom
+
+PatternAtom =
+  BindingPattern
+| DestructurePattern
+| ArrayPattern
+| TypePattern
+| UnreflectPattern
+| ParenPattern
+| WildcardPattern
+
+ChainPatternItem =
+  UnionPattern
 | BindingPattern
 | DestructurePattern
 | ArrayPattern
@@ -400,15 +413,15 @@ PatternKind =
 | ParenPattern
 | WildcardPattern
 
-ChainPattern = Pattern (':' Pattern)*
-UnionPattern = AnyElement ('|' AnyElement)*
+ChainPattern = first:ChainPatternItem (':' rest:ChainPatternItem)*
+UnionPattern = first:PatternAtom ('|' rest:PatternAtom)*
 BindingPattern = ('let' | 'const') name_token:'#word' (':' Pattern)?
-DestructurePattern = ('let' | 'const')? AnyElement*
+DestructurePattern = ('let' | 'const')? first_token:'#word' ('.' path_token:'#word')* (GenericArgs | TypeArgs)? '{' (FieldPattern | ',')* '}'
 FieldPattern = name_token:'#word' (':' Pattern)?
 ArrayPattern = '[' (ArrayPatternElement | ',')* ']' (':' TypeExpr)?
 ArrayPatternElement = '..'? Pattern?
 TypePattern = TypeExpr
-UnreflectPattern = name_token:'#word' '(' value:AnyElement ')'
+UnreflectPattern = name_token:'#word' '(' value:ExprNode ')'
 ParenPattern = '(' Pattern ')'
 WildcardPattern = ('let' | 'const')? name_token:'#word'
 

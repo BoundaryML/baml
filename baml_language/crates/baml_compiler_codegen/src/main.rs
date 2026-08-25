@@ -277,7 +277,7 @@ fn generate_schema(grammar: &Grammar) -> Result<String> {
          use crate::{SyntaxKind, SyntaxNode, ast};\n\n\
          use super::{\n\
              StrongAstError,\n\
-             arena::{ElementId, ElementRecord, Validated, ValidatedChildren, ValidatedElement, ValidatedSyntaxToken, element_is_node, element_kind},\n\
+             arena::{ElementId, ElementRecord, Validated, ValidatedChildren, ValidatedSyntaxToken, element_is_node, element_kind},\n\
          };\n\n\
          #[derive(Debug)]\n\
          enum SchemaRule {\n\
@@ -466,7 +466,7 @@ fn generate_schema(grammar: &Grammar) -> Result<String> {
                 Field::Node(field) if field.ty == "AnyElement" => {
                     writeln!(
                         source,
-                        "    pub fn {}(&self) -> Option<ValidatedElement<'tree>> {{ self.element({slot}) }}",
+                        "    pub fn {}(&self) -> Option<super::arena::ValidatedElement<'tree>> {{ self.elements({slot}).next() }}",
                         field.name
                     )?;
                 }

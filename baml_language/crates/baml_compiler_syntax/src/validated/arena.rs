@@ -294,10 +294,6 @@ where
         self.children(slot).next()
     }
 
-    pub(crate) fn element(&self, slot: usize) -> Option<ValidatedElement<'tree>> {
-        self.elements(slot).next()
-    }
-
     pub(crate) fn elements(&self, slot: usize) -> ValidatedElements<'tree> {
         let range = self.tree.field(self.id, slot);
         ValidatedElements {

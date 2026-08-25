@@ -4067,7 +4067,7 @@ impl AstNode for ChainPattern {
 }
 
 impl ChainPattern {
-    pub fn pattern(&self) -> Option<Pattern> {
+    pub fn first(&self) -> Option<ChainPatternItem> {
         support::child(&self.syntax)
     }
     pub fn colon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
@@ -4075,6 +4075,9 @@ impl ChainPattern {
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| token.kind() == SyntaxKind::COLON)
+    }
+    pub fn rest(&self) -> AstChildren<ChainPatternItem> {
+        support::children(&self.syntax)
     }
 }
 
@@ -4099,16 +4102,17 @@ impl AstNode for UnionPattern {
 }
 
 impl UnionPattern {
-    pub fn any_element(&self) -> Option<SyntaxElement> {
-        self.syntax
-            .children_with_tokens()
-            .find(|element| !element.kind().is_trivia())
+    pub fn first(&self) -> Option<PatternAtom> {
+        support::child(&self.syntax)
     }
     pub fn pipe_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| token.kind() == SyntaxKind::PIPE)
+    }
+    pub fn rest(&self) -> AstChildren<PatternAtom> {
+        support::children(&self.syntax)
     }
 }
 
@@ -4177,10 +4181,41 @@ impl DestructurePattern {
     pub fn const_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::KW_CONST)
     }
-    pub fn any_element(&self) -> impl Iterator<Item = SyntaxElement> + '_ {
+    pub fn first_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::WORD)
+    }
+    pub fn dot_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
-            .filter(|element| !element.kind().is_trivia())
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::DOT)
+    }
+    pub fn path_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::WORD)
+    }
+    pub fn generic_args(&self) -> Option<GenericArgs> {
+        support::child(&self.syntax)
+    }
+    pub fn type_args(&self) -> Option<TypeArgs> {
+        support::child(&self.syntax)
+    }
+    pub fn l_brace_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::L_BRACE)
+    }
+    pub fn field_pattern(&self) -> AstChildren<FieldPattern> {
+        support::children(&self.syntax)
+    }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::COMMA)
+    }
+    pub fn r_brace_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::R_BRACE)
     }
 }
 
@@ -4281,10 +4316,8 @@ impl UnreflectPattern {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_PAREN)
     }
-    pub fn value(&self) -> Option<SyntaxElement> {
-        self.syntax
-            .children_with_tokens()
-            .find(|element| !element.kind().is_trivia())
+    pub fn value(&self) -> Option<ExprNode> {
+        support::child(&self.syntax)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_PAREN)
@@ -6161,6 +6194,208 @@ impl From<ParenPattern> for PatternKind {
 }
 
 impl From<WildcardPattern> for PatternKind {
+    fn from(node: WildcardPattern) -> Self {
+        Self::WildcardPattern(node)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PatternAtom {
+    BindingPattern(BindingPattern),
+    DestructurePattern(DestructurePattern),
+    ArrayPattern(ArrayPattern),
+    TypePattern(TypePattern),
+    UnreflectPattern(UnreflectPattern),
+    ParenPattern(ParenPattern),
+    WildcardPattern(WildcardPattern),
+}
+
+impl AstNode for PatternAtom {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        matches!(
+            kind,
+            SyntaxKind::BINDING_PATTERN
+                | SyntaxKind::DESTRUCTURE_PATTERN
+                | SyntaxKind::ARRAY_PATTERN
+                | SyntaxKind::TYPE_PATTERN
+                | SyntaxKind::UNREFLECT_PATTERN
+                | SyntaxKind::PAREN_PATTERN
+                | SyntaxKind::WILDCARD_PATTERN
+        )
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        match syntax.kind() {
+            SyntaxKind::BINDING_PATTERN => Some(Self::BindingPattern(BindingPattern { syntax })),
+            SyntaxKind::DESTRUCTURE_PATTERN => {
+                Some(Self::DestructurePattern(DestructurePattern { syntax }))
+            }
+            SyntaxKind::ARRAY_PATTERN => Some(Self::ArrayPattern(ArrayPattern { syntax })),
+            SyntaxKind::TYPE_PATTERN => Some(Self::TypePattern(TypePattern { syntax })),
+            SyntaxKind::UNREFLECT_PATTERN => {
+                Some(Self::UnreflectPattern(UnreflectPattern { syntax }))
+            }
+            SyntaxKind::PAREN_PATTERN => Some(Self::ParenPattern(ParenPattern { syntax })),
+            SyntaxKind::WILDCARD_PATTERN => Some(Self::WildcardPattern(WildcardPattern { syntax })),
+            _ => None,
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        match self {
+            Self::BindingPattern(node) => node.syntax(),
+            Self::DestructurePattern(node) => node.syntax(),
+            Self::ArrayPattern(node) => node.syntax(),
+            Self::TypePattern(node) => node.syntax(),
+            Self::UnreflectPattern(node) => node.syntax(),
+            Self::ParenPattern(node) => node.syntax(),
+            Self::WildcardPattern(node) => node.syntax(),
+        }
+    }
+}
+
+impl From<BindingPattern> for PatternAtom {
+    fn from(node: BindingPattern) -> Self {
+        Self::BindingPattern(node)
+    }
+}
+
+impl From<DestructurePattern> for PatternAtom {
+    fn from(node: DestructurePattern) -> Self {
+        Self::DestructurePattern(node)
+    }
+}
+
+impl From<ArrayPattern> for PatternAtom {
+    fn from(node: ArrayPattern) -> Self {
+        Self::ArrayPattern(node)
+    }
+}
+
+impl From<TypePattern> for PatternAtom {
+    fn from(node: TypePattern) -> Self {
+        Self::TypePattern(node)
+    }
+}
+
+impl From<UnreflectPattern> for PatternAtom {
+    fn from(node: UnreflectPattern) -> Self {
+        Self::UnreflectPattern(node)
+    }
+}
+
+impl From<ParenPattern> for PatternAtom {
+    fn from(node: ParenPattern) -> Self {
+        Self::ParenPattern(node)
+    }
+}
+
+impl From<WildcardPattern> for PatternAtom {
+    fn from(node: WildcardPattern) -> Self {
+        Self::WildcardPattern(node)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ChainPatternItem {
+    UnionPattern(UnionPattern),
+    BindingPattern(BindingPattern),
+    DestructurePattern(DestructurePattern),
+    ArrayPattern(ArrayPattern),
+    TypePattern(TypePattern),
+    UnreflectPattern(UnreflectPattern),
+    ParenPattern(ParenPattern),
+    WildcardPattern(WildcardPattern),
+}
+
+impl AstNode for ChainPatternItem {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        matches!(
+            kind,
+            SyntaxKind::UNION_PATTERN
+                | SyntaxKind::BINDING_PATTERN
+                | SyntaxKind::DESTRUCTURE_PATTERN
+                | SyntaxKind::ARRAY_PATTERN
+                | SyntaxKind::TYPE_PATTERN
+                | SyntaxKind::UNREFLECT_PATTERN
+                | SyntaxKind::PAREN_PATTERN
+                | SyntaxKind::WILDCARD_PATTERN
+        )
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        match syntax.kind() {
+            SyntaxKind::UNION_PATTERN => Some(Self::UnionPattern(UnionPattern { syntax })),
+            SyntaxKind::BINDING_PATTERN => Some(Self::BindingPattern(BindingPattern { syntax })),
+            SyntaxKind::DESTRUCTURE_PATTERN => {
+                Some(Self::DestructurePattern(DestructurePattern { syntax }))
+            }
+            SyntaxKind::ARRAY_PATTERN => Some(Self::ArrayPattern(ArrayPattern { syntax })),
+            SyntaxKind::TYPE_PATTERN => Some(Self::TypePattern(TypePattern { syntax })),
+            SyntaxKind::UNREFLECT_PATTERN => {
+                Some(Self::UnreflectPattern(UnreflectPattern { syntax }))
+            }
+            SyntaxKind::PAREN_PATTERN => Some(Self::ParenPattern(ParenPattern { syntax })),
+            SyntaxKind::WILDCARD_PATTERN => Some(Self::WildcardPattern(WildcardPattern { syntax })),
+            _ => None,
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        match self {
+            Self::UnionPattern(node) => node.syntax(),
+            Self::BindingPattern(node) => node.syntax(),
+            Self::DestructurePattern(node) => node.syntax(),
+            Self::ArrayPattern(node) => node.syntax(),
+            Self::TypePattern(node) => node.syntax(),
+            Self::UnreflectPattern(node) => node.syntax(),
+            Self::ParenPattern(node) => node.syntax(),
+            Self::WildcardPattern(node) => node.syntax(),
+        }
+    }
+}
+
+impl From<UnionPattern> for ChainPatternItem {
+    fn from(node: UnionPattern) -> Self {
+        Self::UnionPattern(node)
+    }
+}
+
+impl From<BindingPattern> for ChainPatternItem {
+    fn from(node: BindingPattern) -> Self {
+        Self::BindingPattern(node)
+    }
+}
+
+impl From<DestructurePattern> for ChainPatternItem {
+    fn from(node: DestructurePattern) -> Self {
+        Self::DestructurePattern(node)
+    }
+}
+
+impl From<ArrayPattern> for ChainPatternItem {
+    fn from(node: ArrayPattern) -> Self {
+        Self::ArrayPattern(node)
+    }
+}
+
+impl From<TypePattern> for ChainPatternItem {
+    fn from(node: TypePattern) -> Self {
+        Self::TypePattern(node)
+    }
+}
+
+impl From<UnreflectPattern> for ChainPatternItem {
+    fn from(node: UnreflectPattern) -> Self {
+        Self::UnreflectPattern(node)
+    }
+}
+
+impl From<ParenPattern> for ChainPatternItem {
+    fn from(node: ParenPattern) -> Self {
+        Self::ParenPattern(node)
+    }
+}
+
+impl From<WildcardPattern> for ChainPatternItem {
     fn from(node: WildcardPattern) -> Self {
         Self::WildcardPattern(node)
     }

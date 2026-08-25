@@ -5,8 +5,8 @@
 use super::{
     StrongAstError,
     arena::{
-        ElementId, ElementRecord, Validated, ValidatedChildren, ValidatedElement,
-        ValidatedSyntaxToken, element_is_node, element_kind,
+        ElementId, ElementRecord, Validated, ValidatedChildren, ValidatedSyntaxToken,
+        element_is_node, element_kind,
     },
 };
 use crate::{SyntaxKind, SyntaxNode, ast};
@@ -247,19 +247,19 @@ const RULE_CATCH_ARM: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot:
 #[rustfmt::skip]
 const RULE_CATCH_PATTERN: SchemaRule = SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::PATTERN]) };
 #[rustfmt::skip]
-const RULE_CHAIN_PATTERN: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::PATTERN]) }, SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::COLON) }, SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::PATTERN]) }]))]);
+const RULE_CHAIN_PATTERN: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::UNION_PATTERN, SyntaxKind::BINDING_PATTERN, SyntaxKind::DESTRUCTURE_PATTERN, SyntaxKind::ARRAY_PATTERN, SyntaxKind::TYPE_PATTERN, SyntaxKind::UNREFLECT_PATTERN, SyntaxKind::PAREN_PATTERN, SyntaxKind::WILDCARD_PATTERN]) }, SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::COLON) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::UNION_PATTERN, SyntaxKind::BINDING_PATTERN, SyntaxKind::DESTRUCTURE_PATTERN, SyntaxKind::ARRAY_PATTERN, SyntaxKind::TYPE_PATTERN, SyntaxKind::UNREFLECT_PATTERN, SyntaxKind::PAREN_PATTERN, SyntaxKind::WILDCARD_PATTERN]) }]))]);
 #[rustfmt::skip]
-const RULE_UNION_PATTERN: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Any }, SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::PIPE) }, SchemaRule::Capture { slot: 0, rule: &SchemaRule::Any }]))]);
+const RULE_UNION_PATTERN: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::BINDING_PATTERN, SyntaxKind::DESTRUCTURE_PATTERN, SyntaxKind::ARRAY_PATTERN, SyntaxKind::TYPE_PATTERN, SyntaxKind::UNREFLECT_PATTERN, SyntaxKind::PAREN_PATTERN, SyntaxKind::WILDCARD_PATTERN]) }, SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::PIPE) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::BINDING_PATTERN, SyntaxKind::DESTRUCTURE_PATTERN, SyntaxKind::ARRAY_PATTERN, SyntaxKind::TYPE_PATTERN, SyntaxKind::UNREFLECT_PATTERN, SyntaxKind::PAREN_PATTERN, SyntaxKind::WILDCARD_PATTERN]) }]))]);
 #[rustfmt::skip]
 const RULE_BINDING_PATTERN: SchemaRule = SchemaRule::Seq(&[SchemaRule::Alt(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_LET) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_CONST) }]), SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::COLON) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::PATTERN]) }]))]);
 #[rustfmt::skip]
-const RULE_DESTRUCTURE_PATTERN: SchemaRule = SchemaRule::Seq(&[SchemaRule::Optional(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_LET) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_CONST) }])), SchemaRule::Repeated(&SchemaRule::Capture { slot: 2, rule: &SchemaRule::Any })]);
+const RULE_DESTRUCTURE_PATTERN: SchemaRule = SchemaRule::Seq(&[SchemaRule::Optional(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_LET) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::KW_CONST) }])), SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Repeated(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::DOT) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::WORD) }])), SchemaRule::Optional(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 5, rule: &SchemaRule::Node(&[SyntaxKind::GENERIC_ARGS]) }, SchemaRule::Capture { slot: 6, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_ARGS]) }])), SchemaRule::Capture { slot: 7, rule: &SchemaRule::Token(SyntaxKind::L_BRACE) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 8, rule: &SchemaRule::Node(&[SyntaxKind::FIELD_PATTERN]) }, SchemaRule::Capture { slot: 9, rule: &SchemaRule::Token(SyntaxKind::COMMA) }])), SchemaRule::Capture { slot: 10, rule: &SchemaRule::Token(SyntaxKind::R_BRACE) }]);
 #[rustfmt::skip]
 const RULE_ARRAY_PATTERN: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::L_BRACKET) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::ARRAY_PATTERN_ELEMENT]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::COMMA) }])), SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::R_BRACKET) }, SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 4, rule: &SchemaRule::Token(SyntaxKind::COLON) }, SchemaRule::Capture { slot: 5, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }]))]);
 #[rustfmt::skip]
 const RULE_TYPE_PATTERN: SchemaRule = SchemaRule::Capture { slot: 0, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) };
 #[rustfmt::skip]
-const RULE_UNREFLECT_PATTERN: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Any }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }]);
+const RULE_UNREFLECT_PATTERN: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::WORD) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }]);
 #[rustfmt::skip]
 const RULE_PAREN_PATTERN: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::PATTERN]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }]);
 #[rustfmt::skip]
@@ -833,12 +833,12 @@ const SCHEMAS: &[NodeSchema] = &[
     },
     NodeSchema {
         kind: SyntaxKind::CHAIN_PATTERN,
-        field_count: 2,
+        field_count: 3,
         rule: &RULE_CHAIN_PATTERN,
     },
     NodeSchema {
         kind: SyntaxKind::UNION_PATTERN,
-        field_count: 2,
+        field_count: 3,
         rule: &RULE_UNION_PATTERN,
     },
     NodeSchema {
@@ -848,7 +848,7 @@ const SCHEMAS: &[NodeSchema] = &[
     },
     NodeSchema {
         kind: SyntaxKind::DESTRUCTURE_PATTERN,
-        field_count: 3,
+        field_count: 11,
         rule: &RULE_DESTRUCTURE_PATTERN,
     },
     NodeSchema {
@@ -3225,7 +3225,7 @@ impl<'tree> Validated<'tree, ast::CatchPattern> {
 }
 
 impl<'tree> Validated<'tree, ast::ChainPattern> {
-    pub fn pattern(&self) -> Validated<'tree, ast::Pattern> {
+    pub fn first(&self) -> Validated<'tree, ast::ChainPatternItem> {
         self.child(0).expect("validated required field")
     }
     pub fn colon_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
@@ -3235,11 +3235,14 @@ impl<'tree> Validated<'tree, ast::ChainPattern> {
                 .filter(|token| token.kind() == SyntaxKind::COLON)
         })
     }
+    pub fn rest(&self) -> ValidatedChildren<'tree, ast::ChainPatternItem> {
+        self.children(2)
+    }
 }
 
 impl<'tree> Validated<'tree, ast::UnionPattern> {
-    pub fn any_element(&self) -> Option<ValidatedElement<'tree>> {
-        self.element(0)
+    pub fn first(&self) -> Validated<'tree, ast::PatternAtom> {
+        self.child(0).expect("validated required field")
     }
     pub fn pipe_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
         self.elements(1).filter_map(|element| {
@@ -3247,6 +3250,9 @@ impl<'tree> Validated<'tree, ast::UnionPattern> {
                 .token()
                 .filter(|token| token.kind() == SyntaxKind::PIPE)
         })
+    }
+    pub fn rest(&self) -> ValidatedChildren<'tree, ast::PatternAtom> {
+        self.children(2)
     }
 }
 
@@ -3276,8 +3282,47 @@ impl<'tree> Validated<'tree, ast::DestructurePattern> {
     pub fn const_token(&self) -> Option<ValidatedSyntaxToken> {
         self.token(1, SyntaxKind::KW_CONST)
     }
-    pub fn any_element(&self) -> super::arena::ValidatedElements<'tree> {
-        self.elements(2)
+    pub fn first_token(&self) -> ValidatedSyntaxToken {
+        self.token(2, SyntaxKind::WORD)
+            .expect("validated required token")
+    }
+    pub fn dot_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(3).filter_map(|element| {
+            element
+                .token()
+                .filter(|token| token.kind() == SyntaxKind::DOT)
+        })
+    }
+    pub fn path_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(4).filter_map(|element| {
+            element
+                .token()
+                .filter(|token| token.kind() == SyntaxKind::WORD)
+        })
+    }
+    pub fn generic_args(&self) -> Option<Validated<'tree, ast::GenericArgs>> {
+        self.child(5)
+    }
+    pub fn type_args(&self) -> Option<Validated<'tree, ast::TypeArgs>> {
+        self.child(6)
+    }
+    pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
+        self.token(7, SyntaxKind::L_BRACE)
+            .expect("validated required token")
+    }
+    pub fn field_pattern(&self) -> ValidatedChildren<'tree, ast::FieldPattern> {
+        self.children(8)
+    }
+    pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(9).filter_map(|element| {
+            element
+                .token()
+                .filter(|token| token.kind() == SyntaxKind::COMMA)
+        })
+    }
+    pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
+        self.token(10, SyntaxKind::R_BRACE)
+            .expect("validated required token")
     }
 }
 
@@ -3323,8 +3368,8 @@ impl<'tree> Validated<'tree, ast::UnreflectPattern> {
         self.token(1, SyntaxKind::L_PAREN)
             .expect("validated required token")
     }
-    pub fn value(&self) -> Option<ValidatedElement<'tree>> {
-        self.element(2)
+    pub fn value(&self) -> Validated<'tree, ast::ExprNode> {
+        self.child(2).expect("validated required field")
     }
     pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
         self.token(3, SyntaxKind::R_PAREN)
@@ -4122,6 +4167,90 @@ impl<'tree> Validated<'tree, ast::PatternKind> {
             SyntaxKind::WILDCARD_PATTERN => {
                 ValidatedPatternKind::WildcardPattern(self.cast().expect("validated enum variant"))
             }
+            _ => unreachable!("validated enum kind"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ValidatedPatternAtom<'tree> {
+    BindingPattern(Validated<'tree, ast::BindingPattern>),
+    DestructurePattern(Validated<'tree, ast::DestructurePattern>),
+    ArrayPattern(Validated<'tree, ast::ArrayPattern>),
+    TypePattern(Validated<'tree, ast::TypePattern>),
+    UnreflectPattern(Validated<'tree, ast::UnreflectPattern>),
+    ParenPattern(Validated<'tree, ast::ParenPattern>),
+    WildcardPattern(Validated<'tree, ast::WildcardPattern>),
+}
+
+impl<'tree> Validated<'tree, ast::PatternAtom> {
+    pub fn as_variant(self) -> ValidatedPatternAtom<'tree> {
+        match self.syntax().kind() {
+            SyntaxKind::BINDING_PATTERN => {
+                ValidatedPatternAtom::BindingPattern(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::DESTRUCTURE_PATTERN => ValidatedPatternAtom::DestructurePattern(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::ARRAY_PATTERN => {
+                ValidatedPatternAtom::ArrayPattern(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::TYPE_PATTERN => {
+                ValidatedPatternAtom::TypePattern(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::UNREFLECT_PATTERN => {
+                ValidatedPatternAtom::UnreflectPattern(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::PAREN_PATTERN => {
+                ValidatedPatternAtom::ParenPattern(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::WILDCARD_PATTERN => {
+                ValidatedPatternAtom::WildcardPattern(self.cast().expect("validated enum variant"))
+            }
+            _ => unreachable!("validated enum kind"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ValidatedChainPatternItem<'tree> {
+    UnionPattern(Validated<'tree, ast::UnionPattern>),
+    BindingPattern(Validated<'tree, ast::BindingPattern>),
+    DestructurePattern(Validated<'tree, ast::DestructurePattern>),
+    ArrayPattern(Validated<'tree, ast::ArrayPattern>),
+    TypePattern(Validated<'tree, ast::TypePattern>),
+    UnreflectPattern(Validated<'tree, ast::UnreflectPattern>),
+    ParenPattern(Validated<'tree, ast::ParenPattern>),
+    WildcardPattern(Validated<'tree, ast::WildcardPattern>),
+}
+
+impl<'tree> Validated<'tree, ast::ChainPatternItem> {
+    pub fn as_variant(self) -> ValidatedChainPatternItem<'tree> {
+        match self.syntax().kind() {
+            SyntaxKind::UNION_PATTERN => ValidatedChainPatternItem::UnionPattern(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::BINDING_PATTERN => ValidatedChainPatternItem::BindingPattern(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::DESTRUCTURE_PATTERN => ValidatedChainPatternItem::DestructurePattern(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::ARRAY_PATTERN => ValidatedChainPatternItem::ArrayPattern(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::TYPE_PATTERN => {
+                ValidatedChainPatternItem::TypePattern(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::UNREFLECT_PATTERN => ValidatedChainPatternItem::UnreflectPattern(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::PAREN_PATTERN => ValidatedChainPatternItem::ParenPattern(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::WILDCARD_PATTERN => ValidatedChainPatternItem::WildcardPattern(
+                self.cast().expect("validated enum variant"),
+            ),
             _ => unreachable!("validated enum kind"),
         }
     }
