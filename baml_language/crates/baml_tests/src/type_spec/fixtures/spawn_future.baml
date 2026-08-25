@@ -13,8 +13,8 @@ function boom() -> int throws user.Boom {
 
 function f() -> int throws never {
     let a = spawn { 42 };
-     // ^ Future<int, never>
+     // ^ baml.future.Future<int, never>
     let b = spawn { boom() };
-     // ^ Future<int, user.Boom>
+     // ^ baml.future.Future<int, user.Boom>
     0
 }

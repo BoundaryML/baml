@@ -1496,12 +1496,13 @@ unsafe impl salsa::Update for ProjectClassTypeTags {
 /// `LoweringContext` construction — i.e. the whole project's item trees were
 /// walked, and every class name re-rendered and re-hashed, once per lowered
 /// function/let (see `crates/tools_compile_profile/README.md`, July 2026
-/// audit, item #4). `project` is only the memo key; the body's file/item
-/// reads are tracked as dependencies through `db` as usual.
+/// audit, item #4). `_roots` (the database's one source-root table) is only
+/// the memo key; the body's file/item reads are tracked as dependencies
+/// through `db` as usual.
 #[salsa::tracked(returns(ref))]
 fn class_type_tags_for_project(
     db: &dyn crate::Db,
-    _project: baml_workspace::Project,
+    _roots: baml_base::SourceRootTable,
 ) -> ProjectClassTypeTags {
     use baml_compiler2_ppir::item_data::{class_data, file_classes};
     let all_files = compiler2_all_files(db);
@@ -2335,7 +2336,7 @@ impl<'db> LoweringContext<'db> {
         // Tags are content-addressed over each class's fully-qualified name,
         // so they match the emitter's `class.type_tag` values by construction.
         // Memoized project-wide (was rebuilt here per lowered function).
-        let class_type_tags = &class_type_tags_for_project(db, db.project()).tags;
+        let class_type_tags = &class_type_tags_for_project(db, db.source_roots()).tags;
 
         // --- Determine arity from function signature ---
         let sig = baml_compiler2_ppir::function_signature(db, func_loc);
@@ -2443,7 +2444,7 @@ impl<'db> LoweringContext<'db> {
         // Tags are content-addressed over each class's fully-qualified name,
         // so they match the emitter's `class.type_tag` values by construction.
         // Memoized project-wide (was rebuilt here per lowered function).
-        let class_type_tags = &class_type_tags_for_project(db, db.project()).tags;
+        let class_type_tags = &class_type_tags_for_project(db, db.source_roots()).tags;
 
         LoweringContext {
             db,

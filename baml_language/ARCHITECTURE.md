@@ -296,7 +296,7 @@ The compiler2 uses the [Salsa](https://salsa-rs.github.io/salsa/) incremental co
 
 ```
 salsa::Database
-  └─ baml_workspace::Db        (project root, file list)
+  └─ baml_base                 (source roots: path, package, kind, files)
       └─ baml_compiler_parser::Db  (syntax_tree query)
           └─ baml_compiler2_hir::Db  (file_semantic_index, namespace_items, package_items)
               └─ baml_compiler2_ppir::Db  (ppir_expansion_items, canonical queries)

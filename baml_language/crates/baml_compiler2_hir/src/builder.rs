@@ -8,6 +8,11 @@
 
 use std::sync::Arc;
 
+/// Known type-level attribute names (not field attrs, which are
+/// `disambiguate::FIELD_ATTR_NAMES`'s business). Public so completion can
+/// enumerate exactly what this validation accepts.
+pub const KNOWN_TYPE_ATTRS: &[&str] = &["stream.done", "stream.must_exist", "stream.with_state"];
+
 use baml_base::{Name, SourceFile};
 use baml_compiler_diagnostics::{diagnostic::DiagnosticId, runtime_type::SerializedKeyContainer};
 use baml_compiler2_ast::{self as ast, LoweringDiagnostic};
@@ -2205,18 +2210,13 @@ impl<'db> SemanticIndexBuilder<'db> {
         Self::collect_unknown_type_attrs(type_expr, &mut self.diagnostics);
     }
 
-    /// Known type-level attribute names (not field attrs, which are handled by
-    /// `disambiguate::validate_field_attrs`).
-    const KNOWN_TYPE_ATTRS: &'static [&'static str] =
-        &["stream.done", "stream.must_exist", "stream.with_state"];
-
     fn collect_unknown_type_attrs(
         type_expr: &ast::TypeExpr,
         diagnostics: &mut Vec<Hir2Diagnostic>,
     ) {
         for attr in type_expr.attrs() {
             let name = attr.name.as_str();
-            if !ast::is_field_attr(name) && !Self::KNOWN_TYPE_ATTRS.contains(&name) {
+            if !ast::is_field_attr(name) && !KNOWN_TYPE_ATTRS.contains(&name) {
                 diagnostics.push(Hir2Diagnostic::UnknownTypeAttribute {
                     attr_name: attr.name.clone(),
                     span: attr.span,

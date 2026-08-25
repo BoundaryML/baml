@@ -1,15 +1,18 @@
 //! Package/namespace resolution for a source file.
 //!
-//! Determines which package and namespace chain a file belongs to based on
-//! its path. User files → `package: "user"`, built-in files → `package: "baml"`
-//! or `"env"` based on the `<builtin>/` prefix.
+//! A file's package is its [`baml_base::SourceRoot`]'s package name; its
+//! namespace chain is derived from `ns_*` path segments relative to the
+//! root's path.
 
-use baml_base::{Name, SourceFile};
+use baml_base::{Name, SourceFile, SourceRoot};
 
 /// Package/namespace info for a file.
 #[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct PackageInfo {
-    /// Package name: "user", "baml", or "env".
+    /// The source root the file belongs to. Lets consumers ask
+    /// `root.kind(db)` instead of sniffing path prefixes.
+    pub root: SourceRoot,
+    /// Package name (the root's package).
     pub package: Name,
     /// Namespace path within the package.
     /// e.g., `["llm"]` for `<builtin>/baml/ns_llm/llm.baml` or `ns_llm/client.baml`.
@@ -30,63 +33,41 @@ fn extract_ns_name(component: &str) -> Option<Name> {
     valid.then(|| Name::new(ns_name))
 }
 
-/// Determine which package a file belongs to based on its path.
+/// Determine which package a file belongs to.
 ///
-/// Salsa-tracked (keyed on `file`) so the path parsing — `to_string_lossy`,
-/// `strip_prefix`, component iteration, and the `Vec<Name>` allocation — runs
-/// once per file instead of on every call. This is called from ~100 sites
-/// across every compiler phase (often in per-class/per-function loops), so
-/// memoizing it removes a pervasive, repeated path-parsing cost.
+/// Salsa-tracked (keyed on `file`) so the path parsing — `strip_prefix`,
+/// component iteration, and the `Vec<Name>` allocation — runs once per file
+/// instead of on every call. This is called from ~100 sites across every
+/// compiler phase (often in per-class/per-function loops), so memoizing it
+/// removes a pervasive, repeated path-parsing cost.
+///
+/// Reads only the file's `source_root` field and the root's `path`/`package`
+/// fields: adding or removing an unrelated root never invalidates a file's
+/// package identity.
 #[salsa::tracked]
 pub fn file_package(db: &dyn crate::Db, file: SourceFile) -> PackageInfo {
+    let root = file.source_root(db);
+    let package = root.package(db);
+    let root_path = root.path(db);
+
     let path = file.path(db);
-    let path_str = path.to_string_lossy();
+    let relative = path.strip_prefix(root_path.as_path()).unwrap_or(&path);
 
-    if let Some(relative) = path_str.strip_prefix("<builtin>/") {
-        let segments: Vec<&str> = relative.split('/').collect();
-        if segments.len() >= 2 {
-            let package = Name::new(segments[0]);
-            // Apply ns_* detection to intermediate segments (same as user files)
-            let namespace_path: Vec<Name> = segments[1..segments.len() - 1]
-                .iter()
-                .filter_map(|s| extract_ns_name(s))
-                .collect();
-            PackageInfo {
-                package,
-                namespace_path,
-            }
-        } else {
-            // e.g. <builtin>/env.baml → package "env"
-            let stem = segments[0].trim_end_matches(".baml");
-            PackageInfo {
-                package: Name::new(stem),
-                namespace_path: vec![],
-            }
-        }
-    } else {
-        // User files: derive namespace from ns_* folder segments.
-        let root = db.project().root(db);
-        let path = std::path::Path::new(path_str.as_ref());
-        let relative = path
-            .strip_prefix(root.as_path())
-            .map(std::path::Path::to_path_buf)
-            .unwrap_or_else(|_| path.to_path_buf());
+    let namespace_path: Vec<Name> = relative
+        .parent()
+        .map(|p| {
+            p.components()
+                .filter_map(|c| match c {
+                    std::path::Component::Normal(name) => extract_ns_name(name.to_str()?),
+                    _ => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
-        let namespace_path: Vec<Name> = relative
-            .parent()
-            .map(|p| {
-                p.components()
-                    .filter_map(|c| match c {
-                        std::path::Component::Normal(name) => extract_ns_name(name.to_str()?),
-                        _ => None,
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        PackageInfo {
-            package: Name::new("user"),
-            namespace_path,
-        }
+    PackageInfo {
+        root,
+        package,
+        namespace_path,
     }
 }

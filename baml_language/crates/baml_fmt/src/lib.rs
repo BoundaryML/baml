@@ -4,11 +4,11 @@ mod trivia_classifier;
 
 use ast::FromCST as _;
 use baml_db::{
+    ProjectDatabase, SourceRootSpec,
     baml_compiler_diagnostics::ParseError,
     baml_compiler_lexer, baml_compiler_parser,
     baml_compiler_syntax::{SyntaxElement, SyntaxNode},
 };
-use baml_project::ProjectDatabase;
 use printer::{Printer, Shape};
 pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 
@@ -22,9 +22,27 @@ mod formatter_scenario_tests;
 /// # Errors
 /// Errors can occur if the source code is invalid: the parser or AST errors will be returned.
 pub fn format(source: &str, options: &FormatOptions) -> Result<String, FormatterError> {
-    let mut db = ProjectDatabase::new();
-    let source_file = db.add_file("file.baml", source);
+    let (db, source_file) = single_file_db("file.baml", source);
     format_salsa(&db, source_file, *options)
+}
+
+/// A throwaway database holding exactly one workspace file.
+///
+/// Formatting is purely syntactic (lexer + parser over one file), so the
+/// database carries no stdlib — only the workspace root the file must belong
+/// to. The root's virtual path never touches the filesystem.
+pub(crate) fn single_file_db(name: &str, source: &str) -> (ProjectDatabase, baml_db::SourceFile) {
+    let mut db = ProjectDatabase::new();
+    let root = db
+        .add_source_root(SourceRootSpec {
+            path: std::path::PathBuf::from("<fmt>"),
+            package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: baml_db::SourceRootKind::Workspace,
+        })
+        .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
+    let file =
+        db.add_or_update_file_in(root, &std::path::PathBuf::from("<fmt>").join(name), source);
+    (db, file)
 }
 
 #[salsa::tracked]

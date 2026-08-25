@@ -6,7 +6,7 @@
 //! default methods, not just the methods the impl overrides, with an override
 //! winning over the default.
 
-use baml_project::testing::compile_source;
+use baml_db::testing::compile_source;
 use bex_vm_types::{Object, TyTemplate, types::Program};
 
 /// The head type name of a for-type pattern (`Dog` for `Dog`, `Wrap` for

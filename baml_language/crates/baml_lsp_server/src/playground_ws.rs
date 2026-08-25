@@ -217,7 +217,7 @@ pub struct RunListFilter {
     pub visibility: Option<RunListVisibility>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RunListKind {
     Function,
@@ -227,7 +227,7 @@ pub enum RunListKind {
     Internal,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RunListVisibility {
     HistoryOnly,

@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/corpus.rs
+assertion_line: 162
 ---
 function ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionSpec<#0>, j: ai.Journal, total: ai.events.Usage, attempts_left: int) -> ai.ModelTurn {
     load_var spec
@@ -1274,7 +1275,7 @@ function ai.Agent.run(self: ai.Agent, spec: ai.FunctionSpec<#0>) -> ai.RunResult
     container_len
     store_var before
     load_type ai.content.ToolUse
-    load_type future<void, ai.errors.ToolFailedError>
+    load_type baml.future.Future<void, ai.errors.ToolFailedError>
     load_type never
     load_var calls
     load_type #0

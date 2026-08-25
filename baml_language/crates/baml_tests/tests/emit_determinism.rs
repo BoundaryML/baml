@@ -13,8 +13,8 @@ use baml_compiler2_emit::{
     CompileOptions, OptLevel, emit_units, generate_project_bytecode,
     generate_project_bytecode_with_stdlib, generate_stdlib_program,
 };
-use baml_project::ProjectDatabase;
-use baml_workspace::discover_baml_files;
+use baml_db::{ProjectDatabase, discover_baml_files};
+use baml_tests::engine::TestDbExt;
 use bex_vm_types::{CompilationUnit, RuntimeCompileRequest};
 
 /// Read every `.baml` file under `root` into memory, in discovery order.
@@ -33,9 +33,9 @@ fn read_project(root: &Path) -> Vec<(PathBuf, String)> {
 /// it to serialized bytecode.
 fn compile_to_bytes(root: &Path, sources: &[(PathBuf, String)], emit_test_cases: bool) -> Vec<u8> {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(root);
+    db.workspace(root);
     for (path, content) in sources {
-        db.add_or_update_file(path, content);
+        db.file(path, content);
     }
     let program = generate_project_bytecode(&db, &CompileOptions { emit_test_cases })
         .unwrap_or_else(|e| panic!("compilation of {} failed: {e:?}", root.display()));
@@ -136,9 +136,9 @@ fn parallel_emit_is_byte_identical_to_serial() {
 
 fn build_db(root: &Path, sources: &[(PathBuf, String)]) -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(root);
+    db.workspace(root);
     for (path, content) in sources {
-        db.add_or_update_file(path, content);
+        db.file(path, content);
     }
     db
 }
@@ -251,8 +251,8 @@ function count(value: RuntimeValue) -> int throws never {
 
     let root = Path::new("<runtime>");
     let mut full_db = ProjectDatabase::new();
-    full_db.set_project_root(root);
-    full_db.add_file(root.join("main.baml"), source);
+    full_db.workspace(root);
+    full_db.file(root.join("main.baml"), source);
     let full_user_units = emit_units(
         &full_db,
         &CompileOptions {

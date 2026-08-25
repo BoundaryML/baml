@@ -4,13 +4,14 @@
 //! definitions, matching the expansion rules in `01b-stream-expansion-rules.md`.
 
 use super::support::{make_db, render_tir};
+use crate::engine::TestDbExt;
 
 // ── Default expansion (no annotations) ──────────────────────────────────────
 
 #[test]
 fn primitives_get_null_union() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class Primitives {
@@ -26,7 +27,7 @@ class Primitives {
 #[test]
 fn enum_field_unchanged() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "enums.baml",
         "\
 enum Status {
@@ -34,7 +35,7 @@ enum Status {
     Inactive
 }",
     );
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class WithEnum {
@@ -47,7 +48,7 @@ class WithEnum {
 #[test]
 fn class_field_gets_stream_prefix() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class Inner {
@@ -64,7 +65,7 @@ class Outer {
 #[test]
 fn literal_fields_unchanged() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class WithLiterals {
@@ -80,7 +81,7 @@ class WithLiterals {
 #[test]
 fn list_field_recurses() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class Inner {
@@ -99,7 +100,7 @@ class WithLists {
 #[test]
 fn map_field_recurses_value() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class Inner {
@@ -117,7 +118,7 @@ class WithMaps {
 #[test]
 fn union_field_recurses_variants() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class Inner {
@@ -136,7 +137,7 @@ class WithUnions {
 #[test]
 fn optional_expands_to_union_with_null() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class Inner {
@@ -154,7 +155,7 @@ class WithOptionals {
 #[test]
 fn type_alias_expansion() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class Inner {
@@ -172,7 +173,7 @@ type OptionalAlias = Inner?",
 #[test]
 fn recursive_class() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class TreeNode {
@@ -188,7 +189,7 @@ class TreeNode {
 #[test]
 fn stream_done_field_keeps_type_as_is() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class WithDone {
@@ -202,7 +203,7 @@ class WithDone {
 #[test]
 fn stream_done_block_attr() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class AtomicPoint {
@@ -219,7 +220,7 @@ class AtomicPoint {
 #[test]
 fn stream_not_null_field() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class WithNotNull {
@@ -233,7 +234,7 @@ class WithNotNull {
 #[test]
 fn stream_not_null_block_attr_on_referenced_class() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class NotNullEducation {
@@ -255,7 +256,7 @@ class References {
 #[test]
 fn stream_done_and_not_null() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class Combined {
@@ -273,7 +274,7 @@ class Combined {
 #[test]
 fn cross_file_class_reference() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "inner.baml",
         "\
 class Education {
@@ -281,7 +282,7 @@ class Education {
     year int
 }",
     );
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class Resume {
@@ -300,7 +301,7 @@ fn type_alias_to_list_in_union_gets_correct_pending_default() {
     // and return EmptyArray (not Null). This means the stream expansion should
     // NOT prepend an extra null to the union.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 type Ints = int[]
@@ -316,7 +317,7 @@ class WithAliasUnion {
 fn chained_alias_to_list_in_union() {
     // A -> B -> int[] — chained aliases should also resolve correctly
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 type IntList = int[]
@@ -332,7 +333,7 @@ class WithChainedAlias {
 #[test]
 fn type_alias_to_map_in_union_gets_empty_map_default() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 type Config = map<string, string>
@@ -349,7 +350,7 @@ class WithMapAlias {
 #[test]
 fn field_alias_preserved_on_stream_class() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class WithAlias {
@@ -364,7 +365,7 @@ class WithAlias {
 #[test]
 fn field_description_preserved_stream_done_stripped() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class WithDesc {
@@ -392,7 +393,7 @@ fn stream_companion_preserves_generic_args_in_class_field() {
     // through PPIR's stream rewrite, `Box$stream` would lose its arg and
     // mismatch the synthesized `Box$stream<T>` arity.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Box<T> {
@@ -415,7 +416,7 @@ fn stream_companion_preserves_generic_args_for_llm_return_type() {
     // (The legacy LLM `$stream`/`$parse_stream` function companions are gone;
     // the class-level `$stream` type expansion is what this pins now.)
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Box<T> {

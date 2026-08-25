@@ -120,7 +120,7 @@ function future_types.captured_local_future_is_int_future_fn() -> bool {
     store_var _4
     load_var _4
     store_var_load_var f
-    is_type future<int, never>
+    is_type baml.future.Future<int, never>
     pop_jump_if_false L0
     jump L1
 
@@ -141,11 +141,11 @@ function future_types.captured_local_future_is_int_future_fn() -> bool {
     return
 }
 
-function future_types.classify_future(f: future<int, never> | future<string, never>) -> string {
+function future_types.classify_future(f: baml.future.Future<int, never> | baml.future.Future<string, never>) -> string {
     load_var f
     store_var _2
     load_var _2
-    narrow_bind future<int, never>, slot=2
+    narrow_bind baml.future.Future<int, never>, slot=2
     pop_jump_if_false L0
     jump L1
 
@@ -198,15 +198,15 @@ function future_types.classify_string_future_fn() -> string {
     return
 }
 
-function future_types.classify_tagged(v: future<int, never> | future<string, never> | int | string | bool) -> string {
+function future_types.classify_tagged(v: baml.future.Future<int, never> | baml.future.Future<string, never> | int | string | bool) -> string {
     load_var v
-    is_type future<int, never>
+    is_type baml.future.Future<int, never>
     pop_jump_if_false L0
     jump L7
 
   L0:
     load_var v
-    is_type future<string, never>
+    is_type baml.future.Future<string, never>
     pop_jump_if_false L1
     jump L6
 
@@ -260,10 +260,10 @@ function future_types.future_array_matches_fn() -> bool {
     spawn
     store_var _4
     load_var _4
-    load_type future<int, never>
+    load_type baml.future.Future<int, never>
     alloc_array 1
     store_var_load_var fs
-    is_type future<int, never>[]
+    is_type baml.future.Future<int, never>[]
     pop_jump_if_false L0
     jump L1
 
@@ -324,7 +324,7 @@ function future_types.int_future_is_int_future_fn() -> bool {
     store_var _3
     load_var _3
     store_var_load_var f
-    is_type future<int, never>
+    is_type baml.future.Future<int, never>
     pop_jump_if_false L0
     jump L1
 
@@ -355,7 +355,7 @@ function future_types.int_future_is_string_future_fn() -> bool {
     store_var _3
     load_var _3
     store_var_load_var f
-    is_type future<string, never>
+    is_type baml.future.Future<string, never>
     pop_jump_if_false L0
     jump L1
 
@@ -391,7 +391,7 @@ function future_types.spawn_is_int_future(v: #0) -> bool {
     store_var _4
     load_var _4
     store_var_load_var f
-    is_type future<int, never>
+    is_type baml.future.Future<int, never>
     pop_jump_if_false L0
     jump L1
 
@@ -460,7 +460,7 @@ function future_types.throwing_future_is_non_throwing_future_fn() -> bool {
     store_var _3
     load_var _3
     store_var_load_var f
-    is_type future<int, never>
+    is_type baml.future.Future<int, never>
     pop_jump_if_false L0
     jump L1
 
@@ -501,10 +501,10 @@ function future_types.wrong_future_array_fn() -> bool {
     spawn
     store_var _4
     load_var _4
-    load_type future<string, never>
+    load_type baml.future.Future<string, never>
     alloc_array 1
     store_var_load_var fs
-    is_type future<int, never>[]
+    is_type baml.future.Future<int, never>[]
     pop_jump_if_false L0
     jump L1
 

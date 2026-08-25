@@ -1236,6 +1236,55 @@ fn infer_parameter_defaults<'db>(
     infer_body_impl(db, BodyOwnerId::ParameterDefaults(function))
 }
 
+/// The bounds the owner declared, as the lowering context wants them
+/// (interned). [`owner_bounds`] is the same env in the plain vocabulary the
+/// fact oracle takes.
+pub(crate) fn owner_declared_bounds<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    owner: BodyOwnerId<'db>,
+) -> FxHashMap<baml_type::ParamTy, Vec<baml_type::interned::InterfaceRef>> {
+    match owner {
+        BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
+            crate::lower::function_generic_bounds(db, function)
+        }
+        BodyOwnerId::Let(_) => FxHashMap::default(),
+    }
+}
+
+/// The param env a body owner's inference runs in: each rigid type
+/// variable's declared bound conjunction.
+///
+/// Shared with the IDE's member enumeration, which must ask the same
+/// question in the same env — a `T extends Compare` receiver has members
+/// only because the owner declared that bound.
+pub(crate) fn owner_bounds<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    owner: BodyOwnerId<'db>,
+) -> FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>> {
+    owner_declared_bounds(db, owner)
+        .into_iter()
+        .map(|(param, bounds)| {
+            (
+                param,
+                bounds
+                    .into_iter()
+                    .map(|bound| {
+                        baml_type::Interface::new(
+                            bound.name.clone(),
+                            bound.generics.iter().map(Ty::to_plain).collect(),
+                            bound
+                                .associated_types
+                                .iter()
+                                .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                                .collect(),
+                        )
+                    })
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
 /// Infers types for one body owner (function or top-level let), keyed by
 /// the S1 `BodyOwnerId` (rust-analyzer's `DefWithBodyId` shape). Lambdas
 /// are typed inside their owner's run; parameter defaults get their own
@@ -1313,12 +1362,6 @@ fn infer_body_impl<'db>(
         }
         BodyOwnerId::Let(_) => (Vec::new(), Vec::new(), None, None),
     };
-    let bounds = match owner {
-        BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
-            crate::lower::function_generic_bounds(db, function)
-        }
-        BodyOwnerId::Let(_) => FxHashMap::default(),
-    };
     let concrete_self = match owner {
         BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
             // BODY-position `Self` is a PLAIN-class-method error (the
@@ -1346,32 +1389,11 @@ fn infer_body_impl<'db>(
     };
     let lower = lower_ctx_for_file(db, owner.file(db))
         .with_frame(frame)
-        .with_bounds(bounds.clone())
+        .with_bounds(owner_declared_bounds(db, owner))
         .with_self_ty(concrete_self)
         .with_impl_target(impl_target);
     let type_refs = baml_compiler2_ppir::body_type_refs(db, owner);
-    let plain_bounds = bounds
-        .into_iter()
-        .map(|(param, bounds)| {
-            (
-                param,
-                bounds
-                    .into_iter()
-                    .map(|bound| {
-                        baml_type::Interface::new(
-                            bound.name.clone(),
-                            bound.generics.iter().map(Ty::to_plain).collect(),
-                            bound
-                                .associated_types
-                                .iter()
-                                .map(|(name, ty)| (name.clone(), ty.to_plain()))
-                                .collect(),
-                        )
-                    })
-                    .collect(),
-            )
-        })
-        .collect();
+    let plain_bounds = owner_bounds(db, owner);
     // Split the declared clause into its named part and openness (spec
     // rule 3: `throws T | _` names T and opens the remainder to
     // inference); nested holes in named members stay ruling-4 errors.
@@ -3930,15 +3952,9 @@ impl<'db> InferenceContext<'db> {
                 if let Some(folded) = const_fold_binary(op, &lhs_ty, &rhs_ty) {
                     return folded;
                 }
-                let interface = match op {
-                    BinaryOp::Add => "Add",
-                    BinaryOp::Sub => "Subtract",
-                    BinaryOp::Mul => "Multiply",
-                    BinaryOp::Div => "Divide",
-                    BinaryOp::Mod => "Remainder",
-                    _ => unreachable!("outer match arm"),
-                };
-                self.operator_or_obligation(expr, interface, &lhs_ty, Some(&rhs_ty))
+                let dispatch = crate::ops::binary_operator(op)
+                    .unwrap_or_else(|| unreachable!("outer match arm covers dispatching ops"));
+                self.operator_or_obligation(expr, dispatch.interface, &lhs_ty, Some(&rhs_ty))
             }
             // Bitwise dispatches through the `baml.ops` interfaces like
             // every other operator (decision 3B); the stdlib grew them
@@ -3955,15 +3971,9 @@ impl<'db> InferenceContext<'db> {
                 if let Some(folded) = const_fold_binary(op, &lhs_ty, &rhs_ty) {
                     return folded;
                 }
-                let interface = match op {
-                    BinaryOp::BitAnd => "BitAnd",
-                    BinaryOp::BitOr => "BitOr",
-                    BinaryOp::BitXor => "BitXor",
-                    BinaryOp::Shl => "ShiftLeft",
-                    BinaryOp::Shr => "ShiftRight",
-                    _ => unreachable!("outer match arm"),
-                };
-                self.operator_or_obligation(expr, interface, &lhs_ty, Some(&rhs_ty))
+                let dispatch = crate::ops::binary_operator(op)
+                    .unwrap_or_else(|| unreachable!("outer match arm covers dispatching ops"));
+                self.operator_or_obligation(expr, dispatch.interface, &lhs_ty, Some(&rhs_ty))
             }
         }
     }
@@ -4164,22 +4174,10 @@ impl<'db> InferenceContext<'db> {
         lhs: &Ty,
         rhs: &Ty,
     ) -> Ty {
-        use baml_compiler2_ast::AssignOp;
-        let interface = match op {
-            AssignOp::Add => "Add",
-            AssignOp::Sub => "Subtract",
-            AssignOp::Mul => "Multiply",
-            AssignOp::Div => "Divide",
-            AssignOp::Mod => "Remainder",
-            AssignOp::BitAnd => "BitAnd",
-            AssignOp::BitOr => "BitOr",
-            AssignOp::BitXor => "BitXor",
-            AssignOp::Shl => "ShiftLeft",
-            AssignOp::Shr => "ShiftRight",
-        };
         // The reporting road (an inapplicable compound operator is the
         // same E0004 the binary spelling gets), anchored at the value.
-        self.operator_or_obligation(at, interface, lhs, Some(rhs))
+        let dispatch = crate::ops::assign_operator(op);
+        self.operator_or_obligation(at, dispatch.interface, lhs, Some(rhs))
     }
 
     /// `base[idx]` dispatches through `baml.ops.Index` (the ruling:

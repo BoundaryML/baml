@@ -1,0 +1,7 @@
+---
+source: crates/baml_ide/src/listing.rs
+assertion_line: 664
+expression: listing
+---
+class            llm.Config                       models.baml:2
+function         llm.llm_identity                 models.baml:7

@@ -1,18 +1,20 @@
 //! Phase 5 tests: `.baml` builtin stub files and HIR integration.
 //!
 //! Verifies that the builtin stub files are correctly loaded into the compiler2
-//! HIR pipeline. After `set_project_root`, `package_items(db, "baml")` should
+//! HIR pipeline. After `ensure_stdlib_sources`, `package_items(db, "baml")` should
 //! contain `Array`, `Map`, `String`, `Media`, `Request`, `Response`, and the
 //! function declarations in `env`, `math`, and `sys` namespaces.
 
 use std::fmt::Write;
+
+use crate::engine::TestDbExt;
 
 /// Lower a raw AST type expression through hir's scratch store and
 /// hir_ty's one lowering road (the MIR pattern), to a plain type plus
 /// the sink's lowering diagnostics. Resolution context comes from
 /// `file`'s package/namespace.
 fn lower_type_expr_hir_in(
-    db: &baml_project::ProjectDatabase,
+    db: &baml_db::ProjectDatabase,
     file: baml_base::SourceFile,
     expr: &baml_compiler2_ast::TypeExpr,
 ) -> (
@@ -28,7 +30,7 @@ fn lower_type_expr_hir_in(
 }
 
 fn lower_type_expr_hir(
-    db: &baml_project::ProjectDatabase,
+    db: &baml_db::ProjectDatabase,
     expr: &baml_compiler2_ast::TypeExpr,
 ) -> baml_type::Ty {
     let file = baml_compiler2_hir::compiler2_all_files(db)
@@ -43,13 +45,13 @@ use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, package_items},
 };
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
 
 fn make_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("."));
+    db.workspace(std::path::Path::new("."));
     db
 }
 
@@ -435,8 +437,8 @@ fn file_package_derives_correct_namespaces() {
 
     let db = make_db();
 
-    // The compiler2 extra files are NOT in project.files() (to avoid polluting
-    // the v1 compiler). Use compiler2_all_files() to get the combined view.
+    // The stdlib lives in its own `Stdlib` roots, not the workspace root:
+    // `compiler2_all_files()` is the combined, table-ordered view.
     let files = baml_compiler2_hir::compiler2_all_files(&db);
 
     let mut found_containers = false;
@@ -531,7 +533,7 @@ fn user_package_unaffected_by_builtins() {
     use super::support::{make_db as make_tir_db, render_tir};
 
     let mut db = make_tir_db();
-    let file = db.add_file("test.baml", "class Foo { name string }");
+    let file = db.file("test.baml", "class Foo { name string }");
 
     // Render should only show user.Foo, not any baml builtins
     let output = render_tir(&db, file);
@@ -552,10 +554,10 @@ fn cross_namespace_type_resolution_via_root() {
     let mut db = make_db();
 
     // Root namespace: defines Config
-    let _root_file = db.add_file("main.baml", "class Config { key string }");
+    let _root_file = db.file("main.baml", "class Config { key string }");
 
     // llm namespace: defines Response
-    let ns_file = db.add_file("ns_llm/models.baml", "class Response { text string }");
+    let ns_file = db.file("ns_llm/models.baml", "class Response { text string }");
 
     // From root namespace: resolve root.llm.Response
     let segments = vec![Name::new("root"), Name::new("llm"), Name::new("Response")];
@@ -610,8 +612,8 @@ fn same_namespace_resolution_no_prefix() {
     let mut db = make_db();
 
     // Both files in ns_llm namespace
-    let _f1 = db.add_file("ns_llm/types.baml", "class LLMConfig { model string }");
-    let _f2 = db.add_file("ns_llm/client.baml", "class LLMClient { name string }");
+    let _f1 = db.file("ns_llm/types.baml", "class LLMConfig { model string }");
+    let _f2 = db.file("ns_llm/client.baml", "class LLMClient { name string }");
 
     // From within llm namespace: resolve LLMConfig (no root. prefix)
     let segments = vec![Name::new("LLMConfig")];
@@ -644,8 +646,8 @@ fn same_namespace_resolution_no_prefix() {
 fn nested_namespace_resolution() {
     let mut db = make_db();
 
-    let _root_file = db.add_file("main.baml", "class Config { key string }");
-    let _nested_file = db.add_file(
+    let _root_file = db.file("main.baml", "class Config { key string }");
+    let _nested_file = db.file(
         "ns_llm/ns_openai/client.baml",
         "class ResponsesClient { model string }",
     );
@@ -695,8 +697,8 @@ fn bare_name_cross_namespace_rejected() {
     // Config is in root, but ns_context is ["llm"] — bare "Config" should not resolve
 
     let mut db = make_db();
-    let _root_file = db.add_file("main.baml", "class Config { key string }");
-    let _ns_file = db.add_file("ns_llm/models.baml", "class Response { text string }");
+    let _root_file = db.file("main.baml", "class Config { key string }");
+    let _ns_file = db.file("ns_llm/models.baml", "class Response { text string }");
 
     let segments = vec![Name::new("Config")];
     let (ty, diags) = lower_type_expr_hir_in(
@@ -732,8 +734,8 @@ fn multi_segment_bare_path_rejected() {
     // "ns2.MyClass" from ns1 without root. prefix should fail
 
     let mut db = make_db();
-    let _f1 = db.add_file("ns_ns1/a.baml", "class Foo { x int }");
-    let _f2 = db.add_file("ns_ns2/b.baml", "class MyClass { y string }");
+    let _f1 = db.file("ns_ns1/a.baml", "class Foo { x int }");
+    let _f2 = db.file("ns_ns2/b.baml", "class MyClass { y string }");
 
     let segments = vec![Name::new("ns2"), Name::new("MyClass")];
     let (ty, diags) = lower_type_expr_hir_in(

@@ -114,7 +114,7 @@ jobs:
         run: cargo fetch
         working-directory: baml_language
 
-      # `baml_tests`, `baml_cli`, and `baml_lsp2_actions` already run on linux
+      # `baml_tests` and `baml_cli` already run on linux
       # with `--all-features` in the dedicated `snapshot-tests` job, so this
       # job neither builds nor runs them — their test binaries are also the
       # heaviest links in the workspace. (A nextest `-E` filter would only
@@ -122,11 +122,11 @@ jobs:
       # too.) The `sdk_test_*` crates need uv and run in the dedicated
       # `sdk-tests` matrix below.
       - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude baml_lsp2_actions --exclude "sdk_test_*" --exclude baml_bridge
+        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       - name: "Run tests with nextest"
-        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_lsp2_actions --exclude "sdk_test_*" --exclude baml_bridge
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       # Release leg: the profiler's value copy carries `debug_assert`-adjacent
@@ -1541,16 +1541,15 @@ jobs:
         working-directory: baml_language
 
       - name: "Build tests with --timings"
-        run: cargo test --no-run -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --timings
+        run: cargo test --no-run -p baml_tests -p baml_cli --all-features --timings
         working-directory: baml_language
 
-      # This job provides glibc coverage of `baml_tests`, `baml_cli`, and
-      # `baml_lsp2_actions`. The x86_64 GNU job excludes all three to avoid
-      # running them twice; keep its `--exclude` list in sync with the package
-      # list here. The musl job separately runs `baml_cli`, including
+      # This job provides glibc coverage of `baml_tests` and `baml_cli`. The
+      # x86_64 GNU job excludes both to avoid running them twice; keep its
+      # `--exclude` list in sync with the package list here. The musl job separately runs `baml_cli`, including
       # `pack_e2e`, so both Linux libc variants exercise the ELF pack path.
       - name: "Run snapshot tests"
-        run: cargo insta test --test-runner nextest -p baml_tests -p baml_cli -p baml_lsp2_actions --all-features --unreferenced=reject
+        run: cargo insta test --test-runner nextest -p baml_tests -p baml_cli --all-features --unreferenced=reject
         working-directory: baml_language
 
       - name: "Check for snapshot changes"

@@ -6,6 +6,8 @@
 //! Run with:
 //!   cargo test -p baml_tests --test memory_leak_audit -- --nocapture --ignored
 
+use baml_tests::engine::TestDbExt;
+
 #[cfg(unix)]
 fn rss_mb() -> f64 {
     // macOS: ru_maxrss is bytes
@@ -76,11 +78,11 @@ fn editing_session_memory_growth() {
     let file_path = dir.join("main.baml");
     std::fs::write(&file_path, project_source(50, 0)).unwrap();
 
-    let mut db = baml_project::ProjectDatabase::new();
-    db.set_project_root(&dir);
-    db.add_or_update_file(&file_path, &project_source(50, 0));
+    let mut db = baml_db::ProjectDatabase::new();
+    db.workspace(&dir);
+    db.file(&file_path, &project_source(50, 0));
 
-    let baseline_diags = baml_project::collect_compiler2_diagnostics(&db);
+    let baseline_diags = baml_db::collect_compiler2_diagnostics(&db);
     println!(
         "baseline: {} diagnostics, rss={:.1}MB",
         baseline_diags.len(),
@@ -97,16 +99,13 @@ fn editing_session_memory_growth() {
     for i in 1..=iters {
         // Simulate a keystroke: full-text update with a tiny change.
         let text = project_source(50, i);
-        db.add_or_update_file(&file_path, &text);
-        let diags = baml_project::collect_compiler2_diagnostics(&db);
+        db.file(&file_path, &text);
+        let diags = baml_db::collect_compiler2_diagnostics(&db);
 
-        // Simulate the rest of the LSP didChange path (update_bex):
-        // bytecode generation + CFG snapshot for every function.
+        // Simulate the rest of an editor's didChange path: bytecode
+        // generation on top of the diagnostics sweep.
         if full_lsp_path && diags.is_empty() {
             let _bytecode = db.get_bytecode();
-            let _graphs: Vec<_> = (0..50)
-                .filter_map(|f| db.ast_control_flow_graph(&format!("Process{f}")))
-                .collect();
         }
 
         if i % 50 == 0 {
@@ -130,10 +129,10 @@ fn delete_recreate_churn() {
     let file_path = dir.join("main.baml");
     std::fs::write(&file_path, project_source(50, 0)).unwrap();
 
-    let mut db = baml_project::ProjectDatabase::new();
-    db.set_project_root(&dir);
-    db.add_or_update_file(&file_path, &project_source(50, 0));
-    let _ = baml_project::collect_compiler2_diagnostics(&db);
+    let mut db = baml_db::ProjectDatabase::new();
+    db.workspace(&dir);
+    db.file(&file_path, &project_source(50, 0));
+    let _ = baml_db::collect_compiler2_diagnostics(&db);
     println!("baseline rss={:.1}MB", phys_footprint_mb());
 
     let iters: usize = std::env::var("MEM_AUDIT_ITERS")
@@ -143,9 +142,9 @@ fn delete_recreate_churn() {
 
     for i in 1..=iters {
         db.remove_file(&file_path);
-        let _ = baml_project::collect_compiler2_diagnostics(&db);
-        db.add_or_update_file(&file_path, &project_source(50, i));
-        let _ = baml_project::collect_compiler2_diagnostics(&db);
+        let _ = baml_db::collect_compiler2_diagnostics(&db);
+        db.file(&file_path, &project_source(50, i));
+        let _ = baml_db::collect_compiler2_diagnostics(&db);
         if i % 50 == 0 {
             println!(
                 "iter {i:5}: rss={:.1}MB maxrss={:.1}MB",
@@ -167,10 +166,10 @@ fn editing_session_rename_churn() {
     let base = project_source(50, 0);
     std::fs::write(&file_path, &base).unwrap();
 
-    let mut db = baml_project::ProjectDatabase::new();
-    db.set_project_root(&dir);
-    db.add_or_update_file(&file_path, &base);
-    let _ = baml_project::collect_compiler2_diagnostics(&db);
+    let mut db = baml_db::ProjectDatabase::new();
+    db.workspace(&dir);
+    db.file(&file_path, &base);
+    let _ = baml_db::collect_compiler2_diagnostics(&db);
     println!("baseline rss={:.1}MB", phys_footprint_mb());
 
     let iters: usize = std::env::var("MEM_AUDIT_ITERS")
@@ -183,8 +182,8 @@ fn editing_session_rename_churn() {
         let text = format!(
             "{base}\nfunction Fresh{name_suffix}(a: string) -> string {{\n  let q = a;\n  q\n}}\n"
         );
-        db.add_or_update_file(&file_path, &text);
-        let _diags = baml_project::collect_compiler2_diagnostics(&db);
+        db.file(&file_path, &text);
+        let _diags = baml_db::collect_compiler2_diagnostics(&db);
         if i % 50 == 0 {
             println!(
                 "iter {i:5}: rss={:.1}MB maxrss={:.1}MB",

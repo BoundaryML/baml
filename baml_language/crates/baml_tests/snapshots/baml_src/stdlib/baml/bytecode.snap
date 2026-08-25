@@ -2885,25 +2885,25 @@ function baml.fs.write(path: string, content: string) -> int {
 function baml.fs.write_bytes(path: string, content: uint8array) -> int {
 }
 
-function baml.future.Future.cancel(self: future<#0, #1>) -> bool {
+function baml.future.Future.cancel(self: baml.future.Future<#0, #1>) -> bool {
 }
 
-function baml.future.Future.is_cancelled(self: future<#0, #1>) -> bool {
+function baml.future.Future.is_cancelled(self: baml.future.Future<#0, #1>) -> bool {
 }
 
-function baml.future.Future.is_error(self: future<#0, #1>) -> bool {
+function baml.future.Future.is_error(self: baml.future.Future<#0, #1>) -> bool {
 }
 
-function baml.future.Future.is_result(self: future<#0, #1>) -> bool {
+function baml.future.Future.is_result(self: baml.future.Future<#0, #1>) -> bool {
 }
 
-function baml.future.Future.is_settled(self: future<#0, #1>) -> bool {
+function baml.future.Future.is_settled(self: baml.future.Future<#0, #1>) -> bool {
 }
 
-function baml.future.Future.state(self: future<#0, #1>) -> baml.future.FutureState {
+function baml.future.Future.state(self: baml.future.Future<#0, #1>) -> baml.future.FutureState {
 }
 
-function baml.future.all(futures: future<#0, #1>[]) -> future<#0[], #1> {
+function baml.future.all(futures: baml.future.Future<#0, #1>[]) -> baml.future.Future<#0[], #1> {
     load_var ?1
     make_cell
     store_var ?1
@@ -2921,7 +2921,7 @@ function baml.future.all(futures: future<#0, #1>[]) -> future<#0[], #1> {
     return
 }
 
-function baml.future.all_complete(futures: future<#0, #1>[]) -> future<#0[], #1> {
+function baml.future.all_complete(futures: baml.future.Future<#0, #1>[]) -> baml.future.Future<#0[], #1> {
     load_var ?1
     make_cell
     store_var ?1
@@ -2939,7 +2939,7 @@ function baml.future.all_complete(futures: future<#0, #1>[]) -> future<#0[], #1>
     return
 }
 
-function baml.future.any(futures: future<#0, #1>[]) -> future<#0, baml.future.AllFailed<#1>> {
+function baml.future.any(futures: baml.future.Future<#0, #1>[]) -> baml.future.Future<#0, baml.future.AllFailed<#1>> {
     load_var ?1
     make_cell
     store_var ?1
@@ -2957,7 +2957,7 @@ function baml.future.any(futures: future<#0, #1>[]) -> future<#0, baml.future.Al
     return
 }
 
-function baml.future.race(futures: future<#0, #1>[]) -> future<#0, #1> {
+function baml.future.race(futures: baml.future.Future<#0, #1>[]) -> baml.future.Future<#0, #1> {
     load_var ?1
     make_cell
     store_var ?1

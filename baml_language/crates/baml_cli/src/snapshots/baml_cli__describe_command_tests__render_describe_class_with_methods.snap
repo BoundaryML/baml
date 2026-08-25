@@ -1,5 +1,6 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
+assertion_line: 776
 expression: "capture_description(&db, &descs[0], 30)"
 ---
 class User  methods.baml:2-13
@@ -10,7 +11,7 @@ class User {
 }
 
 methods:
-  function Greet(self) -> string  methods.baml:6-8
-  function IsAdult(self) -> bool  methods.baml:10-12
+  function Greet(self) -> string throws never  methods.baml:6-8
+  function IsAdult(self) -> bool throws never  methods.baml:10-12
 
 references (0):

@@ -1737,6 +1737,17 @@ pub enum BuiltinKind {
     AwaitAny,
 }
 
+/// Source geometry of an LLM function's prompt literal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LlmPromptSpans {
+    /// The whole literal (backtick or quoted), delimiters included.
+    pub literal: TextRange,
+    /// Every `${…}` construct inside it — interpolations and
+    /// `${for}`/`${if}`/`${end…}` block tags. Offsets outside these (and
+    /// inside `literal`) are prompt prose.
+    pub code: Vec<TextRange>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmBodyDef {
     pub client: Option<Name>,
@@ -1747,6 +1758,12 @@ pub struct LlmBodyDef {
     /// `companions::llm_spec`. Absent when the prompt or client is unusable
     /// (a migration diagnostic was emitted instead).
     pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
+    /// The prompt literal's source geometry, recorded while the CST is in
+    /// hand: hover/navigation classify prompt PROSE (addressed to the
+    /// `ai.prompt` driver) versus `${…}` code without re-deriving the
+    /// desugared spec body's aliased spans. `None` when the prompt was
+    /// unusable.
+    pub prompt_spans: Option<LlmPromptSpans>,
     /// True when the function's `tools` field can hold tools at runtime:
     /// any value other than an absent field or a literal empty list (`tools
     /// []`). A non-literal expression (`tools: shared()`) counts as `true`

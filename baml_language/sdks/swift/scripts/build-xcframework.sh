@@ -11,7 +11,7 @@
 #       simulator (arm64+x86_64 lipo) slices. Requires the rustup targets:
 #         aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios
 #         aarch64-apple-ios-sim x86_64-apple-ios
-#       Always builds with --profile release-bridge-swift (panic=unwind).
+#       Always builds with --release (panic=unwind workspace-wide).
 #
 # The xcframework bundles the static lib together with
 # Sources/CBamlBridge/include/{baml_cffi.h, module.modulemap}, so the
@@ -69,8 +69,8 @@ case "$MODE" in
     LIB_ARGS+=(-library "$(lib_for_target "$HOST_TARGET")" -headers "$INCLUDE_DIR")
     ;;
 --all)
-    PROFILE_FLAG="--profile release-bridge-swift"
-    PROFILE_DIR="release-bridge-swift"
+    PROFILE_FLAG="--release"
+    PROFILE_DIR="release"
     # Deployment targets must match Package.swift's platform minimums
     # (.macOS(.v13) / .iOS(.v16)) — without these, cargo stamps objects
     # with the host OS version and every consumer link warns

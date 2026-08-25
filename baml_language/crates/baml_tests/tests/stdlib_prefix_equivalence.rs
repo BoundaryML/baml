@@ -7,7 +7,7 @@
 //! sources both ways and compares the serialized `Program`s byte for byte, at
 //! every optimization level the artifact carries.
 //!
-//! It is the reason `baml_project::testing`'s honest helpers still exist: they
+//! It is the reason `baml_db::testing`'s honest helpers still exist: they
 //! are the control arm. Deleting them would leave the fast path unfalsifiable.
 //!
 //! A failure here means the suite has started testing a different artifact than
@@ -18,8 +18,11 @@ use std::{collections::HashSet, path::Path};
 
 use baml_compiler_diagnostics::Severity;
 use baml_compiler2_emit::{CompileOptions, OptLevel, generate_project_bytecode_with_opt};
-use baml_project::{ProjectDatabase, collect_diagnostics, testing};
-use baml_tests::stdlib_prefix::{check_user_files, prefix};
+use baml_db::{ProjectDatabase, collect_diagnostics, testing};
+use baml_tests::{
+    engine::TestDbExt,
+    stdlib_prefix::{check_user_files, prefix},
+};
 
 /// One project exercising the constructs whose lowering could plausibly depend
 /// on stdlib derivation: sysop calls (the case a source-less stdlib mount gets
@@ -62,7 +65,7 @@ function shade(c: Color) -> string {
     (
         "ifaces.baml",
         r#"
-interface Area { function area(self) -> int }
+interface Area { function area(self) -> int throws never }
 class Square { side int }
 implements Area for Square { function area(self) -> int { self.side * self.side } }
 function total_area(sq: Square) -> int { sq.area() }
@@ -107,9 +110,9 @@ fn opts() -> CompileOptions {
 
 fn honest_bytes(opt: OptLevel) -> Vec<u8> {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(Path::new("."));
+    db.workspace(Path::new("."));
     for (path, content) in FILES {
-        db.add_file(*path, content);
+        db.file(*path, content);
     }
     testing::assert_no_diagnostic_errors(&db);
     let program = generate_project_bytecode_with_opt(&db, &opts(), opt).expect("honest compile");
@@ -167,14 +170,14 @@ fn user_file_check_matches_the_whole_project_pass() {
     ];
 
     let mut db = ProjectDatabase::new();
-    db.set_project_root(Path::new("."));
+    db.workspace(Path::new("."));
     db.set_seeded_stdlib_interface(prefix(OptLevel::One).interfaces.clone());
     for (path, content) in BROKEN {
-        db.add_file(*path, content);
+        db.file(*path, content);
     }
 
     let user_files: HashSet<_> = db
-        .get_source_files()
+        .workspace_files()
         .iter()
         .map(|f| f.file_id(&db))
         .collect();

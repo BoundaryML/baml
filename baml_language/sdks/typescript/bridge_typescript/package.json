@@ -38,7 +38,7 @@
     "build:clean": "node typescript_src/clean-dist.js",
     "build:proto": "node node_modules/protobufjs-cli/bin/pbjs -t static-module -w es6 -p ../../../crates/bridge_ctypes/types -o typescript_src/proto/baml_cffi.js ../../../crates/bridge_ctypes/types/baml_bridge/cffi/v1/baml_inbound.proto ../../../crates/bridge_ctypes/types/baml_bridge/cffi/v1/baml_outbound.proto && node node_modules/protobufjs-cli/bin/pbts -o typescript_src/proto/baml_cffi.d.ts typescript_src/proto/baml_cffi.js",
     "build:napi-debug": "napi build --js ./dist/native.js --esm --dts ./dist/native.d.ts --platform",
-    "build:napi-release": "napi build --js ./dist/native.js --esm --dts ./dist/native.d.ts --platform --profile release-bridge-node",
+    "build:napi-release": "napi build --js ./dist/native.js --esm --dts ./dist/native.d.ts --platform --release",
     "build:copy-native-dts": "node typescript_src/copy-native-dts.js",
     "build:ts_build": "tsc -p tsconfig.json",
     "build:tag-generated-files": "node typescript_src/tag-generated-files.js",

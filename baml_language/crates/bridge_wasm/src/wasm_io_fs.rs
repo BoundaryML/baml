@@ -15,7 +15,7 @@ use js_sys::Uint8Array;
 use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, owned};
 use sys_types::BexHeap;
 
-use crate::{send_wrapper::SendWrapper, wasm_fs::WasmVfs};
+use crate::{send_wrapper::SendWrapper, wasm_vfs::WasmVfs};
 
 /// WASM implementation of `baml.fs` namespace ops.
 ///
@@ -106,7 +106,7 @@ fn dir_children(vfs: &WasmVfs, path: &str) -> Result<Vec<RemoveChild>, VmBamlErr
     if let Ok(arr) = vfs.vfs_read_dir_entries(path) {
         let mut out = Vec::with_capacity(arr.length() as usize);
         for v in arr.iter() {
-            let entry: crate::wasm_fs::WasmVfsDirEntry = serde_wasm_bindgen::from_value(v)
+            let entry: crate::wasm_vfs::WasmVfsDirEntry = serde_wasm_bindgen::from_value(v)
                 .map_err(|e| VmBamlError::Io {
                     message: format!("Invalid readDirEntries payload for '{path}': {e}"),
                 })?;
@@ -482,7 +482,7 @@ impl io::IoNamespaceFs for WasmIoFs {
             Ok(arr) => {
                 let mut entries = Vec::with_capacity(arr.length() as usize);
                 for v in arr.iter() {
-                    let entry: crate::wasm_fs::WasmVfsDirEntry =
+                    let entry: crate::wasm_vfs::WasmVfsDirEntry =
                         match serde_wasm_bindgen::from_value(v) {
                             Ok(e) => e,
                             Err(e) => {

@@ -4,13 +4,13 @@
 //! dependency graph, so the embedded bytes cannot outlive the build that
 //! produced their `Program`/`PackageInterface` layouts.
 //!
-//! The derivation itself lives in `baml_project::stdlib_prefix`, shared with
+//! The derivation itself lives in `baml_db::stdlib_prefix`, shared with
 //! the test-side artifact in `baml_tests`. This artifact deliberately
 //! carries only [`precompiled_stdlib_config::OPT_LEVEL`]: it ships inside
 //! production binaries, where each additional level is a few more megabytes for
 //! no runtime benefit.
 
-use baml_project::stdlib_prefix::build_stdlib_prefix;
+use baml_db::stdlib_prefix::build_stdlib_prefix;
 
 #[path = "src/precompiled_stdlib_config.rs"]
 mod precompiled_stdlib_config;

@@ -1,8 +1,0 @@
----
-source: crates/baml_lsp2_actions/src/describe_tests.rs
-expression: "project.format_description(&descs[0])"
----
-function ExtractPoint  funcs.baml:3
-/// Extract a point from text.
-shape: function ExtractPoint(text: string) -> Point
-deps: Point

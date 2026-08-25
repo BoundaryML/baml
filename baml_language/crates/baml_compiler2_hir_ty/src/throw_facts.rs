@@ -57,7 +57,7 @@ unsafe impl salsa::Update for FileThrowFacts {
 /// This is the expensive half of throw inference (PPIR bodies + signature
 /// lowering), isolated per file so it can be (a) memoized at file
 /// granularity and (b) seeded from a previous compile: when the database
-/// carries [`baml_workspace::SeededThrowFacts`] for this file, the seeds are
+/// carries [`baml_compiler2_hir::inputs::SeededThrowFacts`] for this file, the seeds are
 /// returned verbatim and the body is never walked. Facts are a pure
 /// function of file content + name resolution; the bytecode cache only
 /// seeds files whose content is unchanged and whose resolution-relevant

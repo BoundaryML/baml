@@ -1,4 +1,4 @@
-// This crate provides the BAML CLI, including the LSP server and
+// This crate provides the BAML CLI: project build/check/test commands and
 // standalone execution via `baml run`.
 #![allow(
     dead_code,
@@ -20,8 +20,6 @@ pub(crate) mod commands;
 pub(crate) mod describe_command;
 #[cfg(test)]
 mod describe_command_tests;
-pub(crate) mod describe_render;
-pub(crate) mod describe_search;
 pub(crate) mod diagnostics_cache;
 #[cfg(test)]
 mod diagnostics_cache_oracle;
@@ -148,9 +146,8 @@ impl From<ExitCode> for u32 {
 
 /// Run the CLI with the given arguments.
 ///
-/// Dispatches to one of: `run`, `describe`, `generate`, `test`,
-/// `format`, or `language-server`. `baml run` is the top-level entry for
-/// standalone execution.
+/// Dispatches to one of: `run`, `check`, `generate`, `test`, `pack`,
+/// `fmt`, ... `baml run` is the top-level entry for standalone execution.
 pub fn run_cli(argv: Vec<String>) -> Result<ExitCode> {
     if argv.get(1).map(String::as_str) == Some("update") {
         return Err(anyhow!(
@@ -223,7 +220,7 @@ mod exit_code_tests {
         assert_eq!(u32::from(ExitCode::TargetError), 1);
     }
 
-    /// `Other` continues to mean "internal error" (used by describe /
+    /// `Other` continues to mean "internal error" (used by check /
     /// generate / format / test internal failures). It must not collide
     /// with the new `TargetError`.
     #[test]

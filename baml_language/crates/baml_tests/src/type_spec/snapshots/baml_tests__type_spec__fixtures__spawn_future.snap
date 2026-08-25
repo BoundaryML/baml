@@ -7,16 +7,16 @@ expression: outcome.dump
 431..446 'Boom { m: "x" }': user.Boom
 441..444 '"x"': "x"
 459..460 'f': throws never
-483..610 '{\n   ...  0\n}': 0
-489..494 'let a': Future<int, never>
-497..509 'spawn { 42 }': Future<int, never>
+483..634 '{\n   ...  0\n}': 0
+489..494 'let a': baml.future.Future<int, never>
+497..509 'spawn { 42 }': baml.future.Future<int, never>
 503..509 '{ 42 }': () -> int throws never
 503..509 '{ 42 }': 42
 505..507 '42': 42
-544..549 'let b': Future<int, user.Boom>
-552..568 'spawn ...om() }': Future<int, user.Boom>
-558..568 '{ boom() }': () -> int throws user.Boom
-558..568 '{ boom() }': int
-560..564 'boom': () -> int throws user.Boom
-560..566 'boom()': int
-607..608 '0': 0
+556..561 'let b': baml.future.Future<int, user.Boom>
+564..580 'spawn ...om() }': baml.future.Future<int, user.Boom>
+570..580 '{ boom() }': () -> int throws user.Boom
+570..580 '{ boom() }': int
+572..576 'boom': () -> int throws user.Boom
+572..578 'boom()': int
+631..632 '0': 0

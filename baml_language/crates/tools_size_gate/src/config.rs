@@ -334,4 +334,15 @@ mod tests {
     fn policy_rejects_integer_thresholds() {
         assert!(toml::from_str::<Policy>("max_file_bytes = 1_572_864").is_err());
     }
+
+    #[test]
+    fn checked_in_config_uses_valid_human_readable_thresholds() {
+        let config: Config =
+            toml::from_str(include_str!("../../../.cargo/size-gate.toml")).unwrap();
+        config.validate().unwrap();
+
+        // "62.0 MiB" — keep in lockstep with `.cargo/size-gate.toml`.
+        let macos = &config.artifacts["baml-cli"].platform["aarch64-apple-darwin"];
+        assert_eq!(macos.max_file_bytes, Some(65_011_712));
+    }
 }

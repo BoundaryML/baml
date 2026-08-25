@@ -154,7 +154,6 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/crates/baml_compiler_hir/**' \
-            ':baml_language/crates/baml_workspace/**' \
             ':baml_language/crates/baml_compiler_parser/**' \
             ':baml_language/crates/baml_base/**' \
           ; then
@@ -217,6 +216,7 @@ jobs:
             ':typescript2/pkg-playground/**' \
             ':typescript2/pkg-proto/**' \
             ':baml_language/crates/bridge_ctypes/types/**' \
+            ':baml_language/crates/bridge_wasm/**' \
             ':.github/workflows/webview-tests.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"

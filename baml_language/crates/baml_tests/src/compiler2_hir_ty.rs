@@ -5,7 +5,9 @@ mod tests {
     use baml_compiler2_hir_ty::lower::{
         FunctionSignature, class_field_types, function_signature, type_alias_value,
     };
-    use baml_project::ProjectDatabase;
+    use baml_db::ProjectDatabase;
+
+    use crate::engine::TestDbExt;
 
     fn render(ty: &baml_type::interned::Ty) -> String {
         ty.to_plain().render_canonical()
@@ -35,7 +37,7 @@ mod tests {
     #[test]
     fn lowers_signature_types_with_name_resolution() {
         let mut db = crate::compiler2_tir::support::make_db();
-        let file = db.add_file(
+        let file = db.file(
             "test.baml",
             r#"
 class Box<T> { v T }
@@ -78,7 +80,7 @@ function f(
     #[test]
     fn interface_existentials_and_signature_holes() {
         let mut db = crate::compiler2_tir::support::make_db();
-        let file = db.add_file(
+        let file = db.file(
             "test.baml",
             r#"
 interface Show<T> {
@@ -114,7 +116,7 @@ function f(
     #[test]
     fn generic_frames_cover_functions_and_methods() {
         let mut db = crate::compiler2_tir::support::make_db();
-        let file = db.add_file(
+        let file = db.file(
             "test.baml",
             r#"
 class Holder<T> {
@@ -152,8 +154,8 @@ function pair<T>(x: T, y: T[]) -> T throws never {
     #[test]
     fn resolves_across_namespaces_and_packages() {
         let mut db = crate::compiler2_tir::support::make_db();
-        db.add_file("ns_util/util.baml", "class Helper {}");
-        let file = db.add_file(
+        db.file("ns_util/util.baml", "class Helper {}");
+        let file = db.file(
             "main.baml",
             r#"
 function f(
@@ -167,11 +169,11 @@ function f(
         let signature = signature_of(&db, file, "f");
         assert_eq!(
             param_renders(&signature),
-            ["user.util.Helper", "Future<int, never>"]
+            ["user.util.Helper", "baml.future.Future<int, never>"]
         );
 
         // Inside the namespace, the bare name resolves namespace-relative.
-        let util_file = db.add_file(
+        let util_file = db.file(
             "ns_util/use.baml",
             "function g(h: Helper) -> int throws never { 1 }",
         );
@@ -182,7 +184,7 @@ function f(
     #[test]
     fn class_fields_and_alias_values_lower() {
         let mut db = crate::compiler2_tir::support::make_db();
-        let file = db.add_file(
+        let file = db.file(
             "test.baml",
             r#"
 class Pair<L, R> {

@@ -7506,7 +7506,7 @@ mod concurrent_tests {
 mod type_identity_tests {
     use std::sync::Arc;
 
-    use baml_project::testing::compile_source;
+    use baml_db::testing::compile_source;
     use bex_heap::{HeapPermit, TlabHolder};
     use bex_vm_types::Object;
     use sys_native::SysOpsExt;

@@ -4,7 +4,7 @@ use parking_lot::Mutex;
 
 /// Native session-owned playground state.
 ///
-/// Env values are logically owned by SessionStore. The native map is only the
+/// Env values are logically owned by `SessionStore`. The native map is only the
 /// process-side mirror used by `IoNamespaceEnv` before it falls back to process
 /// env or the webview prompt path.
 #[derive(Default)]
