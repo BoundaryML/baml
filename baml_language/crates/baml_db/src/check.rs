@@ -2281,6 +2281,57 @@ function demo() -> int throws never {
     }
 
     #[test]
+    fn an_unresolved_type_in_a_required_interface_method_is_reported() {
+        // A required (bodyless) interface method's signature is still a
+        // signature: an unresolved reference in it is E0002 like anywhere
+        // else. The signature pass used to skip these items outright, so
+        // nothing reported them and the `Error` sentinel travelled all the
+        // way to emit, which converts interface declarations under an
+        // `unreachable!` — a three-line file aborted `baml check`.
+        let source =
+            "interface Store {\n    function get(self, key: string) -> Missing throws never\n}\n";
+        let (db, file) = single_file(source);
+        let unresolved: Vec<_> = check_file(&db, file)
+            .into_iter()
+            .filter(|diag| diag.id == DiagnosticId::UnknownType)
+            .collect();
+        assert_eq!(unresolved.len(), 1, "{unresolved:?}");
+        let span = unresolved[0].annotations[0].span.range;
+        assert_eq!(&source[span], "Missing", "the report underlines the type");
+    }
+
+    #[test]
+    fn required_interface_signatures_resolve_self_and_method_generics() {
+        // Why the pass skipped required methods: the exclusion assumed a
+        // re-lowering would false-fire E0002 on every `Self.*`. It does not.
+        // `function_generic_frame` binds `Self`, the interface's generics,
+        // and the method's own; an associated type is not a frame slot at
+        // all — `Self.X` is a projection over the `Self` slot, reduced by
+        // the resolver at use. Either way these must check clean, and that
+        // is what makes reporting the genuinely-unresolved case above safe.
+        let (db, file) = single_file(
+            r#"interface Iter {
+    type Item
+    type Error
+    function next(self) -> Self.Item throws Self.Error
+    function map_to<Out>(self, seed: Out) -> Out throws Self.Error
+    function clone_me(self) -> Self throws never
+}
+
+interface Pair<A, B> {
+    type Joined
+    function join<Extra>(self, a: A, b: B, e: Extra) -> Self.Joined throws never
+}
+"#,
+        );
+        let unresolved: Vec<_> = check_file(&db, file)
+            .into_iter()
+            .filter(|diag| diag.id == DiagnosticId::UnknownType)
+            .collect();
+        assert!(unresolved.is_empty(), "{unresolved:?}");
+    }
+
+    #[test]
     fn self_referential_associated_bound_checks_clean() {
         // `type Assoc extends Iface` on `Iface` itself is valid (a bound is
         // a constraint head — it never demands the target's associated

@@ -2265,13 +2265,6 @@ pub fn signature_lowering_diagnostics<'db>(
     function: FunctionLoc<'db>,
 ) -> Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> {
     use crate::diagnostics::TirTypeError;
-    // Required interface methods are signature-only items checked by the
-    // interface-scope driver with `Self` in scope; this pass would
-    // misreport their `Self.*` references (the same exclusion the
-    // pre-S17 signature pass carried).
-    if baml_compiler2_ppir::item_data::is_required_interface_method(db, function) {
-        return Vec::new();
-    }
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let frame = function_generic_frame(db, function);
     let bounds = function_generic_bounds(db, function);
