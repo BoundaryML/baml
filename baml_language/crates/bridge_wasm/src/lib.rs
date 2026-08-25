@@ -17,7 +17,7 @@
 //! ever seeing a live clone (a mutation with one outstanding would hang the
 //! tab). Owner events are drained after each inbound message rather than by a
 //! blocking `select!` loop, and the debounced diagnostics tail is flushed the
-//! same way — see [`BamlWasmRuntime::pump`].
+//! same way — see `BamlWasmRuntime::pump`.
 //!
 //! The playground half (engine, runs, tests) is a separate surface still
 //! being rebuilt; this file is the analysis half only.

@@ -3,7 +3,7 @@
 // and non-regular recursive generics are rejected before the render walk can
 // diverge. Ported from the Rust `runtime_render_identity.rs` suite; the one
 // host-boundary test (an uncatchable `baml.errors.RenderPrompt` escaping
-// `output_format_with`, which declares `throws never`) remains in Rust.
+// `output_format`, which declares `throws never`) remains in Rust.
 
 client IdentityClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
@@ -13,7 +13,7 @@ client IdentityClient = openai.ResponsesClient.new(
 
 function Render<T>() -> T {
     client: IdentityClient
-    prompt: `${ctx.output_format}`
+    prompt: `${ctx.output_format()}`
 }
 
 test "non-equivalent same-name runtime classes fail before render" {
@@ -162,7 +162,7 @@ class BoxRec<T> {
 
 function RenderPair<T, U>() -> BoxRec<T> | BoxRec<U> {
     client: IdentityClient
-    prompt: `${ctx.output_format}`
+    prompt: `${ctx.output_format()}`
 }
 
 test "runtime type arguments with the same display name remain distinct" {

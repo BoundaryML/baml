@@ -254,7 +254,7 @@ pub fn package_impl_locs<'db>(
 /// Matching is nominal on the head's qualified name (implements is nominal):
 /// every generic instantiation of `Foo` names `Foo`, so instantiations are not
 /// distinguished here. Order is deterministic — packages sorted by name (via
-/// [`all_packages`]), blocks in source order within each. Mounted and
+/// `all_packages`), blocks in source order within each. Mounted and
 /// precompiled packages ship no source blocks, so their impls are not listed.
 #[salsa::tracked(returns(ref))]
 pub fn impls_naming_interface<'db>(

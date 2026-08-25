@@ -301,7 +301,7 @@ function gateway_images_render(
     }
     let journal = ai.wire.sanitize_for_client(input.journal, _gw_images_client_id(c));
     // No schema block: the only thing this endpoint can return is an image.
-    let lowered = _gw_images_input(input.prompt(""), journal, preview = preview);
+    let lowered = _gw_images_input(input.prompt(ai.internal.build_output_format(input.output_type)), journal, preview = preview);
     let files: GwImagesFile[]? = if (lowered.files.length() == 0) {
         null
     } else {

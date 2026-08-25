@@ -20,7 +20,7 @@ client TestClient = openai.ResponsesClient.new(
 
 function GenericList<T>(topic: string) -> T[] {
     client: TestClient
-    prompt: `List ${topic}.\n${ctx.output_format}`
+    prompt: `List ${topic}.\n${ctx.output_format()}`
 }
 "#;
 
@@ -33,7 +33,7 @@ client TestClient = openai.ResponsesClient.new(
 
 function GenericValue<T>(topic: string) -> T {
     client: TestClient
-    prompt: `Describe ${topic}.\n${ctx.output_format}`
+    prompt: `Describe ${topic}.\n${ctx.output_format()}`
 }
 "#;
 

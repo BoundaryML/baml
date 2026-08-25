@@ -66,10 +66,7 @@ function fixtures.retry_policy.UseRetryClient$render_prompt(input: string) -> ai
     call user.fixtures.retry_policy.UseRetryClient$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }

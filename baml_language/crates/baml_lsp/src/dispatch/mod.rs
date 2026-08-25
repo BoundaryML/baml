@@ -1,6 +1,6 @@
 //! The protocol dispatch tables.
 //!
-//! Requests come in two kinds, declared once in [`define_request_tables!`]:
+//! Requests come in two kinds, declared once in `define_request_tables!`:
 //!
 //! - **owner-inline** — served on the owner thread from session/root
 //!   bookkeeping alone (`initialize`, `shutdown`, …); they never run a
@@ -12,7 +12,7 @@
 //!
 //! Notifications are all owner-inline and reduce to
 //! [`crate::mutation::SourceMutation`] batches plus executor jobs
-//! (discovery, reloads); [`define_notification_table!`] declares them. Every
+//! (discovery, reloads); `define_notification_table!` declares them. Every
 //! method string is spelled exactly once, next to a handler whose parameter
 //! and result types are the `lsp_types` ones for that method — the tables
 //! type-check the wire contract. Anything not listed is

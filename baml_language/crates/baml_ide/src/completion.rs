@@ -2,19 +2,19 @@
 //!
 //! rust-analyzer's shape, in three parts that never trade jobs.
 //!
-//! **Analysis** ([`context`]) answers *what kind of position is this, and
+//! **Analysis** (`context`) answers *what kind of position is this, and
 //! what does the qualifier before it mean*. It classifies on a SPECULATIVE
 //! parse — the file with a marker identifier spliced in at the cursor —
 //! because a completion position is almost always a parse error in the real
 //! text, and it resolves the dot before the cursor ONCE, into a
-//! [`context::DotTarget`], against the real file's recorded facts.
+//! `context::DotTarget`, against the real file's recorded facts.
 //!
-//! **Providers** ([`members`], [`values`], [`args`], [`record`]) answer
+//! **Providers** (`members`, `values`, `args`, `record`) answer
 //! *what goes here*: one match arm per analysis, each enumerating from a
 //! compiler enumeration and filtering to what a reader can write at the
 //! position. No provider re-derives the position it was handed.
 //!
-//! **Presentation** (the [`completions`] accumulator and [`render`]) answers
+//! **Presentation** (the [`completions`] accumulator and `render`) answers
 //! *how an offer looks*: insert text, kind, and relevance are decided in the
 //! accumulator, detail and documentation in the renderer — each rule stated
 //! once, holding for every provider at once.

@@ -292,7 +292,7 @@ impl TypeInfo {
     /// or any trailing hint/note. For a class this is the **fields-only** body
     /// (`class Foo {\n    bar: int,\n}`): methods are surfaced separately by
     /// `describe`, never inside the body block. Shared by
-    /// [`Self::to_hover_markdown`] (which wraps it) and `describe::build_shape`.
+    /// [`Self::to_hover_block`] (which wraps it) and `describe::build_shape`.
     pub fn to_describe_block(&self) -> String {
         match self {
             TypeInfo::Function {
@@ -2411,7 +2411,7 @@ function helpful_turn(username: string, history: string[]) -> string {
             ${h}
         ${endfor}
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }"#,
         );
@@ -2431,7 +2431,7 @@ function helpful_turn(username: string, history: string[]) -> string {
     client: Terra
     prompt: `
         Respond to ${user<[CURSOR]name} helpfully.
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }"#,
         );

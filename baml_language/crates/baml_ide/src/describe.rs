@@ -63,7 +63,7 @@ pub struct SymbolDescription {
 
 /// A described symbol's kind, carrying exactly the payload that kind of
 /// symbol has. The one total mapping from the compiler's flat
-/// [`DefinitionKind`] is [`classify_definition_kind`]; the reverse
+/// [`DefinitionKind`] is `classify_definition_kind`; the reverse
 /// projection (for display labels and kind-based coloring) is
 /// [`Self::definition_kind`].
 #[derive(Clone, Serialize)]

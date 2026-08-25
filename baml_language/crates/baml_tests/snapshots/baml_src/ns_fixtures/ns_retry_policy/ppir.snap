@@ -12,10 +12,10 @@ function user.fixtures.retry_policy.UseRetryClient$parse(json: string) -> string
   baml.sap.parse(json)
 }
 function user.fixtures.retry_policy.UseRetryClient$render_prompt(input: string) -> ai.Prompt  [expr] {
-  UseRetryClient$spec(input).prompt(output_format = ai.wire.render_output_format(reflect.Type.of()))
+  UseRetryClient$spec(input).prompt()
 }
 function user.fixtures.retry_policy.UseRetryClient$spec(input: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "UseRetryClient", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "echo ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(MyClient) }
+  ai.FunctionSpec { spec_name: "UseRetryClient", args: map { "input": input }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "echo ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(MyClient) }
 }
 function user.fixtures.retry_policy.UseRetryClient$stream(input: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
   ai.stream.from_spec(UseRetryClient$spec(input), client = client, on_event = on_event)

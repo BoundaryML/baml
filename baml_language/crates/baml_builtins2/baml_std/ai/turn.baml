@@ -4,9 +4,9 @@
 // Mirrors _planv2/pages/02_guides/03_clients/02_the_client_interface.md.
 
 class ModelTurnInput {
-    // The bound prompt template. The client supplies the output-format text
-    // appropriate for its own wire format and receives one structural prompt.
-    prompt: (string) -> Prompt throws never,
+    // The bound prompt template. The client supplies the output-format schema
+    // handle and receives one structural prompt.
+    prompt: (OutputFormat) -> Prompt throws never,
     journal: Journal,
     toolbox: root.tools.Toolbox,
     output_type: reflect.Type,

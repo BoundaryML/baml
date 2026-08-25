@@ -7,7 +7,7 @@
 //! is itself waiting on the owner would stall every mutation (and on wasm,
 //! where the owner is the only thread, hang the tab). The type enforces the
 //! shape structurally: no `Clone`, a crate-private constructor, and the only
-//! consumer is [`crate::executor::Executor::spawn`], whose wrapper owns the
+//! consumer is [`crate::executor::spawn_read`], whose wrapper owns the
 //! snapshot, lends it to the task as `&Snapshot`, and drops it *before*
 //! reporting the result.
 

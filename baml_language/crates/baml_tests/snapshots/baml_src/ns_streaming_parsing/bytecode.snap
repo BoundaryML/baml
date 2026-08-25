@@ -66,10 +66,7 @@ function streaming_parsing.ExtractDoc$render_prompt(input: string) -> ai.Prompt 
     call user.streaming_parsing.ExtractDoc$spec
     store_var _2
     load_type streaming_parsing.Doc
-    call ai.wire.render_output_format
-    store_var _3
-    load_type streaming_parsing.Doc
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -192,10 +189,7 @@ function streaming_parsing.SayHello$render_prompt(input: string) -> ai.Prompt {
     call user.streaming_parsing.SayHello$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }

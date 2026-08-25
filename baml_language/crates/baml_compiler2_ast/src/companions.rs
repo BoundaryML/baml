@@ -122,7 +122,7 @@ fn llm_spec(parent: &FunctionDef) -> Option<FunctionDef> {
 /// the return type's output-format text as a structural `ai.Prompt`.
 fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
     spec_llm_meta(parent)?;
-    let out = parent.return_type.clone()?;
+    parent.return_type.as_ref()?;
     let params = own_params(parent);
     let generic_param_names: Vec<Name> = parent
         .generic_params
@@ -133,7 +133,6 @@ fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
         parent.name.as_str(),
         &params,
         &generic_param_names,
-        Some(out),
         parent.span,
     );
     let return_type = (TypeExprKind::Path {

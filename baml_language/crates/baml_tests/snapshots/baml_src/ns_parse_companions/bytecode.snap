@@ -82,10 +82,7 @@ function parse_companions.ParseCompanionsParseAliasPayload$render_prompt() -> ai
     call user.parse_companions.ParseCompanionsParseAliasPayload$spec
     store_var _1
     load_type parse_companions.ParseCompanionsAliasPayload
-    call ai.wire.render_output_format
-    store_var _2
-    load_type parse_companions.ParseCompanionsAliasPayload
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }
@@ -198,10 +195,7 @@ function parse_companions.ParseCompanionsParseOptPayload$render_prompt() -> ai.P
     call user.parse_companions.ParseCompanionsParseOptPayload$spec
     store_var _1
     load_type parse_companions.ParseCompanionsOptPayload
-    call ai.wire.render_output_format
-    store_var _2
-    load_type parse_companions.ParseCompanionsOptPayload
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }

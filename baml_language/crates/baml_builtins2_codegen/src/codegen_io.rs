@@ -87,7 +87,7 @@ fn io_package_name(builtin: &NativeBuiltin) -> &str {
 /// - "baml.fs.open" → "fs"
 /// - "baml.fs.File.read" → "fs"
 /// - `"ai.internal._gcp_access_token"` → `"internal"`
-/// - `"ai.Context.output_format_with"` → `""` (top-level class method)
+/// - `"ai.OutputFormat._render"` -> `""` (top-level class method)
 fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
     let after_package = builtin
         .path
@@ -2082,7 +2082,7 @@ fn emit_root_trait(tree: &BTreeMap<String, IoNamespaceNode>) -> TokenStream {
                 })
                 .collect();
             // A package's top-level classes (empty namespace, e.g.
-            // `ai.Context.output_format_with`) have no namespace segment to
+            // `ai.OutputFormat._render`) have no namespace segment to
             // consume: route the full `{Class}.{method}` rest to the
             // package-root dispatcher instead of `None`.
             let fallback = namespaces

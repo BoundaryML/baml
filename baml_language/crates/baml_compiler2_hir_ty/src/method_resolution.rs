@@ -984,7 +984,7 @@ pub enum MemberSource {
 /// order: class-inherent first, then the interfaces the receiver reaches.
 ///
 /// This walks exactly the tiers [`lookup_method`] and
-/// [`lookup_interface_member`] walk, sharing [`member_roots`] with them, and
+/// [`lookup_interface_member`] walk, sharing `member_roots` with them, and
 /// the first spelling of a name wins — which is the ladder's precedence, so
 /// what is enumerated is what would resolve. Members two interfaces declare
 /// ambiguously (E0121) are still enumerated once: the fix for an ambiguous

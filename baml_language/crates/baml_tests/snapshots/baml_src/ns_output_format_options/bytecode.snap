@@ -1,0 +1,191 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function output_format_options.$init_test_ns_output_format_options_output_format_options(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.output_format_options"
+    load_const "declarative output format supports every legacy option"
+    make_closure .<lambda($init_test_ns_output_format_options_output_format_options, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.output_format_options"
+    load_const "output format preserves legacy hoist classes shapes"
+    make_closure .<lambda($init_test_ns_output_format_options_output_format_options, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.output_format_options"
+    load_const "output format distinguishes omitted options from explicit null"
+    make_closure .<lambda($init_test_ns_output_format_options_output_format_options, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function output_format_options.OfAllLegacyOptions(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> output_format_options.OfOptionResult {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
+    load_const <omitted>
+    load_const <omitted>
+    load_var client
+    load_const <omitted>
+    load_var on_event
+    call ai.Agent.new
+    store_var _6
+    call user.output_format_options.OfAllLegacyOptions$spec
+    store_var _8
+    load_type output_format_options.OfOptionResult
+    load_var2 3 4
+    call ai.Agent.run
+    load_field .value
+    return
+}
+
+function output_format_options.OfAllLegacyOptions$build_request(client: ai.Client | null) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    call user.output_format_options.OfAllLegacyOptions$spec
+    store_var _3
+    load_type output_format_options.OfOptionResult
+    load_var2 2 1
+    call ai.FunctionSpec.build_request
+    return
+}
+
+function output_format_options.OfAllLegacyOptions$parse(json: string) -> output_format_options.OfOptionResult {
+    load_type output_format_options.OfOptionResult
+    load_var json
+    call baml.sap.parse
+    return
+}
+
+function output_format_options.OfAllLegacyOptions$render_prompt() -> ai.Prompt {
+    call user.output_format_options.OfAllLegacyOptions$spec
+    store_var _1
+    load_type output_format_options.OfOptionResult
+    load_var _1
+    call ai.FunctionSpec.prompt
+    return
+}
+
+function output_format_options.OfAllLegacyOptions$spec() -> ai.FunctionSpec<output_format_options.OfOptionResult> {
+    load_type ai.tools.Tool
+    alloc_array 0
+    call ai.tools.Toolbox.new
+    store_var _3
+    load_const "gpt-4o-mini"
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    call openai.ResponsesClient.new
+    store_var _5
+    load_const "OfAllLegacyOptions"
+    load_type string
+    load_type unknown
+    alloc_map 0
+    make_closure .<lambda(OfAllLegacyOptions$spec, 0)>, 0
+    load_var2 1 2
+    load_type output_format_options.OfOptionResult
+    init_instance<1> ai.FunctionSpec .spec_name, .args, .prompt_template, .toolbox, .default_client
+    return
+}
+
+function output_format_options.OfAllLegacyOptions$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<output_format_options.OfOptionResult$stream | null, output_format_options.OfOptionResult> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const null
+    store_var client
+
+  L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    call user.output_format_options.OfAllLegacyOptions$spec
+    store_var _5
+    load_type output_format_options.OfOptionResult$stream | null
+    load_type output_format_options.OfOptionResult
+    load_var2 3 1
+    load_var on_event
+    call ai.stream.from_spec
+    return
+}
+
+function output_format_options.of_context() -> ai.Context {
+    load_type output_format_options.OfOptionResult
+    sys_op ai.internal.build_output_format
+    store_var _5
+    load_const "test"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_type string
+    alloc_array 1
+    init_instance ai.ContextClient .name, .provider, .default_role, .allowed_roles
+    load_type string
+    load_type unknown
+    alloc_map 0
+    load_var _5
+    init_instance ai.Context .client, .tags, ._output_format
+    return
+}
+
+function output_format_options.of_render_hoist_classes(hoist_classes: bool | "auto" | string[]) -> string {
+    call user.output_format_options.of_context
+    load_const null
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_const <omitted>
+    load_var hoist_classes
+    load_const <omitted>
+    load_const <omitted>
+    call ai.Context.output_format
+    return
+}

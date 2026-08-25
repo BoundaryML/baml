@@ -606,7 +606,7 @@ async fn runtime_enum_renders_and_alias_round_trips_through_sap() {
 
         function Classify<T>(input: string) -> T {
             client: TestClient
-            prompt: `Choose a category for ${input}.\n${ctx.output_format}`
+            prompt: `Choose a category for ${input}.\n${ctx.output_format()}`
         }
 
         function main() -> string {
@@ -657,7 +657,7 @@ async fn runtime_enum_identity_and_metadata_are_preserved() {
 
         function Classify<T>(input: string) -> T {
             client: TestClient
-            prompt: `Choose a category for ${input}.\n${ctx.output_format}`
+            prompt: `Choose a category for ${input}.\n${ctx.output_format()}`
         }
 
         function main() -> string {
@@ -737,7 +737,7 @@ async fn empty_runtime_enum_fails_at_the_render_boundary() {
 
         function Classify<T>(input: string) -> T {
             client: TestClient
-            prompt: `Choose a category for ${input}.\n${ctx.output_format}`
+            prompt: `Choose a category for ${input}.\n${ctx.output_format()}`
         }
 
         function main() -> string throws never {
@@ -780,7 +780,7 @@ fn runtime_type_arguments_are_rejected_on_streaming_companions() {
 
         function Classify<T>(input: string) -> T {
             client: TestClient
-            prompt: `${input} ${ctx.output_format}`
+            prompt: `${input} ${ctx.output_format()}`
         }
 
         function main() -> null {
@@ -825,7 +825,7 @@ async fn get_function_refuses_an_unspecialized_generic_through_any_function() {
             client: TestClient
             prompt: `
                 Return an empty list of ${topic}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
 
@@ -878,7 +878,7 @@ async fn call_any_still_invokes_a_non_generic_companion() {
             client: TestClient
             prompt: `
                 Say ${topic}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
 
@@ -915,7 +915,7 @@ async fn get_function_refuses_an_unspecialized_generic_companion() {
             client: TestClient
             prompt: `
                 Return an empty list of ${topic}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
 
@@ -969,7 +969,7 @@ async fn get_function_still_extracts_a_non_generic_companion() {
             client: TestClient
             prompt: `
                 Say ${topic}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
 

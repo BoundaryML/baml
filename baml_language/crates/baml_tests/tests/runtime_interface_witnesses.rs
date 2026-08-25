@@ -76,7 +76,7 @@ async fn scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves() {
 
         function ExtractPerson<T extends PersonAnchor>(input: string) -> T {
             client: TestClient
-            prompt: `Extract a person from ${input}.\n${ctx.output_format}`
+            prompt: `Extract a person from ${input}.\n${ctx.output_format()}`
         }
 
         function main() -> string {
@@ -134,7 +134,7 @@ async fn bounded_unreflect_fails_before_rendering() {
 
         function ExtractPerson<T extends PersonAnchor>() -> T {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> string {
@@ -275,7 +275,7 @@ async fn equivalent_witnessed_definitions_render_and_parse_identically() {
 
         function ExtractPerson<T extends PersonAnchor>() -> T {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> bool {
@@ -332,7 +332,7 @@ async fn open_interface_occurrence_fails_at_render_boundary() {
 
         function ExtractEnvelope() -> Envelope {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> string {
@@ -380,7 +380,7 @@ async fn witness_inherits_interface_default_methods() {
 
         function ExtractGreeter<T extends Greeter>(input: string) -> T {
             client: TestClient
-            prompt: `Extract from ${input}.\n${ctx.output_format}`
+            prompt: `Extract from ${input}.\n${ctx.output_format()}`
         }
 
         function main() -> string {

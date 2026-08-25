@@ -29,6 +29,6 @@ function Structured(text: string) -> StreamEnvelope {
   prompt: `
     Return the deterministic replay object for: ${text}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }

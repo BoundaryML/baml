@@ -4,7 +4,7 @@
 
 function CompositeStreamSpec() -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `Return a short value. ${ctx.output_format}`
+    prompt: `Return a short value. ${ctx.output_format()}`
 }
 
 class StreamProbe {

@@ -3,7 +3,7 @@
 
 function SchemaAttemptSpec() -> int {
     client: "openai/gpt-4o-mini"
-    prompt: `Return one integer. ${ctx.output_format}`
+    prompt: `Return one integer. ${ctx.output_format()}`
 }
 
 class InvocationProbe {

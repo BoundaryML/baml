@@ -127,10 +127,7 @@ function runtime_render_identity.Render$render_prompt() -> ai.Prompt {
     call user.runtime_render_identity.Render$spec
     store_var _1
     load_type #0
-    call ai.wire.render_output_format
-    store_var _3
-    load_type #0
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }
@@ -251,10 +248,7 @@ function runtime_render_identity.RenderPair$render_prompt() -> ai.Prompt {
     call user.runtime_render_identity.RenderPair$spec
     store_var _1
     load_type runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>
-    call ai.wire.render_output_format
-    store_var _4
-    load_type runtime_render_identity.BoxRec<#0> | runtime_render_identity.BoxRec<#1>
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }

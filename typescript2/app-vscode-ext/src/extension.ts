@@ -1,21 +1,21 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
 import {
   LanguageClient,
   type LanguageClientOptions,
   type ServerOptions,
   State,
 } from 'vscode-languageclient/node';
-import { WebviewPanel } from './panels/WebviewPanel';
 import {
   BAML_LSP_PROTOCOL_MAX,
   BAML_LSP_PROTOCOL_MIN,
   BAML_PLAYGROUND_PROTOCOL_MAX,
   BAML_PLAYGROUND_PROTOCOL_MIN,
-  isProtocolCompatible,
   type BamlServerMetadata,
+  isProtocolCompatible,
 } from './compat';
+import { WebviewPanel } from './panels/WebviewPanel';
 
 // ── One client per window ────────────────────────────────────────────────
 //
@@ -32,13 +32,17 @@ import {
 let client: LanguageClient | undefined;
 let clientStartFailed = false;
 let knownProjects: string[] = [];
-let currentServerState: 'starting' | 'running' | 'stopped' | 'error' = 'starting';
+let currentServerState: 'starting' | 'running' | 'stopped' | 'error' =
+  'starting';
 let statusBarItem: vscode.StatusBarItem | undefined;
 let playgroundDir: string | undefined;
 let wrapperPath = 'baml';
 
 function getExtVersion(): string {
-  return vscode.extensions.getExtension('Boundary.baml-language')?.packageJSON?.version ?? '?';
+  return (
+    vscode.extensions.getExtension('Boundary.baml-language')?.packageJSON
+      ?.version ?? '?'
+  );
 }
 
 /** Short display name: last path component (e.g. "/Users/x/repos/myapp/baml_src" → "myapp/baml_src") */
@@ -49,34 +53,48 @@ function projectLabel(fullPath: string): string {
   return parent && parent !== name ? `${parent}/${name}` : name || fullPath;
 }
 
-function buildStatusTooltip(serverState: 'starting' | 'running' | 'stopped' | 'error'): vscode.MarkdownString {
+function buildStatusTooltip(
+  serverState: 'starting' | 'running' | 'stopped' | 'error',
+): vscode.MarkdownString {
   const serverVersion = client?.initializeResult?.serverInfo?.version ?? '—';
 
   const md = new vscode.MarkdownString(undefined, true);
   md.isTrusted = true;
   md.supportThemeIcons = true;
 
-  md.appendMarkdown(`Extension Info: Version ${getExtVersion()}, Server Version ${serverVersion}\n\n`);
-  md.appendMarkdown(`---\n\n`);
-  md.appendMarkdown(`[$(output) Open Logs](command:baml.openLogs)\n\n`);
+  md.appendMarkdown(
+    `Extension Info: Version ${getExtVersion()}, Server Version ${serverVersion}\n\n`,
+  );
+  md.appendMarkdown('---\n\n');
+  md.appendMarkdown('[$(output) Open Logs](command:baml.openLogs)\n\n');
 
   const projects = [...knownProjects].sort();
   if (projects.length > 0) {
     for (const project of projects) {
       const encoded = encodeURIComponent(JSON.stringify(project));
-      md.appendMarkdown(`[$(play) Open Playground — ${projectLabel(project)}](command:baml.openPlayground?${encoded})\n\n`);
+      md.appendMarkdown(
+        `[$(play) Open Playground — ${projectLabel(project)}](command:baml.openPlayground?${encoded})\n\n`,
+      );
     }
   } else {
-    md.appendMarkdown(`[$(play) Open Playground](command:baml.openPlayground)\n\n`);
+    md.appendMarkdown(
+      '[$(play) Open Playground](command:baml.openPlayground)\n\n',
+    );
   }
 
-  md.appendMarkdown(`---\n\n`);
+  md.appendMarkdown('---\n\n');
 
   if (serverState === 'running') {
-    md.appendMarkdown(`[$(debug-stop) Stop Server](command:baml.stopLanguageServer)\n\n`);
-    md.appendMarkdown(`[$(debug-restart) Restart Server](command:baml.restartLanguageServer)\n\n`);
+    md.appendMarkdown(
+      '[$(debug-stop) Stop Server](command:baml.stopLanguageServer)\n\n',
+    );
+    md.appendMarkdown(
+      '[$(debug-restart) Restart Server](command:baml.restartLanguageServer)\n\n',
+    );
   } else if (serverState === 'stopped' || serverState === 'error') {
-    md.appendMarkdown(`[$(debug-start) Start Server](command:baml.startLanguageServer)\n\n`);
+    md.appendMarkdown(
+      '[$(debug-start) Start Server](command:baml.startLanguageServer)\n\n',
+    );
   }
 
   return md;
@@ -108,12 +126,21 @@ function refreshTooltip() {
   }
 }
 
-function getPlaygroundDir(context: vscode.ExtensionContext): string | undefined {
-  const playgroundDir = vscode.Uri.joinPath(context.extensionUri, 'dist', 'playground').fsPath;
+function getPlaygroundDir(
+  context: vscode.ExtensionContext,
+): string | undefined {
+  const playgroundDir = vscode.Uri.joinPath(
+    context.extensionUri,
+    'dist',
+    'playground',
+  ).fsPath;
   return fs.existsSync(playgroundDir) ? playgroundDir : undefined;
 }
 
-function playgroundArgsForPath(projectPath?: string): { args: string[]; cwd?: string } {
+function playgroundArgsForPath(projectPath?: string): {
+  args: string[];
+  cwd?: string;
+} {
   if (!projectPath) {
     return { args: ['playground'] };
   }
@@ -147,8 +174,8 @@ function openPlaygroundInBrowserTerminal(projectPath?: string): void {
   // process first). No shell also means no quoting and no shell integration.
   const terminal = vscode.window.createTerminal({
     name: 'BAML Playground',
-    shellPath: wrapperPath,
     shellArgs: args,
+    shellPath: wrapperPath,
     ...(cwd ? { cwd } : {}),
   });
   terminal.show(false);
@@ -157,8 +184,8 @@ function openPlaygroundInBrowserTerminal(projectPath?: string): void {
 function createClient(context: vscode.ExtensionContext): LanguageClient {
   const firstFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const serverOptions: ServerOptions = {
-    command: wrapperPath,
     args: ['lsp'],
+    command: wrapperPath,
     options: {
       ...(firstFolder ? { cwd: firstFolder } : {}),
       env: {
@@ -176,6 +203,25 @@ function createClient(context: vscode.ExtensionContext): LanguageClient {
     // `workspace/didChangeWorkspaceFolders`, and the server discovers
     // projects underneath them.
     documentSelector: [{ language: 'baml', scheme: 'file' }],
+    initializationOptions: {
+      bamlClient: {
+        capabilities: [
+          'openPlayground.v1',
+          'listProjects.v1',
+          'playgroundWebSocket.v1',
+        ],
+        extensionVersion: getExtVersion(),
+        kind: 'vscode',
+        supportedLspProtocol: {
+          max: BAML_LSP_PROTOCOL_MAX,
+          min: BAML_LSP_PROTOCOL_MIN,
+        },
+        supportedPlaygroundProtocol: {
+          max: BAML_PLAYGROUND_PROTOCOL_MAX,
+          min: BAML_PLAYGROUND_PROTOCOL_MIN,
+        },
+      },
+    },
     synchronize: {
       fileEvents: [
         vscode.workspace.createFileSystemWatcher('**/*.baml'),
@@ -184,21 +230,17 @@ function createClient(context: vscode.ExtensionContext): LanguageClient {
         vscode.workspace.createFileSystemWatcher('**/{baml.toml,baml_src}'),
       ],
     },
-    initializationOptions: {
-      bamlClient: {
-        kind: 'vscode',
-        extensionVersion: getExtVersion(),
-        supportedLspProtocol: { min: BAML_LSP_PROTOCOL_MIN, max: BAML_LSP_PROTOCOL_MAX },
-        supportedPlaygroundProtocol: { min: BAML_PLAYGROUND_PROTOCOL_MIN, max: BAML_PLAYGROUND_PROTOCOL_MAX },
-        capabilities: ['openPlayground.v1', 'listProjects.v1', 'playgroundWebSocket.v1'],
-      },
-    },
   };
 
   // The literal id `baml` is what makes the `baml.trace.server` setting
   // work: vscode-languageclient looks the trace level up under the client
   // id, and the previous per-root ids (`baml:/path`) never matched.
-  const created = new LanguageClient('baml', 'BAML Language Server', serverOptions, clientOptions);
+  const created = new LanguageClient(
+    'baml',
+    'BAML Language Server',
+    serverOptions,
+    clientOptions,
+  );
 
   created.onDidChangeState((e) => {
     switch (e.newState) {
@@ -228,17 +270,24 @@ function createClient(context: vscode.ExtensionContext): LanguageClient {
     }) => {
       await WebviewPanel.render(context.extensionUri, params.port, {
         project: params.projectPath,
-        ...(params.functionName !== undefined ? { functionName: params.functionName } : {}),
+        ...(params.functionName !== undefined
+          ? { functionName: params.functionName }
+          : {}),
         ...(params.testName !== undefined ? { testName: params.testName } : {}),
-        ...(params.testsetName !== undefined ? { testsetName: params.testsetName } : {}),
+        ...(params.testsetName !== undefined
+          ? { testsetName: params.testsetName }
+          : {}),
       });
     },
   );
 
-  created.onNotification('baml/listProjects', (params: { projects: string[] }) => {
-    knownProjects = params.projects ?? [];
-    refreshTooltip();
-  });
+  created.onNotification(
+    'baml/listProjects',
+    (params: { projects: string[] }) => {
+      knownProjects = params.projects ?? [];
+      refreshTooltip();
+    },
+  );
 
   return created;
 }
@@ -258,24 +307,38 @@ async function startClient(): Promise<void> {
 }
 
 function validateServerCompatibility(client: LanguageClient) {
-  const metadata = client.initializeResult?.capabilities?.experimental?.baml as BamlServerMetadata | undefined;
+  const metadata = client.initializeResult?.capabilities?.experimental?.baml as
+    | BamlServerMetadata
+    | undefined;
   if (!metadata?.lspProtocol || !metadata.minSupportedClientLspProtocol) {
     return;
   }
-  if (!isProtocolCompatible(metadata.lspProtocol, metadata.minSupportedClientLspProtocol, {
-    min: BAML_LSP_PROTOCOL_MIN,
-    max: BAML_LSP_PROTOCOL_MAX,
-  })) {
-    vscode.window.showWarningMessage('BAML language server protocol is incompatible with this extension. Update the BAML extension or the active BAML toolchain.');
+  if (
+    !isProtocolCompatible(
+      metadata.lspProtocol,
+      metadata.minSupportedClientLspProtocol,
+      {
+        max: BAML_LSP_PROTOCOL_MAX,
+        min: BAML_LSP_PROTOCOL_MIN,
+      },
+    )
+  ) {
+    vscode.window.showWarningMessage(
+      'BAML language server protocol is incompatible with this extension. Update the BAML extension or the active BAML toolchain.',
+    );
   }
 }
 
 export async function activate(context: vscode.ExtensionContext) {
   const config = vscode.workspace.getConfiguration('baml');
   playgroundDir = getPlaygroundDir(context);
-  wrapperPath = process.env.BAML_CLI_PATH ?? config.get<string | null>('cliPath') ?? 'baml';
+  wrapperPath =
+    process.env.BAML_CLI_PATH ?? config.get<string | null>('cliPath') ?? 'baml';
 
-  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+  statusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    0,
+  );
   statusBarItem.text = '$(loading~spin) 🐑 BAML';
   statusBarItem.tooltip = buildStatusTooltip('starting');
   statusBarItem.show();
@@ -322,26 +385,34 @@ export async function activate(context: vscode.ExtensionContext) {
   // status bar tooltip links). Routes through the LSP so
   // NativePlaygroundSender can decide how to open it (and attach the port).
   context.subscriptions.push(
-    vscode.commands.registerCommand('baml.openPlayground', async (projectPath?: string) => {
-      if (!client || client.state !== State.Running) {
-        vscode.window.showWarningMessage('BAML Language Server is not running.');
-        return;
-      }
-      const args: Record<string, unknown> = {};
-      if (projectPath) {
-        args.projectPath = projectPath;
-      }
-      await client.sendRequest('workspace/executeCommand', {
-        command: 'baml.openBamlPanel',
-        arguments: [args],
-      });
-    }),
+    vscode.commands.registerCommand(
+      'baml.openPlayground',
+      async (projectPath?: string) => {
+        if (!client || client.state !== State.Running) {
+          vscode.window.showWarningMessage(
+            'BAML Language Server is not running.',
+          );
+          return;
+        }
+        const args: Record<string, unknown> = {};
+        if (projectPath) {
+          args.projectPath = projectPath;
+        }
+        await client.sendRequest('workspace/executeCommand', {
+          arguments: [args],
+          command: 'baml.openBamlPanel',
+        });
+      },
+    ),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('baml.openPlaygroundInBrowser', (projectPath?: string) => {
-      openPlaygroundInBrowserTerminal(projectPath);
-    }),
+    vscode.commands.registerCommand(
+      'baml.openPlaygroundInBrowser',
+      (projectPath?: string) => {
+        openPlaygroundInBrowserTerminal(projectPath);
+      },
+    ),
   );
 
   // Activation fires on `onLanguage:baml`, so a BAML document exists (or

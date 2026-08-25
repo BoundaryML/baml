@@ -96,7 +96,7 @@ function prompt(
 class FunctionSpec<Out> {
     spec_name: string,
     args: map<string, unknown>,
-    prompt_template: (string) -> Prompt throws never,
+    prompt_template: (OutputFormat) -> Prompt throws never,
     toolbox: root.tools.Toolbox,
     default_client: Client,
 
@@ -129,8 +129,8 @@ class FunctionSpec<Out> {
         output_type
     }
 
-    function prompt(self, output_format: string = "") -> Prompt {
-        self.prompt_template(output_format)
+    function prompt(self) -> Prompt {
+        self.prompt_template(root.internal.build_output_format(self.output_type()))
     }
 
     function tools(self) -> root.tools.Toolbox {

@@ -45,7 +45,7 @@
 //! additive post-merge pass (ruled 2026-08-20): interface `requires` clauses
 //! and associated-type `extends` bounds are not exported, and a bound's
 //! associated-type bindings (`Iterable<Item = …>`) are dropped by
-//! [`generic_export`]'s renderer (latent — no current stdlib generic bound
+//! `generic_export`'s renderer (latent — no current stdlib generic bound
 //! carries bindings).
 
 use std::fmt::{self, Write as _};

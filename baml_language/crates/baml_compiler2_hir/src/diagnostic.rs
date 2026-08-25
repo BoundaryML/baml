@@ -74,7 +74,7 @@ pub enum Hir2Diagnostic {
     /// either two members share an `@alias("k")`, or one member's name equals
     /// another member's `@alias`. Because an aliased member's real name is never
     /// used for matching (see `bex_sap`'s `AnnotatedField::key_matches`), such
-    /// members are indistinguishable in the serialized schema: `ctx.output_format`
+    /// members are indistinguishable in the serialized schema: `ctx.output_format()`
     /// renders duplicate keys and only one member can ever be populated at parse
     /// time (for classes) or produced during parsing (for enum variants).
     ///

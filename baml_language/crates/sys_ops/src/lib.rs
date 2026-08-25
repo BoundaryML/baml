@@ -174,33 +174,26 @@ impl<T> io::IoClassSapParseCache for T {
     }
 }
 
-/// Blanket impl — `Context.output_format_with(...)` re-renders the return
-/// type's schema with caller options (BEP-049 §10 / M5b.2). `Context._output_format`
-/// carries the prebuilt schema as an opaque handle, so this only re-renders it.
-impl<T> io::IoClassAiContext for T {
+impl<T> io::IoClassAiOutputFormat for T {
     #[allow(clippy::too_many_arguments)]
-    fn output_format_with(
+    fn _render(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        context: io::owned::ai::Context,
-        prefix: Option<String>,
-        or_splitter: Option<String>,
-        enum_value_prefix: Option<String>,
-        hoisted_class_prefix: Option<String>,
-        always_hoist_enums: Option<bool>,
-        quote_class_fields: Option<bool>,
-        hoist_classes: Option<Vec<String>>,
-        map_style: Option<String>,
-        render_null_as: Option<String>,
+        output_format: io::owned::ai::OutputFormat,
+        prefix: io::BexExternalValue,
+        or_splitter: io::BexExternalValue,
+        enum_value_prefix: io::BexExternalValue,
+        hoisted_class_prefix: io::BexExternalValue,
+        always_hoist_enums: io::BexExternalValue,
+        quote_class_fields: io::BexExternalValue,
+        hoist_classes: io::BexExternalValue,
+        map_style: io::BexExternalValue,
+        render_null_as: io::BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        // Render the prebuilt schema handle with the caller's options. The
-        // `Option → RenderOptions` mapping lives inside `output_format` (those
-        // option types are module-internal there).
-        let content = unwrap_output_format(&context._output_format);
-        let rendered = crate::output_format::render_output_format_content(
-            &content,
+        render_output_format_with_op(
+            &output_format,
             prefix,
             or_splitter,
             enum_value_prefix,
@@ -210,16 +203,7 @@ impl<T> io::IoClassAiContext for T {
             hoist_classes,
             map_style,
             render_null_as,
-        );
-        match rendered {
-            Ok(rendered) => SysOpOutput::ok(rendered),
-            // Keep the structured render failure at the VM boundary instead of
-            // turning it into a successful empty schema. The public BAML method
-            // retains its existing effect signature for prompt-tag compatibility.
-            Err(error) => SysOpOutput::err(VmBamlError::RenderPrompt {
-                message: error.to_string(),
-            }),
-        }
+        )
     }
 }
 
@@ -734,7 +718,7 @@ impl<T> io::IoNamespaceAi for T {}
 // both `DefaultIoOps` and `NativeSysOps` delegate their `IoNamespaceAiInternal`
 // prompt methods to these shared implementations.
 
-/// BEP-049 §10 (M5b): the `ctx.output_format` schema string.
+/// BEP-049 section 10 (M5b): the `ctx.output_format()` schema string.
 pub fn render_output_format_op(
     return_type: &::sys_types::SapTy,
     ctx: &SysOpContext,
@@ -742,14 +726,163 @@ pub fn render_output_format_op(
     SysOpOutput::ok(crate::output_format::render_output_format(return_type, ctx))
 }
 
-/// BEP-049 §10 (M5b.2): build the opaque schema handle `Context._output_format`
-/// carries; `output_format_with(...)` renders it with caller options.
+/// BEP-049 section 10 (M5b.2): build the opaque schema handle `Context._output_format`
+/// carries; `output_format(...)` renders it with caller options.
 pub fn build_output_format_op(
     return_type: &::sys_types::SapTy,
     ctx: &SysOpContext,
 ) -> SysOpOutput<io::owned::ai::OutputFormat> {
     let content = crate::output_format::build_output_format_content(return_type, ctx);
     SysOpOutput::ok(wrap_output_format(std::sync::Arc::new(content)))
+}
+
+fn output_format_option_value(value: io::BexExternalValue) -> io::BexExternalValue {
+    match value {
+        io::BexExternalValue::Union { value, .. } => output_format_option_value(*value),
+        value => value,
+    }
+}
+
+fn invalid_output_format_option(name: &str, value: &io::BexExternalValue) -> VmBamlError {
+    VmBamlError::DevOther {
+        message: format!("invalid internal value for output_format option `{name}`: {value:?}"),
+    }
+}
+
+fn is_output_format_default(value: &io::BexExternalValue) -> bool {
+    matches!(
+        value,
+        io::BexExternalValue::Variant {
+            variant_name,
+            ..
+        } if variant_name == "Auto"
+    )
+}
+
+fn output_format_string_setting(
+    name: &str,
+    value: io::BexExternalValue,
+    null_is_never: bool,
+) -> Result<crate::output_format::RenderSetting<String>, VmBamlError> {
+    use crate::output_format::RenderSetting;
+
+    let value = output_format_option_value(value);
+    match value {
+        io::BexExternalValue::String(value) => Ok(RenderSetting::Always(value.to_string())),
+        io::BexExternalValue::Null if null_is_never => Ok(RenderSetting::Never),
+        io::BexExternalValue::Null => Ok(RenderSetting::Auto),
+        value if is_output_format_default(&value) => Ok(RenderSetting::Auto),
+        value => Err(invalid_output_format_option(name, &value)),
+    }
+}
+
+fn output_format_bool_setting(
+    name: &str,
+    value: io::BexExternalValue,
+) -> Result<crate::output_format::RenderSetting<bool>, VmBamlError> {
+    use crate::output_format::RenderSetting;
+
+    let value = output_format_option_value(value);
+    match value {
+        io::BexExternalValue::Bool(value) => Ok(RenderSetting::Always(value)),
+        value if is_output_format_default(&value) => Ok(RenderSetting::Auto),
+        value => Err(invalid_output_format_option(name, &value)),
+    }
+}
+
+fn output_format_hoist_classes(
+    value: io::BexExternalValue,
+) -> Result<crate::output_format::HoistClasses, VmBamlError> {
+    use crate::output_format::HoistClasses;
+
+    let value = output_format_option_value(value);
+    match value {
+        io::BexExternalValue::Bool(true) => Ok(HoistClasses::All),
+        io::BexExternalValue::Bool(false) => Ok(HoistClasses::Auto),
+        io::BexExternalValue::String(value) if value.as_str() == "auto" => Ok(HoistClasses::Auto),
+        io::BexExternalValue::Array { items, .. } => items
+            .into_iter()
+            .map(|item| match output_format_option_value(item) {
+                io::BexExternalValue::String(value) => Ok(value.to_string()),
+                value => Err(invalid_output_format_option("hoist_classes", &value)),
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(HoistClasses::Subset),
+        value if is_output_format_default(&value) => Ok(HoistClasses::Auto),
+        value => Err(invalid_output_format_option("hoist_classes", &value)),
+    }
+}
+
+fn output_format_map_style(
+    value: io::BexExternalValue,
+) -> Result<crate::output_format::MapStyle, VmBamlError> {
+    use crate::output_format::MapStyle;
+
+    let value = output_format_option_value(value);
+    match value {
+        io::BexExternalValue::String(value) if value.as_str() == "angle" => {
+            Ok(MapStyle::TypeParameters)
+        }
+        io::BexExternalValue::String(value) if value.as_str() == "object" => {
+            Ok(MapStyle::ObjectLiteral)
+        }
+        value if is_output_format_default(&value) => Ok(MapStyle::default()),
+        value => Err(invalid_output_format_option("map_style", &value)),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn render_output_format_with_op(
+    output_format: &io::owned::ai::OutputFormat,
+    prefix: io::BexExternalValue,
+    or_splitter: io::BexExternalValue,
+    enum_value_prefix: io::BexExternalValue,
+    hoisted_class_prefix: io::BexExternalValue,
+    always_hoist_enums: io::BexExternalValue,
+    quote_class_fields: io::BexExternalValue,
+    hoist_classes: io::BexExternalValue,
+    map_style: io::BexExternalValue,
+    render_null_as: io::BexExternalValue,
+) -> SysOpOutput<String> {
+    let options: Result<crate::output_format::RenderOptions, VmBamlError> = (|| {
+        Ok(crate::output_format::RenderOptions {
+            prefix: output_format_string_setting("prefix", prefix, true)?,
+            or_splitter: output_format_string_setting("or_splitter", or_splitter, false)?,
+            enum_value_prefix: output_format_string_setting(
+                "enum_value_prefix",
+                enum_value_prefix,
+                true,
+            )?,
+            hoisted_class_prefix: output_format_string_setting(
+                "hoisted_class_prefix",
+                hoisted_class_prefix,
+                true,
+            )?,
+            hoist_classes: output_format_hoist_classes(hoist_classes)?,
+            always_hoist_enums: output_format_bool_setting(
+                "always_hoist_enums",
+                always_hoist_enums,
+            )?,
+            map_style: output_format_map_style(map_style)?,
+            quote_class_fields: output_format_bool_setting(
+                "quote_class_fields",
+                quote_class_fields,
+            )?,
+            render_null_as: output_format_string_setting("render_null_as", render_null_as, false)?,
+        })
+    })();
+
+    let options = match options {
+        Ok(options) => options,
+        Err(error) => return SysOpOutput::err(error),
+    };
+    let content = unwrap_output_format(output_format);
+    match crate::output_format::render_output_format_content(&content, &options) {
+        Ok(rendered) => SysOpOutput::ok(rendered),
+        Err(error) => SysOpOutput::err(VmBamlError::RenderPrompt {
+            message: error.to_string(),
+        }),
+    }
 }
 
 /// Look up an LLM function's declared return type by name.

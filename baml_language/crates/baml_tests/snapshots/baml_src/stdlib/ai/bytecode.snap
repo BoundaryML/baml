@@ -1424,7 +1424,97 @@ function ai.Agent.run(self: ai.Agent, spec: ai.FunctionSpec<#0>) -> ai.RunResult
     throw
 }
 
-function ai.Context.output_format_with(self: ai.Context, prefix: string | null, or_splitter: string | null, enum_value_prefix: string | null, hoisted_class_prefix: string | null, always_hoist_enums: bool | null, quote_class_fields: bool | null, hoist_classes: string[] | null, map_style: string | null, render_null_as: string | null) -> string {
+function ai.Context.output_format(self: ai.Context, prefix: string | null | ai.internal.OutputFormatDefault, or_splitter: string | ai.internal.OutputFormatDefault, enum_value_prefix: string | null | ai.internal.OutputFormatDefault, hoisted_class_prefix: string | null | ai.internal.OutputFormatDefault, always_hoist_enums: bool | ai.internal.OutputFormatDefault, quote_class_fields: bool | ai.internal.OutputFormatDefault, hoist_classes: bool | "auto" | string[] | ai.internal.OutputFormatDefault, map_style: "angle" | "object" | ai.internal.OutputFormatDefault, render_null_as: string | null | ai.internal.OutputFormatDefault) -> string {
+    load_var prefix
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var prefix
+
+  L0:
+    load_var or_splitter
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var or_splitter
+
+  L1:
+    load_var enum_value_prefix
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var enum_value_prefix
+
+  L2:
+    load_var hoisted_class_prefix
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var hoisted_class_prefix
+
+  L3:
+    load_var always_hoist_enums
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var always_hoist_enums
+
+  L4:
+    load_var quote_class_fields
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L5
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var quote_class_fields
+
+  L5:
+    load_var hoist_classes
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L6
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var hoist_classes
+
+  L6:
+    load_var map_style
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L7
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var map_style
+
+  L7:
+    load_var render_null_as
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L8
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var render_null_as
+
+  L8:
+    load_var self
+    load_field ._output_format
+    load_var2 2 3
+    load_var2 4 5
+    load_var2 6 7
+    load_var2 8 9
+    load_var render_null_as
+    sys_op ai.OutputFormat._render
+    return
 }
 
 function ai.FunctionSpec.arguments(self: ai.FunctionSpec<#0>) -> map<string, unknown> {
@@ -1497,17 +1587,15 @@ function ai.FunctionSpec.output_type(self: ai.FunctionSpec<#0>) -> reflect.Type 
     return
 }
 
-function ai.FunctionSpec.prompt(self: ai.FunctionSpec<#0>, output_format: string) -> ai.Prompt {
-    load_var output_format
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const ""
-    store_var output_format
-
-  L0:
-    load_var2 2 1
+function ai.FunctionSpec.prompt(self: ai.FunctionSpec<#0>) -> ai.Prompt {
+    load_var self
     load_field .prompt_template
+    store_var _2
+    load_type #0
+    load_var self
+    call ai.FunctionSpec.output_type
+    sys_op ai.internal.build_output_format
+    load_var _2
     call_indirect
     return
 }
@@ -1687,6 +1775,9 @@ function ai.ModelTurn.tool_uses(self: ai.ModelTurn) -> ai.content.ToolUse[] {
   L2:
     load_var out
     return
+}
+
+function ai.OutputFormat._render(self: ai.OutputFormat, prefix: string | null | ai.internal.OutputFormatDefault, or_splitter: string | ai.internal.OutputFormatDefault, enum_value_prefix: string | null | ai.internal.OutputFormatDefault, hoisted_class_prefix: string | null | ai.internal.OutputFormatDefault, always_hoist_enums: bool | ai.internal.OutputFormatDefault, quote_class_fields: bool | ai.internal.OutputFormatDefault, hoist_classes: bool | "auto" | string[] | ai.internal.OutputFormatDefault, map_style: "angle" | "object" | ai.internal.OutputFormatDefault, render_null_as: string | null | ai.internal.OutputFormatDefault) -> string {
 }
 
 function ai.Prompt.baml.ToString.to_string(self: ai.Prompt) -> string {
@@ -3858,6 +3949,99 @@ function ai.events.guard(listener: ((ai.events.RunStarted | ai.events.UserMessag
     make_closure .<lambda(guard, 0)>, captures=1, ntypeargs=1
 
   L2:
+    return
+}
+
+function ai.internal.SpecCtx.output_format(self: ai.internal.SpecCtx, prefix: string | null | ai.internal.OutputFormatDefault, or_splitter: string | ai.internal.OutputFormatDefault, enum_value_prefix: string | null | ai.internal.OutputFormatDefault, hoisted_class_prefix: string | null | ai.internal.OutputFormatDefault, always_hoist_enums: bool | ai.internal.OutputFormatDefault, quote_class_fields: bool | ai.internal.OutputFormatDefault, hoist_classes: bool | "auto" | string[] | ai.internal.OutputFormatDefault, map_style: "angle" | "object" | ai.internal.OutputFormatDefault, render_null_as: string | null | ai.internal.OutputFormatDefault) -> string {
+    load_var prefix
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var prefix
+
+  L0:
+    load_var or_splitter
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var or_splitter
+
+  L1:
+    load_var enum_value_prefix
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L2
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var enum_value_prefix
+
+  L2:
+    load_var hoisted_class_prefix
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L3
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var hoisted_class_prefix
+
+  L3:
+    load_var always_hoist_enums
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L4
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var always_hoist_enums
+
+  L4:
+    load_var quote_class_fields
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L5
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var quote_class_fields
+
+  L5:
+    load_var hoist_classes
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L6
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var hoist_classes
+
+  L6:
+    load_var map_style
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L7
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var map_style
+
+  L7:
+    load_var render_null_as
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L8
+    load_const ai.internal.OutputFormatDefault.Auto
+    alloc_variant ai.internal.OutputFormatDefault
+    store_var render_null_as
+
+  L8:
+    load_var self
+    load_field ._output_format
+    load_var2 2 3
+    load_var2 4 5
+    load_var2 6 7
+    load_var2 8 9
+    load_var render_null_as
+    sys_op ai.OutputFormat._render
     return
 }
 

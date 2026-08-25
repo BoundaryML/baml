@@ -399,7 +399,7 @@ function extract_resume(text: string) -> Resume {
   client: "openai/gpt-4o-mini"
   prompt: `
     Extract the resume.
-    ${ctx.output_format}
+    ${ctx.output_format()}
     ${text}
   `
 }

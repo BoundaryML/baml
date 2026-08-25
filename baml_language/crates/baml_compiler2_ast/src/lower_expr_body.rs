@@ -365,10 +365,10 @@ pub(crate) fn lower_client_initializer(
 /// ai.FunctionSpec<Out> {
 ///     spec_name: "Fn",
 ///     args: { "p": p, ... },
-///     prompt_template: (output_format: string) -> {
+///     prompt_template: (output_format: ai.OutputFormat) -> {
 ///         // the parameter's real name is ` __spec_output_format` (leading
 ///         // space) so it can never shadow a user identifier
-///         let ctx = ai.internal.SpecCtx { output_format: output_format };
+///         let ctx = ai.internal.SpecCtx { _output_format: output_format };
 ///         let tagged = baml.TaggedString { ...the function's prompt... };
 ///         ai.internal.assemble_llm_prompt(tagged.parts, tagged.values)
 ///     },
@@ -380,7 +380,7 @@ pub(crate) fn lower_client_initializer(
 /// The prompt closure uses the same structural parts/values representation as
 /// the built-in `prompt` tag. `${role(...)}` values become prompt messages
 /// and media remains structural. `ctx` is bound to an `ai.internal.SpecCtx`,
-/// so `${ctx.output_format}` resolves to the closure's parameter and every
+/// so `${ctx.output_format()}` renders the closure's schema handle and every
 /// other interpolation captures the enclosing function's parameters.
 ///
 /// The `default_client` expression is evaluated when this `$spec` body runs —
@@ -429,12 +429,12 @@ pub(crate) fn synthesize_llm_spec_body(
         .collect();
     let args_map = ctx.alloc_expr(Expr::Map { entries }, span);
 
-    // prompt_template: ( __spec_output_format: string) -> ai.Prompt { ... }
+    // prompt_template: ( __spec_output_format: ai.OutputFormat) -> ai.Prompt { ... }
     //
     // The lambda parameter carries a leading-space name so it can never
     // shadow a user identifier: a function parameter named `output_format`
     // must stay visible to `${output_format}` in the template (the parameter
-    // is only the render calling convention; `ctx.output_format` is the
+    // is only the render calling convention; `ctx.output_format()` is the
     // documented way to reach the rendered schema). Mirrors the `__tt_*`
     // accumulator naming in `elaborate_tagged_body`.
     //
@@ -452,7 +452,7 @@ pub(crate) fn synthesize_llm_spec_body(
             type_name: baml_base::TypePath::from_dotted("ai.internal.SpecCtx"),
             type_args: vec![],
             fields: vec![ObjectExprField::explicit(
-                Name::new("output_format"),
+                Name::new("_output_format"),
                 of_ref,
             )],
             spreads: vec![],
@@ -574,7 +574,15 @@ pub(crate) fn synthesize_llm_spec_body(
     );
     let of_param = Param {
         name: of_param_name,
-        type_expr: Some((TypeExprKind::String { attrs: vec![] }).at(span)),
+        type_expr: Some(
+            (TypeExprKind::Path {
+                segments: vec![Name::new("ai"), Name::new("OutputFormat")],
+                generic_args: vec![],
+                associated_type_bindings: vec![],
+                attrs: vec![],
+            })
+            .at(span),
+        ),
         default: None,
         span,
         name_span: span,
@@ -747,17 +755,13 @@ pub(crate) fn synthesize_llm_spec_body(
 }
 
 /// Synthesize the `$render_prompt` companion body: render the spec's prompt
-/// with the return type's output-format text —
-/// `Fn$spec(p...).prompt(ai.wire.render_output_format(reflect.Type.of<Out>()))`.
+/// with the return type's output-format handle: `Fn$spec(p...).prompt()`.
 pub(crate) fn synthesize_spec_render_prompt_body(
     function_name: &str,
     params: &[Param],
     generic_param_names: &[Name],
-    out_type: Option<crate::ast::TypeExpr>,
     span: TextRange,
 ) -> (ExprBody, AstSourceMap) {
-    use crate::ast::CallArg;
-
     let mut ctx = LoweringContext::new();
 
     let spec_callee = ctx.alloc_expr(
@@ -780,43 +784,11 @@ pub(crate) fn synthesize_spec_render_prompt_body(
         },
         span,
     );
-    let type_of_callee = ctx.alloc_expr(
-        Expr::Path(vec![
-            Name::new("reflect"),
-            Name::new("Type"),
-            Name::new("of"),
-        ]),
-        span,
-    );
-    let type_of_call = ctx.alloc_expr(
-        Expr::Call {
-            callee: type_of_callee,
-            type_args: out_type.map(|t| vec![t.into()]).unwrap_or_default(),
-            args: vec![],
-        },
-        span,
-    );
-    let rof_callee = ctx.alloc_expr(
-        Expr::Path(vec![
-            Name::new("ai"),
-            Name::new("wire"),
-            Name::new("render_output_format"),
-        ]),
-        span,
-    );
-    let rof_call = ctx.alloc_expr(
-        Expr::Call {
-            callee: rof_callee,
-            type_args: vec![],
-            args: vec![CallArg::positional(type_of_call)],
-        },
-        span,
-    );
     let render_call = ctx.alloc_expr(
         Expr::Call {
             callee: prompt_callee,
             type_args: vec![],
-            args: vec![CallArg::named("output_format", rof_call)],
+            args: vec![],
         },
         span,
     );

@@ -7,13 +7,11 @@ source: crates/baml_tests/src/corpus.rs
 class ai.Context {
   client: ai.ContextClient
   tags: map<string, unknown>
-  output_format: string
   _output_format: ai.OutputFormat
 }
 class ai.Context$stream {
   client: ai.ContextClient$stream | null
   tags: map<string, unknown>
-  output_format: string | null
   _output_format: ai.OutputFormat$stream | null
 }
 class ai.ContextClient {
@@ -42,7 +40,10 @@ class ai.Role$stream {
   name: string | null
   metadata: map<string, unknown>
 }
-function ai.output_format_with(self: ?, prefix: string? = null, or_splitter: string? = null, enum_value_prefix: string? = null, hoisted_class_prefix: string? = null, always_hoist_enums: bool? = null, quote_class_fields: bool? = null, hoist_classes: string[]? = null, map_style: string? = null, render_null_as: string? = null) -> string  [builtin]
+function ai._render(self: ?, prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, or_splitter: string | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, enum_value_prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, hoisted_class_prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, always_hoist_enums: bool | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, quote_class_fields: bool | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, hoist_classes: bool | "auto" | string[] | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, map_style: "angle" | "object" | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, render_null_as: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto) -> string  [builtin]
+function ai.output_format(self: ?, prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, or_splitter: string | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, enum_value_prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, hoisted_class_prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, always_hoist_enums: bool | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, quote_class_fields: bool | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, hoist_classes: bool | "auto" | string[] | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, map_style: "angle" | "object" | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto, render_null_as: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto) -> string  [expr] {
+  {  } self._output_format._render(prefix = prefix, or_splitter = or_splitter, enum_value_prefix = enum_value_prefix, hoisted_class_prefix = hoisted_class_prefix, always_hoist_enums = always_hoist_enums, quote_class_fields = quote_class_fields, hoist_classes = hoist_classes, map_style = map_style, render_null_as = render_null_as)
+}
 
 --- <builtin>/ai/journal.baml ---
 class ai.Journal {
@@ -534,10 +535,10 @@ function ai.internal._shorthand_prefixes() -> string  [expr] {
 
 --- <builtin>/ai/ns_internal/helpers.baml ---
 class ai.internal.SpecCtx {
-  output_format: string
+  _output_format: root.OutputFormat
 }
 class ai.internal.SpecCtx$stream {
-  output_format: string | null
+  _output_format: root.OutputFormat$stream | null
 }
 function ai.internal._schema_for_signature(handler: reflect.AnyFunction) -> map<string, unknown>  [expr] {
   { let sig = reflect.signature(handler); let props: map<string, unknown> = map {  }; let required: string[] = []; for a in sig.args { let _ = props.set(a.name, baml.json.schema(a.type)); required.push(a.name) } } map { "type": "object", "properties": props, "required": required, "additionalProperties": false }
@@ -546,6 +547,9 @@ function ai.internal.assemble_llm_prompt(parts: string[], values: unknown[]) -> 
   { let first_role = Neg 1; let i = 0; while i Lt values.length() { if (first_role Lt 0 And values[i] is root.Role) { first_role = i }; i Add= 1 }; let needs_system = if (first_role Lt 0) {  } true else if (first_role Gt 0) {  } true else {  } parts[0].trim() Ne "" } if (needs_system) { let system = root.Role { name: "system", metadata: map {  } }; let llm_parts: string[] = [""]; for part in parts { llm_parts.push(part) }; let llm_values: unknown[] = [system]; for value in values { llm_values.push(value) } } assemble_prompt(llm_parts, llm_values) else {  } assemble_prompt(parts, values)
 }
 function ai.internal.assemble_prompt(parts: string[], values: unknown[]) -> root.Prompt  [builtin]
+function ai.internal.output_format(self: ?, prefix: string | null | OutputFormatDefault = OutputFormatDefault.Auto, or_splitter: string | OutputFormatDefault = OutputFormatDefault.Auto, enum_value_prefix: string | null | OutputFormatDefault = OutputFormatDefault.Auto, hoisted_class_prefix: string | null | OutputFormatDefault = OutputFormatDefault.Auto, always_hoist_enums: bool | OutputFormatDefault = OutputFormatDefault.Auto, quote_class_fields: bool | OutputFormatDefault = OutputFormatDefault.Auto, hoist_classes: bool | "auto" | string[] | OutputFormatDefault = OutputFormatDefault.Auto, map_style: "angle" | "object" | OutputFormatDefault = OutputFormatDefault.Auto, render_null_as: string | null | OutputFormatDefault = OutputFormatDefault.Auto) -> string  [expr] {
+  {  } self._output_format._render(prefix = prefix, or_splitter = or_splitter, enum_value_prefix = enum_value_prefix, hoisted_class_prefix = hoisted_class_prefix, always_hoist_enums = always_hoist_enums, quote_class_fields = quote_class_fields, hoist_classes = hoist_classes, map_style = map_style, render_null_as = render_null_as)
+}
 
 --- <builtin>/ai/ns_internal/http_errors.baml ---
 function ai.internal._header(headers: map<string, string>, lower: string, canonical: string) -> string?  [expr] {
@@ -601,6 +605,7 @@ function ai.internal._resolve_media_preview_content(url: string?, file: string?,
 }
 
 --- <builtin>/ai/ns_internal/prompt.baml ---
+enum ai.internal.OutputFormatDefault {Auto}
 type ai.internal.OutputFormat = root.OutputFormat
 type ai.internal.OutputFormat$stream = root.OutputFormat$stream
 function ai.internal.build_output_format(return_type: reflect.Type) -> ai.internal.OutputFormat  [builtin]
@@ -970,7 +975,7 @@ lambda (one) in ?: captures [f]
 class ai.FunctionSpec {
   spec_name: string
   args: map<string, unknown>
-  prompt_template: (string) -> ai.Prompt throws never
+  prompt_template: (OutputFormat) -> ai.Prompt throws never
   toolbox: root.tools.Toolbox
   default_client: Client
 }
@@ -1023,8 +1028,8 @@ function ai.output_type(self: ?) -> reflect.Type  [expr] {
 function ai.prompt(body: (role: (string) -> root.Role throws never, ctx: root.Context) -> baml.TaggedString throws never) -> (root.Context) -> ai.Prompt throws never  [expr] {
   { let render = (ctx: root.Context) -> { { let tagged = body(root.internal.make_role, ctx) } root.internal.assemble_prompt(tagged.parts, tagged.values) } } render
 }
-function ai.prompt(self: ?, output_format: string = "") -> ai.Prompt  [expr] {
-  {  } self.prompt_template(output_format)
+function ai.prompt(self: ?) -> ai.Prompt  [expr] {
+  {  } self.prompt_template(root.internal.build_output_format(self.output_type()))
 }
 function ai.text(self: ?) -> string  [builtin]
 function ai.to_string(self: ?) -> string  [expr] {
@@ -1051,7 +1056,7 @@ class ai.ModelTurn$stream {
   calls: root.events.LLMCall$stream[]
 }
 class ai.ModelTurnInput {
-  prompt: (string) -> Prompt throws never
+  prompt: (OutputFormat) -> Prompt throws never
   journal: Journal
   toolbox: root.tools.Toolbox
   output_type: reflect.Type

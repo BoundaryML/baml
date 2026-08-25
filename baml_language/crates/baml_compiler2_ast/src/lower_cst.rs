@@ -388,7 +388,7 @@ fn lower_function(
 
     let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
         let mut llm_body_def = lower_llm_body(&llm);
-        reject_reserved_llm_client_params(&mut params, name.as_str(), diags);
+        reject_reserved_llm_params(&mut params, name.as_str(), diags);
         // A prompt is a string literal: backtick (interpolating) or quoted
         // (inert). Both become the same tagged template below; the parser
         // rejects every other value shape.
@@ -796,28 +796,35 @@ pub(crate) fn append_spec_on_event_param(
     });
 }
 
-fn reject_reserved_llm_client_params(
+fn reject_reserved_llm_params(
     params: &mut Vec<Param>,
     function_name: &str,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    let mut reserved = Vec::new();
-    params.retain(|param| {
-        if matches!(param.name.as_str(), "client" | "on_event") {
-            reserved.push((param.name.clone(), param.name_span));
-            false
-        } else {
-            true
-        }
-    });
+    const RESERVED: &[(&str, &str)] = &[
+        ("client", "the compiler-injected LLM client override"),
+        (
+            "on_event",
+            "the compiler-injected LLM event listener override",
+        ),
+        ("ctx", "the compiler-provided prompt context"),
+    ];
 
-    for (name, span) in reserved {
-        diags.push(LoweringDiagnostic::ReservedLlmClientParam {
+    params.retain(|param| {
+        let Some((param_name, reserved_for)) = RESERVED
+            .iter()
+            .find(|(name, _)| *name == param.name.as_str())
+        else {
+            return true;
+        };
+        diags.push(LoweringDiagnostic::ReservedLlmParam {
             function_name: function_name.to_string(),
-            param_name: name.to_string(),
-            span,
+            param_name: (*param_name).to_string(),
+            reserved_for,
+            span: param.name_span,
         });
-    }
+        false
+    });
 }
 
 fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {

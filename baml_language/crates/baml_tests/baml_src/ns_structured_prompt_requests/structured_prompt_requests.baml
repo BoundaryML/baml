@@ -76,7 +76,7 @@ function _input_for(spec: ai.FunctionSpec<string>) -> ai.ModelTurnInput {
 
 function RequestShape(input: string) -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `${input} ${ctx.output_format}`
+    prompt: `${input} ${ctx.output_format()}`
 }
 
 test "generated build_request companion is network-free and overridable" {
@@ -136,7 +136,7 @@ test "generic nested output format uses concrete class arguments" {
 
 function GenericShape<T>() -> Outer<T> {
     client: PreviewResponses
-    prompt: `${ctx.output_format}`
+    prompt: `${ctx.output_format()}`
 }
 
 test "generic build_request specializes nested output format" {
@@ -150,7 +150,7 @@ test "generic build_request specializes nested output format" {
 
 function FirstShape() -> string {
     client: PreviewResponses
-    prompt: `hello ${ctx.output_format}`
+    prompt: `hello ${ctx.output_format()}`
 }
 
 test "client wrapper rendering is pure and deterministic" {
@@ -221,7 +221,7 @@ test "chat preview preserves urls unless invoke would inline them" {
 
 function RoledShape() -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `${role("system")}Follow the rules.${role("user")}Answer this.${ctx.output_format}`
+    prompt: `${role("system")}Follow the rules.${role("user")}Answer this.${ctx.output_format()}`
 }
 
 function _roled_body(request: baml.http.Request) -> baml.json.json {

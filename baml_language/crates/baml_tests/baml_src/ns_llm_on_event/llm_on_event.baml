@@ -12,7 +12,7 @@ function Greet(name: string) -> Greeting {
         ${role("user")}
         Greet ${name}.
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 
