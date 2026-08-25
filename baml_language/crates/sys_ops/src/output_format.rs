@@ -23,7 +23,7 @@ pub enum RenderError {
         instantiation: String,
     },
     #[error(
-        "Classes '{first}' and '{second}' both render as '{rendered_name}' in the output schema"
+        "Output definitions '{first}' and '{second}' both render as '{rendered_name}' in the output schema"
     )]
     RenderedClassNameCollision {
         rendered_name: String,
@@ -380,23 +380,24 @@ impl OutputFormatContent {
         hoisted_classes: &indexmap::IndexSet<String>,
         hoisted_enums: &indexmap::IndexSet<String>,
     ) -> Result<(), RenderError> {
-        let mut definitions_by_rendered_name = IndexMap::<String, String>::new();
+        let mut definitions_by_rendered_name = self
+            .recursive_type_aliases
+            .keys()
+            .map(|name| (name.clone(), name.clone()))
+            .collect::<IndexMap<String, String>>();
         for definition_key in hoisted_classes {
             let Some(cls) = self.find_class(definition_key) else {
                 continue;
             };
             let rendered_name = rendered_hoisted_definition_name(definition_key, cls);
             if let Some(first) = definitions_by_rendered_name.get(&rendered_name) {
-                if first != definition_key {
-                    return Err(RenderError::RenderedClassNameCollision {
-                        rendered_name,
-                        first: first.clone(),
-                        second: definition_key.clone(),
-                    });
-                }
-            } else {
-                definitions_by_rendered_name.insert(rendered_name, definition_key.clone());
+                return Err(RenderError::RenderedClassNameCollision {
+                    rendered_name,
+                    first: first.clone(),
+                    second: definition_key.clone(),
+                });
             }
+            definitions_by_rendered_name.insert(rendered_name, definition_key.clone());
         }
         for definition_key in hoisted_enums {
             let Some(enm) = self.find_enum(definition_key) else {
@@ -404,16 +405,13 @@ impl OutputFormatContent {
             };
             let rendered_name = rendered_name(&enm.name, enm.alias.as_ref()).to_string();
             if let Some(first) = definitions_by_rendered_name.get(&rendered_name) {
-                if first != definition_key {
-                    return Err(RenderError::RenderedEnumNameCollision {
-                        rendered_name,
-                        first: first.clone(),
-                        second: definition_key.clone(),
-                    });
-                }
-            } else {
-                definitions_by_rendered_name.insert(rendered_name, definition_key.clone());
+                return Err(RenderError::RenderedEnumNameCollision {
+                    rendered_name,
+                    first: first.clone(),
+                    second: definition_key.clone(),
+                });
             }
+            definitions_by_rendered_name.insert(rendered_name, definition_key.clone());
         }
         Ok(())
     }
@@ -1520,6 +1518,31 @@ mod tests {
                 first,
                 second,
             } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
+        ));
+    }
+
+    #[test]
+    fn type_alias_and_hoisted_class_alias_collision_is_rejected() {
+        let mut class = mk_class("Choice", vec![("value", ty_string())]);
+        class.alias = Some("SharedChoice".to_string());
+        let mut content = OutputFormatContent::new(ty_class("Choice")).with_class(class);
+        content
+            .recursive_type_aliases
+            .insert("SharedChoice".to_string(), ty_string());
+
+        let error = content
+            .render(&RenderOptions {
+                hoist_classes: HoistClasses::All,
+                ..RenderOptions::default()
+            })
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedClassNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "SharedChoice" && first == "SharedChoice" && second == "Choice"
         ));
     }
 
