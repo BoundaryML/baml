@@ -446,7 +446,7 @@ function gateway_images_parse(
     } else {
         null
     };
-    ai.ModelTurn { content: content, stop_reason: ai.content.StopReason.Complete, usage: usage }
+    ai.ModelTurn { calls: [], content: content, stop_reason: ai.content.StopReason.Complete, usage: usage }
 }
 
 // The one internal entry point: render, send, normalize — one model turn. The
@@ -456,6 +456,12 @@ function gateway_images_invoke(
     input: ai.ModelTurnInput,
 ) -> ai.ModelTurn {
     let req = gateway_images_render(c, input, preview = false);
-    let resp = ai.wire.send_as<GwImagesResponse>(req, "ai-gateway-images");
-    gateway_images_parse(c, resp)
+    let sent = ai.wire.send_as_with_wire<GwImagesResponse>(
+        req,
+        "ai-gateway-images",
+        _gw_images_client_id(c),
+        capture_wire = c.capture_wire,
+    );
+    let turn = gateway_images_parse(c, sent.value);
+    ai.ModelTurn { ...turn, calls: [sent.call] }
 }

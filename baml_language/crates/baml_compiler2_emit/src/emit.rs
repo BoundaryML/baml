@@ -3514,15 +3514,6 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // so the VM compares each arg invariantly; empty args →
             // class-pointer identity.
             TyTemplate::Class(tn, type_args_templates, _) => {
-                // A reflected `type` value is physically `Object::Type` but its
-                // reconstructed concrete type is one of the nine sealed kind
-                // classes. Kind tests must therefore use the structural value
-                // matcher; class-object pointer identity only applies to normal
-                // user instances.
-                if baml_type::type_kind::is_type_kind_class(tn) {
-                    emit_structural(self, ty_template);
-                    return Ok(());
-                }
                 let class_name_str = tn.display_name();
                 let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) else {
                     emit_false(self);

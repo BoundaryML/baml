@@ -12,7 +12,7 @@
 //     (test-block locals are boxed by the VM);
 //   * cross-namespace names are `root.`-absolute;
 //   * the mock's port is only known at runtime, so the client is constructed
-//     inside the case and handed to `ai.Agent<Out>.new(client = …)` — which is
+//     inside the case and handed to `ai.Agent.new(client = …)` — which is
 //     exactly what a direct `Fn(args)` call desugars to.
 //
 // The two endpoints differ on media INPUT: /images/generations is text-only
@@ -121,7 +121,7 @@ function openai_images_request_shape() -> string {
                 output_format = "png",
                 background = "opaque",
             );
-            let result = ai.Agent<image>.new(client = cl).run(ImagesDraw@spec("a brass desk lamp"));
+            let result = ai.Agent.new(client = cl).run(ImagesDraw@spec("a brass desk lamp"));
             let sent = mock.last_request();
             let body = sent.json();
             let text = baml.json.path<string>(body, ".prompt");
@@ -171,7 +171,7 @@ function openai_images_dalle_response_format() -> string {
                 base_url = mock.base_url(),
                 style = "vivid",
             );
-            let first = ai.Agent<image>.new(client = defaulted).run(ImagesDraw@spec("a lamp"));
+            let first = ai.Agent.new(client = defaulted).run(ImagesDraw@spec("a lamp"));
             let defaulted_body = mock.last_request().json();
             let overridden = openai.ImageClient.new(
                 model = "dall-e-3",
@@ -179,7 +179,7 @@ function openai_images_dalle_response_format() -> string {
                 base_url = mock.base_url(),
                 response_format = "url",
             );
-            let second = ai.Agent<image>.new(client = overridden).run(ImagesDraw@spec("a lamp"));
+            let second = ai.Agent.new(client = overridden).run(ImagesDraw@spec("a lamp"));
             let overridden_body = mock.last_request().json();
             `${baml.json.path<string>(defaulted_body, ".response_format")}`
                 + `|${baml.json.path<string>(defaulted_body, ".style")}`
@@ -226,7 +226,7 @@ function openai_images_url_mode_inlines() -> string {
                         base_url = mock.base_url(),
                         response_format = "url",
                     );
-                    let picture = ai.Agent<image>.new(client = cl)
+                    let picture = ai.Agent.new(client = cl)
                         .run(ImagesDraw@spec("a lamp"))
                         .value;
                     `${picture.base64()}`
@@ -258,7 +258,7 @@ function openai_images_url_fetch_failure() -> string {
                         base_url = mock.base_url(),
                         response_format = "url",
                     );
-                    ai.Agent<image>.new(client = cl)
+                    ai.Agent.new(client = cl)
                         .run(ImagesDraw@spec("a lamp"))
                         .value
                         .base64() catch_all (e) {
@@ -299,7 +299,7 @@ function openai_images_passthrough() -> string {
                 headers = { "X-Trace-Id": "abc", "Content-Type": "application/json" },
                 query_params = { "beta": "images v2" },
             );
-            let _ = ai.Agent<image>.new(client = cl).run(ImagesDraw@spec("a lamp"));
+            let _ = ai.Agent.new(client = cl).run(ImagesDraw@spec("a lamp"));
             let sent = mock.last_request();
             let body = sent.json();
             `n=${baml.json.path_or<int>(body, ".n", 0)}`
@@ -332,7 +332,7 @@ function openai_images_list_output() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let pictures = ai.Agent<image[]>.new(client = cl)
+            let pictures = ai.Agent.new(client = cl)
                 .run(ImagesDrawSet@spec("a brass desk lamp"))
                 .value;
             let encoded: string[] = [];
@@ -359,7 +359,7 @@ function openai_images_union_output() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let answer = ai.Agent<string | image>.new(client = cl)
+            let answer = ai.Agent.new(client = cl)
                 .run(ImagesDrawOrSay@spec("a brass desk lamp"))
                 .value;
             // The image member narrows the ordinary way — `match` on the
@@ -390,7 +390,7 @@ function openai_images_mixed_shape_error() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            ai.Agent<string | image>.new(client = cl)
+            ai.Agent.new(client = cl)
                 .run(ImagesDrawOrSay@spec("a lamp"))
                 .value
                 .to_string() catch_all (e) {
@@ -420,7 +420,7 @@ function openai_images_exactly_one_error() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            ai.Agent<image>.new(client = cl).run(ImagesDraw@spec("a lamp")).value.base64() catch_all (e) {
+            ai.Agent.new(client = cl).run(ImagesDraw@spec("a lamp")).value.base64() catch_all (e) {
                 let failed: ai.errors.ParseFailed => failed.raw_output,
                 _ => `unexpected error class: ${e.to_string()}`,
             }
@@ -446,7 +446,7 @@ function openai_images_no_data_error() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            ai.Agent<image>.new(client = cl).run(ImagesDraw@spec("a lamp")).value.base64() catch_all (e) {
+            ai.Agent.new(client = cl).run(ImagesDraw@spec("a lamp")).value.base64() catch_all (e) {
                 let failed: ai.errors.ParseFailed => failed.raw_output,
                 _ => `unexpected error class: ${e.to_string()}`,
             }
@@ -472,7 +472,7 @@ test "openai_images_no_data_error" {
 // The client here is an ordinary chat client so the turn is text and nothing
 // else: the image endpoints never produce a media-less success (an empty
 // `data[]` is `openai_images_no_data_error` above), so they cannot exercise
-// this branch at all. `ai.Agent<Out>.new(client = …)` overrides the spec's
+// this branch at all. `ai.Agent.new(client = …)` overrides the spec's
 // default client, which is what makes one spec usable with either.
 
 function ImagesMaybeDraw(subject: string) -> image? {
@@ -494,7 +494,7 @@ function images_optional_accepts_absence() -> string {
         [root.llm_mock.MockResponse.ok(_images_text_answer())],
         (mock: root.llm_mock.MockJsonServer) -> {
             let cl = openai.ChatClient.new(api_key = "test-key", base_url = mock.base_url());
-            let answer = ai.Agent<image?>.new(client = cl)
+            let answer = ai.Agent.new(client = cl)
                 .run(ImagesMaybeDraw@spec("a brass desk lamp"))
                 .value;
             match (answer) {
@@ -517,7 +517,7 @@ function images_list_accepts_absence() -> string {
         [root.llm_mock.MockResponse.ok(_images_text_answer())],
         (mock: root.llm_mock.MockJsonServer) -> {
             let cl = openai.ChatClient.new(api_key = "test-key", base_url = mock.base_url());
-            let pictures = ai.Agent<image[]>.new(client = cl)
+            let pictures = ai.Agent.new(client = cl)
                 .run(ImagesDrawSet@spec("a brass desk lamp"))
                 .value;
             `count=${pictures.length()}` catch_all (e) {
@@ -539,7 +539,7 @@ function images_required_rejects_absence() -> string {
         [root.llm_mock.MockResponse.ok(_images_text_answer())],
         (mock: root.llm_mock.MockJsonServer) -> {
             let cl = openai.ChatClient.new(api_key = "test-key", base_url = mock.base_url());
-            ai.Agent<image>.new(client = cl).run(ImagesDraw@spec("a lamp")).value.base64() catch_all (e) {
+            ai.Agent.new(client = cl).run(ImagesDraw@spec("a lamp")).value.base64() catch_all (e) {
                 let failed: ai.errors.ParseFailed => `ParseFailed|${failed.raw_output}`,
                 _ => `unexpected error class: ${e.to_string()}`,
             }
@@ -564,7 +564,7 @@ function openai_images_media_input_rejected() -> string {
                 base_url = mock.base_url(),
             );
             let source = baml.media.Image.from_base64("aGVsbG8=", "image/png");
-            let detail = ai.Agent<image>.new(client = cl)
+            let detail = ai.Agent.new(client = cl)
                 .run(ImagesRedraw@spec(source, "a lamp"))
                 .value
                 .base64() catch_all (e) {
@@ -595,7 +595,7 @@ function openai_images_http_error_taxonomy() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            ai.Agent<image>.new(client = cl).run(ImagesDraw@spec("a lamp")).value.base64() catch_all (e) {
+            ai.Agent.new(client = cl).run(ImagesDraw@spec("a lamp")).value.base64() catch_all (e) {
                 let invalid: ai.errors.InvalidRequest => {
                     `InvalidRequest ${invalid.status_code ?? 0} ${invalid.provider}`
                 },
@@ -627,7 +627,7 @@ function gateway_images_request_shape() -> string {
                 // trailing slash trimmed, "/image-model" appended
                 base_url = `${mock.base_url()}/v4/ai/`,
             );
-            let picture = ai.Agent<image>.new(client = cl)
+            let picture = ai.Agent.new(client = cl)
                 .run(GatewayDraw@spec("a brass desk lamp"))
                 .value;
             let sent = mock.last_request();
@@ -676,7 +676,7 @@ function gateway_images_output_format_mime() -> string {
                     `{"providerOptions":{"blackForestLabs":{"outputFormat":"jpeg"}}}`,
                 ),
             );
-            let pictures = ai.Agent<image[]>.new(client = cl)
+            let pictures = ai.Agent.new(client = cl)
                 .run(GatewayDrawSet@spec("a brass desk lamp"))
                 .value;
             let body = mock.last_request().json();
@@ -712,7 +712,7 @@ function gateway_images_data_url_payload() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let picture = ai.Agent<image>.new(client = cl)
+            let picture = ai.Agent.new(client = cl)
                 .run(GatewayDraw@spec("a lamp"))
                 .value;
             `${picture.mime_type() ?? "?"}|${picture.base64()}`
@@ -736,7 +736,7 @@ function gateway_images_data_url_not_base64() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            ai.Agent<image>.new(client = cl).run(GatewayDraw@spec("a lamp")).value.base64() catch_all (e) {
+            ai.Agent.new(client = cl).run(GatewayDraw@spec("a lamp")).value.base64() catch_all (e) {
                 let failed: ai.errors.ParseFailed => failed.raw_output,
                 _ => `unexpected error class: ${e.to_string()}`,
             }
@@ -763,7 +763,7 @@ function gateway_images_usage() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<image>.new(client = cl).run(GatewayDraw@spec("a lamp"));
+            let result = ai.Agent.new(client = cl).run(GatewayDraw@spec("a lamp"));
             `${result.value.base64()}`
                 + `|${result.usage.input_tokens}/${result.usage.output_tokens}`
         },
@@ -835,7 +835,7 @@ function gateway_images_image_input_files() -> string {
                 base_url = mock.base_url(),
             );
             let inline_source = baml.media.Image.from_base64("aGVsbG8=", "image/jpeg");
-            let edited = ai.Agent<image>.new(client = cl)
+            let edited = ai.Agent.new(client = cl)
                 .run(GatewayRedraw@spec(inline_source, "a lamp"))
                 .value;
             let inline_body = mock.last_request().json();
@@ -843,7 +843,7 @@ function gateway_images_image_input_files() -> string {
                 "https://example.invalid/cat.png",
                 "image/png",
             );
-            let _ = ai.Agent<image>.new(client = cl)
+            let _ = ai.Agent.new(client = cl)
                 .run(GatewayRedraw@spec(remote_source, "a lamp"))
                 .value;
             let remote_body = mock.last_request().json();
@@ -901,7 +901,7 @@ function gateway_images_no_images_error() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            ai.Agent<image>.new(client = cl).run(GatewayDraw@spec("a lamp")).value.base64() catch_all (e) {
+            ai.Agent.new(client = cl).run(GatewayDraw@spec("a lamp")).value.base64() catch_all (e) {
                 let failed: ai.errors.ParseFailed => failed.raw_output,
                 _ => `unexpected error class: ${e.to_string()}`,
             }
@@ -927,7 +927,7 @@ function gateway_images_http_error_taxonomy() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            ai.Agent<image>.new(client = cl).run(GatewayDraw@spec("a lamp")).value.base64() catch_all (e) {
+            ai.Agent.new(client = cl).run(GatewayDraw@spec("a lamp")).value.base64() catch_all (e) {
                 let limited: ai.errors.RateLimited => `RateLimited ${limited.provider}`,
                 _ => "wrong error class",
             }
@@ -1055,7 +1055,7 @@ function openai_images_missing_key() -> string {
         api_key = env.BAML_TEST_NO_SUCH_OPENAI_IMAGES_KEY,
         base_url = "http://127.0.0.1:1/v1",
     );
-    ai.Agent<image>.new(client = cl).run(ImagesDraw@spec("a lamp")).value.base64() catch_all (e) {
+    ai.Agent.new(client = cl).run(ImagesDraw@spec("a lamp")).value.base64() catch_all (e) {
         let invalid: ai.errors.InvalidRequest => `InvalidRequest ${invalid.provider}`,
         _ => `unexpected error class: ${e.to_string()}`,
     }
@@ -1067,7 +1067,7 @@ function gateway_images_missing_key() -> string {
         api_key = env.BAML_TEST_NO_SUCH_GATEWAY_KEY,
         base_url = "http://127.0.0.1:1/v4/ai",
     );
-    ai.Agent<image>.new(client = cl).run(GatewayDraw@spec("a lamp")).value.base64() catch_all (e) {
+    ai.Agent.new(client = cl).run(GatewayDraw@spec("a lamp")).value.base64() catch_all (e) {
         let invalid: ai.errors.InvalidRequest => `InvalidRequest ${invalid.provider}`,
         _ => `unexpected error class: ${e.to_string()}`,
     }
@@ -1111,7 +1111,7 @@ function live_openai_images_draws() -> string {
         quality = "low",
         output_format = "png",
     );
-    let picture = ai.Agent<image>.new(client = cl).run(LiveDrawSquare@spec()).value;
+    let picture = ai.Agent.new(client = cl).run(LiveDrawSquare@spec()).value;
     `${picture.base64().length() > 1024}|${picture.mime_type() ?? "?"}`
 }
 

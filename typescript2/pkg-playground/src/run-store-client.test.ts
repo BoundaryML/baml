@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  RunCommandError,
   createRunStoreClient,
   isProjectNotReadyError,
+  RunCommandError,
 } from './run-store-client';
 import type { RuntimePort } from './runtime-port';
 import type { Run, WorkerInMessage, WorkerOutMessage } from './worker-protocol';
@@ -14,34 +14,32 @@ describe('run-store-client', () => {
     const client = createRunStoreClient(port);
 
     const pending = client.startPreviewRun({
-      project: 'project',
-      parentFunctionName: 'Extract',
-      helper: 'render_prompt',
-      functionName: 'Extract$render_prompt',
       argsBytes: new Uint8Array([1, 2, 3]),
+      functionName: 'Extract$render_prompt',
+      helper: 'render_prompt',
+      parentFunctionName: 'Extract',
+      project: 'project',
     });
 
     expect(port.sent).toEqual([
       {
-        type: 'startPreviewRun',
-        requestId: 1,
-        project: 'project',
-        parentFunctionName: 'Extract',
-        helper: 'render_prompt',
-        functionName: 'Extract$render_prompt',
         argsBytes: new Uint8Array([1, 2, 3]),
+        functionName: 'Extract$render_prompt',
+        helper: 'render_prompt',
+        parentFunctionName: 'Extract',
+        project: 'project',
+        requestId: 1,
+        type: 'startPreviewRun',
       },
     ]);
 
     port.emit({
-      type: 'runStarted',
       requestId: 1,
       run: runFixture('baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ'),
+      type: 'runStarted',
     });
 
-    await expect(pending).resolves.toBe(
-      'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
-    );
+    await expect(pending).resolves.toBe('baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ');
     client.dispose();
   });
 
@@ -50,30 +48,28 @@ describe('run-store-client', () => {
     const client = createRunStoreClient(port);
 
     const pending = client.startTestRun({
-      project: 'project',
       generation: 2,
+      project: 'project',
       testName: 'suite/test',
     });
 
     expect(port.sent).toEqual([
       {
-        type: 'startTestRun',
-        requestId: 1,
-        project: 'project',
         generation: 2,
+        project: 'project',
+        requestId: 1,
         testName: 'suite/test',
+        type: 'startTestRun',
       },
     ]);
 
     port.emit({
-      type: 'runStarted',
       requestId: 1,
       run: runFixture('baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ'),
+      type: 'runStarted',
     });
 
-    await expect(pending).resolves.toBe(
-      'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
-    );
+    await expect(pending).resolves.toBe('baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ');
     client.dispose();
   });
 
@@ -89,18 +85,18 @@ describe('run-store-client', () => {
 
     expect(port.sent).toEqual([
       {
-        type: 'respondToInput',
-        requestId: 1,
         boundaryId: 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
         inputRequestId: '3',
+        requestId: 1,
+        type: 'respondToInput',
         value: 'answer',
       },
     ]);
 
     port.emit({
-      type: 'commandAck',
-      requestId: 1,
       outcome: 'accepted',
+      requestId: 1,
+      type: 'commandAck',
     });
 
     await expect(pending).resolves.toBe('accepted');
@@ -119,18 +115,18 @@ describe('run-store-client', () => {
 
     expect(port.sent).toEqual([
       {
-        type: 'respondToEnv',
-        requestId: 1,
         boundaryId: 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
         envRequestId: '4',
+        requestId: 1,
+        type: 'respondToEnv',
         value: 'secret',
       },
     ]);
 
     port.emit({
-      type: 'commandAck',
-      requestId: 1,
       outcome: 'accepted',
+      requestId: 1,
+      type: 'commandAck',
     });
 
     await expect(pending).resolves.toBe('accepted');
@@ -142,43 +138,43 @@ describe('run-store-client', () => {
     const client = createRunStoreClient(port);
     const boundaryId = 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ';
     const valueRef = {
-      id: 'value_1',
-      codec: 'bamlOutboundValue' as const,
       availability: 'available' as const,
+      codec: 'bamlOutboundValue' as const,
+      diagnostic: null,
+      id: 'value_1',
       originalSizeBytes: 3,
       retainedSizeBytes: 3,
-      diagnostic: null,
     };
 
     const pending = client.readValue(boundaryId, valueRef);
 
     expect(port.sent).toEqual([
       {
-        type: 'readValue',
-        requestId: 1,
         boundaryId,
+        requestId: 1,
+        type: 'readValue',
         valueRef,
       },
     ]);
 
     port.emit({
-      type: 'valueBody',
-      requestId: 1,
-      boundaryId,
-      valueRefId: 'value_1',
-      codec: 'bamlOutboundValue',
       availability: 'available',
       bodyBase64: 'AQID',
+      boundaryId,
+      codec: 'bamlOutboundValue',
+      requestId: 1,
+      type: 'valueBody',
+      valueRefId: 'value_1',
     });
 
     await expect(pending).resolves.toEqual({
-      type: 'valueBody',
-      requestId: 1,
-      boundaryId,
-      valueRefId: 'value_1',
-      codec: 'bamlOutboundValue',
       availability: 'available',
       bodyBase64: 'AQID',
+      boundaryId,
+      codec: 'bamlOutboundValue',
+      requestId: 1,
+      type: 'valueBody',
+      valueRefId: 'value_1',
     });
     client.dispose();
   });
@@ -193,31 +189,31 @@ describe('run-store-client', () => {
 
     expect(port.sent).toEqual([
       {
-        type: 'subscribe',
+        afterCursor: 99,
+        boundaryId,
         requestId: 1,
         subscriptionId: handle.subscriptionId,
-        boundaryId,
-        afterCursor: 99,
+        type: 'subscribe',
       },
     ]);
 
     port.emit({
-      type: 'runCursorExpired',
-      requestId: 1,
-      subscriptionId: handle.subscriptionId,
       boundaryId,
       reason: 'future',
+      requestId: 1,
+      subscriptionId: handle.subscriptionId,
+      type: 'runCursorExpired',
     });
 
     await expect(iterator.next()).resolves.toEqual({
-      value: { type: 'cursorExpired', boundaryId, reason: 'future' },
       done: false,
+      value: { boundaryId, reason: 'future', type: 'cursorExpired' },
     });
 
     client.dispose();
     await expect(iterator.next()).resolves.toEqual({
-      value: undefined,
       done: true,
+      value: undefined,
     });
   });
 
@@ -226,49 +222,49 @@ describe('run-store-client', () => {
     const client = createRunStoreClient(port);
 
     const pending = client.listRuns({
-      projectId: '/tmp/project',
-      projectGeneration: 4,
-      kinds: ['function'],
       callTreeContainsFunction: 'Extract',
+      kinds: ['function'],
+      projectGeneration: 4,
+      projectId: '/tmp/project',
       visibility: 'historyOnly',
     });
 
     expect(port.sent).toEqual([
       {
-        type: 'listRuns',
-        requestId: 1,
         filter: {
-          projectId: '/tmp/project',
-          projectGeneration: 4,
-          kinds: ['function'],
           callTreeContainsFunction: 'Extract',
+          kinds: ['function'],
+          projectGeneration: 4,
+          projectId: '/tmp/project',
           visibility: 'historyOnly',
         },
+        requestId: 1,
+        type: 'listRuns',
       },
     ]);
 
     port.emit({
-      type: 'runList',
       requestId: 1,
       runs: [
         {
           boundaryId: 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
-          target: { kind: 'function', functionName: 'Extract' },
-          visibility: { kind: 'history' },
-          status: 'succeeded',
+          completedAtMs: 150,
+          createdAtMs: 100,
           request: {
-            projectId: '/tmp/project',
-            projectGeneration: 4,
-            target: { kind: 'function', functionName: 'Extract' },
             argsSummary: null,
             optionsSummary: null,
+            projectGeneration: 4,
+            projectId: '/tmp/project',
+            target: { functionName: 'Extract', kind: 'function' },
           },
-          touchedFunctions: ['Extract'],
-          createdAtMs: 100,
-          completedAtMs: 150,
           retention: 'Full',
+          status: 'succeeded',
+          target: { functionName: 'Extract', kind: 'function' },
+          touchedFunctions: ['Extract'],
+          visibility: { kind: 'history' },
         },
       ],
+      type: 'runList',
     });
 
     await expect(pending).resolves.toHaveLength(1);
@@ -283,16 +279,16 @@ describe('run-store-client', () => {
 
     expect(port.sent).toEqual([
       {
-        type: 'listHistory',
-        requestId: 1,
         filter: { visibility: 'historyOnly' },
+        requestId: 1,
+        type: 'listHistory',
       },
     ]);
 
     port.emit({
-      type: 'historyList',
       requestId: 1,
       runs: [],
+      type: 'historyList',
     });
 
     await expect(pending).resolves.toEqual([]);
@@ -308,18 +304,18 @@ describe('run-store-client', () => {
 
     expect(port.sent).toEqual([
       {
-        type: 'openHistory',
-        requestId: 1,
         boundaryId,
+        requestId: 1,
+        type: 'openHistory',
       },
     ]);
 
     const run = runFixture(boundaryId);
     port.emit({
-      type: 'runSnapshot',
-      requestId: 1,
       boundaryId,
+      requestId: 1,
       snapshot: run,
+      type: 'runSnapshot',
     });
 
     await expect(pending).resolves.toEqual(run);
@@ -331,16 +327,16 @@ describe('run-store-client', () => {
     const client = createRunStoreClient(port);
 
     const pending = client.startRun({
-      project: 'project',
-      functionName: 'Extract',
       argsBytes: new Uint8Array([1]),
+      functionName: 'Extract',
+      project: 'project',
     });
 
     port.emit({
-      type: 'commandError',
-      requestId: 1,
       code: 'projectNotReady',
       message: 'Cannot start run: rebuild pending',
+      requestId: 1,
+      type: 'commandError',
     });
 
     const error = await pending.then(
@@ -386,32 +382,28 @@ class FakeRuntimePort implements RuntimePort {
 function runFixture(boundaryId: string): Run {
   return {
     boundaryId,
-    target: { kind: 'test', generation: 2, testName: 'suite/test' },
-    visibility: { kind: 'history' },
-    status: 'running',
-    createdAtMs: 100,
-    startedAtMs: 100,
+    cancellation: null,
     completedAtMs: null,
+    createdAtMs: 100,
+    cursor: 0,
+    diagnostics: [],
+    error: null,
+    payloads: [],
+    request: {
+      argsSummary: null,
+      optionsSummary: null,
+      projectGeneration: 2,
+      projectId: 'project',
+      target: { generation: 2, kind: 'test', testName: 'suite/test' },
+    },
+    result: null,
+    startedAtMs: 100,
+    status: 'running',
+    target: { generation: 2, kind: 'test', testName: 'suite/test' },
     timeAnchor: {
       epochCreatedAtMs: 100,
       traceZeroNs: '0',
     },
-    request: {
-      projectId: 'project',
-      projectGeneration: 2,
-      target: { kind: 'test', generation: 2, testName: 'suite/test' },
-      argsSummary: null,
-      optionsSummary: null,
-    },
-    result: null,
-    error: null,
-    cancellation: null,
-    rootCallNodeId: null,
-    graphRuntimeOverlay: null,
-    calls: [],
-    threads: [],
-    payloads: [],
-    diagnostics: [],
-    cursor: 0,
+    visibility: { kind: 'history' },
   };
 }

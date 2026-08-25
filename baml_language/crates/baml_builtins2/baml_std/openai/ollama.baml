@@ -27,6 +27,10 @@ class OllamaClient {
     top_p: float?,
     stop: string[]?,
     seed: int?,
+    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // records delivered through on_event. Status, headers, and timing are
+    // always recorded; this flag only gates the bodies.
+    capture_wire: bool,
 
     function new(
         model: string,
@@ -40,6 +44,7 @@ class OllamaClient {
         top_p: float? = null,
         stop: string[]? = null,
         seed: int? = null,
+        capture_wire: bool = true,
     ) -> OllamaClient {
         OllamaClient {
             model: model,
@@ -53,6 +58,7 @@ class OllamaClient {
             top_p: top_p,
             stop: stop,
             seed: seed,
+            capture_wire: capture_wire,
         }
     }
 
@@ -108,7 +114,7 @@ class OllamaClient {
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
-            root.internal.chat_invoke(self.compat(), self.params(), input) catch_all (e) {
+            root.internal.chat_invoke(self.compat(), self.params(), input, capture_wire = self.capture_wire) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
         }
@@ -116,7 +122,7 @@ class OllamaClient {
 
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-            root.internal.chat_invoke_stream(self.compat(), self.params(), input) catch_all (e) {
+            root.internal.chat_invoke_stream(self.compat(), self.params(), input, capture_wire = self.capture_wire) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
             }
         }

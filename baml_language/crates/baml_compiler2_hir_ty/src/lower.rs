@@ -2273,7 +2273,7 @@ pub fn signature_lowering_diagnostics<'db>(
         match lowered.kind() {
             // The compiler-derived builtin interface is a VALUE type,
             // never a bound (E0154).
-            TyKind::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
+            TyKind::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
                 out.push((
                     source_map.type_refs.span(*bound),
                     TirTypeError::BuiltinInterfaceNotABound {
@@ -2426,7 +2426,7 @@ pub fn class_lowering_diagnostics<'db>(
         );
         extend_lowering_diagnostics(&mut out, &source_map.type_refs, diagnostics);
         match lowered.kind() {
-            TyKind::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
+            TyKind::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
                 out.push((
                     source_map.type_refs.span(*bound),
                     TirTypeError::BuiltinInterfaceNotABound {
@@ -2513,7 +2513,7 @@ pub fn interface_lowering_diagnostics<'db>(
         let Some(bound) = assoc.bound else { continue };
         let lowered = ctx.lower_type_ref_at(&data.type_refs, bound, TypePosition::ConstraintHead);
         match lowered.kind() {
-            TyKind::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
+            TyKind::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
                 out.push((
                     source_map.type_refs.span(bound),
                     TirTypeError::BuiltinInterfaceNotABound {

@@ -1,12 +1,14 @@
 //! BEP-066 constructor-correctness and removed-reader regression tests.
 
 use baml_compiler_diagnostics::Severity;
-use baml_db::{collect_diagnostics, testing::setup_test_db};
-use baml_tests::baml_test;
+use baml_tests::{
+    baml_test,
+    stdlib_prefix::{check_user_files, setup_test_db},
+};
 use bex_engine::BexExternalValue;
 
 fn compile_errors(source: &str) -> Vec<(String, String)> {
-    collect_diagnostics(&setup_test_db(source))
+    check_user_files(&setup_test_db(source))
         .into_iter()
         .filter(|diagnostic| diagnostic.severity == Severity::Error)
         .map(|diagnostic| (diagnostic.code().to_string(), diagnostic.message))

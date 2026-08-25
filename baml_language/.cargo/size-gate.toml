@@ -43,21 +43,20 @@ policy.max_delta_pct = 3.0
 # Reclaiming the `syn` cost would mean dropping prettyplease (raw,
 # unformatted generated SDK output).
 #
-# Ceilings raised ~25% when `[profile.release]` moved to `panic = "unwind"`
-# (see the profile note in Cargo.toml): measured on aarch64-apple-darwin,
-# baml-cli 24.65 MiB (abort) -> 30.87 MiB (unwind), +6.23 MiB — unwind
-# tables (`__eh_frame`, `__gcc_except_tab`, `__unwind_info`) plus landing-pad
-# code. The macOS ceiling is ~3.7% above that measurement; linux/windows apply
-# the same ratio to their previous ceilings until the daily baseline refresh
-# re-pegs them to CI's recorded sizes.
+# Ceilings are canary's re-pegged numbers (which include the `baml query`
+# engine, measured at `panic = "abort"`) scaled by the ~1.25x unwind ratio
+# measured when `[profile.release]` moved to `panic = "unwind"` (see the
+# profile note in Cargo.toml: baml-cli 24.65 MiB abort -> 30.87 MiB unwind
+# on aarch64-apple-darwin). The daily baseline refresh re-pegs these to CI's
+# recorded sizes.
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = "32.0 MiB"
+max_file_bytes = "59.7 MiB"
 
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "39.0 MiB"
+max_file_bytes = "76.9 MiB"
 
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = "33.5 MiB"
+max_file_bytes = "66.0 MiB"
 
 [artifacts.packed-program]
 kind = "pack"
@@ -71,19 +70,14 @@ policy.max_delta_pct = 3.0
 # 12 native BAML provider clients replaced the Rust `sys_llm` shim: their
 # bytecode ships in every packed program. Each ceiling is ~3% above the
 # re-recorded baseline in `.ci/size-gate`.
-#
-# Raised ~25% for `panic = "unwind"` (same ratio as baml-cli above; the
-# pack-host binary carries the engine's unwind tables, the bytecode envelope
-# does not grow, so this is an upper bound until the daily baseline refresh
-# re-pegs it to CI's recorded sizes).
 [artifacts.packed-program.platform.aarch64-apple-darwin]
-max_file_bytes = "25.3 MiB"
+max_file_bytes = "26.4 MiB"
 
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "30.6 MiB"
+max_file_bytes = "31.9 MiB"
 
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_file_bytes = "26.7 MiB"
+max_file_bytes = "27.9 MiB"
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"
@@ -106,4 +100,4 @@ wasm = true
 policy.max_delta_pct = 3.0
 
 [artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
-max_gzip_bytes = "5.3 MiB"
+max_gzip_bytes = "5.6 MiB"

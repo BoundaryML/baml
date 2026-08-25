@@ -5125,6 +5125,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new(argument),
                 docstring: None,
                 ty: ty.clone(),
@@ -5146,6 +5147,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_string(),
@@ -5201,6 +5203,7 @@ mod tests {
             generic_params: vec![type_parameter.clone()],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_type_var(type_parameter.clone()),
@@ -5268,12 +5271,14 @@ mod tests {
             docstring: Some("Constructs a value without a receiver.".to_string()),
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: ty_string(),
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("suffix"),
                     docstring: None,
                     ty: ty_string(),
@@ -5290,6 +5295,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_media(baml_base::MediaKind::Generic),
@@ -5305,6 +5311,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_type_var(BaseName::new("T")),
@@ -5320,6 +5327,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_type_var(BaseName::new("T")),
@@ -5367,6 +5375,7 @@ mod tests {
                 generic_params: vec![],
                 docstring: None,
                 arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: ty_string(),
@@ -5429,6 +5438,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("fallback"),
                 docstring: None,
                 ty: ty_type_var(type_parameter.clone()),
@@ -5712,6 +5722,7 @@ mod tests {
             generic_params: vec![type_parameter.clone()],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_union(vec![
@@ -5749,12 +5760,14 @@ mod tests {
             docstring: None,
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("options"),
                     docstring: None,
                     ty: ty_string(),
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("opt1"),
                     docstring: None,
                     ty: ty_union(vec![ty_int(), ty_null()]),
@@ -5763,6 +5776,7 @@ mod tests {
                     ))),
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("opt2"),
                     docstring: None,
                     ty: ty_string(),
@@ -6013,6 +6027,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("ctx"),
                 docstring: None,
                 ty: ty_class(person.clone(), vec![]),
@@ -6099,6 +6114,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("callback"),
                 docstring: None,
                 ty: callback(),
@@ -6166,6 +6182,7 @@ mod tests {
                 generic_params: vec![],
                 docstring: None,
                 arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("callback"),
                     docstring: None,
                     ty: callback,
@@ -6255,6 +6272,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("outer"),
                 docstring: None,
                 ty: ty_class(outer.clone(), vec![]),
@@ -6492,6 +6510,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: Ty::Resource {
@@ -6532,6 +6551,7 @@ mod tests {
             arguments: ["ctx", "result", "err"]
                 .into_iter()
                 .map(|name| FunctionArgument {
+                    injected: false,
                     name: BaseName::new(name),
                     docstring: None,
                     ty: ty_string(),
@@ -6645,6 +6665,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_bigint(),

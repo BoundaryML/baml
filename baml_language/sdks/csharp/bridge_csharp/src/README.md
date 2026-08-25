@@ -57,16 +57,16 @@ class. The unsuffixed method is synchronous; the `Async` method returns a
 token:
 
 ```csharp
-using CsharpSlice;
+using CsharpBasicCalls;
 
-string result = Functions.PrimitiveSlice(
+string result = Functions.BasicCalls(
     flag: true,
     count: 42,
     ratio: 1.25,
     text: "hello",
     nullable: null,
     cancellationToken);
-string asyncResult = await Functions.PrimitiveSliceAsync(
+string asyncResult = await Functions.BasicCallsAsync(
     flag: false,
     count: -17,
     ratio: -2.5,
@@ -267,7 +267,7 @@ Catch the narrowest useful type:
 ```csharp
 try
 {
-    _ = await Functions.PrimitiveSliceAsync(
+    _ = await Functions.BasicCallsAsync(
         true, 1, 1.0, text, null, cancellationToken);
 }
 catch (BamlTypeMismatchException error)
@@ -321,7 +321,7 @@ public sealed class PrimitiveService : IPrimitiveService
     public Task<string> EchoAsync(
         string text,
         CancellationToken cancellationToken) =>
-        CsharpSlice.Functions.PrimitiveSliceAsync(
+        CsharpBasicCalls.Functions.BasicCallsAsync(
             flag: true,
             count: 1,
             ratio: 1.0,
@@ -337,9 +337,11 @@ application-owned helpers but must not replace generated required properties
 or codecs.
 
 The repository's `Baml.Bridge.DocumentationConsumer` compiles these public
-patterns with nullable analysis and warnings as errors. Product verification
-runs that consumer from the exact assembled package, and the release workflow
-runs it again from a clean public NuGet cache after publication.
+patterns with nullable analysis and warnings as errors during normal C# CI.
+Product verification restores, publishes, and runs
+`Baml.Bridge.NuGetPackageSmoke` against the exact assembled package, and the
+release workflow runs that smoke again from a clean public NuGet cache after
+publication.
 
 ## Publishing and trimming
 

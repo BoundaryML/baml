@@ -17,7 +17,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use baml_compiler_diagnostics::runtime_type;
-use baml_type::{Name, normalize::TypeContext};
+use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use smallvec::SmallVec;
 
 /// Lower named host `TypeVar` bindings to the positional De Bruijn `type_args`
@@ -95,11 +95,10 @@ use bex_events::{
     ids::{BexCallId, BexThreadId, FunctionId as ProfFunctionId},
     prof::{
         backend::{
-            BoundaryHandle, CapturePlan, ErrorCaptureAttempt, ErrorCaptureId,
-            ErrorCaptureLossReason, ErrorSource, ErrorUnwindKind, FunctionCaptureClass,
-            InactiveReason, LocalIdOverrides, Owner, ProfilerMemoryGovernor, Reservation,
-            ReservationClass, RootProfiler, TerminalErrorTarget, ThrowSite, ValueLossReason,
-            ValueState,
+            CapturePlan, ErrorCaptureAttempt, ErrorCaptureId, ErrorCaptureLossReason, ErrorSource,
+            ErrorUnwindKind, ExecutionHandle, FunctionCaptureClass, InactiveReason,
+            LocalIdOverrides, Owner, ProfilerMemoryGovernor, Reservation, ReservationClass,
+            RootProfiler, TerminalErrorTarget, ThrowSite, ValueLossReason, ValueState,
         },
         record::CallSiteSourceSpan,
     },
@@ -1129,7 +1128,7 @@ pub struct BexVm {
     /// Non-owning projection of the outer completion guard's live boundary
     /// lease. It is used only to acquire a new owned child lease before that
     /// child becomes runnable.
-    pub prof_boundary_handle: Option<BoundaryHandle>,
+    pub prof_boundary_handle: Option<ExecutionHandle>,
 
     /// True only for the first structural call of a user boundary's root VM.
     /// Spawned VMs inherit the root token with this bit cleared.
@@ -1851,6 +1850,18 @@ impl BexVm {
         if count == 0 {
             return Ok(TakenTypeArgs::default());
         }
+        // Every type-operand position's contract is
+        // `reflect.Type | reflect.TypeView`; a kind view converts at this
+        // boundary to the `type` value it wraps, so everything downstream
+        // sees `Object::Type` only.
+        for slot in start..end {
+            let value = self.stack[StackIndex::from_raw(slot)];
+            if let Some(ty_value) =
+                crate::package_reflect::type_kinds::as_view_type_value(self, value)
+            {
+                self.stack[StackIndex::from_raw(slot)] = ty_value;
+            }
+        }
         // A type built only from compiled declarations needs no per-frame
         // carrier: every consumer can find those declarations from the program
         // index, and they never move. Anything naming a runtime declaration
@@ -2330,7 +2341,7 @@ impl BexVm {
     /// read off the declaration itself.
     ///
     /// The one name→head channel inside the VM, for the boundaries that
-    /// genuinely start from a name (the algebra's `baml.AnyFunction` case, host
+    /// genuinely start from a name (the algebra's `reflect.AnyFunction` case, host
     /// conversion, codegen FQN constants). Everything interior already holds a
     /// head and must deref it instead: content-addressing a name into a tag
     /// would fabricate an identity rather than resolve one, and cannot see a
@@ -2615,6 +2626,9 @@ impl BexVm {
     /// `Spawn`) consume them this way.
     fn ensure_pop_type(&mut self) -> Result<bex_vm_types::RealizedTy, VmInternalError> {
         let value = self.stack.ensure_pop();
+        // A kind view converts to the `type` value it wraps at this boundary.
+        let value =
+            crate::package_reflect::type_kinds::as_view_type_value(self, value).unwrap_or(value);
         let ptr = self.as_object_ptr(value, ObjectType::Type)?;
         match self.get_object(ptr) {
             Object::Type(type_value) => Ok(type_value.ty.clone()),
@@ -3176,16 +3190,13 @@ impl BexVm {
                     ObjectType::of(other)
                 ),
             },
-            // A `type` value reports its precise sealed reflection-kind class.
-            // Each kind class is a subtype of the `type` carrier.
-            Object::Type(type_value) => {
-                let kind = baml_type::type_kind::classify_type(&type_value.ty);
-                let name = kind.class_name();
-                let head = self.declaration_head(&name).unwrap_or_else(|| {
-                    unreachable!("reflection kind class `{name}` is declared by the stdlib")
-                });
-                ConcreteRealizedTy::Class(head, Vec::new(), TyAttr::default())
-            }
+            // A `type` value's concrete type is the `reflect.Type` metatype
+            // itself. The nine kind views are ordinary wrapper classes whose
+            // instances take the `Object::Instance` arm above; nothing about a
+            // type value's membership depends on classifying its payload.
+            Object::Type(_) => ConcreteRealizedTy::Type {
+                attr: TyAttr::default(),
+            },
             // Arrays/maps carry their element/key/value types, so the faithful
             // `list<T>` / `map<K, V>` is reconstructed from the value itself.
             Object::Array(arr) => {
@@ -4898,30 +4909,30 @@ impl BexVm {
         }))
     }
 
-    /// `int << r`, validated: a negative count throws `NegativeBitShift`, and a
-    /// result outside the i63 range throws `IntegerOverflow` (e.g. `1 << 62`).
-    /// `checked_shl` also rules out the shift-amount UB of a raw `<<`.
+    /// Evaluate `int << r` with the shared i63 semantics used by constant
+    /// folding. A negative count throws `NegativeBitShift`.
     #[inline]
     fn int_shl(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        let Ok(shift) = u32::try_from(r) else {
-            return Err(self.negative_bit_shift(r));
+        let Some(l) = Int63::new(l) else {
+            verifier_unreachable!()
         };
-        match l.checked_shl(shift).and_then(Value::try_int) {
-            Some(v) => Ok(v),
-            None => Err(self.integer_overflow(format!("{l} << {r} overflows int"))),
+        match l.shift_left(r) {
+            Ok(value) => Ok(Value::int(value.get())),
+            Err(IntShiftError::NegativeCount(count)) => Err(self.negative_bit_shift(count)),
         }
     }
 
-    /// `int >> r` (arithmetic), validated: a negative count throws
-    /// `NegativeBitShift`. The result is always within i63 (magnitude only
-    /// shrinks); a count `>= 64` saturates to the sign bit (`min(63)` avoids the
-    /// shift-amount UB of a raw `>>`).
+    /// Evaluate `int >> r` with the shared i63 semantics used by constant
+    /// folding. A negative count throws `NegativeBitShift`.
     #[inline]
     fn int_shr(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        let Ok(shift) = u32::try_from(r) else {
-            return Err(self.negative_bit_shift(r));
+        let Some(l) = Int63::new(l) else {
+            verifier_unreachable!()
         };
-        Ok(Value::int(l >> shift.min(63)))
+        match l.shift_right(r) {
+            Ok(value) => Ok(Value::int(value.get())),
+            Err(IntShiftError::NegativeCount(count)) => Err(self.negative_bit_shift(count)),
+        }
     }
 
     /// Allocate a `baml.panics.*` class instance using pre-resolved pointers.
@@ -7475,9 +7486,8 @@ impl BexVm {
                 // than wrapping or raw-Rust-panicking. Only `*` can overflow
                 // i64 from i63 operands (so it needs checked_mul); +, -, /, %
                 // can't, so a plain op + i63 range-check suffices. And/Or/Xor of
-                // two i63 values stay in range, but `<<` can leave it (e.g.
-                // `1 << 62`), so Shl/Shr are validated (overflow + negative
-                // count) too.
+                // two i63 values stay in range, and `<<` truncates back into it
+                // (see `int_shl`); both shifts still reject a negative count.
                 BinOp::Add => self.finish_int(l.wrapping_add(r), l, '+', r)?,
                 BinOp::Sub => self.finish_int(l.wrapping_sub(r), l, '-', r)?,
                 BinOp::Mul => self.int_arith_result(l.checked_mul(r), l, '*', r)?,
@@ -9009,6 +9019,12 @@ impl BexVm {
 
                 OpCode::RuntimeIsType => {
                     let expected_value = self.stack.ensure_pop();
+                    // A kind view filters as the `type` value it wraps.
+                    let expected_value = crate::package_reflect::type_kinds::as_view_type_value(
+                        self,
+                        expected_value,
+                    )
+                    .unwrap_or(expected_value);
                     let value = self.stack.ensure_pop();
                     // `is unreflect(t)` filters on *nominal* identity: the
                     // scrutinee's declaration must be the one `t` denotes, at

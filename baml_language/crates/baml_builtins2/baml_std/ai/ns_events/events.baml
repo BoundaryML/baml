@@ -44,6 +44,53 @@ class FinalProduced {
     value_json: string,
 }
 
+
+// ---------------------------------------------------------------------------
+// Wire records (v0-Collector-shaped). One LLMCall per HTTP exchange,
+// INCLUDING failed retry/fallback legs (selected: false).
+
+class Timing {
+    // Wall-clock UTC start of the exchange; from baml.time.Instant.now().
+    // Null on failed legs, whose start was never measured — never fabricated.
+    start_time_utc_ms: bigint?,
+    // Total duration; null when the leg failed before it could be measured.
+    duration_ms: bigint?,
+    // Time to first data event; streams only.
+    ttft_ms: bigint?,
+}
+
+// Response snapshot; baml.http.Response holds a native body handle and
+// cannot ride events.
+class HttpResponse {
+    status: int,
+    headers: map<string, string>,
+    // Only when the client set capture_wire.
+    body: string?,
+}
+
+// Raw SSE data field, streams only. Duplicates ai.stream.SseEvent's shape so
+// ns_events does not depend on ns_stream.
+class SseEventRecord {
+    event: string?,
+    data: string?,
+    id: string?,
+}
+
+class LLMCall {
+    client_name: string,
+    provider: string,
+    timing: Timing,
+    // Reused as-is; only when capture_wire. Rendered requests carry no
+    // credential headers (auth is applied at send); the URL is redacted.
+    http_request: baml.http.Request?,
+    // Null on transport failure.
+    http_response: HttpResponse?,
+    usage: Usage?,
+    selected: bool,
+    // Streams, only when capture_wire.
+    sse_responses: SseEventRecord[]?,
+}
+
 type Event = RunStarted
     | UserMessage
     | AssistantMessage
@@ -51,4 +98,21 @@ type Event = RunStarted
     | ToolCompleted
     | ToolFailed
     | Usage
+    | LLMCall
     | FinalProduced;
+
+// Wrap a listener so a listener error can never fail or alter a run.
+// A null listener stays null; callers `if let` and skip emission entirely.
+// `E` accepts fallible listeners (host callables included); the wrapper
+// swallows whatever they throw, hence the `throws never` on the returned type.
+function guard<E>(
+    listener: ((Event) -> void throws E)?,
+) -> ((Event) -> void throws never)? {
+    if let cb: (Event) -> void throws E = listener {
+        (e: Event) -> void {
+            cb(e) catch_all (err) { _ => {} }
+        }
+    } else {
+        null
+    }
+}

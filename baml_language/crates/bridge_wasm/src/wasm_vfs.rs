@@ -14,14 +14,6 @@
 //! filesystem's answers, so the browser and `baml check` agree on what a
 //! project is.
 
-#![expect(
-    deprecated,
-    reason = "tsify's into_wasm_abi/from_wasm_abi is the browser's established \
-              binding for these shapes; moving to `tsify::Ts` changes what the \
-              host worker receives, so it is a protocol change (the deprecation \
-              is about a wasm-bindgen leak, tracked upstream)"
-)]
-
 use std::path::{Path, PathBuf};
 
 use baml_lsp::{

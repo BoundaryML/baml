@@ -99,7 +99,7 @@ function runtime_leaf_narrowing.classify_type_runtime_value(value: reflect.Type 
 
   L1:
     load_var _2
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
 
   L2:
     return
@@ -119,7 +119,7 @@ function runtime_leaf_narrowing.if_let_binds_type_runtime_value() -> string {
 
   L1:
     load_var _2
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
 
   L2:
     return

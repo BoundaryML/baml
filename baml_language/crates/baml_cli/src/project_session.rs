@@ -126,7 +126,16 @@ impl ProjectSession {
         if CacheContext::verify_enabled() {
             return None;
         }
-        self.cache.as_ref().and_then(CacheContext::load)
+        let mut program = self.cache.as_ref().and_then(CacheContext::load)?;
+        // `source_content_hash` is in-memory metadata (`borsh(skip)`), so a
+        // cached program arrives without it. The cache hit just validated
+        // every project file byte-for-byte against this database, so
+        // recomputing here restores exactly the identity a fresh compile
+        // would have stamped.
+        program.source_content_hash = Some(
+            baml_db::baml_compiler2_emit::project_source_content_hash(&self.db),
+        );
+        Some(program)
     }
 
     /// Seed the stdlib typed interface and prepare the per-file reuse plan —

@@ -1,15 +1,12 @@
 version = 1
-recorded_at = "2026-08-17T09:30:29Z"
-git_sha = "1a997de0aaabac9d2b91828155e123af98bd8296"
+recorded_at = "2026-08-25T03:24:02Z"
+git_sha = "8481522548dddbaf3c460100d467171b5c0a48fa"
 
-# baml-cli re-pegged to the measured panic=unwind build (32,372,752 B);
-# packed-program scaled ~+25% pending the next CI record (the daily
-# baseline refresh replaces these with CI-measured sizes).
 [artifacts.baml-cli]
-file_bytes = "30.9 MiB"
-stripped_bytes = "30.9 MiB"
-gzip_bytes = "13.3 MiB"
+file_bytes = "57.9 MiB"
+stripped_bytes = "57.9 MiB"
+gzip_bytes = "22.9 MiB"
 
 [artifacts.packed-program]
-file_bytes = "24.5 MiB"
-gzip_bytes = "9.8 MiB"
+file_bytes = "25.6 MiB"
+gzip_bytes = "10.0 MiB"

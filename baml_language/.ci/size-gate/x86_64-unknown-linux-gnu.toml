@@ -1,17 +1,12 @@
 version = 1
-recorded_at = "2026-08-16T04:00:02Z"
-git_sha = "2273e45dbf4e23231743f428bd2e53d978b91e9a"
+recorded_at = "2026-08-25T03:24:02Z"
+git_sha = "8481522548dddbaf3c460100d467171b5c0a48fa"
 
-# Scaled ~+25% for panic=unwind (measured on macOS; the daily baseline
-# refresh replaces these with CI-measured sizes).
 [artifacts.baml-cli]
-file_bytes = "37.8 MiB"
-stripped_bytes = "37.8 MiB"
-gzip_bytes = "15.0 MiB"
+file_bytes = "74.6 MiB"
+stripped_bytes = "74.6 MiB"
+gzip_bytes = "26.6 MiB"
 
-# Re-recorded from CI run 31925567696: Package.compile's compiler-built stdlib
-# prefix is embedded in bex_project so first-call runtime compilation does not
-# rebuild the full stdlib.
 [artifacts.packed-program]
-file_bytes = "29.7 MiB"
-gzip_bytes = "10.9 MiB"
+file_bytes = "31.0 MiB"
+gzip_bytes = "11.2 MiB"

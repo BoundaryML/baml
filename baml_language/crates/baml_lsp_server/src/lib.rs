@@ -37,6 +37,7 @@ pub mod playground_seam;
 pub mod playground_sender;
 pub mod playground_server;
 pub mod playground_session;
+pub mod playground_telemetry;
 pub mod playground_ws;
 
 use std::{

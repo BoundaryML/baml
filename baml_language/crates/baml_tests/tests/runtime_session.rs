@@ -966,9 +966,9 @@ fn ordinary_compile_error(source: &str) -> String {
 
 fn ordinary_compile_errors(source: &str) -> Vec<String> {
     use baml_compiler_diagnostics::Severity;
-    use baml_db::{collect_diagnostics, testing::setup_test_db};
+    use baml_tests::stdlib_prefix::{check_user_files, setup_test_db};
 
-    collect_diagnostics(&setup_test_db(source))
+    check_user_files(&setup_test_db(source))
         .into_iter()
         .filter(|diagnostic| diagnostic.severity == Severity::Error)
         .map(|diagnostic| {

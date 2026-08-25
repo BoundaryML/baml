@@ -25,7 +25,6 @@ use std::{
     sync::Arc,
 };
 
-pub use baml_db::testing::{OptLevel, compile_multi_file, compile_source, compile_source_with_opt};
 use baml_db::{Name, ProjectDatabase, SourceFile, SourceRoot, SourceRootKind, SourceRootSpec};
 use bex_engine::{BexCallArg, BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm::debug::{BytecodeFormat, display_program};
@@ -34,6 +33,14 @@ pub use indexmap::IndexMap;
 #[cfg(test)]
 use insta::{assert_snapshot, with_settings};
 use sys_native::SysOpsExt;
+
+// The stdlib slice these helpers splice in is compiled once at build time
+// rather than once per test; see `crate::stdlib_prefix`. Output is byte-identical
+// to `baml_db::testing`'s honest helpers, pinned by the
+// `stdlib_prefix_equivalence` oracle.
+pub use crate::stdlib_prefix::{
+    OptLevel, compile_multi_file, compile_source, compile_source_with_opt,
+};
 
 #[cfg(test)]
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/engine");

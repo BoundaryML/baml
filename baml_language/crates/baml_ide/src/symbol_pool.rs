@@ -23,6 +23,19 @@ fn name_from_qtn(qtn: &QualifiedTypeName) -> cg::Name {
     qtn.clone()
 }
 
+/// Is this lowered type function-shaped (directly or through union arms)?
+/// Used to keep the `injected` provenance mark off user parameters that merely
+/// reuse the `on_event` NAME on a `$`-suffixed function: the compiler-injected
+/// listener is always function-typed, so a `Foo$stream(on_event: string)`
+/// param stays a public user parameter.
+fn ty_is_function_shaped(ty: &cg::Ty) -> bool {
+    match ty {
+        cg::Ty::Function { .. } => true,
+        cg::Ty::Union(members, _) => members.iter().any(ty_is_function_shaped),
+        _ => false,
+    }
+}
+
 fn lower_codegen_default(
     default_ref: Option<&baml_compiler2_hir::item_tree::DefaultExprRef>,
     defaults: &ast::FunctionDefaults,
@@ -275,39 +288,40 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 let method_defaults =
                     baml_compiler2_ppir::function_parameter_defaults(db, method_loc);
 
-                // The compiler injects a trailing `client` override on LLM
-                // methods and on the `$build_request`/`$stream` companions.
-                // It is an interface-typed BAML implementation detail and
-                // must not leak into generated host SDK method signatures.
-                let param_count = sig.params.len();
-                let drop_injected_client = sig
-                    .params
-                    .last()
-                    .is_some_and(|p| p.name.as_str() == "client")
-                    && (baml_compiler2_ppir::item_data::function_llm_meta(db, method_loc)
-                        .is_some()
+                // The compiler injects a `client` override on LLM methods and
+                // on the `$build_request`/`$stream` companions. It is an
+                // interface-typed BAML implementation detail and must not leak
+                // into generated host SDK method signatures. Strip it BY NAME
+                // (the injected `on_event` listener sits after it, so it is no
+                // longer the last param); `on_event` stays — its function type
+                // is representable and part of the SDK surface.
+                let strips_injected_client =
+                    baml_compiler2_ppir::item_data::function_llm_meta(db, method_loc).is_some()
                         || method.name.as_str().ends_with("$stream")
-                        || method.name.as_str().ends_with("$build_request"));
-                let visible_params = if drop_injected_client {
-                    param_count - 1
-                } else {
-                    param_count
-                };
+                        || method.name.as_str().ends_with("$build_request");
 
                 let arguments: Vec<cg::FunctionArgument> = sig
                     .params
                     .iter()
                     .enumerate()
                     .skip(usize::from(is_instance))
-                    .take(visible_params.saturating_sub(usize::from(is_instance)))
-                    .map(|(index, param)| cg::FunctionArgument {
-                        name: param.name.clone(),
-                        docstring: None,
-                        ty: lower(param.type_ref),
-                        default: lower_codegen_default(
-                            method_defaults.param_default(index),
-                            &method_defaults.defaults,
-                        ),
+                    .filter(|(_, param)| {
+                        !(strips_injected_client && param.name.as_str() == "client")
+                    })
+                    .map(|(index, param)| {
+                        let ty = lower(param.type_ref);
+                        cg::FunctionArgument {
+                            injected: strips_injected_client
+                                && param.name.as_str() == "on_event"
+                                && ty_is_function_shaped(&ty),
+                            name: param.name.clone(),
+                            docstring: None,
+                            ty,
+                            default: lower_codegen_default(
+                                method_defaults.param_default(index),
+                                &method_defaults.defaults,
+                            ),
+                        }
                     })
                     .collect();
 
@@ -516,43 +530,41 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 convert_tir_to_codegen_ty(&tir_ty, alias_map, recursive_aliases)
             };
             let func_defaults = baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
-            // The compiler injects a trailing `client: ai.Client? = null`
-            // override onto every LLM function (and its companions). It is a
-            // BAML-side concern typed as an INTERFACE, which no target
+            // The compiler injects a `client: ai.Client? = null` override onto
+            // every LLM function (and its `$stream`/`$build_request`
+            // companions, where it is retyped `ai.stream.StreamingClient?`).
+            // It is a BAML-side concern typed as an INTERFACE, which no target
             // language can represent — leaving it in makes the whole function
             // "unsupported" and the generator drops it, so the SDK would
-            // expose no LLM functions at all. Strip it here (the same rule
-            // `param_schema` applies for the playground form): SDK callers get
-            // the function's declared default client.
-            let param_count = sig.params.len();
-            // ...and on the `$stream` companion, where the same override is
-            // typed `ai.stream.StreamingClient?` (companions carry no LLM
-            // metadata of their own, hence the name check).
-            let drop_injected_client = sig
-                .params
-                .last()
-                .is_some_and(|p| p.name.as_str() == "client")
-                && (baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some()
+            // expose no LLM functions at all. Strip it BY NAME (the injected
+            // `on_event` listener now sits after it, so it is no longer the
+            // last param; a user param cannot be named `client` on these
+            // functions — the compiler reserves it). `on_event` stays: its
+            // function type is representable and it is part of the SDK
+            // surface.
+            let strips_injected_client =
+                baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some()
                     || func.name.as_str().ends_with("$stream")
-                    || func.name.as_str().ends_with("$build_request"));
-            let visible_params = if drop_injected_client {
-                param_count - 1
-            } else {
-                param_count
-            };
+                    || func.name.as_str().ends_with("$build_request");
             let arguments: Vec<cg::FunctionArgument> = sig
                 .params
                 .iter()
-                .take(visible_params)
                 .enumerate()
-                .map(|(index, param)| cg::FunctionArgument {
-                    name: param.name.clone(),
-                    docstring: None,
-                    ty: lower(param.type_ref),
-                    default: lower_codegen_default(
-                        func_defaults.param_default(index),
-                        &func_defaults.defaults,
-                    ),
+                .filter(|(_, param)| !(strips_injected_client && param.name.as_str() == "client"))
+                .map(|(index, param)| {
+                    let ty = lower(param.type_ref);
+                    cg::FunctionArgument {
+                        injected: strips_injected_client
+                            && param.name.as_str() == "on_event"
+                            && ty_is_function_shaped(&ty),
+                        name: param.name.clone(),
+                        docstring: None,
+                        ty,
+                        default: lower_codegen_default(
+                            func_defaults.param_default(index),
+                            &func_defaults.defaults,
+                        ),
+                    }
                 })
                 .collect();
 
@@ -919,17 +931,19 @@ function extract_resume(resume: string) -> Resume {
 
         let pool = build_symbol_pool(&db);
 
-        // The compiler injects a trailing `client: ai.Client? = null` override
-        // onto the LLM function. `ai.Client` is an interface, which no target
-        // language can represent — leaving it in the pool made every generator
-        // classify the function as unsupported and drop it entirely. The pool
-        // must expose the user's own parameters only.
+        // The compiler injects `client: ai.Client? = null` and
+        // `on_event: ((ai.events.Event) -> void)? = null` onto the LLM
+        // function. `ai.Client` is an interface, which no target language can
+        // represent — leaving it in the pool made every generator classify
+        // the function as unsupported and drop it entirely. `on_event` is a
+        // representable function type and IS part of the SDK surface, on the
+        // function and its `$stream` companion only.
         for (bare, expected) in [
-            ("extract_resume", &["resume"][..]),
+            ("extract_resume", &["resume", "on_event"][..]),
             ("extract_resume$build_request", &["resume"][..]),
             ("extract_resume$render_prompt", &["resume"][..]),
             ("extract_resume$parse", &["json"][..]),
-            ("extract_resume$stream", &["resume"][..]),
+            ("extract_resume$stream", &["resume", "on_event"][..]),
         ] {
             let key = cg::Name::new(Name::new("user"), vec![], Name::new(bare));
             let Some(cg::Symbol::Function(func)) = pool.get(&key) else {
@@ -1019,16 +1033,16 @@ class Extractor {
         );
 
         let expected = [
-            ("extract", vec!["text", "suffix"]),
+            ("extract", vec!["text", "suffix", "on_event"]),
             ("extract$build_request", vec!["text", "suffix"]),
             ("extract$render_prompt", vec!["text", "suffix"]),
             ("extract$parse", vec!["json"]),
-            ("extract$stream", vec!["text", "suffix"]),
-            ("summarize", vec!["text", "suffix"]),
+            ("extract$stream", vec!["text", "suffix", "on_event"]),
+            ("summarize", vec!["text", "suffix", "on_event"]),
             ("summarize$build_request", vec!["text", "suffix"]),
             ("summarize$render_prompt", vec!["text", "suffix"]),
             ("summarize$parse", vec!["json"]),
-            ("summarize$stream", vec!["text", "suffix"]),
+            ("summarize$stream", vec!["text", "suffix", "on_event"]),
         ];
         for (name, expected_args) in expected {
             let actual: Vec<&str> = find_method(name)
@@ -1037,6 +1051,46 @@ class Extractor {
                 .map(|arg| arg.name.as_str())
                 .collect();
             assert_eq!(actual, expected_args, "arguments for {name}");
+        }
+    }
+
+    #[test]
+    fn test_user_on_event_params_are_never_marked_injected() {
+        // A user may declare into the `$` suffix namespace and may name a
+        // parameter `on_event`; only the compiler-injected listener (function
+        // typed, on an LLM function or real companion) carries provenance.
+        let root = Path::new("/tmp/user_on_event_params");
+        let mut db = ProjectDatabase::new();
+        db.workspace(root);
+        db.file(
+            root.join("main.baml").as_path(),
+            r##"
+function Notify$stream(on_event: string) -> string {
+  on_event
+}
+
+function Watch(on_event: ((string) -> void throws never)? = null) -> string {
+  let _ = on_event;
+  "ok"
+}
+"##,
+        );
+
+        let pool = build_symbol_pool(&db);
+        for bare in ["Notify$stream", "Watch"] {
+            let key = cg::Name::new(Name::new("user"), vec![], Name::new(bare));
+            let Some(cg::Symbol::Function(func)) = pool.get(&key) else {
+                panic!("missing function {bare}");
+            };
+            let arg = func
+                .arguments
+                .iter()
+                .find(|a| a.name.as_str() == "on_event")
+                .unwrap_or_else(|| panic!("{bare} lost its user on_event parameter"));
+            assert!(
+                !arg.injected,
+                "user-declared on_event on {bare} must not carry injected provenance"
+            );
         }
     }
 

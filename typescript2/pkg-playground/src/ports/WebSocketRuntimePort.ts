@@ -341,6 +341,26 @@ export class WebSocketRuntimePort implements RuntimePort {
           requestId: msg.requestId,
           type: 'openHistory',
         };
+      case 'listExecutions':
+        return {
+          project: msg.project,
+          requestId: msg.requestId,
+          type: 'listExecutions',
+        };
+      case 'openExecution':
+        return {
+          executionId: msg.executionId,
+          project: msg.project,
+          requestId: msg.requestId,
+          type: 'openExecution',
+        };
+      case 'readTelemetryMedia':
+        return {
+          cid: msg.cid,
+          project: msg.project,
+          requestId: msg.requestId,
+          type: 'readTelemetryMedia',
+        };
       case 'snapshot':
         return {
           boundaryId: msg.boundaryId,
@@ -510,6 +530,27 @@ export class WebSocketRuntimePort implements RuntimePort {
         };
       case 'runList':
         return { requestId: raw.requestId, runs: raw.runs, type: 'runList' };
+      case 'executionList':
+        return {
+          executions: raw.executions,
+          requestId: raw.requestId,
+          storeMissing: raw.storeMissing,
+          type: 'executionList',
+        };
+      case 'executionTelemetry':
+        return {
+          executionId: raw.executionId,
+          requestId: raw.requestId,
+          telemetry: raw.telemetry,
+          type: 'executionTelemetry',
+        };
+      case 'telemetryMedia':
+        return {
+          cid: raw.cid,
+          media: raw.media,
+          requestId: raw.requestId,
+          type: 'telemetryMedia',
+        };
       case 'runSnapshot':
         return {
           boundaryId: raw.boundaryId,

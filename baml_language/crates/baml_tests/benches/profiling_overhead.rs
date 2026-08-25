@@ -16,10 +16,7 @@ use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
 use baml_db::ProjectDatabase;
 use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, FunctionCallContextBuilder, logger::TraceLogger};
-use bex_events::{
-    ids::BoundaryId,
-    prof::backend::{DiskBudget, DurableRunReader, ProfilerConfig, ProfilerSession},
-};
+use bex_events::prof::backend::{DiskBudget, ProfilerConfig, ProfilerSession, list_executions};
 use divan::{Bencher, black_box};
 use sys_native::{CallId, SysOpsExt};
 
@@ -80,6 +77,8 @@ fn compile_source(
             max_project_bytes: 10 * 1024 * 1024 * 1024,
             minimum_free_bytes: 0,
         },
+        publish_interval: Duration::from_secs(1),
+        stream: None,
     });
     assert!(diagnostic.is_none(), "{diagnostic:?}");
     let engine = BexEngine::new_with_profiler_session(
@@ -132,28 +131,18 @@ fn bench_vm_main(bencher: Bencher, source: &str, mode: BenchMode) {
         });
     if matches!(mode, BenchMode::On) {
         assert!(bex_events::prof::flush_and_join(Duration::from_secs(30)));
-        let runs = store.path().join("profiles-v1/runs");
-        for entry in std::fs::read_dir(runs).expect("on benchmark must publish runs") {
-            let name = entry.unwrap().file_name().to_string_lossy().into_owned();
-            let mut bytes = [0_u8; 16];
-            assert_eq!(name.len(), 32, "invalid run directory {name}");
-            assert!(
-                name.bytes()
-                    .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')),
-                "run directory must be lowercase hex: {name}"
-            );
-            for (index, byte) in bytes.iter_mut().enumerate() {
-                *byte = u8::from_str_radix(&name[index * 2..index * 2 + 2], 16)
-                    .expect("run directory must be lowercase hex");
-            }
-            let run = DurableRunReader::open(
-                store.path().join("profiles-v1"),
-                BoundaryId::from_bytes(bytes),
-            )
-            .and_then(|reader| reader.load())
-            .expect("benchmark run must be durably readable");
+        let executions = list_executions(&store.path().join("profiles-v1"))
+            .expect("on benchmark must publish a readable stream");
+        assert!(
+            !executions.is_empty(),
+            "on benchmark must publish executions"
+        );
+        for execution in executions {
+            let health = execution
+                .health
+                .expect("benchmark execution must be durably ended");
             assert_eq!(
-                run.terminal_health.structural_transport_exceeded, 0,
+                health.structural_transport_exceeded, 0,
                 "performance samples are invalid when transport records were lost"
             );
         }

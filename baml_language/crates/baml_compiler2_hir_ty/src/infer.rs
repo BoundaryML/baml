@@ -40,7 +40,7 @@ use baml_compiler2_hir::{
     },
 };
 use baml_type::{
-    Freshness, Literal, TyAttr,
+    Freshness, Int63, Literal, TyAttr,
     interned::{InterfaceRef, Ty, TyKind},
     normalize::{canonical_union_interned, equivalent_interned, is_subtype_interned},
 };
@@ -110,7 +110,7 @@ fn is_spawn_params_qtn(qtn: &baml_type::TypeName) -> bool {
 /// Negate a numeric literal into the negative literal TYPE (ruling 2:
 /// `-1` is a type, TS parity). Freshness carries through. `None` skips
 /// the fold: non-numeric literals, and an int result outside BAML's i63
-/// value range (`-INT_MIN` = 2^62) - the unfolded dispatch result stands
+/// value range (`-int.min_value()` = 2^62) - the unfolded dispatch result stands
 /// and the VM raises the catchable overflow, identical to the
 /// through-a-variable path (TIR's `fold_int` rule).
 /// Where a type-qualified reference's OWN generic args come from -
@@ -132,21 +132,11 @@ struct WrittenQualifier<'a> {
     realized: &'a baml_type::Interface,
 }
 
-/// BAML's int value range: i63 (the VM tags the low bit). One
-/// crate-level pair, mirroring TIR's layout and the
-/// `baml_type::MAX_BIGINT_BITS` precedent; a folded result outside it
-/// defers to the runtime overflow.
-const INT_MIN: i64 = -(1 << 62);
-const INT_MAX: i64 = (1 << 62) - 1;
-
 fn negate_literal(lit: &Literal, freshness: Freshness) -> Option<Ty> {
     let negated = match lit {
         Literal::Int(n) => {
-            let v = n.checked_neg()?;
-            if !(INT_MIN..=INT_MAX).contains(&v) {
-                return None;
-            }
-            Literal::Int(v)
+            let v = Int63::new(n.checked_neg()?)?;
+            Literal::Int(v.get())
         }
         Literal::Bigint(n) => Literal::Bigint(-n.clone()),
         // The float's WRITTEN digits are preserved exactly: negation is a
@@ -187,11 +177,7 @@ fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Op
     };
     let lit = |value: Literal| Ty::intern(TyKind::Literal(value, freshness, TyAttr::default()));
     let boolean = |value: bool| Some(lit(Literal::Bool(value)));
-    let int = |value: i64| {
-        (INT_MIN..=INT_MAX)
-            .contains(&value)
-            .then(|| lit(Literal::Int(value)))
-    };
+    let int = |value: i64| Int63::new(value).map(|value| lit(Literal::Int(value.get())));
     match (a, b) {
         (Literal::Int(a), Literal::Int(b)) => {
             let (a, b) = (*a, *b);
@@ -204,10 +190,11 @@ fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Op
                 BinaryOp::BitAnd => Some(lit(Literal::Int(a & b))),
                 BinaryOp::BitOr => Some(lit(Literal::Int(a | b))),
                 BinaryOp::BitXor => Some(lit(Literal::Int(a ^ b))),
-                // Shifts range-check the RESULT too (`1 << 62` escapes
-                // i63); bad counts defer to the runtime throw.
-                BinaryOp::Shl => int(a.checked_shl(u32::try_from(b).ok()?)?),
-                BinaryOp::Shr => int(a.checked_shr(u32::try_from(b).ok()?)?),
+                // The same semantic value used by the VM defines folding.
+                // Negative counts remain unfolded so runtime dispatch raises
+                // the typed `NegativeBitShift` panic.
+                BinaryOp::Shl => Some(lit(Literal::Int(Int63::new(a)?.shift_left(b).ok()?.get()))),
+                BinaryOp::Shr => Some(lit(Literal::Int(Int63::new(a)?.shift_right(b).ok()?.get()))),
                 BinaryOp::Eq => boolean(a == b),
                 BinaryOp::Ne => boolean(a != b),
                 BinaryOp::Lt => boolean(a < b),
@@ -628,6 +615,15 @@ enum TaggedTagIssue {
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum HoleAnchor {
     TypeRef(BodyTypeRefId),
+}
+
+/// Where an inference variable came from and the user-facing type that
+/// contains it. Writeback uses this to report unsolved variables before
+/// replacing them with the error sentinel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct InferVarOrigin {
+    location: crate::diagnostics::DiagnosticLocation,
+    containing_type: Ty,
 }
 
 /// S17 pending diagnostic (engine-internal): arena-anchored, payload
@@ -1642,6 +1638,12 @@ struct InferenceContext<'db> {
     /// finalize reports E0147 `CannotInferType` there (rustc's E0282
     /// discipline) instead of leaking a bare `Infer` into lowering.
     hole_vars: Vec<(baml_type::interned::InferVar, HoleAnchor)>,
+    /// User-source origins for ordinary inference variables that require a
+    /// concrete solution. The order vector makes diagnostic selection stable
+    /// when several source variables unify into one unresolved class.
+    infer_var_origins: FxHashMap<baml_type::interned::InferVar, InferVarOrigin>,
+    infer_var_origin_order: Vec<baml_type::interned::InferVar>,
+    diagnosed_infer_vars: rustc_hash::FxHashSet<baml_type::interned::InferVar>,
     /// One lowering per written body annotation (rust-analyzer's
     /// discipline): the let rule, the pattern walk, and the backfill all
     /// read the SAME lowered type - and so the same instantiated hole
@@ -1783,6 +1785,9 @@ impl<'db> InferenceContext<'db> {
             throws_channels: vec![Vec::new()],
             pending_diags: Vec::new(),
             hole_vars: Vec::new(),
+            infer_var_origins: FxHashMap::default(),
+            infer_var_origin_order: Vec::new(),
+            diagnosed_infer_vars: rustc_hash::FxHashSet::default(),
             annotation_cache: FxHashMap::default(),
             canonical_cache: baml_type::normalize::InternedCanonicalCache::default(),
             member_probe_depth: 0,
@@ -2010,7 +2015,7 @@ impl<'db> InferenceContext<'db> {
                 // placeholder so a failed compile can't carry the bad value
                 // forward - TIR's rule verbatim.
                 let lit = if let Literal::Int(v) = lit
-                    && !(INT_MIN..=INT_MAX).contains(v)
+                    && Int63::new(*v).is_none()
                 {
                     self.pending_diags
                         .push(PendingDiag::IntLiteralOutOfRange { expr, value: *v });
@@ -2416,7 +2421,7 @@ impl<'db> InferenceContext<'db> {
                     None if elements.is_empty() => {
                         // `[]`: a list over a fresh element variable - the
                         // honest replacement for the EvolvingList sentinel.
-                        Ty::list(self.table.new_establishment_var_ty())
+                        self.untyped_empty_container_ty(expr, Ty::list)
                     }
                     None => {
                         let joined: Vec<Ty> = elements
@@ -2472,10 +2477,12 @@ impl<'db> InferenceContext<'db> {
                     // `checked_map_key`), so a key var has exactly one
                     // legal solution and leaving it open lets `m[0] = 1`
                     // silently solve `?K := int`.
-                    Ty::intern(TyKind::Map {
-                        key: Ty::string(),
-                        value: self.table.new_establishment_var_ty(),
-                        attr: TyAttr::default(),
+                    self.untyped_empty_container_ty(expr, |value| {
+                        Ty::intern(TyKind::Map {
+                            key: Ty::string(),
+                            value,
+                            attr: TyAttr::default(),
+                        })
                     })
                 } else {
                     let (keys, values): (Vec<Ty>, Vec<Ty>) = entries
@@ -2546,10 +2553,12 @@ impl<'db> InferenceContext<'db> {
                             attr: TyAttr::default(),
                         })
                     } else if fields.is_empty() {
-                        Ty::intern(TyKind::Map {
-                            key: Ty::string(),
-                            value: self.table.new_establishment_var_ty(),
-                            attr: TyAttr::default(),
+                        self.untyped_empty_container_ty(expr, |value| {
+                            Ty::intern(TyKind::Map {
+                                key: Ty::string(),
+                                value,
+                                attr: TyAttr::default(),
+                            })
                         })
                     } else {
                         let values: Vec<Ty> = fields
@@ -3460,7 +3469,7 @@ impl<'db> InferenceContext<'db> {
                 ok &= self.sub(&throws.0, &throws.1);
                 ok
             }
-            // `baml.AnyFunction` is compiler-derived for concrete function
+            // `reflect.AnyFunction` is compiler-derived for concrete function
             // values, rather than an ordinary impl obligation.  When a
             // generic consumer such as `reflect.call_any<R, E>` receives a
             // function value directly, carry its output channels into the
@@ -3475,7 +3484,7 @@ impl<'db> InferenceContext<'db> {
                     ..
                 },
                 TyKind::Interface(name, _, expected_pins, _),
-            ) if name.is_builtin_root_type("AnyFunction") => {
+            ) if name.is_reflect_root_type("AnyFunction") => {
                 let mut ok = true;
                 for (pin, expected_pin) in expected_pins {
                     let Some(actual_pin) = (match pin.as_str() {
@@ -3511,7 +3520,7 @@ impl<'db> InferenceContext<'db> {
                     ) = (actual.kind(), expected.kind())
                         && a_name == b_name
                         && a_args.len() == b_args.len()
-                        && (a_name.is_builtin_root_type("AnyFunction")
+                        && (a_name.is_reflect_root_type("AnyFunction")
                             || b_pins
                                 .iter()
                                 .all(|(pin, _)| a_pins.iter().any(|(a_pin, _)| a_pin == pin)))
@@ -4695,9 +4704,25 @@ impl<'db> InferenceContext<'db> {
         {
             return;
         }
-        let expected = Ty::intern(TyKind::Type {
-            attr: TyAttr::default(),
-        });
+        // The operand contract is `reflect.Type | reflect.TypeView`: a kind
+        // view is accepted and converts to the `type` value it wraps at the
+        // VM's type-operand boundary — the same explicit-computation-point
+        // model as `int + float`, never a subtyping edge.
+        let expected = Ty::intern(TyKind::Union(
+            vec![
+                Ty::intern(TyKind::Type {
+                    attr: TyAttr::default(),
+                }),
+                Ty::intern(TyKind::Interface(
+                    baml_type::QualifiedTypeName::from_dotted_path("reflect.TypeView"),
+                    Box::new([]),
+                    Box::new([]),
+                    TyAttr::default(),
+                )),
+            ]
+            .into(),
+            TyAttr::default(),
+        ));
         let saved_anchor = self.obligation_anchor.replace(operand);
         let fits = self.sub(&got, &expected);
         self.obligation_anchor = saved_anchor;
@@ -9836,6 +9861,54 @@ impl<'db> InferenceContext<'db> {
             .insert(expr, ResolvedPath { segments: steps });
     }
 
+    fn untyped_empty_container_ty(
+        &mut self,
+        expr: ExprId,
+        make_container: impl FnOnce(Ty) -> Ty,
+    ) -> Ty {
+        let slot = self.table.new_establishment_var_ty();
+        let TyKind::Infer { var: Some(var), .. } = slot.kind() else {
+            unreachable!("a fresh establishment variable must be an inference type");
+        };
+        let var = *var;
+        let containing_type = make_container(slot);
+        self.infer_var_origin_order.push(var);
+        self.infer_var_origins.insert(
+            var,
+            InferVarOrigin {
+                location: crate::diagnostics::DiagnosticLocation::Expr(expr),
+                containing_type: containing_type.clone(),
+            },
+        );
+        containing_type
+    }
+
+    fn take_unresolved_infer_diagnostics(
+        &mut self,
+    ) -> Vec<(crate::diagnostics::DiagnosticLocation, baml_type::Ty)> {
+        let mut diagnostics = Vec::new();
+        for var in std::mem::take(&mut self.infer_var_origin_order) {
+            let Some(origin) = self.infer_var_origins.remove(&var) else {
+                continue;
+            };
+            let Some(root) = self.table.unsolved_root_var(var) else {
+                continue;
+            };
+            let full_type = self.table.resolve_completely(&origin.containing_type);
+            if full_type.has_error() {
+                continue;
+            }
+            if !self.diagnosed_infer_vars.insert(root) {
+                continue;
+            }
+            diagnostics.push((
+                origin.location,
+                infer_to_diagnostic_unknown(&full_type).to_plain(),
+            ));
+        }
+        diagnostics
+    }
+
     fn finish(mut self) -> InferenceResult<'db> {
         // The fulfillment fixpoint: solve what FULL bounds determine,
         // attempt obligations, re-drive the deferred residue, repeat
@@ -9890,6 +9963,7 @@ impl<'db> InferenceContext<'db> {
         // BAML's only defaulting rule: an unconstrained EFFECT is `never`
         // (a value variable erases to Error instead - ruling 2).
         self.table.default_unsolved_effects_to_never();
+        let unresolved_infer_diagnostics = self.take_unresolved_infer_diagnostics();
         let throws = match self.declared_throws.clone() {
             // A closed clause IS the surface (declared wins, rule 1),
             // VERBATIM - the written member order is render fidelity
@@ -10006,6 +10080,14 @@ impl<'db> InferenceContext<'db> {
                 DiagnosticLocation, DiagnosticSeverity, TirDiagnostic, TirTypeError,
             };
             let mut diags: Vec<TirDiagnostic<'db>> = Vec::new();
+            for (location, full_type) in unresolved_infer_diagnostics {
+                diags.push(TirDiagnostic {
+                    error: TirTypeError::TypeMustBeKnown { full_type },
+                    severity: DiagnosticSeverity::Error,
+                    primary: location,
+                    related: Vec::new(),
+                });
+            }
             for (&expr, (expected, actual)) in &result.type_mismatches {
                 // rustc's tainted_by_errors discipline: a mismatch whose
                 // operand IS the error sentinel is a CASCADE of a reported
@@ -12097,6 +12179,20 @@ fn erase_infer(ty: &Ty) -> Ty {
         return Ty::error();
     }
     Ty::intern(ty.kind().map_children(erase_infer))
+}
+
+/// Replaces every unresolved inference node with the user-denotable top type
+/// while preserving the surrounding shape for diagnostics.
+fn infer_to_diagnostic_unknown(ty: &Ty) -> Ty {
+    if !ty.has_infer() {
+        return ty.clone();
+    }
+    if matches!(ty.kind(), TyKind::Infer { .. }) {
+        return Ty::intern(TyKind::Unknown {
+            attr: TyAttr::default(),
+        });
+    }
+    Ty::intern(ty.kind().map_children(infer_to_diagnostic_unknown))
 }
 
 /// A fresh literal widens to its base primitive at binding sites (the spec's

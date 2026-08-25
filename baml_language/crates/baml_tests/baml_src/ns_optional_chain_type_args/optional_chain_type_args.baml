@@ -395,13 +395,13 @@ test "non_generic_optional_calls_unchanged" {
 
 // ─── The reflection shape the bug was found on ────────────────────────────────
 
-function reflected_field_read_fn() -> int? throws baml.errors.TypeMismatch {
-    let value: baml.AnyClass = Point { x: 7, label: "a" } else { return null }
+function reflected_field_read_fn() -> int? throws reflect.errors.TypeMismatch {
+    let value: reflect.AnyClass = Point { x: 7, label: "a" } else { return null }
     value.get_field("x")?.value<int>()
 }
 
-function reflected_missing_field_fn() -> int? throws baml.errors.TypeMismatch {
-    let value: baml.AnyClass = Point { x: 7, label: "a" } else { return null }
+function reflected_missing_field_fn() -> int? throws reflect.errors.TypeMismatch {
+    let value: reflect.AnyClass = Point { x: 7, label: "a" } else { return null }
     value.get_field("absent")?.value<int>()
 }
 
@@ -411,11 +411,11 @@ test "reflected_field_read_through_optional_chain" {
 }
 
 /// A type arg the value does not fit is still a domain error
-/// (`baml.errors.TypeMismatch`), not a frame-layout failure.
+/// (`reflect.errors.TypeMismatch`), not a frame-layout failure.
 function reflected_field_wrong_type_arg_fn() -> string {
-    let value: baml.AnyClass = Point { x: 7, label: "a" } else { return "no-class" }
+    let value: reflect.AnyClass = Point { x: 7, label: "a" } else { return "no-class" }
     let read = value.get_field("x")?.value<string>() catch (e) {
-        baml.errors.TypeMismatch { message } => { return "type-mismatch" }
+        reflect.errors.TypeMismatch { message } => { return "type-mismatch" }
     }
     read ?? "null"
 }

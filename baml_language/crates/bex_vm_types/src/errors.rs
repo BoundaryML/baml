@@ -54,7 +54,9 @@ pub enum VmPanic {
     #[error("operation cancelled")]
     Cancelled,
 
-    /// A user-caused panic from `baml.sys.panic`.
+    /// A user-caused panic from `baml.sys.panic`, and the stdlib's panic of
+    /// record for a user-violated native invariant (e.g. a reflection kind
+    /// view's `_ty` field overwritten with a type of a different kind).
     #[error("baml.sys.panic: {message}")]
     UserPanic { message: String },
 

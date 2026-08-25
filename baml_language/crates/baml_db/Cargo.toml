@@ -31,6 +31,7 @@ baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
 baml_type = { workspace = true }
 bex_vm_types = { workspace = true }
+borsh = { workspace = true }
 ignore = { workspace = true }
 rayon = { workspace = true }
 salsa = { workspace = true }

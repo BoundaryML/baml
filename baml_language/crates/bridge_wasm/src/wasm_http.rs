@@ -719,6 +719,12 @@ impl IoNamespaceHttp for WasmHttp {
             }
 
             let url = response.url().to_string();
+            let status_code = i64::from(response.status().as_u16());
+            let headers: indexmap::IndexMap<String, String> = response
+                .headers()
+                .iter()
+                .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
+                .collect();
             let byte_stream = Box::pin(response.bytes_stream());
 
             // Create channel and spawn background task to parse SSE events.
@@ -730,6 +736,8 @@ impl IoNamespaceHttp for WasmHttp {
 
             Ok(io::owned::http::SseStream {
                 url,
+                status_code,
+                headers,
                 _handle: handle,
             })
         }))

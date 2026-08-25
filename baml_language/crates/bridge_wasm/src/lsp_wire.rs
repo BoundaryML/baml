@@ -4,14 +4,6 @@
 //! `MessageChannel`, so messages arrive as plain objects rather than framed
 //! bytes; these types are the `tsify` mirror of `lsp_server`'s.
 
-#![expect(
-    deprecated,
-    reason = "tsify's into_wasm_abi/from_wasm_abi is the browser's established \
-              binding for these shapes; moving to `tsify::Ts` changes what the \
-              host worker receives, so it is a protocol change (the deprecation \
-              is about a wasm-bindgen leak, tracked upstream)"
-)]
-
 use baml_lsp::LspError;
 use js_sys::Function;
 use serde::{Deserialize, Serialize};

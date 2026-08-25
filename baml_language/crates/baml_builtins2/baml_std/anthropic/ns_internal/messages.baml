@@ -868,14 +868,21 @@ function anthropic_parse(resp: AnthropicResponse) -> ai.ModelTurn {
         null => null,
     };
 
-    ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
+    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
 }
 
 // The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = _anthropic_request(c, input, false, preview = false);
-    let resp = ai.wire.send_as<AnthropicResponse>(req, "anthropic", request_timeout_ms = c.request_timeout_ms);
-    anthropic_parse(resp)
+    let sent = ai.wire.send_as_with_wire<AnthropicResponse>(
+        req,
+        "anthropic",
+        c.id(),
+        capture_wire = c.capture_wire,
+        request_timeout_ms = c.request_timeout_ms,
+    );
+    let turn = anthropic_parse(sent.value);
+    ai.ModelTurn { ...turn, calls: [sent.call] }
 }
 
 // ---------------------------------------------------------------------------
@@ -1019,10 +1026,10 @@ function _anth_stream_failure(error: AnthStreamError?, raw: string) -> ai.errors
     let detail = error?.message ?? kind;
     match (kind) {
         "rate_limit_error" => {
-            ai.errors.RateLimited { provider: "anthropic", retry_after_ms: null, raw_body: raw }
+            ai.errors.RateLimited { status_code: null, provider: "anthropic", retry_after_ms: null, raw_body: raw }
         },
         "overloaded_error" | "api_error" | "timeout_error" => {
-            ai.errors.NetworkFailure {
+            ai.errors.NetworkFailure { status_code: null,
                 provider: "anthropic",
                 detail: `${kind}: ${detail}`,
                 raw_body: raw,
@@ -1219,7 +1226,7 @@ function _anthropic_sse_failure(message: string) -> ai.errors.Failure {
             }
         }
     }
-    ai.errors.NetworkFailure {
+    ai.errors.NetworkFailure { status_code: null,
         provider: "anthropic",
         detail: `transport failed before a response arrived: ${message}`,
         raw_body: null,
@@ -1237,6 +1244,7 @@ function _anthropic_stream_open_failure(error: baml.errors.Io | baml.errors.Time
 // `stream: true`, wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     let req = _anthropic_request(c, input, true, preview = false);
+    let started = baml.time.Instant.now();
     let sse = baml.http.fetch_sse(
         req,
         timeout = baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
@@ -1251,7 +1259,7 @@ function invoke_stream(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.
     // closes before it (proxy timeout, dropped socket, provider killing the
     // response mid-generation) is a TRUNCATED turn, and without this opt-in the
     // stream would report the partial text as a successful, complete answer.
-    ai.stream.TurnStream.from_sse(
+    let stream = ai.stream.TurnStream.from_sse(
         sse,
         (batch: string) -> {
             anthropic_decode_batch(batch, state) catch_all (e) {
@@ -1259,5 +1267,42 @@ function invoke_stream(c: root.AnthropicClient, input: ai.ModelTurnInput) -> ai.
             }
         },
         require_terminal = "anthropic",
-    )
+    );
+    let call = ai.events.LLMCall {
+        client_name: c.id(),
+        provider: "anthropic",
+        timing: ai.events.Timing {
+            start_time_utc_ms: started.to_timestamp_milliseconds(),
+            duration_ms: null,
+            ttft_ms: null,
+        },
+        http_request: if (c.capture_wire) {
+            baml.http.Request {
+                method: req.method,
+                url: ai.wire.redact_url_secrets(req.url),
+                headers: ai.wire.redact_request_headers(req.headers),
+                body: req.body,
+            }
+        } else {
+            null
+        },
+        http_response: ai.events.HttpResponse {
+            status: sse.status_code,
+            headers: sse.headers,
+            body: null,
+        },
+        usage: null,
+        selected: true,
+        sse_responses: if (c.capture_wire) {
+            []
+        } else {
+            null
+        },
+    };
+    stream._calls = [call];
+    stream._wire_call = call;
+    stream._call_started = started;
+    stream._ttft_from = baml.time.Instant.now();
+    stream._capture_sse = c.capture_wire;
+    stream
 }

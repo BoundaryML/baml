@@ -13,13 +13,6 @@
 //! playground notifications for project state, the browser has exactly one
 //! callback: run frames ride this enum too.
 
-#![expect(
-    deprecated,
-    reason = "tsify's into_wasm_abi is the browser's established binding for \
-              these shapes; moving to `tsify::Ts` changes the generated .d.ts \
-              the worker imports, so it is a protocol change"
-)]
-
 use js_sys::Function;
 use serde::Serialize;
 use tsify::Tsify;

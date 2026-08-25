@@ -482,18 +482,10 @@ test "catch_integer_overflow_via_panic_union" {
     assert.equal(catch_integer_overflow_via_panic_union_fn(), -2)
 }
 
-// `<<` can overflow i63 (`1 << 62` = 2^62 > INT_MAX) → catchable IntegerOverflow;
-// a negative shift count → catchable NegativeBitShift. (Runtime args avoid
-// constant folding so the VM's shift opcode is exercised.)
+// A negative shift count produces a catchable NegativeBitShift. Runtime args
+// avoid constant folding so the VM's shift opcode is exercised. Oversized
+// counts truncate instead; see `ns_operators`.
 function s5_shl(x: int, n: int) -> int { x << n }
-
-function catch_shift_overflow_fn() -> int {
-    s5_shl(1, 62) catch (e) { baml.panics.IntegerOverflow => -1 }
-}
-
-test "catch_shift_overflow" {
-    assert.equal(catch_shift_overflow_fn(), -1)
-}
 
 function catch_negative_shift_fn() -> int {
     s5_shl(1, 0 - 1) catch (e) { baml.panics.NegativeBitShift => -1 }

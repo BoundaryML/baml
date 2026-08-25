@@ -165,7 +165,7 @@ function anthropic_request_shape() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(AnthMockAsk@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(AnthMockAsk@spec("Say pong."));
             let sent = mock.last_request();
             let body = sent.json();
             [
@@ -269,7 +269,7 @@ function anthropic_params_and_passthrough() -> string {
                 },
                 query_params = { "beta": "true" },
             );
-            let result = ai.Agent<string>.new(client = cl).run(AnthMockAsk@spec("hi"));
+            let result = ai.Agent.new(client = cl).run(AnthMockAsk@spec("hi"));
             let sent = mock.last_request();
             let body = sent.json();
             [
@@ -323,7 +323,7 @@ function anthropic_cache_control_placement() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let _ = ai.Agent<string>.new(client = cl).run(AnthMockCached@spec("hi"));
+            let _ = ai.Agent.new(client = cl).run(AnthMockCached@spec("hi"));
             let body = mock.last_request().json();
             [
                 `system_cc=${baml.json.path_or<string>(body, ".system[0].cache_control.type", "-")}`,
@@ -480,7 +480,7 @@ function anthropic_tool_round_trip() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(AnthMockTools@spec("weather?"));
+            let result = ai.Agent.new(client = cl).run(AnthMockTools@spec("weather?"));
             let body = mock.last_request().json();
             [
                 `value=${result.value}`,
@@ -533,7 +533,7 @@ function anthropic_stop_reason_outcome(stop_reason: string) -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let outcome = ai.Agent<string>.new(client = cl).run(AnthMockAsk@spec("hi")).value catch_all (e) {
+            let outcome = ai.Agent.new(client = cl).run(AnthMockAsk@spec("hi")).value catch_all (e) {
                 _ => anth_failure_label(e),
             };
             outcome
@@ -580,7 +580,7 @@ function anthropic_http_error(status: int) -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let outcome = ai.Agent<string>.new(client = cl).run(AnthMockAsk@spec("hi")).value catch_all (e) {
+            let outcome = ai.Agent.new(client = cl).run(AnthMockAsk@spec("hi")).value catch_all (e) {
                 _ => anth_failure_label(e),
             };
             outcome
@@ -1087,7 +1087,7 @@ function anthropic_reasoning_tokens() -> string {
                 base_url = mock.base_url(),
                 thinking = anthropic.ThinkingConfig.enabled(1024),
             );
-            let result = ai.Agent<string>.new(client = cl).run(AnthMockAsk@spec("hi"));
+            let result = ai.Agent.new(client = cl).run(AnthMockAsk@spec("hi"));
             [
                 `value=${result.value}`,
                 `output=${result.usage.output_tokens}`,
