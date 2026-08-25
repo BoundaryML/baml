@@ -2941,9 +2941,22 @@ impl io::IoNamespaceHttp for NativeSysOps {
 
                 loop {
                     let next_chunk = if let Some((deadline, duration)) = first_event_deadline {
-                        match tokio::time::timeout_at(deadline, byte_stream.next()).await {
+                        // `timeout_at` polls the inner future before checking
+                        // the clock, so a task whose first poll is delayed past
+                        // BOTH the deadline and the server's send would find
+                        // the data already buffered and never time out. Check
+                        // the deadline explicitly first: an expired budget is a
+                        // timeout even when bytes arrived late.
+                        let outcome = if tokio::time::Instant::now() >= deadline {
+                            Err(())
+                        } else {
+                            tokio::time::timeout_at(deadline, byte_stream.next())
+                                .await
+                                .map_err(|_elapsed| ())
+                        };
+                        match outcome {
                             Ok(chunk) => chunk,
-                            Err(_elapsed) => {
+                            Err(()) => {
                                 let mut buf = buf_clone.lock().await;
                                 buf.error = Some(VmBamlError::Timeout {
                                     message: format!(
