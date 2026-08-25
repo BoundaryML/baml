@@ -661,7 +661,7 @@ class Wrapper<T> {
 
 function Extract<T>(input: string) -> T {
     client: TestClient
-    prompt: `Extract ${input}.\n${ctx.output_format}`
+    prompt: `Extract ${input}.\n${ctx.output_format()}`
 }
 
 function main() -> string {

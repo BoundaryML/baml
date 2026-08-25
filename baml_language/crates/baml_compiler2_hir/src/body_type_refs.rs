@@ -245,11 +245,10 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, BodyTypeRefSour
                 scrutinee_type: Some(type_id),
                 ..
             } => {
-                refs.match_scrutinee_types
-                    .insert(
-                        expr_id,
-                        BodyTypeRefId(builder.lower(&body.type_annotations[*type_id])),
-                    );
+                refs.match_scrutinee_types.insert(
+                    expr_id,
+                    BodyTypeRefId(builder.lower(&body.type_annotations[*type_id])),
+                );
             }
             _ => {}
         }

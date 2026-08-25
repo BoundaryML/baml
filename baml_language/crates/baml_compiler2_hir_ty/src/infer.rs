@@ -3267,11 +3267,7 @@ impl<'db> InferenceContext<'db> {
         position: crate::lower::TypePosition,
     ) -> (Ty, Vec<crate::lower::LoweringDiag>) {
         let type_refs = Arc::clone(&self.type_refs);
-        self.lower_scoped_type_ref_at(
-            &type_refs.store,
-            type_refs.raw_id(type_ref),
-            position,
-        )
+        self.lower_scoped_type_ref_at(&type_refs.store, type_refs.raw_id(type_ref), position)
     }
     fn lower_scoped_type_path(&self, segments: &[baml_type::Name]) -> Ty {
         self.lower

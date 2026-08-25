@@ -291,7 +291,7 @@ fn agent_constructed_with_an_inline_runtime_type_is_refused() {
 
         function DynamicOutput<T>() -> T {{
             client: DefaultClient
-            prompt: `${{ctx.output_format}}`
+            prompt: `${{ctx.output_format()}}`
         }}
 
         function main(t: reflect.Type, c: ai.Client) -> unknown throws unknown {{
