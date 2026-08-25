@@ -71,16 +71,33 @@ def restore():
     with open(MANIFEST) as f:
         manifest = json.load(f)
     backdated = 0
+    changed = []
+    missing = []
     for path, want in manifest.items():
         try:
             if digest(path) == want:
                 os.utime(path, (BACKDATED_MTIME, BACKDATED_MTIME))
                 backdated += 1
+            else:
+                changed.append(path)
         except OSError:
             # Deleted or unreadable file: nothing to backdate; any project
             # that referenced it rebuilds via its own fresh inputs.
-            continue
+            missing.append(path)
+    new = [p for p in tracked_files() if p not in manifest]
     print(f"backdated {backdated}/{len(manifest)} unchanged files")
+    for label, paths in (("changed", changed), ("missing", missing), ("new", new)):
+        if not paths:
+            continue
+        by_prefix = {}
+        for p in paths:
+            prefix = "/".join(p.split("/")[:6])
+            by_prefix[prefix] = by_prefix.get(prefix, 0) + 1
+        print(f"{label}: {len(paths)} files")
+        for prefix, count in sorted(by_prefix.items(), key=lambda kv: -kv[1])[:15]:
+            print(f"  {count:5d}  {prefix}")
+        for p in paths[:8]:
+            print(f"    e.g. {p}")
 
 
 def main():
