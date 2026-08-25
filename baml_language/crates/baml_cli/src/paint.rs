@@ -3,7 +3,7 @@
 //! `baml describe`).
 //!
 //! Reuses the compiler's own semantic-token classifier
-//! (`baml_lsp2_actions::semantic_tokens`) instead of a separate TextMate/Sublime
+//! (`baml_ide::semantic_tokens`) instead of a separate TextMate/Sublime
 //! grammar. `describe` has already compiled the project by the time it renders,
 //! so classification is effectively free (it reads Salsa-cached queries) and can
 //! never drift from the language the way a hand-maintained grammar would.
@@ -15,17 +15,16 @@
 use std::{cell::RefCell, collections::HashMap, fmt::Write, path::Path, rc::Rc};
 
 use baml_db::{
-    SourceFile,
+    ProjectDatabase, SourceFile,
     baml_compiler_diagnostics::{
         DiagnosticIdentifierKind, DiagnosticMessageHighlightError, DiagnosticMessageHighlighter,
         DiagnosticMessageKind, HighlightAttributes, HighlightColor, HighlightSpan,
     },
 };
-use baml_lsp2_actions::{
+use baml_ide::{
     DefinitionKind, ModifierSet, SemanticToken, SemanticTokenType, semantic_highlight_style,
     semantic_tokens,
 };
-use baml_project::ProjectDatabase;
 use console::Style;
 use text_size::{TextRange, TextSize};
 
@@ -142,15 +141,26 @@ fn classify_fragment(
     text: &str,
 ) -> Result<Vec<SemanticToken>, Vec<baml_db::baml_compiler_diagnostics::ParseError>> {
     thread_local! {
-        static SCRATCH_DB: RefCell<ProjectDatabase> = RefCell::new({
+        static SCRATCH_DB: RefCell<(ProjectDatabase, baml_db::SourceRoot)> = RefCell::new({
             let mut db = ProjectDatabase::new();
-            db.set_project_root(Path::new("/baml-fragment-scratch"));
-            db
+            db.ensure_stdlib_sources();
+            let root = db
+                .add_source_root(baml_db::SourceRootSpec {
+                    path: Path::new("/baml-fragment-scratch").to_path_buf(),
+                    package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
+                    kind: baml_db::SourceRootKind::Workspace,
+                })
+                .unwrap_or_else(|e| unreachable!("scratch workspace root must be addable: {e}"));
+            (db, root)
         });
     }
     SCRATCH_DB.with(|db| {
-        let db = &mut *db.borrow_mut();
-        let file = db.add_or_update_file(Path::new("/baml-fragment-scratch/fragment.baml"), text);
+        let (db, root) = &mut *db.borrow_mut();
+        let file = db.add_or_update_file_in(
+            *root,
+            Path::new("/baml-fragment-scratch/fragment.baml"),
+            text,
+        );
         let errors = baml_db::baml_compiler_parser::parse_errors(db, file);
         if !errors.is_empty() {
             return Err(errors);
@@ -514,11 +524,13 @@ fn push_styled(out: &mut String, seg: &str, style: &Style) {
 mod tests {
     use std::path::Path;
 
-    use baml_db::baml_compiler_diagnostics::{
-        DiagnosticMessageHighlighter, DiagnosticMessageKind, HighlightColor,
+    use baml_db::{
+        ProjectDatabase,
+        baml_compiler_diagnostics::{
+            DiagnosticMessageHighlighter, DiagnosticMessageKind, HighlightColor,
+        },
     };
-    use baml_lsp2_actions::{ModifierSet, SemanticTokenType};
-    use baml_project::ProjectDatabase;
+    use baml_ide::{ModifierSet, SemanticTokenType};
 
     use super::{Highlighter, MessageHighlighter, highlight_str, style_for};
 
@@ -614,8 +626,16 @@ mod tests {
     #[test]
     fn diagnostic_spans_use_describe_palette() {
         let mut db = ProjectDatabase::new();
-        db.set_project_root(Path::new("/test"));
-        let file = db.add_or_update_file(Path::new("/test/main.baml"), "class Foo {}\n");
+        db.ensure_stdlib_sources();
+        let workspace = db
+            .add_source_root(baml_db::SourceRootSpec {
+                path: Path::new("/test").to_path_buf(),
+                package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
+                kind: baml_db::SourceRootKind::Workspace,
+            })
+            .unwrap_or_else(|e| unreachable!("workspace root must be addable: {e}"));
+        let file =
+            db.add_or_update_file_in(workspace, Path::new("/test/main.baml"), "class Foo {}\n");
         let highlighter = Highlighter::new(&db);
         let span = highlighter
             .spans(file)
@@ -639,7 +659,14 @@ mod tests {
     #[test]
     fn rendered_body_uses_no_fixed_colors() {
         let mut db = ProjectDatabase::new();
-        db.set_project_root(Path::new("/test"));
+        db.ensure_stdlib_sources();
+        let workspace = db
+            .add_source_root(baml_db::SourceRootSpec {
+                path: Path::new("/test").to_path_buf(),
+                package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
+                kind: baml_db::SourceRootKind::Workspace,
+            })
+            .unwrap_or_else(|e| unreachable!("workspace root must be addable: {e}"));
         let src = r#"/// Doc.
 class Point { x int }
 function make(v: int) -> Point {
@@ -647,7 +674,7 @@ function make(v: int) -> Point {
   return p
 }
 "#;
-        let file = db.add_or_update_file(Path::new("/test/main.baml"), src);
+        let file = db.add_or_update_file_in(workspace, Path::new("/test/main.baml"), src);
         let hl = Highlighter::new(&db);
         let out = hl.range(
             file,

@@ -2264,7 +2264,7 @@ fn testing.run_children_parallel(children: testing.TestSetChild[], pool: testing
     let _0: testing.TestSetReport // _0 // return
     let _1: testing.TestSetChild[] // children // param
     let _2: testing.TestPool // pool // param [captured]
-    let _3: future<testing.NamedChildReport, never>[] // futures
+    let _3: baml.future.Future<testing.NamedChildReport, never>[] // futures
     let _4: baml.iter.Iterator<Error = never, Item = testing.TestSetChild>
     let _5: unknown
     let _6: bool
@@ -2272,24 +2272,24 @@ fn testing.run_children_parallel(children: testing.TestSetChild[], pool: testing
     let _8: testing.TestSetChild // child [captured]
     let _9: void
     let _10: bool
-    let _11: future<testing.NamedChildReport, never>
+    let _11: baml.future.Future<testing.NamedChildReport, never>
     let _12: null
-    let _13: future<testing.NamedChildReport, never>
+    let _13: baml.future.Future<testing.NamedChildReport, never>
     let _14: reflect.Type
     let _15: null
-    let _16: future<testing.NamedChildReport, never>
+    let _16: baml.future.Future<testing.NamedChildReport, never>
     let _17: null
-    let _18: future<testing.NamedChildReport, never>
+    let _18: baml.future.Future<testing.NamedChildReport, never>
     let _19: reflect.Type
     let _20: testing.NamedChildReport[] // named_results
     let _21: null
-    let _22: future<testing.NamedChildReport, never>[]
+    let _22: baml.future.Future<testing.NamedChildReport, never>[]
     let _23: reflect.Type
     let _24: reflect.Type
     let _25: testing.NamedChildReport[]
 
     bb0: {
-        _3 = []: future<testing.NamedChildReport, never>[];
+        _3 = []: baml.future.Future<testing.NamedChildReport, never>[];
         _4 = virtual_call iter as baml.iter.Iterable<Error = never, Item = testing.TestSetChild>(copy _1) -> [bb1];
     }
 
@@ -2321,7 +2321,7 @@ fn testing.run_children_parallel(children: testing.TestSetChild[], pool: testing
 
     bb6: {
         _16 = copy _18;
-        _19 = load_type(future<testing.NamedChildReport, never>);
+        _19 = load_type(baml.future.Future<testing.NamedChildReport, never>);
         _9 = call const fn baml.Array.push<copy _19>(copy _3, copy _16) -> [bb1];
     }
 
@@ -2332,7 +2332,7 @@ fn testing.run_children_parallel(children: testing.TestSetChild[], pool: testing
 
     bb8: {
         _11 = copy _13;
-        _14 = load_type(future<testing.NamedChildReport, never>);
+        _14 = load_type(baml.future.Future<testing.NamedChildReport, never>);
         _9 = call const fn baml.Array.push<copy _14>(copy _3, copy _11) -> [bb1];
     }
 
@@ -2488,18 +2488,18 @@ fn .<lambda(run_test, 0)>() -> testing.TestReport {
     let _6: string // t
     let _7: unknown // e
     let _8: string
-    let _9: future<testing.RunReport, never> // work
+    let _9: baml.future.Future<testing.RunReport, never> // work
     let _10: null
-    let _11: future<testing.RunReport, never>
-    let _12: future<testing.RunReport, never> // timer
+    let _11: baml.future.Future<testing.RunReport, never>
+    let _12: baml.future.Future<testing.RunReport, never> // timer
     let _13: null
-    let _14: future<testing.RunReport, never>
+    let _14: baml.future.Future<testing.RunReport, never>
     let _15: testing.RunReport // result
     let _16: unknown // e
     let _17: null
-    let _18: future<testing.RunReport, never>[]
-    let _19: future<testing.RunReport, never>
-    let _20: future<testing.RunReport, never>
+    let _18: baml.future.Future<testing.RunReport, never>[]
+    let _19: baml.future.Future<testing.RunReport, never>
+    let _20: baml.future.Future<testing.RunReport, never>
     let _21: reflect.Type
     let _22: reflect.Type
     let _23: int // duration
@@ -2575,7 +2575,7 @@ fn .<lambda(run_test, 0)>() -> testing.TestReport {
         _12 = copy _14;
         _19 = copy _9;
         _20 = copy _12;
-        _18 = [copy _19, copy _20]: future<testing.RunReport, never>[];
+        _18 = [copy _19, copy _20]: baml.future.Future<testing.RunReport, never>[];
         _21 = load_type(testing.RunReport);
         _22 = load_type(never);
         _17 = call const fn baml.future.race<copy _21, copy _22>(copy _18) -> [bb12, unwind: bb13];

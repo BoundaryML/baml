@@ -47,7 +47,7 @@ async fn scenario_2_saved_form_class_renders_parses_and_assert_reads() {
 
         function ExtractNote<T>(transcript: string) -> T {
             client: TestClient
-            prompt: `Extract a visit note from ${transcript}.\n${ctx.output_format}`
+            prompt: `Extract a visit note from ${transcript}.\n${ctx.output_format()}`
         }
 
         class SavedField {
@@ -161,7 +161,7 @@ async fn scenario_3_tool_union_dispatches_by_runtime_class() {
 
         function PickAction<T>(context: string) -> T {
             client: TestClient
-            prompt: `Pick one action for ${context}.\n${ctx.output_format}`
+            prompt: `Pick one action for ${context}.\n${ctx.output_format()}`
         }
 
         function main() -> string {
@@ -328,7 +328,7 @@ async fn constructed_type_to_baml_compiles_to_equivalent_new_identity() {
 
         function RoundTrip<T>() -> T {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> bool throws unknown {
@@ -445,7 +445,7 @@ async fn same_fields_in_different_orders_render_independently() {
 
         function Render<T>() -> T {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> string {
@@ -500,7 +500,7 @@ async fn get_field_missing_and_wrong_type_throw_compilation_diagnostics() {
 
         function Extract<T>() -> T {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> string {
@@ -566,7 +566,7 @@ async fn an_anonymous_class_instance_crosses_as_an_opaque_handle() {
 
         function Extract<T>() -> T {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> unknown {
@@ -614,7 +614,7 @@ async fn a_runtime_compiled_class_instance_crosses_as_an_opaque_handle() {
 
         function Extract<T>() -> T {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> unknown throws unknown {

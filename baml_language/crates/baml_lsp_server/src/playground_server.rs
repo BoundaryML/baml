@@ -49,15 +49,27 @@ use tokio::{net::TcpListener, sync::broadcast};
 use crate::{
     playground_env::PlaygroundEnvState,
     playground_io::PlaygroundIoState,
+    playground_notify::PlaygroundNotification,
     playground_runs::{
         overlay_function_name_for_target, patch_to_wire, run_summary_to_wire, run_to_wire,
     },
+    playground_seam::{PlaygroundSeam, PlaygroundSourceFile},
     playground_ws::{RunListFilter, RunListKind, RunListVisibility, WsInMessage, WsOutMessage},
 };
 
+/// Telemetry reads one session may run at once. Small on purpose: these are
+/// `DataFusion` queries and CAS reads, and a panel needs a couple in flight
+/// (the list plus the open execution), not a backlog.
+const MAX_INFLIGHT_TELEMETRY: usize = 4;
+
+/// Reported when that ceiling is reached. The client treats it as "skip this
+/// refresh" rather than as a failure, because the common cause is its own
+/// polling outrunning a slow query.
+const TELEMETRY_BUSY_CODE: &str = "telemetryBusy";
+
 #[derive(Debug, thiserror::Error)]
 #[error("Playground server requires either BAML_PLAYGROUND_DEV_PORT or BAML_PLAYGROUND_DIR")]
-pub(crate) struct PlaygroundNotConfigured;
+pub struct PlaygroundNotConfigured;
 
 fn to_ws_text(msg: &WsOutMessage) -> Option<AxumWsMsg> {
     match serde_json::to_string(msg) {
@@ -172,8 +184,8 @@ impl FunctionRunClient {
         self.request_id
     }
 
-    fn run_started_request_id(self) -> Option<u64> {
-        Some(self.request_id)
+    fn run_started_request_id(self) -> u64 {
+        self.request_id
     }
 
     fn error(self, code: &'static str, message: String) -> WsOutMessage {
@@ -434,7 +446,8 @@ const DISK_CHANGE_NOTIFICATION: &str = "baml/fileChangedOnDisk";
 
 #[derive(Clone)]
 struct WsState {
-    bex: Arc<dyn bex_project::BexLsp>,
+    /// The one boundary onto the database and the engines.
+    seam: Arc<PlaygroundSeam>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
     io_state: Arc<PlaygroundIoState>,
@@ -450,20 +463,40 @@ struct WsState {
     /// What the browser currently has per file (for disk-watcher echo avoidance).
     doc_mirror: DocMirror,
     /// Workspace roots that browser-mode LSP saves are allowed to write under.
-    workspace_roots: Arc<Vec<PathBuf>>,
-    /// Target of the most recent OpenPlayground; replayed to a page when it
+    workspace_roots: Arc<[PathBuf]>,
+    /// Target of the most recent `OpenPlayground`; replayed to a page when it
     /// requests state so a freshly opened / reconnected window navigates there.
     current_open_target: crate::playground_sender::SharedOpenTarget,
 }
 
 type LiveValueStore = Arc<Mutex<LiveValueCache>>;
 
-fn root_value_success_outcome(value_ref: Option<ValueRef>, renderer_hint: &str) -> RunOutcome {
+fn root_value_success_outcome_with_value(
+    value_ref: Option<ValueRef>,
+    value: Option<Vec<u8>>,
+    renderer_hint: &str,
+) -> RunOutcome {
     RunOutcome::Succeeded(RunResult {
         value_ref,
+        value,
         renderer_hint: Some(renderer_hint.to_string()),
         supporting_payload_ids: Vec::new(),
     })
+}
+
+/// The completed run's value, inlined as artifact-safe outbound bytes so the
+/// client has something to render — without it a test report (the pass/fail
+/// verdict and its error messages) or a function result completes as a bare
+/// "succeeded" with an empty pane. An encode failure degrades to `None`
+/// (status still reaches the client) rather than failing the run.
+fn inline_result_value(value: &bex_project::BexExternalValue) -> Option<Vec<u8>> {
+    match bridge_ctypes::artifact_safe_outbound_bytes(value) {
+        Ok(bytes) => Some(bytes),
+        Err(err) => {
+            tracing::warn!("failed to encode a run result for inline display: {err}");
+            None
+        }
+    }
 }
 
 fn drain_logs_and_broadcast(
@@ -658,15 +691,11 @@ fn capture_loss_message(capture_kind: &str, skipped: u64) -> String {
     )
 }
 
-#[derive(Clone, Debug)]
-struct PlaygroundAccessGuard {}
+#[derive(Clone, Copy, Debug)]
+struct PlaygroundAccessGuard;
 
 impl PlaygroundAccessGuard {
-    fn new() -> Self {
-        Self {}
-    }
-
-    fn is_allowed_origin(&self, origin: Option<&HeaderValue>) -> bool {
+    fn is_allowed_origin(origin: Option<&HeaderValue>) -> bool {
         let Some(origin) = origin else {
             return true;
         };
@@ -676,9 +705,9 @@ impl PlaygroundAccessGuard {
         is_loopback_origin(origin) || is_vscode_webview_origin(origin)
     }
 
-    fn cors_origin(&self, origin: Option<&HeaderValue>) -> Option<HeaderValue> {
+    fn cors_origin(origin: Option<&HeaderValue>) -> Option<HeaderValue> {
         let origin = origin?;
-        if self.is_allowed_origin(Some(origin)) {
+        if Self::is_allowed_origin(Some(origin)) {
             Some(origin.clone())
         } else {
             None
@@ -696,7 +725,7 @@ fn is_loopback_origin(origin: &str) -> bool {
     let Ok(uri) = origin.parse::<Uri>() else {
         return false;
     };
-    if !matches!(uri.scheme_str(), Some("http") | Some("https")) {
+    if !matches!(uri.scheme_str(), Some("http" | "https")) {
         return false;
     }
     let Some(host) = uri.host() else {
@@ -740,27 +769,14 @@ struct SourceFilesQuery {
 #[serde(rename_all = "camelCase")]
 struct SourceFilesResponse {
     project: String,
-    files: Vec<bex_project::PlaygroundSourceFile>,
-}
-
-#[derive(Debug, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct UpdateSourceFileRequest {
-    project: String,
-    path: String,
-    content: String,
-}
-
-#[derive(Debug, serde::Serialize)]
-struct UpdateSourceFileResponse {
-    ok: bool,
+    files: Vec<PlaygroundSourceFile>,
 }
 
 /// Start the playground server on the given listener.
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn run(
+pub async fn run(
     listener: TcpListener,
-    bex: Arc<dyn bex_project::BexLsp>,
+    seam: Arc<PlaygroundSeam>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
     io_state: Arc<PlaygroundIoState>,
@@ -773,9 +789,9 @@ pub(crate) async fn run(
     current_open_target: crate::playground_sender::SharedOpenTarget,
 ) -> anyhow::Result<()> {
     let local_addr = listener.local_addr()?;
-    let access_guard = PlaygroundAccessGuard::new();
+    let access_guard = PlaygroundAccessGuard;
     let app = build_router(
-        bex,
+        seam,
         broadcast_tx,
         env_state,
         io_state,
@@ -784,7 +800,7 @@ pub(crate) async fn run(
         lsp_out_tx,
         lsp_runtime,
         doc_mirror,
-        Arc::new(workspace_roots),
+        workspace_roots.into(),
         access_guard,
         current_open_target,
     )?;
@@ -798,7 +814,7 @@ pub(crate) async fn run(
 
 #[allow(clippy::too_many_arguments)]
 fn build_router(
-    bex: Arc<dyn bex_project::BexLsp>,
+    seam: Arc<PlaygroundSeam>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     env_state: Arc<PlaygroundEnvState>,
     io_state: Arc<PlaygroundIoState>,
@@ -807,16 +823,24 @@ fn build_router(
     lsp_out_tx: broadcast::Sender<crate::OutboundFrame>,
     lsp_runtime: Arc<crate::lsp_runtime::LspRuntime>,
     doc_mirror: DocMirror,
-    workspace_roots: Arc<Vec<PathBuf>>,
+    workspace_roots: Arc<[PathBuf]>,
     access_guard: PlaygroundAccessGuard,
     current_open_target: crate::playground_sender::SharedOpenTarget,
 ) -> anyhow::Result<Router> {
     let value_store = Arc::new(Mutex::new(LiveValueCache::with_max_bytes(
         DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
     )));
-    let history_store = Arc::new(HistoryStore::new((*workspace_roots).clone()));
+    let history_store = Arc::new(HistoryStore::new(workspace_roots.to_vec()));
+    // Point the profiler at this workspace before any engine runs. Without
+    // it the global session keeps its default *relative* `.baml/profiles-v1`,
+    // which for a long-lived server resolves against whatever directory it
+    // started in -- so runs would be written where no reader looks.
+    if let Some(root) = workspace_roots.first() {
+        crate::playground_telemetry::configure_store_root(root);
+        crate::playground_telemetry::warn_if_multi_root(&workspace_roots);
+    }
     let ws_state = WsState {
-        bex,
+        seam,
         broadcast_tx,
         env_state,
         io_state,
@@ -833,10 +857,7 @@ fn build_router(
     let api = Router::new()
         .route("/api/ws", get(playground_ws_handler))
         .route("/api/lsp", get(lsp_ws_handler))
-        .route(
-            "/api/source-files",
-            get(source_files_handler).put(update_source_file_handler),
-        )
+        .route("/api/source-files", get(source_files_handler))
         .with_state(ws_state)
         .layer(middleware::from_fn_with_state(
             access_guard,
@@ -932,7 +953,7 @@ async fn lsp_ws_session(socket: WebSocket, state: WsState) {
     let response_budget = crate::OutboundBudget::new();
     let response_sink_budget = response_budget.clone();
     let response_sink: crate::lsp_runtime::Sink = Arc::new(move |message| {
-        let frame = match response_sink_budget.try_message(message) {
+        let frame = match response_sink_budget.try_message(&message) {
             Ok(frame) => frame,
             Err(crate::OutboundReserveError::Saturated) => {
                 return crate::lsp_runtime::SinkDelivery::Saturated;
@@ -967,20 +988,21 @@ async fn lsp_ws_session(socket: WebSocket, state: WsState) {
     let hook_pending_text = pending_text.clone();
     let hook_doc_mirror = state.doc_mirror.clone();
     let hook_workspace_roots = state.workspace_roots.clone();
-    let after_notification: crate::lsp_runtime::NotificationHook = Arc::new(move |notification| {
-        let Ok(mut pending_text) = hook_pending_text.lock() else {
-            return;
-        };
-        track_and_persist_lsp_notification(
-            notification,
-            &mut pending_text,
-            &hook_doc_mirror,
-            &hook_workspace_roots,
-        );
-    });
+    let after_notification: crate::lsp_runtime::NotificationHook =
+        Arc::new(move |state, _session, notification| {
+            let Ok(mut pending_text) = hook_pending_text.lock() else {
+                return;
+            };
+            track_and_persist_lsp_notification(
+                state,
+                notification,
+                &mut pending_text,
+                &hook_doc_mirror,
+                &hook_workspace_roots,
+            );
+        });
     let opened = state.lsp_runtime.open_session(
         crate::lsp_ingress::TransportKind::Browser,
-        state.bex.clone(),
         response_sink,
         close_endpoint,
         Some(after_notification),
@@ -1099,6 +1121,7 @@ async fn handle_lsp_client_text(
 
 /// Track the latest document text and, on save, write it through to disk.
 fn track_and_persist_lsp_notification(
+    state: &baml_lsp::GlobalState,
     notif: &lsp_server::Notification,
     pending_text: &mut std::collections::HashMap<String, String>,
     doc_mirror: &DocMirror,
@@ -1123,19 +1146,19 @@ fn track_and_persist_lsp_notification(
             }
         }
         "textDocument/didChange" => {
-            // FULL sync mode: a single change event carries the whole document.
-            if let (Some(uri), Some(text)) = (
-                uri,
-                notif
-                    .params
-                    .pointer("/contentChanges/0/text")
-                    .and_then(serde_json::Value::as_str),
-            ) {
-                pending_text.insert(uri.to_string(), text.to_string());
-                // Record what the browser now has so the disk watcher won't bounce
-                // the user's own save back as an "external" change. NB: no disk
-                // write here — edits persist only on an explicit save (didSave).
-                update_doc_mirror(doc_mirror, uri, text);
+            // The hook runs on the owner *after* the mutation was applied, so
+            // the state holds the authoritative post-edit text — which is what
+            // save must write and what the disk watcher compares against. That
+            // also makes ranged (INCREMENTAL) edits a non-issue here: the
+            // protocol layer already folded them.
+            if let (Some(uri), Some(path)) = (uri, uri.and_then(uri_to_path)) {
+                let Some(text) = state.file_text(&path) else {
+                    return;
+                };
+                // NB: no disk write here — edits persist only on an explicit
+                // save (didSave).
+                pending_text.insert(uri.to_string(), text.clone());
+                update_doc_mirror(doc_mirror, uri, &text);
             }
         }
         "textDocument/didSave" => {
@@ -1223,6 +1246,12 @@ fn uri_to_canonical_path(uri: &str) -> Option<PathBuf> {
     Some(std::fs::canonicalize(&path).unwrap_or(path))
 }
 
+/// Resolve a `file://` URI to a plain filesystem path (the database key
+/// form; it canonicalizes paths itself).
+fn uri_to_path(uri: &str) -> Option<PathBuf> {
+    lsp_types::Url::parse(uri).ok()?.to_file_path().ok()
+}
+
 /// Record the content the browser now has for `uri` (used for echo avoidance).
 fn update_doc_mirror(doc_mirror: &DocMirror, uri: &str, text: &str) {
     if let Some(path) = uri_to_canonical_path(uri)
@@ -1232,22 +1261,33 @@ fn update_doc_mirror(doc_mirror: &DocMirror, uri: &str, text: &str) {
     }
 }
 
-/// Watch `roots` for external `.baml` edits and push them to the browser editor
-/// over `/api/lsp` (as a `baml/fileChangedOnDisk` notification). Echo avoidance:
-/// a change whose content already matches `doc_mirror` (what the browser has, or
-/// just wrote through) is NOT pushed back. The returned watcher must be kept
-/// alive for as long as watching should continue.
-pub(crate) fn spawn_disk_watcher(
+/// Watch `roots` for external `.baml` edits.
+///
+/// Browser mode has no editor client to send `didChangeWatchedFiles`, so this
+/// is the only path by which a change made outside the playground (another
+/// editor, a formatter, a `git checkout`) reaches the database — and it is
+/// also what tells the browser's own editor model to refresh, as a
+/// `baml/fileChangedOnDisk` notification over `/api/lsp`.
+///
+/// Echo avoidance: a change whose content already matches `doc_mirror` (what
+/// the browser has, or just wrote through) is neither applied nor pushed. The
+/// returned watcher must be kept alive for as long as watching should
+/// continue.
+pub fn spawn_disk_watcher(
     roots: &[PathBuf],
     lsp_out_tx: broadcast::Sender<crate::OutboundFrame>,
     lsp_out_budget: Arc<crate::OutboundBudget>,
     doc_mirror: DocMirror,
+    owner: baml_lsp::OwnerHandle,
 ) -> Option<notify::RecommendedWatcher> {
     use notify::{EventKind, RecursiveMode, Watcher};
 
     let handler = move |res: notify::Result<notify::Event>| {
         let Ok(event) = res else { return };
-        if !matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
+        if !matches!(
+            event.kind,
+            EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
+        ) {
             return;
         }
         for path in event.paths {
@@ -1256,6 +1296,12 @@ pub(crate) fn spawn_disk_watcher(
             }
             let canonical = std::fs::canonicalize(&path).unwrap_or(path);
             let Ok(content) = std::fs::read_to_string(&canonical) else {
+                // Gone (or unreadable): drop it from the database unless an
+                // editor buffer still owns the path.
+                apply_disk_removal(&owner, canonical.clone());
+                if let Ok(mut mirror) = doc_mirror.lock() {
+                    mirror.remove(&canonical);
+                }
                 continue;
             };
             {
@@ -1268,6 +1314,7 @@ pub(crate) fn spawn_disk_watcher(
                 }
                 mirror.insert(canonical.clone(), content.clone());
             }
+            apply_disk_text(&owner, canonical.clone(), content.clone());
             let Ok(url) = lsp_types::Url::from_file_path(&canonical) else {
                 continue;
             };
@@ -1279,7 +1326,7 @@ pub(crate) fn spawn_disk_watcher(
             // Disk pushes are best-effort refresh hints: budget exhaustion
             // drops the hint (the browser re-reads on save/reload) instead of
             // growing an unbounded queue.
-            let frame = match lsp_out_budget.try_message(message) {
+            let frame = match lsp_out_budget.try_message(&message) {
                 Ok(frame) => frame,
                 Err(crate::OutboundReserveError::Saturated) => {
                     tracing::warn!("Disk watcher: LSP outbound byte budget is saturated");
@@ -1301,7 +1348,7 @@ pub(crate) fn spawn_disk_watcher(
         }
     };
 
-    let mut watcher = match notify::recommended_watcher(handler) {
+    let mut watcher: notify::RecommendedWatcher = match notify::recommended_watcher(handler) {
         Ok(w) => w,
         Err(e) => {
             tracing::warn!("Disk watcher: failed to initialize: {e}");
@@ -1317,63 +1364,44 @@ pub(crate) fn spawn_disk_watcher(
     Some(watcher)
 }
 
+/// Hand a disk text to the owner. Open documents are skipped: their overlay
+/// is authoritative, and the browser refresh push above already tells the
+/// editor to reconcile. Identical text is skipped too — a mutation batch
+/// always bumps the revision, so applying a no-op would schedule a rebuild
+/// for nothing.
+fn apply_disk_text(owner: &baml_lsp::OwnerHandle, path: PathBuf, text: String) {
+    owner.post(baml_lsp::OwnerEvent::Call(Box::new(move |state| {
+        if state.open_document(&path).is_some() || state.file_text(&path).as_ref() == Some(&text) {
+            return;
+        }
+        let applied = state.apply(vec![baml_lsp::SourceMutation::SetDisk { path, text }]);
+        for (mutation, error) in &applied.rejected {
+            tracing::debug!(?mutation, %error, "disk watcher change not applied");
+        }
+    })));
+}
+
+fn apply_disk_removal(owner: &baml_lsp::OwnerHandle, path: PathBuf) {
+    owner.post(baml_lsp::OwnerEvent::Call(Box::new(move |state| {
+        if state.open_document(&path).is_some() || state.file_text(&path).is_none() {
+            return;
+        }
+        state.apply(vec![baml_lsp::SourceMutation::RemoveFile { path }]);
+    })));
+}
+
 async fn source_files_handler(
     State(state): State<WsState>,
     Query(query): Query<SourceFilesQuery>,
 ) -> Response {
-    match state.bex.playground_source_files(&query.project) {
-        Ok(files) => json_response(
-            StatusCode::OK,
-            &SourceFilesResponse {
-                project: query.project,
-                files,
-            },
-        ),
-        Err(error) => text_response(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
-    }
-}
-
-async fn update_source_file_handler(
-    State(state): State<WsState>,
-    request: Request<Body>,
-) -> Response {
-    let body = match axum::body::to_bytes(request.into_body(), 1024 * 1024).await {
-        Ok(body) => body,
-        Err(error) => {
-            return text_response(
-                StatusCode::BAD_REQUEST,
-                format!("Failed to read request body: {error}"),
-            );
-        }
-    };
-    let request = match serde_json::from_slice::<UpdateSourceFileRequest>(&body) {
-        Ok(request) => request,
-        Err(error) => {
-            return text_response(
-                StatusCode::BAD_REQUEST,
-                format!("Invalid source file update body: {error}"),
-            );
-        }
-    };
-
-    match state
-        .bex
-        .playground_update_source_file(&request.project, &request.path, request.content)
-    {
-        Ok(()) => {
-            // The edit may have added or removed an `env.FOO` reference, and
-            // the declared set decides which keys are worth blocking a run to
-            // prompt for. Without this refresh a removed key keeps prompting
-            // and a newly added one resolves silently until the session
-            // reconnects.
-            state
-                .env_state
-                .set_declared_keys(&state.bex.all_env_var_names());
-            state.bex.request_playground_state();
-            json_response(StatusCode::OK, &UpdateSourceFileResponse { ok: true })
-        }
-        Err(error) => text_response(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
-    }
+    let files = state.seam.source_files(&query.project).await;
+    json_response(
+        StatusCode::OK,
+        &SourceFilesResponse {
+            project: query.project,
+            files,
+        },
+    )
 }
 
 fn json_response<T: serde::Serialize>(status: StatusCode, value: &T) -> Response {
@@ -1436,7 +1464,7 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
     // Dynamically-computed keys still resolve lazily via the EnvVarRequest
     // round-trip (playground_env.rs).
     {
-        let names = state.bex.all_env_var_names();
+        let names = state.seam.env_var_names().await;
         // Only these keys are worth blocking a run to prompt for; everything
         // else resolves to unset without stalling. See `playground_env`.
         state.env_state.set_declared_keys(&names);
@@ -1454,17 +1482,54 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
     }
 
     // Send current playground state.
-    state.bex.request_playground_state();
+    state.seam.push_project_state().await;
+
+    // Telemetry reads run against DataFusion over the profile store and can
+    // take seconds on a large execution. Awaiting one inside the select
+    // below would stall this whole session: no further client messages, and
+    // no run-patch forwarding, so a live run's UI freezes while a panel
+    // loads. They run on their own tasks and hand their reply back here.
+    let (deferred_tx, mut deferred_rx) = tokio::sync::mpsc::channel::<WsOutMessage>(32);
+
+    // Bound how much telemetry work one session can have in flight. The
+    // channel above bounds queued *replies*, not running queries: moving
+    // these off the select loop removed the accidental serialisation that
+    // awaiting inline used to provide, so without this a client can start
+    // an unbounded number of profile-store queries and blocking CAS reads.
+    // Not only an adversarial case -- the panel polls every couple of
+    // seconds while a run is live, so any query slower than the poll
+    // interval would pile up on its own.
+    let telemetry_permits =
+        std::sync::Arc::new(tokio::sync::Semaphore::new(MAX_INFLIGHT_TELEMETRY));
 
     loop {
         tokio::select! {
+            deferred = deferred_rx.recv() => {
+                match deferred {
+                    Some(msg) => {
+                        if let Some(text) = to_ws_text(&msg)
+                            && sink.send(text).await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    None => break,
+                }
+            }
             client_msg = stream.next() => {
                 match client_msg {
                     Some(Ok(AxumWsMsg::Text(text))) => {
                         let text_str: &str = &text;
                         match serde_json::from_str::<WsInMessage>(text_str) {
                             Ok(msg) => {
-                                handle_ws_in_message(msg, &state, &mut sink).await;
+                                handle_ws_in_message(
+                                    msg,
+                                    &state,
+                                    &mut sink,
+                                    &deferred_tx,
+                                    &telemetry_permits,
+                                )
+                                .await;
                             }
                             Err(e) => {
                                 tracing::warn!("Playground WS: invalid message: {e}");
@@ -1540,10 +1605,14 @@ async fn handle_function_run(
     // in a single transaction, with the overlay control-flow graph pinned
     // for that generation so overlay spans stay resolvable after later
     // recompiles. Replaces the racy generation → graph → engine triple-read.
-    let prepared = match state.bex.prepare_function_run(
-        &project,
-        overlay_function_name_for_target(&target.run_target),
-    ) {
+    let prepared = match state
+        .seam
+        .prepare_function_run(
+            &project,
+            overlay_function_name_for_target(&target.run_target),
+        )
+        .await
+    {
         Ok(prepared) => prepared,
         Err(e) => {
             send_ws(
@@ -1591,14 +1660,18 @@ async fn handle_function_run(
         &broadcast_tx,
         &run_store,
         &started,
-        client.run_started_request_id(),
+        Some(client.run_started_request_id()),
     );
 
     tokio::spawn(async move {
         let function_name = target.call_function_name;
-        match bex
-            .call_function_with_trace(&function_name, kwargs.into(), function_call_ctx.build())
-            .await
+        match bex_project::Bex::call_function_with_trace(
+            bex,
+            &function_name,
+            kwargs.into(),
+            function_call_ctx.build(),
+        )
+        .await
         {
             Ok(traced) => {
                 drain_logs_and_broadcast(
@@ -1610,7 +1683,11 @@ async fn handle_function_run(
                     &logger,
                 );
                 let outcome = match traced.value {
-                    Ok(_result) => root_value_success_outcome(None, "baml.outbound.base64"),
+                    Ok(result) => root_value_success_outcome_with_value(
+                        None,
+                        inline_result_value(&result),
+                        "baml.outbound.base64",
+                    ),
                     Err(e) => runtime_error_outcome_with_ref(&e, None),
                 };
                 complete_run_and_broadcast(
@@ -1638,7 +1715,7 @@ async fn handle_function_run(
                     runtime_error_outcome_with_ref(&e, None),
                 );
             }
-        };
+        }
     });
 }
 
@@ -1657,7 +1734,7 @@ fn handle_test_run(
         .with_logger(logger.clone())
         .build();
     let broadcast_tx = state.broadcast_tx.clone();
-    let bex = state.bex.clone();
+    let seam = state.seam.clone();
     let run_store = state.run_store.clone();
     let history_store = state.history_store.clone();
     let value_store = state.value_store.clone();
@@ -1687,11 +1764,11 @@ fn handle_test_run(
         &broadcast_tx,
         &run_store,
         &started,
-        client.run_started_request_id(),
+        Some(client.run_started_request_id()),
     );
 
     tokio::spawn(async move {
-        match bex
+        match seam
             .call_test_function_with_trace(&project, generation, &test_name, ctx)
             .await
         {
@@ -1705,7 +1782,11 @@ fn handle_test_run(
                     &logger,
                 );
                 let outcome = match traced.value {
-                    Ok(_result) => root_value_success_outcome(None, "testReport"),
+                    Ok(result) => root_value_success_outcome_with_value(
+                        None,
+                        inline_result_value(&result),
+                        "testReport",
+                    ),
                     Err(e) => engine_error_outcome_with_ref(&e, None),
                 };
                 complete_run_and_broadcast(
@@ -1733,14 +1814,25 @@ fn handle_test_run(
                     engine_error_outcome_with_ref(&e, None),
                 );
             }
-        };
+        }
     });
+}
+
+/// The reply when a session already has its share of telemetry work running.
+fn telemetry_busy(request_id: u64) -> WsOutMessage {
+    WsOutMessage::CommandError {
+        code: TELEMETRY_BUSY_CODE.to_string(),
+        message: "Telemetry is already busy for this session; try again.".to_string(),
+        request_id,
+    }
 }
 
 async fn handle_ws_in_message(
     msg: WsInMessage,
     state: &WsState,
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
+    deferred: &tokio::sync::mpsc::Sender<WsOutMessage>,
+    telemetry_permits: &std::sync::Arc<tokio::sync::Semaphore>,
 ) {
     match msg {
         WsInMessage::StartRun {
@@ -1815,16 +1907,11 @@ async fn handle_ws_in_message(
                             // current-engine fallback cannot find its call
                             // and the run keeps executing. Registration that
                             // retains superseded run engines is deferred.
-                            let engine = state
-                                .bex
-                                .engine_for_generation(&project_id, generation)
-                                .map(Ok)
-                                .unwrap_or_else(|| {
-                                    let fs_path = bex_project::FsPath::from_str(project_id.clone());
-                                    state.bex.get_bex_for_project(&fs_path)
-                                });
-                            match engine {
-                                Ok(bex) => match bex.cancel_function_call(call_id) {
+                            match state.seam.engine_for_generation(&project_id, generation) {
+                                Some(bex) => match bex_project::Bex::cancel_function_call(
+                                    bex.as_ref(),
+                                    call_id,
+                                ) {
                                     Ok(()) => WsOutMessage::CommandAck {
                                         request_id,
                                         outcome: "accepted".to_string(),
@@ -1835,10 +1922,13 @@ async fn handle_ws_in_message(
                                         message: format!("{e}"),
                                     },
                                 },
-                                Err(e) => WsOutMessage::CommandError {
+                                None => WsOutMessage::CommandError {
                                     request_id,
                                     code: "projectMissing".to_string(),
-                                    message: format!("{e}"),
+                                    message: format!(
+                                        "the engine generation {generation} this run \
+                                         launched on is no longer installed"
+                                    ),
                                 },
                             }
                         }
@@ -1934,6 +2024,111 @@ async fn handle_ws_in_message(
                     .await;
                 }
             }
+        }
+
+        WsInMessage::ReadTelemetryMedia {
+            request_id,
+            project,
+            cid,
+        } => {
+            let Ok(permit) = telemetry_permits.clone().try_acquire_owned() else {
+                send_ws(sink, &telemetry_busy(request_id)).await;
+                return;
+            };
+            let project_root = history_project_root_for_project(&project);
+            let reply = deferred.clone();
+            let echoed_cid = cid.clone();
+            // Off the socket task entirely: reading the CAS is blocking work,
+            // and awaiting it here would stall the session loop.
+            tokio::task::spawn_blocking(move || {
+                let out = match crate::playground_telemetry::read_media(&project_root, &cid) {
+                    Ok(media) => WsOutMessage::TelemetryMedia {
+                        cid: echoed_cid,
+                        media: serde_json::to_value(&media).unwrap_or(serde_json::Value::Null),
+                        request_id,
+                    },
+                    Err(err) => WsOutMessage::CommandError {
+                        code: "telemetryMediaFailed".to_string(),
+                        message: format!("{err}"),
+                        request_id,
+                    },
+                };
+                let _ = reply.blocking_send(out);
+                drop(permit);
+            });
+        }
+
+        WsInMessage::ListExecutions {
+            request_id,
+            project,
+        } => {
+            let Ok(permit) = telemetry_permits.clone().try_acquire_owned() else {
+                send_ws(sink, &telemetry_busy(request_id)).await;
+                return;
+            };
+            let project_root = history_project_root_for_project(&project);
+            let reply = deferred.clone();
+            tokio::spawn(async move {
+                let out = match crate::playground_telemetry::list_executions(&project_root).await {
+                    Ok(executions) => WsOutMessage::ExecutionList {
+                        executions: executions
+                            .iter()
+                            .map(|row| serde_json::to_value(row).unwrap_or(serde_json::Value::Null))
+                            .collect(),
+                        request_id,
+                        store_missing: false,
+                    },
+                    // No store is the state before anything has run, not a
+                    // failure: the client shows an empty table, not an error.
+                    Err(crate::playground_telemetry::TelemetryError::NoStore(_)) => {
+                        WsOutMessage::ExecutionList {
+                            executions: Vec::new(),
+                            request_id,
+                            store_missing: true,
+                        }
+                    }
+                    Err(err) => WsOutMessage::CommandError {
+                        code: "telemetryQueryFailed".to_string(),
+                        message: format!("{err}"),
+                        request_id,
+                    },
+                };
+                let _ = reply.send(out).await;
+                drop(permit);
+            });
+        }
+
+        WsInMessage::OpenExecution {
+            request_id,
+            project,
+            execution_id,
+        } => {
+            let Ok(permit) = telemetry_permits.clone().try_acquire_owned() else {
+                send_ws(sink, &telemetry_busy(request_id)).await;
+                return;
+            };
+            let project_root = history_project_root_for_project(&project);
+            let reply = deferred.clone();
+            tokio::spawn(async move {
+                let out =
+                    match crate::playground_telemetry::read_execution(&project_root, &execution_id)
+                        .await
+                    {
+                        Ok(telemetry) => WsOutMessage::ExecutionTelemetry {
+                            execution_id,
+                            request_id,
+                            telemetry: serde_json::to_value(&telemetry)
+                                .unwrap_or(serde_json::Value::Null),
+                        },
+                        Err(err) => WsOutMessage::CommandError {
+                            code: "telemetryQueryFailed".to_string(),
+                            message: format!("{err}"),
+                            request_id,
+                        },
+                    };
+                let _ = reply.send(out).await;
+                drop(permit);
+            });
         }
 
         WsInMessage::Snapshot {
@@ -2134,8 +2329,9 @@ async fn handle_ws_in_message(
             testset_name,
         } => {
             state
-                .bex
-                .expand_test_set(&project, generation, &testset_name);
+                .seam
+                .expand_test_set(&project, generation, &testset_name)
+                .await;
         }
 
         WsInMessage::RespondToInput {
@@ -2151,20 +2347,17 @@ async fn handle_ws_in_message(
                     return;
                 }
             };
-            let input_request_id = match input_request_id.parse::<u64>() {
-                Ok(id) => id,
-                Err(_) => {
-                    send_ws(
-                        sink,
-                        &WsOutMessage::CommandError {
-                            request_id,
-                            code: "invalidInputRequestId".to_string(),
-                            message: format!("Invalid inputRequestId: {input_request_id}"),
-                        },
-                    )
-                    .await;
-                    return;
-                }
+            let Ok(input_request_id) = input_request_id.parse::<u64>() else {
+                send_ws(
+                    sink,
+                    &WsOutMessage::CommandError {
+                        request_id,
+                        code: "invalidInputRequestId".to_string(),
+                        message: format!("Invalid inputRequestId: {input_request_id}"),
+                    },
+                )
+                .await;
+                return;
             };
             let outcome = state
                 .io_state
@@ -2192,20 +2385,17 @@ async fn handle_ws_in_message(
                     return;
                 }
             };
-            let env_request_id = match env_request_id.parse::<u64>() {
-                Ok(id) => id,
-                Err(_) => {
-                    send_ws(
-                        sink,
-                        &WsOutMessage::CommandError {
-                            request_id,
-                            code: "invalidEnvRequestId".to_string(),
-                            message: format!("Invalid envRequestId: {env_request_id}"),
-                        },
-                    )
-                    .await;
-                    return;
-                }
+            let Ok(env_request_id) = env_request_id.parse::<u64>() else {
+                send_ws(
+                    sink,
+                    &WsOutMessage::CommandError {
+                        request_id,
+                        code: "invalidEnvRequestId".to_string(),
+                        message: format!("Invalid envRequestId: {env_request_id}"),
+                    },
+                )
+                .await;
+                return;
             };
             let outcome = state
                 .env_state
@@ -2229,13 +2419,13 @@ async fn handle_ws_in_message(
         }
 
         WsInMessage::RequestState => {
-            state.bex.request_playground_state();
+            state.seam.push_project_state().await;
             // A page that connected after an OpenPlayground request (a freshly
             // spawned browser window, or a reconnect) still needs to be told
             // where to navigate. Replay the last target directly to it.
             let target = state.current_open_target.lock().unwrap().clone();
             if let Some(target) = target {
-                let notif = bex_project::PlaygroundNotification::OpenPlayground {
+                let notif = PlaygroundNotification::OpenPlayground {
                     project: target.project,
                     function_name: target.function_name,
                     test_name: target.test_name,
@@ -2252,7 +2442,7 @@ async fn handle_ws_in_message(
         }
 
         WsInMessage::RequestCollectTests { project } => {
-            state.bex.request_collect_tests(&project);
+            state.seam.collect_tests(Path::new(&project)).await;
         }
 
         WsInMessage::RequestControlFlowGraph {
@@ -2260,7 +2450,7 @@ async fn handle_ws_in_message(
             function_name,
             request_id,
         } => {
-            let graph = state.bex.ast_control_flow_graph(&function_name);
+            let graph = state.seam.control_flow_graph(&function_name).await;
             let graph = graph.map(|g| {
                 baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(&g)
             });
@@ -2278,7 +2468,7 @@ async fn handle_ws_in_message(
         }
 
         WsInMessage::CursorPosition { file, line, column } => {
-            let ctx = state.bex.playground_cursor_context(&file, line, column);
+            let ctx = state.seam.cursor_context(&file, line, column).await;
             let ctx_json = serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null);
             let msg = WsOutMessage::CursorContext { context: ctx_json };
             if let Some(ws_msg) = to_ws_text(&msg)
@@ -2303,12 +2493,12 @@ async fn handle_ws_in_message(
 // ---------------------------------------------------------------------------
 
 async fn api_guard_middleware(
-    State(access_guard): State<PlaygroundAccessGuard>,
+    State(_access_guard): State<PlaygroundAccessGuard>,
     req: Request<Body>,
     next: Next,
 ) -> Response {
     let origin = req.headers().get(header::ORIGIN).cloned();
-    if !access_guard.is_allowed_origin(origin.as_ref()) {
+    if !PlaygroundAccessGuard::is_allowed_origin(origin.as_ref()) {
         return text_response(StatusCode::FORBIDDEN, "Forbidden origin".to_string());
     }
 
@@ -2325,21 +2515,17 @@ async fn api_guard_middleware(
             .header(header::EXPIRES, "0")
             .body(Body::empty())
             .unwrap();
-        apply_api_response_headers(&access_guard, origin.as_ref(), &mut response);
+        apply_api_response_headers(origin.as_ref(), &mut response);
         return response;
     }
 
     let mut resp = next.run(req).await;
-    apply_api_response_headers(&access_guard, origin.as_ref(), &mut resp);
+    apply_api_response_headers(origin.as_ref(), &mut resp);
     resp
 }
 
-fn apply_api_response_headers(
-    access_guard: &PlaygroundAccessGuard,
-    origin: Option<&HeaderValue>,
-    resp: &mut Response,
-) {
-    if let Some(origin) = access_guard.cors_origin(origin) {
+fn apply_api_response_headers(origin: Option<&HeaderValue>, resp: &mut Response) {
+    if let Some(origin) = PlaygroundAccessGuard::cors_origin(origin) {
         resp.headers_mut()
             .insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
         resp.headers_mut()
@@ -2446,6 +2632,8 @@ fn ensure_rustls_crypto_provider() {}
 
 /// Proxy a WebSocket upgrade request (e.g. Vite HMR) to the upstream dev server.
 async fn proxy_ws(upstream: String, req: Request<Body>) -> Response {
+    use tokio_tungstenite::tungstenite::Message as TungMsg;
+
     let uri_path_and_query = req
         .uri()
         .path_and_query()
@@ -2482,8 +2670,6 @@ async fn proxy_ws(upstream: String, req: Request<Body>) -> Response {
         let (mut client_sink, mut client_stream) = client_socket.split();
         let (mut upstream_sink, mut upstream_stream) = upstream_ws.split();
 
-        use tokio_tungstenite::tungstenite::Message as TungMsg;
-
         let client_to_upstream = async {
             while let Some(Ok(msg)) = client_stream.next().await {
                 let tung_msg = match msg {
@@ -2513,7 +2699,7 @@ async fn proxy_ws(upstream: String, req: Request<Body>) -> Response {
                         let _ = client_sink.send(AxumWsMsg::Close(None)).await;
                         break;
                     }
-                    _ => continue,
+                    TungMsg::Frame(_) => continue,
                 };
                 if client_sink.send(axum_msg).await.is_err() {
                     break;
@@ -2522,8 +2708,8 @@ async fn proxy_ws(upstream: String, req: Request<Body>) -> Response {
         };
 
         tokio::select! {
-            _ = client_to_upstream => {}
-            _ = upstream_to_client => {}
+            () = client_to_upstream => {}
+            () = upstream_to_client => {}
         }
     })
 }
@@ -2854,8 +3040,7 @@ mod tests {
 
     #[test]
     fn playground_access_guard_accepts_any_loopback_port_and_vscode_origins() {
-        let guard = PlaygroundAccessGuard::new();
-        assert!(guard.is_allowed_origin(None));
+        assert!(PlaygroundAccessGuard::is_allowed_origin(None));
         for allowed in [
             "http://localhost:4265",
             "http://localhost:8000", // ssh -L remapped tunnel port
@@ -2866,7 +3051,7 @@ mod tests {
             "https://abc123.vscode-cdn.net",
         ] {
             assert!(
-                guard.is_allowed_origin(Some(&HeaderValue::from_static(allowed))),
+                PlaygroundAccessGuard::is_allowed_origin(Some(&HeaderValue::from_static(allowed))),
                 "{allowed}"
             );
         }
@@ -2879,7 +3064,7 @@ mod tests {
             "https://vscode-cdn.net.example.com",
         ] {
             assert!(
-                !guard.is_allowed_origin(Some(&HeaderValue::from_static(denied))),
+                !PlaygroundAccessGuard::is_allowed_origin(Some(&HeaderValue::from_static(denied))),
                 "{denied}"
             );
         }

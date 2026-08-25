@@ -1098,7 +1098,7 @@ function chat_runs_through_the_agent() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(ChatEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(ChatEcho@spec("Say pong."));
             result.value
         },
     )
@@ -1632,7 +1632,7 @@ test "chat_parses_audio_output" {
 
 function live_openai_chat_answers() -> bool {
     let cl = openai.ChatClient.new(model = "gpt-4o-mini", max_tokens = 16);
-    let result = ai.Agent<string>.new(client = cl).run(ChatEcho@spec("Say pong."));
+    let result = ai.Agent.new(client = cl).run(ChatEcho@spec("Say pong."));
     result.value.trim().length() > 0
 }
 
@@ -1647,7 +1647,7 @@ function live_openai_chat_streams() -> bool {
 
 function live_openrouter_answers() -> bool {
     let cl = openai.OpenRouterClient.new(model = "openai/gpt-4o-mini", max_tokens = 16);
-    let result = ai.Agent<string>.new(client = cl).run(ChatEcho@spec("Say pong."));
+    let result = ai.Agent.new(client = cl).run(ChatEcho@spec("Say pong."));
     result.value.trim().length() > 0
 }
 

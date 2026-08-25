@@ -1004,13 +1004,6 @@ fn switch_member_tag_sufficient(member: &RuntimeTy, scrutinee: Option<&RuntimeTy
         // the shared `ENUM` tag can't express, so always take the precise chain.
         RuntimeTy::EnumVariant(..) => false,
         RuntimeTy::Class(name, args, _) => {
-            // Reflection-kind classes are transparent views over an
-            // `Object::Type`: their precise `is` test inspects the wrapped
-            // realized type, while `TypeTag` sees only the outer `TYPE` tag.
-            // A tag switch would therefore miss every kind arm.
-            if baml_type::type_kind::is_type_kind_class(name) {
-                return false;
-            }
             if args.is_empty() {
                 return true;
             }
@@ -1188,11 +1181,37 @@ fn resolution_to_item_ref(
             })
         }
         MemberResolution::InterfaceConcreteMethod { impl_loc, func_loc } => {
-            // A statically-resolved interface-method call. Route it through the interface's
-            // method ref — the runtime dispatches on the concrete receiver's registered impl,
-            // which is correct. (A direct static call to `func_loc` is a valid optimization,
-            // not required for correctness; it is deferred.)
+            // A statically-resolved interface-method call.
             let block = baml_compiler2_ppir::item_data::impl_block_data(db, *impl_loc);
+
+            // When the impl provides its own frame-free override, call it
+            // directly: the impl block binds no generic params, so the callee
+            // needs no frame type args and the resolved function IS the body
+            // this call must run. Routing such a call through the interface's
+            // method ref instead would (for a defaulted method) name the
+            // interface's default-body global, which direct-calls the default
+            // with an empty frame — its `Self`-typed templates then have no
+            // slot to substitute and the call traps at runtime.
+            let impl_is_frame_free = match &block.subject {
+                baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } => {
+                    generics.is_empty()
+                }
+                baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
+                    baml_compiler2_hir_ty::lower::class_generic_frame(db, *class).is_empty()
+                }
+            };
+            if impl_is_frame_free && block.methods.contains(func_loc) {
+                return Some(def_to_item_ref(db, Definition::Function(*func_loc)));
+            }
+
+            // BUG: the remaining shapes (a generic impl's override, or an
+            // impl inheriting the interface default) are still routed through
+            // the interface's method ref. For a defaulted method that global
+            // IS the default body, so a direct call runs it without the
+            // `Self`/impl frame it needs — the same trap the branch above
+            // avoids. These shapes should lower as virtual dispatch on the
+            // receiver (the rule carries the frame); today they are only
+            // reached by paths that never executed before this arm existed.
             let impl_pkg = file_package(db, impl_loc.file(db));
             let impl_pkg_items = baml_compiler2_ppir::package_items(
                 db,
@@ -1477,12 +1496,13 @@ unsafe impl salsa::Update for ProjectClassTypeTags {
 /// `LoweringContext` construction — i.e. the whole project's item trees were
 /// walked, and every class name re-rendered and re-hashed, once per lowered
 /// function/let (see `crates/tools_compile_profile/README.md`, July 2026
-/// audit, item #4). `project` is only the memo key; the body's file/item
-/// reads are tracked as dependencies through `db` as usual.
+/// audit, item #4). `_roots` (the database's one source-root table) is only
+/// the memo key; the body's file/item reads are tracked as dependencies
+/// through `db` as usual.
 #[salsa::tracked(returns(ref))]
 fn class_type_tags_for_project(
     db: &dyn crate::Db,
-    _project: baml_workspace::Project,
+    _roots: baml_base::SourceRootTable,
 ) -> ProjectClassTypeTags {
     use baml_compiler2_ppir::item_data::{class_data, file_classes};
     let all_files = compiler2_all_files(db);
@@ -1579,7 +1599,7 @@ fn package_lowering_data<'db>(
             );
         }
 
-        // `baml.AnyClass` keeps its ratified reflection-backed default methods
+        // `reflect.AnyClass` keeps its ratified reflection-backed default methods
         // in the `baml` package, while `reflect` depends on `baml` for the
         // interface and core error types. Avoiding a dependency cycle is
         // intentional, but MIR still needs the root reflect package's concrete
@@ -2316,7 +2336,7 @@ impl<'db> LoweringContext<'db> {
         // Tags are content-addressed over each class's fully-qualified name,
         // so they match the emitter's `class.type_tag` values by construction.
         // Memoized project-wide (was rebuilt here per lowered function).
-        let class_type_tags = &class_type_tags_for_project(db, db.project()).tags;
+        let class_type_tags = &class_type_tags_for_project(db, db.source_roots()).tags;
 
         // --- Determine arity from function signature ---
         let sig = baml_compiler2_ppir::function_signature(db, func_loc);
@@ -2424,7 +2444,7 @@ impl<'db> LoweringContext<'db> {
         // Tags are content-addressed over each class's fully-qualified name,
         // so they match the emitter's `class.type_tag` values by construction.
         // Memoized project-wide (was rebuilt here per lowered function).
-        let class_type_tags = &class_type_tags_for_project(db, db.project()).tags;
+        let class_type_tags = &class_type_tags_for_project(db, db.source_roots()).tags;
 
         LoweringContext {
             db,
@@ -7947,7 +7967,7 @@ impl<'db> LoweringContext<'db> {
             _ => None,
         };
         let sysop_callee = callee_expr.and_then(|callee| self.sys_op_callee(callee));
-        // A method-convention sys-op call (e.g. `ctx.output_format_with(...)`) has
+        // A method-convention sys-op call (e.g. `output_format._render(...)`) has
         // a receiver-relative `param_index` — TIR strips `self` via
         // `skip_self_param` when building the call plan — but the callee's default
         // arena (`function_parameter_defaults`) is indexed self-inclusive. Shift

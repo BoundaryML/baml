@@ -32,12 +32,9 @@ baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
 baml_db = { workspace = true }
 baml_fmt = { workspace = true }
-baml_lsp2_actions = { workspace = true }
 baml_path = { workspace = true }
-baml_project = { workspace = true }
 baml_type = { workspace = true }
 baml_version = { workspace = true }
-baml_workspace = { workspace = true }
 bex_engine = { workspace = true }
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
@@ -48,8 +45,6 @@ async-trait = { workspace = true }
 borsh = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
-lsp-server = { workspace = true }
-lsp-types = { workspace = true }
 paste = { workspace = true }
 percent-encoding = { workspace = true }
 regex = { workspace = true }
@@ -64,7 +59,7 @@ vfs = { workspace = true }
 
 [build-dependencies]
 baml_compiler2_emit = { workspace = true }
-baml_project = { workspace = true }
+baml_db = { workspace = true }
 baml_version = { workspace = true }
 borsh = { workspace = true }
 

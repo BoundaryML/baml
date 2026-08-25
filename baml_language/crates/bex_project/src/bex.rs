@@ -5,7 +5,7 @@ use bex_engine::{BexCallArg, BexEngine, CallRef, FunctionCallContext, UnhandledS
 use bex_heap::{BexExternalValue, BexValue};
 use sys_types::CallId;
 
-use crate::{BexArgs, RuntimeError, project::BexProject};
+use crate::{BexArgs, RuntimeError};
 
 pub struct BexCallTraceResult {
     pub value: Result<BexExternalValue, RuntimeError>,
@@ -64,57 +64,6 @@ pub trait Bex: Send + Sync {
     /// the adapter-owned `HostCallId` backing value, not a `RunId`.
     fn cancel_run(&self, host_call_id: CallId) -> Result<(), RuntimeError> {
         self.cancel_function_call(host_call_id)
-    }
-}
-
-#[async_trait]
-impl Bex for BexProject {
-    async fn call_function(
-        self: Arc<Self>,
-        function_name: &str,
-        args: BexArgs,
-        call_ctx: FunctionCallContext,
-    ) -> Result<BexExternalValue, RuntimeError> {
-        let bex = self.get_bex()?;
-        Bex::call_function(bex, function_name, args, call_ctx).await
-    }
-
-    async fn call_function_with_trace(
-        self: Arc<Self>,
-        function_name: &str,
-        args: BexArgs,
-        call_ctx: FunctionCallContext,
-    ) -> Result<BexCallTraceResult, RuntimeError> {
-        let bex = self.get_bex()?;
-        Bex::call_function_with_trace(bex, function_name, args, call_ctx).await
-    }
-
-    async fn call_callable(
-        self: Arc<Self>,
-        handle: bex_external_types::Handle,
-        args: BexArgs,
-        call_ctx: FunctionCallContext,
-    ) -> Result<BexExternalValue, RuntimeError> {
-        let bex = self.get_bex()?;
-        Bex::call_callable(bex, handle, args, call_ctx).await
-    }
-
-    fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError> {
-        let bex = self.get_bex()?;
-        bex.cancel_function_call(call_id)
-            .map_err(RuntimeError::from)
-    }
-
-    fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>) {
-        if let Ok(bex) = self.get_bex() {
-            bex.set_unhandled_spawn_error_handler(handler);
-        }
-    }
-
-    async fn shutdown(self: Arc<Self>) {
-        if let Ok(bex) = self.get_bex() {
-            bex.shutdown().await;
-        }
     }
 }
 

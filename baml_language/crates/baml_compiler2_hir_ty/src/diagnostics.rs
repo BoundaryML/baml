@@ -270,6 +270,8 @@ pub enum TirTypeError {
     /// Lowered to `Ty::Error` so it never reaches the canonical normalizer, which treats
     /// `Ty::Infer` as `unreachable!`.
     CannotInferType,
+    /// An ordinary inference variable remained unresolved at writeback.
+    TypeMustBeKnown { full_type: Ty },
     /// An associated-type projection references `member`, but the subject it
     /// projects through does not declare (or cannot declare) it as an
     /// associated type.
@@ -488,6 +490,8 @@ pub enum TirTypeError {
     /// implicit `.to_string()` can't run on a possibly-null value; the user
     /// must coalesce (`${x ?? "…"}`) or unwrap first.
     InterpolatedValueMaybeNull { ty: Ty },
+    /// The output-format method was referenced without being called.
+    OutputFormatNotCalled,
     /// BEP-049 §11: an untagged `${expr}` interpolates a value whose type has
     /// no `to_string` method, so it can't be implicitly stringified.
     TypeNotInterpolatable { ty: Ty },
@@ -626,11 +630,11 @@ pub enum TirTypeError {
     /// concrete non-interface type. Generic bounds must be interfaces.
     GenericBoundNotInterface { bound: Ty },
     /// BEP-062: an `implements` block targets a compiler-builtin interface
-    /// (`baml.AnyFunction`), whose conformance is derived by the compiler and
+    /// (`reflect.AnyFunction`), whose conformance is derived by the compiler and
     /// cannot be written by hand.
     BuiltinInterfaceNotImplementable { interface: QualifiedTypeName },
     /// BEP-062: a generic parameter's bound names a compiler-builtin interface
-    /// (`baml.AnyFunction`) that is only legal as a value type (an
+    /// (`reflect.AnyFunction`) that is only legal as a value type (an
     /// existential), never as a bound.
     BuiltinInterfaceNotABound { interface: QualifiedTypeName },
     /// [`TYPE_SYSTEM.md` § Generics on Functions](TYPE_SYSTEM.md#generics-on-functions):
@@ -1168,6 +1172,13 @@ impl fmt::Display for TirTypeError {
             TirTypeError::CannotInferType => {
                 write!(f, "type inference failed; write the type explicitly")
             }
+            TirTypeError::TypeMustBeKnown { full_type } => {
+                write!(
+                    f,
+                    "type annotations needed\nfull type: `{}`",
+                    full_type.render_user_facing()
+                )
+            }
             TirTypeError::UnknownAssociatedType { member, container } => {
                 write!(f, "unknown associated type `{member}` for {container}")
             }
@@ -1555,6 +1566,9 @@ impl fmt::Display for TirTypeError {
                 "cannot interpolate a value of type `{}` — it may be null; coalesce with `?? \"…\"` or unwrap it first",
                 ty.render_user_facing()
             ),
+            TirTypeError::OutputFormatNotCalled => {
+                write!(f, "`output_format` must be called; use `output_format()`")
+            }
             TirTypeError::ConditionAlwaysConstant { ty, always_true } => {
                 let (always, never) = if *always_true {
                     ("truthy", "falsy")

@@ -66,7 +66,7 @@ function ExtractInvoice(text: string) -> Invoice {
   prompt: `
     Extract a structured invoice from the text below.
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
 
     ${role("user")}
     ${text}

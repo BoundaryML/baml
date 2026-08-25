@@ -1,12 +1,17 @@
 version = 1
-recorded_at = "2026-08-21T09:29:37Z"
-git_sha = "f7bd01e8b4bc5a4b45af3b71c01ded9e8196513b"
+recorded_at = "2026-08-25T20:35:00Z"
+git_sha = "cf74e48817c5f2c4a9e457580b282c6d5d225061"
 
+# baml-cli re-pegged from CI's measured size (run 32893558553): 80.2 MB
+# file / 27.3 MB gzip. stripped == file because the CI runner has no
+# llvm-strip (MSVC symbols live in the PDB anyway). packed-program was NOT
+# measured on that run (packing hit the `<builtin>` path-separator bug this
+# branch fixes); its estimate stands until CI records it.
 [artifacts.baml-cli]
-file_bytes = "26.5 MiB"
-stripped_bytes = "26.5 MiB"
-gzip_bytes = "11.0 MiB"
+file_bytes = "76.5 MiB"
+stripped_bytes = "76.5 MiB"
+gzip_bytes = "26.1 MiB"
 
 [artifacts.packed-program]
-file_bytes = "21.6 MiB"
-gzip_bytes = "8.1 MiB"
+file_bytes = "27.1 MiB"
+gzip_bytes = "10.1 MiB"

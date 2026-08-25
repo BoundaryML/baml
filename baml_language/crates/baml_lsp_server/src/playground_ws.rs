@@ -76,6 +76,33 @@ pub enum WsInMessage {
         request_id: u64,
         filter: Option<RunListFilter>,
     },
+    /// Read one captured value's media bytes by content id. Values travel
+    /// with media as a descriptor; this fetches the bytes on demand.
+    #[serde(rename = "readTelemetryMedia")]
+    ReadTelemetryMedia {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        project: String,
+        cid: String,
+    },
+    /// List executions in the project's `profiles-v1` store. Structure and
+    /// timing live there, not in the run store.
+    #[serde(rename = "listExecutions")]
+    ListExecutions {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        project: String,
+    },
+    /// Read one execution's threads, calling contexts, retained spans, and
+    /// errors.
+    #[serde(rename = "openExecution")]
+    OpenExecution {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        project: String,
+        #[serde(rename = "executionId")]
+        execution_id: String,
+    },
     #[serde(rename = "openHistory")]
     OpenHistory {
         #[serde(rename = "requestId")]
@@ -190,7 +217,7 @@ pub struct RunListFilter {
     pub visibility: Option<RunListVisibility>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RunListKind {
     Function,
@@ -200,7 +227,7 @@ pub enum RunListKind {
     Internal,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RunListVisibility {
     HistoryOnly,
@@ -261,6 +288,31 @@ pub enum WsOutMessage {
         #[serde(rename = "requestId")]
         request_id: u64,
         runs: Vec<serde_json::Value>,
+    },
+    #[serde(rename = "executionList")]
+    ExecutionList {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        executions: Vec<serde_json::Value>,
+        /// Set when the project has no profile store yet. The client renders
+        /// an empty state, not an error: nothing has run here.
+        #[serde(rename = "storeMissing", skip_serializing_if = "std::ops::Not::not")]
+        store_missing: bool,
+    },
+    #[serde(rename = "telemetryMedia")]
+    TelemetryMedia {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        cid: String,
+        media: serde_json::Value,
+    },
+    #[serde(rename = "executionTelemetry")]
+    ExecutionTelemetry {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        #[serde(rename = "executionId")]
+        execution_id: String,
+        telemetry: serde_json::Value,
     },
     #[serde(rename = "runSnapshot")]
     RunSnapshot {

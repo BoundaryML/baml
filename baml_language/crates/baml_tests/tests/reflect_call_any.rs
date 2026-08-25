@@ -1,4 +1,4 @@
-//! Runtime semantics of BEP-062's AnyFunction slice: `baml.AnyFunction`
+//! Runtime semantics of BEP-062's AnyFunction slice: `reflect.AnyFunction`
 //! coercion carried to runtime, `reflect.signature`, and `reflect.call_any`
 //! (argument checking, callee defaults, error propagation).
 
@@ -35,7 +35,7 @@ async fn call_any_dispatches_named_args() {
         }
 
         function main() -> int throws never {
-            let f: baml.AnyFunction<Returns = int, Throws = never> = add
+            let f: reflect.AnyFunction<Returns = int, Throws = never> = add
             return reflect.call_any(f, { "x": 20, "y": 22 }) catch (e) {
                 _ => -1
             }
@@ -54,7 +54,7 @@ async fn call_any_absent_optional_fires_callee_default() {
         }
 
         function main() -> int throws never {
-            let f: baml.AnyFunction<Returns = int, Throws = never> = scale
+            let f: reflect.AnyFunction<Returns = int, Throws = never> = scale
             // Absent: the callee's own (non-constant) default fires: 5 * 6.
             let defaulted = reflect.call_any(f, { "x": 5 }) catch (e) {
                 _ => -1
@@ -79,7 +79,7 @@ async fn call_any_rejects_missing_key_and_type_mismatches() {
         }
 
         function main() -> int throws never {
-            let f: baml.AnyFunction<Returns = string, Throws = never> = greet
+            let f: reflect.AnyFunction<Returns = string, Throws = never> = greet
             let missing = reflect.call_any(f, {}) catch (e) {
                 reflect.InvalidArgumentError => 1,
                 reflect.errors.CompilationError => 100,
@@ -133,7 +133,7 @@ async fn call_any_widens_int_for_float_param() {
         }
 
         function main() -> int throws never {
-            let g: baml.AnyFunction<Returns = float, Throws = never> = scale
+            let g: reflect.AnyFunction<Returns = float, Throws = never> = scale
             // The one boundary conversion: an integral value widens for a
             // `float` parameter (JSON Schema's `number` admits integers)...
             let widened = reflect.call_any(g, { "budget": 150 }) catch (e) {
@@ -147,7 +147,7 @@ async fn call_any_widens_int_for_float_param() {
             }
             // Nothing else converts: a float does not narrow to `int`, and a
             // numeric string does not parse to `float`.
-            let h: baml.AnyFunction<Returns = int, Throws = never> = takes_int
+            let h: reflect.AnyFunction<Returns = int, Throws = never> = takes_int
             let narrowed = reflect.call_any(h, { "n": 1.5 }) catch (e) {
                 reflect.InvalidArgumentError => -1,
                 reflect.errors.CompilationError => -100,
@@ -202,7 +202,7 @@ async fn call_any_invalid_argument_error_carries_types() {
         }
 
         function main() -> string throws never {
-            let f: baml.AnyFunction<Returns = string, Throws = never> = greet
+            let f: reflect.AnyFunction<Returns = string, Throws = never> = greet
             let bad_value = reflect.call_any(f, { "name": 42 }) catch (e) {
                 reflect.InvalidArgumentError => e.argument + ":" + e.expected.to_string() + "|" + e.got.to_string(),
                 reflect.errors.CompilationError => "unexpected-compilation-error",
@@ -245,7 +245,7 @@ async fn call_any_propagates_callee_typed_throw() {
         }
 
         function main() -> string throws never {
-            let f: baml.AnyFunction<Returns = string, Throws = ToolError> = fail_search
+            let f: reflect.AnyFunction<Returns = string, Throws = ToolError> = fail_search
             // Exhaustive without a wildcard: all declared channels are named.
             return reflect.call_any(f, { "q": "cats" }) catch (e) {
                 ToolError => e.message,
@@ -277,7 +277,7 @@ async fn call_any_heterogeneous_tool_map_dispatch() {
             throw ToolError { message: s }
         }
 
-        function dispatch(tools: map<string, baml.AnyFunction<Returns = string, Throws = ToolError>>, name: string, args: map<string, unknown>) -> string throws never {
+        function dispatch(tools: map<string, reflect.AnyFunction<Returns = string, Throws = ToolError>>, name: string, args: map<string, unknown>) -> string throws never {
             let f = tools.get(name)
             if f is null {
                 return "no-such-tool"
@@ -290,7 +290,7 @@ async fn call_any_heterogeneous_tool_map_dispatch() {
         }
 
         function main() -> string throws never {
-            let tools: map<string, baml.AnyFunction<Returns = string, Throws = ToolError>> = {
+            let tools: map<string, reflect.AnyFunction<Returns = string, Throws = ToolError>> = {
                 "shout": shout,
                 "fail": fail,
             }
@@ -312,7 +312,7 @@ async fn call_any_lambda_callee() {
             let double = (x: int) -> int throws never {
                 x * 2
             }
-            let f: baml.AnyFunction<Returns = int, Throws = never> = double
+            let f: reflect.AnyFunction<Returns = int, Throws = never> = double
             return reflect.call_any(f, { "x": 21 }) catch (e) {
                 _ => -1
             }
@@ -336,7 +336,7 @@ async fn call_any_bound_method_callee() {
 
         function main() -> int throws never {
             let c = Counter { base: 40 }
-            let m: baml.AnyFunction<Returns = int, Throws = never> = c.bump
+            let m: reflect.AnyFunction<Returns = int, Throws = never> = c.bump
             return reflect.call_any(m, { "amount": 2 }) catch (e) {
                 _ => -1
             }
@@ -363,7 +363,7 @@ async fn signature_reports_types_and_param_split() {
         }
 
         function main() -> string throws never {
-            let f: baml.AnyFunction = search
+            let f: reflect.AnyFunction = search
             let sig = reflect.signature(f)
             let limit = sig.opts.get("limit")
             let limit_str = "absent"
@@ -409,7 +409,7 @@ async fn signature_bound_method_drops_receiver() {
 
         function main() -> string throws never {
             let c = Counter { base: 40 }
-            let m: baml.AnyFunction = c.bump
+            let m: reflect.AnyFunction = c.bump
             let sig = reflect.signature(m)
             let method_name = "unnamed"
             let n = sig.name
@@ -444,7 +444,7 @@ async fn instantiated_generic_function_reflects_precisely_and_dispatches() {
         function main() -> string throws never {
             // An instantiated generic callable carries its realized frame, so its
             // signature reconstructs at that instantiation rather than coarsely.
-            let f: baml.AnyFunction = ident<int>
+            let f: reflect.AnyFunction = ident<int>
             let sig = reflect.signature(f)
             let r = reflect.call_any(f, { "x": 42 }) catch (e) {
                 _ => -1
@@ -472,7 +472,7 @@ async fn call_any_reports_unspecialized_generic_function() {
         }
 
         function main() -> string throws unknown {
-            let f: baml.AnyFunction = ident
+            let f: reflect.AnyFunction = ident
             let _ = reflect.call_any(f, { "x": 42 }) catch (e) {
                 reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
@@ -500,7 +500,7 @@ async fn pinned_call_any_declares_unspecialized_generic_compilation_error() {
         }
 
         function main() -> string throws never {
-            let f: baml.AnyFunction<Returns = string, Throws = never> = ident
+            let f: reflect.AnyFunction<Returns = string, Throws = never> = ident
             let _ = reflect.call_any(f, { "x": "value" }) catch (e) {
                 reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
@@ -534,7 +534,7 @@ async fn uninstantiated_generic_function_reference_is_a_compile_error() {
         }
 
         function main() -> string throws never {
-            let f: baml.AnyFunction = ident
+            let f: reflect.AnyFunction = ident
             return "unreachable"
         }
         "#
@@ -606,7 +606,7 @@ async fn runtime_enum_renders_and_alias_round_trips_through_sap() {
 
         function Classify<T>(input: string) -> T {
             client: TestClient
-            prompt: `Choose a category for ${input}.\n${ctx.output_format}`
+            prompt: `Choose a category for ${input}.\n${ctx.output_format()}`
         }
 
         function main() -> string {
@@ -657,14 +657,14 @@ async fn runtime_enum_identity_and_metadata_are_preserved() {
 
         function Classify<T>(input: string) -> T {
             client: TestClient
-            prompt: `Choose a category for ${input}.\n${ctx.output_format}`
+            prompt: `Choose a category for ${input}.\n${ctx.output_format()}`
         }
 
         function main() -> string {
-            // Widen explicitly to select `reflect.Type.meta(...)`, rather than the
-            // enum-kind view's zero-argument metadata reader.
-            let left: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"])
-            let right: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"])
+            // Widen explicitly (`as_type`) to select `reflect.Type.meta(...)`,
+            // rather than the enum-kind view's zero-argument metadata reader.
+            let left: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"]).as_type()
+            let right: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"]).as_type()
             let left_prompt = Classify$render_prompt<unreflect(left)>("sample").text()
             let right_prompt = Classify$render_prompt<unreflect(right)>("sample").text()
             let tagged = left.meta(
@@ -737,7 +737,7 @@ async fn empty_runtime_enum_fails_at_the_render_boundary() {
 
         function Classify<T>(input: string) -> T {
             client: TestClient
-            prompt: `Choose a category for ${input}.\n${ctx.output_format}`
+            prompt: `Choose a category for ${input}.\n${ctx.output_format()}`
         }
 
         function main() -> string throws never {
@@ -780,7 +780,7 @@ fn runtime_type_arguments_are_rejected_on_streaming_companions() {
 
         function Classify<T>(input: string) -> T {
             client: TestClient
-            prompt: `${input} ${ctx.output_format}`
+            prompt: `${input} ${ctx.output_format()}`
         }
 
         function main() -> null {
@@ -819,13 +819,13 @@ async fn get_function_refuses_an_unspecialized_generic_through_any_function() {
             base_url = "http://localhost:1234",
         );
 
-        type AnyCallable = baml.AnyFunction<Returns = unknown, Throws = unknown>;
+        type AnyCallable = reflect.AnyFunction<Returns = unknown, Throws = unknown>;
 
         function GenericList<T>(topic: string) -> T[] {
             client: TestClient
             prompt: `
                 Return an empty list of ${topic}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
 
@@ -872,13 +872,13 @@ async fn call_any_still_invokes_a_non_generic_companion() {
             base_url = "http://localhost:1234",
         );
 
-        type AnyCallable = baml.AnyFunction<Returns = unknown, Throws = unknown>;
+        type AnyCallable = reflect.AnyFunction<Returns = unknown, Throws = unknown>;
 
         function Plain(topic: string) -> string {
             client: TestClient
             prompt: `
                 Say ${topic}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
 
@@ -915,7 +915,7 @@ async fn get_function_refuses_an_unspecialized_generic_companion() {
             client: TestClient
             prompt: `
                 Return an empty list of ${topic}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
 
@@ -969,7 +969,7 @@ async fn get_function_still_extracts_a_non_generic_companion() {
             client: TestClient
             prompt: `
                 Say ${topic}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
 

@@ -339,7 +339,7 @@ function classify(text: string) -> Review {
   prompt: `
     Classify this review.
     ${text}
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 ```

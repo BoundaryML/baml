@@ -83,8 +83,7 @@ function promptast_accessors.pa_message_metadata_survives_assembly() -> string {
     load_type unknown
     alloc_map 0
     load_const null
-    load_const null
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.messages
@@ -188,8 +187,7 @@ function promptast_accessors.pa_message_parts_preserve_media() -> string {
     load_type unknown
     alloc_map 0
     load_const null
-    load_const null
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.messages
@@ -422,8 +420,7 @@ function promptast_accessors.paa_render_ast() -> ai.Prompt {
     load_type unknown
     alloc_map 0
     load_const null
-    load_const null
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, ._output_format
     load_var render
     call_indirect
     return
@@ -444,8 +441,7 @@ function promptast_accessors.paa_single_message_fn() -> ai.PromptMessage[] {
     load_type unknown
     alloc_map 0
     load_const null
-    load_const null
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.messages

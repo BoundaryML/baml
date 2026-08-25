@@ -1,12 +1,17 @@
 version = 1
-recorded_at = "2026-08-21T09:29:37Z"
-git_sha = "f7bd01e8b4bc5a4b45af3b71c01ded9e8196513b"
+recorded_at = "2026-08-25T20:35:00Z"
+git_sha = "cf74e48817c5f2c4a9e457580b282c6d5d225061"
 
+# NOT yet CI-measured at panic=unwind: the linux measure job on run
+# 32893558553 was cancelled. baml-cli extrapolates the macOS correction
+# (estimates ran ~4% under the measured binaries) with a little slack;
+# packed-program keeps the abort-scaled estimate. The next successful CI
+# measure / daily refresh replaces both with recorded sizes.
 [artifacts.baml-cli]
-file_bytes = "30.8 MiB"
-stripped_bytes = "30.8 MiB"
-gzip_bytes = "12.2 MiB"
+file_bytes = "78.5 MiB"
+stripped_bytes = "78.5 MiB"
+gzip_bytes = "27.7 MiB"
 
 [artifacts.packed-program]
-file_bytes = "24.7 MiB"
-gzip_bytes = "9.0 MiB"
+file_bytes = "31.0 MiB"
+gzip_bytes = "11.2 MiB"

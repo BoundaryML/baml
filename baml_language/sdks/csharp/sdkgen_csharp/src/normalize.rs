@@ -71,6 +71,19 @@ fn normalize_symbol(symbol: &Symbol) -> Symbol {
     }
 }
 
+/// The compiler-injected `on_event` listener parameter (`injected` provenance
+/// set by the symbol pool). Its type reaches into the `ai.events.Event` union
+/// (and through it `ai.content.*` and the media classes), none of which is
+/// classified for C# yet, so the whole function would be rejected as
+/// unsupported. The parameter is optional with a null default, so omitting it
+/// from the C# surface keeps every call valid — the VM fills the default,
+/// exactly like the pool-stripped `client` override. User-declared parameters
+/// are never `injected`, whatever their name or shape. Remove this filter
+/// when the events family gets a C# projection.
+fn is_unrepresentable_on_event(argument: &FunctionArgument) -> bool {
+    argument.injected
+}
+
 fn normalize_function(function: &Function) -> Function {
     Function {
         name: function.name.clone(),
@@ -79,7 +92,9 @@ fn normalize_function(function: &Function) -> Function {
         arguments: function
             .arguments
             .iter()
+            .filter(|argument| !is_unrepresentable_on_event(argument))
             .map(|argument| FunctionArgument {
+                injected: argument.injected,
                 name: argument.name.clone(),
                 docstring: argument.docstring.clone(),
                 ty: normalize_ty(&argument.ty),

@@ -124,7 +124,17 @@ fn build_interface_def(
                        store: &TypeRefStore,
                        id: TypeRefId|
      -> Option<bex_vm_types::RuntimeInterface> {
-        let lowered = ctx.lower_type_ref(store, id).to_plain();
+        // ConstraintHead, per the contract above: the default (existential)
+        // position eagerly realizes omitted associated defaults and fills
+        // the rest with Error sentinels — a bound like `type A extends
+        // Iface` with unpinned associated types would panic `to_runtime`.
+        let lowered = ctx
+            .lower_type_ref_at(
+                store,
+                id,
+                baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
+            )
+            .to_plain();
         let baml_type::Ty::Interface(qtn, args, assoc, _) = lowered else {
             return None;
         };
@@ -1568,7 +1578,35 @@ pub fn generate_project_bytecode_with_opt(
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_impl(db, options, opt, None, false, None)
+    let mut program = generate_impl(db, options, opt, None, false, None)?;
+    program.source_content_hash = Some(project_source_content_hash(db));
+    Ok(program)
+}
+
+/// The conservative source-content identity of this compile's project file
+/// set (profiling streams spec §2.3): any byte change in any project file, or
+/// a compiler version change, yields a new hash. Stdlib stubs are excluded —
+/// they are a compiler-build constant already covered by the version input.
+pub fn project_source_content_hash(db: &dyn crate::Db) -> [u8; 32] {
+    // The `<builtin>/` path prefix is the wire-contract spelling of "stdlib
+    // stub" (and of runtime mount stubs), the same rule `builtin_count`
+    // keys on — filtering by root KIND here would diverge for databases
+    // that hold both source stdlib and mount-stub roots.
+    let files: Vec<(String, String)> = compiler2_all_files(db)
+        .iter()
+        .filter(|file| !file.path(db).to_string_lossy().starts_with("<builtin>/"))
+        .map(|file| {
+            (
+                file.path(db).to_string_lossy().into_owned(),
+                file.text(db).clone(),
+            )
+        })
+        .collect();
+    bex_vm_types::identity::program_content_hash(
+        files
+            .iter()
+            .map(|(path, text)| (path.as_str(), text.as_bytes())),
+    )
 }
 
 /// Compile ONLY the builtin stdlib into a standalone `Program` slice.
@@ -1609,7 +1647,9 @@ pub fn generate_project_bytecode_with_stdlib(
     opt: OptLevel,
     base: &Program,
 ) -> Result<Program, LoweringError> {
-    generate_impl(db, options, opt, Some(base), false, None)
+    let mut program = generate_impl(db, options, opt, Some(base), false, None)?;
+    program.source_content_hash = Some(project_source_content_hash(db));
+    Ok(program)
 }
 
 /// Compile and link a source consumer against independently emitted mounted
@@ -1764,6 +1804,8 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
 
     let program = bex_vm_types::link::link(&assembled)
         .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))?;
+    let mut program = program;
+    program.source_content_hash = Some(project_source_content_hash(db));
     Ok((program, assembled))
 }
 
@@ -3826,7 +3868,13 @@ fn emit_file_group(
                 opt,
             )?;
 
-            let init_fq_name = if pkg_name.as_str() == "user" {
+            // The local (workspace) package's chainer is unprefixed — the
+            // same `Package::Local` classification the type layer uses.
+            let is_local_pkg = matches!(
+                baml_type::Package::from_name(baml_base::Name::new(pkg_name.as_str())),
+                baml_type::Package::Local
+            );
+            let init_fq_name = if is_local_pkg {
                 "$init".to_string()
             } else {
                 format!("{pkg_name}.$init")
@@ -3967,7 +4015,13 @@ fn emit_file_group(
                 runtime_package: bex_vm_types::HeapPtr::null(),
             };
 
-            let chainer_name = if pkg_name.as_str() == "user" {
+            // The local (workspace) package's chainer is unprefixed — the
+            // same `Package::Local` classification the type layer uses.
+            let is_local_pkg = matches!(
+                baml_type::Package::from_name(baml_base::Name::new(pkg_name.as_str())),
+                baml_type::Package::Local
+            );
+            let chainer_name = if is_local_pkg {
                 "$init_test".to_string()
             } else {
                 format!("{pkg_name}.$init_test")
@@ -4589,21 +4643,29 @@ fn compute_function_metadata<'db>(
     }
 }
 
-/// Project-root-relative display path for `file` (our `-trimpath`).
+/// Root-relative display path for `file` (our `-trimpath`).
 ///
 /// `Function::source_file` is display/metadata-only (backtraces, event
 /// metadata, reflection locations) — never opened from disk — so stripping
-/// the project root keeps serialized `Program`s location-independent (a
-/// cached or packed blob is byte-identical wherever the project lives) and
-/// backtraces machine-independent. Paths outside the root — `<builtin>/…`
-/// stubs, standalone files — are kept verbatim.
+/// the root keeps serialized `Program`s location-independent (a cached or
+/// packed blob is byte-identical wherever the project lives) and backtraces
+/// machine-independent. Only `Workspace` roots are stripped: `Stdlib` and
+/// `Dependency` roots keep their paths verbatim, because their
+/// `<builtin>/…` unit paths are a wire contract
+/// (`bex_vm_types/src/link.rs` string-matches the prefix).
 fn relative_source_path(db: &dyn baml_compiler2_mir::Db, file: baml_base::SourceFile) -> String {
     let path = file.path(db);
-    let root = db.project().root(db);
-    path.strip_prefix(&root)
-        .unwrap_or(&path)
-        .display()
-        .to_string()
+    let root = file.source_root(db);
+    match root.kind(db) {
+        baml_base::SourceRootKind::Workspace => path
+            .strip_prefix(root.path(db))
+            .unwrap_or(&path)
+            .display()
+            .to_string(),
+        baml_base::SourceRootKind::Stdlib
+        | baml_base::SourceRootKind::Dependency
+        | baml_base::SourceRootKind::Dynamic => path.display().to_string(),
+    }
 }
 
 /// Build a table of byte offsets where each line starts in the source text.
@@ -4673,6 +4735,21 @@ fn topological_sort_packages(
             queue.extend(next);
         }
     }
+
+    // Kahn's algorithm cannot order the members of a dependency cycle: they
+    // never reach in-degree zero, so they would silently VANISH from the
+    // result — and with it from `package_init_order`, leaving their globals
+    // uninitialized. The package dependency graph is acyclic by construction;
+    // enforce it so a future edge cannot rot into that silent failure.
+    assert_eq!(
+        result.len(),
+        pkg_names.len(),
+        "package dependency cycle: {:?} cannot be topologically ordered",
+        pkg_names
+            .iter()
+            .filter(|name| !result.contains(name))
+            .collect::<Vec<_>>()
+    );
 
     result
 }
@@ -5584,7 +5661,7 @@ fn attach_function_metadata<'db>(
     // The stream return type is now carried by the synthesized `$stream` companion's
     // own `return_type` (see ppir's `companion_stream_return_type`), so the old
     // emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
-    // of `ctx.output_format` should be re-verified against canary's streaming.
+    // of `ctx.output_format()` should be re-verified against canary's streaming.
     if let Some(llm_meta) = function_llm_meta(db, func_loc)
         && let Some(client) = &llm_meta.client_name
     {
@@ -5945,9 +6022,9 @@ mod tests {
         sync::atomic::{AtomicU32, Ordering},
     };
 
-    use baml_base::{FileId, SourceFile};
+    use baml_base::{FileId, Name, SourceFile, SourceRoot, SourceRootKind, SourceRootTable};
     use baml_compiler2_hir::item_tree::{Attribute, AttributeArg};
-    use baml_workspace::Project;
+    use salsa::Setter;
 
     use super::*;
 
@@ -5955,16 +6032,29 @@ mod tests {
     struct TestDb {
         storage: salsa::Storage<TestDb>,
         next_file_id: AtomicU32,
-        project: Option<Project>,
+        /// Present from construction (`Default` fills them in immediately).
+        roots: Option<SourceRootTable>,
+        workspace: Option<SourceRoot>,
     }
 
     impl Default for TestDb {
         fn default() -> Self {
-            Self {
+            let mut db = Self {
                 storage: salsa::Storage::default(),
                 next_file_id: AtomicU32::new(0),
-                project: None,
-            }
+                roots: None,
+                workspace: None,
+            };
+            let workspace = SourceRoot::new(
+                &db,
+                PathBuf::from("."),
+                Name::new(baml_type::RESERVED_USER_PACKAGE),
+                SourceRootKind::Workspace,
+                Vec::new(),
+            );
+            db.roots = Some(SourceRootTable::new(&db, vec![workspace]));
+            db.workspace = Some(workspace);
+            db
         }
     }
 
@@ -5973,15 +6063,25 @@ mod tests {
             Self {
                 storage: self.storage.clone(),
                 next_file_id: AtomicU32::new(self.next_file_id.load(Ordering::SeqCst)),
-                project: self.project,
+                roots: self.roots,
+                workspace: self.workspace,
             }
         }
     }
 
     impl TestDb {
+        /// Add a workspace file (registered on the workspace root).
         fn add_file(&mut self, path: impl Into<PathBuf>, content: &str) -> SourceFile {
             let file_id = FileId::new(self.next_file_id.fetch_add(1, Ordering::SeqCst));
-            SourceFile::new(self, content.to_string(), path.into(), file_id, false)
+            let root = self
+                .workspace
+                .expect("workspace root present from construction");
+            let file =
+                SourceFile::new(self, content.to_string(), path.into(), file_id, false, root);
+            let mut files = root.files(self).clone();
+            files.push(file);
+            root.set_files(self).to(files);
+            file
         }
     }
 
@@ -5989,14 +6089,11 @@ mod tests {
     impl salsa::Database for TestDb {}
 
     #[salsa::db]
-    impl baml_workspace::Db for TestDb {
-        fn project(&self) -> Project {
-            self.project.expect("TestDb not initialized")
+    impl baml_compiler2_hir::Db for TestDb {
+        fn source_roots(&self) -> SourceRootTable {
+            self.roots.expect("root table present from construction")
         }
     }
-
-    #[salsa::db]
-    impl baml_compiler2_hir::Db for TestDb {}
 
     #[salsa::db]
     impl baml_compiler2_ppir::Db for TestDb {}
@@ -6081,7 +6178,6 @@ mod tests {
             "test.baml",
             "function f(required: int, with_default: int = 1, also_required: int) -> int { 1 }",
         );
-        db.project = Some(Project::new(&db, PathBuf::from("."), vec![file]));
 
         let func_loc = baml_compiler2_ppir::item_data::file_functions(&db, file)
             .iter()
@@ -6111,7 +6207,6 @@ mod tests {
     fn interface_def_for(source: &str, name: &str) -> bex_vm_types::types::InterfaceDef {
         let mut db = TestDb::default();
         let file = db.add_file("test.baml", source);
-        db.project = Some(Project::new(&db, PathBuf::from("."), vec![file]));
 
         let iface_loc = baml_compiler2_ppir::item_data::file_interfaces(&db, file)
             .iter()

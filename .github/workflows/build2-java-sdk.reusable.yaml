@@ -19,7 +19,7 @@ name: BAML SDK Release - Build Java
 # toolchain except musl, which builds inside `cross` containers (like
 # build2-bridge-cffi — the container carries the full musl toolchain). `bridge_java` is the JVM
 # analog of `bridge_cffi`: it loads into the user's JVM, so it is built
-# `--profile release-bridge-java` (`panic = "unwind"`) — an engine panic must
+# `--release` (`panic = "unwind"` workspace-wide) — an engine panic must
 # unwind into the bridge's `catch_unwind` -> `BamlPanic` boundary, not SIGABRT
 # the JVM. The built cdylib is packaged into a `natives-<platform>` classifier
 # jar by the `baml_bridge` Gradle project (`nativeJar` task,
@@ -168,7 +168,7 @@ jobs:
         run: |
           set -euo pipefail
           # `bridge_java` is `crate-type = ["cdylib"]`; the cdylib is the release
-          # artifact. `release-bridge-java` = release + panic = "unwind".
+          # artifact (`release` is panic = "unwind" workspace-wide).
           #
           # musl targets default to `+crt-static`, and rustc cannot emit a cdylib
           # under a static CRT — it silently drops the crate type. Disable
@@ -178,7 +178,7 @@ jobs:
           if [[ "$TARGET" == *-musl ]]; then
             export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=-crt-static"
           fi
-          "${CARGO:-cargo}" build -p bridge_java --profile release-bridge-java --target "$TARGET"
+          "${CARGO:-cargo}" build -p bridge_java --release --target "$TARGET"
 
       - name: Package natives-<platform> jar
         working-directory: baml_language/sdks/java/baml_bridge
@@ -198,10 +198,10 @@ jobs:
             *apple*)   libfile="libbridge_java.dylib" ;;
             *)         libfile="libbridge_java.so" ;;
           esac
-          native_lib="../../../target/${BAML_TARGET}/release-bridge-java/${libfile}"
+          native_lib="../../../target/${BAML_TARGET}/release/${libfile}"
           if [[ ! -f "$native_lib" ]]; then
             echo "::error::expected cdylib ${native_lib} not found"
-            ls -la "../../../target/${BAML_TARGET}/release-bridge-java" || true
+            ls -la "../../../target/${BAML_TARGET}/release" || true
             exit 1
           fi
           gradle --no-daemon nativeJar \

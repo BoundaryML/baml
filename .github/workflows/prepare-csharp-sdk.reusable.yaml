@@ -84,10 +84,10 @@ jobs:
               csharp_abi_probe_tests::emit_function_calls_bytecode \
               --lib -- --ignored --exact --nocapture
             cargo run --quiet -p baml_cli -- \
-              generate --from sdk_tests/crates/csharp/primitive_slice
+              generate --from sdk_tests/crates/csharp/basic_calls
           )
           test -s "$BAML_CSHARP_ABI_PROBE_BYTECODE"
-          fixture=baml_language/sdk_tests/crates/csharp/primitive_slice
+          fixture=baml_language/sdk_tests/crates/csharp/basic_calls
           while IFS= read -r source; do
             relative="${source#"$fixture/baml_sdk/"}"
             destination="$generated_output/$relative"

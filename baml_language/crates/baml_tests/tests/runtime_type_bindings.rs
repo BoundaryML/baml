@@ -264,6 +264,7 @@ class ProbeClient {
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
             ai.ModelTurn {
+                calls: [],
                 content: [ai.content.Text { text: self.reply }],
                 stop_reason: ai.content.StopReason.Complete,
                 usage: null,
@@ -331,7 +332,7 @@ async fn agent_run_parses_a_reflected_output_type() {
 
         function DynamicOutput<T>() -> T {{
             client: DefaultClient
-            prompt: `${{ctx.output_format}}`
+            prompt: `${{ctx.output_format()}}`
         }}
 
         function main() -> string throws unknown {{
@@ -343,7 +344,7 @@ async fn agent_run_parses_a_reflected_output_type() {
             // Control: the direct SAP call has always worked.
             let direct = baml.sap.parse<Out>(`{{"name":"Pixel"}}`)
 
-            let run = ai.Agent<Out>.new(
+            let run = ai.Agent.new(
                 client = ProbeClient {{ reply: `{{"name":"Pixel"}}` }},
             ).run(DynamicOutput@spec<Out>())
 
@@ -772,7 +773,7 @@ async fn dispatch_identity_covers_a_runtime_enum_slot() {
 /// A runtime declaration's identity is its tag, never a spelling — so no
 /// internal identity token exists to leak, and every surface that renders a
 /// type name must show the name the source wrote. Pinned here at once:
-/// `to_string`, `to_baml`, the LLM schema `ctx.output_format` builds, and a
+/// `to_string`, `to_baml`, the LLM schema `ctx.output_format()` builds, and a
 /// compiler diagnostic.
 #[tokio::test]
 async fn a_package_declarations_identity_never_reaches_rendered_output() {
@@ -786,7 +787,7 @@ async fn a_package_declarations_identity_never_reaches_rendered_output() {
 
         function Render<T>() -> T {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> string throws unknown {
@@ -1003,7 +1004,7 @@ class Item { value string }
     assert_eq!(output.result, Ok(BexExternalValue::String("yes|no".into())));
 }
 
-/// The LLM schema `ctx.output_format` builds is assembled from a definition
+/// The LLM schema `ctx.output_format()` builds is assembled from a definition
 /// overlay keyed by qualified name, so the same collision showed up there as a
 /// prompt describing the *first* package's fields under the second package's
 /// class. The model was then asked for a shape the caller never declared.
@@ -1019,7 +1020,7 @@ async fn an_output_format_schema_describes_each_packages_own_class() {
 
         function Render<T>() -> T {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> string throws unknown {

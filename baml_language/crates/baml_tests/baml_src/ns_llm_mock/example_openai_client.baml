@@ -8,7 +8,7 @@
 // at it. Construct the client inside the test function instead and hand it to
 // the runner explicitly:
 //
-//   ai.Agent<Out>.new(client = cl).run(Fn@spec(args))        // non-streaming
+//   ai.Agent.new(client = cl).run(Fn@spec(args))        // non-streaming
 //   ai.stream.from_spec<Out$stream, Out>(Fn@spec(args), client = cl)  // streaming
 //
 // which is exactly what a direct `Fn(args)` call desugars to
@@ -36,7 +36,7 @@ function example_openai_non_streaming() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(MockEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(MockEcho@spec("Say pong."));
             let sent = mock.last_request();
             [
                 result.value,

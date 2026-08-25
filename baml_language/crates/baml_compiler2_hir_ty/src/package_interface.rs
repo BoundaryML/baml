@@ -221,16 +221,27 @@ pub struct ResolvedMethod {
     pub class_generic_params: Vec<ParamTy>,
 }
 
+/// Whether an exported function declares a `self` receiver, and is therefore
+/// an instance method rather than a static one.
+///
+/// The receiver is an ordinary first parameter named `self` (there is no
+/// separate receiver slot), so this is the whole test — for the dispatch
+/// shape `resolved_exported_function` records and for the member
+/// enumeration alike.
+pub(crate) fn exported_takes_self(function: &ExportedFunction) -> bool {
+    function
+        .params
+        .first()
+        .and_then(|param| param.name.as_ref())
+        .is_some_and(|name| name.as_str() == "self")
+}
+
 pub(crate) fn resolved_exported_function(
     function: &ExportedFunction,
     owner_generic_params: Vec<ParamTy>,
     owner_generic_param_bounds: Vec<Vec<baml_type::Interface>>,
 ) -> ResolvedFunction {
-    let takes_self = function
-        .params
-        .first()
-        .and_then(|param| param.name.as_ref())
-        .is_some_and(|name| name.as_str() == "self");
+    let takes_self = exported_takes_self(function);
     ResolvedFunction {
         name: function.name.clone(),
         params: function.params.clone(),

@@ -71,6 +71,69 @@ pub struct PackageId<'db> {
     pub name: Name,
 }
 
+/// Files of the roots carrying `package_id`'s name, in table order.
+///
+/// The package-scoped counterpart of [`crate::compiler2_all_files`]: readers
+/// that fold over one package's files (namespace discovery, impl-loc scans)
+/// use this so an edit to another root's file set never invalidates them.
+/// Depends on the table, each root's `package` field, and only the matching
+/// roots' `files`.
+#[salsa::tracked(returns(ref))]
+pub fn package_files<'db>(
+    db: &'db dyn crate::Db,
+    package_id: PackageId<'db>,
+) -> Vec<baml_base::SourceFile> {
+    let name = package_id.name(db);
+    db.source_roots()
+        .roots(db)
+        .iter()
+        .filter(|root| root.package(db) == *name)
+        .flat_map(|root| root.files(db).iter().copied())
+        .collect()
+}
+
+/// The `Workspace`-kind source roots, in table order.
+#[salsa::tracked(returns(ref))]
+pub fn workspace_roots(db: &dyn crate::Db) -> Vec<baml_base::SourceRoot> {
+    db.source_roots()
+        .roots(db)
+        .iter()
+        .copied()
+        .filter(|root| root.kind(db) == baml_base::SourceRootKind::Workspace)
+        .collect()
+}
+
+/// The distinct package names of `Workspace` roots, in table order.
+pub fn workspace_package_names(db: &dyn crate::Db) -> Vec<Name> {
+    let mut names: Vec<Name> = workspace_roots(db)
+        .iter()
+        .map(|root| root.package(db))
+        .collect();
+    names.dedup();
+    names
+}
+
+/// The sole workspace package.
+///
+/// Phase-A stopgap for the single-workspace-root invariant: the compiler is
+/// single-world (impl resolution, `definition_of`, and `Ty`'s `Package::Local`
+/// carry no viewpoint), so a database holds at most one `Workspace` package
+/// until the world-viewpoint rework lands. Callers that today spell the
+/// reserved `"user"` name as a resolution key use this instead, so the Phase-B
+/// sweep has one seam to widen.
+pub fn sole_workspace_package(db: &dyn crate::Db) -> PackageId<'_> {
+    let names = workspace_package_names(db);
+    debug_assert!(
+        names.len() <= 1,
+        "multiple workspace packages in one database requires the world-viewpoint rework"
+    );
+    let name = names
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| Name::new(baml_type::RESERVED_USER_PACKAGE));
+    PackageId::new(db, name)
+}
+
 /// Rare/optional data for `PackageItems`. Heap-allocated only when
 /// at least one conflict or shadow exists.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,10 +227,9 @@ impl<'db> PackageItems<'db> {
 pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) -> PackageItems<'db> {
     let package_name = package_id.name(db);
 
-    // Discover all unique namespace paths for this package.
-    // Use compiler2_all_files() so that compiler2-only builtin stubs (e.g.
-    // Array<T>, Map<K,V>) are visible here without being added to the v1
-    // compiler's project.files() list.
+    // Discover all unique namespace paths for this package from the
+    // package's own files ([`package_files`]), so edits to another root's
+    // file set never invalidate this fold.
     //
     // `IndexSet` (not `HashSet`) so the downstream `namespaces` map is built
     // in a deterministic insertion order. Without this, when two namespaces
@@ -177,11 +239,10 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
     // namespace was inserted last — flipping the choice of bytecode lowering
     // path across runs.
     let mut ns_paths: indexmap::IndexSet<Vec<Name>> = indexmap::IndexSet::new();
-    for file in crate::compiler2_all_files(db) {
-        let pkg_info = crate::file_package::file_package(db, file);
-        if pkg_info.package == *package_name {
-            ns_paths.insert(pkg_info.namespace_path.clone());
-        }
+    for file in package_files(db, package_id) {
+        let pkg_info = crate::file_package::file_package(db, *file);
+        debug_assert_eq!(pkg_info.package, *package_name);
+        ns_paths.insert(pkg_info.namespace_path.clone());
     }
 
     let mut namespaces: FxHashMap<Vec<Name>, NamespaceItems<'db>> = FxHashMap::default();
@@ -257,53 +318,84 @@ mod tests {
         sync::atomic::{AtomicU32, Ordering},
     };
 
-    use baml_base::{FileId, SourceFile};
-    use baml_workspace::{Compiler2ExtraFiles, MountedPackages, Project};
+    use baml_base::{FileId, Name, SourceFile, SourceRoot, SourceRootKind, SourceRootTable};
     use salsa::Setter;
 
     use super::{
         PackageId, is_allowed_builtin_namespace_shadow, is_external_package, is_mounted_package,
         is_precompiled_package, package_items,
     };
-    use crate::Db;
+    use crate::{Db, inputs::MountedPackages};
 
     #[salsa::db]
     struct TestDb {
         storage: salsa::Storage<TestDb>,
         next_file_id: AtomicU32,
-        project: Option<Project>,
-        extra: Option<Compiler2ExtraFiles>,
+        roots: Option<SourceRootTable>,
         mounted: Option<MountedPackages>,
     }
 
     impl Default for TestDb {
         fn default() -> Self {
-            Self {
+            let mut db = Self {
                 storage: salsa::Storage::default(),
                 next_file_id: AtomicU32::new(0),
-                project: None,
-                extra: None,
+                roots: None,
                 mounted: None,
-            }
+            };
+            db.roots = Some(SourceRootTable::new(&db, Vec::new()));
+            db
         }
     }
 
     impl TestDb {
-        fn add_file(&mut self, path: impl Into<PathBuf>, content: &str) -> SourceFile {
+        fn add_root(
+            &mut self,
+            path: impl Into<PathBuf>,
+            package: &str,
+            kind: SourceRootKind,
+        ) -> SourceRoot {
+            let root = SourceRoot::new(self, path.into(), Name::new(package), kind, Vec::new());
+            let table = self.roots.expect("table present from construction");
+            let mut roots = table.roots(self).clone();
+            roots.push(root);
+            table.set_roots(self).to(roots);
+            root
+        }
+
+        fn add_file_in(
+            &mut self,
+            root: SourceRoot,
+            path: impl Into<PathBuf>,
+            content: &str,
+        ) -> SourceFile {
             let file_id = FileId::new(self.next_file_id.fetch_add(1, Ordering::SeqCst));
-            SourceFile::new(self, content.to_string(), path.into(), file_id, false)
+            let file =
+                SourceFile::new(self, content.to_string(), path.into(), file_id, false, root);
+            let mut files = root.files(self).clone();
+            files.push(file);
+            root.set_files(self).to(files);
+            file
         }
 
         fn with_builtins() -> Self {
             let mut db = Self::default();
-            let builtin_files = baml_builtins2::ALL
-                .iter()
-                .map(|builtin| db.add_file(PathBuf::from(builtin.virtual_path()), builtin.contents))
-                .collect::<Vec<_>>();
-            let project = Project::new(&db, PathBuf::from("/test"), Vec::new());
-            project.set_files(&mut db).to(Vec::new());
-            db.project = Some(project);
-            db.extra = Some(Compiler2ExtraFiles::new(&db, builtin_files));
+            let mut roots: std::collections::BTreeMap<&str, SourceRoot> =
+                std::collections::BTreeMap::new();
+            for builtin in baml_builtins2::ALL {
+                let root = *roots.entry(builtin.package).or_insert_with(|| {
+                    db.add_root(
+                        PathBuf::from(format!("<builtin>/{}", builtin.package)),
+                        builtin.package,
+                        SourceRootKind::Stdlib,
+                    )
+                });
+                db.add_file_in(
+                    root,
+                    PathBuf::from(builtin.virtual_path()),
+                    builtin.contents,
+                );
+            }
             db
         }
 
@@ -321,20 +413,13 @@ mod tests {
     impl salsa::Database for TestDb {}
 
     #[salsa::db]
-    impl baml_workspace::Db for TestDb {
-        fn project(&self) -> Project {
-            self.project.expect("test db initialized")
+    impl Db for TestDb {
+        fn source_roots(&self) -> SourceRootTable {
+            self.roots.expect("table present from construction")
         }
 
         fn mounted_packages(&self) -> Option<MountedPackages> {
             self.mounted
-        }
-    }
-
-    #[salsa::db]
-    impl Db for TestDb {
-        fn compiler2_extra_files(&self) -> Option<Compiler2ExtraFiles> {
-            self.extra
         }
     }
 
@@ -419,7 +504,7 @@ pub fn is_reserved_package_name(name: &str) -> bool {
 }
 
 /// The names of every mounted source-less dependency package (BEP-066
-/// mounted-package linking): the keys of the [`baml_workspace::MountedPackages`]
+/// mounted-package linking): the keys of the [`crate::inputs::MountedPackages`]
 /// input, minus any
 /// reserved name ([`is_reserved_package_name`] — a blob may not shadow the
 /// stdlib, `user`, `root`, or `env`). Deterministically ordered (`BTreeMap`
@@ -526,10 +611,16 @@ pub fn package_dependencies<'db>(
         "boundary" => vec![],
         // "baml" depends on "log" so stdlib code can call log.info/debug/etc.
         "baml" => vec![PackageId::new(db, Name::new("log"))],
-        // Reflection is a true root package. It uses the core baml interfaces
-        // and errors, while `reflect.Type` annotations lower directly to the
-        // compiler metatype and therefore do not create a baml -> reflect edge.
-        "reflect" => vec![PackageId::new(db, Name::new("baml"))],
+        // Reflection is a true root package with NO dependencies: it
+        // deliberately references nothing from `baml` (its typed reads throw
+        // `reflect.errors.TypeMismatch`, and `AnyFunction`/`AnyClass` live
+        // here). The one cross-package tie runs the other way — `baml`
+        // implements its `ToString` for `reflect.Type` beside the interface
+        // (conversions.baml), which needs no `baml -> reflect` edge because
+        // `reflect.Type` is the compiler metatype. Keeping both directions
+        // empty keeps the stdlib dependency graph acyclic by construction;
+        // emit's topological package sort asserts that invariant.
+        "reflect" => vec![],
         // The "testing" and "assert" packages depend on "baml" only.
         "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
         // The "ai" package uses BAML primitives and runtime type reflection.
@@ -545,12 +636,13 @@ pub fn package_dependencies<'db>(
             PackageId::new(db, Name::new("ai")),
         ],
         // User packages depend on public builtin packages — plus every mounted
-        // source-less package (BEP-066 mounted-package linking) and every auxiliary source
-        // package installed through `compiler2_extra_files`. The latter makes
-        // the source side of the source-vs-blob contract real: a package such
-        // as `<builtin>/app/…` is the same direct dependency whether its source
-        // or its mounted interface is present. A mounted/auxiliary package
-        // itself keeps the stdlib list only, avoiding dependency cycles.
+        // source-less package (BEP-066 mounted-package linking) and every
+        // source-bearing `Dependency` root. The latter makes the source side
+        // of the source-vs-blob contract real: a package such as
+        // `<builtin>/app/…` is the same direct dependency whether its source
+        // root or its mounted interface is present. A mounted/dependency
+        // package itself keeps the stdlib list only, avoiding dependency
+        // cycles.
         name => {
             let mut deps = vec![
                 PackageId::new(db, Name::new("baml")),
@@ -573,17 +665,31 @@ pub fn package_dependencies<'db>(
                         .map(|mounted_name| PackageId::new(db, mounted_name)),
                 );
             }
-            if name == "user" {
-                let source_packages: std::collections::BTreeSet<Name> =
-                    crate::compiler2_all_files(db)
-                        .into_iter()
-                        .map(|file| crate::file_package::file_package(db, file).package)
-                        .filter(|package| {
-                            package.as_str() != name
-                                && !is_reserved_package_name(package.as_str())
-                                && !is_external_package(db, package)
-                        })
-                        .collect();
+            if workspace_package_names(db)
+                .iter()
+                .any(|w| w.as_str() == name)
+            {
+                // Workspace packages additionally see every source-bearing
+                // dependency root, build-time (`Dependency`) or runtime-loaded
+                // (`Dynamic`). Reads only the table and per-root package/kind
+                // fields — never any file set.
+                let source_packages: std::collections::BTreeSet<Name> = db
+                    .source_roots()
+                    .roots(db)
+                    .iter()
+                    .filter(|root| match root.kind(db) {
+                        baml_base::SourceRootKind::Dependency
+                        | baml_base::SourceRootKind::Dynamic => true,
+                        baml_base::SourceRootKind::Stdlib
+                        | baml_base::SourceRootKind::Workspace => false,
+                    })
+                    .map(|root| root.package(db))
+                    .filter(|package| {
+                        package.as_str() != name
+                            && !is_reserved_package_name(package.as_str())
+                            && !is_external_package(db, package)
+                    })
+                    .collect();
                 deps.extend(
                     source_packages
                         .into_iter()

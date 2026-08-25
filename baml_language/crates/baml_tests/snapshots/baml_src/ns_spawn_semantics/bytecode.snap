@@ -83,7 +83,7 @@ function spawn_semantics.multiple_awaits_on_same_future_return_cached_value_fn()
     return
 }
 
-function spawn_semantics.spawn_child() -> future<int, never> {
+function spawn_semantics.spawn_child() -> baml.future.Future<int, never> {
     make_closure .<lambda(spawn_child, 0)>, 0
     load_const null
     load_const null

@@ -25,6 +25,6 @@ function GenerateMixedImageNarrative(prompt: string) -> (image | string)[] {
     Generate a short narrative with text captions and image outputs for:
     ${prompt}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }

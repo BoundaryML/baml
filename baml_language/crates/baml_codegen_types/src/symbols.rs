@@ -58,6 +58,12 @@ pub struct FunctionArgument {
     pub docstring: Option<String>,
     pub ty: super::Ty,
     pub default: Option<FunctionArgumentDefault>,
+    /// True for compiler-injected parameters (`on_event` on LLM functions and
+    /// their `$stream` companions; the injected `client` never reaches the
+    /// pool). Generators that cannot represent an injected parameter's type
+    /// may omit it — its default fills in at the VM boundary — but must never
+    /// drop a user-declared parameter, whatever its name or shape.
+    pub injected: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

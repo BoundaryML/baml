@@ -42,7 +42,9 @@ pub(crate) mod support {
         body::FunctionBody, contributions::Definition, item_tree::DefaultExprRef, scope::ScopeKind,
     };
     use baml_compiler2_hir_ty::infer::InferenceResult;
-    use baml_project::ProjectDatabase;
+    use baml_db::ProjectDatabase;
+
+    use crate::engine::TestDbExt;
 
     // ── Rendering helpers ────────────────────────────────────────────────────
 
@@ -2354,7 +2356,7 @@ pub(crate) mod support {
 
     pub fn make_db() -> ProjectDatabase {
         let mut db = ProjectDatabase::new();
-        db.set_project_root(std::path::Path::new("."));
+        db.workspace(std::path::Path::new("."));
         db
     }
 }

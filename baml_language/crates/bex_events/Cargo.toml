@@ -19,6 +19,7 @@ workspace = true
 
 [dependencies]
 bex_external_types = { workspace = true }
+bex_prof_store = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_types = { workspace = true }
 base64 = { workspace = true }

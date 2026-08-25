@@ -183,9 +183,9 @@ pub(crate) fn lower_generic_param_interface_bounds<'db>(
             diags,
         );
         match ty {
-            // BEP-062: `baml.AnyFunction` is legal only as a value type; as a
+            // BEP-062: `reflect.AnyFunction` is legal only as a value type; as a
             // bound it is rejected and contributes no constraint.
-            Ty::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
+            Ty::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
                 diags.push(TirTypeError::BuiltinInterfaceNotABound { interface: qtn });
             }
             Ty::Interface(qtn, generics, assoc, _) => {
@@ -422,9 +422,9 @@ pub fn impl_data<'db>(
     // and associated-binding hygiene. (Signature conformance is phase 5.)
     let mut conformance_diags: Vec<(TirTypeError, ImplDiagnosticLocation)> = Vec::new();
     if let Some(iface_qtn) = interface_loc_qtn(db, iface_loc) {
-        // BEP-062 (E0153): `baml.AnyFunction`'s conformance is compiler-derived;
+        // BEP-062 (E0153): `reflect.AnyFunction`'s conformance is compiler-derived;
         // a written impl is rejected outright.
-        if iface_qtn.is_builtin_root_type("AnyFunction") {
+        if iface_qtn.is_reflect_root_type("AnyFunction") {
             conformance_diags.push((
                 TirTypeError::BuiltinInterfaceNotImplementable {
                     interface: iface_qtn.clone(),
@@ -1533,18 +1533,13 @@ pub fn package_impl_locs<'db>(
     pkg_id: PackageId<'db>,
 ) -> Vec<baml_compiler2_hir::loc::ImplLoc<'db>> {
     let mut out = Vec::new();
-    for file in baml_compiler2_hir::compiler2_all_files(db) {
-        let file_pkg = PackageId::new(
-            db,
-            baml_compiler2_hir::file_package::file_package(db, file).package,
-        );
-        if file_pkg != pkg_id {
-            continue;
-        }
+    // Scan only the package's own files (`package_files`), so edits to
+    // another root's file set never invalidate this query.
+    for file in baml_compiler2_hir::package::package_files(db, pkg_id) {
         // `file_impls` yields the blocks in source order, so the resolver's
         // "first full match" is reproducible.
         out.extend(
-            baml_compiler2_ppir::item_data::file_impls(db, file)
+            baml_compiler2_ppir::item_data::file_impls(db, *file)
                 .iter()
                 .copied(),
         );
@@ -1727,7 +1722,7 @@ pub fn implements_interface(
     // The blanket stdlib impl supplies AnyClass's default-method dispatch, but
     // membership is compiler-derived and narrower. Reuse the normalizer's
     // class-only rule so `requires AnyClass` cannot observe the blanket.
-    if interface.name.is_builtin_root_type("AnyClass") {
+    if interface.name.is_reflect_root_type("AnyClass") {
         return is_subtype(concrete, &interface.to_ty());
     }
 

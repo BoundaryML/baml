@@ -24,7 +24,7 @@ pub use ast::*;
 /// Re-exported from [`baml_base::escape::unescape_string_literal`] so existing
 /// callers don't need to change their import path.
 pub use baml_base::escape::unescape_string_literal;
-pub use disambiguate::is_field_attr;
+pub use disambiguate::{FIELD_ATTR_NAMES, is_field_attr};
 pub use docstring::extract_docstring;
 pub use lower_cst::{
     lower_file, lower_file_with_path, lower_file_with_path_and_test_owner,
@@ -489,7 +489,7 @@ mod tests {
         let source = r##"
 function Extract(client: string, text: string) -> string {
   client: "openai/gpt-4o"
-  prompt: `${text} ${ctx.output_format}`
+  prompt: `${text} ${ctx.output_format()}`
 }
 "##;
 
@@ -497,7 +497,7 @@ function Extract(client: string, text: string) -> string {
         assert!(
             diags.iter().any(|diag| matches!(
                 diag,
-                crate::LoweringDiagnostic::ReservedLlmClientParam {
+                crate::LoweringDiagnostic::ReservedLlmParam {
                     function_name,
                     param_name,
                     ..
@@ -514,13 +514,18 @@ function Extract(client: string, text: string) -> string {
             })
             .expect("expected Extract function");
         let param_names: Vec<&str> = function.params.iter().map(|p| p.name.as_str()).collect();
-        assert_eq!(param_names, vec!["text", "client"]);
-        let default_id = function.params[1].default.expect("expected client default");
-        let default_expr = &function.defaults.exprs.exprs[default_id.expr()];
-        assert!(
-            matches!(default_expr, Expr::Null),
-            "the injected ai.Client? override defaults to null, got {default_expr:#?}"
-        );
+        assert_eq!(param_names, vec!["text", "client", "on_event"]);
+        for injected in [&function.params[1], &function.params[2]] {
+            let default_id = injected
+                .default
+                .unwrap_or_else(|| panic!("expected {} default", injected.name.as_str()));
+            let default_expr = &function.defaults.exprs.exprs[default_id.expr()];
+            assert!(
+                matches!(default_expr, Expr::Null),
+                "the injected {} override defaults to null, got {default_expr:#?}",
+                injected.name.as_str()
+            );
+        }
     }
 
     #[test]

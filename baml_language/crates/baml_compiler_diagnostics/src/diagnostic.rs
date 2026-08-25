@@ -315,7 +315,7 @@ pub enum DiagnosticId {
     /// Two or more fields of a class serialize to the same JSON key — either two
     /// fields share an `@alias`, or one field's name equals another field's
     /// `@alias`. Such a schema is unsatisfiable: an aliased field's real name is
-    /// never matched, so `ctx.output_format` renders duplicate keys and a
+    /// never matched, so `ctx.output_format()` renders duplicate keys and a
     /// required shadowed field can never be parsed (Linear B-615).
     DuplicateFieldAlias,
 
@@ -328,11 +328,11 @@ pub enum DiagnosticId {
 
     // Builtin interfaces (BEP-062, E0153/E0154)
     /// An `implements` block targets a compiler-builtin interface
-    /// (`baml.AnyFunction`), whose conformance is derived by the compiler
+    /// (`reflect.AnyFunction`), whose conformance is derived by the compiler
     /// (every function type implements it) and cannot be written by hand.
     BuiltinInterfaceNotImplementable,
     /// A generic parameter's bound (`T extends X`) names a compiler-builtin
-    /// interface (`baml.AnyFunction`) that is only legal as a value type
+    /// interface (`reflect.AnyFunction`) that is only legal as a value type
     /// (an existential), never as a bound.
     BuiltinInterfaceNotABound,
 
@@ -355,6 +355,8 @@ pub enum DiagnosticId {
     /// Empty enums are legal declarations/constructions, but have no output
     /// representation and therefore fail at render time (BEP-066 R-4).
     EmptyEnumAtRender,
+    /// An interface method (required or default) omits its `throws` clause.
+    InterfaceMethodMissingThrows,
 
     /// A runtime reflection union constructor received no members. Static
     /// source cannot spell this defect, so BEP-066 reserves a surface code.
@@ -392,6 +394,8 @@ pub enum DiagnosticId {
     /// declared interface bound, or any at all for a callable with nothing
     /// left to bind.
     ReflectSpecializationFailed,
+    /// An ordinary inference variable remained unresolved at writeback (E0155).
+    TypeMustBeKnown,
 }
 
 impl DiagnosticId {
@@ -601,6 +605,8 @@ impl DiagnosticId {
             // E0167 is owned by the always-constant-condition lint in #4498.
             DiagnosticId::RuntimeTypeMustBeNamed => "E0168",
             DiagnosticId::ReflectSpecializationFailed => "E0169",
+            DiagnosticId::InterfaceMethodMissingThrows => "E0170",
+            DiagnosticId::TypeMustBeKnown => "E0155",
         }
     }
 }

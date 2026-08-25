@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.Client | null) -> #0 {
+function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> #0 {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -10,24 +10,29 @@ function fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.
     store_var client
 
   L0:
-    load_type #0
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _5
+    store_var _7
     load_type #0
     load_var input
     call user.fixtures.anyfunction_reflect.RuntimeClassify$spec
-    store_var _7
+    store_var _9
+    load_type #0
     load_var2 4 5
-    load_type ai.Runner<#0, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<#0>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -64,10 +69,7 @@ function fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: strin
     call user.fixtures.anyfunction_reflect.RuntimeClassify$spec
     store_var _2
     load_type #0
-    call ai.wire.render_output_format
-    store_var _4
-    load_type #0
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -98,7 +100,7 @@ function fixtures.anyfunction_reflect.RuntimeClassify$spec(input: string) -> ai.
     return
 }
 
-function fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<#0 | null, #0> {
+function fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<#0 | null, #0> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -107,13 +109,22 @@ function fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, clie
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     load_type #0
     load_var input
     call user.fixtures.anyfunction_reflect.RuntimeClassify$spec
-    store_var _4
+    store_var _6
     load_type #0 | null
     load_type #0
-    load_var2 3 2
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }
@@ -130,13 +141,13 @@ function fixtures.anyfunction_reflect.current_time() -> string {
     return
 }
 
-function fixtures.anyfunction_reflect.heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns = fixtures.anyfunction_reflect.Doc[] | string, Throws = fixtures.anyfunction_reflect.ToolError>> {
+function fixtures.anyfunction_reflect.heterogeneous_tool_map() -> map<string, reflect.AnyFunction<Returns = fixtures.anyfunction_reflect.Doc[] | string, Throws = fixtures.anyfunction_reflect.ToolError>> {
     load_const user.fixtures.anyfunction_reflect.web_search
     load_const user.fixtures.anyfunction_reflect.current_time
     load_const "search"
     load_const "now"
     load_type string
-    load_type baml.AnyFunction<Returns = string | fixtures.anyfunction_reflect.Doc[], Throws = fixtures.anyfunction_reflect.ToolError>
+    load_type reflect.AnyFunction<Returns = string | fixtures.anyfunction_reflect.Doc[], Throws = fixtures.anyfunction_reflect.ToolError>
     alloc_map 2
     return
 }
@@ -171,17 +182,17 @@ function fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> s
     return
 }
 
-function fixtures.anyfunction_reflect.signature_access(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> string {
+function fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Returns = unknown, Throws = unknown>) -> string {
     load_var f
     call reflect.signature
     store_var sig
     load_var sig
     load_field .returns
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _5
     load_var sig
     load_field .errors
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _7
     load_var sig
     load_field .args
@@ -223,7 +234,7 @@ function fixtures.anyfunction_reflect.signature_access(f: baml.AnyFunction<Retur
     store_var _19
     load_var arg
     load_field .type
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _22
     load_var2 11 12
     bin_op +
@@ -272,7 +283,7 @@ function fixtures.anyfunction_reflect.signature_access(f: baml.AnyFunction<Retur
     store_var _41
     load_var opt
     load_field .1
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _44
     load_var2 17 18
     bin_op +
@@ -288,7 +299,7 @@ function fixtures.anyfunction_reflect.typed_dispatch(name: string, args: map<str
     call user.fixtures.anyfunction_reflect.heterogeneous_tool_map
     store_var tools
     load_type string
-    load_type baml.AnyFunction<Returns = string | fixtures.anyfunction_reflect.Doc[], Throws = fixtures.anyfunction_reflect.ToolError>
+    load_type reflect.AnyFunction<Returns = string | fixtures.anyfunction_reflect.Doc[], Throws = fixtures.anyfunction_reflect.ToolError>
     load_var2 3 1
     call baml.Map.get
     store_var f

@@ -23,16 +23,16 @@ function current_time() -> string throws never {
 }
 
 function bare_and_pinned() -> int throws never {
-    let f: baml.AnyFunction = web_search
-    let g: baml.AnyFunction<Returns = Doc[] | string, Throws = ToolError> = web_search
+    let f: reflect.AnyFunction = web_search
+    let g: reflect.AnyFunction<Returns = Doc[] | string, Throws = ToolError> = web_search
     // Covariant pins: a narrower existential fits a wider one, and every
     // existential fits the bare (unknown-pinned) form.
-    let widened: baml.AnyFunction<Returns = Doc[] | string | int, Throws = ToolError> = g
-    let bare: baml.AnyFunction = g
+    let widened: reflect.AnyFunction<Returns = Doc[] | string | int, Throws = ToolError> = g
+    let bare: reflect.AnyFunction = g
     return 0
 }
 
-function heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns = Doc[] | string, Throws = ToolError>> throws never {
+function heterogeneous_tool_map() -> map<string, reflect.AnyFunction<Returns = Doc[] | string, Throws = ToolError>> throws never {
     // Each function coerces independently: Doc[] and string both fit the
     // Returns pin; never and ToolError both fit the Throws pin.
     return {
@@ -41,7 +41,7 @@ function heterogeneous_tool_map() -> map<string, baml.AnyFunction<Returns = Doc[
     }
 }
 
-function signature_access(f: baml.AnyFunction) -> string throws never {
+function signature_access(f: reflect.AnyFunction) -> string throws never {
     let sig = reflect.signature(f)
     // The error channel field is `errors` (no keyword-named fields),
     // and `type` is an ordinary member name on `reflect.Arg`.
@@ -84,7 +84,7 @@ client RuntimeEnumClient = openai.ResponsesClient.new(
 
 function RuntimeClassify<T>(input: string) -> T {
     client: RuntimeEnumClient
-    prompt: `Choose a category for ${input}.\n${ctx.output_format}`
+    prompt: `Choose a category for ${input}.\n${ctx.output_format()}`
 }
 
 function runtime_enum_llm_companions_compile() -> string {

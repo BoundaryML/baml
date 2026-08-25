@@ -8,7 +8,8 @@ use baml_compiler2_hir_ty::{
         ExportedType, ResolvedValue, package_interface, package_resolution_context,
     },
 };
-use baml_project::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
+use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
+use baml_tests::engine::TestDbExt;
 
 const LIBRARY: &str = r#"
 interface Parent {
@@ -83,8 +84,9 @@ function inspect(
 
 fn library_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("/hir-ty-package-interface-library"));
-    db.add_compiler2_virtual_file("<builtin>/app/lib.baml", LIBRARY);
+    db.workspace(std::path::Path::new("/hir-ty-package-interface-library"));
+    db.dependency("app");
+    db.file("<builtin>/app/lib.baml", LIBRARY);
     db
 }
 
@@ -163,9 +165,9 @@ fn enriched_interface_is_symbolic_loc_free_and_borsh_stable() {
 #[test]
 fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("/hir-ty-package-interface-consumer"));
+    db.workspace(std::path::Path::new("/hir-ty-package-interface-consumer"));
     db.set_mounted_packages([("app".to_owned(), library_blob())].into());
-    db.add_file("main.baml", "function main() -> int throws never { 0 }");
+    db.file("main.baml", "function main() -> int throws never { 0 }");
     let context = package_resolution_context(&db, PackageId::new(&db, Name::new("user")));
 
     let (_, ty) = context
@@ -237,10 +239,10 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
 
 fn error_messages(source: &str) -> Vec<String> {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("/hir-ty-package-interface-errors"));
+    db.workspace(std::path::Path::new("/hir-ty-package-interface-errors"));
     db.set_mounted_packages([("app".to_owned(), library_blob())].into());
-    db.add_file("ns_reflect/local.baml", "class Type<T> { value T }");
-    db.add_file("main.baml", source);
+    db.file("ns_reflect/local.baml", "class Type<T> { value T }");
+    db.file("main.baml", source);
     collect_diagnostics(&db)
         .iter()
         .filter(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
@@ -332,14 +334,15 @@ function bad(
 #[test]
 fn reflect_resolves_as_an_ordinary_builtin_package() {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new(
+    db.workspace(std::path::Path::new(
         "/hir-ty-reflect-shorthand-package-access",
     ));
-    let boundary_file = db.add_compiler2_virtual_file(
+    // `boundary` is a stdlib package: the file joins its `Stdlib` root.
+    let boundary_file = db.file(
         "<builtin>/boundary/reflect_probe.baml",
         "type ForbiddenReflect = reflect.Signature\n",
     );
-    let user_file = db.add_file(
+    let user_file = db.file(
         "allowed_reflect.baml",
         "type AllowedReflect = reflect.Signature\n",
     );
@@ -368,14 +371,15 @@ fn reflect_resolves_as_an_ordinary_builtin_package() {
 #[test]
 fn reflect_package_resolution_uses_ordinary_builtin_items() {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new(
+    db.workspace(std::path::Path::new(
         "/hir-ty-reflect-package-export-surface",
     ));
-    db.add_compiler2_virtual_file(
+    // Joins the stdlib `reflect` root: reflect is its own root package.
+    db.file(
         "<builtin>/reflect/raw_only.baml",
         "interface RawOnly {}\nclient raw_only = openai.ResponsesClient.new(model = \"gpt-4\");\n",
     );
-    db.add_file(
+    db.file(
         "main.baml",
         r#"
 type ExportedShorthandType = reflect.RawOnly
@@ -442,13 +446,13 @@ fn mounted_witnesses_members_defaults_and_symbolic_calls_type_check_source_less(
     assert!(errors.is_empty(), "{errors:#?}");
 
     let mut mounted = ProjectDatabase::new();
-    mounted.set_project_root(std::path::Path::new(
+    mounted.workspace(std::path::Path::new(
         "/hir-ty-package-interface-parity-mounted",
     ));
     mounted.set_mounted_packages([("app".to_owned(), library_blob())].into());
-    mounted.add_file("main.baml", WITNESS_CONSUMER);
+    mounted.file("main.baml", WITNESS_CONSUMER);
     let mut local = library_db();
-    local.add_file("main.baml", WITNESS_CONSUMER);
+    local.file("main.baml", WITNESS_CONSUMER);
     assert_no_diagnostic_errors(&mounted);
     assert_no_diagnostic_errors(&local);
 
@@ -504,8 +508,9 @@ fn mounted_witnesses_members_defaults_and_symbolic_calls_type_check_source_less(
 #[test]
 fn mounted_reserved_builtin_reports_normal_and_optional_calls() {
     let mut library = ProjectDatabase::new();
-    library.set_project_root(std::path::Path::new("/hir-ty-package-interface-native"));
-    library.add_compiler2_virtual_file(
+    library.workspace(std::path::Path::new("/hir-ty-package-interface-native"));
+    library.dependency("native");
+    library.file(
         "<builtin>/native/native.baml",
         r#"
 function value() -> int throws never {
@@ -521,11 +526,11 @@ function value() -> int throws never {
     .expect("native package interface serializes");
 
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new(
+    db.workspace(std::path::Path::new(
         "/hir-ty-package-interface-native-consumer",
     ));
     db.set_mounted_packages([("native".to_owned(), blob)].into());
-    db.add_file(
+    db.file(
         "main.baml",
         r#"
 function direct() -> int throws never {

@@ -920,8 +920,14 @@ impl<N: Clone> Ty<N> {
             Ty::Resource { .. } => "ai.Resource".to_string(),
             Ty::PromptAst { .. } => "ai.Prompt".to_string(),
             Ty::Error { .. } => "!error".to_string(),
+            // Like the opaque leaves above: the WRITABLE spelling. Bare
+            // `Future` resolves nowhere — the class lives in `baml.future`.
             Ty::Future(value, error, _) => {
-                format!("Future<{}, {}>", value.render_with(s), error.render_with(s))
+                format!(
+                    "baml.future.Future<{}, {}>",
+                    value.render_with(s),
+                    error.render_with(s)
+                )
             }
         }
     }
@@ -1111,7 +1117,11 @@ impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
             }
             Ty::Void { .. } => write!(f, "void"),
             Ty::BuiltinUnknown { .. } => write!(f, "unknown"),
-            Ty::Future(value, error, _) => write!(f, "future<{value}, {error}>"),
+            Ty::Future(value, error, _) => {
+                // The writable spelling — lowercase `future<…>` resolves
+                // nowhere, and a diagnostic must not teach it.
+                write!(f, "baml.future.Future<{value}, {error}>")
+            }
             Ty::TypeVar(name, _) => write!(f, "{name}"),
             Ty::AssociatedTypeProjection {
                 base,

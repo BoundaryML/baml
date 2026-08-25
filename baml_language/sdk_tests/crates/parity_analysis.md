@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 683. IDs with complete required parity: 38. Required gaps: 4457.
+Distinct exact test IDs: 684. IDs with complete required parity: 39. Required gaps: 4457.
 
-Baseline ratchet: UNCHANGED. Required gaps: 4457 (baseline: 4457). Present declarations: 2068 (baseline: 2068). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: UNCHANGED. Required gaps: 4457 (baseline: 4457). Present declarations: 2069 (baseline: 2069). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -381,20 +381,21 @@ Parity is the share of the 303 test IDs declared in `python_pydantic2` that are 
 | integration/baml_closure_decodes_multiple_args_and_structured_return_values | - | - | - | - | - | y | - | - | - | - | csharp | C# canonical coverage executes through its native integration harness |
 | integration/baml_closure_is_a_native_callable_with_host_language_arguments | - | - | - | - | - | y | - | - | - | - | csharp | C# canonical coverage executes through its native integration harness |
 | integration/baml_closure_is_reusable_and_retains_mutable_captures | - | - | - | - | - | y | - | - | - | - | csharp | C# canonical coverage executes through its native integration harness |
+| integration/basic_calls_executes_sync_and_async | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
+| integration/cancel_token_any_propagates_native_cancellation | - | - | - | - | - | y | - | - | - | - | csharp | isolates the flaky native cancellation propagation check |
 | integration/canonical_documentation_consumer_compiles_and_executes | - | - | - | - | - | y | - | - | - | - | csharp | validates the C#-specific documentation consumer |
 | integration/checked_in_union_runtime_source_matches_generator | - | - | - | - | - | y | - | - | - | - | csharp | validates C#-specific generated union runtime source |
+| integration/dynamic_values_executes_native_dynamic_value_parity | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
+| integration/failures_and_cancellation_executes_typed_failures_cancellation_and_exit | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/generated_baml_clients_are_not_tracked | - | - | - | - | - | y | - | - | - | - | csharp | validates C#-specific generated-client repository hygiene |
-| integration/phase10_executes_generated_native_stream_and_request_failure | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
-| integration/phase12_executes_native_typed_resource_apis_lifetimes_and_state | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
-| integration/phase13_executes_native_primitive_and_nullable_edges | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
-| integration/phase14_executes_native_stdlib_structural_roundtrips | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
-| integration/phase15_executes_native_dynamic_value_parity | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
-| integration/phase5_slice_executes_nominals_collections_defaults_and_unions | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
-| integration/phase6_generated_surface_rejects_ambiguous_generic_calls | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific generated-surface compile coverage |
-| integration/phase6_slice_executes_inferred_and_explicit_generics | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
-| integration/phase7_executes_typed_failures_cancellation_and_exit | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
-| integration/phase9_executes_media_in_both_directions | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
-| integration/primitive_slice_executes_sync_and_async | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
+| integration/generics_executes_inferred_and_explicit_generics | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
+| integration/generics_generated_surface_rejects_ambiguous_generic_calls | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific generated-surface compile coverage |
+| integration/media_executes_media_in_both_directions | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
+| integration/primitive_edges_executes_native_primitive_and_nullable_edges | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
+| integration/stdlib_resources_executes_native_typed_resource_apis_lifetimes_and_state | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
+| integration/stdlib_structurals_executes_native_stdlib_structural_roundtrips | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
+| integration/streaming_executes_generated_native_stream_and_request_failure | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
+| integration/type_roundtrips_executes_nominals_collections_defaults_and_unions | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | llm_functions/main_baml_sdk_lorem_and_baml_sdk_ipsum_are_reachable | - | y | y | y | - | - | - | - | - | - | all |  |
 | llm_functions/main_classify_sentiment_factory_bindings | y | - | - | - | - | - | y | - | y | - | all |  |
 | llm_functions/main_extract_resume_companion_bindings | y | - | - | - | - | - | y | - | y | - | all |  |

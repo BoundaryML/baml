@@ -1131,7 +1131,6 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     for unit in units {
         program.test_cases.extend(unit.test_cases.iter().cloned());
     }
-
     Ok(program)
 }
 

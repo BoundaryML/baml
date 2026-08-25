@@ -470,7 +470,6 @@ impl TriviaSliceExt for [EmittableTrivia] {
 #[cfg(test)]
 mod tests {
     use baml_db::{baml_compiler_lexer, baml_compiler_parser, baml_compiler_syntax::SyntaxNode};
-    use baml_project::ProjectDatabase;
 
     use super::*;
 
@@ -492,8 +491,7 @@ function MyFunction() -> int {
 // comment before eof
 
 ";
-        let mut db = ProjectDatabase::new();
-        let source_file = db.add_file("file.baml", source);
+        let (db, source_file) = crate::single_file_db("file.baml", source);
         let tokens = baml_compiler_lexer::lex_file(&db, source_file);
         let (parsed, errors) = baml_compiler_parser::parse_file(&tokens);
         assert!(errors.is_empty());

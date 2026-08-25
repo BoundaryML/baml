@@ -10191,7 +10191,7 @@ function Foo() -> {
             "function F(raw: string) -> string {\n  client: Fast\n  prompt: `hi ${raw}`\n}\n",
             "function F(raw: string) -> string {\n  client: Fast\n  prompt: #\"hi\"#\n}\n",
             // prompt first, and a prompt mentioning `client` / braces
-            "function F(raw: string) -> string {\n  prompt: `client {x} ${raw} ${ctx.output_format}`\n  client: Fast\n}\n",
+            "function F(raw: string) -> string {\n  prompt: `client {x} ${raw} ${ctx.output_format()}`\n  client: Fast\n}\n",
         ];
         for source in sources {
             let (root, errors) = parse_source(source);

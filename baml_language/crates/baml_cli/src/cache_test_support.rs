@@ -10,8 +10,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use baml_db::{SourceFile, baml_compiler2_emit::CompileOptions};
-use baml_project::ProjectDatabase;
+use baml_db::{ProjectDatabase, SourceFile, baml_compiler2_emit::CompileOptions};
 
 use crate::{
     bytecode_cache::{CacheContext, compile_program},
@@ -37,10 +36,10 @@ pub(crate) fn opts() -> CompileOptions {
 /// A unique on-disk project root named `<prefix>-<pid>-<n>`, anchored beneath
 /// the *canonical* temp base so it is already in the OS's resolved form (macOS
 /// resolves the `/var` -> `/private/var` symlink; Windows adds the `\\?\`
-/// verbatim prefix). `ProjectDatabase` canonicalizes both the project root and
+/// verbatim prefix). `ProjectDatabase` canonicalizes both the workspace root and
 /// every source path, but only when they exist on disk: db1 is built before the
 /// cache dir exists (root canonicalize is a no-op fallback), then
-/// `store_with_manifest` materializes the root, so db2's `set_project_root`
+/// `store_with_manifest` materializes the root, so db2's `add_source_root`
 /// *does* canonicalize it — while the in-memory `.baml` files never exist to
 /// canonicalize. If the base held an unresolved symlink, the root would then
 /// gain a resolved prefix the file paths lack, `strip_prefix` would fail, every

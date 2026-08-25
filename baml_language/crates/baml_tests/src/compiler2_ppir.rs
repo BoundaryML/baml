@@ -4,14 +4,16 @@
 mod tests {
     use baml_base::Name;
     use baml_compiler2_hir::package::PackageId;
-    use baml_project::ProjectDatabase;
+    use baml_db::ProjectDatabase;
+
+    use crate::engine::TestDbExt;
 
     fn namespace_iteration_order(files: &[&str]) -> Vec<Vec<String>> {
         let mut db = ProjectDatabase::new();
-        db.set_project_root(std::path::Path::new("."));
+        db.workspace(std::path::Path::new("."));
 
         for (index, namespace) in files.iter().enumerate() {
-            db.add_file(
+            db.file(
                 format!("ns_{namespace}/marker_{index}.baml"),
                 &format!("class Marker{index} {{}}"),
             );
@@ -57,8 +59,8 @@ mod tests {
         use baml_compiler2_hir::body::{BodyOwnerId, FunctionBody, OwnerBody};
 
         let mut db = ProjectDatabase::new();
-        db.set_project_root(std::path::Path::new("."));
-        let file = db.add_file(
+        db.workspace(std::path::Path::new("."));
+        let file = db.file(
             "test.baml",
             "function f() -> int { 1 }\n\nfunction g() -> int { f() }\n",
         );

@@ -958,40 +958,18 @@ impl ClientField {
     /// For `client: GPT4`, returns "GPT4".
     /// For `client: "openai/gpt-4o"`, returns "openai/gpt-4o".
     /// For `client: openai/gpt-4o` (unquoted shorthand), returns
-    /// "openai/gpt-4o" — the parser consumes the whole shorthand as value
-    /// tokens, and truncating to the first WORD would silently resolve the
-    /// provider prefix alone.
+    /// "openai/gpt-4o"; the parser consumes the whole shorthand as value
+    /// expression, and truncating to the first WORD would silently resolve
+    /// the provider prefix alone.
     pub fn value(&self) -> Option<String> {
-        // Try token form first: concatenate every non-trivia value token after
-        // the `client` keyword and the leading colon. Only the FIRST
-        // colon is field syntax — later ones belong to the value (model ids
-        // like `ollama/llama3:8b`). A single WORD yields the plain identifier;
-        // a multi-token run reproduces the unquoted shorthand (its source has
-        // no interior whitespace).
-        let mut value = String::new();
-        let mut leading_colon_eaten = false;
-        for token in self
-            .syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|t| !t.kind().is_trivia() && t.kind() != SyntaxKind::KW_CLIENT)
-        {
-            if token.kind() == SyntaxKind::COLON && value.is_empty() && !leading_colon_eaten {
-                leading_colon_eaten = true;
-                continue;
-            }
-            value.push_str(token.text());
+        match self.value_element()? {
+            rowan::NodeOrToken::Token(token) => Some(token.text().to_owned()),
+            rowan::NodeOrToken::Node(node) => match node.kind() {
+                SyntaxKind::STRING_LITERAL => StringLiteral::cast(node).map(|value| value.value()),
+                SyntaxKind::PATH_EXPR | SyntaxKind::BINARY_EXPR => Some(node.text().to_string()),
+                _ => None,
+            },
         }
-        if !value.is_empty() {
-            return Some(value);
-        }
-
-        // Otherwise, try to get it as a string literal
-        if let Some(string_node) = self.syntax.children().find_map(StringLiteral::cast) {
-            return Some(string_node.value());
-        }
-
-        None
     }
 
     /// The client value as a node-or-token element: a `STRING_LITERAL` node

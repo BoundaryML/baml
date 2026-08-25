@@ -18,8 +18,10 @@
 //! signature. False "signature changed" verdicts only cost a wider
 //! recompile, never correctness.
 
-use baml_db::{SourceFile, baml_compiler_parser::syntax_tree, baml_compiler_syntax::SyntaxKind};
-use baml_project::ProjectDatabase;
+use baml_db::{
+    ProjectDatabase, SourceFile, baml_compiler_parser::syntax_tree,
+    baml_compiler_syntax::SyntaxKind,
+};
 use sha2::{Digest, Sha256};
 
 fn function_body_ranges(tree: &baml_db::baml_compiler_syntax::SyntaxNode) -> Vec<(usize, usize)> {
@@ -186,19 +188,21 @@ mod tests {
 
     use super::*;
 
+    /// A database holding `source` as its sole workspace file.
+    fn single_file_db(source: &str) -> (ProjectDatabase, SourceFile) {
+        let (mut db, workspace) = crate::project_load::workspace_db(Path::new("/test-project"));
+        let file =
+            db.add_or_update_file_in(workspace, Path::new("/test-project/main.baml"), source);
+        (db, file)
+    }
+
     fn hash_of(source: &str) -> [u8; 32] {
-        let mut db = ProjectDatabase::new();
-        db.set_project_root(Path::new("/test-project"));
-        db.add_or_update_file(Path::new("/test-project/main.baml"), source);
-        let file = db.get_source_files()[0];
+        let (db, file) = single_file_db(source);
         file_signature_hash(&db, file)
     }
 
     fn layout_of(source: &str) -> [u8; 32] {
-        let mut db = ProjectDatabase::new();
-        db.set_project_root(Path::new("/test-project"));
-        db.add_or_update_file(Path::new("/test-project/main.baml"), source);
-        let file = db.get_source_files()[0];
+        let (db, file) = single_file_db(source);
         file_layout_hash(&db, file)
     }
 

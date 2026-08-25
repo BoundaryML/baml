@@ -1,0 +1,26 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+interface Named  interfaces.baml:3-18
+
+/// A thing with a name.
+interface Named {
+    type Output;
+    name: string,
+    /// The display label.
+    function label(self) -> string throws never
+    /// Greets by label.
+    ///
+    /// Meant for demos.
+    function greet(self) -> string throws never {
+        let base = self.label();
+        base
+    }
+}
+
+implementations (2):
+  implement Named for Person  interfaces.baml:22
+  implement Named for Robot  interfaces.baml:34
+
+references (0):

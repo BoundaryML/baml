@@ -568,6 +568,10 @@ fn outcome_fields_from_replay(
         RunStatus::Succeeded => (
             Some(RunResult {
                 value_ref: completed.result_value_ref,
+                // The durable record does not carry the inline bytes; a
+                // replayed run's value comes from the value store via its
+                // `value_ref`.
+                value: None,
                 renderer_hint: completed.renderer_hint,
                 supporting_payload_ids: Vec::new(),
             }),
@@ -866,6 +870,7 @@ mod tests {
                 boundary_id,
                 &RunOutcome::Succeeded(RunResult {
                     value_ref: None,
+                    value: None,
                     renderer_hint: None,
                     supporting_payload_ids: Vec::new(),
                 }),
@@ -956,6 +961,7 @@ mod tests {
                 boundary_id,
                 &RunOutcome::Succeeded(RunResult {
                     value_ref: None,
+                    value: None,
                     renderer_hint: None,
                     supporting_payload_ids: Vec::new(),
                 }),
@@ -1022,6 +1028,7 @@ mod tests {
             boundary_id,
             &RunOutcome::Succeeded(RunResult {
                 value_ref: None,
+                value: None,
                 renderer_hint: None,
                 supporting_payload_ids: Vec::new(),
             }),

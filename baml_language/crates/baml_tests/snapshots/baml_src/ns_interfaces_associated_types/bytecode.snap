@@ -135,6 +135,13 @@ function interfaces_associated_types.$init_test_ns_interfaces_associated_types_i
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.interfaces_associated_types"
+    load_const "self_referential_associated_bound_compiles_and_runs"
+    make_closure .<lambda($init_test_ns_interfaces_associated_types_interfaces_associated_types, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }
@@ -301,6 +308,12 @@ function interfaces_associated_types.RmfIntSource.RmfSource.get(self: interfaces
 function interfaces_associated_types.RmfStringSource.RmfSource.get(self: interfaces_associated_types.RmfStringSource) -> string {
     load_var self
     load_field .value
+    return
+}
+
+function interfaces_associated_types.SrabLeaf.SrabNode.srab_tag(self: interfaces_associated_types.SrabLeaf) -> string {
+    load_var self
+    load_field .label
     return
 }
 
@@ -900,6 +913,17 @@ function interfaces_associated_types.rpa_main() -> int {
 
   L1:
     load_var score
+    return
+}
+
+function interfaces_associated_types.srab_main() -> string {
+    load_const "leaf"
+    init_instance user.interfaces_associated_types.SrabLeaf .label
+    load_type interfaces_associated_types.SrabNode<Peer = interfaces_associated_types.SrabLeaf>
+    load_const "srab_tag"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 

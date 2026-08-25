@@ -53,6 +53,33 @@ function redact_url_secrets(text: string) -> string {
     root.internal._redact_after(tokens, "secret=")
 }
 
+/// Replace credential-bearing request headers with "REDACTED" before a
+/// request snapshot rides an `ai.events.LLMCall`. Unlike previews, the
+/// request `invoke` actually sends DOES carry auth headers (`x-api-key`,
+/// `authorization`, Azure's `api-key`, ...), so captured requests must be
+/// scrubbed. Matching is case-insensitive; values are replaced, names kept.
+function redact_request_headers(headers: map<string, string>) -> map<string, string> {
+    let out: map<string, string> = {};
+    for (let name in headers.keys()) {
+        let lower = name.to_lower_case();
+        let sensitive = lower == "authorization"
+            || lower == "proxy-authorization"
+            || lower == "x-api-key"
+            || lower == "api-key"
+            || lower == "x-goog-api-key"
+            || lower == "x-amz-security-token"
+            || lower == "cookie";
+        if (sensitive) {
+            let _ = out.set(name, "REDACTED");
+        } else {
+            if let value: string = headers.get(name) {
+                let _ = out.set(name, value);
+            }
+        }
+    }
+    out
+}
+
 /// The environment variables a credential chain consulted, as a readable list,
 /// for the "no credential configured" error a client raises when the whole
 /// chain came back empty.
@@ -92,7 +119,7 @@ function send_as<T>(
     let resp = baml.http.send(req, timeout = timeout) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw root.errors.NetworkFailure {
+            throw root.errors.NetworkFailure { status_code: null,
             provider: provider,
             // redacted: the rendered transport error can embed the request URL,
             // and some providers authenticate through a query parameter.
@@ -104,7 +131,7 @@ function send_as<T>(
     let text = resp.text() catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw root.errors.NetworkFailure {
+            throw root.errors.NetworkFailure { status_code: null,
             provider: provider,
             detail: "the response body could not be read completely",
             raw_body: null,
@@ -120,8 +147,95 @@ function send_as<T>(
     }
 }
 
+/// `send_as_with_wire`'s result: the decoded envelope plus the wire record.
+class SentAs<T> {
+    value: T,
+    call: root.events.LLMCall,
+}
+
+/// Same contract as `send_as`, plus the LLMCall wire record. On a non-2xx or
+/// transport failure this still throws the same classified error `send_as`
+/// throws — composite clients build failed-leg records from the error itself
+/// (`_failed_leg_call`), so no record accompanies a throw. `capture_wire`
+/// gates the request/response bodies; status, headers, and timing are always
+/// recorded. The request URL and captured response body are redacted with
+/// `redact_url_secrets` before storing.
+function send_as_with_wire<T>(
+    req: baml.http.Request,
+    provider: string,
+    client_name: string,
+    capture_wire: bool = true,
+    request_timeout_ms: int? = null,
+) -> SentAs<T> {
+    let started = baml.time.Instant.now();
+    let timeout = match (request_timeout_ms) {
+        let milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds),
+        null => null,
+    };
+    let resp = baml.http.send(req, timeout = timeout) catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        _ => {
+            throw root.errors.NetworkFailure { status_code: null,
+            provider: provider,
+            detail: `transport failed before a response arrived: ${redact_url_secrets(e.to_string())}`,
+            raw_body: null,
+        }
+        },
+    };
+    let text = resp.text() catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        _ => {
+            throw root.errors.NetworkFailure { status_code: null,
+            provider: provider,
+            detail: "the response body could not be read completely",
+            raw_body: null,
+        }
+        },
+    };
+    if (!resp.ok()) {
+        throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers)
+    }
+    let value = baml.json.from_string<T>(text) catch_all (e) {
+        _ => throw root.errors.ParseFailed { provider: provider, raw_output: text },
+    };
+    let call = root.events.LLMCall {
+        client_name: client_name,
+        provider: provider,
+        timing: root.events.Timing {
+            start_time_utc_ms: started.to_timestamp_milliseconds(),
+            duration_ms: started.elapsed().to_milliseconds(),
+            ttft_ms: null,
+        },
+        http_request: if (capture_wire) {
+            baml.http.Request {
+                method: req.method,
+                url: redact_url_secrets(req.url),
+                headers: redact_request_headers(req.headers),
+                body: req.body,
+            }
+        } else {
+            null
+        },
+        http_response: root.events.HttpResponse {
+            status: resp.status_code,
+            headers: resp.headers,
+            body: if (capture_wire) {
+                redact_url_secrets(text)
+            } else {
+                null
+            },
+        },
+        // The provider parse fills the turn-level usage; the wire record does
+        // not re-derive it here.
+        usage: null,
+        selected: true,
+        sse_responses: null,
+    };
+    SentAs { value: value, call: call }
+}
+
 // The return type's schema as prompt text, in the standard dialect —
-// exactly what ${ctx.output_format} renders in an LLM function block.
+// exactly what ${ctx.output_format()} renders in an LLM function block.
 function render_output_format(t: reflect.Type) -> string throws reflect.errors.CompilationError {
     root.internal.validate_output_type(t);
     root.internal.render_output_format(t)

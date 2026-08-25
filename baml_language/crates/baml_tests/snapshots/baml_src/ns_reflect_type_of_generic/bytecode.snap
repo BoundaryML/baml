@@ -141,7 +141,7 @@ function reflect_type_of_generic.$init_test_ns_reflect_type_of_generic_reflect_t
 
 function reflect_type_of_generic.Box.describe(self: reflect_type_of_generic.Box<#0>) -> string {
     load_type #0
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
@@ -155,19 +155,19 @@ function reflect_type_of_generic.HolderStr.delegate(self: reflect_type_of_generi
 
 function reflect_type_of_generic.Inner.name(self: reflect_type_of_generic.Inner<#0>) -> string {
     load_type #0
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
 function reflect_type_of_generic.InnerShow.show(self: reflect_type_of_generic.InnerShow<#0>) -> string {
     load_type #0
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
 function reflect_type_of_generic.Leaf.describe(self: reflect_type_of_generic.Leaf<#0>) -> string {
     load_type #0
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
@@ -187,14 +187,14 @@ function reflect_type_of_generic.array_of() -> reflect.Type {
 function reflect_type_of_generic.array_of_int_fn() -> string {
     load_type int
     call user.reflect_type_of_generic.array_of
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
 function reflect_type_of_generic.array_of_user_to_string_fn() -> string {
     load_type reflect_type_of_generic.User
     call user.reflect_type_of_generic.array_of
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
@@ -228,7 +228,7 @@ function reflect_type_of_generic.closure_captures_type_arg_user_fn() -> string {
 
 function reflect_type_of_generic.describe() -> string {
     load_type #0
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
@@ -300,7 +300,7 @@ function reflect_type_of_generic.level1() -> reflect.Type {
 
 function reflect_type_of_generic.level1_str() -> string {
     load_type #0
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 

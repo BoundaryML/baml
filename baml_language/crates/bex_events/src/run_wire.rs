@@ -1,3 +1,4 @@
+use base64::Engine as _;
 use serde_json::{Value, json};
 
 use crate::{
@@ -246,6 +247,10 @@ fn value_ref_to_wire(value_ref: &ValueRef) -> Value {
 fn result_to_wire(result: &RunResult) -> Value {
     json!({
         "valueRef": result.value_ref.as_ref().map(value_ref_to_wire),
+        "value": result
+            .value
+            .as_deref()
+            .map(|bytes| base64::engine::general_purpose::STANDARD.encode(bytes)),
         "rendererHint": result.renderer_hint,
         "supportingPayloadIds": result.supporting_payload_ids.iter().copied().map(payload_id_to_wire).collect::<Vec<_>>(),
     })

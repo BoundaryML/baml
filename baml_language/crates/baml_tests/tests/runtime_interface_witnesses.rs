@@ -76,7 +76,7 @@ async fn scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves() {
 
         function ExtractPerson<T extends PersonAnchor>(input: string) -> T {
             client: TestClient
-            prompt: `Extract a person from ${input}.\n${ctx.output_format}`
+            prompt: `Extract a person from ${input}.\n${ctx.output_format()}`
         }
 
         function main() -> string {
@@ -134,7 +134,7 @@ async fn bounded_unreflect_fails_before_rendering() {
 
         function ExtractPerson<T extends PersonAnchor>() -> T {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> string {
@@ -275,7 +275,7 @@ async fn equivalent_witnessed_definitions_render_and_parse_identically() {
 
         function ExtractPerson<T extends PersonAnchor>() -> T {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> bool {
@@ -332,7 +332,7 @@ async fn open_interface_occurrence_fails_at_render_boundary() {
 
         function ExtractEnvelope() -> Envelope {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> string {
@@ -367,7 +367,7 @@ async fn witness_inherits_interface_default_methods() {
         r##"
         interface Greeter {
             name: string
-            function greet(self) -> string {
+            function greet(self) -> string throws never {
                 "hello, " + self.name
             }
         }
@@ -380,7 +380,7 @@ async fn witness_inherits_interface_default_methods() {
 
         function ExtractGreeter<T extends Greeter>(input: string) -> T {
             client: TestClient
-            prompt: `Extract from ${input}.\n${ctx.output_format}`
+            prompt: `Extract from ${input}.\n${ctx.output_format()}`
         }
 
         function main() -> string {
@@ -420,7 +420,7 @@ async fn witness_still_rejects_interfaces_with_required_methods() {
         r#"
         interface Named {
             name: string
-            function describe(self) -> string
+            function describe(self) -> string throws never
         }
 
         function main() -> string {
@@ -457,7 +457,7 @@ async fn session_interface_default_methods_are_bound_and_inherited() {
         r#####"
         function main() -> string throws unknown {
             let s = reflect.Session.new()
-            s.eval(`interface Greeter { who: string  function greet(self) -> string { "hello" } }`)
+            s.eval(`interface Greeter { who: string  function greet(self) -> string throws never { "hello" } }`)
             // BUG (session hygiene, pre-existing): a top-level session `let`
             // whose initializer combines an inline map literal with a keyword
             // argument (`reflect.class.new("P", { "f": t }, implementations = [w])`)

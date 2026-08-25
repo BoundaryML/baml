@@ -62,7 +62,6 @@ mod tests {
         baml_compiler_parser::parse_green,
         baml_compiler_syntax::{SyntaxNode, ast as syntax_ast, validated::ValidatedTree},
     };
-    use baml_project::ProjectDatabase;
 
     #[test]
     fn parses_source_file() {
@@ -80,8 +79,7 @@ mod tests {
             }
             "#;
 
-        let mut db = ProjectDatabase::new();
-        let file = db.add_file("test.baml", source);
+        let (db, file) = crate::single_file_db("test.baml", source);
         let parsed = parse_green(&db, file);
         let syntax_tree = SyntaxNode::new_root(parsed);
         let tree = ValidatedTree::new(syntax_tree).unwrap();
@@ -97,8 +95,7 @@ mod tests {
             }
             "#;
 
-        let mut db = ProjectDatabase::new();
-        let file = db.add_file("test.baml", source);
+        let (db, file) = crate::single_file_db("test.baml", source);
         let parsed = parse_green(&db, file);
         let syntax_tree = SyntaxNode::new_root(parsed);
 

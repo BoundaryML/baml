@@ -30,8 +30,8 @@ use baml_compiler2_emit::{
 };
 use baml_compiler2_hir::package::PackageId;
 use baml_compiler2_hir_ty::package_interface::{ExportedType, PackageInterface, package_interface};
-use baml_project::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
-use baml_tests::engine::run_compiled;
+use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
+use baml_tests::engine::{TestDbExt, run_compiled};
 use bex_engine::BexExternalValue;
 use bex_vm_types::{CompilationUnit, Program};
 use indexmap::IndexMap;
@@ -154,8 +154,9 @@ fn options() -> CompileOptions {
 
 fn library_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new(ROOT));
-    db.add_compiler2_virtual_file("<builtin>/app/lib.baml", LIB);
+    db.workspace(std::path::Path::new(ROOT));
+    db.dependency("app");
+    db.file("<builtin>/app/lib.baml", LIB);
     db
 }
 
@@ -186,15 +187,15 @@ fn library_artifacts() -> LibraryArtifacts {
 
 fn source_db(user: &str) -> ProjectDatabase {
     let mut db = library_db();
-    db.add_file("main.baml", user);
+    db.file("main.baml", user);
     db
 }
 
 fn blob_db(user: &str, blob: Vec<u8>) -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new(ROOT));
+    db.workspace(std::path::Path::new(ROOT));
     db.set_mounted_packages([("app".to_string(), blob)].into());
-    db.add_file("main.baml", user);
+    db.file("main.baml", user);
     db
 }
 

@@ -20,6 +20,7 @@ mod tests {
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
@@ -90,7 +91,42 @@ mod tests {
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn test_primitive_slice_executes_sync_and_async() {
+    fn test_basic_calls_executes_sync_and_async() {
+        assert_eq!(
+            env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
+            Ok("1"),
+            "C# native test setup did not run"
+        );
+        let manifest =
+            PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
+        let project = manifest.join("basic_calls").join("BasicCalls.csproj");
+        let output = Command::new("dotnet")
+            .args([
+                "run",
+                "--no-build",
+                "--project",
+                project.to_str().expect("project path is not UTF-8"),
+                "--configuration",
+                "Release",
+            ])
+            .output()
+            .expect("failed to launch the C# basic-call consumer");
+        assert!(
+            output.status.success(),
+            "C# basic-call consumer failed:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("csharp_basic_calls=ok"),
+            "C# basic-call consumer success marker is missing: {}",
+            String::from_utf8_lossy(&output.stdout),
+        );
+    }
+
+    // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
+    #[test]
+    fn test_type_roundtrips_executes_nominals_collections_defaults_and_unions() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -99,34 +135,35 @@ mod tests {
         let manifest =
             PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
         let project = manifest
-            .join("primitive_slice")
-            .join("PrimitiveSlice.csproj");
+            .join("type_roundtrips")
+            .join("TypeRoundtrips.csproj");
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
                 "Release",
             ])
             .output()
-            .expect("failed to launch the C# primitive consumer");
+            .expect("failed to launch the C# type-roundtrip consumer");
         assert!(
             output.status.success(),
-            "C# primitive consumer failed:\nstdout: {}\nstderr: {}",
+            "C# type-roundtrip consumer failed:\nstdout: {}\nstderr: {}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
         );
         assert!(
-            String::from_utf8_lossy(&output.stdout).contains("csharp_primitive_slice=ok"),
-            "C# primitive consumer success marker is missing: {}",
+            String::from_utf8_lossy(&output.stdout).contains("csharp_type_roundtrips=ok"),
+            "C# type-roundtrip consumer success marker is missing: {}",
             String::from_utf8_lossy(&output.stdout),
         );
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn test_phase5_slice_executes_nominals_collections_defaults_and_unions() {
+    fn test_generics_executes_inferred_and_explicit_generics() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -134,60 +171,27 @@ mod tests {
         );
         let manifest =
             PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
-        let project = manifest.join("phase5_slice").join("Phase5Slice.csproj");
+        let project = manifest.join("generics").join("Generics.csproj");
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
                 "Release",
             ])
             .output()
-            .expect("failed to launch the C# Phase 5 consumer");
+            .expect("failed to launch the C# generics consumer");
         assert!(
             output.status.success(),
-            "C# Phase 5 consumer failed:\nstdout: {}\nstderr: {}",
+            "C# generics consumer failed:\nstdout: {}\nstderr: {}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
         );
         assert!(
-            String::from_utf8_lossy(&output.stdout).contains("csharp_phase5_slice=ok"),
-            "C# Phase 5 consumer success marker is missing: {}",
-            String::from_utf8_lossy(&output.stdout),
-        );
-    }
-
-    // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
-    #[test]
-    fn test_phase6_slice_executes_inferred_and_explicit_generics() {
-        assert_eq!(
-            env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
-            Ok("1"),
-            "C# native test setup did not run"
-        );
-        let manifest =
-            PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
-        let project = manifest.join("phase6_slice").join("Phase6Slice.csproj");
-        let output = Command::new("dotnet")
-            .args([
-                "run",
-                "--project",
-                project.to_str().expect("project path is not UTF-8"),
-                "--configuration",
-                "Release",
-            ])
-            .output()
-            .expect("failed to launch the C# Phase 6 consumer");
-        assert!(
-            output.status.success(),
-            "C# Phase 6 consumer failed:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr),
-        );
-        assert!(
-            String::from_utf8_lossy(&output.stdout).contains("csharp_phase6_slice=ok"),
-            "C# Phase 6 consumer success marker is missing: {}",
+            String::from_utf8_lossy(&output.stdout).contains("csharp_generics=ok"),
+            "C# generics consumer success marker is missing: {}",
             String::from_utf8_lossy(&output.stdout),
         );
     }
@@ -195,7 +199,7 @@ mod tests {
     #[cfg(unix)]
     // SDK_PARITY_LINT(skip): exercises C#-specific generated-surface compile coverage
     #[test]
-    fn test_phase6_generated_surface_rejects_ambiguous_generic_calls() {
+    fn test_generics_generated_surface_rejects_ambiguous_generic_calls() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -203,29 +207,27 @@ mod tests {
         );
         let manifest =
             PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
-        let script = manifest
-            .join("phase6_slice")
-            .join("verify_compile_negative.sh");
+        let script = manifest.join("generics").join("verify_compile_negative.sh");
         let output = Command::new(&script)
             .output()
-            .expect("failed to launch the C# Phase 6 generated compile matrix");
+            .expect("failed to launch the C# generics generated compile matrix");
         assert!(
             output.status.success(),
-            "C# Phase 6 generated compile matrix failed:\nstdout: {}\nstderr: {}",
+            "C# generics generated compile matrix failed:\nstdout: {}\nstderr: {}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
         );
         assert!(
             String::from_utf8_lossy(&output.stdout)
-                .contains("csharp_phase6_generated_compile_matrix=ok"),
-            "C# Phase 6 generated compile marker is missing: {}",
+                .contains("csharp_generics_generated_compile_matrix=ok"),
+            "C# generics generated compile marker is missing: {}",
             String::from_utf8_lossy(&output.stdout),
         );
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn test_phase7_executes_typed_failures_cancellation_and_exit() {
+    fn test_failures_and_cancellation_executes_typed_failures_cancellation_and_exit() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -234,34 +236,35 @@ mod tests {
         let manifest =
             PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
         let project = manifest
-            .join("phase7_failures")
-            .join("Phase7Failures.csproj");
+            .join("failures_and_cancellation")
+            .join("FailuresAndCancellation.csproj");
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
                 "Release",
             ])
             .output()
-            .expect("failed to launch the C# Phase 7 failure consumer");
+            .expect("failed to launch the C# failure and cancellation consumer");
         assert!(
             output.status.success(),
-            "C# Phase 7 failure consumer failed:\nstdout: {}\nstderr: {}",
+            "C# failure and cancellation consumer failed:\nstdout: {}\nstderr: {}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
         );
         assert!(
-            String::from_utf8_lossy(&output.stdout).contains("csharp_phase7_failures=ok"),
-            "C# Phase 7 failure success marker is missing: {}",
+            String::from_utf8_lossy(&output.stdout).contains("csharp_failures_and_cancellation=ok"),
+            "C# failure and cancellation success marker is missing: {}",
             String::from_utf8_lossy(&output.stdout),
         );
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn test_phase9_executes_media_in_both_directions() {
+    fn test_media_executes_media_in_both_directions() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -269,33 +272,34 @@ mod tests {
         );
         let manifest =
             PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
-        let project = manifest.join("phase9_media").join("Phase9Media.csproj");
+        let project = manifest.join("media").join("Media.csproj");
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
                 "Release",
             ])
             .output()
-            .expect("failed to launch the C# Phase 9 media consumer");
+            .expect("failed to launch the C# media consumer");
         assert!(
             output.status.success(),
-            "C# Phase 9 media consumer failed:\nstdout: {}\nstderr: {}",
+            "C# media consumer failed:\nstdout: {}\nstderr: {}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
         );
         assert!(
-            String::from_utf8_lossy(&output.stdout).contains("csharp_phase9_media=ok"),
-            "C# Phase 9 media success marker is missing: {}",
+            String::from_utf8_lossy(&output.stdout).contains("csharp_media=ok"),
+            "C# media success marker is missing: {}",
             String::from_utf8_lossy(&output.stdout),
         );
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn test_phase10_executes_generated_native_stream_and_request_failure() {
+    fn test_streaming_executes_generated_native_stream_and_request_failure() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -303,31 +307,32 @@ mod tests {
         );
         let manifest =
             PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
-        let project = manifest.join("phase10_stream").join("Phase10Stream.csproj");
+        let project = manifest.join("streaming").join("Streaming.csproj");
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
                 "Release",
             ])
             .output()
-            .expect("failed to launch the C# Phase 10 stream consumer");
+            .expect("failed to launch the C# streaming consumer");
         assert!(
             output.status.success(),
-            "C# Phase 10 stream consumer failed:\nstdout: {}\nstderr: {}",
+            "C# streaming consumer failed:\nstdout: {}\nstderr: {}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
         );
         assert!(
-            String::from_utf8_lossy(&output.stdout).contains("csharp_phase10_stream_request=ok"),
-            "C# Phase 10 stream success marker is missing: {}",
+            String::from_utf8_lossy(&output.stdout).contains("csharp_streaming_request=ok"),
+            "C# streaming success marker is missing: {}",
             String::from_utf8_lossy(&output.stdout),
         );
     }
 
-    fn phase11_output() -> &'static Output {
+    fn host_callables_output() -> &'static Output {
         static OUTPUT: OnceLock<Output> = OnceLock::new();
 
         assert_eq!(
@@ -337,34 +342,33 @@ mod tests {
         );
         let manifest =
             PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
-        let project = manifest
-            .join("phase11_host_callable")
-            .join("Phase11HostCallable.csproj");
+        let project = manifest.join("host_callables").join("HostCallables.csproj");
         OUTPUT.get_or_init(|| {
             Command::new("dotnet")
                 .args([
                     "run",
+                    "--no-build",
                     "--project",
                     project.to_str().expect("project path is not UTF-8"),
                     "--configuration",
                     "Release",
                 ])
                 .output()
-                .expect("failed to launch the C# Phase 11 host-callable consumer")
+                .expect("failed to launch the C# host-callable consumer")
         })
     }
 
-    fn assert_phase11_marker(marker: &str) {
-        let output = phase11_output();
+    fn assert_host_callables_marker(marker: &str) {
+        let output = host_callables_output();
         assert!(
             output.status.success(),
-            "C# Phase 11 host-callable consumer failed:\nstdout: {}\nstderr: {}",
+            "C# host-callable consumer failed:\nstdout: {}\nstderr: {}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
         );
         assert!(
             String::from_utf8_lossy(&output.stdout).contains(marker),
-            "C# Phase 11 marker {marker:?} is missing: {}",
+            "C# host-callable marker {marker:?} is missing: {}",
             String::from_utf8_lossy(&output.stdout),
         );
     }
@@ -372,61 +376,88 @@ mod tests {
     // SDK_PARITY_LINT(skip): C# canonical coverage executes through its native integration harness
     #[test]
     fn test_baml_closure_is_a_native_callable_with_host_language_arguments() {
-        assert_phase11_marker("baml_closure_is_a_native_callable_with_host_language_arguments=ok");
+        assert_host_callables_marker(
+            "baml_closure_is_a_native_callable_with_host_language_arguments=ok",
+        );
     }
 
     // SDK_PARITY_LINT(skip): C# canonical coverage executes through its native integration harness
     #[test]
     fn test_baml_closure_decodes_multiple_args_and_structured_return_values() {
-        assert_phase11_marker("baml_closure_decodes_multiple_args_and_structured_return_values=ok");
+        assert_host_callables_marker(
+            "baml_closure_decodes_multiple_args_and_structured_return_values=ok",
+        );
     }
 
     // SDK_PARITY_LINT(skip): C# canonical coverage executes through its native integration harness
     #[test]
     fn test_baml_closure_is_reusable_and_retains_mutable_captures() {
-        assert_phase11_marker("baml_closure_is_reusable_and_retains_mutable_captures=ok");
+        assert_host_callables_marker("baml_closure_is_reusable_and_retains_mutable_captures=ok");
+    }
+
+    fn stdlib_resources_output(arguments: &[&str]) -> Output {
+        assert_eq!(
+            env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
+            Ok("1"),
+            "C# native test setup did not run"
+        );
+        let manifest =
+            PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
+        let project = manifest
+            .join("stdlib_resources")
+            .join("StdlibResources.csproj");
+        Command::new("dotnet")
+            .args([
+                "run",
+                "--no-build",
+                "--project",
+                project.to_str().expect("project path is not UTF-8"),
+                "--configuration",
+                "Release",
+            ])
+            .args(arguments)
+            .output()
+            .expect("failed to launch the C# stdlib-resource consumer")
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
+    #[test]
+    fn test_stdlib_resources_executes_native_typed_resource_apis_lifetimes_and_state() {
+        let output = stdlib_resources_output(&[]);
+        assert!(
+            output.status.success(),
+            "C# stdlib-resource consumer failed:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("csharp_stdlib_resources=ok"),
+            "C# stdlib-resource success marker is missing: {}",
+            String::from_utf8_lossy(&output.stdout),
+        );
+    }
+
+    // SDK_PARITY_LINT(skip): isolates the flaky native cancellation propagation check
     #[test]
     #[ignore = "flaky: B-1059 - CancelToken.any intermittently fails to preserve native state"]
-    fn test_phase12_executes_native_typed_resource_apis_lifetimes_and_state() {
-        assert_eq!(
-            env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
-            Ok("1"),
-            "C# native test setup did not run"
-        );
-        let manifest =
-            PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
-        let project = manifest
-            .join("phase12_resources")
-            .join("Phase12Resources.csproj");
-        let output = Command::new("dotnet")
-            .args([
-                "run",
-                "--project",
-                project.to_str().expect("project path is not UTF-8"),
-                "--configuration",
-                "Release",
-            ])
-            .output()
-            .expect("failed to launch the C# Phase 12 opaque-resource consumer");
+    fn test_cancel_token_any_propagates_native_cancellation() {
+        let output = stdlib_resources_output(&["--", "cancel-token-any"]);
         assert!(
             output.status.success(),
-            "C# Phase 12 opaque-resource consumer failed:\nstdout: {}\nstderr: {}",
+            "C# CancelToken.any consumer failed:\nstdout: {}\nstderr: {}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
         );
         assert!(
-            String::from_utf8_lossy(&output.stdout).contains("csharp_phase12_resources=ok"),
-            "C# Phase 12 opaque-resource success marker is missing: {}",
+            String::from_utf8_lossy(&output.stdout).contains("csharp_cancel_token_any=ok"),
+            "C# CancelToken.any success marker is missing: {}",
             String::from_utf8_lossy(&output.stdout),
         );
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn test_phase13_executes_native_primitive_and_nullable_edges() {
+    fn test_primitive_edges_executes_native_primitive_and_nullable_edges() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -435,34 +466,35 @@ mod tests {
         let manifest =
             PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
         let project = manifest
-            .join("phase13_primitive_edges")
-            .join("Phase13PrimitiveEdges.csproj");
+            .join("primitive_edges")
+            .join("PrimitiveEdges.csproj");
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
                 "Release",
             ])
             .output()
-            .expect("failed to launch the C# Phase 13 primitive-edge consumer");
+            .expect("failed to launch the C# primitive-edge consumer");
         assert!(
             output.status.success(),
-            "C# Phase 13 primitive-edge consumer failed:\nstdout: {}\nstderr: {}",
+            "C# primitive-edge consumer failed:\nstdout: {}\nstderr: {}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
         );
         assert!(
-            String::from_utf8_lossy(&output.stdout).contains("csharp_phase13_primitive_edges=ok"),
-            "C# Phase 13 primitive-edge success marker is missing: {}",
+            String::from_utf8_lossy(&output.stdout).contains("csharp_primitive_edges=ok"),
+            "C# primitive-edge success marker is missing: {}",
             String::from_utf8_lossy(&output.stdout),
         );
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn test_phase14_executes_native_stdlib_structural_roundtrips() {
+    fn test_stdlib_structurals_executes_native_stdlib_structural_roundtrips() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -471,35 +503,35 @@ mod tests {
         let manifest =
             PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
         let project = manifest
-            .join("phase14_stdlib_structurals")
-            .join("Phase14StdlibStructurals.csproj");
+            .join("stdlib_structurals")
+            .join("StdlibStructurals.csproj");
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
                 "Release",
             ])
             .output()
-            .expect("failed to launch the C# Phase 14 stdlib-structural consumer");
+            .expect("failed to launch the C# stdlib-structural consumer");
         assert!(
             output.status.success(),
-            "C# Phase 14 stdlib-structural consumer failed:\nstdout: {}\nstderr: {}",
+            "C# stdlib-structural consumer failed:\nstdout: {}\nstderr: {}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
         );
         assert!(
-            String::from_utf8_lossy(&output.stdout)
-                .contains("csharp_phase14_stdlib_structurals=ok"),
-            "C# Phase 14 stdlib-structural success marker is missing: {}",
+            String::from_utf8_lossy(&output.stdout).contains("csharp_stdlib_structurals=ok"),
+            "C# stdlib-structural success marker is missing: {}",
             String::from_utf8_lossy(&output.stdout),
         );
     }
 
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
-    fn test_phase15_executes_native_dynamic_value_parity() {
+    fn test_dynamic_values_executes_native_dynamic_value_parity() {
         assert_eq!(
             env::var("SDK_TEST_CSHARP_SETUP").as_deref(),
             Ok("1"),
@@ -507,11 +539,9 @@ mod tests {
         );
         let manifest =
             PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is not set"));
-        let project = manifest
-            .join("phase15_dynamic_values")
-            .join("Phase15DynamicValues.csproj");
+        let project = manifest.join("dynamic_values").join("DynamicValues.csproj");
         let publish_dir = manifest
-            .join("phase15_dynamic_values")
+            .join("dynamic_values")
             .join("obj")
             .join("trimmed-publish");
         let publish = Command::new("dotnet")
@@ -527,27 +557,27 @@ mod tests {
                     .expect("trimmed publish path is not UTF-8"),
             ])
             .output()
-            .expect("failed to publish the trimmed C# Phase 15 dynamic-value consumer");
+            .expect("failed to publish the trimmed C# dynamic-value consumer");
         assert!(
             publish.status.success(),
-            "trimmed C# Phase 15 dynamic-value publish failed:\nstdout: {}\nstderr: {}",
+            "trimmed C# dynamic-value publish failed:\nstdout: {}\nstderr: {}",
             String::from_utf8_lossy(&publish.stdout),
             String::from_utf8_lossy(&publish.stderr),
         );
-        let assembly = publish_dir.join("Baml.CSharp.Phase15DynamicValues.dll");
+        let assembly = publish_dir.join("Baml.CSharp.DynamicValues.dll");
         let output = Command::new("dotnet")
             .arg(&assembly)
             .output()
-            .expect("failed to launch the trimmed C# Phase 15 dynamic-value consumer");
+            .expect("failed to launch the trimmed C# dynamic-value consumer");
         assert!(
             output.status.success(),
-            "trimmed C# Phase 15 dynamic-value consumer failed:\nstdout: {}\nstderr: {}",
+            "trimmed C# dynamic-value consumer failed:\nstdout: {}\nstderr: {}",
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
         );
         assert!(
-            String::from_utf8_lossy(&output.stdout).contains("csharp_phase15_dynamic_values=ok"),
-            "C# Phase 15 dynamic-value success marker is missing: {}",
+            String::from_utf8_lossy(&output.stdout).contains("csharp_dynamic_values=ok"),
+            "C# dynamic-value success marker is missing: {}",
             String::from_utf8_lossy(&output.stdout),
         );
     }
@@ -567,10 +597,11 @@ mod tests {
             .join("sdks/csharp/bridge_csharp/tests/Baml.Bridge.DocumentationConsumer")
             .join("Baml.Bridge.DocumentationConsumer.csproj");
         let runtime = language_root.join("sdks/csharp/bridge_csharp/src/Baml.Bridge.csproj");
-        let generated = manifest.join("primitive_slice/baml_sdk");
+        let generated = manifest.join("basic_calls/baml_sdk");
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",

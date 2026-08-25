@@ -748,7 +748,7 @@ function _openai_request(
     stream: bool,
     preview: bool = false,
 ) -> baml.http.Request {
-    let prompt = input.prompt(ai.wire.render_output_format(input.output_type));
+    let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
     let items = openai_lower_prompt(prompt, preview = preview);
     // sanitize BEFORE lowering: foreign reasoning, empty turns and orphaned
     // tool calls are everyone's problem, fixed once in ai.wire.
@@ -831,11 +831,11 @@ function _openai_error_failure(err: OaErrorBody) -> ai.errors.Failure {
     let detail = err.message ?? "the OpenAI Responses request failed";
     let raw = baml.json.stringify(baml.json.to_json(err));
     if (code.includes("rate_limit") || code.includes("quota") || code.includes("credit_balance")) {
-        ai.errors.RateLimited { provider: "openai", retry_after_ms: null, raw_body: raw }
+        ai.errors.RateLimited { status_code: null, provider: "openai", retry_after_ms: null, raw_body: raw }
     } else if (code.includes("content_filter") || code.includes("moderation") || code.includes("refusal")) {
         ai.errors.Refused { provider: "openai", reason: detail, raw_body: raw }
     } else if (_openai_transient_code(code)) {
-        ai.errors.NetworkFailure { provider: "openai", detail: detail, raw_body: raw }
+        ai.errors.NetworkFailure { status_code: null, provider: "openai", detail: detail, raw_body: raw }
     } else {
         ai.errors.InvalidRequest {
             provider: "openai",
@@ -967,14 +967,21 @@ function openai_parse(resp: OaResponse) -> ai.ModelTurn {
     } else {
         null
     };
-    ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
+    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
 }
 
 // The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = openai_render(c, input);
-    let resp = ai.wire.send_as<OaResponse>(req, "openai", request_timeout_ms = c.request_timeout_ms);
-    openai_parse(resp)
+    let sent = ai.wire.send_as_with_wire<OaResponse>(
+        req,
+        "openai",
+        c.id(),
+        capture_wire = c.capture_wire,
+        request_timeout_ms = c.request_timeout_ms,
+    );
+    let turn = openai_parse(sent.value);
+    ai.ModelTurn { ...turn, calls: [sent.call] }
 }
 
 // ---------------------------------------------------------------------------
@@ -1180,7 +1187,7 @@ function _openai_sse_failure(error: unknown) -> ai.errors.Failure {
             };
         };
     };
-    ai.errors.NetworkFailure {
+    ai.errors.NetworkFailure { status_code: null,
         provider: "openai",
         detail: `transport failed before a response arrived: ${text}`,
         raw_body: null,
@@ -1199,6 +1206,7 @@ function _openai_stream_open_failure(error: unknown) -> never {
 // wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     let req = _openai_request(c, input, true, preview = false);
+    let started = baml.time.Instant.now();
     let sse = baml.http.fetch_sse(
         req,
         timeout = baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
@@ -1213,7 +1221,7 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
     // complete one — opt into ai.stream's strict termination contract so the
     // partial text is reported as ai.errors.NetworkFailure instead of being
     // handed back as a successful answer.
-    ai.stream.TurnStream.from_sse(
+    let stream = ai.stream.TurnStream.from_sse(
         sse,
         (batch: string) -> {
             _openai_decode_batch(batch, state) catch_all (e) {
@@ -1221,5 +1229,42 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
             }
         },
         require_terminal = "openai",
-    )
+    );
+    let call = ai.events.LLMCall {
+        client_name: c.id(),
+        provider: "openai",
+        timing: ai.events.Timing {
+            start_time_utc_ms: started.to_timestamp_milliseconds(),
+            duration_ms: null,
+            ttft_ms: null,
+        },
+        http_request: if (c.capture_wire) {
+            baml.http.Request {
+                method: req.method,
+                url: ai.wire.redact_url_secrets(req.url),
+                headers: ai.wire.redact_request_headers(req.headers),
+                body: req.body,
+            }
+        } else {
+            null
+        },
+        http_response: ai.events.HttpResponse {
+            status: sse.status_code,
+            headers: sse.headers,
+            body: null,
+        },
+        usage: null,
+        selected: true,
+        sse_responses: if (c.capture_wire) {
+            []
+        } else {
+            null
+        },
+    };
+    stream._calls = [call];
+    stream._wire_call = call;
+    stream._call_started = started;
+    stream._ttft_from = baml.time.Instant.now();
+    stream._capture_sse = c.capture_wire;
+    stream
 }

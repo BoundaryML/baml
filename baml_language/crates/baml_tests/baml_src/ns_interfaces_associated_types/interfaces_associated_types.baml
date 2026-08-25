@@ -806,3 +806,31 @@ function rev_main() -> int {
 test "reflection_enum_variant_type_uses_concrete_base_impls" {
     assert.equal(rev_main(), 11)
 }
+
+// ─── self-referential associated bound ─────────────────────────────────────
+// `type Peer extends SrabNode` on `SrabNode` itself is a valid bound (a
+// constraint head never demands the target's associated types be pinned).
+// Regression: this used to reach emit as an unreported Error sentinel and
+// panic the interface-registry build.
+
+interface SrabNode {
+    type Peer extends SrabNode
+    function srab_tag(self) -> string throws never
+}
+
+class SrabLeaf {
+    label string
+    implements SrabNode {
+        type Peer = SrabLeaf;
+        function srab_tag(self) -> string throws never { return self.label }
+    }
+}
+
+function srab_main() -> string {
+    let leaf = SrabLeaf { label: "leaf" };
+    return leaf.srab_tag()
+}
+
+test "self_referential_associated_bound_compiles_and_runs" {
+    assert.equal(srab_main(), "leaf")
+}
