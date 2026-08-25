@@ -358,12 +358,11 @@ impl RunArgs {
         let reporter = Reporter::new();
         let outcome = self.run_with_reporter(&reporter);
         // A profiling failure never breaks the run, so by default it is
-        // invisible; verbose is the window into why a store is absent.
-        if crate::reporter::verbose()
-            && let Some(diagnostic) =
-                bex_events::prof::backend::ProfilerSession::global_setup_diagnostic()
-        {
-            crate::reporter::print_verbose(format_args!("profiling: {}", diagnostic.message));
+        // invisible; verbose is the window into why a store is absent —
+        // or where an active one actually wrote.
+        if crate::reporter::verbose() {
+            let status = bex_events::prof::backend::ProfilerSession::global().status_line();
+            crate::reporter::print_verbose(format_args!("profiling: {status}"));
         }
         outcome
     }

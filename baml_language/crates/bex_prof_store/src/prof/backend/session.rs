@@ -493,6 +493,23 @@ impl ProfilerSession {
         global_setup_diagnostic_cell().get().cloned()
     }
 
+    /// One-line state summary for hosts' verbose channels. Unlike
+    /// [`Self::global_setup_diagnostic`] it always says something: active
+    /// sessions name the resolved store root (the "it wrote, but where?"
+    /// question), disabled ones name the reason or the configuration.
+    #[must_use]
+    pub fn status_line(&self) -> String {
+        match &self.kind {
+            SessionKind::On(session) => {
+                format!("active, store root {}", session.config.store_root.display())
+            }
+            SessionKind::Off => match global_setup_diagnostic_cell().get() {
+                Some(diagnostic) => diagnostic.message.clone(),
+                None => "off (disabled by configuration)".to_string(),
+            },
+        }
+    }
+
     /// Resolves the global session's store root before its first use (the
     /// CLI calls this with `<project root>/.baml/profiles-v1`). Returns
     /// `false` when a root was already configured; a call after the global
