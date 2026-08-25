@@ -1,5 +1,6 @@
-//! Throwaway: compile a project dir (or just the stdlib) and print
-//! compiler2 diagnostics, instead of bex_project's build.rs panic.
+//! Compile a project dir (or just the stdlib) and print compiler2
+//! diagnostics, instead of `bex_project`'s `build.rs` panic.
+#![allow(clippy::print_stdout)]
 
 use std::path::Path;
 
