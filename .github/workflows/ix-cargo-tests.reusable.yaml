@@ -95,7 +95,7 @@ jobs:
     # exceed 25 minutes; the cap is a hang backstop, not a perf gate.
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           # Keep the warm seed's ignored files (target/, node_modules);
@@ -201,7 +201,7 @@ jobs:
       CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
       CC_x86_64_unknown_linux_musl: musl-gcc
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           # Keep the warm seed's ignored files (target/, node_modules);
@@ -312,7 +312,7 @@ jobs:
   #   runs-on: blacksmith-6vcpu-macos-latest
   #   timeout-minutes: 35
   #   steps:
-  #     - uses: actions/checkout@v6
+  #     - uses: actions/checkout@v7
   #       with:
   #         persist-credentials: false
 
@@ -399,7 +399,7 @@ jobs:
     steps:
       - name: "Build matrix"
         id: matrix
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             // Fork PRs stay on the hosted runners; untrusted code never
@@ -752,12 +752,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: sdk-test-matrix
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: "Assert every SDK directory has a matrix entry"
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           MATRIX_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.sdk-dirs }}
           TEMPORARILY_DISABLED_SDK_DIRS: ${{ needs.sdk-test-matrix.outputs.temporarily-disabled-sdk-dirs }}
@@ -833,7 +833,7 @@ jobs:
       # space, so -w alone, not -s -w).
       GOFLAGS: "-ldflags=-w"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           # Keep the warm seed's ignored files (target/, node_modules);
@@ -859,7 +859,7 @@ jobs:
 
       - name: "Install .NET SDK"
         if: matrix.sdk-label == 'csharp'
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.301
 
@@ -1045,7 +1045,7 @@ jobs:
     runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           # Keep the warm seed's ignored files (target/, node_modules);
@@ -1162,7 +1162,7 @@ jobs:
     # minutes. Warm runs sit far inside the old budget.
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           # Keep the warm seed's ignored files (target/, node_modules);
@@ -1253,7 +1253,7 @@ jobs:
     runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-gnu"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           # Keep the warm seed's ignored files (target/, node_modules);
@@ -1333,7 +1333,7 @@ jobs:
     # 45, not 30: cold headroom, same reasoning as the gnu lane above.
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           # Keep the warm seed's ignored files (target/, node_modules);
@@ -1447,7 +1447,7 @@ jobs:
       - snapshot-tests
     steps:
       - name: "Merge cargo timings artifacts"
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v7
         with:
           name: cargo-timings
           pattern: cargo-timings-*
@@ -1465,7 +1465,7 @@ jobs:
       - snapshot-tests
     steps:
       - name: "Merge sccache stats artifacts"
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v7
         with:
           name: sccache-stats
           pattern: sccache-stats-*

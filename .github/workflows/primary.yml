@@ -46,7 +46,7 @@ jobs:
       runtime: ${{ steps.check_runtime.outputs.changed }}
       skip_reason: ${{ steps.check_runtime.outputs.skip_reason }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -169,7 +169,7 @@ jobs:
           [rust-format, rust-lint, rust-lint-wasm, python-lint]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -221,7 +221,7 @@ jobs:
     if: needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -251,7 +251,7 @@ jobs:
     if: needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -273,7 +273,7 @@ jobs:
     if: needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -333,7 +333,7 @@ jobs:
         test-suite: [rust-unit, python-integration]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -416,7 +416,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
@@ -484,12 +484,12 @@ jobs:
     if: github.ref == 'refs/heads/canary' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout main repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           path: main-repo
 
       - name: Checkout zed-baml repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: BoundaryML/zed-baml
           token: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
