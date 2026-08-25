@@ -6,7 +6,7 @@
 
 use baml_base::{Name, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
-use rustc_hash::FxHashMap;
+use indexmap::IndexMap;
 
 use crate::{
     contributions::{Definition, DefinitionKind},
@@ -150,7 +150,7 @@ pub struct PackageItems<'db> {
     /// interned id with `PackageId::new(db, package.clone())` when one is needed.
     pub package: Name,
     /// Namespace path -> items within that namespace.
-    pub namespaces: FxHashMap<Vec<Name>, NamespaceItems<'db>>,
+    pub namespaces: IndexMap<Vec<Name>, NamespaceItems<'db>>,
     /// Conflicts and other rare data. `None` when no conflicts exist.
     pub extra: Option<Box<PackageItemsExtra<'db>>>,
 }
@@ -245,7 +245,7 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
         ns_paths.insert(pkg_info.namespace_path.clone());
     }
 
-    let mut namespaces: FxHashMap<Vec<Name>, NamespaceItems<'db>> = FxHashMap::default();
+    let mut namespaces: IndexMap<Vec<Name>, NamespaceItems<'db>> = IndexMap::new();
     let mut all_conflicts: Vec<NameConflict<'db>> = Vec::new();
     for ns_path in ns_paths {
         let ns_id = NamespaceId::new(db, package_name.clone(), ns_path.clone());
