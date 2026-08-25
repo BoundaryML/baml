@@ -52,6 +52,109 @@ interface TypeView {
 /// The closed set of reflection views for a runtime `type` value.
 type TypeKind = reflect.class.Type | reflect.enum.Type | reflect.union.Type | reflect.literal.Type | reflect.array.Type | reflect.map.Type | reflect.interface.Type | reflect.primitive.Type | reflect.function.Type
 
+/// Implemented automatically by every function value, with its parameter
+/// list erased. `Returns` pins the held function's return type and `Throws`
+/// its error type; both default to `unknown`, so a bare `AnyFunction`
+/// accepts any function. A compiler builtin: it cannot be implemented by
+/// hand, cannot be used as a generic bound, and declares no methods. Call
+/// the held function through `reflect.call_any`; read its signature with
+/// `reflect.signature`.
+interface AnyFunction {
+  type Returns = unknown
+  type Throws = unknown
+}
+
+/// A read-only reflected view implemented automatically by class values.
+///
+/// Narrow an opaque value with `let value: reflect.AnyClass = opaque else { ... }`
+/// before using this surface. Ordinary class instances implement it, including
+/// runtime-minted classes. Of the sealed reflection-kind views, only
+/// `reflect.class.Type` implements it.
+interface AnyClass {
+  /// Read a field as `T`. A missing field returns `null`; use `has_field` to
+  /// distinguish that case from a present field whose value is null.
+  function get<T>(self, name: string) -> T? throws reflect.errors.TypeMismatch {
+    if (!self.has_field(name)) {
+      return null
+    }
+    // NOTE: spelled with `let … else` rather than `self.get_field(name)?.value<T>()`
+    // because an optional-chained call does not thread `T` to the callee.
+    let field: reflect.class.Field = self.get_field(name) else {
+      return null
+    }
+    field.value<T>()
+  }
+
+  /// Return a value-bound field handle, or `null` when no such field exists.
+  function get_field(self, name: string) -> reflect.class.Field? throws never {
+    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+      return null
+    }
+    for (let field in class_type.fields()) {
+      if (field.name == name) {
+        return reflect.class.Field {
+          name: field.name,
+          type: field.type,
+          meta: field.meta,
+          _owner: self,
+        }
+      }
+    }
+    null
+  }
+
+  function has_field(self, name: string) -> bool throws never {
+    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+      return false
+    }
+    for (let field in class_type.fields()) {
+      if (field.name == name) {
+        return true
+      }
+    }
+    false
+  }
+
+  /// Reflected fields bound to this value for `Field.value<T>()`.
+  function list_fields(self) -> reflect.class.Field[] throws never {
+    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+      return []
+    }
+    let fields: reflect.class.Field[] = []
+    for (let field in class_type.fields()) {
+      fields.push(reflect.class.Field {
+        name: field.name,
+        type: field.type,
+        meta: field.meta,
+        _owner: self,
+      })
+    }
+    fields
+  }
+
+  function name(self) -> string throws never {
+    reflect.Type.of_value(self).to_string()
+  }
+
+  function type(self) -> reflect.Type throws never {
+    reflect.Type.of_value(self)
+  }
+
+  function attributes(self) -> reflect.Meta throws never {
+    let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+      return reflect.Meta {
+        alias: null,
+        description: null,
+        docstring: null,
+        other: {},
+      }
+    }
+    class_type.meta()
+  }
+}
+
+implement<T> AnyClass for T {}
+
 /// The runtime signature of a function value, reconstructed from the value
 /// itself (BEP-062). Positional (required) parameters appear in `args` in
 /// declaration order; named/optional parameters appear in `opts`, keyed by
@@ -217,7 +320,7 @@ class Session {
 ///   sig.returns.to_string()
 //baml:mut_vm
 //baml:fallible
-function signature(f: baml.AnyFunction) -> Signature throws never {
+function signature(f: AnyFunction) -> Signature throws never {
   $rust_function
 }
 
@@ -233,6 +336,6 @@ function signature(f: baml.AnyFunction) -> Signature throws never {
 /// `reflect.errors.CompilationError`).
 //baml:mut_vm
 //baml:may_yield
-function call_any<R, E>(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R throws E | InvalidArgumentError | reflect.errors.CompilationError {
+function call_any<R, E>(f: AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R throws E | InvalidArgumentError | reflect.errors.CompilationError {
   $rust_function
 }

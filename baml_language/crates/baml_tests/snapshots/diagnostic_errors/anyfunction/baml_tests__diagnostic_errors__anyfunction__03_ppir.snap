@@ -27,7 +27,7 @@ class user.ToolError$stream {
   message: string | null
 }
 function user.main() -> int  [expr] {
-  { let bad_ret: baml.AnyFunction<Returns = string> = web_search; let bad_throws: baml.AnyFunction<Throws = never> = web_search; let not_a_fn: baml.AnyFunction = 42; let narrow: baml.AnyFunction<Returns = user.Doc[]> = web_search; let bad_widen: baml.AnyFunction<Returns = string> = narrow; return 0 }
+  { let bad_ret: reflect.AnyFunction<Returns = string> = web_search; let bad_throws: reflect.AnyFunction<Throws = never> = web_search; let not_a_fn: reflect.AnyFunction = 42; let narrow: reflect.AnyFunction<Returns = user.Doc[]> = web_search; let bad_widen: reflect.AnyFunction<Returns = string> = narrow; return 0 }
 }
 function user.pick(f: T) -> T  [expr] {
   { return f }

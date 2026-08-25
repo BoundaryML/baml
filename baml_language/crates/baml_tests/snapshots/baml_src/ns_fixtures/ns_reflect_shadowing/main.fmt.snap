@@ -41,7 +41,7 @@ function helper(q: string) -> string throws never {
 // The class answers for `describe` and nothing else, so a name it does not
 // declare still reaches the package.
 function package_still_reachable() -> string {
-    let f: baml.AnyFunction = helper;
+    let f: reflect.AnyFunction = helper;
     let sig = reflect.signature(f);
     return sig.returns.to_string();
 }

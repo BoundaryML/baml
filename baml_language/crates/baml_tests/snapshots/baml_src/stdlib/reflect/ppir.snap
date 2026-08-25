@@ -5,8 +5,10 @@ source: crates/baml_tests/src/corpus.rs
 
 --- <builtin>/reflect/ns_array/array.baml ---
 class reflect.array.Type {
+  _ty: reflect.Type
 }
 class reflect.array.Type$stream {
+  _ty: unknown
 }
 function reflect.array.as_type(self: ?) -> reflect.Type  [builtin]
 function reflect.array.element_type(self: ?) -> reflect.Type  [builtin]
@@ -47,8 +49,10 @@ class reflect.class.PendingType$stream {
   _resolved: unknown | null
 }
 class reflect.class.Type {
+  _ty: reflect.Type
 }
 class reflect.class.Type$stream {
+  _ty: unknown
 }
 function reflect.class._build(self: ?, implementations: reflect.interface.Implementation[]) -> reflect.class.Type  [builtin]
 function reflect.class._new(name: string, fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>>, implementations: reflect.interface.Implementation[]) -> reflect.class.Type  [builtin]
@@ -74,13 +78,15 @@ function reflect.class.resolved(self: ?) -> reflect.Type?  [builtin]
 function reflect.class.type(self: ?) -> reflect.class.PendingType  [builtin]
 function reflect.class.union(self: ?, others: reflect.Type | reflect.class.PendingType[]) -> reflect.class.PendingType  [builtin]
 function reflect.class.value(self: ?) -> T?  [expr] {
-  { let owner: baml.AnyClass = self._owner } reflect.class.get_field(owner, self.name) catch (e) { reflect.errors.CompilationError { message: message } => { throw baml.errors.TypeMismatch { message: message } } }
+  { let owner: reflect.AnyClass = self._owner } reflect.class.get_field(owner, self.name) catch (e) { reflect.errors.CompilationError { message: message } => { throw reflect.errors.TypeMismatch { message: message } } }
 }
 
 --- <builtin>/reflect/ns_enum/enum.baml ---
 class reflect.enum.Type {
+  _ty: reflect.Type
 }
 class reflect.enum.Type$stream {
+  _ty: unknown
 }
 class reflect.enum.Value {
   name: string
@@ -118,6 +124,12 @@ class reflect.errors.SessionBusy {
 class reflect.errors.SessionBusy$stream {
   message: string | null
 }
+class reflect.errors.TypeMismatch {
+  message: string
+}
+class reflect.errors.TypeMismatch$stream {
+  message: string | null
+}
 
 --- <builtin>/reflect/ns_function/function.baml ---
 class reflect.function.Parameter {
@@ -131,8 +143,10 @@ class reflect.function.Parameter$stream {
   optional: bool | null
 }
 class reflect.function.Type {
+  _ty: reflect.Type
 }
 class reflect.function.Type$stream {
+  _ty: unknown
 }
 function reflect.function.as_type(self: ?) -> reflect.Type  [builtin]
 function reflect.function.params(self: ?) -> reflect.function.Parameter[]  [builtin]
@@ -146,8 +160,10 @@ class reflect.interface.Implementation$stream {
   _handle: $rust_type
 }
 class reflect.interface.Type {
+  _ty: reflect.Type
 }
 class reflect.interface.Type$stream {
+  _ty: unknown
 }
 function reflect.interface.as_type(self: ?) -> reflect.Type  [builtin]
 function reflect.interface.field(self: ?, interface_field: string, class_field: string? = null) -> reflect.interface.Implementation  [builtin]
@@ -156,16 +172,20 @@ function reflect.interface.implemented_by(self: ?, other: reflect.Type) -> bool 
 
 --- <builtin>/reflect/ns_literal/literal.baml ---
 class reflect.literal.Type {
+  _ty: reflect.Type
 }
 class reflect.literal.Type$stream {
+  _ty: unknown
 }
 function reflect.literal.as_type(self: ?) -> reflect.Type  [builtin]
 function reflect.literal.new(value: string | int | bool) -> reflect.literal.Type  [builtin]
 
 --- <builtin>/reflect/ns_map/map.baml ---
 class reflect.map.Type {
+  _ty: reflect.Type
 }
 class reflect.map.Type$stream {
+  _ty: unknown
 }
 function reflect.map.as_type(self: ?) -> reflect.Type  [builtin]
 function reflect.map.key_type(self: ?) -> reflect.Type  [builtin]
@@ -174,15 +194,19 @@ function reflect.map.value_type(self: ?) -> reflect.Type  [builtin]
 
 --- <builtin>/reflect/ns_primitive/primitive.baml ---
 class reflect.primitive.Type {
+  _ty: reflect.Type
 }
 class reflect.primitive.Type$stream {
+  _ty: unknown
 }
 function reflect.primitive.as_type(self: ?) -> reflect.Type  [builtin]
 
 --- <builtin>/reflect/ns_union/union.baml ---
 class reflect.union.Type {
+  _ty: reflect.Type
 }
 class reflect.union.Type$stream {
+  _ty: unknown
 }
 function reflect.union.as_type(self: ?) -> reflect.Type  [builtin]
 function reflect.union.member_types(self: ?) -> reflect.Type[]  [builtin]
@@ -289,7 +313,10 @@ function reflect._finish(artifact: reflect.Package, packages: map<string, reflec
 function reflect._finish(self: ?, artifact: reflect.Package) -> T  [builtin]
 function reflect._new(packages: map<string, reflect.Package>) -> reflect.Session  [builtin]
 function reflect.as_type(self: ?) -> reflect.Type  [missing]
-function reflect.call_any(f: baml.AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R  [builtin]
+function reflect.attributes(self: ?) -> reflect.Meta  [expr] {
+  { let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() } class_type.meta()
+}
+function reflect.call_any(f: AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R  [builtin]
 function reflect.classes(self: ?) -> map<string, reflect.class.Type>  [builtin]
 function reflect.compile(files: map<string, string>, packages: map<string, reflect.Package> = ...) -> reflect.Package  [expr] {
   { let artifact = Package._compile(files, packages) } Package._finish(artifact, packages)
@@ -302,16 +329,34 @@ function reflect.eval(self: ?, source: string) -> T  [expr] {
   { let artifact = self._compile(source) } self._finish(artifact) catch (_) { _ => throw reflect.errors.EvaluationError { message: "session evaluatio..." } }
 }
 function reflect.functions(self: ?) -> map<string, reflect.function.Type>  [builtin]
+function reflect.get(self: ?, name: string) -> T?  [expr] {
+  { if (Not self.has_field(name)) { return null }; let field: reflect.class.Field = self.get_field(name) } field.value()
+}
 function reflect.get_class(self: ?, name: string) -> reflect.class.Type?  [builtin]
 function reflect.get_enum(self: ?, name: string) -> reflect.enum.Type?  [builtin]
+function reflect.get_field(self: ?, name: string) -> reflect.class.Field?  [expr] {
+  { let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class(); for field in class_type.fields() {  } if (field.name Eq name) { return reflect.class.Field { name: field.name, type: field.type, meta: field.meta, _owner: self } } } null
+}
 function reflect.get_function(self: ?, name: string) -> F?  [builtin]
 function reflect.get_interface(self: ?, name: string) -> reflect.interface.Type?  [builtin]
+function reflect.has_field(self: ?, name: string) -> bool  [expr] {
+  { let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class(); for field in class_type.fields() {  } if (field.name Eq name) { return true } } false
+}
 function reflect.interfaces(self: ?) -> map<string, reflect.interface.Type>  [builtin]
+function reflect.list_fields(self: ?) -> reflect.class.Field[]  [expr] {
+  { let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class(); let fields: reflect.class.Field[] = []; for field in class_type.fields() {  } fields.push(reflect.class.Field { name: field.name, type: field.type, meta: field.meta, _owner: self }) } fields
+}
+function reflect.name(self: ?) -> string  [expr] {
+  {  } reflect.Type.of_value(self).to_string()
+}
 function reflect.new(packages: map<string, reflect.Package> = ...) -> reflect.Session  [expr] {
   {  } Session._new(packages)
 }
-function reflect.signature(f: baml.AnyFunction) -> reflect.Signature  [builtin]
+function reflect.signature(f: AnyFunction) -> reflect.Signature  [builtin]
 function reflect.tests(self: ?) -> map<string, () -> null throws unknown>  [builtin]
+function reflect.type(self: ?) -> reflect.Type  [expr] {
+  {  } reflect.Type.of_value(self)
+}
 function reflect.with_types(self: ?, types: map<string, reflect.Type | reflect.TypeView>) -> reflect.Package  [builtin]
 
 --- <builtin>/reflect/type.baml ---
@@ -339,6 +384,3 @@ function reflect.of() -> reflect.Type  [builtin]
 function reflect.of_value(value: unknown) -> reflect.Type  [builtin]
 function reflect.optional(self: ?) -> reflect.union.Type  [builtin]
 function reflect.to_baml(self: ?) -> string  [builtin]
-function reflect.to_string(self: ?) -> string  [expr] {
-  {  } self._to_string_impl()
-}

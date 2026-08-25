@@ -153,6 +153,9 @@ function baml.to_json(self: ?) -> baml.json.json  [expr] {
 function baml.to_string(self: ?) -> string  [expr] {
   {  } root._to_string_default(self)
 }
+function baml.to_string(self: ?) -> string  [expr] {
+  {  } self._to_string_impl()
+}
 
 --- <builtin>/baml/core.baml ---
 class baml.TaggedString {
@@ -163,28 +166,7 @@ class baml.TaggedString$stream {
   parts: string[]
   values: unknown[]
 }
-function baml.attributes(self: ?) -> reflect.Meta  [expr] {
-  { let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() } class_type.meta()
-}
 function baml.deep_copy(value: T) -> T  [builtin]
-function baml.get(self: ?, name: string) -> T?  [expr] {
-  { if (Not self.has_field(name)) { return null }; let field: reflect.class.Field = self.get_field(name) } field.value()
-}
-function baml.get_field(self: ?, name: string) -> reflect.class.Field?  [expr] {
-  { let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class(); for field in class_type.fields() {  } if (field.name Eq name) { return reflect.class.Field { name: field.name, type: field.type, meta: field.meta, _owner: self } } } null
-}
-function baml.has_field(self: ?, name: string) -> bool  [expr] {
-  { let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class(); for field in class_type.fields() {  } if (field.name Eq name) { return true } } false
-}
-function baml.list_fields(self: ?) -> reflect.class.Field[]  [expr] {
-  { let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class(); let fields: reflect.class.Field[] = []; for field in class_type.fields() {  } fields.push(reflect.class.Field { name: field.name, type: field.type, meta: field.meta, _owner: self }) } fields
-}
-function baml.name(self: ?) -> string  [expr] {
-  {  } reflect.Type.of_value(self).to_string()
-}
-function baml.type(self: ?) -> reflect.Type  [expr] {
-  {  } reflect.Type.of_value(self)
-}
 
 --- <builtin>/baml/float.baml ---
 class baml.Float {

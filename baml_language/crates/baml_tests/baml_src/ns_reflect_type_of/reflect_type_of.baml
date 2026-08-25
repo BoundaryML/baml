@@ -175,9 +175,11 @@ test "of_value_array_reports_element_type" {
     assert.is_true(reflect.Type.of_value(xs) == reflect.Type.of<int[]>())
 }
 
-test "of_value_of_a_type_value_is_precise_kind" {
-    // A reflected class type value has the sealed class-kind view as its concrete type.
-    assert.is_true(reflect.Type.of_value(reflect.Type.of<User>()) == reflect.Type.of<reflect.class.Type>())
+test "of_value_of_a_type_value_is_the_carrier" {
+    // A type value's concrete type is the `reflect.Type` metatype itself; the
+    // kind views are ordinary wrapper classes reached through `kind()`/`as_*`.
+    assert.is_true(reflect.Type.of_value(reflect.Type.of<User>()) == reflect.Type.of<reflect.Type>())
+    assert.is_true(reflect.Type.of_value(reflect.Type.of<User>().as_class()) == reflect.Type.of<reflect.class.Type>())
 }
 
 test "of_value_widened_unknown_slot" {
@@ -191,7 +193,7 @@ function of_value_helper(q: string) -> string throws never {
 }
 
 test "of_value_function_value_reports_function_type" {
-    let f: baml.AnyFunction = of_value_helper;
+    let f: reflect.AnyFunction = of_value_helper;
     let t = reflect.Type.of_value(f);
     // The reconstructed signature type mentions the arrow, not `unknown`.
     assert.is_true(t != reflect.Type.of<unknown>())
@@ -205,7 +207,7 @@ test "of_value_function_value_reports_function_type" {
 // reports the declared name, return type, and error type.
 
 test "reflect_signature_reports_the_declared_types" {
-    let f: baml.AnyFunction = of_value_helper;
+    let f: reflect.AnyFunction = of_value_helper;
     let sig = reflect.signature(f);
     // `name` is null for host and compiler-synthesized callables; a declared
     // function reports the name it was written with.

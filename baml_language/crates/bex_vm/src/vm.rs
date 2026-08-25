@@ -1851,6 +1851,18 @@ impl BexVm {
         if count == 0 {
             return Ok(TakenTypeArgs::default());
         }
+        // Every type-operand position's contract is
+        // `reflect.Type | reflect.TypeView`; a kind view converts at this
+        // boundary to the `type` value it wraps, so everything downstream
+        // sees `Object::Type` only.
+        for slot in start..end {
+            let value = self.stack[StackIndex::from_raw(slot)];
+            if let Some(ty_value) =
+                crate::package_reflect::type_kinds::as_view_type_value(self, value)
+            {
+                self.stack[StackIndex::from_raw(slot)] = ty_value;
+            }
+        }
         // A type built only from compiled declarations needs no per-frame
         // carrier: every consumer can find those declarations from the program
         // index, and they never move. Anything naming a runtime declaration
@@ -2330,7 +2342,7 @@ impl BexVm {
     /// read off the declaration itself.
     ///
     /// The one name→head channel inside the VM, for the boundaries that
-    /// genuinely start from a name (the algebra's `baml.AnyFunction` case, host
+    /// genuinely start from a name (the algebra's `reflect.AnyFunction` case, host
     /// conversion, codegen FQN constants). Everything interior already holds a
     /// head and must deref it instead: content-addressing a name into a tag
     /// would fabricate an identity rather than resolve one, and cannot see a
@@ -2615,6 +2627,9 @@ impl BexVm {
     /// `Spawn`) consume them this way.
     fn ensure_pop_type(&mut self) -> Result<bex_vm_types::RealizedTy, VmInternalError> {
         let value = self.stack.ensure_pop();
+        // A kind view converts to the `type` value it wraps at this boundary.
+        let value =
+            crate::package_reflect::type_kinds::as_view_type_value(self, value).unwrap_or(value);
         let ptr = self.as_object_ptr(value, ObjectType::Type)?;
         match self.get_object(ptr) {
             Object::Type(type_value) => Ok(type_value.ty.clone()),
@@ -3176,16 +3191,13 @@ impl BexVm {
                     ObjectType::of(other)
                 ),
             },
-            // A `type` value reports its precise sealed reflection-kind class.
-            // Each kind class is a subtype of the `type` carrier.
-            Object::Type(type_value) => {
-                let kind = baml_type::type_kind::classify_type(&type_value.ty);
-                let name = kind.class_name();
-                let head = self.declaration_head(&name).unwrap_or_else(|| {
-                    unreachable!("reflection kind class `{name}` is declared by the stdlib")
-                });
-                ConcreteRealizedTy::Class(head, Vec::new(), TyAttr::default())
-            }
+            // A `type` value's concrete type is the `reflect.Type` metatype
+            // itself. The nine kind views are ordinary wrapper classes whose
+            // instances take the `Object::Instance` arm above; nothing about a
+            // type value's membership depends on classifying its payload.
+            Object::Type(_) => ConcreteRealizedTy::Type {
+                attr: TyAttr::default(),
+            },
             // Arrays/maps carry their element/key/value types, so the faithful
             // `list<T>` / `map<K, V>` is reconstructed from the value itself.
             Object::Array(arr) => {
@@ -9008,6 +9020,12 @@ impl BexVm {
 
                 OpCode::RuntimeIsType => {
                     let expected_value = self.stack.ensure_pop();
+                    // A kind view filters as the `type` value it wraps.
+                    let expected_value = crate::package_reflect::type_kinds::as_view_type_value(
+                        self,
+                        expected_value,
+                    )
+                    .unwrap_or(expected_value);
                     let value = self.stack.ensure_pop();
                     // `is unreflect(t)` filters on *nominal* identity: the
                     // scrutinee's declaration must be the one `t` denotes, at

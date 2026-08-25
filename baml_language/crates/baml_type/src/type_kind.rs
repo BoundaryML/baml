@@ -1,6 +1,6 @@
 //! Closed BEP-066 reflection-kind classification.
 
-use crate::{ConcreteRealizedTy, Name, QualifiedTypeName, RealizedTy, TyAttr};
+use crate::{Name, QualifiedTypeName, RealizedTy};
 
 /// The nine sealed runtime views of a reflected `type` value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -51,10 +51,6 @@ impl TypeKind {
             Name::new("Type"),
         )
     }
-
-    pub fn concrete_class_ty(self) -> ConcreteRealizedTy {
-        ConcreteRealizedTy::Class(self.class_name(), Vec::new(), TyAttr::default())
-    }
 }
 
 /// Classify every realized runtime type into exactly one reflection kind.
@@ -82,28 +78,6 @@ pub fn is_type_kind_class(name: &QualifiedTypeName) -> bool {
             .iter()
             .any(|kind| name.namespace()[0].as_str() == kind.namespace())
         && name.name().as_str() == "Type"
-}
-
-/// Whether `tag` identifies one of the sealed reflection kind classes.
-///
-/// A compiled declaration's tag is content-addressed from its fully-qualified
-/// name, so this is an integer compare against the nine known names — no
-/// lookup, and no runtime declaration can collide with one, since counter tags
-/// are drawn from a disjoint range.
-#[must_use]
-pub fn is_type_kind_tag(tag: crate::typetag::TypeTag) -> bool {
-    TypeKind::ALL.iter().any(|kind| {
-        tag == crate::typetag::TypeTag::of_head(&kind.class_name().render_dotted(false))
-    })
-}
-
-/// [`class_inhabits_any_class`] for a runtime head, which carries a tag rather
-/// than a name.
-#[must_use]
-pub fn tag_inhabits_any_class(tag: crate::typetag::TypeTag) -> bool {
-    !is_type_kind_tag(tag)
-        || tag
-            == crate::typetag::TypeTag::of_head(&TypeKind::Class.class_name().render_dotted(false))
 }
 
 /// A builtin type and where its values actually come from, for the
@@ -165,13 +139,6 @@ pub fn builtin_companion_of(name: &QualifiedTypeName) -> Option<BuiltinCompanion
     })
 }
 
-/// Whether a nominal class inhabits the compiler-derived `baml.AnyClass`
-/// interface. Ordinary classes do. Within the sealed reflection-kind family,
-/// only the class-kind value view is intentionally admitted.
-pub fn class_inhabits_any_class(name: &QualifiedTypeName) -> bool {
-    !is_type_kind_class(name) || name == &TypeKind::Class.class_name()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,20 +191,6 @@ mod tests {
                 builtin_companion_of(&QualifiedTypeName::from_dotted_path(path)),
                 None,
                 "{path} should not be a companion carrier"
-            );
-        }
-    }
-
-    #[test]
-    fn any_class_admits_ordinary_classes_and_only_the_class_kind_view() {
-        assert!(class_inhabits_any_class(
-            &QualifiedTypeName::from_dotted_path("user.Record")
-        ));
-        for kind in TypeKind::ALL {
-            assert_eq!(
-                class_inhabits_any_class(&kind.class_name()),
-                kind == TypeKind::Class,
-                "unexpected AnyClass membership for {kind:?}"
             );
         }
     }

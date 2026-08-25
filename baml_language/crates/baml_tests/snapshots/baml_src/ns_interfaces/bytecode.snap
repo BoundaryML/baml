@@ -1962,10 +1962,10 @@ function interfaces.GimpEchoer.GimpEcho<int>.echo(self: interfaces.GimpEchoer, v
 
 function interfaces.GoopDescriber<T>$for$GoopBox<T>.describe(self: interfaces.GoopBox<#0>, value: #1) -> string {
     load_type #0
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _4
     load_type #1
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _6
     load_var _4
     load_const ":"
@@ -4740,7 +4740,7 @@ function interfaces.ritv_main() -> bool {
 
 function interfaces.rtit_main() -> string {
     load_type interfaces.RtitAnimal
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
@@ -5478,10 +5478,10 @@ function interfaces.w306_main() -> string {
 
 function interfaces.w306_names() -> string {
     load_type #0
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var naked
     load_type interfaces.W306Box<#0>
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var wrapped
     load_const "naked="
     load_var naked

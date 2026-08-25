@@ -474,7 +474,7 @@ class ai.internal.SpecCtx {
 class ai.internal.SpecCtx$stream {
   output_format: string | null
 }
-function ai.internal._schema_for_signature(handler: baml.AnyFunction) -> map<string, unknown>  [expr] {
+function ai.internal._schema_for_signature(handler: reflect.AnyFunction) -> map<string, unknown>  [expr] {
   { let sig = reflect.signature(handler); let props: map<string, unknown> = map {  }; let required: string[] = []; for a in sig.args { let _ = props.set(a.name, baml.json.schema(a.type)); required.push(a.name) } } map { "type": "object", "properties": props, "required": required, "additionalProperties": false }
 }
 function ai.internal.assemble_llm_prompt(parts: string[], values: unknown[]) -> root.Prompt  [expr] {
@@ -730,7 +730,7 @@ class ai.tools.Tool {
   name: string
   description: string
   input_schema: map<string, unknown>
-  handler: baml.AnyFunction?
+  handler: reflect.AnyFunction?
   raw_handler: (map<string, unknown>) -> string throws unknown?
   on_error: ai.tools.ErrorMode?
 }
@@ -738,7 +738,7 @@ class ai.tools.Tool$stream {
   name: string | null
   description: string | null
   input_schema: map<string, unknown>
-  handler: baml.AnyFunction | null
+  handler: reflect.AnyFunction | null
   raw_handler: unknown | null
   on_error: ai.tools.ErrorMode | null
 }
@@ -750,7 +750,7 @@ class ai.tools.Toolbox$stream {
 }
 enum ai.tools.ErrorMode {Report, Raise}
 function ai.tools.call(self: ?, args: map<string, unknown>) -> string  [expr] {
-  { if let rh: (map<string, unknown>) -> string throws unknown = self.raw_handler { return rh(args) } } if let h: baml.AnyFunction = self.handler { let value = reflect.call_any(h, args) catch (e) { bad: reflect.InvalidArgumentError => { throw baml.errors.InvalidArgument { message: `...` } } } } baml.json.stringify(baml.json.to_json(value)) else { throw baml.errors.InvalidArgument { message: `...` } }
+  { if let rh: (map<string, unknown>) -> string throws unknown = self.raw_handler { return rh(args) } } if let h: reflect.AnyFunction = self.handler { let value = reflect.call_any(h, args) catch (e) { bad: reflect.InvalidArgumentError => { throw baml.errors.InvalidArgument { message: `...` } } } } baml.json.stringify(baml.json.to_json(value)) else { throw baml.errors.InvalidArgument { message: `...` } }
 }
 function ai.tools.get(self: ?, name: string) -> ai.tools.Tool?  [expr] {
   {  } self.entries.find((t) -> { {  } t.name Eq name })
@@ -767,7 +767,7 @@ function ai.tools.new(tools: ai.tools.Tool[]) -> ai.tools.Toolbox  [expr] {
 function ai.tools.raw_tool(name: string, description: string, input_schema: map<string, unknown>, handler: (map<string, unknown>) -> string throws unknown, on_error: ai.tools.ErrorMode? = null) -> ai.tools.Tool  [expr] {
   { if (name Eq "__baml_return_output") { throw baml.errors.InvalidArgument { message: "the tool name __b..." } } } ai.tools.Tool { name: name, description: description, input_schema: input_schema, handler: null, raw_handler: handler, on_error: on_error }
 }
-function ai.tools.tool(handler: baml.AnyFunction, name: string? = null, description: string? = null, on_error: ai.tools.ErrorMode? = null) -> ai.tools.Tool  [expr] {
+function ai.tools.tool(handler: reflect.AnyFunction, name: string? = null, description: string? = null, on_error: ai.tools.ErrorMode? = null) -> ai.tools.Tool  [expr] {
   { let sig = reflect.signature(handler); let resolved_name = name NullCoalesce sig.name } if let n: string = resolved_name { if (n Eq "__baml_return_output") { throw baml.errors.InvalidArgument { message: "the tool name __b..." } } } ai.tools.Tool { name: n, description: description NullCoalesce sig.docstring NullCoalesce "", input_schema: root.internal._schema_for_signature(handler), handler: handler, raw_handler: null, on_error: on_error } else { throw baml.errors.InvalidArgument { message: "anonymous tool ne..." } }
 }
 
