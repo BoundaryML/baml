@@ -196,6 +196,7 @@ hyper-util = { version = "0.1", features = [ "server", "server-auto", "tokio" ] 
 indexmap = { version = "2.13", features = [ "serde" ] }
 indicatif = "0.18"
 insta = { version = "1.34", features = [ "yaml", "redactions" ] }
+juniper = { version = "0.17.1", features = [ "schema-language" ] }
 similar = "2"
 jiff = { version = "0.2" }
 la-arena = { version = "0.3" }

@@ -29,6 +29,7 @@ pub(crate) mod feedback_command;
 pub(crate) mod file_signature;
 pub(crate) mod format;
 pub(crate) mod generate;
+pub(crate) mod graphql_command;
 pub(crate) mod help_command;
 pub(crate) mod ide_command;
 pub(crate) mod init_command;
