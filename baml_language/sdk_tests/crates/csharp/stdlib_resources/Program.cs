@@ -8,7 +8,7 @@ if (args is ["cancel-token-any"])
 {
     await VerifyCancelTokenAnyAsync();
     Console.WriteLine("csharp_cancel_token_any=ok");
-    return 0;
+    return;
 }
 
 string tempRoot = Path.Combine(
