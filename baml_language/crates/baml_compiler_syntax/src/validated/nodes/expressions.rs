@@ -1,5 +1,7 @@
+use rowan::ast::AstNode as _;
+
 use crate::{
-    SyntaxElement, SyntaxKind, TextRange,
+    SyntaxElement, SyntaxKind, TextRange, ast as raw_ast,
     validated::{
         BinaryOp, FromCST, KnownKind, StrongAstError, SyntaxNodeIter, UnaryOp,
         ValidatedToken as Token,
@@ -2135,7 +2137,7 @@ impl KnownKind for FunctionArrow {
 #[derive(Debug)]
 pub struct LambdaExpr {
     pub generic_params: Option<GenericParamList>,
-    pub param_list: super::FunctionParamList,
+    pub param_list: raw_ast::ParameterList,
     pub arrow: FunctionArrow,
     pub return_type: Option<Type>,
     pub throws: Option<ThrowsClause>,
@@ -2160,7 +2162,9 @@ impl FromCST for LambdaExpr {
         };
 
         // Parameter list: (x: int, y: string) or ()
-        let param_list: super::FunctionParamList = it.expect_parse()?;
+        let param_list = StrongAstError::assert_is_node(it.expect_next("parameter list")?)?;
+        StrongAstError::assert_kind_node(&param_list, SyntaxKind::PARAMETER_LIST)?;
+        let param_list = raw_ast::ParameterList::cast(param_list).expect("checked parameter list");
 
         // Arrow: `->` or `=>` (formatter normalizes to `->`)
         let arrow: FunctionArrow = it.expect_parse()?;

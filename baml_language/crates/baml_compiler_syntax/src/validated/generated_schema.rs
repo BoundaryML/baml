@@ -1147,14 +1147,14 @@ impl<'tree> Validated<'tree, ast::ClassDef> {
         self.token(4, SyntaxKind::L_BRACE)
             .expect("validated required token")
     }
-    pub fn field(&self) -> Option<Validated<'tree, ast::Field>> {
-        self.child(5)
+    pub fn field(&self) -> ValidatedChildren<'tree, ast::Field> {
+        self.children(5)
     }
-    pub fn function_def(&self) -> Option<Validated<'tree, ast::FunctionDef>> {
-        self.child(6)
+    pub fn function_def(&self) -> ValidatedChildren<'tree, ast::FunctionDef> {
+        self.children(6)
     }
-    pub fn implements_block(&self) -> Option<Validated<'tree, ast::ImplementsBlock>> {
-        self.child(7)
+    pub fn implements_block(&self) -> ValidatedChildren<'tree, ast::ImplementsBlock> {
+        self.children(7)
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
         self.token(8, SyntaxKind::R_BRACE)
@@ -1181,8 +1181,8 @@ impl<'tree> Validated<'tree, ast::EnumDef> {
         self.token(4, SyntaxKind::L_BRACE)
             .expect("validated required token")
     }
-    pub fn enum_variant(&self) -> Option<Validated<'tree, ast::EnumVariant>> {
-        self.child(5)
+    pub fn enum_variant(&self) -> ValidatedChildren<'tree, ast::EnumVariant> {
+        self.children(5)
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
         self.token(6, SyntaxKind::R_BRACE)
@@ -1212,14 +1212,14 @@ impl<'tree> Validated<'tree, ast::InterfaceDef> {
         self.token(5, SyntaxKind::L_BRACE)
             .expect("validated required token")
     }
-    pub fn method_sig(&self) -> Option<Validated<'tree, ast::MethodSig>> {
-        self.child(6)
+    pub fn method_sig(&self) -> ValidatedChildren<'tree, ast::MethodSig> {
+        self.children(6)
     }
-    pub fn associated_type_decl(&self) -> Option<Validated<'tree, ast::AssociatedTypeDecl>> {
-        self.child(7)
+    pub fn associated_type_decl(&self) -> ValidatedChildren<'tree, ast::AssociatedTypeDecl> {
+        self.children(7)
     }
-    pub fn field(&self) -> Option<Validated<'tree, ast::Field>> {
-        self.child(8)
+    pub fn field(&self) -> ValidatedChildren<'tree, ast::Field> {
+        self.children(8)
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
         self.token(9, SyntaxKind::R_BRACE)
@@ -1254,20 +1254,20 @@ impl<'tree> Validated<'tree, ast::ImplementsFor> {
         self.token(7, SyntaxKind::L_BRACE)
             .expect("validated required token")
     }
-    pub fn function_def(&self) -> Option<Validated<'tree, ast::FunctionDef>> {
-        self.child(8)
+    pub fn function_def(&self) -> ValidatedChildren<'tree, ast::FunctionDef> {
+        self.children(8)
     }
-    pub fn associated_type_decl(&self) -> Option<Validated<'tree, ast::AssociatedTypeDecl>> {
-        self.child(9)
+    pub fn associated_type_decl(&self) -> ValidatedChildren<'tree, ast::AssociatedTypeDecl> {
+        self.children(9)
     }
-    pub fn interface_field_link(&self) -> Option<Validated<'tree, ast::InterfaceFieldLink>> {
-        self.child(10)
+    pub fn interface_field_link(&self) -> ValidatedChildren<'tree, ast::InterfaceFieldLink> {
+        self.children(10)
     }
-    pub fn field(&self) -> Option<Validated<'tree, ast::Field>> {
-        self.child(11)
+    pub fn field(&self) -> ValidatedChildren<'tree, ast::Field> {
+        self.children(11)
     }
-    pub fn block_attribute(&self) -> Option<Validated<'tree, ast::BlockAttribute>> {
-        self.child(12)
+    pub fn block_attribute(&self) -> ValidatedChildren<'tree, ast::BlockAttribute> {
+        self.children(12)
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
         self.token(13, SyntaxKind::R_BRACE)
@@ -1721,20 +1721,20 @@ impl<'tree> Validated<'tree, ast::ImplementsBlock> {
         self.token(3, SyntaxKind::L_BRACE)
             .expect("validated required token")
     }
-    pub fn function_def(&self) -> Option<Validated<'tree, ast::FunctionDef>> {
-        self.child(4)
+    pub fn function_def(&self) -> ValidatedChildren<'tree, ast::FunctionDef> {
+        self.children(4)
     }
-    pub fn associated_type_decl(&self) -> Option<Validated<'tree, ast::AssociatedTypeDecl>> {
-        self.child(5)
+    pub fn associated_type_decl(&self) -> ValidatedChildren<'tree, ast::AssociatedTypeDecl> {
+        self.children(5)
     }
-    pub fn interface_field_link(&self) -> Option<Validated<'tree, ast::InterfaceFieldLink>> {
-        self.child(6)
+    pub fn interface_field_link(&self) -> ValidatedChildren<'tree, ast::InterfaceFieldLink> {
+        self.children(6)
     }
-    pub fn field(&self) -> Option<Validated<'tree, ast::Field>> {
-        self.child(7)
+    pub fn field(&self) -> ValidatedChildren<'tree, ast::Field> {
+        self.children(7)
     }
-    pub fn block_attribute(&self) -> Option<Validated<'tree, ast::BlockAttribute>> {
-        self.child(8)
+    pub fn block_attribute(&self) -> ValidatedChildren<'tree, ast::BlockAttribute> {
+        self.children(8)
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
         self.token(9, SyntaxKind::R_BRACE)
@@ -1883,11 +1883,11 @@ impl<'tree> Validated<'tree, ast::ConfigBlock> {
         self.token(0, SyntaxKind::L_BRACE)
             .expect("validated required token")
     }
-    pub fn config_item(&self) -> Option<Validated<'tree, ast::ConfigItem>> {
-        self.child(1)
+    pub fn config_item(&self) -> ValidatedChildren<'tree, ast::ConfigItem> {
+        self.children(1)
     }
-    pub fn block_attribute(&self) -> Option<Validated<'tree, ast::BlockAttribute>> {
-        self.child(2)
+    pub fn block_attribute(&self) -> ValidatedChildren<'tree, ast::BlockAttribute> {
+        self.children(2)
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
         self.token(3, SyntaxKind::R_BRACE)
@@ -1943,11 +1943,11 @@ impl<'tree> Validated<'tree, ast::ConfigArray> {
         self.token(0, SyntaxKind::L_BRACKET)
             .expect("validated required token")
     }
-    pub fn config_value(&self) -> Option<Validated<'tree, ast::ConfigValue>> {
-        self.child(1)
+    pub fn config_value(&self) -> ValidatedChildren<'tree, ast::ConfigValue> {
+        self.children(1)
     }
-    pub fn config_block(&self) -> Option<Validated<'tree, ast::ConfigBlock>> {
-        self.child(2)
+    pub fn config_block(&self) -> ValidatedChildren<'tree, ast::ConfigBlock> {
+        self.children(2)
     }
     pub fn r_bracket_token(&self) -> ValidatedSyntaxToken {
         self.token(3, SyntaxKind::R_BRACKET)
@@ -1989,11 +1989,11 @@ impl<'tree> Validated<'tree, ast::TypeArgs> {
         self.token(0, SyntaxKind::LESS)
             .expect("validated required token")
     }
-    pub fn type_expr(&self) -> Option<Validated<'tree, ast::TypeExpr>> {
-        self.child(1)
+    pub fn type_expr(&self) -> ValidatedChildren<'tree, ast::TypeExpr> {
+        self.children(1)
     }
-    pub fn associated_type_decl(&self) -> Option<Validated<'tree, ast::AssociatedTypeDecl>> {
-        self.child(2)
+    pub fn associated_type_decl(&self) -> ValidatedChildren<'tree, ast::AssociatedTypeDecl> {
+        self.children(2)
     }
     pub fn greater_token(&self) -> ValidatedSyntaxToken {
         self.token(3, SyntaxKind::GREATER)
@@ -2500,11 +2500,11 @@ impl<'tree> Validated<'tree, ast::MatchExpr> {
         self.token(6, SyntaxKind::L_BRACE)
             .expect("validated required token")
     }
-    pub fn match_arm(&self) -> Option<Validated<'tree, ast::MatchArm>> {
-        self.child(7)
+    pub fn match_arm(&self) -> ValidatedChildren<'tree, ast::MatchArm> {
+        self.children(7)
     }
-    pub fn header_comment(&self) -> Option<Validated<'tree, ast::HeaderComment>> {
-        self.child(8)
+    pub fn header_comment(&self) -> ValidatedChildren<'tree, ast::HeaderComment> {
+        self.children(8)
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
         self.token(9, SyntaxKind::R_BRACE)
@@ -2619,11 +2619,11 @@ impl<'tree> Validated<'tree, ast::ForExpr> {
     pub fn l_paren_token(&self) -> Option<ValidatedSyntaxToken> {
         self.token(1, SyntaxKind::L_PAREN)
     }
-    pub fn let_stmt(&self) -> Option<Validated<'tree, ast::LetStmt>> {
-        self.child(2)
+    pub fn let_stmt(&self) -> ValidatedChildren<'tree, ast::LetStmt> {
+        self.children(2)
     }
-    pub fn expr_node(&self) -> Option<Validated<'tree, ast::ExprNode>> {
-        self.child(3)
+    pub fn expr_node(&self) -> ValidatedChildren<'tree, ast::ExprNode> {
+        self.children(3)
     }
     pub fn in_token(&self) -> Option<ValidatedSyntaxToken> {
         self.token(4, SyntaxKind::KW_IN)
@@ -2644,11 +2644,11 @@ impl<'tree> Validated<'tree, ast::ObjectLiteral> {
         self.token(1, SyntaxKind::L_BRACE)
             .expect("validated required token")
     }
-    pub fn object_field(&self) -> Option<Validated<'tree, ast::ObjectField>> {
-        self.child(2)
+    pub fn object_field(&self) -> ValidatedChildren<'tree, ast::ObjectField> {
+        self.children(2)
     }
-    pub fn spread_element(&self) -> Option<Validated<'tree, ast::SpreadElement>> {
-        self.child(3)
+    pub fn spread_element(&self) -> ValidatedChildren<'tree, ast::SpreadElement> {
+        self.children(3)
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
         self.token(4, SyntaxKind::R_BRACE)
@@ -2840,11 +2840,11 @@ impl<'tree> Validated<'tree, ast::GenericArgs> {
         self.token(0, SyntaxKind::LESS)
             .expect("validated required token")
     }
-    pub fn type_expr(&self) -> Option<Validated<'tree, ast::TypeExpr>> {
-        self.child(1)
+    pub fn type_expr(&self) -> ValidatedChildren<'tree, ast::TypeExpr> {
+        self.children(1)
     }
-    pub fn unreflect_arg(&self) -> Option<Validated<'tree, ast::UnreflectArg>> {
-        self.child(2)
+    pub fn unreflect_arg(&self) -> ValidatedChildren<'tree, ast::UnreflectArg> {
+        self.children(2)
     }
     pub fn greater_token(&self) -> ValidatedSyntaxToken {
         self.token(3, SyntaxKind::GREATER)
@@ -2952,11 +2952,11 @@ impl<'tree> Validated<'tree, ast::CatchClause> {
         self.token(8, SyntaxKind::L_BRACE)
             .expect("validated required token")
     }
-    pub fn catch_arm(&self) -> Option<Validated<'tree, ast::CatchArm>> {
-        self.child(9)
+    pub fn catch_arm(&self) -> ValidatedChildren<'tree, ast::CatchArm> {
+        self.children(9)
     }
-    pub fn header_comment(&self) -> Option<Validated<'tree, ast::HeaderComment>> {
-        self.child(10)
+    pub fn header_comment(&self) -> ValidatedChildren<'tree, ast::HeaderComment> {
+        self.children(10)
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
         self.token(11, SyntaxKind::R_BRACE)

@@ -140,6 +140,18 @@ impl GenericParam {
     }
 }
 
+impl TestExprDef {
+    pub fn expressions(&self) -> impl Iterator<Item = ExprNode> + '_ {
+        self.syntax.children().filter_map(ExprNode::cast)
+    }
+}
+
+impl TestsetDef {
+    pub fn expressions(&self) -> impl Iterator<Item = ExprNode> + '_ {
+        self.syntax.children().filter_map(ExprNode::cast)
+    }
+}
+
 /// Parts of a union member for token-based parsing.
 ///
 /// Union members can contain both tokens (WORD, `L_BRACKET`, etc.) and child nodes

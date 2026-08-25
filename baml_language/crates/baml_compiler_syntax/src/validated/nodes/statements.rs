@@ -1,8 +1,10 @@
+use rowan::ast::AstNode as _;
+
 use crate::{
-    SyntaxElement, SyntaxKind, TextRange,
+    SyntaxElement, SyntaxKind, TextRange, ast as raw_ast,
     validated::{
         FromCST, HeaderComment, KnownKind, StrongAstError, SyntaxNodeIter,
-        nodes::{BlockExpr, Expression, MatchPattern, ParenExpr, TestExprDecl, TestSetDecl},
+        nodes::{BlockExpr, Expression, MatchPattern, ParenExpr},
         tokens as t,
     },
 };
@@ -26,9 +28,9 @@ pub enum Statement {
     /// There's a semicolon with no preceding statement.
     EmptySemicolon(t::Semicolon),
     /// An expression-body test nested inside a testset body.
-    TestExpr(TestExprDecl),
+    TestExpr(raw_ast::TestExprDef),
     /// A nested testset inside a testset body.
-    TestSet(TestSetDecl),
+    TestSet(raw_ast::TestsetDef),
     Unknown(TextRange),
 }
 
@@ -46,8 +48,18 @@ impl FromCST for Statement {
             SyntaxKind::HEADER_COMMENT => {
                 t::HeaderComment::from_cst(elem).map(Statement::HeaderComment)
             }
-            SyntaxKind::TEST_EXPR_DEF => TestExprDecl::from_cst(elem).map(Statement::TestExpr),
-            SyntaxKind::TESTSET_DEF => TestSetDecl::from_cst(elem).map(Statement::TestSet),
+            SyntaxKind::TEST_EXPR_DEF => {
+                let node = StrongAstError::assert_is_node(elem)?;
+                Ok(Statement::TestExpr(
+                    raw_ast::TestExprDef::cast(node).expect("checked expression test"),
+                ))
+            }
+            SyntaxKind::TESTSET_DEF => {
+                let node = StrongAstError::assert_is_node(elem)?;
+                Ok(Statement::TestSet(
+                    raw_ast::TestsetDef::cast(node).expect("checked test set"),
+                ))
+            }
             _ => ExpressionStmt::from_cst(elem).map(Statement::Expr),
         }
     }

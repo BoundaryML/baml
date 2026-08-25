@@ -58,7 +58,7 @@ struct Args {
     check: bool,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Cardinality {
     Required,
     Optional,
@@ -701,12 +701,31 @@ fn lower_rule(
         }
         Rule::Alt(rules) => {
             for rule in rules {
-                lower_rule(grammar, rule, label, Cardinality::Optional, fields)?;
+                lower_rule(
+                    grammar,
+                    rule,
+                    label,
+                    optional_cardinality(cardinality),
+                    fields,
+                )?;
             }
         }
-        Rule::Opt(inner) => lower_rule(grammar, inner, label, Cardinality::Optional, fields)?,
+        Rule::Opt(inner) => lower_rule(
+            grammar,
+            inner,
+            label,
+            optional_cardinality(cardinality),
+            fields,
+        )?,
     }
     Ok(())
+}
+
+fn optional_cardinality(cardinality: Cardinality) -> Cardinality {
+    match cardinality {
+        Cardinality::Many => Cardinality::Many,
+        Cardinality::Required | Cardinality::Optional => Cardinality::Optional,
+    }
 }
 
 fn deduplicate_fields(fields: &mut Vec<Field>) {
@@ -1138,5 +1157,14 @@ mod tests {
     fn case_conversion_preserves_acronyms() {
         assert_eq!(upper_snake_case("LlmFunctionBody"), "LLM_FUNCTION_BODY");
         assert_eq!(upper_snake_case("IfExpr"), "IF_EXPR");
+    }
+
+    #[test]
+    fn optional_rules_preserve_repetition() {
+        assert_eq!(optional_cardinality(Cardinality::Many), Cardinality::Many);
+        assert_eq!(
+            optional_cardinality(Cardinality::Required),
+            Cardinality::Optional
+        );
     }
 }

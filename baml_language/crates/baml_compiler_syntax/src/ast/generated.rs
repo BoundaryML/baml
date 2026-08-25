@@ -117,14 +117,14 @@ impl ClassDef {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn field(&self) -> Option<Field> {
-        support::child(&self.syntax)
+    pub fn field(&self) -> AstChildren<Field> {
+        support::children(&self.syntax)
     }
-    pub fn function_def(&self) -> Option<FunctionDef> {
-        support::child(&self.syntax)
+    pub fn function_def(&self) -> AstChildren<FunctionDef> {
+        support::children(&self.syntax)
     }
-    pub fn implements_block(&self) -> Option<ImplementsBlock> {
-        support::child(&self.syntax)
+    pub fn implements_block(&self) -> AstChildren<ImplementsBlock> {
+        support::children(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -167,8 +167,8 @@ impl EnumDef {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn enum_variant(&self) -> Option<EnumVariant> {
-        support::child(&self.syntax)
+    pub fn enum_variant(&self) -> AstChildren<EnumVariant> {
+        support::children(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -211,14 +211,14 @@ impl InterfaceDef {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn method_sig(&self) -> Option<MethodSig> {
-        support::child(&self.syntax)
+    pub fn method_sig(&self) -> AstChildren<MethodSig> {
+        support::children(&self.syntax)
     }
-    pub fn associated_type_decl(&self) -> Option<AssociatedTypeDecl> {
-        support::child(&self.syntax)
+    pub fn associated_type_decl(&self) -> AstChildren<AssociatedTypeDecl> {
+        support::children(&self.syntax)
     }
-    pub fn field(&self) -> Option<Field> {
-        support::child(&self.syntax)
+    pub fn field(&self) -> AstChildren<Field> {
+        support::children(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -270,20 +270,20 @@ impl ImplementsFor {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn function_def(&self) -> Option<FunctionDef> {
-        support::child(&self.syntax)
+    pub fn function_def(&self) -> AstChildren<FunctionDef> {
+        support::children(&self.syntax)
     }
-    pub fn associated_type_decl(&self) -> Option<AssociatedTypeDecl> {
-        support::child(&self.syntax)
+    pub fn associated_type_decl(&self) -> AstChildren<AssociatedTypeDecl> {
+        support::children(&self.syntax)
     }
-    pub fn interface_field_link(&self) -> Option<InterfaceFieldLink> {
-        support::child(&self.syntax)
+    pub fn interface_field_link(&self) -> AstChildren<InterfaceFieldLink> {
+        support::children(&self.syntax)
     }
-    pub fn field(&self) -> Option<Field> {
-        support::child(&self.syntax)
+    pub fn field(&self) -> AstChildren<Field> {
+        support::children(&self.syntax)
     }
-    pub fn block_attribute(&self) -> Option<BlockAttribute> {
-        support::child(&self.syntax)
+    pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
+        support::children(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -1148,20 +1148,20 @@ impl ImplementsBlock {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn function_def(&self) -> Option<FunctionDef> {
-        support::child(&self.syntax)
+    pub fn function_def(&self) -> AstChildren<FunctionDef> {
+        support::children(&self.syntax)
     }
-    pub fn associated_type_decl(&self) -> Option<AssociatedTypeDecl> {
-        support::child(&self.syntax)
+    pub fn associated_type_decl(&self) -> AstChildren<AssociatedTypeDecl> {
+        support::children(&self.syntax)
     }
-    pub fn interface_field_link(&self) -> Option<InterfaceFieldLink> {
-        support::child(&self.syntax)
+    pub fn interface_field_link(&self) -> AstChildren<InterfaceFieldLink> {
+        support::children(&self.syntax)
     }
-    pub fn field(&self) -> Option<Field> {
-        support::child(&self.syntax)
+    pub fn field(&self) -> AstChildren<Field> {
+        support::children(&self.syntax)
     }
-    pub fn block_attribute(&self) -> Option<BlockAttribute> {
-        support::child(&self.syntax)
+    pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
+        support::children(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -1475,11 +1475,11 @@ impl ConfigBlock {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn config_item(&self) -> Option<ConfigItem> {
-        support::child(&self.syntax)
+    pub fn config_item(&self) -> AstChildren<ConfigItem> {
+        support::children(&self.syntax)
     }
-    pub fn block_attribute(&self) -> Option<BlockAttribute> {
-        support::child(&self.syntax)
+    pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
+        support::children(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -1611,11 +1611,11 @@ impl ConfigArray {
     pub fn l_bracket_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACKET)
     }
-    pub fn config_value(&self) -> Option<ConfigValue> {
-        support::child(&self.syntax)
+    pub fn config_value(&self) -> AstChildren<ConfigValue> {
+        support::children(&self.syntax)
     }
-    pub fn config_block(&self) -> Option<ConfigBlock> {
-        support::child(&self.syntax)
+    pub fn config_block(&self) -> AstChildren<ConfigBlock> {
+        support::children(&self.syntax)
     }
     pub fn r_bracket_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACKET)
@@ -1735,11 +1735,11 @@ impl TypeArgs {
     pub fn less_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::LESS)
     }
-    pub fn type_expr(&self) -> Option<TypeExpr> {
-        support::child(&self.syntax)
+    pub fn type_expr(&self) -> AstChildren<TypeExpr> {
+        support::children(&self.syntax)
     }
-    pub fn associated_type_decl(&self) -> Option<AssociatedTypeDecl> {
-        support::child(&self.syntax)
+    pub fn associated_type_decl(&self) -> AstChildren<AssociatedTypeDecl> {
+        support::children(&self.syntax)
     }
     pub fn greater_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::GREATER)
@@ -2716,11 +2716,11 @@ impl MatchExpr {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn match_arm(&self) -> Option<MatchArm> {
-        support::child(&self.syntax)
+    pub fn match_arm(&self) -> AstChildren<MatchArm> {
+        support::children(&self.syntax)
     }
-    pub fn header_comment(&self) -> Option<HeaderComment> {
-        support::child(&self.syntax)
+    pub fn header_comment(&self) -> AstChildren<HeaderComment> {
+        support::children(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -3007,11 +3007,11 @@ impl ForExpr {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_PAREN)
     }
-    pub fn let_stmt(&self) -> Option<LetStmt> {
-        support::child(&self.syntax)
+    pub fn let_stmt(&self) -> AstChildren<LetStmt> {
+        support::children(&self.syntax)
     }
-    pub fn expr_node(&self) -> Option<ExprNode> {
-        support::child(&self.syntax)
+    pub fn expr_node(&self) -> AstChildren<ExprNode> {
+        support::children(&self.syntax)
     }
     pub fn in_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::KW_IN)
@@ -3051,11 +3051,11 @@ impl ObjectLiteral {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn object_field(&self) -> Option<ObjectField> {
-        support::child(&self.syntax)
+    pub fn object_field(&self) -> AstChildren<ObjectField> {
+        support::children(&self.syntax)
     }
-    pub fn spread_element(&self) -> Option<SpreadElement> {
-        support::child(&self.syntax)
+    pub fn spread_element(&self) -> AstChildren<SpreadElement> {
+        support::children(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -3468,11 +3468,11 @@ impl GenericArgs {
     pub fn less_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::LESS)
     }
-    pub fn type_expr(&self) -> Option<TypeExpr> {
-        support::child(&self.syntax)
+    pub fn type_expr(&self) -> AstChildren<TypeExpr> {
+        support::children(&self.syntax)
     }
-    pub fn unreflect_arg(&self) -> Option<UnreflectArg> {
-        support::child(&self.syntax)
+    pub fn unreflect_arg(&self) -> AstChildren<UnreflectArg> {
+        support::children(&self.syntax)
     }
     pub fn greater_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::GREATER)
@@ -3730,11 +3730,11 @@ impl CatchClause {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn catch_arm(&self) -> Option<CatchArm> {
-        support::child(&self.syntax)
+    pub fn catch_arm(&self) -> AstChildren<CatchArm> {
+        support::children(&self.syntax)
     }
-    pub fn header_comment(&self) -> Option<HeaderComment> {
-        support::child(&self.syntax)
+    pub fn header_comment(&self) -> AstChildren<HeaderComment> {
+        support::children(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
