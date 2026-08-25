@@ -134,6 +134,13 @@ impl InferenceTable {
         Ty::infer_var(var)
     }
 
+    /// Returns the canonical representative when `var`'s equivalence class
+    /// still lacks a solution.
+    pub fn unsolved_root_var(&mut self, var: InferVar) -> Option<InferVar> {
+        let root = self.vars.find(VarKey(var));
+        matches!(self.vars.probe_value(root), VarValue::Unknown).then_some(root.0)
+    }
+
     /// Whether `var`'s equivalence class contains an establishment var.
     pub fn is_establishment_var(&mut self, var: InferVar) -> bool {
         let root = self.vars.find(VarKey(var));
@@ -524,6 +531,21 @@ mod tests {
         let b = table.new_var_ty();
         assert_ne!(a, b);
         assert_eq!(table.shallow_resolve(&a), a);
+    }
+
+    #[test]
+    fn unsolved_root_var_tracks_equivalence_classes() {
+        let mut table = InferenceTable::new();
+        let a = table.new_var();
+        let b = table.new_var();
+        assert_ne!(table.unsolved_root_var(a), table.unsolved_root_var(b));
+
+        table.unify(&Ty::infer_var(a), &Ty::infer_var(b)).unwrap();
+        assert_eq!(table.unsolved_root_var(a), table.unsolved_root_var(b));
+
+        table.unify(&Ty::infer_var(a), &Ty::int()).unwrap();
+        assert_eq!(table.unsolved_root_var(a), None);
+        assert_eq!(table.unsolved_root_var(b), None);
     }
 
     #[test]

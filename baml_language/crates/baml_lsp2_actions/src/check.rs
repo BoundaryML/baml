@@ -1603,6 +1603,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::BuiltinInterfaceNotABound { .. } => DiagnosticId::BuiltinInterfaceNotABound,
         // A `_` placeholder in a non-inferable position.
         TirTypeError::CannotInferType => DiagnosticId::WildcardTypeNotAllowed,
+        TirTypeError::TypeMustBeKnown { .. } => DiagnosticId::TypeMustBeKnown,
         // Generic-parameter / associated-type declaration hygiene.
         TirTypeError::TypeParamShadowedImplParam { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::DuplicateGenericParam { .. }

@@ -270,6 +270,8 @@ pub enum TirTypeError {
     /// Lowered to `Ty::Error` so it never reaches the canonical normalizer, which treats
     /// `Ty::Infer` as `unreachable!`.
     CannotInferType,
+    /// An ordinary inference variable remained unresolved at writeback.
+    TypeMustBeKnown { full_type: Ty },
     /// An associated-type projection references `member`, but the subject it
     /// projects through does not declare (or cannot declare) it as an
     /// associated type.
@@ -1167,6 +1169,13 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::CannotInferType => {
                 write!(f, "type inference failed; write the type explicitly")
+            }
+            TirTypeError::TypeMustBeKnown { full_type } => {
+                write!(
+                    f,
+                    "type annotations needed\nfull type: `{}`",
+                    full_type.render_user_facing()
+                )
             }
             TirTypeError::UnknownAssociatedType { member, container } => {
                 write!(f, "unknown associated type `{member}` for {container}")

@@ -1328,6 +1328,15 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                                                                    ╰── expected `string`, found `0`
      ╰────
 
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `unknown[]`
+     ╭─[other_exprs.baml:101:5]
+ 101 │     [];
+     ·     ──
+     ╰────
+
   [validation] E0011
 
   × duplicate function `ManyParams`

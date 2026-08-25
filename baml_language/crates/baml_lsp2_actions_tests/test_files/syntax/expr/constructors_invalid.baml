@@ -86,6 +86,14 @@ function Foo() -> Bar {
 //  7 │   let x = Bar { a: "hello", c: 12 };
 //    ·                             ─
 //    ╰────
+// E0155
+//
+//   × type annotations needed
+//   │ full type: `map<string, unknown>`
+//     ╭─[expr_constructors_invalid.baml:10:14]
+//  10 │     headers: {},
+//     ·              ──
+//     ╰────
 // E0003
 //
 //   × unresolved name: `a`

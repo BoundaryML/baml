@@ -617,6 +617,15 @@ enum HoleAnchor {
     TypeRef(BodyTypeRefId),
 }
 
+/// Where an inference variable came from and the user-facing type that
+/// contains it. Writeback uses this to report unsolved variables before
+/// replacing them with the error sentinel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct InferVarOrigin {
+    location: crate::diagnostics::DiagnosticLocation,
+    containing_type: Ty,
+}
+
 /// S17 pending diagnostic (engine-internal): arena-anchored, payload
 /// types interned (still var-carrying until finish); finalized into the
 /// shared vocabulary with PLAIN types at writeback. Short-lived and
@@ -1607,6 +1616,12 @@ struct InferenceContext<'db> {
     /// finalize reports E0147 `CannotInferType` there (rustc's E0282
     /// discipline) instead of leaking a bare `Infer` into lowering.
     hole_vars: Vec<(baml_type::interned::InferVar, HoleAnchor)>,
+    /// User-source origins for ordinary inference variables that require a
+    /// concrete solution. The order vector makes diagnostic selection stable
+    /// when several source variables unify into one unresolved class.
+    infer_var_origins: FxHashMap<baml_type::interned::InferVar, InferVarOrigin>,
+    infer_var_origin_order: Vec<baml_type::interned::InferVar>,
+    diagnosed_infer_vars: rustc_hash::FxHashSet<baml_type::interned::InferVar>,
     /// One lowering per written body annotation (rust-analyzer's
     /// discipline): the let rule, the pattern walk, and the backfill all
     /// read the SAME lowered type - and so the same instantiated hole
@@ -1748,6 +1763,9 @@ impl<'db> InferenceContext<'db> {
             throws_channels: vec![Vec::new()],
             pending_diags: Vec::new(),
             hole_vars: Vec::new(),
+            infer_var_origins: FxHashMap::default(),
+            infer_var_origin_order: Vec::new(),
+            diagnosed_infer_vars: rustc_hash::FxHashSet::default(),
             annotation_cache: FxHashMap::default(),
             canonical_cache: baml_type::normalize::InternedCanonicalCache::default(),
             member_probe_depth: 0,
@@ -2381,7 +2399,7 @@ impl<'db> InferenceContext<'db> {
                     None if elements.is_empty() => {
                         // `[]`: a list over a fresh element variable - the
                         // honest replacement for the EvolvingList sentinel.
-                        Ty::list(self.table.new_establishment_var_ty())
+                        self.untyped_empty_container_ty(expr, Ty::list)
                     }
                     None => {
                         let joined: Vec<Ty> = elements
@@ -2437,10 +2455,12 @@ impl<'db> InferenceContext<'db> {
                     // `checked_map_key`), so a key var has exactly one
                     // legal solution and leaving it open lets `m[0] = 1`
                     // silently solve `?K := int`.
-                    Ty::intern(TyKind::Map {
-                        key: Ty::string(),
-                        value: self.table.new_establishment_var_ty(),
-                        attr: TyAttr::default(),
+                    self.untyped_empty_container_ty(expr, |value| {
+                        Ty::intern(TyKind::Map {
+                            key: Ty::string(),
+                            value,
+                            attr: TyAttr::default(),
+                        })
                     })
                 } else {
                     let (keys, values): (Vec<Ty>, Vec<Ty>) = entries
@@ -2511,10 +2531,12 @@ impl<'db> InferenceContext<'db> {
                             attr: TyAttr::default(),
                         })
                     } else if fields.is_empty() {
-                        Ty::intern(TyKind::Map {
-                            key: Ty::string(),
-                            value: self.table.new_establishment_var_ty(),
-                            attr: TyAttr::default(),
+                        self.untyped_empty_container_ty(expr, |value| {
+                            Ty::intern(TyKind::Map {
+                                key: Ty::string(),
+                                value,
+                                attr: TyAttr::default(),
+                            })
                         })
                     } else {
                         let values: Vec<Ty> = fields
@@ -9841,6 +9863,54 @@ impl<'db> InferenceContext<'db> {
             .insert(expr, ResolvedPath { segments: steps });
     }
 
+    fn untyped_empty_container_ty(
+        &mut self,
+        expr: ExprId,
+        make_container: impl FnOnce(Ty) -> Ty,
+    ) -> Ty {
+        let slot = self.table.new_establishment_var_ty();
+        let TyKind::Infer { var: Some(var), .. } = slot.kind() else {
+            unreachable!("a fresh establishment variable must be an inference type");
+        };
+        let var = *var;
+        let containing_type = make_container(slot);
+        self.infer_var_origin_order.push(var);
+        self.infer_var_origins.insert(
+            var,
+            InferVarOrigin {
+                location: crate::diagnostics::DiagnosticLocation::Expr(expr),
+                containing_type: containing_type.clone(),
+            },
+        );
+        containing_type
+    }
+
+    fn take_unresolved_infer_diagnostics(
+        &mut self,
+    ) -> Vec<(crate::diagnostics::DiagnosticLocation, baml_type::Ty)> {
+        let mut diagnostics = Vec::new();
+        for var in std::mem::take(&mut self.infer_var_origin_order) {
+            let Some(origin) = self.infer_var_origins.remove(&var) else {
+                continue;
+            };
+            let Some(root) = self.table.unsolved_root_var(var) else {
+                continue;
+            };
+            let full_type = self.table.resolve_completely(&origin.containing_type);
+            if full_type.has_error() {
+                continue;
+            }
+            if !self.diagnosed_infer_vars.insert(root) {
+                continue;
+            }
+            diagnostics.push((
+                origin.location,
+                infer_to_diagnostic_unknown(&full_type).to_plain(),
+            ));
+        }
+        diagnostics
+    }
+
     fn finish(mut self) -> InferenceResult<'db> {
         // The fulfillment fixpoint: solve what FULL bounds determine,
         // attempt obligations, re-drive the deferred residue, repeat
@@ -9895,6 +9965,7 @@ impl<'db> InferenceContext<'db> {
         // BAML's only defaulting rule: an unconstrained EFFECT is `never`
         // (a value variable erases to Error instead - ruling 2).
         self.table.default_unsolved_effects_to_never();
+        let unresolved_infer_diagnostics = self.take_unresolved_infer_diagnostics();
         let throws = match self.declared_throws.clone() {
             // A closed clause IS the surface (declared wins, rule 1),
             // VERBATIM - the written member order is render fidelity
@@ -10011,6 +10082,14 @@ impl<'db> InferenceContext<'db> {
                 DiagnosticLocation, DiagnosticSeverity, TirDiagnostic, TirTypeError,
             };
             let mut diags: Vec<TirDiagnostic<'db>> = Vec::new();
+            for (location, full_type) in unresolved_infer_diagnostics {
+                diags.push(TirDiagnostic {
+                    error: TirTypeError::TypeMustBeKnown { full_type },
+                    severity: DiagnosticSeverity::Error,
+                    primary: location,
+                    related: Vec::new(),
+                });
+            }
             for (&expr, (expected, actual)) in &result.type_mismatches {
                 // rustc's tainted_by_errors discipline: a mismatch whose
                 // operand IS the error sentinel is a CASCADE of a reported
@@ -12102,6 +12181,20 @@ fn erase_infer(ty: &Ty) -> Ty {
         return Ty::error();
     }
     Ty::intern(ty.kind().map_children(erase_infer))
+}
+
+/// Replaces every unresolved inference node with the user-denotable top type
+/// while preserving the surrounding shape for diagnostics.
+fn infer_to_diagnostic_unknown(ty: &Ty) -> Ty {
+    if !ty.has_infer() {
+        return ty.clone();
+    }
+    if matches!(ty.kind(), TyKind::Infer { .. }) {
+        return Ty::intern(TyKind::Unknown {
+            attr: TyAttr::default(),
+        });
+    }
+    Ty::intern(ty.kind().map_children(infer_to_diagnostic_unknown))
 }
 
 /// A fresh literal widens to its base primitive at binding sites (the spec's
