@@ -1,21 +1,25 @@
 //! Reference: [`baml_db::baml_compiler_syntax::ast::Expr`] and [`baml_db::baml_compiler_hir::body`]
 
-use baml_db::baml_compiler_syntax::validated::{
-    ValidatedSyntaxToken,
-    nodes::{
-        ArmListItem, ArrayInitializer, BinaryExpr, BlockExpr, CallArg, CallArgs, CallExpr,
-        CatchArm, CatchBinding, CatchClause, CatchExpr, ElseExpr, EnvAccessExpr, Expression,
-        FieldAccessExpr, FunctionArrow, GenericApplyExpr, GenericArg, GenericArgs,
-        GenericParamBounds, GenericParamList, IfExpr, IfLetExpr, IndexExpr, IsExpr, LambdaExpr,
-        MapLiteral, MatchArm, MatchExpr, MatchGuard, ObjectField, ObjectFieldKey,
-        ObjectInitializer, ObjectMember, OptionalCallExpr, OptionalFieldAccessExpr,
-        OptionalIndexExpr, ParenExpr, PathExpr, SpawnExpr, SpreadElement, UnaryExpr, UnreflectArg,
+use baml_db::baml_compiler_syntax::{
+    SyntaxElement, ast as raw_ast,
+    validated::{
+        FromCST, Validated, ValidatedSyntaxToken,
+        nodes::{
+            ArmListItem, ArrayInitializer, BinaryExpr, BlockExpr, CallArg, CallArgs, CallExpr,
+            CatchArm, CatchBinding, CatchClause, CatchExpr, ElseExpr, EnvAccessExpr, Expression,
+            FieldAccessExpr, FunctionArrow, GenericApplyExpr, GenericArg, GenericArgs,
+            GenericParamBounds, GenericParamList, IfExpr, IfLetExpr, IndexExpr, IsExpr, LambdaExpr,
+            MapLiteral, MatchArm, MatchExpr, MatchGuard, ObjectField, ObjectFieldKey,
+            ObjectInitializer, ObjectMember, OptionalCallExpr, OptionalFieldAccessExpr,
+            OptionalIndexExpr, ParenExpr, PathExpr, SpawnExpr, SpreadElement, ThrowsClause,
+            UnaryExpr, UnreflectArg,
+        },
     },
 };
-use rowan::TextRange;
+use rowan::{TextRange, ast::AstNode as _};
 
 use crate::{
-    ast::{BinaryOp, Literal, ThrowsClause, Token, tokens as t},
+    ast::{BinaryOp, Literal, Token, tokens as t},
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::{EmittableTrivia, TriviaInfo, TriviaSliceExt},
 };
@@ -3168,6 +3172,42 @@ impl Printable for ThrowsClause {
     }
     fn rightmost_token(&self) -> TextRange {
         self.ty.rightmost_token()
+    }
+}
+
+impl Printable for raw_ast::ThrowsClause {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        ThrowsClause::from_cst(SyntaxElement::Node(self.syntax().clone()))
+            .expect("validated throws clause")
+            .print(shape, printer)
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        ThrowsClause::from_cst(SyntaxElement::Node(self.syntax().clone()))
+            .expect("validated throws clause")
+            .leftmost_token()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        ThrowsClause::from_cst(SyntaxElement::Node(self.syntax().clone()))
+            .expect("validated throws clause")
+            .rightmost_token()
+    }
+}
+
+impl Printable for Validated<'_, raw_ast::ThrowsClause> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        ThrowsClause::from_cst(SyntaxElement::Node(self.syntax().clone()))
+            .expect("validated throws clause")
+            .print(shape, printer)
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.first_token_range()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.last_token_range()
     }
 }
 

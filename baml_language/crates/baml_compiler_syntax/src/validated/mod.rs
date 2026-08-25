@@ -1,6 +1,10 @@
 use std::{borrow::Cow, path::Path};
 
-use crate::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxNodeExt as _, SyntaxToken, TextRange};
+use rowan::ast::AstNode;
+
+use crate::{
+    BamlLanguage, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxNodeExt as _, SyntaxToken, TextRange,
+};
 
 mod arena;
 mod generated_schema;
@@ -476,6 +480,22 @@ impl KnownKind for HeaderComment {
 
 pub trait FromCST: Sized {
     fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError>;
+}
+
+impl<T> FromCST for T
+where
+    T: AstNode<Language = BamlLanguage>,
+{
+    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(element)?;
+        let found = node.kind();
+        let at = node.text_range();
+        T::cast(node).ok_or_else(|| StrongAstError::UnexpectedKindDesc {
+            expected_desc: std::any::type_name::<T>().into(),
+            found,
+            at,
+        })
+    }
 }
 
 pub trait KnownKind {

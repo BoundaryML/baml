@@ -2,12 +2,18 @@
 //! since we shouldn't need special treatment for things like `string` and `int` during formatting.
 //! If this ever gets used for something else, we can split it up into multiple types.
 
-use baml_db::baml_compiler_syntax::validated::nodes::{
-    ArrayType, AssociatedProjectionType, AssociatedTypeArgBinding, ConstrainedType, FunctionType,
-    FunctionTypeParam, GenericType, OptionalType, ParenType, PathType, SignedLiteralType,
-    StringType, Type, TypeArg, TypeArgs, UnionType, UnionTypeMember,
+use baml_db::baml_compiler_syntax::{
+    SyntaxElement, ast as raw_ast,
+    validated::{
+        FromCST, Validated,
+        nodes::{
+            ArrayType, AssociatedProjectionType, AssociatedTypeArgBinding, ConstrainedType,
+            FunctionType, FunctionTypeParam, GenericType, OptionalType, ParenType, PathType,
+            SignedLiteralType, StringType, Type, TypeArg, TypeArgs, UnionType, UnionTypeMember,
+        },
+    },
 };
-use rowan::{TextRange, TextSize};
+use rowan::{TextRange, TextSize, ast::AstNode as _};
 
 use crate::{
     ast::Token,
@@ -17,6 +23,74 @@ use crate::{
 
 trait TryPrintSingleLine {
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo>;
+}
+
+pub(super) trait TypeLayout {
+    fn multi_line_is_indented(&self) -> bool;
+}
+
+impl TypeLayout for Validated<'_, raw_ast::TypeExpr> {
+    fn multi_line_is_indented(&self) -> bool {
+        Type::from_cst(SyntaxElement::Node(self.syntax().clone()))
+            .expect("validated type expression")
+            .multi_line_is_indented()
+    }
+}
+
+impl Printable for Validated<'_, raw_ast::TypeExpr> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        Type::from_cst(SyntaxElement::Node(self.syntax().clone()))
+            .expect("validated type expression")
+            .print(shape, printer)
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.first_token_range()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.last_token_range()
+    }
+}
+
+impl Printable for raw_ast::TypeExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        Type::from_cst(SyntaxElement::Node(self.syntax().clone()))
+            .expect("validated type expression")
+            .print(shape, printer)
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        Type::from_cst(SyntaxElement::Node(self.syntax().clone()))
+            .expect("validated type expression")
+            .leftmost_token()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        Type::from_cst(SyntaxElement::Node(self.syntax().clone()))
+            .expect("validated type expression")
+            .rightmost_token()
+    }
+}
+
+impl Printable for raw_ast::TypeArgs {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        TypeArgs::from_cst(SyntaxElement::Node(self.syntax().clone()))
+            .expect("validated type arguments")
+            .print(shape, printer)
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        TypeArgs::from_cst(SyntaxElement::Node(self.syntax().clone()))
+            .expect("validated type arguments")
+            .leftmost_token()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        TypeArgs::from_cst(SyntaxElement::Node(self.syntax().clone()))
+            .expect("validated type arguments")
+            .rightmost_token()
+    }
 }
 
 impl Printable for Type {

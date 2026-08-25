@@ -5,7 +5,7 @@ use crate::{
     validated::{
         BinaryOp, FromCST, KnownKind, StrongAstError, SyntaxNodeIter, UnaryOp,
         ValidatedToken as Token,
-        nodes::{Literal, MatchPattern, Statement, ThrowsClause, Type},
+        nodes::{Literal, MatchPattern, Statement},
         tokens as t,
     },
 };
@@ -1898,7 +1898,7 @@ pub struct GenericParam {
 #[derive(Debug)]
 pub struct GenericParamBounds {
     pub extends: t::Extends,
-    pub bounds: Vec<(Type, Option<t::And>)>,
+    pub bounds: Vec<(raw_ast::TypeExpr, Option<t::And>)>,
 }
 
 impl FromCST for GenericParamList {
@@ -1970,7 +1970,7 @@ impl FromCST for GenericParamBounds {
         let extends: t::Extends = it.expect_parse()?;
         let mut bounds = Vec::new();
         while it.peek().is_some() {
-            let ty: Type = it.expect_parse()?;
+            let ty = raw_ast::TypeExpr::from_cst(it.expect_next("type bound")?)?;
             let and = it
                 .next_if_kind(SyntaxKind::AND)
                 .map(t::And::from_cst)
@@ -2003,7 +2003,7 @@ pub struct GenericArgs {
 
 #[derive(Debug)]
 pub enum GenericArg {
-    Type(Type),
+    Type(raw_ast::TypeExpr),
     Unreflect(UnreflectArg),
 }
 
@@ -2055,7 +2055,7 @@ impl FromCST for GenericArgs {
                     break t::Greater::from_cst(elem)?;
                 }
                 SyntaxKind::TYPE_EXPR => {
-                    let arg = GenericArg::Type(Type::from_cst(elem)?);
+                    let arg = GenericArg::Type(raw_ast::TypeExpr::from_cst(elem)?);
                     let comma = it
                         .next_if_kind(SyntaxKind::COMMA)
                         .map(t::Comma::from_cst)
@@ -2139,8 +2139,8 @@ pub struct LambdaExpr {
     pub generic_params: Option<GenericParamList>,
     pub param_list: raw_ast::ParameterList,
     pub arrow: FunctionArrow,
-    pub return_type: Option<Type>,
-    pub throws: Option<ThrowsClause>,
+    pub return_type: Option<raw_ast::TypeExpr>,
+    pub throws: Option<raw_ast::ThrowsClause>,
     pub block: BlockExpr,
 }
 
@@ -2172,7 +2172,7 @@ impl FromCST for LambdaExpr {
         // Optional return type: TYPE_EXPR before THROWS_CLAUSE or BLOCK_EXPR
         let return_type = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::TYPE_EXPR) {
             let elem = it.next().expect("peeked");
-            Some(Type::from_cst(elem)?)
+            Some(raw_ast::TypeExpr::from_cst(elem)?)
         } else {
             None
         };
@@ -2180,7 +2180,7 @@ impl FromCST for LambdaExpr {
         // Optional throws clause
         let throws = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::THROWS_CLAUSE) {
             let elem = it.next().expect("peeked");
-            Some(ThrowsClause::from_cst(elem)?)
+            Some(raw_ast::ThrowsClause::from_cst(elem)?)
         } else {
             None
         };

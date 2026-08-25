@@ -4,7 +4,7 @@ use baml_db::baml_compiler_syntax::{
 };
 use rowan::{TextRange, ast::AstNode as _};
 
-use super::expressions::FunctionArrowLayout;
+use super::{expressions::FunctionArrowLayout, types::TypeLayout};
 use crate::{
     EmittableTrivia,
     ast::{Token, tokens as t},
@@ -99,13 +99,8 @@ impl Printable for Validated<'_, syntax_ast::FunctionDef> {
             .arrow_token()
             .or_else(|| self.fat_arrow_token())
             .expect("validated function arrow");
-        let return_type =
-            super::Type::from_cst(SyntaxElement::Node(self.type_expr().syntax().clone()))
-                .expect("validated return type");
-        let throws = self.throws_clause().map(|throws| {
-            super::ThrowsClause::from_cst(SyntaxElement::Node(throws.syntax().clone()))
-                .expect("validated throws clause")
-        });
+        let return_type = self.type_expr();
+        let throws = self.throws_clause();
         let body = self.function_body_kind();
         print_function_layout(
             &keyword,
@@ -135,8 +130,8 @@ fn print_function_layout(
     generic_params: Option<&super::GenericParamList>,
     params: &Validated<'_, syntax_ast::ParameterList>,
     arrow: &impl FunctionArrowLayout,
-    return_type: &super::Type,
-    throws: Option<&super::ThrowsClause>,
+    return_type: &Validated<'_, syntax_ast::TypeExpr>,
+    throws: Option<&Validated<'_, syntax_ast::ThrowsClause>>,
     body: &Validated<'_, syntax_ast::FunctionBodyKind>,
     shape: Shape,
     printer: &mut Printer,
@@ -262,7 +257,35 @@ enum ParameterView<'tree> {
     Raw(syntax_ast::Parameter),
 }
 
-impl ParameterView<'_> {
+enum ParameterType<'tree> {
+    Cached(Validated<'tree, syntax_ast::TypeExpr>),
+    Raw(syntax_ast::TypeExpr),
+}
+
+impl Printable for ParameterType<'_> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            Self::Cached(ty) => ty.print(shape, printer),
+            Self::Raw(ty) => ty.print(shape, printer),
+        }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            Self::Cached(ty) => ty.leftmost_token(),
+            Self::Raw(ty) => ty.leftmost_token(),
+        }
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            Self::Cached(ty) => ty.rightmost_token(),
+            Self::Raw(ty) => ty.rightmost_token(),
+        }
+    }
+}
+
+impl<'tree> ParameterView<'tree> {
     fn name_token(&self) -> ParameterToken {
         match self {
             Self::Cached(parameter) => ParameterToken::Cached(
@@ -297,16 +320,10 @@ impl ParameterView<'_> {
         }
     }
 
-    fn ty(&self) -> Option<super::Type> {
+    fn ty(&self) -> Option<ParameterType<'tree>> {
         match self {
-            Self::Cached(parameter) => {
-                let ty = parameter.type_expr()?;
-                super::Type::from_cst(SyntaxElement::Node(ty.syntax().clone())).ok()
-            }
-            Self::Raw(parameter) => {
-                let ty = parameter.type_expr()?;
-                super::Type::from_cst(SyntaxElement::Node(ty.syntax().clone())).ok()
-            }
+            Self::Cached(parameter) => parameter.type_expr().map(ParameterType::Cached),
+            Self::Raw(parameter) => parameter.type_expr().map(ParameterType::Raw),
         }
     }
 
@@ -827,17 +844,15 @@ impl Printable for Validated<'_, syntax_ast::ClassDef> {
     }
 }
 
-fn class_field_parts(
-    field: &Validated<'_, syntax_ast::Field>,
-) -> (ValidatedSyntaxToken, super::Type) {
+fn class_field_parts<'tree>(
+    field: &Validated<'tree, syntax_ast::Field>,
+) -> (ValidatedSyntaxToken, Validated<'tree, syntax_ast::TypeExpr>) {
     let name = field
         .direct_elements()
         .filter_map(|element| element.token())
         .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
         .expect("validated class field name");
     let ty = field.type_expr().expect("validated class field type");
-    let ty = super::Type::from_cst(SyntaxElement::Node(ty.syntax().clone()))
-        .expect("validated class field type");
     (name, ty)
 }
 
@@ -919,8 +934,6 @@ impl Printable for Validated<'_, syntax_ast::Field> {
 impl Printable for Validated<'_, syntax_ast::ImplementsTarget> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let ty = self.type_expr();
-        let ty = super::Type::from_cst(SyntaxElement::Node(ty.syntax().clone()))
-            .expect("validated implements target");
         ty.print(shape, printer)
     }
 
@@ -935,14 +948,8 @@ impl Printable for Validated<'_, syntax_ast::ImplementsTarget> {
 
 impl Printable for Validated<'_, syntax_ast::AssociatedTypeDecl> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let bound = self.bound().map(|ty| {
-            super::Type::from_cst(SyntaxElement::Node(ty.syntax().clone()))
-                .expect("validated associated type bound")
-        });
-        let binding = self.binding().map(|ty| {
-            super::Type::from_cst(SyntaxElement::Node(ty.syntax().clone()))
-                .expect("validated associated type binding")
-        });
+        let bound = self.bound();
+        let binding = self.binding();
         let mut multi_lined = false;
         printer.print_raw_token(&self.type_token().expect("validated type keyword"));
         printer.print_str(" ");
@@ -2143,9 +2150,7 @@ impl Printable for Validated<'_, syntax_ast::TypeAliasDef> {
         let keyword = self.type_token();
         let name = self.name_token();
         let equals = self.equals_token();
-        let type_expr =
-            super::Type::from_cst(SyntaxElement::Node(self.type_expr().syntax().clone()))
-                .expect("validated type expression");
+        let type_expr = self.type_expr();
         let semicolon = self.semicolon_token();
         printer.print_raw_token(&keyword);
         printer.print_str(" ");

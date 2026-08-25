@@ -1,8 +1,8 @@
 use crate::{
-    SyntaxElement, SyntaxKind, SyntaxNode,
+    SyntaxElement, SyntaxKind, SyntaxNode, ast as raw_ast,
     validated::{
         FromCST, KnownKind, StrongAstError, SyntaxNodeIter,
-        nodes::{Expression, GenericArgs, Type, TypeArgs},
+        nodes::{Expression, GenericArgs},
         tokens as t,
     },
 };
@@ -194,14 +194,14 @@ impl DestructurePattern {
 #[derive(Debug)]
 pub enum DestructureTypeArgs {
     Generic(GenericArgs),
-    Type(TypeArgs),
+    Type(raw_ast::TypeArgs),
 }
 
 impl FromCST for DestructureTypeArgs {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
             SyntaxKind::GENERIC_ARGS => GenericArgs::from_cst(elem).map(Self::Generic),
-            SyntaxKind::TYPE_ARGS => TypeArgs::from_cst(elem).map(Self::Type),
+            SyntaxKind::TYPE_ARGS => raw_ast::TypeArgs::from_cst(elem).map(Self::Type),
             found => Err(StrongAstError::UnexpectedKindDesc {
                 expected_desc: "GENERIC_ARGS or TYPE_ARGS".into(),
                 found,
@@ -243,7 +243,7 @@ pub struct ArrayPattern {
     pub close_bracket: t::RBracket,
     /// `[...]: T` - optional type ascription folded into the
     /// [`SyntaxKind::ARRAY_PATTERN`] node by the parser.
-    pub ascription: Option<(t::Colon, Type)>,
+    pub ascription: Option<(t::Colon, raw_ast::TypeExpr)>,
 }
 
 impl ArrayPattern {
@@ -266,7 +266,8 @@ impl ArrayPattern {
             elements.push((pattern, comma));
         };
         let ascription = if let Some(colon) = it.next_if_kind(SyntaxKind::COLON) {
-            Some((t::Colon::from_cst(colon)?, it.expect_parse()?))
+            let ty = raw_ast::TypeExpr::from_cst(it.expect_next("type ascription")?)?;
+            Some((t::Colon::from_cst(colon)?, ty))
         } else {
             None
         };
@@ -305,13 +306,13 @@ impl FromCST for ArrayPatternElement {
 /// arrays, etc).
 #[derive(Debug)]
 pub struct TypePattern {
-    pub ty: Type,
+    pub ty: raw_ast::TypeExpr,
 }
 
 impl TypePattern {
     fn from_node(node: &SyntaxNode) -> Result<Self, StrongAstError> {
         let mut it = SyntaxNodeIter::new(node);
-        let ty = it.expect_parse()?;
+        let ty = raw_ast::TypeExpr::from_cst(it.expect_next("type pattern")?)?;
         it.expect_end()?;
         Ok(Self { ty })
     }
