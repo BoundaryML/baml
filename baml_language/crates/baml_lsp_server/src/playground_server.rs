@@ -55,6 +55,16 @@ use crate::{
     playground_ws::{RunListFilter, RunListKind, RunListVisibility, WsInMessage, WsOutMessage},
 };
 
+/// Telemetry reads one session may run at once. Small on purpose: these are
+/// DataFusion queries and CAS reads, and a panel needs a couple in flight
+/// (the list plus the open execution), not a backlog.
+const MAX_INFLIGHT_TELEMETRY: usize = 4;
+
+/// Reported when that ceiling is reached. The client treats it as "skip this
+/// refresh" rather than as a failure, because the common cause is its own
+/// polling outrunning a slow query.
+const TELEMETRY_BUSY_CODE: &str = "telemetryBusy";
+
 #[derive(Debug, thiserror::Error)]
 #[error("Playground server requires either BAML_PLAYGROUND_DEV_PORT or BAML_PLAYGROUND_DIR")]
 pub(crate) struct PlaygroundNotConfigured;
@@ -1471,6 +1481,17 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
     // loads. They run on their own tasks and hand their reply back here.
     let (deferred_tx, mut deferred_rx) = tokio::sync::mpsc::channel::<WsOutMessage>(32);
 
+    // Bound how much telemetry work one session can have in flight. The
+    // channel above bounds queued *replies*, not running queries: moving
+    // these off the select loop removed the accidental serialisation that
+    // awaiting inline used to provide, so without this a client can start
+    // an unbounded number of profile-store queries and blocking CAS reads.
+    // Not only an adversarial case -- the panel polls every couple of
+    // seconds while a run is live, so any query slower than the poll
+    // interval would pile up on its own.
+    let telemetry_permits =
+        std::sync::Arc::new(tokio::sync::Semaphore::new(MAX_INFLIGHT_TELEMETRY));
+
     loop {
         tokio::select! {
             deferred = deferred_rx.recv() => {
@@ -1496,6 +1517,7 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
                                     &state,
                                     &mut sink,
                                     &deferred_tx,
+                                    &telemetry_permits,
                                 )
                                 .await;
                             }
@@ -1770,11 +1792,21 @@ fn handle_test_run(
     });
 }
 
+/// The reply when a session already has its share of telemetry work running.
+fn telemetry_busy(request_id: u64) -> WsOutMessage {
+    WsOutMessage::CommandError {
+        code: TELEMETRY_BUSY_CODE.to_string(),
+        message: "Telemetry is already busy for this session; try again.".to_string(),
+        request_id,
+    }
+}
+
 async fn handle_ws_in_message(
     msg: WsInMessage,
     state: &WsState,
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
     deferred: &tokio::sync::mpsc::Sender<WsOutMessage>,
+    telemetry_permits: &std::sync::Arc<tokio::sync::Semaphore>,
 ) {
     match msg {
         WsInMessage::StartRun {
@@ -1975,6 +2007,10 @@ async fn handle_ws_in_message(
             project,
             cid,
         } => {
+            let Ok(permit) = telemetry_permits.clone().try_acquire_owned() else {
+                send_ws(sink, &telemetry_busy(request_id)).await;
+                return;
+            };
             let project_root = history_project_root_for_project(&project);
             let reply = deferred.clone();
             let echoed_cid = cid.clone();
@@ -1994,6 +2030,7 @@ async fn handle_ws_in_message(
                     },
                 };
                 let _ = reply.blocking_send(out);
+                drop(permit);
             });
         }
 
@@ -2001,6 +2038,10 @@ async fn handle_ws_in_message(
             request_id,
             project,
         } => {
+            let Ok(permit) = telemetry_permits.clone().try_acquire_owned() else {
+                send_ws(sink, &telemetry_busy(request_id)).await;
+                return;
+            };
             let project_root = history_project_root_for_project(&project);
             let reply = deferred.clone();
             tokio::spawn(async move {
@@ -2029,6 +2070,7 @@ async fn handle_ws_in_message(
                     },
                 };
                 let _ = reply.send(out).await;
+                drop(permit);
             });
         }
 
@@ -2037,6 +2079,10 @@ async fn handle_ws_in_message(
             project,
             execution_id,
         } => {
+            let Ok(permit) = telemetry_permits.clone().try_acquire_owned() else {
+                send_ws(sink, &telemetry_busy(request_id)).await;
+                return;
+            };
             let project_root = history_project_root_for_project(&project);
             let reply = deferred.clone();
             tokio::spawn(async move {
@@ -2057,6 +2103,7 @@ async fn handle_ws_in_message(
                         },
                     };
                 let _ = reply.send(out).await;
+                drop(permit);
             });
         }
 

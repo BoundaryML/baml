@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { RunStoreClient } from '../run-store-client';
+import { RunCommandError, type RunStoreClient } from '../run-store-client';
 import type {
   ExecutionTelemetry,
   TelemetryExecution,
@@ -58,6 +58,19 @@ export interface UseTelemetryOptions {
  */
 const RUNNING_POLL_MS = 2000;
 
+/**
+ * The server bounds telemetry work per session, and says so with this code
+ * when a request arrives while its share is already running. The usual
+ * cause is this hook's own polling outrunning a slow query, so a refresh
+ * that is turned away is skipped rather than shown as a failure: the data
+ * already on screen is still the best answer, and the next poll retries.
+ */
+const BUSY_CODE = 'telemetryBusy';
+
+function isBusy(cause: unknown): boolean {
+  return cause instanceof RunCommandError && cause.code === BUSY_CODE;
+}
+
 export function useTelemetry({
   client,
   project,
@@ -104,7 +117,7 @@ export function useTelemetry({
         setStoreMissing(result.storeMissing);
       })
       .catch((cause: unknown) => {
-        if (request !== listRequest.current) return;
+        if (request !== listRequest.current || isBusy(cause)) return;
         setExecutions([]);
         setError(cause instanceof Error ? cause.message : String(cause));
       })
@@ -129,7 +142,7 @@ export function useTelemetry({
         setTelemetry(result);
       })
       .catch((cause: unknown) => {
-        if (request !== detailRequest.current) return;
+        if (request !== detailRequest.current || isBusy(cause)) return;
         setTelemetry(null);
         setError(cause instanceof Error ? cause.message : String(cause));
       })
