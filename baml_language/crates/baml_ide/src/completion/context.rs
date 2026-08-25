@@ -72,7 +72,12 @@ pub(crate) enum PathKind {
     /// An expression: locals, items, packages, and the keywords that can
     /// start one.
     Expr,
-    // Type, Pattern, and Item positions arrive with C3/C4.
+    /// A type is being written: an annotation, a parameter/return type, a
+    /// type argument, a bound, a `throws` clause — or a match/catch arm,
+    /// because a pattern IS a type (`TYPE_PATTERN` wraps a `TYPE_EXPR`;
+    /// BEP-015's membership model makes that literal).
+    Type,
+    // Item positions arrive with C4.
 }
 
 /// What the `.` before the cursor reads a member OF, resolved once.
@@ -128,12 +133,16 @@ impl<'db> CompletionContext<'db> {
         // Classify on the speculative tree, then resolve what the
         // classification located against the real file's recorded facts.
         let analysis = match classify(&token) {
-            Position::Dotted { dot } => match dot_target(db, file, dot) {
+            Position::Dotted { dot, kind } => match dot_target(db, file, dot) {
                 Some(qualifier) => CompletionAnalysis::Path {
-                    kind: PathKind::Expr,
+                    kind,
                     qualifier: Some(qualifier),
                 },
                 None => CompletionAnalysis::Unsupported,
+            },
+            Position::Type => CompletionAnalysis::Path {
+                kind: PathKind::Type,
+                qualifier: None,
             },
             // A slot whose call inference recorded nothing for is still an
             // expression position; only the labels are gone.
@@ -198,7 +207,10 @@ enum Position {
     /// where the prefix's recorded span ends.
     Dotted {
         dot: TextSize,
+        kind: PathKind,
     },
+    /// A bare name in type position.
+    Type,
     /// `f(<here>)` — `open_paren` is where the argument list begins, which
     /// is where the callee's span ends.
     ArgumentSlot {
@@ -221,8 +233,26 @@ fn classify(token: &SyntaxToken) -> Position {
     if in_prose(token) {
         return Position::Unsupported;
     }
+    // A marker inside a TYPE_EXPR is a type being written, wherever the
+    // expression sits — annotation, signature, bound, `throws`, or a
+    // match/catch arm (patterns parse as TYPE_PATTERN around a TYPE_EXPR).
+    // The kind rides along on the dotted form: `baml.⎸` in a type slot
+    // resolves through the same DotTarget and filters to types.
+    let in_type = token
+        .parent_ancestors()
+        .any(|node| node.kind() == SyntaxKind::TYPE_EXPR);
     if let Some(dot) = preceding_dot(token) {
-        return Position::Dotted { dot };
+        return Position::Dotted {
+            dot,
+            kind: if in_type {
+                PathKind::Type
+            } else {
+                PathKind::Expr
+            },
+        };
+    }
+    if in_type {
+        return Position::Type;
     }
     for node in token.parent_ancestors() {
         match node.kind() {

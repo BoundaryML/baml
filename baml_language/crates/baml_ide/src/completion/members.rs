@@ -10,19 +10,30 @@
 
 use baml_base::SourceFile;
 use baml_compiler2_hir::contributions::Definition;
+use baml_compiler2_hir_ty::method_resolution::MemberDecl;
 use baml_compiler2_ppir::resolve::NamespaceMemberKind;
 
-use super::{completions::Completions, context::DotTarget, render::MemberForm};
+use super::{
+    completions::Completions,
+    context::{DotTarget, PathKind},
+    render::MemberForm,
+};
 use crate::symbols;
 
 pub(crate) fn complete(
     db: &dyn baml_compiler2_ppir::Db,
     file: SourceFile,
     target: &DotTarget<'_>,
+    kind: PathKind,
     out: &mut Completions,
 ) {
     match target {
         DotTarget::Value { owner, receiver } => {
+            // A value's members are not types; a value receiver cannot even
+            // occur syntactically to the left of a type-position dot.
+            if kind == PathKind::Type {
+                return;
+            }
             for candidate in baml_compiler2_hir_ty::ide::members_for_receiver(db, *owner, receiver)
             {
                 // A static is reached through the TYPE. Offering it here
@@ -35,21 +46,47 @@ pub(crate) fn complete(
         }
         DotTarget::Type(definition) => {
             for candidate in baml_compiler2_hir_ty::ide::members_for_type(db, *definition) {
+                // In type position only a member that IS a type resolves:
+                // an enum's variants (`Status.Active` as a type pattern).
+                // Methods are call syntax, not types.
+                if kind == PathKind::Type
+                    && !matches!(candidate.decl, MemberDecl::EnumVariant { .. })
+                {
+                    continue;
+                }
                 out.add_member(db, file, &candidate, MemberForm::Qualified);
             }
         }
         DotTarget::Namespace(members) => {
             for member in members {
-                if let NamespaceMemberKind::Item(def) = &member.kind
-                    && (symbols::is_synthesized(db, &member.name, *def)
-                        || is_builtin_companion(db, *def))
-                {
-                    continue;
+                if let NamespaceMemberKind::Item(def) = &member.kind {
+                    if symbols::is_synthesized(db, &member.name, *def)
+                        || is_builtin_companion(db, *def)
+                    {
+                        continue;
+                    }
+                    // A type position reaches the namespace's TYPES; its
+                    // values (functions, lets, clients) do not resolve there.
+                    if kind == PathKind::Type && !is_type_definition(*def) {
+                        continue;
+                    }
                 }
                 out.add_namespace_member(db, file, member);
             }
         }
     }
+}
+
+/// Whether a definition can be written where a type is expected.
+fn is_type_definition(def: Definition<'_>) -> bool {
+    use baml_compiler2_hir::contributions::DefinitionKind;
+    matches!(
+        def.kind(),
+        DefinitionKind::Class
+            | DefinitionKind::Enum
+            | DefinitionKind::Interface
+            | DefinitionKind::TypeAlias
+    )
 }
 
 /// Whether a definition is a COMPANION CARRIER — the class a builtin's

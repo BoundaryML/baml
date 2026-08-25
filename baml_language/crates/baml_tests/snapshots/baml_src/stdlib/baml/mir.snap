@@ -3962,12 +3962,12 @@ fn baml.future.Future.is_error = builtin(vm)
 
 fn baml.future.Future.state = builtin(vm)
 
-fn baml.future.all_complete(futures: future<T, E>[]) -> future<T[], E> {
+fn baml.future.all_complete(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E> {
     // Locals:
-    let _0: future<T[], E> // _0 // return
-    let _1: future<T, E>[] // futures // param [captured]
+    let _0: baml.future.Future<T[], E> // _0 // return
+    let _1: baml.future.Future<T, E>[] // futures // param [captured]
     let _2: null
-    let _3: future<T[], E>
+    let _3: baml.future.Future<T[], E>
 
     bb0: {
         _2 = make_closure lambda[0]<2 type_args>(copy _1);
@@ -3988,7 +3988,7 @@ fn baml.future.all_complete(futures: future<T, E>[]) -> future<T[], E> {
 fn .<lambda(all_complete, 0)>() -> T[] {
     // Locals:
     let _0: T[] // _0 // return
-    let _1: (future<T, E>) -> T throws E
+    let _1: (baml.future.Future<T, E>) -> T throws E
     let _2: reflect.Type
     let _3: reflect.Type
     let _4: reflect.Type
@@ -3997,7 +3997,7 @@ fn .<lambda(all_complete, 0)>() -> T[] {
         _1 = make_closure lambda[0]<2 type_args>();
         _2 = load_type(#0);
         _3 = load_type(#1);
-        _4 = load_type(future<#0, #1>);
+        _4 = load_type(baml.future.Future<#0, #1>);
         _0 = call const fn baml.Array.map<copy _4, copy _2, copy _3>(copy capture[0], copy _1) -> [bb1];
     }
 
@@ -4007,10 +4007,10 @@ fn .<lambda(all_complete, 0)>() -> T[] {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(all_complete, 0)>, 1)>(f: future<T, E>) -> T {
+fn .<lambda(<lambda(all_complete, 0)>, 1)>(f: baml.future.Future<T, E>) -> T {
     // Locals:
     let _0: T // _0 // return
-    let _1: future<T, E> // f // param
+    let _1: baml.future.Future<T, E> // f // param
 
     bb0: {
         _0 = await _1 -> [bb1];
@@ -4021,12 +4021,12 @@ fn .<lambda(<lambda(all_complete, 0)>, 1)>(f: future<T, E>) -> T {
     }
 }
 
-fn baml.future.all(futures: future<T, E>[]) -> future<T[], E> {
+fn baml.future.all(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E> {
     // Locals:
-    let _0: future<T[], E> // _0 // return
-    let _1: future<T, E>[] // futures // param [captured]
+    let _0: baml.future.Future<T[], E> // _0 // return
+    let _1: baml.future.Future<T, E>[] // futures // param [captured]
     let _2: null
-    let _3: future<T[], E>
+    let _3: baml.future.Future<T[], E>
 
     bb0: {
         _2 = make_closure lambda[0]<2 type_args>(copy _1);
@@ -4047,7 +4047,7 @@ fn baml.future.all(futures: future<T, E>[]) -> future<T[], E> {
 fn .<lambda(all, 0)>() -> T[] {
     // Locals:
     let _0: T[] // _0 // return
-    let _1: (future<T, E>) -> T throws E
+    let _1: (baml.future.Future<T, E>) -> T throws E
     let _2: reflect.Type
     let _3: reflect.Type
     let _4: reflect.Type
@@ -4056,7 +4056,7 @@ fn .<lambda(all, 0)>() -> T[] {
         _1 = make_closure lambda[0]<2 type_args>(copy capture[0]);
         _2 = load_type(#0);
         _3 = load_type(#1);
-        _4 = load_type(future<#0, #1>);
+        _4 = load_type(baml.future.Future<#0, #1>);
         _0 = call const fn baml.Array.map<copy _4, copy _2, copy _3>(copy capture[0], copy _1) -> [bb1];
     }
 
@@ -4066,14 +4066,14 @@ fn .<lambda(all, 0)>() -> T[] {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(all, 0)>, 1)>(f: future<T, E>) -> T {
+fn .<lambda(<lambda(all, 0)>, 1)>(f: baml.future.Future<T, E>) -> T {
     // Locals:
     let _0: T // _0 // return
-    let _1: future<T, E> // f // param
+    let _1: baml.future.Future<T, E> // f // param
     let _2: unknown // e
     let _3: E // e
     let _4: bool[]
-    let _5: (future<T, E>) -> bool throws never
+    let _5: (baml.future.Future<T, E>) -> bool throws never
     let _6: reflect.Type
     let _7: reflect.Type
     let _8: reflect.Type
@@ -4081,8 +4081,8 @@ fn .<lambda(<lambda(all, 0)>, 1)>(f: future<T, E>) -> T {
     let _10: bool
     let _11: int
     let _12: int
-    let _13: future<T, E> // g
-    let _14: future<T, E>[]
+    let _13: baml.future.Future<T, E> // g
+    let _14: baml.future.Future<T, E>[]
     let _15: int
     let _16: bool
     let _17: null | T
@@ -4107,7 +4107,7 @@ fn .<lambda(<lambda(all, 0)>, 1)>(f: future<T, E>) -> T {
         _5 = make_closure lambda[0]<2 type_args>();
         _6 = load_type(bool);
         _7 = load_type(never);
-        _8 = load_type(future<#0, #1>);
+        _8 = load_type(baml.future.Future<#0, #1>);
         _4 = call const fn baml.Array.map<copy _8, copy _6, copy _7>(copy capture[0], copy _5) -> [bb4];
     }
 
@@ -4164,10 +4164,10 @@ fn .<lambda(<lambda(all, 0)>, 1)>(f: future<T, E>) -> T {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(<lambda(all, 0)>, 1)>, 2)>(g: future<T, E>) -> bool {
+fn .<lambda(<lambda(<lambda(all, 0)>, 1)>, 2)>(g: baml.future.Future<T, E>) -> bool {
     // Locals:
     let _0: bool // _0 // return
-    let _1: future<T, E> // g // param
+    let _1: baml.future.Future<T, E> // g // param
 
     bb0: {
         _0 = call const fn baml.future.Future.cancel(copy _1) -> [bb1];
@@ -4180,12 +4180,12 @@ fn .<lambda(<lambda(<lambda(all, 0)>, 1)>, 2)>(g: future<T, E>) -> bool {
 
 fn baml.future.__await_any = builtin(await_any)
 
-fn baml.future.race(futures: future<T, E>[]) -> future<T, E> {
+fn baml.future.race(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T, E> {
     // Locals:
-    let _0: future<T, E> // _0 // return
-    let _1: future<T, E>[] // futures // param [captured]
+    let _0: baml.future.Future<T, E> // _0 // return
+    let _1: baml.future.Future<T, E>[] // futures // param [captured]
     let _2: null
-    let _3: future<T, E>
+    let _3: baml.future.Future<T, E>
 
     bb0: {
         _2 = make_closure lambda[0]<2 type_args>(copy _1);
@@ -4207,14 +4207,14 @@ fn .<lambda(race, 0)>() -> T {
     // Locals:
     let _0: T // _0 // return
     let _1: int // i
-    let _2: future<T, E>[]
+    let _2: baml.future.Future<T, E>[]
     let _3: bool[]
-    let _4: (future<T, E>) -> bool throws never
+    let _4: (baml.future.Future<T, E>) -> bool throws never
     let _5: reflect.Type
     let _6: reflect.Type
     let _7: reflect.Type
     let _8: null
-    let _9: future<T, E>[]
+    let _9: baml.future.Future<T, E>[]
     let _10: int
 
     bb0: {
@@ -4226,7 +4226,7 @@ fn .<lambda(race, 0)>() -> T {
         _4 = make_closure lambda[0]<2 type_args>();
         _5 = load_type(bool);
         _6 = load_type(never);
-        _7 = load_type(future<#0, #1>);
+        _7 = load_type(baml.future.Future<#0, #1>);
         _3 = call const fn baml.Array.map<copy _7, copy _5, copy _6>(copy capture[0], copy _4) -> [bb2];
     }
 
@@ -4243,10 +4243,10 @@ fn .<lambda(race, 0)>() -> T {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(race, 0)>, 1)>(f: future<T, E>) -> bool {
+fn .<lambda(<lambda(race, 0)>, 1)>(f: baml.future.Future<T, E>) -> bool {
     // Locals:
     let _0: bool // _0 // return
-    let _1: future<T, E> // f // param
+    let _1: baml.future.Future<T, E> // f // param
 
     bb0: {
         _0 = call const fn baml.future.Future.cancel(copy _1) -> [bb1];
@@ -4257,12 +4257,12 @@ fn .<lambda(<lambda(race, 0)>, 1)>(f: future<T, E>) -> bool {
     }
 }
 
-fn baml.future.any(futures: future<T, Err>[]) -> future<T, baml.future.AllFailed<Err>> {
+fn baml.future.any(futures: baml.future.Future<T, Err>[]) -> baml.future.Future<T, baml.future.AllFailed<Err>> {
     // Locals:
-    let _0: future<T, baml.future.AllFailed<Err>> // _0 // return
-    let _1: future<T, Err>[] // futures // param [captured]
+    let _0: baml.future.Future<T, baml.future.AllFailed<Err>> // _0 // return
+    let _1: baml.future.Future<T, Err>[] // futures // param [captured]
     let _2: null
-    let _3: future<T, baml.future.AllFailed<Err>>
+    let _3: baml.future.Future<T, baml.future.AllFailed<Err>>
 
     bb0: {
         _2 = make_closure lambda[0]<2 type_args>(copy _1);
@@ -4284,13 +4284,13 @@ fn .<lambda(any, 0)>() -> T {
     // Locals:
     let _0: T // _0 // return
     let _1: T[] // winners
-    let _2: future<T, Err>[] // remaining
+    let _2: baml.future.Future<T, Err>[] // remaining
     let _3: bool
     let _4: int
     let _5: int // i
-    let _6: future<T, Err>[]
-    let _7: future<T, Err> // f
-    let _8: future<T, Err>[]
+    let _6: baml.future.Future<T, Err>[]
+    let _7: baml.future.Future<T, Err> // f
+    let _8: baml.future.Future<T, Err>[]
     let _9: int
     let _10: bool
     let _11: int
@@ -4306,10 +4306,10 @@ fn .<lambda(any, 0)>() -> T {
     let _21: null | T
     let _22: unknown // e
     let _23: null
-    let _24: future<T, Err>[]
+    let _24: baml.future.Future<T, Err>[]
     let _25: int
     let _26: reflect.Type
-    let _27: future<T, Err>[]
+    let _27: baml.future.Future<T, Err>[]
     let _28: int
     let _29: int
     let _30: int
@@ -4322,8 +4322,8 @@ fn .<lambda(any, 0)>() -> T {
     let _37: bool
     let _38: int
     let _39: int
-    let _40: future<T, Err> // g
-    let _41: future<T, Err>[]
+    let _40: baml.future.Future<T, Err> // g
+    let _41: baml.future.Future<T, Err>[]
     let _42: int
     let _43: bool
     let _44: null | T
@@ -4337,7 +4337,7 @@ fn .<lambda(any, 0)>() -> T {
     let _52: baml.future.AllFailed<Err> // failure
     let _53: Err[]
     let _54: bool[]
-    let _55: (future<T, Err>) -> bool throws never
+    let _55: (baml.future.Future<T, Err>) -> bool throws never
     let _56: reflect.Type
     let _57: reflect.Type
     let _58: reflect.Type
@@ -4361,7 +4361,7 @@ fn .<lambda(any, 0)>() -> T {
 
     bb3: {
         _25 = copy _5;
-        _26 = load_type(future<#0, #1>);
+        _26 = load_type(baml.future.Future<#0, #1>);
         _24 = call const fn baml.Array.slice<copy _26>(copy _2, const 0_i64, copy _25) -> [bb4];
     }
 
@@ -4373,12 +4373,12 @@ fn .<lambda(any, 0)>() -> T {
     }
 
     bb5: {
-        _31 = load_type(future<#0, #1>);
+        _31 = load_type(baml.future.Future<#0, #1>);
         _27 = call const fn baml.Array.slice<copy _31>(copy _2, copy _28, copy _30) -> [bb6];
     }
 
     bb6: {
-        _32 = load_type(future<#0, #1>);
+        _32 = load_type(baml.future.Future<#0, #1>);
         _2 = call const fn baml.Array.concat<copy _32>(copy _24, copy _27) -> [bb7];
     }
 
@@ -4457,7 +4457,7 @@ fn .<lambda(any, 0)>() -> T {
         _55 = make_closure lambda[0]<2 type_args>();
         _56 = load_type(bool);
         _57 = load_type(never);
-        _58 = load_type(future<#0, #1>);
+        _58 = load_type(baml.future.Future<#0, #1>);
         _54 = call const fn baml.Array.map<copy _58, copy _56, copy _57>(copy capture[0], copy _55) -> [bb22];
     }
 
@@ -4535,10 +4535,10 @@ fn .<lambda(any, 0)>() -> T {
 }
 
 // lambda[0]
-fn .<lambda(<lambda(any, 0)>, 1)>(g: future<T, Err>) -> bool {
+fn .<lambda(<lambda(any, 0)>, 1)>(g: baml.future.Future<T, Err>) -> bool {
     // Locals:
     let _0: bool // _0 // return
-    let _1: future<T, Err> // g // param
+    let _1: baml.future.Future<T, Err> // g // param
 
     bb0: {
         _0 = call const fn baml.future.Future.cancel(copy _1) -> [bb1];

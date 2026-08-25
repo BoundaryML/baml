@@ -222,6 +222,96 @@ pub fn names_in_scope_at<'db>(
     out
 }
 
+/// One TYPE name that resolves at a position.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypeScopeName<'db> {
+    pub name: Name,
+    pub kind: TypeScopeNameKind<'db>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeScopeNameKind<'db> {
+    /// A type declaration in the file's own namespace.
+    Item(Definition<'db>),
+    /// A generic parameter declared by an enclosing item (`T`).
+    GenericParam,
+    /// A dependency package name, rooting a qualified type path.
+    Package,
+}
+
+/// Every bare name that resolves AS A TYPE at `at_offset`.
+///
+/// The enumeration counterpart of the type resolver (`lower::resolve_type`):
+/// generic parameters of the enclosing items, the file's own namespace's
+/// types, and dependency package names. Builtin aliases (`int`, `string`,
+/// `json`) are the language's own table, not database state, so the
+/// completion layer enumerates them from `baml_type` directly.
+pub fn type_names_in_scope_at<'db>(
+    db: &'db dyn crate::Db,
+    file: SourceFile,
+    at_offset: TextSize,
+) -> Vec<TypeScopeName<'db>> {
+    let index = crate::file_semantic_index(db, file);
+    let scope_id = index.scope_at_offset(at_offset, None);
+    let mut out: Vec<TypeScopeName<'db>> = Vec::new();
+    let push = |name: Name, kind: TypeScopeNameKind<'db>, out: &mut Vec<TypeScopeName<'db>>| {
+        if out.iter().any(|entry| entry.name == name) {
+            return;
+        }
+        out.push(TypeScopeName { name, kind });
+    };
+
+    for ancestor_id in index.ancestor_scopes(scope_id) {
+        let scope = &index.scopes[ancestor_id.index() as usize];
+        // Generic parameters come from the DECLARING items, exactly the
+        // frames the resolver's lexical overlay reads.
+        if matches!(scope.kind, ScopeKind::Function | ScopeKind::Class) {
+            let owner_scope_id = index.scope_ids[ancestor_id.index() as usize];
+            match crate::item_data::scope_owner(db, owner_scope_id) {
+                Some(crate::item_data::ScopeOwner::Function(function)) => {
+                    let data = crate::item_data::function_data(db, function);
+                    for param in &data.generic_params {
+                        push(
+                            param.name.clone(),
+                            TypeScopeNameKind::GenericParam,
+                            &mut out,
+                        );
+                    }
+                }
+                Some(crate::item_data::ScopeOwner::Class(class)) => {
+                    let data = crate::item_data::class_data(db, class);
+                    for param in &data.generic_params {
+                        push(
+                            param.name.clone(),
+                            TypeScopeNameKind::GenericParam,
+                            &mut out,
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        if matches!(scope.kind, ScopeKind::File | ScopeKind::Package) {
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+            let pkg_id = PackageId::new(db, pkg_info.package.clone());
+            let own_items: &PackageItems<'db> = crate::package_items(db, pkg_id);
+            if let Some(namespace) = own_items.namespaces.get(&pkg_info.namespace_path) {
+                for (name, def) in &namespace.types {
+                    push(name.clone(), TypeScopeNameKind::Item(*def), &mut out);
+                }
+            }
+            for &dep_id in package_dependencies(db, pkg_id) {
+                push(
+                    dep_id.name(db).clone(),
+                    TypeScopeNameKind::Package,
+                    &mut out,
+                );
+            }
+        }
+    }
+    out
+}
+
 /// `PackageItems` for a package accessible from `file`'s own package: the
 /// own package itself, or a declared dependency. Undeclared packages are
 /// invisible (`None`) - the same access rule the type resolver applies.

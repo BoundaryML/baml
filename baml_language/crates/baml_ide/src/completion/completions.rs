@@ -9,7 +9,8 @@ use baml_base::{Name, SourceFile};
 use baml_compiler2_hir::contributions::DefinitionKind;
 use baml_compiler2_hir_ty::method_resolution::{MemberCandidate, MemberDecl, MemberSource};
 use baml_compiler2_ppir::resolve::{
-    NamespaceMember, NamespaceMemberKind, ScopeName, ScopeNameKind,
+    NamespaceMember, NamespaceMemberKind, ScopeName, ScopeNameKind, TypeScopeName,
+    TypeScopeNameKind,
 };
 use text_size::TextRange;
 
@@ -133,6 +134,54 @@ impl Completions {
                 is_own_package,
                 ..CompletionRelevance::default()
             },
+        });
+    }
+
+    /// A bare name that resolves as a TYPE: an own-namespace type, a
+    /// generic parameter, or a package rooting a qualified type path.
+    pub(super) fn add_type_scope_name(
+        &mut self,
+        db: &dyn baml_compiler2_ppir::Db,
+        file: SourceFile,
+        entry: &TypeScopeName<'_>,
+    ) {
+        let (kind, is_local, is_own_package) = match &entry.kind {
+            TypeScopeNameKind::Item(def) => (definition_kind(def.kind()), false, true),
+            // A generic parameter is the type-side analogue of a local:
+            // the reader (or the item they are inside) just declared it.
+            TypeScopeNameKind::GenericParam => (CompletionKind::TypeParam, true, false),
+            TypeScopeNameKind::Package => (CompletionKind::Package, false, false),
+        };
+        let (detail, documentation) = match &entry.kind {
+            TypeScopeNameKind::Item(def) => render::definition(db, file, def),
+            TypeScopeNameKind::GenericParam | TypeScopeNameKind::Package => (None, None),
+        };
+        self.push(Completion {
+            label: entry.name.as_str().to_string(),
+            source_range: self.source_range,
+            insert: CompletionInsert::Plain(entry.name.as_str().to_string()),
+            kind,
+            detail,
+            documentation,
+            relevance: CompletionRelevance {
+                is_local,
+                is_own_package,
+                ..CompletionRelevance::default()
+            },
+        });
+    }
+
+    /// A builtin type alias (`int`, `string`, `json`) — the language's own
+    /// spelling table, offered wherever a type can be written.
+    pub(super) fn add_builtin_type(&mut self, alias: &str) {
+        self.push(Completion {
+            label: alias.to_string(),
+            source_range: self.source_range,
+            insert: CompletionInsert::Plain(alias.to_string()),
+            kind: CompletionKind::BuiltinType,
+            detail: None,
+            documentation: baml_builtins2::language_topic(alias).map(|topic| topic.summary.clone()),
+            relevance: CompletionRelevance::default(),
         });
     }
 

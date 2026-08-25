@@ -189,7 +189,7 @@ function ai.Agent.Runner<Out>.run(self: ai.Agent<#0>, spec: ai.FunctionSpec<#0>)
     container_len
     store_var before
     load_type ai.content.ToolUse
-    load_type future<void, ai.errors.ToolFailedError>
+    load_type baml.future.Future<void, ai.errors.ToolFailedError>
     load_type never
     load_var calls
     load_type #0

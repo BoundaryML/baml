@@ -169,7 +169,7 @@ function f(
         let signature = signature_of(&db, file, "f");
         assert_eq!(
             param_renders(&signature),
-            ["user.util.Helper", "Future<int, never>"]
+            ["user.util.Helper", "baml.future.Future<int, never>"]
         );
 
         // Inside the namespace, the bare name resolves namespace-relative.

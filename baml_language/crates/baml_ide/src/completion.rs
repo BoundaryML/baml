@@ -26,6 +26,7 @@ mod item;
 mod members;
 mod record;
 mod render;
+mod types;
 mod values;
 
 use baml_base::SourceFile;
@@ -53,16 +54,22 @@ pub fn completions(
     let mut out = Completions::new(context.source_range);
     match &context.analysis {
         CompletionAnalysis::Path {
-            kind: PathKind::Expr,
+            kind,
             qualifier: Some(target),
         } => {
-            members::complete(db, file, target, &mut out);
+            members::complete(db, file, target, *kind, &mut out);
         }
         CompletionAnalysis::Path {
             kind: PathKind::Expr,
             qualifier: None,
         } => {
             values::complete(db, file, offset, &mut out);
+        }
+        CompletionAnalysis::Path {
+            kind: PathKind::Type,
+            qualifier: None,
+        } => {
+            types::complete(db, file, offset, &mut out);
         }
         CompletionAnalysis::CallArgument { call } => {
             // A slot takes a named argument OR an expression, so it offers
@@ -662,11 +669,18 @@ function f() -> int throws never {
     }
 
     #[test]
-    fn a_position_no_provider_claims_offers_nothing() {
-        // A type annotation is C3's business; until then it stays silent
-        // rather than offering value completions that cannot go there.
+    fn a_field_type_is_a_type_position() {
         let test = CursorTest::new("class Foo {\n    bar: <[CURSOR]\n}\n");
-        assert!(complete(&test).is_empty(), "{:?}", labels(&complete(&test)));
+        let items = complete(&test);
+        let labels = labels(&items);
+        // The class itself is legal (self-referential fields are types),
+        // and so are builtins and package roots; values are not offered.
+        for expected in ["Foo", "int", "baml"] {
+            assert!(
+                labels.contains(&expected),
+                "missing `{expected}`: {labels:?}"
+            );
+        }
     }
 
     // ── The type rung: statics, UFCS, and what a type is NOT ────────────────
@@ -829,6 +843,182 @@ function f() -> int {
         assert!(
             labels.contains(&"iter") && labels.contains(&"Comparable"),
             "the namespace's own items and children still come back: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn value_position_offers_builtin_aliases_as_qualifiers() {
+        let test = CursorTest::new("function f() -> int {\n    let a = <[CURSOR]\n    0\n}\n");
+        let items = complete(&test);
+        let int_item = items
+            .iter()
+            .find(|item| item.label == "int")
+            .unwrap_or_else(|| unreachable!("`int` roots `int.max_value()` and is offered"));
+        assert_eq!(int_item.kind, CompletionKind::BuiltinType);
+    }
+
+    // ── Type positions (C3) ─────────────────────────────────────────────────
+
+    #[test]
+    fn a_type_annotation_offers_types_not_values() {
+        let test = CursorTest::new(
+            r#"class Point { x: int }
+
+function helper() -> int throws never { 0 }
+
+function f() -> int {
+    let seed = 3;
+    let x: <[CURSOR]
+    0
+}
+"#,
+        );
+        let items = complete(&test);
+        let labels = labels(&items);
+        for expected in ["Point", "int", "string", "json", "baml"] {
+            assert!(
+                labels.contains(&expected),
+                "missing `{expected}`: {labels:?}"
+            );
+        }
+        // What resolves as a VALUE does not resolve as a type.
+        for absent in ["helper", "seed", "let", "return"] {
+            assert!(
+                !labels.contains(&absent),
+                "`{absent}` is not a type: {labels:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_match_arm_is_a_type_position() {
+        // A pattern IS a type (BEP-015); this position used to offer value
+        // completions — locals and functions the checker would reject.
+        let test = CursorTest::new(
+            r#"class Circle { r: int }
+
+function f(x: int | Circle) -> int {
+    let seed = 3;
+    match (x) {
+        <[CURSOR]
+    }
+}
+"#,
+        );
+        let items = complete(&test);
+        let labels = labels(&items);
+        assert!(
+            labels.contains(&"Circle") && labels.contains(&"int"),
+            "{labels:?}"
+        );
+        assert!(
+            !labels.contains(&"seed"),
+            "locals are not patterns: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn a_generic_parameter_completes_in_type_positions() {
+        let test = CursorTest::new(
+            r#"function pick<Elem>(xs: Elem[], fallback: <[CURSOR]) -> Elem {
+    fallback
+}
+"#,
+        );
+        let items = complete(&test);
+        let elem = items
+            .iter()
+            .find(|item| item.label == "Elem")
+            .unwrap_or_else(|| unreachable!("the enclosing function's parameter is in scope"));
+        assert_eq!(elem.kind, CompletionKind::TypeParam);
+        // Local-analogue ranking: the declared parameter outranks package
+        // types and builtins.
+        assert_eq!(items.first().map(|item| item.label.as_str()), Some("Elem"));
+    }
+
+    #[test]
+    fn a_qualified_type_position_reaches_only_types() {
+        let test = CursorTest::new(
+            r#"function f() -> int {
+    let x: baml.<[CURSOR]
+    0
+}
+"#,
+        );
+        let items = complete(&test);
+        assert!(!items.is_empty());
+        for item in &items {
+            assert!(
+                matches!(
+                    item.kind,
+                    CompletionKind::Class
+                        | CompletionKind::Enum
+                        | CompletionKind::Interface
+                        | CompletionKind::TypeAlias
+                        | CompletionKind::Package
+                ),
+                "`{}` ({:?}) is not writable as a type",
+                item.label,
+                item.kind
+            );
+        }
+    }
+
+    #[test]
+    fn an_enum_qualifier_in_a_pattern_offers_its_variants() {
+        let test = CursorTest::new(
+            r#"enum Status { Active Done }
+
+function f(s: Status) -> int {
+    match (s) {
+        Status.<[CURSOR]
+    }
+}
+"#,
+        );
+        let items = complete(&test);
+        assert_eq!(
+            labels(&items),
+            vec!["Active", "Done"],
+            "variants and nothing else"
+        );
+        assert!(
+            items
+                .iter()
+                .all(|item| item.kind == CompletionKind::EnumVariant)
+        );
+    }
+
+    #[test]
+    fn intrinsics_are_offered_in_type_positions() {
+        // `void` is offered EVERYWHERE a type can be written (ruling
+        // 2026-08-25, superseding return-slots-only): `spawn` of a void
+        // function makes `Future<void, E>` real, so `void` flows into
+        // generic arguments and a slot restriction has no clean boundary.
+        let annot = CursorTest::new("function f() -> int {\n    let x: <[CURSOR]\n    0\n}\n");
+        let items = complete(&annot);
+        let labels = labels(&items);
+        for intrinsic in ["void", "never", "unknown"] {
+            assert!(
+                labels.contains(&intrinsic),
+                "missing `{intrinsic}`: {labels:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_throws_clause_offers_types() {
+        let test = CursorTest::new(
+            r#"class MyError { message: string }
+
+function f() -> int throws <[CURSOR]
+"#,
+        );
+        let items = complete(&test);
+        let labels = labels(&items);
+        assert!(
+            labels.contains(&"MyError") && labels.contains(&"baml"),
+            "{labels:?}"
         );
     }
 }

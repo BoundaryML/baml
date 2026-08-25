@@ -124,6 +124,18 @@ pub enum BuiltinTypeName {
 }
 
 impl BuiltinTypeName {
+    /// Every builtin source-level type name — the enumeration counterpart of
+    /// [`from_alias`](Self::from_alias), so what completion offers is what
+    /// the resolver accepts.
+    pub fn all() -> impl Iterator<Item = Self> {
+        PrimitiveType::ALL.into_iter().map(Self::Primitive).chain([
+            Self::Json,
+            Self::Void,
+            Self::Never,
+            Self::Unknown,
+        ])
+    }
+
     pub fn from_alias(alias: &str) -> Option<Self> {
         if let Some(primitive) = PrimitiveType::from_alias(alias) {
             return Some(Self::Primitive(primitive));

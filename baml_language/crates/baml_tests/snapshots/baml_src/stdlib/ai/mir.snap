@@ -10953,14 +10953,14 @@ fn ai.Agent.Runner<Out>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.Ru
     let _32: int
     let _33: int // before
     let _34: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
-    let _35: future<void, ai.errors.ToolFailedError>[] // futures
-    let _36: (ai.content.ToolUse) -> future<void, ai.errors.ToolFailedError> throws never
+    let _35: baml.future.Future<void, ai.errors.ToolFailedError>[] // futures
+    let _36: (ai.content.ToolUse) -> baml.future.Future<void, ai.errors.ToolFailedError> throws never
     let _37: reflect.Type
     let _38: reflect.Type
     let _39: reflect.Type
     let _40: void[]
     let _41: null
-    let _42: future<void, ai.errors.ToolFailedError>[]
+    let _42: baml.future.Future<void, ai.errors.ToolFailedError>[]
     let _43: reflect.Type
     let _44: reflect.Type
     let _45: ai.Journal
@@ -11226,7 +11226,7 @@ fn ai.Agent.Runner<Out>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.Ru
 
     bb29: {
         _36 = make_closure lambda[0]<1 type_args>(copy _1, copy _2, copy _9);
-        _37 = load_type(future<void, ai.errors.ToolFailedError>);
+        _37 = load_type(baml.future.Future<void, ai.errors.ToolFailedError>);
         _38 = load_type(never);
         _39 = load_type(ai.content.ToolUse);
         _35 = call const fn baml.Array.map<copy _39, copy _37, copy _38>(copy _30, copy _36) -> [bb30];
@@ -11401,12 +11401,12 @@ fn ai.Agent.Runner<Out>.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.Ru
 }
 
 // lambda[0]
-fn .<lambda(Agent.run, 0)>(call: ai.content.ToolUse) -> future<void, ai.errors.ToolFailedError> {
+fn .<lambda(Agent.run, 0)>(call: ai.content.ToolUse) -> baml.future.Future<void, ai.errors.ToolFailedError> {
     // Locals:
-    let _0: future<void, ai.errors.ToolFailedError> // _0 // return
+    let _0: baml.future.Future<void, ai.errors.ToolFailedError> // _0 // return
     let _1: ai.content.ToolUse // call // param [captured]
     let _2: null
-    let _3: future<void, ai.errors.ToolFailedError>
+    let _3: baml.future.Future<void, ai.errors.ToolFailedError>
 
     bb0: {
         _2 = make_closure lambda[0]<1 type_args>(copy capture[0], copy capture[1], copy _1, copy capture[2]);

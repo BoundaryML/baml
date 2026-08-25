@@ -62,6 +62,10 @@ pub enum CompletionKind {
     RetryPolicy,
     /// A dependency package that roots a qualified path (`baml.http.fetch`).
     Package,
+    /// A generic parameter in scope (`T`).
+    TypeParam,
+    /// A builtin type alias (`int`, `string`, `json`).
+    BuiltinType,
     Keyword,
     /// An item kind with no completion-specific presentation.
     Other,

@@ -43,4 +43,13 @@ pub(crate) fn complete(
     for keyword in EXPRESSION_KEYWORDS {
         out.add_keyword(keyword);
     }
+
+    // A builtin alias is a legal expression ROOT — `int.max_value()`,
+    // `string.from(x)` — the value-side analogue of a package name: the
+    // bare word is not a value, but a qualifier the next `.` resolves
+    // through the type rung.
+    for primitive in baml_type::PrimitiveType::ALL {
+        out.add_builtin_type(primitive.alias());
+    }
+    out.add_builtin_type(baml_type::BuiltinTypeName::Json.alias());
 }
