@@ -1369,10 +1369,12 @@ mod tests {
         );
         let definition = |name: &str| sys_types::EnumDefinition {
             name: name.to_string(),
+            docstring: None,
             description: None,
             alias: Some("SharedChoice".to_string()),
             variants: vec![sys_types::EnumVariantDefinition {
                 name: "Value".to_string(),
+                docstring: None,
                 description: None,
                 alias: None,
             }],
@@ -1423,10 +1425,12 @@ mod tests {
             enum_key,
             sys_types::EnumDefinition {
                 name: "Choice_2".to_string(),
+                docstring: None,
                 description: None,
                 alias: Some("SharedChoice".to_string()),
                 variants: vec![sys_types::EnumVariantDefinition {
                     name: "Value".to_string(),
+                    docstring: None,
                     description: None,
                     alias: None,
                 }],

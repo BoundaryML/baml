@@ -2369,7 +2369,7 @@ mod tests {
         }));
         assert!(sources.iter().any(|source| {
             source.starts_with("/// Runtime class docs\nclass ClassAlias {")
-                && source.contains("  /// Runtime field docs\n  value unknown")
+                && source.contains("  /// Runtime field docs\n  value string")
         }));
         assert!(sources.iter().any(|source| {
             source.starts_with("/// Runtime enum docs\nenum RuntimeState {")
