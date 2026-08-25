@@ -91,9 +91,9 @@ use ::bex_heap::{HeapPermit as _, Tlab};
 use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
-use bex_events::prof::backend::{BoundaryEndStatus, ProfilerSession, RootProfiler};
+use bex_events::prof::backend::{ExecutionEndStatus, ProfilerSession, RootProfiler};
 #[cfg(not(target_arch = "wasm32"))]
-use bex_events::prof::backend::{BoundaryHandle, RootAdmission, ValueLossReason, ValueRole};
+use bex_events::prof::backend::{ExecutionHandle, RootAdmission, ValueLossReason, ValueRole};
 pub use bex_events::{
     FunctionMetadataTable, ProgramMetadata,
     ids::{
@@ -312,13 +312,13 @@ pub(crate) enum ChildSettleKind {
 
 struct ThreadBoundaryLeaseGuard {
     session: Arc<ProfilerSession>,
-    lease: Option<bex_events::prof::backend::BoundaryThreadLease>,
+    lease: Option<bex_events::prof::backend::ExecutionThreadLease>,
 }
 
 impl ThreadBoundaryLeaseGuard {
     fn new(
         session: Arc<ProfilerSession>,
-        lease: bex_events::prof::backend::BoundaryThreadLease,
+        lease: bex_events::prof::backend::ExecutionThreadLease,
     ) -> Self {
         Self {
             session,
@@ -326,10 +326,10 @@ impl ThreadBoundaryLeaseGuard {
         }
     }
 
-    fn handle(&self) -> Option<bex_events::prof::backend::BoundaryHandle> {
+    fn handle(&self) -> Option<bex_events::prof::backend::ExecutionHandle> {
         self.lease
             .as_ref()
-            .map(bex_events::prof::backend::BoundaryThreadLease::handle)
+            .map(bex_events::prof::backend::ExecutionThreadLease::handle)
     }
 }
 
@@ -476,7 +476,7 @@ struct CallValueCaptureContext {
 #[derive(Clone)]
 struct BackendValueCaptureContext {
     session: Arc<ProfilerSession>,
-    boundary: BoundaryHandle,
+    boundary: ExecutionHandle,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1165,6 +1165,77 @@ impl Drop for BexEngine {
     }
 }
 
+/// Builds the durable `FunctionTableV1` body (streams spec §4.6) from the
+/// engine's in-memory function metadata. Files are every distinct `file_id`
+/// referenced by a function's source span, mapped to that function's
+/// `source_file`.
+#[cfg(not(target_arch = "wasm32"))]
+fn encode_engine_function_table(
+    metadata: &ProgramMetadata,
+) -> Result<Vec<u8>, bex_events::prof::backend::FunctionTableError> {
+    use bex_events::prof::backend::{
+        FunctionKindCode, FunctionOriginCode, FunctionSourceSpan, FunctionTable,
+        FunctionTableEntry, FunctionTableFile,
+    };
+    let mut functions: Vec<FunctionTableEntry> = metadata
+        .function_table
+        .functions
+        .iter()
+        .map(|function| FunctionTableEntry {
+            function_id: function.function_id,
+            fqn: function.fqn.clone(),
+            display_name: function.display_name.clone(),
+            definition_key: function.definition_key.as_ref().map(|key| key.0.clone()),
+            kind: Some(match &function.kind {
+                bex_events::RuntimeFunctionKind::Bytecode => FunctionKindCode::Bytecode,
+                bex_events::RuntimeFunctionKind::SysOp(_) => FunctionKindCode::SysOp,
+                bex_events::RuntimeFunctionKind::Native => FunctionKindCode::Native,
+                bex_events::RuntimeFunctionKind::NativeUnresolved => {
+                    FunctionKindCode::NativeUnresolved
+                }
+            }),
+            kind_detail: match &function.kind {
+                bex_events::RuntimeFunctionKind::SysOp(name) => Some(name.clone()),
+                _ => None,
+            },
+            origin: Some(match function.origin {
+                bex_events::RuntimeFunctionOrigin::UserDefined => FunctionOriginCode::UserDefined,
+                bex_events::RuntimeFunctionOrigin::Companion => FunctionOriginCode::Companion,
+                bex_events::RuntimeFunctionOrigin::Internal => FunctionOriginCode::Internal,
+                bex_events::RuntimeFunctionOrigin::Builtin => FunctionOriginCode::Builtin,
+                bex_events::RuntimeFunctionOrigin::AutoDerive => FunctionOriginCode::AutoDerive,
+            }),
+            source_file: function.source_file.clone(),
+            source_span: function
+                .source_span
+                .as_ref()
+                .map(|span| FunctionSourceSpan {
+                    file_id: span.file_id,
+                    start: span.start,
+                    end: span.end,
+                }),
+            package_name: function.package_name.clone(),
+            namespace: function.namespace.clone(),
+        })
+        .collect();
+    functions.sort_by_key(|function| function.function_id.0);
+    let mut files: Vec<FunctionTableFile> = Vec::new();
+    for function in &metadata.function_table.functions {
+        let (Some(span), Some(path)) = (&function.source_span, &function.source_file) else {
+            continue;
+        };
+        if !files.iter().any(|file| file.file_id == span.file_id) {
+            files.push(FunctionTableFile {
+                file_id: span.file_id,
+                path: path.clone(),
+            });
+        }
+    }
+    files.sort_by_key(|file| file.file_id);
+    bex_events::prof::backend::encode_function_table(&FunctionTable { functions, files })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn hex_bytes(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     let mut encoded = String::with_capacity(bytes.len() * 2);
@@ -1823,9 +1894,20 @@ impl BexEngine {
             semantic_lanes: None,
         });
 
+        // Conservative content identity (streams spec §2.3): byte-identical
+        // builds share a program_id (so ContextKeys aggregate across
+        // executions of one build); a host that provides no hash falls back
+        // to random, which over-splits — the safe direction.
+        let (program_id, source_snapshot_id) = match program.source_content_hash {
+            Some(hash) => (
+                ProgramId(hash[..16].try_into().expect("fixed-width slice")),
+                Some(bex_events::ids::SourceSnapshotId(hash)),
+            ),
+            None => (ProgramId::new_random(), None),
+        };
         ProgramMetadata {
-            program_id: ProgramId::new_random(),
-            source_snapshot_id: None,
+            program_id,
+            source_snapshot_id,
             revision_id: None,
             function_table: FunctionMetadataTable { functions },
         }
@@ -2306,6 +2388,29 @@ impl BexEngine {
                 self.engine_id,
                 &self.profiler_session,
             );
+            // Streams spec §7.2: the one deliberate synchronous publication —
+            // the engine's durable function/file tables — then the
+            // `EngineStarted` index record, both before any root of this
+            // engine can be admitted.
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let function_table_cid = encode_engine_function_table(&self.program_metadata)
+                    .ok()
+                    .and_then(|bytes| self.profiler_session.publish_function_table(&bytes));
+                self.profiler_session.engine_started(
+                    self.engine_id,
+                    self.program_metadata.program_id,
+                    function_table_cid,
+                    self.program_metadata
+                        .revision_id
+                        .as_ref()
+                        .map(|revision| revision.0.clone()),
+                    self.program_metadata
+                        .source_snapshot_id
+                        .as_ref()
+                        .map(|source| hex_bytes(&source.0)),
+                );
+            }
         }
     }
 
@@ -2358,7 +2463,7 @@ impl BexEngine {
 
     fn prof_record_transport_loss(
         &self,
-        handle: Option<bex_events::prof::backend::BoundaryHandle>,
+        handle: Option<bex_events::prof::backend::ExecutionHandle>,
     ) {
         if let Some(handle) = handle {
             bex_events::prof::backend::record_session_transport_loss(
@@ -3887,14 +3992,6 @@ impl BexEngine {
             profile_intent,
             root_thread_ref,
             self.program_metadata.program_id,
-            self.program_metadata
-                .revision_id
-                .as_ref()
-                .map(|revision| revision.0.clone()),
-            self.program_metadata
-                .source_snapshot_id
-                .as_ref()
-                .map(|source| hex_bytes(&source.0)),
         );
         thread.vm.root_profiler = admission.profiler();
         thread.vm.prof_boundary_handle = admission.boundary_handle();
@@ -4022,10 +4119,10 @@ impl BexEngine {
         // opcode, or synthesized by engine safepoints (see
         // `cancelled_unhandled_throw`).
         let boundary_status = match &result {
-            Ok(ThreadOutcome::RootValue(_)) => BoundaryEndStatus::Succeeded,
-            Ok(ThreadOutcome::SettledChild(_)) => BoundaryEndStatus::Failed,
-            Err(error) if is_cancelled_engine_error(error) => BoundaryEndStatus::Cancelled,
-            Err(_) => BoundaryEndStatus::Failed,
+            Ok(ThreadOutcome::RootValue(_)) => ExecutionEndStatus::Succeeded,
+            Ok(ThreadOutcome::SettledChild(_)) => ExecutionEndStatus::Failed,
+            Err(error) if is_cancelled_engine_error(error) => ExecutionEndStatus::Cancelled,
+            Err(_) => ExecutionEndStatus::Failed,
         };
         #[cfg(not(target_arch = "wasm32"))]
         if let RootAdmission::Active(active) = admission {

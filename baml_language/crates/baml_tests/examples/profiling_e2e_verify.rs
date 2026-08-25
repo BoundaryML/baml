@@ -1,14 +1,16 @@
-use std::{error::Error, fs, io, path::Path};
+//! Durable verification for the packed profiling e2e run: every execution of
+//! the process stream must be complete, healthy, and semantically consistent
+//! with the workload's expected call/context population.
 
-use bex_events::{
-    ids::BoundaryId,
-    prof::{
-        backend::{
-            BoundaryEndStatus, BoundaryHealthSnapshot, CounterHealth, DurableRunReader, EdgeKind,
-            ProfileRun, RoleMask, ValueState,
-        },
-        record::FunctionEndStatus,
+use std::{error::Error, io, path::Path};
+
+use bex_events::prof::{
+    backend::{
+        CounterHealth, DataState, EdgeKind, ExecutionHealthSnapshot, ExecutionProfile,
+        ExecutionReader, ExecutionStatus, IndexState, Plane, RoleMask, StreamReader, ValueState,
+        list_streams, segment_path,
     },
+    record::FunctionEndStatus,
 };
 use serde_json::json;
 
@@ -82,55 +84,83 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
     };
 
-    let boundary_ids = boundaries(Path::new(&store_root))?;
-    // The JSON argument/output helpers run as suppressed internal roots, so a
-    // packed invocation publishes exactly one durable run: the workload.
+    let store_root = Path::new(&store_root);
+    // One process ⇒ one stream (streams spec §3/§9).
+    let streams = list_streams(store_root)?;
     assert_eq!(
-        boundary_ids.len(),
+        streams.len(),
         1,
-        "packed execution should produce exactly one (workload) boundary"
+        "the packed single-process run must produce exactly one stream"
     );
-    let mut runs = Vec::with_capacity(boundary_ids.len());
-    for boundary_id in boundary_ids {
-        let reader = DurableRunReader::open(&store_root, boundary_id)?;
-        let run = reader.load()?;
-        let counts = assert_run_integrity(&reader, &run)?;
-        runs.push((boundary_id, run, counts));
+    let stream_reader = StreamReader::open(store_root, streams[0])?;
+    assert!(
+        !stream_reader.alive,
+        "the packed process exited; its stream must read dead"
+    );
+    assert!(
+        stream_reader.index_gaps.is_empty(),
+        "index gaps: {:?}",
+        stream_reader.index_gaps
+    );
+    assert!(
+        stream_reader.header.is_some(),
+        "the stream header (wall-clock zero) must be durable"
+    );
+    let meta_segments = stream_reader.high_water.meta;
+    let data_segments = stream_reader.high_water.data;
+    let summaries = stream_reader.executions();
+    assert_eq!(
+        summaries.len(),
+        2,
+        "packed execution should produce workload and output-serialization executions"
+    );
+
+    let mut profiles = Vec::with_capacity(summaries.len());
+    for summary in &summaries {
+        let reader = stream_reader.execution(summary.id)?;
+        let profile = reader.load()?;
+        let counts = assert_execution_integrity(&reader, &profile)?;
+        profiles.push((summary.id, profile, counts));
     }
 
-    let workload_index = runs.iter().position(|(_, run, counts)| {
-        u64::try_from(run.contexts.len()).ok() == Some(expected_contexts)
+    let workload_index = profiles.iter().position(|(_, profile, counts)| {
+        u64::try_from(profile.contexts.len()).ok() == Some(expected_contexts)
             && counts.invocations.iter().sum::<u64>() == expected_total_calls
     });
     let Some(workload_index) = workload_index else {
-        let observed = runs
+        let observed = profiles
             .iter()
-            .map(|(boundary_id, run, counts)| {
+            .map(|(id, profile, counts)| {
                 format!(
                     "{}: contexts={}, counts={counts:?}, health={:?}",
-                    boundary_id.to_wire_string(),
-                    run.contexts.len(),
-                    run.terminal_health,
+                    id.encode(),
+                    profile.contexts.len(),
+                    profile.summary.health,
                 )
             })
             .collect::<Vec<_>>()
             .join("; ");
         return Err(io::Error::other(format!(
-            "workload profiling boundary not found; observed {observed}"
+            "workload profiling execution not found; observed {observed}"
         ))
         .into());
     };
     assert_eq!(
-        runs.iter()
-            .filter(|(_, run, counts)| {
-                u64::try_from(run.contexts.len()).ok() == Some(expected_contexts)
+        profiles
+            .iter()
+            .filter(|(_, profile, counts)| {
+                u64::try_from(profile.contexts.len()).ok() == Some(expected_contexts)
                     && counts.invocations.iter().sum::<u64>() == expected_total_calls
             })
             .count(),
         1,
-        "workload profiling boundary is not unique"
+        "workload profiling execution is not unique"
     );
-    let (boundary_id, run, counts) = &runs[workload_index];
+    let serialization_index = 1_usize
+        .checked_sub(workload_index)
+        .expect("two execution indexes");
+    let (execution_id, profile, counts) = &profiles[workload_index];
+    let (_, serialization, serialization_counts) = &profiles[serialization_index];
 
     assert_eq!(counts.invocations[0], expected_root_calls);
     assert_eq!(counts.invocations[1], expected_call_edges);
@@ -147,14 +177,47 @@ fn main() -> Result<(), Box<dyn Error>> {
         expected_nonroot_contexts
     );
 
-    let workload_end = run.end.as_ref().expect("integrity checked sealed run");
+    assert_eq!(serialization.contexts.len(), 3);
+    assert_eq!(serialization_counts.contexts, [1, 2, 0]);
+    assert_eq!(serialization_counts.invocations, [1, 2, 0]);
+    assert_eq!(serialization_counts.completed, 3);
+    assert_eq!(serialization_counts.await_count, 0);
+
+    // Optional strict layout gate for runs whose publish interval exceeded
+    // the run duration (streams spec §9: meta, data, meta).
+    if std::env::var_os("PROFILING_E2E_EXPECT_MINIMAL_SEGMENTS").is_some() {
+        assert_eq!(
+            (meta_segments, data_segments),
+            (2, 1),
+            "expected the minimal meta,data,meta stream layout"
+        );
+    }
+    // The layout is O(bytes), never O(executions): a single fast process must
+    // not produce more than a handful of segments per plane.
+    for sequence in 1..=data_segments {
+        assert!(
+            segment_path(store_root, streams[0], Plane::Data, sequence).is_file(),
+            "data plane must be contiguous"
+        );
+    }
+
+    let transport_loss = profiles
+        .iter()
+        .map(|(_, profile, _)| {
+            profile
+                .summary
+                .health
+                .map_or(0, |health| health.structural_transport_exceeded)
+        })
+        .sum::<u64>();
 
     println!(
         "{}",
         json!({
-            "boundary_id": boundary_id.to_wire_string(),
-            "durable_runs": runs.len(),
-            "contexts": run.contexts.len(),
+            "execution_id": execution_id.encode(),
+            "stream_count": streams.len(),
+            "durable_executions": profiles.len(),
+            "contexts": profile.contexts.len(),
             "context_counts": {
                 "root": counts.contexts[0],
                 "call": counts.contexts[1],
@@ -167,10 +230,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "spawn": counts.invocations[2],
             },
             "await_count": counts.await_count,
-            "selected_spans": run.spans.len(),
-            "transport_loss": run.terminal_health.structural_transport_exceeded,
-            "cct_segments": workload_end.fence.cct.segment_count,
-            "evidence_segments": workload_end.fence.evidence.segment_count,
+            "selected_spans": profile.spans.len(),
+            "threads": profile.threads.len(),
+            "serialization": {
+                "contexts": serialization.contexts.len(),
+                "invocations": serialization_counts.invocations.iter().sum::<u64>(),
+                "selected_spans": serialization.spans.len(),
+            },
+            "transport_loss": transport_loss,
+            "meta_segments": meta_segments,
+            "data_segments": data_segments,
         })
     );
     Ok(())
@@ -184,19 +253,35 @@ struct RunCounts {
     await_count: u64,
 }
 
-fn assert_run_integrity(
-    reader: &DurableRunReader,
-    run: &ProfileRun,
+fn assert_execution_integrity(
+    reader: &ExecutionReader,
+    profile: &ExecutionProfile,
 ) -> Result<RunCounts, Box<dyn Error>> {
-    let end = run
-        .end
-        .as_ref()
-        .ok_or_else(|| io::Error::other("durable run is incomplete"))?;
-    assert_eq!(end.end.status, BoundaryEndStatus::Succeeded);
-    assert_eq!(run.terminal_health, BoundaryHealthSnapshot::default());
-    assert_eq!(run.cct_health, CounterHealth::default());
-    assert!(run.overflow.is_empty(), "unexpected CCT overflow");
-    assert!(run.errors.is_empty(), "unexpected error evidence");
+    assert_eq!(profile.summary.status, ExecutionStatus::Succeeded);
+    assert_eq!(profile.summary.index_state, IndexState::Complete);
+    assert_eq!(profile.data_state, DataState::Complete);
+    assert_eq!(
+        profile.summary.health,
+        Some(ExecutionHealthSnapshot::default()),
+        "the packed run must be loss-free"
+    );
+    assert_eq!(profile.cct_health, CounterHealth::default());
+    assert!(profile.overflow.is_empty(), "unexpected CCT overflow");
+    assert!(profile.errors.is_empty(), "unexpected error evidence");
+    assert!(
+        profile.summary.started_unix_ns.is_some(),
+        "wall clock must be durable"
+    );
+    assert!(
+        profile.thread_issues.is_empty(),
+        "thread lineage must be loss-free: {:?}",
+        profile.thread_issues
+    );
+    // Every thread has durable start AND end facts in a loss-free run.
+    for (thread_ref, thread) in &profile.threads {
+        assert!(thread.start.is_some(), "thread start for {thread_ref:?}");
+        assert!(thread.end.is_some(), "thread end for {thread_ref:?}");
+    }
 
     let mut counts = RunCounts {
         contexts: [0; 3],
@@ -205,7 +290,7 @@ fn assert_run_integrity(
         await_count: 0,
     };
     let mut selected = 0_u64;
-    for context in run.contexts.values() {
+    for context in profile.contexts.values() {
         let tuple = context
             .tuple
             .ok_or_else(|| io::Error::other("context definition missing"))?;
@@ -241,8 +326,16 @@ fn assert_run_integrity(
     }
     assert_eq!(selected, 1);
 
-    assert_eq!(run.spans.len(), 1, "only the root span should be selected");
-    let span = run.spans.values().next().expect("one selected root span");
+    assert_eq!(
+        profile.spans.len(),
+        1,
+        "only the root span should be selected"
+    );
+    let span = profile
+        .spans
+        .values()
+        .next()
+        .expect("one selected root span");
     let start = span.start.ok_or("selected root has no start")?;
     let finish = span.end.ok_or("selected root has no end")?;
     assert_eq!(start.edge_kind, EdgeKind::Root);
@@ -258,7 +351,7 @@ fn assert_run_integrity(
 }
 
 fn assert_available(
-    reader: &DurableRunReader,
+    reader: &ExecutionReader,
     occurrence: bex_events::prof::backend::ValueOccurrence,
 ) -> Result<(), Box<dyn Error>> {
     let ValueState::Available { cid, .. } = occurrence.state else {
@@ -267,44 +360,4 @@ fn assert_available(
     let object = reader.read_value(cid)?;
     assert_eq!(object.cid, cid);
     Ok(())
-}
-
-fn boundaries(store_root: &Path) -> Result<Vec<BoundaryId>, Box<dyn Error>> {
-    let mut directories = fs::read_dir(store_root.join("runs"))?
-        .filter_map(Result::ok)
-        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
-        .collect::<Vec<_>>();
-    directories.sort_by_key(fs::DirEntry::file_name);
-    directories
-        .into_iter()
-        .map(|entry| {
-            let name = entry
-                .file_name()
-                .into_string()
-                .map_err(|_| io::Error::other("run directory is not UTF-8"))?;
-            Ok(BoundaryId::from_bytes(decode_boundary_hex(&name)?))
-        })
-        .collect()
-}
-
-fn decode_boundary_hex(value: &str) -> Result<[u8; 16], Box<dyn Error>> {
-    if value.len() != 32 {
-        return Err(io::Error::other("invalid boundary directory length").into());
-    }
-    let mut output = [0_u8; 16];
-    for (index, slot) in output.iter_mut().enumerate() {
-        let offset = index * 2;
-        *slot = (hex_nibble(value.as_bytes()[offset])? << 4)
-            | hex_nibble(value.as_bytes()[offset + 1])?;
-    }
-    Ok(output)
-}
-
-fn hex_nibble(value: u8) -> Result<u8, Box<dyn Error>> {
-    match value {
-        b'0'..=b'9' => Ok(value - b'0'),
-        b'a'..=b'f' => Ok(value - b'a' + 10),
-        b'A'..=b'F' => Ok(value - b'A' + 10),
-        _ => Err(io::Error::other("invalid boundary directory hex").into()),
-    }
 }

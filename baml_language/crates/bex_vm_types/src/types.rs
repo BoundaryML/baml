@@ -109,6 +109,22 @@ pub struct Program {
     /// references are order-independent). The single source of truth for interface
     /// dispatch, named-item lookup, and recursive-alias rendering.
     pub packages: IndexMap<baml_type::Name, ProgramPackage>,
+
+    /// Conservative source-content identity of the compiled file set
+    /// (streams spec §2.3): SHA-256 over the domain string, compiler
+    /// version, and every (path, bytes) pair. `None` when the compiling
+    /// host chose not to provide one (e.g. mounted-unit links) — the
+    /// profiler then falls back to a random per-engine `ProgramId`, which
+    /// over-splits (the safe direction).
+    ///
+    /// In-memory metadata, NOT compiled content: it is `borsh(skip)`ped so
+    /// program/unit byte-identity oracles compare compiled output only,
+    /// and per-file `CompilationUnit`s never carry project-wide state. A
+    /// host that materializes a `Program` from stored bytes restamps it
+    /// (the CLI bytecode cache recomputes from the project files it just
+    /// validated); a host that cannot leaves `None`.
+    #[borsh(skip)]
+    pub source_content_hash: Option<[u8; 32]>,
 }
 
 /// Metadata for building a client tree at runtime.

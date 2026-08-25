@@ -1,4 +1,6 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
+
+use crate::ids::ProcessEuid;
 
 /// The only disk-policy inputs accepted by the MVP backend.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -7,26 +9,44 @@ pub struct DiskBudget {
     pub minimum_free_bytes: u64,
 }
 
-/// Five-input profiler configuration. Only `enabled` and `store_root` are
-/// host-facing; tests may inject the three resource values.
+/// Profiler configuration. Only `enabled`, `store_root`, and
+/// `publish_interval` are host-facing; tests may inject the resource values
+/// and a distinct stream id (simulating several processes in one test
+/// process, streams spec §3).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProfilerConfig {
     pub enabled: bool,
     pub store_root: PathBuf,
     pub process_memory_bytes: u64,
     pub disk: DiskBudget,
+    /// Publication batching age trigger (streams spec §5.3). `ZERO` =
+    /// publish on every consumer pass with pending work; `MAX` = manual
+    /// (explicit flush only). Default 1 s, overridable via
+    /// `BAML_PROFILE_PUBLISH_INTERVAL_MS` (tests).
+    pub publish_interval: Duration,
+    /// Stream identity override; `None` = this process
+    /// (`ProcessEuid::current()`).
+    pub stream: Option<ProcessEuid>,
 }
 
 impl Default for ProfilerConfig {
     fn default() -> Self {
+        let publish_interval = std::env::var("BAML_PROFILE_PUBLISH_INTERVAL_MS")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .map_or(Duration::from_secs(1), Duration::from_millis);
+        let store_root = std::env::var_os("BAML_PROFILE_DIR")
+            .map_or_else(|| PathBuf::from(".baml/profiles-v1"), PathBuf::from);
         Self {
             enabled: cfg!(not(target_arch = "wasm32")),
-            store_root: PathBuf::from(".baml/profiles-v1"),
+            store_root,
             process_memory_bytes: 256 * 1024 * 1024,
             disk: DiskBudget {
                 max_project_bytes: 10 * 1024 * 1024 * 1024,
                 minimum_free_bytes: 1024 * 1024 * 1024,
             },
+            publish_interval,
+            stream: None,
         }
     }
 }
@@ -36,7 +56,7 @@ impl Default for ProfilerConfig {
 /// rather than claiming allocator-exact occupied sizes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MeasuredLayouts {
-    pub boundary_slot_bytes: u64,
+    pub execution_slot_bytes: u64,
     pub population_item_min_bytes: u64,
     pub transport_segment_bytes: u64,
     pub active_thread_min_bytes: u64,
@@ -45,12 +65,16 @@ pub struct MeasuredLayouts {
     pub evidence_item_min_bytes: u64,
     pub value_root_min_bytes: u64,
     pub writer_batch_min_bytes: u64,
+    /// Accounted charge per pending index-plane record in the stream
+    /// writer's fixed `meta_queue` reservation (`RootEnded` encodes to
+    /// ≈ 286 bytes).
+    pub meta_record_bytes: u64,
     pub fixed_control_bytes: u64,
 }
 
 impl MeasuredLayouts {
     pub const V1: Self = Self {
-        boundary_slot_bytes: 8 * 1024,
+        execution_slot_bytes: 8 * 1024,
         population_item_min_bytes: 256,
         transport_segment_bytes: 256 * 1024,
         active_thread_min_bytes: 192,
@@ -59,6 +83,7 @@ impl MeasuredLayouts {
         evidence_item_min_bytes: 256,
         value_root_min_bytes: 512,
         writer_batch_min_bytes: 64 * 1024,
+        meta_record_bytes: 320,
         fixed_control_bytes: 256 * 1024,
     };
 }
@@ -70,7 +95,7 @@ pub struct DerivedSizing {
     pub control_reserve_bytes: u64,
     pub manual_reserve_bytes: u64,
     pub general_bytes: u64,
-    pub boundary_slots: u32,
+    pub execution_slots: u32,
     pub transport_segment_bytes: u64,
     pub transport_freelist_segments: u32,
     pub producer_queue_slots: u32,
@@ -108,7 +133,7 @@ impl ProfilerSizingPolicy {
     ) -> Result<DerivedSizing, InvalidMemoryBudget> {
         let minimum_bytes = measured
             .fixed_control_bytes
-            .saturating_add(measured.boundary_slot_bytes)
+            .saturating_add(measured.execution_slot_bytes)
             .saturating_add(measured.transport_segment_bytes)
             .saturating_add(Self::CONTROL_MIN)
             .saturating_add(Self::MANUAL_MIN)
@@ -130,8 +155,8 @@ impl ProfilerSizingPolicy {
             .expect("minimum budget preserves general capacity");
 
         let slot_bytes = control_reserve_bytes.saturating_sub(measured.fixed_control_bytes)
-            / measured.boundary_slot_bytes.max(1);
-        let boundary_slots = u32::try_from(slot_bytes.clamp(1, 4096)).unwrap_or(4096);
+            / measured.execution_slot_bytes.max(1);
+        let execution_slots = u32::try_from(slot_bytes.clamp(1, 4096)).unwrap_or(4096);
         let segment_target_bytes = (general_bytes / 32)
             .clamp(Self::SEGMENT_MIN, Self::SEGMENT_MAX)
             .max(measured.writer_batch_min_bytes);
@@ -150,7 +175,7 @@ impl ProfilerSizingPolicy {
             control_reserve_bytes,
             manual_reserve_bytes,
             general_bytes,
-            boundary_slots,
+            execution_slots,
             transport_segment_bytes: measured.transport_segment_bytes,
             transport_freelist_segments: 2,
             producer_queue_slots,
@@ -186,7 +211,7 @@ mod tests {
         assert_eq!(size_of::<CapturePlan>(), 3);
         assert_eq!(size_of::<ContextKey>(), 32);
         assert_eq!(size_of::<ContextTuple>(), 76);
-        assert_eq!(size_of::<RootProfiler>(), 17);
+        assert_eq!(size_of::<RootProfiler>(), 40);
         assert_eq!(size_of::<crate::prof::backend::ProfilerSession>(), 8);
     }
 
@@ -200,7 +225,7 @@ mod tests {
                 control_reserve_bytes: 16_777_216,
                 manual_reserve_bytes: 16_777_216,
                 general_bytes: 234_881_024,
-                boundary_slots: 2016,
+                execution_slots: 2016,
                 transport_segment_bytes: 262_144,
                 transport_freelist_segments: 2,
                 producer_queue_slots: 16_384,
@@ -221,7 +246,7 @@ mod tests {
                 control_reserve_bytes: 2_097_152,
                 manual_reserve_bytes: 2_097_152,
                 general_bytes: 29_360_128,
-                boundary_slots: 224,
+                execution_slots: 224,
                 transport_segment_bytes: 262_144,
                 transport_freelist_segments: 2,
                 producer_queue_slots: 3_584,
@@ -235,7 +260,7 @@ mod tests {
     #[test]
     fn too_small_budget_is_rejected_without_partial_sizing() {
         let minimum = MeasuredLayouts::V1.fixed_control_bytes
-            + MeasuredLayouts::V1.boundary_slot_bytes
+            + MeasuredLayouts::V1.execution_slot_bytes
             + MeasuredLayouts::V1.transport_segment_bytes
             + ProfilerSizingPolicy::CONTROL_MIN
             + ProfilerSizingPolicy::MANUAL_MIN

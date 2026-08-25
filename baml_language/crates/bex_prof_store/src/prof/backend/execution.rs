@@ -1,4 +1,4 @@
-//! Fixed-capacity generation-tagged profiling boundary ownership.
+//! Fixed-capacity generation-tagged execution ownership.
 
 use std::sync::{
     Arc, Mutex,
@@ -12,24 +12,23 @@ const PHASE_FREE: u8 = u8::MAX;
 const STATUS_NONE: u8 = u8::MAX;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct BoundaryHandle {
+pub struct ExecutionHandle {
     pub slot: u32,
     pub generation: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub enum BoundaryPhase {
+pub enum ExecutionPhase {
     Open = 0,
     RootReturned = 1,
     Closing = 2,
-    Sealed = 3,
-    ReleasedIncomplete = 4,
+    Released = 3,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub enum BoundaryEndStatus {
+pub enum ExecutionEndStatus {
     Succeeded = 0,
     Failed = 1,
     Cancelled = 2,
@@ -40,24 +39,29 @@ pub enum BoundaryEndStatus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LeaseUnavailable {
     StaleGeneration,
-    BoundaryNotOpen,
+    ExecutionNotOpen,
     CounterSaturated,
     ParentDisarmed,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BoundarySlotUnavailable {
+pub enum ExecutionSlotUnavailable {
     NoStableSlot,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct BoundaryMetadata {
-    pub boundary_id: BoundaryId,
+pub struct ExecutionMetadata {
     pub root_thread_ref: ThreadRef,
+    /// Host runtime token (`baml_id_1_…`), opaque to the profiler.
+    pub runtime_id: BoundaryId,
+    /// `now_ticks()` sampled at the top of `register_root`; the durable
+    /// `RootStarted.started_ns` source (a lost `StartThread` record must not
+    /// lose the start time).
+    pub admitted_ticks: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct BoundaryProducerHealthSnapshot {
+pub struct ExecutionProducerHealthSnapshot {
     pub structural_transport_exceeded: u64,
     pub value_attempt_transport_exceeded: u64,
     pub error_capture_attempt_transport_exceeded: u64,
@@ -65,21 +69,26 @@ pub struct BoundaryProducerHealthSnapshot {
 }
 
 #[derive(Debug)]
-struct BoundarySlot {
+struct ExecutionSlot {
     generation: AtomicU32,
     phase: AtomicU8,
     active_threads: AtomicU64,
     root_status: AtomicU8,
     finish_ready: AtomicBool,
     consumer_drain_armed: AtomicBool,
+    /// Set (with `metadata`) under the `metadata` mutex by `reserve_root`;
+    /// cleared by `take_admitted` on the consumer thread.
+    admitted_pending: AtomicBool,
+    /// `now_ticks()` recorded at the one-to-zero lease release.
+    closing_ticks: AtomicU64,
     structural_transport_exceeded: AtomicU64,
     value_attempt_transport_exceeded: AtomicU64,
     error_capture_attempt_transport_exceeded: AtomicU64,
     terminal_error_link_transport_exceeded: AtomicU64,
-    metadata: Mutex<Option<BoundaryMetadata>>,
+    metadata: Mutex<Option<ExecutionMetadata>>,
 }
 
-impl BoundarySlot {
+impl ExecutionSlot {
     fn new() -> Self {
         Self {
             generation: AtomicU32::new(1),
@@ -88,6 +97,8 @@ impl BoundarySlot {
             root_status: AtomicU8::new(STATUS_NONE),
             finish_ready: AtomicBool::new(false),
             consumer_drain_armed: AtomicBool::new(false),
+            admitted_pending: AtomicBool::new(false),
+            closing_ticks: AtomicU64::new(0),
             structural_transport_exceeded: AtomicU64::new(0),
             value_attempt_transport_exceeded: AtomicU64::new(0),
             error_capture_attempt_transport_exceeded: AtomicU64::new(0),
@@ -98,45 +109,52 @@ impl BoundarySlot {
 }
 
 #[derive(Debug)]
-pub struct BoundaryRegistry {
-    slots: Box<[BoundarySlot]>,
+pub struct ExecutionRegistry {
+    slots: Box<[ExecutionSlot]>,
     free: Mutex<Vec<u32>>,
+    /// `EngineStarted` records pushed by `engine_started` and drained by
+    /// `take_admitted` AFTER the slot scan, ordered before same-engine
+    /// `RootStarted`s (never the lossy producer lane).
+    #[cfg(not(target_arch = "wasm32"))]
+    engines_started: Mutex<Vec<super::MetaRecord>>,
     _control_reservation: Reservation,
 }
 
 #[derive(Debug)]
-pub struct BoundaryThreadLease {
-    handle: BoundaryHandle,
+pub struct ExecutionThreadLease {
+    handle: ExecutionHandle,
     armed: bool,
 }
 
 #[derive(Debug)]
-pub struct RootBoundaryCompletionGuard {
-    registry: Arc<BoundaryRegistry>,
-    lease: BoundaryThreadLease,
+pub struct RootExecutionCompletionGuard {
+    registry: Arc<ExecutionRegistry>,
+    lease: ExecutionThreadLease,
     completed: bool,
 }
 
-impl BoundaryRegistry {
+impl ExecutionRegistry {
     pub fn new(
         slot_count: u32,
-        boundary_slot_bytes: u64,
+        execution_slot_bytes: u64,
         memory: &ProfilerMemoryGovernor,
     ) -> Result<Arc<Self>, MemoryDenied> {
-        let accounted_bytes = u64::from(slot_count).saturating_mul(boundary_slot_bytes);
+        let accounted_bytes = u64::from(slot_count).saturating_mul(execution_slot_bytes);
         let control_reservation = memory.try_reserve(
             ReservationClass::Control,
             Owner::Population,
             accounted_bytes,
         )?;
-        let slots: Box<[BoundarySlot]> = (0..slot_count)
-            .map(|_| BoundarySlot::new())
+        let slots: Box<[ExecutionSlot]> = (0..slot_count)
+            .map(|_| ExecutionSlot::new())
             .collect::<Vec<_>>()
             .into_boxed_slice();
         let free = (0..slot_count).rev().collect();
         Ok(Arc::new(Self {
             slots,
             free: Mutex::new(free),
+            #[cfg(not(target_arch = "wasm32"))]
+            engines_started: Mutex::new(Vec::new()),
             _control_reservation: control_reservation,
         }))
     }
@@ -145,20 +163,27 @@ impl BoundaryRegistry {
     /// admission before this guard is exposed to engine execution.
     pub fn reserve_root(
         self: &Arc<Self>,
-        metadata: BoundaryMetadata,
-    ) -> Result<RootBoundaryCompletionGuard, BoundarySlotUnavailable> {
+        metadata: ExecutionMetadata,
+    ) -> Result<RootExecutionCompletionGuard, ExecutionSlotUnavailable> {
         let slot_index = self
             .free
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .pop()
-            .ok_or(BoundarySlotUnavailable::NoStableSlot)?;
+            .ok_or(ExecutionSlotUnavailable::NoStableSlot)?;
         let slot = &self.slots[slot_index as usize];
         debug_assert_eq!(slot.phase.load(Ordering::Acquire), PHASE_FREE);
-        *slot
-            .metadata
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(metadata);
+        {
+            let mut guard = slot
+                .metadata
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            *guard = Some(metadata);
+            // The pair (metadata, admitted_pending) is written under the
+            // mutex so `take_admitted` reads it atomically.
+            slot.admitted_pending.store(true, Ordering::Release);
+        }
+        slot.closing_ticks.store(0, Ordering::Relaxed);
         slot.root_status.store(STATUS_NONE, Ordering::Relaxed);
         slot.finish_ready.store(false, Ordering::Relaxed);
         slot.consumer_drain_armed.store(false, Ordering::Relaxed);
@@ -172,14 +197,14 @@ impl BoundaryRegistry {
             .store(0, Ordering::Relaxed);
         slot.active_threads.store(1, Ordering::Relaxed);
         slot.phase
-            .store(BoundaryPhase::Open as u8, Ordering::Release);
-        let handle = BoundaryHandle {
+            .store(ExecutionPhase::Open as u8, Ordering::Release);
+        let handle = ExecutionHandle {
             slot: slot_index,
             generation: slot.generation.load(Ordering::Acquire),
         };
-        Ok(RootBoundaryCompletionGuard {
+        Ok(RootExecutionCompletionGuard {
             registry: Arc::clone(self),
-            lease: BoundaryThreadLease {
+            lease: ExecutionThreadLease {
                 handle,
                 armed: true,
             },
@@ -189,15 +214,15 @@ impl BoundaryRegistry {
 
     pub fn try_acquire_child(
         &self,
-        parent: &BoundaryThreadLease,
-    ) -> Result<BoundaryThreadLease, LeaseUnavailable> {
+        parent: &ExecutionThreadLease,
+    ) -> Result<ExecutionThreadLease, LeaseUnavailable> {
         if !parent.armed {
             return Err(LeaseUnavailable::ParentDisarmed);
         }
         self.try_acquire_child_handle(parent.handle)
     }
 
-    pub fn record_structural_transport_loss(&self, handle: BoundaryHandle) {
+    pub fn record_structural_transport_loss(&self, handle: ExecutionHandle) {
         let Ok(slot) = self.validate(handle) else {
             return;
         };
@@ -208,21 +233,21 @@ impl BoundaryRegistry {
         );
     }
 
-    pub fn record_value_attempt_transport_loss(&self, handle: BoundaryHandle) {
+    pub fn record_value_attempt_transport_loss(&self, handle: ExecutionHandle) {
         let Ok(slot) = self.validate(handle) else {
             return;
         };
         saturating_increment(&slot.value_attempt_transport_exceeded);
     }
 
-    pub fn record_error_attempt_transport_loss(&self, handle: BoundaryHandle) {
+    pub fn record_error_attempt_transport_loss(&self, handle: ExecutionHandle) {
         let Ok(slot) = self.validate(handle) else {
             return;
         };
         saturating_increment(&slot.error_capture_attempt_transport_exceeded);
     }
 
-    pub fn record_terminal_error_transport_loss(&self, handle: BoundaryHandle) {
+    pub fn record_terminal_error_transport_loss(&self, handle: ExecutionHandle) {
         let Ok(slot) = self.validate(handle) else {
             return;
         };
@@ -230,11 +255,11 @@ impl BoundaryRegistry {
     }
 
     #[must_use]
-    pub fn producer_health(&self, handle: BoundaryHandle) -> BoundaryProducerHealthSnapshot {
+    pub fn producer_health(&self, handle: ExecutionHandle) -> ExecutionProducerHealthSnapshot {
         self.validate(handle)
             .ok()
-            .map_or_else(BoundaryProducerHealthSnapshot::default, |slot| {
-                BoundaryProducerHealthSnapshot {
+            .map_or_else(ExecutionProducerHealthSnapshot::default, |slot| {
+                ExecutionProducerHealthSnapshot {
                     structural_transport_exceeded: slot
                         .structural_transport_exceeded
                         .load(Ordering::Acquire),
@@ -252,12 +277,12 @@ impl BoundaryRegistry {
     }
 
     #[must_use]
-    pub fn accepts_producer(&self, handle: BoundaryHandle) -> bool {
+    pub fn accepts_producer(&self, handle: ExecutionHandle) -> bool {
         self.validate(handle).is_ok_and(|slot| {
             matches!(
                 slot.phase.load(Ordering::Acquire),
-                phase if phase == BoundaryPhase::Open as u8
-                    || phase == BoundaryPhase::RootReturned as u8
+                phase if phase == ExecutionPhase::Open as u8
+                    || phase == ExecutionPhase::RootReturned as u8
             )
         })
     }
@@ -268,12 +293,12 @@ impl BoundaryRegistry {
     /// a fresh lease to a child before scheduling.
     pub fn try_acquire_child_handle(
         &self,
-        parent: BoundaryHandle,
-    ) -> Result<BoundaryThreadLease, LeaseUnavailable> {
+        parent: ExecutionHandle,
+    ) -> Result<ExecutionThreadLease, LeaseUnavailable> {
         let slot = self.validate(parent)?;
         let phase = slot.phase.load(Ordering::Acquire);
-        if phase != BoundaryPhase::Open as u8 && phase != BoundaryPhase::RootReturned as u8 {
-            return Err(LeaseUnavailable::BoundaryNotOpen);
+        if phase != ExecutionPhase::Open as u8 && phase != ExecutionPhase::RootReturned as u8 {
+            return Err(LeaseUnavailable::ExecutionNotOpen);
         }
         let mut active = slot.active_threads.load(Ordering::Acquire);
         loop {
@@ -292,7 +317,7 @@ impl BoundaryRegistry {
                         debug_assert!(previous > 1);
                         return Err(LeaseUnavailable::StaleGeneration);
                     }
-                    return Ok(BoundaryThreadLease {
+                    return Ok(ExecutionThreadLease {
                         handle: parent,
                         armed: true,
                     });
@@ -302,7 +327,7 @@ impl BoundaryRegistry {
         }
     }
 
-    pub fn finish_thread(&self, lease: &mut BoundaryThreadLease) {
+    pub fn finish_thread(&self, lease: &mut ExecutionThreadLease) {
         if !lease.armed {
             return;
         }
@@ -316,6 +341,8 @@ impl BoundaryRegistry {
             return;
         }
         fence(Ordering::Acquire);
+        slot.closing_ticks
+            .store(crate::prof::clock::now_ticks(), Ordering::Release);
         if slot.root_status.load(Ordering::Acquire) == STATUS_NONE {
             debug_assert!(false, "last boundary owner released before root status");
             return;
@@ -323,8 +350,8 @@ impl BoundaryRegistry {
         if slot
             .phase
             .compare_exchange(
-                BoundaryPhase::RootReturned as u8,
-                BoundaryPhase::Closing as u8,
+                ExecutionPhase::RootReturned as u8,
+                ExecutionPhase::Closing as u8,
                 Ordering::AcqRel,
                 Ordering::Acquire,
             )
@@ -332,17 +359,17 @@ impl BoundaryRegistry {
         {
             slot.finish_ready.store(true, Ordering::Release);
             #[cfg(all(not(target_arch = "wasm32"), not(baml_loom)))]
-            crate::prof::consumer::wake_for_backend_terminal();
+            super::hooks::wake_for_backend_terminal();
         }
     }
 
     #[must_use]
-    pub fn ready_handles(&self) -> Vec<BoundaryHandle> {
+    pub fn ready_handles(&self) -> Vec<ExecutionHandle> {
         self.slots
             .iter()
             .enumerate()
             .filter(|(_, slot)| slot.finish_ready.load(Ordering::Acquire))
-            .map(|(index, slot)| BoundaryHandle {
+            .map(|(index, slot)| ExecutionHandle {
                 slot: u32::try_from(index).expect("boundary slot count is u32-bounded"),
                 generation: slot.generation.load(Ordering::Acquire),
             })
@@ -354,11 +381,11 @@ impl BoundaryRegistry {
     /// `true` performs a complete ring sweep, so structural commits that
     /// happen-before the last thread lease release cannot be overtaken by
     /// boundary finalization.
-    pub fn consumer_drain_completed(&self, handle: BoundaryHandle) -> bool {
+    pub fn consumer_drain_completed(&self, handle: ExecutionHandle) -> bool {
         let Ok(slot) = self.validate(handle) else {
             return false;
         };
-        if slot.phase.load(Ordering::Acquire) != BoundaryPhase::Closing as u8
+        if slot.phase.load(Ordering::Acquire) != ExecutionPhase::Closing as u8
             || !slot.finish_ready.load(Ordering::Acquire)
         {
             return false;
@@ -368,10 +395,10 @@ impl BoundaryRegistry {
 
     pub fn closing_facts(
         &self,
-        handle: BoundaryHandle,
-    ) -> Option<(BoundaryMetadata, BoundaryEndStatus)> {
+        handle: ExecutionHandle,
+    ) -> Option<(ExecutionMetadata, ExecutionEndStatus, u64)> {
         let slot = self.validate(handle).ok()?;
-        if slot.phase.load(Ordering::Acquire) != BoundaryPhase::Closing as u8
+        if slot.phase.load(Ordering::Acquire) != ExecutionPhase::Closing as u8
             || !slot.finish_ready.load(Ordering::Acquire)
         {
             return None;
@@ -381,11 +408,61 @@ impl BoundaryRegistry {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner))?;
         let status = decode_status(slot.root_status.load(Ordering::Acquire))?;
-        Some((metadata, status))
+        let closing_ticks = slot.closing_ticks.load(Ordering::Acquire);
+        Some((metadata, status, closing_ticks))
     }
 
-    pub fn acknowledge_terminal(&self, handle: BoundaryHandle, terminal: BoundaryPhase) -> bool {
-        if terminal != BoundaryPhase::Sealed && terminal != BoundaryPhase::ReleasedIncomplete {
+    /// Pushes an `EngineStarted` index record; drained by `take_admitted`.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn engine_started(&self, record: super::MetaRecord) -> usize {
+        let mut engines = self
+            .engines_started
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        engines.push(record);
+        engines.len()
+    }
+
+    /// Consumer-thread admission drain (streams spec §5.5): (1) scan slots
+    /// for `admitted_pending` and clear it, (2) THEN drain the registry-side
+    /// `EngineStarted` vector, returning records ordered so every
+    /// `EngineStarted` precedes any `RootStarted` of the same engine.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn take_admitted(
+        &self,
+        clock: &crate::prof::clock::TickConverter,
+    ) -> Vec<super::MetaRecord> {
+        let mut roots = Vec::new();
+        for slot in &self.slots {
+            if !slot.admitted_pending.load(Ordering::Acquire) {
+                continue;
+            }
+            let guard = slot
+                .metadata
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !slot.admitted_pending.swap(false, Ordering::AcqRel) {
+                continue;
+            }
+            let Some(metadata) = *guard else { continue };
+            roots.push(super::MetaRecord::RootStarted {
+                root: metadata.root_thread_ref,
+                started_ns: clock.to_ns(metadata.admitted_ticks),
+                runtime_id: metadata.runtime_id,
+            });
+        }
+        let mut records = std::mem::take(
+            &mut *self
+                .engines_started
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        records.append(&mut roots);
+        records
+    }
+
+    pub fn acknowledge_terminal(&self, handle: ExecutionHandle, terminal: ExecutionPhase) -> bool {
+        if terminal != ExecutionPhase::Released {
             return false;
         }
         let Ok(slot) = self.validate(handle) else {
@@ -394,7 +471,7 @@ impl BoundaryRegistry {
         if slot
             .phase
             .compare_exchange(
-                BoundaryPhase::Closing as u8,
+                ExecutionPhase::Closing as u8,
                 terminal as u8,
                 Ordering::AcqRel,
                 Ordering::Acquire,
@@ -403,6 +480,11 @@ impl BoundaryRegistry {
         {
             return false;
         }
+        debug_assert!(
+            !slot.admitted_pending.load(Ordering::Acquire),
+            "take_admitted runs before finalization on the consumer thread"
+        );
+        slot.admitted_pending.store(false, Ordering::Release);
         slot.finish_ready.store(false, Ordering::Release);
         slot.consumer_drain_armed.store(false, Ordering::Release);
         *slot
@@ -428,7 +510,7 @@ impl BoundaryRegistry {
         true
     }
 
-    fn return_root(&self, lease: &mut BoundaryThreadLease, status: BoundaryEndStatus) {
+    fn return_root(&self, lease: &mut ExecutionThreadLease, status: ExecutionEndStatus) {
         if !lease.armed {
             return;
         }
@@ -443,15 +525,15 @@ impl BoundaryRegistry {
             Ordering::Acquire,
         );
         let _ = slot.phase.compare_exchange(
-            BoundaryPhase::Open as u8,
-            BoundaryPhase::RootReturned as u8,
+            ExecutionPhase::Open as u8,
+            ExecutionPhase::RootReturned as u8,
             Ordering::AcqRel,
             Ordering::Acquire,
         );
         self.finish_thread(lease);
     }
 
-    fn cancel_provisional(&self, lease: &mut BoundaryThreadLease) {
+    fn cancel_provisional(&self, lease: &mut ExecutionThreadLease) {
         if !lease.armed {
             return;
         }
@@ -459,7 +541,7 @@ impl BoundaryRegistry {
         let Ok(slot) = self.validate(lease.handle) else {
             return;
         };
-        if slot.phase.load(Ordering::Acquire) != BoundaryPhase::Open as u8
+        if slot.phase.load(Ordering::Acquire) != ExecutionPhase::Open as u8
             || slot.active_threads.load(Ordering::Acquire) != 1
             || slot.root_status.load(Ordering::Acquire) != STATUS_NONE
         {
@@ -486,7 +568,7 @@ impl BoundaryRegistry {
             .push(lease.handle.slot);
     }
 
-    fn validate(&self, handle: BoundaryHandle) -> Result<&BoundarySlot, LeaseUnavailable> {
+    fn validate(&self, handle: ExecutionHandle) -> Result<&ExecutionSlot, LeaseUnavailable> {
         let Some(slot) = self.slots.get(handle.slot as usize) else {
             return Err(LeaseUnavailable::StaleGeneration);
         };
@@ -503,9 +585,9 @@ fn saturating_increment(counter: &AtomicU64) {
     });
 }
 
-impl BoundaryThreadLease {
+impl ExecutionThreadLease {
     #[must_use]
-    pub const fn handle(&self) -> BoundaryHandle {
+    pub const fn handle(&self) -> ExecutionHandle {
         self.handle
     }
 
@@ -515,17 +597,17 @@ impl BoundaryThreadLease {
     }
 }
 
-impl RootBoundaryCompletionGuard {
+impl RootExecutionCompletionGuard {
     #[must_use]
-    pub const fn lease(&self) -> &BoundaryThreadLease {
+    pub const fn lease(&self) -> &ExecutionThreadLease {
         &self.lease
     }
 
-    pub fn acquire_child(&self) -> Result<BoundaryThreadLease, LeaseUnavailable> {
+    pub fn acquire_child(&self) -> Result<ExecutionThreadLease, LeaseUnavailable> {
         self.registry.try_acquire_child(&self.lease)
     }
 
-    pub fn complete(mut self, status: BoundaryEndStatus) {
+    pub fn complete(mut self, status: ExecutionEndStatus) {
         self.registry.return_root(&mut self.lease, status);
         self.completed = true;
     }
@@ -538,27 +620,27 @@ impl RootBoundaryCompletionGuard {
     }
 }
 
-impl Drop for RootBoundaryCompletionGuard {
+impl Drop for RootExecutionCompletionGuard {
     fn drop(&mut self) {
         if self.completed || !self.lease.armed {
             return;
         }
         let status = if std::thread::panicking() {
-            BoundaryEndStatus::Panicked
+            ExecutionEndStatus::Panicked
         } else {
-            BoundaryEndStatus::Abandoned
+            ExecutionEndStatus::Abandoned
         };
         self.registry.return_root(&mut self.lease, status);
     }
 }
 
-fn decode_status(raw: u8) -> Option<BoundaryEndStatus> {
+fn decode_status(raw: u8) -> Option<ExecutionEndStatus> {
     match raw {
-        0 => Some(BoundaryEndStatus::Succeeded),
-        1 => Some(BoundaryEndStatus::Failed),
-        2 => Some(BoundaryEndStatus::Cancelled),
-        3 => Some(BoundaryEndStatus::Panicked),
-        4 => Some(BoundaryEndStatus::Abandoned),
+        0 => Some(ExecutionEndStatus::Succeeded),
+        1 => Some(ExecutionEndStatus::Failed),
+        2 => Some(ExecutionEndStatus::Cancelled),
+        3 => Some(ExecutionEndStatus::Panicked),
+        4 => Some(ExecutionEndStatus::Abandoned),
         _ => None,
     }
 }
@@ -571,20 +653,27 @@ mod tests {
         prof::backend::{MeasuredLayouts, ProfilerSizingPolicy},
     };
 
-    fn registry(slots: u32) -> Arc<BoundaryRegistry> {
-        let sizing = ProfilerSizingPolicy::derive(32 * 1024 * 1024, MeasuredLayouts::V1).unwrap();
-        let memory = ProfilerMemoryGovernor::new(sizing, MeasuredLayouts::V1);
-        BoundaryRegistry::new(slots, MeasuredLayouts::V1.boundary_slot_bytes, &memory).unwrap()
+    #[cfg(not(target_arch = "wasm32"))]
+    fn drain_admissions(registry: &ExecutionRegistry) {
+        let clock = crate::prof::clock::TickConverter::from_clock();
+        let _ = registry.take_admitted(&clock);
     }
 
-    fn metadata(byte: u8) -> BoundaryMetadata {
-        BoundaryMetadata {
-            boundary_id: BoundaryId::from_bytes([byte; 16]),
+    fn registry(slots: u32) -> Arc<ExecutionRegistry> {
+        let sizing = ProfilerSizingPolicy::derive(32 * 1024 * 1024, MeasuredLayouts::V1).unwrap();
+        let memory = ProfilerMemoryGovernor::new(sizing, MeasuredLayouts::V1);
+        ExecutionRegistry::new(slots, MeasuredLayouts::V1.execution_slot_bytes, &memory).unwrap()
+    }
+
+    fn metadata(byte: u8) -> ExecutionMetadata {
+        ExecutionMetadata {
             root_thread_ref: ThreadRef {
                 process_euid: ProcessEuid([byte; 16]),
                 engine_id: EngineId(1),
                 thread_id: BexThreadId(1),
             },
+            runtime_id: BoundaryId::from_bytes([byte; 16]),
+            admitted_ticks: 0,
         }
     }
 
@@ -593,13 +682,14 @@ mod tests {
         let registry = registry(1);
         let root = registry.reserve_root(metadata(1)).unwrap();
         let handle = root.lease().handle();
-        root.complete(BoundaryEndStatus::Succeeded);
+        drain_admissions(&registry);
+        root.complete(ExecutionEndStatus::Succeeded);
         assert_eq!(registry.ready_handles(), vec![handle]);
-        assert_eq!(
+        assert!(matches!(
             registry.closing_facts(handle),
-            Some((metadata(1), BoundaryEndStatus::Succeeded))
-        );
-        assert!(registry.acknowledge_terminal(handle, BoundaryPhase::Sealed));
+            Some((metadata, ExecutionEndStatus::Succeeded, _)) if metadata == self::metadata(1)
+        ));
+        assert!(registry.acknowledge_terminal(handle, ExecutionPhase::Released));
         assert!(registry.ready_handles().is_empty());
     }
 
@@ -609,7 +699,7 @@ mod tests {
         let root = registry.reserve_root(metadata(2)).unwrap();
         let handle = root.lease().handle();
         let mut child = root.acquire_child().unwrap();
-        root.complete(BoundaryEndStatus::Succeeded);
+        root.complete(ExecutionEndStatus::Succeeded);
         assert!(registry.ready_handles().is_empty());
         let mut grandchild = registry.try_acquire_child(&child).unwrap();
         registry.finish_thread(&mut child);
@@ -623,11 +713,12 @@ mod tests {
         let registry = registry(1);
         let root = registry.reserve_root(metadata(3)).unwrap();
         let old_handle = root.lease().handle();
-        root.complete(BoundaryEndStatus::Succeeded);
-        assert!(registry.acknowledge_terminal(old_handle, BoundaryPhase::Sealed));
+        drain_admissions(&registry);
+        root.complete(ExecutionEndStatus::Succeeded);
+        assert!(registry.acknowledge_terminal(old_handle, ExecutionPhase::Released));
         let next = registry.reserve_root(metadata(4)).unwrap();
         assert_ne!(next.lease().handle().generation, old_handle.generation);
-        let stale = BoundaryThreadLease {
+        let stale = ExecutionThreadLease {
             handle: old_handle,
             armed: true,
         };
@@ -643,10 +734,10 @@ mod tests {
         let root = registry.reserve_root(metadata(5)).unwrap();
         let handle = root.lease().handle();
         drop(root);
-        assert_eq!(
+        assert!(matches!(
             registry.closing_facts(handle),
-            Some((metadata(5), BoundaryEndStatus::Abandoned))
-        );
+            Some((metadata, ExecutionEndStatus::Abandoned, _)) if metadata == self::metadata(5)
+        ));
         assert_eq!(registry.ready_handles(), vec![handle]);
     }
 
@@ -655,16 +746,17 @@ mod tests {
         let registry = registry(1);
         let root = registry.reserve_root(metadata(6)).unwrap();
         let handle = root.lease().handle();
+        drain_admissions(&registry);
         assert!(matches!(
             registry.reserve_root(metadata(7)),
-            Err(BoundarySlotUnavailable::NoStableSlot)
+            Err(ExecutionSlotUnavailable::NoStableSlot)
         ));
-        root.complete(BoundaryEndStatus::Failed);
+        root.complete(ExecutionEndStatus::Failed);
         assert!(matches!(
             registry.reserve_root(metadata(7)),
-            Err(BoundarySlotUnavailable::NoStableSlot)
+            Err(ExecutionSlotUnavailable::NoStableSlot)
         ));
-        assert!(registry.acknowledge_terminal(handle, BoundaryPhase::ReleasedIncomplete));
+        assert!(registry.acknowledge_terminal(handle, ExecutionPhase::Released));
         assert!(registry.reserve_root(metadata(7)).is_ok());
     }
 
@@ -677,19 +769,20 @@ mod tests {
         let root = registry.reserve_root(metadata(8)).unwrap();
         let exhausted = root.lease().handle();
         assert_eq!(exhausted.generation, u32::MAX);
-        root.complete(BoundaryEndStatus::Succeeded);
-        assert!(registry.acknowledge_terminal(exhausted, BoundaryPhase::Sealed));
+        drain_admissions(&registry);
+        root.complete(ExecutionEndStatus::Succeeded);
+        assert!(registry.acknowledge_terminal(exhausted, ExecutionPhase::Released));
         assert!(matches!(
             registry.reserve_root(metadata(9)),
-            Err(BoundarySlotUnavailable::NoStableSlot)
+            Err(ExecutionSlotUnavailable::NoStableSlot)
         ));
-        let stale = BoundaryThreadLease {
+        let stale = ExecutionThreadLease {
             handle: exhausted,
             armed: true,
         };
         assert!(matches!(
             registry.try_acquire_child(&stale),
-            Err(LeaseUnavailable::BoundaryNotOpen)
+            Err(LeaseUnavailable::ExecutionNotOpen)
         ));
     }
 

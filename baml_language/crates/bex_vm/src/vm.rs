@@ -95,11 +95,10 @@ use bex_events::{
     ids::{BexCallId, BexThreadId, FunctionId as ProfFunctionId},
     prof::{
         backend::{
-            BoundaryHandle, CapturePlan, ErrorCaptureAttempt, ErrorCaptureId,
-            ErrorCaptureLossReason, ErrorSource, ErrorUnwindKind, FunctionCaptureClass,
-            InactiveReason, LocalIdOverrides, Owner, ProfilerMemoryGovernor, Reservation,
-            ReservationClass, RootProfiler, TerminalErrorTarget, ThrowSite, ValueLossReason,
-            ValueState,
+            CapturePlan, ErrorCaptureAttempt, ErrorCaptureId, ErrorCaptureLossReason, ErrorSource,
+            ErrorUnwindKind, ExecutionHandle, FunctionCaptureClass, InactiveReason,
+            LocalIdOverrides, Owner, ProfilerMemoryGovernor, Reservation, ReservationClass,
+            RootProfiler, TerminalErrorTarget, ThrowSite, ValueLossReason, ValueState,
         },
         record::CallSiteSourceSpan,
     },
@@ -1129,7 +1128,7 @@ pub struct BexVm {
     /// Non-owning projection of the outer completion guard's live boundary
     /// lease. It is used only to acquire a new owned child lease before that
     /// child becomes runnable.
-    pub prof_boundary_handle: Option<BoundaryHandle>,
+    pub prof_boundary_handle: Option<ExecutionHandle>,
 
     /// True only for the first structural call of a user boundary's root VM.
     /// Spawned VMs inherit the root token with this bit cleared.

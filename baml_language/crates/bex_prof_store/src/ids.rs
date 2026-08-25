@@ -81,7 +81,7 @@ pub struct SourceSnapshotId(pub [u8; 32]);
 pub struct BexThreadId(pub u64);
 
 /// Index into the engine's function metadata table
-/// ([`crate::FunctionMetadataTable`]) — 1-based sequential in object-pool
+/// (`bex_events::FunctionMetadataTable`) — 1-based sequential in object-pool
 /// walk order (0 = unassigned). NOT stable across recompiles: joins are
 /// valid only against the same artifact's header (cross-run joins use the
 /// FQN). Synthetic rows (spawn-closure, unknown-function) sit just past
@@ -102,6 +102,22 @@ pub struct ThreadRef {
     pub process_euid: ProcessEuid,
     pub engine_id: EngineId,
     pub thread_id: BexThreadId,
+}
+
+/// An execution's identity: its root (parentless) logical thread. Wire form
+/// is the `ThreadRef` wire form (`baml_thread_1_…`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ExecutionId(pub ThreadRef);
+
+impl ExecutionId {
+    #[must_use]
+    pub fn encode(&self) -> String {
+        self.0.encode()
+    }
+
+    pub fn decode(value: &str) -> Result<Self, DecodeError> {
+        ThreadRef::decode(value).map(Self)
+    }
 }
 
 /// Fully-scoped call identity (the complete quad); encodes to a reversible
