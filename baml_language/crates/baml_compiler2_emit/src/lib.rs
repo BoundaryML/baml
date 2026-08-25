@@ -2954,21 +2954,19 @@ fn generate_impl(
     skip_clean: Option<&HashSet<String>>,
 ) -> Result<Program, LoweringError> {
     let mut all_files = compiler2_all_files(db);
-    // The user-independent stdlib prefix is exactly the `Stdlib`-kind roots'
-    // files: `compiler2_all_files` concatenates the root table in kind order
-    // (Stdlib first), so their file counts sum to the prefix length. Path
-    // spelling is NOT the discriminator — a source-less runtime database
-    // holds `<builtin>/…` link stubs for ordinary runtime mounts as `Dynamic`
-    // roots, which must be emitted into temporary dependency units, never
-    // skipped as stdlib (that database has no `Stdlib` roots, so this sum is
-    // zero there).
-    let builtin_count: usize = db
-        .source_roots()
-        .roots(db)
-        .iter()
-        .take_while(|root| root.kind(db) == baml_base::SourceRootKind::Stdlib)
-        .map(|root| root.files(db).len())
-        .sum();
+    let builtin_count = if base.is_some()
+        && !baml_compiler2_hir::package::precompiled_package_names(db).is_empty()
+    {
+        // A source-less stdlib database has no builtin sources to skip. Any
+        // `<builtin>/…` files it does hold are link stubs for ordinary runtime
+        // mounts and must be emitted into temporary dependency units.
+        0
+    } else {
+        all_files
+            .iter()
+            .take_while(|f| f.path(db).to_string_lossy().starts_with("<builtin>/"))
+            .count()
+    };
     if stdlib_only {
         // The builtin prefix is user-independent, so compiling "just the
         // stdlib" is the full pipeline over the builtin files alone.

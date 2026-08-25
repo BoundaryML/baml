@@ -27,6 +27,34 @@ use crate::{
 ///
 /// Diagnostics are push-only (`publishDiagnostics`); the pull provider is
 /// deliberately absent so editors never show each diagnostic twice.
+/// The BAML-specific protocol versions, published to clients in
+/// `capabilities.experimental.baml` so the extension's version-skew check
+/// has something to read (it silently skips servers that send nothing).
+///
+/// The playground numbers mirror the `/api/ws` handshake's `hello` frame
+/// (protocol 2, min client 2) — the WS layer is the source of truth for
+/// what those versions MEAN; these exist so a client can learn them before
+/// opening a socket.
+pub(crate) const LSP_PROTOCOL: u32 = 1;
+pub(crate) const MIN_SUPPORTED_CLIENT_LSP_PROTOCOL: u32 = 1;
+pub(crate) const PLAYGROUND_PROTOCOL: u32 = 2;
+pub(crate) const MIN_SUPPORTED_CLIENT_PLAYGROUND_PROTOCOL: u32 = 2;
+
+/// The `BamlServerMetadata` the extension reads from
+/// `capabilities.experimental.baml` (camelCase is the wire contract).
+fn baml_server_metadata() -> serde_json::Value {
+    serde_json::json!({
+        "baml": {
+            "toolchainVersion": baml_version::CANONICAL_VERSION,
+            "lspProtocol": LSP_PROTOCOL,
+            "minSupportedClientLspProtocol": MIN_SUPPORTED_CLIENT_LSP_PROTOCOL,
+            "playgroundProtocol": PLAYGROUND_PROTOCOL,
+            "minSupportedClientPlaygroundProtocol": MIN_SUPPORTED_CLIENT_PLAYGROUND_PROTOCOL,
+            "capabilities": ["openPlayground.v1", "listProjects.v1", "playgroundWebSocket.v1"],
+        }
+    })
+}
+
 pub fn server_capabilities(encoding: PositionEncoding, open_panel: bool) -> ServerCapabilities {
     ServerCapabilities {
         position_encoding: Some(encoding.to_lsp_kind()),
@@ -93,6 +121,7 @@ pub fn server_capabilities(encoding: PositionEncoding, open_panel: bool) -> Serv
             commands: vec![OPEN_PANEL_COMMAND.to_owned()],
             work_done_progress_options: lsp_types::WorkDoneProgressOptions::default(),
         }),
+        experimental: Some(baml_server_metadata()),
 
         ..ServerCapabilities::default()
     }
@@ -795,6 +824,23 @@ pub(super) fn code_lens(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn metadata_is_published_for_the_version_skew_check() {
+        // The extension reads `capabilities.experimental.baml` and SILENTLY
+        // skips the skew check when it is absent — so an empty `experimental`
+        // is not a smaller surface, it is an unchecked deployment.
+        let caps = server_capabilities(PositionEncoding::UTF16, false);
+        let experimental = caps
+            .experimental
+            .unwrap_or_else(|| unreachable!("experimental.baml is always published"));
+        let baml = &experimental["baml"];
+        assert_eq!(baml["lspProtocol"], 1);
+        assert_eq!(baml["minSupportedClientLspProtocol"], 1);
+        assert_eq!(baml["playgroundProtocol"], 2, "mirrors the WS hello");
+        assert_eq!(baml["minSupportedClientPlaygroundProtocol"], 2);
+        assert!(baml["toolchainVersion"].is_string());
+    }
 
     #[test]
     fn capabilities_advertise_the_negotiated_encoding() {
