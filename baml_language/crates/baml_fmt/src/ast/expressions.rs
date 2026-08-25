@@ -1,9 +1,9 @@
 //! Reference: [`baml_db::baml_compiler_syntax::ast::Expr`] and [`baml_db::baml_compiler_hir::body`]
 
 use baml_db::baml_compiler_syntax::{
-    ast as raw_ast,
+    FromCST, ast as raw_ast,
     validated::{
-        Validated, ValidatedSyntaxToken,
+        Validated, ValidatedExprNode, ValidatedSyntaxToken,
         nodes::{
             ArmListItem, ArrayInitializer, BinaryExpr, BlockExpr, CallArg, CallArgs, CallExpr,
             CatchArm, CatchBinding, CatchClause, CatchExpr, ElseExpr, EnvAccessExpr, Expression,
@@ -210,6 +210,53 @@ trait SpawnExprLayout {
     fn single_line_width(&self, input: &Printer<'_>) -> Option<usize>;
     fn print_header(&self, shape: &Shape, printer: &mut Printer) -> bool;
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo>;
+}
+
+impl Printable for Validated<'_, raw_ast::ExprNode> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self.as_variant() {
+            ValidatedExprNode::LiteralExpr(literal) => {
+                let token = literal
+                    .direct_elements()
+                    .find_map(|element| element.token())
+                    .expect("validated literal token");
+                printer.print_raw_token(&token);
+                PrintInfo::default_single_line()
+            }
+            ValidatedExprNode::StringLiteral(string) => {
+                let token = t::QuotedString::new_from_span(string.text_range());
+                token.print(shape, printer)
+            }
+            ValidatedExprNode::RawStringLiteral(string) => {
+                let token = t::RawString::from_cst(string.syntax().clone().into())
+                    .expect("validated raw string");
+                token.print(shape, printer)
+            }
+            ValidatedExprNode::BacktickStringLiteral(string) => {
+                let token = t::BacktickString::from_cst(string.syntax().clone().into())
+                    .expect("validated backtick string");
+                token.print(shape, printer)
+            }
+            ValidatedExprNode::ByteStringLiteral(string) => {
+                let token = t::ByteString::from_cst(string.syntax().clone().into())
+                    .expect("validated byte string");
+                token.print(shape, printer)
+            }
+            _ => {
+                let expression = Expression::from_cst(self.syntax().clone().into())
+                    .expect("validated expression must convert during migration");
+                expression.print(shape, printer)
+            }
+        }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.first_token_range()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.last_token_range()
+    }
 }
 
 impl ExpressionWidth for Expression {
@@ -2408,6 +2455,22 @@ impl Printable for BlockExpr {
     }
     fn rightmost_token(&self) -> TextRange {
         self.close_brace.span()
+    }
+}
+
+impl Printable for Validated<'_, raw_ast::BlockExpr> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        BlockExpr::from_cst(self.syntax().clone().into())
+            .expect("validated block expression must convert during migration")
+            .print(shape, printer)
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.l_brace_token().text_range()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.r_brace_token().text_range()
     }
 }
 

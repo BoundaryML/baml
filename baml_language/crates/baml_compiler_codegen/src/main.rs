@@ -512,6 +512,45 @@ fn generate_schema(grammar: &Grammar) -> Result<String> {
         writeln!(source, "}}\n")?;
     }
 
+    for item in grammar.iter().filter_map(|node| {
+        let name = grammar[node].name.clone();
+        enum_variants(grammar, &grammar[node].rule).map(|variants| EnumDef { name, variants })
+    }) {
+        writeln!(
+            source,
+            "#[derive(Debug, Clone, Copy)]\npub enum Validated{}<'tree> {{",
+            item.name
+        )?;
+        for variant in &item.variants {
+            writeln!(source, "    {variant}(Validated<'tree, ast::{variant}>),")?;
+        }
+        writeln!(source, "}}\n")?;
+        writeln!(
+            source,
+            "impl<'tree> Validated<'tree, ast::{}> {{",
+            item.name
+        )?;
+        writeln!(
+            source,
+            "    pub fn as_variant(self) -> Validated{}<'tree> {{",
+            item.name
+        )?;
+        writeln!(source, "        match self.syntax().kind() {{")?;
+        for variant in &item.variants {
+            writeln!(
+                source,
+                "            SyntaxKind::{} => Validated{}::{variant}(self.cast().expect(\"validated enum variant\")),",
+                upper_snake_case(variant),
+                item.name
+            )?;
+        }
+        writeln!(
+            source,
+            "            _ => unreachable!(\"validated enum kind\"),"
+        )?;
+        writeln!(source, "        }}\n    }}\n}}\n")?;
+    }
+
     format_generated(&source)
 }
 

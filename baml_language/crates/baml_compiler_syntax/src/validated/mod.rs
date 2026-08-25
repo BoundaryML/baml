@@ -15,6 +15,7 @@ pub use arena::{
     NodeId, Validated, ValidatedChildren, ValidatedDirectElements, ValidatedElement,
     ValidatedElements, ValidatedSyntaxToken, ValidatedTree,
 };
+pub use generated_schema::*;
 
 pub mod tokens {
     pub use super::{

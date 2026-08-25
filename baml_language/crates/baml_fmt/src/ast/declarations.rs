@@ -614,8 +614,6 @@ impl Printable for Validated<'_, syntax_ast::FunctionBodyKind> {
                     .cast::<syntax_ast::ExprFunctionBody>()
                     .expect("validated expression function body")
                     .block_expr();
-                let body = super::BlockExpr::from_cst(SyntaxElement::Node(body.syntax().clone()))
-                    .expect("validated expression function body");
                 body.print(shape, printer)
             }
             _ => unreachable!("validated function body kind"),
@@ -679,8 +677,6 @@ fn print_llm_field(
     shape: Shape,
     printer: &mut Printer,
 ) -> PrintInfo {
-    let value = super::Expression::from_cst(SyntaxElement::Node(value.syntax().clone()))
-        .expect("validated LLM field value");
     printer.print_raw_token(keyword);
     let (_, keyword_trailing) = printer.trivia.get_for_range_split(keyword.span());
     printer.print_trivia_squished(keyword_trailing);
@@ -688,9 +684,9 @@ fn print_llm_field(
     printer.print_trivia_squished(colon_leading);
     printer.print_str(": ");
     printer.print_trivia_squished(colon_trailing);
-    let value_leading = printer.trivia.get_leading_for_element(&value);
+    let value_leading = printer.trivia.get_leading_for_element(value);
     printer.print_trivia_squished(value_leading);
-    printer.print(&value, shape)
+    printer.print(value, shape)
 }
 
 impl Printable for Validated<'_, syntax_ast::ClientField> {
@@ -1727,8 +1723,6 @@ impl Printable for Validated<'_, syntax_ast::ConfigValue> {
             return block.print(shape, printer);
         }
         let expr = self.expr().expect("validated config expression");
-        let expr = super::Expression::from_cst(SyntaxElement::Node(expr.syntax().clone()))
-            .expect("validated config expression");
         expr.print(shape, printer)
     }
     fn leftmost_token(&self) -> TextRange {
@@ -1930,14 +1924,9 @@ impl Printable for Validated<'_, syntax_ast::TestDef> {
 
 impl Printable for Validated<'_, syntax_ast::TestExprDef> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let name = super::Expression::from_cst(SyntaxElement::Node(self.name().syntax().clone()))
-            .expect("validated test name");
-        let with_value = self.with_value().map(|value| {
-            super::Expression::from_cst(SyntaxElement::Node(value.syntax().clone()))
-                .expect("validated test runner")
-        });
-        let body = super::BlockExpr::from_cst(SyntaxElement::Node(self.body().syntax().clone()))
-            .expect("validated test body");
+        let name = self.name();
+        let with_value = self.with_value();
+        let body = self.body();
         printer.print_raw_token(&self.test_token());
         printer.print_str(" ");
         printer.print(&name, shape.clone());
@@ -1960,14 +1949,9 @@ impl Printable for Validated<'_, syntax_ast::TestExprDef> {
 
 impl Printable for Validated<'_, syntax_ast::TestsetDef> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let name = super::Expression::from_cst(SyntaxElement::Node(self.name().syntax().clone()))
-            .expect("validated test set name");
-        let with_value = self.with_value().map(|value| {
-            super::Expression::from_cst(SyntaxElement::Node(value.syntax().clone()))
-                .expect("validated test set runner")
-        });
-        let body = super::BlockExpr::from_cst(SyntaxElement::Node(self.body().syntax().clone()))
-            .expect("validated test set body");
+        let name = self.name();
+        let with_value = self.with_value();
+        let body = self.body();
         printer.print_raw_token(&self.testset_token());
         printer.print_str(" ");
         printer.print(&name, shape.clone());

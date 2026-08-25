@@ -3618,3 +3618,557 @@ impl<'tree> Validated<'tree, ast::BacktickEndif> {
             .expect("validated required token")
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub enum ValidatedTopLevelDeclaration<'tree> {
+    FunctionDef(Validated<'tree, ast::FunctionDef>),
+    ClassDef(Validated<'tree, ast::ClassDef>),
+    EnumDef(Validated<'tree, ast::EnumDef>),
+    InterfaceDef(Validated<'tree, ast::InterfaceDef>),
+    ImplementsFor(Validated<'tree, ast::ImplementsFor>),
+    ClientDef(Validated<'tree, ast::ClientDef>),
+    ClientValueDef(Validated<'tree, ast::ClientValueDef>),
+    TestDef(Validated<'tree, ast::TestDef>),
+    TestExprDef(Validated<'tree, ast::TestExprDef>),
+    TestsetDef(Validated<'tree, ast::TestsetDef>),
+    HeaderComment(Validated<'tree, ast::HeaderComment>),
+    GeneratorDef(Validated<'tree, ast::GeneratorDef>),
+    RetryPolicyDef(Validated<'tree, ast::RetryPolicyDef>),
+    TemplateStringDef(Validated<'tree, ast::TemplateStringDef>),
+    TypeAliasDef(Validated<'tree, ast::TypeAliasDef>),
+}
+
+impl<'tree> Validated<'tree, ast::TopLevelDeclaration> {
+    pub fn as_variant(self) -> ValidatedTopLevelDeclaration<'tree> {
+        match self.syntax().kind() {
+            SyntaxKind::FUNCTION_DEF => ValidatedTopLevelDeclaration::FunctionDef(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::CLASS_DEF => {
+                ValidatedTopLevelDeclaration::ClassDef(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::ENUM_DEF => {
+                ValidatedTopLevelDeclaration::EnumDef(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::INTERFACE_DEF => ValidatedTopLevelDeclaration::InterfaceDef(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::IMPLEMENTS_FOR => ValidatedTopLevelDeclaration::ImplementsFor(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::CLIENT_DEF => ValidatedTopLevelDeclaration::ClientDef(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::CLIENT_VALUE_DEF => ValidatedTopLevelDeclaration::ClientValueDef(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::TEST_DEF => {
+                ValidatedTopLevelDeclaration::TestDef(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::TEST_EXPR_DEF => ValidatedTopLevelDeclaration::TestExprDef(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::TESTSET_DEF => ValidatedTopLevelDeclaration::TestsetDef(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::HEADER_COMMENT => ValidatedTopLevelDeclaration::HeaderComment(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::GENERATOR_DEF => ValidatedTopLevelDeclaration::GeneratorDef(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::RETRY_POLICY_DEF => ValidatedTopLevelDeclaration::RetryPolicyDef(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::TEMPLATE_STRING_DEF => ValidatedTopLevelDeclaration::TemplateStringDef(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::TYPE_ALIAS_DEF => ValidatedTopLevelDeclaration::TypeAliasDef(
+                self.cast().expect("validated enum variant"),
+            ),
+            _ => unreachable!("validated enum kind"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ValidatedFunctionBodyKind<'tree> {
+    LlmFunctionBody(Validated<'tree, ast::LlmFunctionBody>),
+    ExprFunctionBody(Validated<'tree, ast::ExprFunctionBody>),
+}
+
+impl<'tree> Validated<'tree, ast::FunctionBodyKind> {
+    pub fn as_variant(self) -> ValidatedFunctionBodyKind<'tree> {
+        match self.syntax().kind() {
+            SyntaxKind::LLM_FUNCTION_BODY => ValidatedFunctionBodyKind::LlmFunctionBody(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::EXPR_FUNCTION_BODY => ValidatedFunctionBodyKind::ExprFunctionBody(
+                self.cast().expect("validated enum variant"),
+            ),
+            _ => unreachable!("validated enum kind"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ValidatedExprNode<'tree> {
+    LiteralExpr(Validated<'tree, ast::LiteralExpr>),
+    BlockExpr(Validated<'tree, ast::BlockExpr>),
+    PathExpr(Validated<'tree, ast::PathExpr>),
+    StringLiteral(Validated<'tree, ast::StringLiteral>),
+    RawStringLiteral(Validated<'tree, ast::RawStringLiteral>),
+    BacktickStringLiteral(Validated<'tree, ast::BacktickStringLiteral>),
+    ByteStringLiteral(Validated<'tree, ast::ByteStringLiteral>),
+    BinaryExpr(Validated<'tree, ast::BinaryExpr>),
+    IsExpr(Validated<'tree, ast::IsExpr>),
+    UnaryExpr(Validated<'tree, ast::UnaryExpr>),
+    CallExpr(Validated<'tree, ast::CallExpr>),
+    IndexExpr(Validated<'tree, ast::IndexExpr>),
+    TaggedTemplateExpr(Validated<'tree, ast::TaggedTemplateExpr>),
+    OptionalCallExpr(Validated<'tree, ast::OptionalCallExpr>),
+    OptionalIndexExpr(Validated<'tree, ast::OptionalIndexExpr>),
+    FieldAccessExpr(Validated<'tree, ast::FieldAccessExpr>),
+    UpcastExpr(Validated<'tree, ast::UpcastExpr>),
+    QualifiedPathExpr(Validated<'tree, ast::QualifiedPathExpr>),
+    SpecExpr(Validated<'tree, ast::SpecExpr>),
+    OptionalFieldAccessExpr(Validated<'tree, ast::OptionalFieldAccessExpr>),
+    EnvAccessExpr(Validated<'tree, ast::EnvAccessExpr>),
+    ParenExpr(Validated<'tree, ast::ParenExpr>),
+    IfExpr(Validated<'tree, ast::IfExpr>),
+    IfLetExpr(Validated<'tree, ast::IfLetExpr>),
+    MatchExpr(Validated<'tree, ast::MatchExpr>),
+    CatchExpr(Validated<'tree, ast::CatchExpr>),
+    ThrowExpr(Validated<'tree, ast::ThrowExpr>),
+    ReturnExpr(Validated<'tree, ast::ReturnExpr>),
+    BreakExpr(Validated<'tree, ast::BreakExpr>),
+    ContinueExpr(Validated<'tree, ast::ContinueExpr>),
+    SpawnExpr(Validated<'tree, ast::SpawnExpr>),
+    AwaitExpr(Validated<'tree, ast::AwaitExpr>),
+    LambdaExpr(Validated<'tree, ast::LambdaExpr>),
+    ForExpr(Validated<'tree, ast::ForExpr>),
+    ObjectLiteral(Validated<'tree, ast::ObjectLiteral>),
+    ArrayLiteral(Validated<'tree, ast::ArrayLiteral>),
+    MapLiteral(Validated<'tree, ast::MapLiteral>),
+}
+
+impl<'tree> Validated<'tree, ast::ExprNode> {
+    pub fn as_variant(self) -> ValidatedExprNode<'tree> {
+        match self.syntax().kind() {
+            SyntaxKind::LITERAL_EXPR => {
+                ValidatedExprNode::LiteralExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::BLOCK_EXPR => {
+                ValidatedExprNode::BlockExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::PATH_EXPR => {
+                ValidatedExprNode::PathExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::STRING_LITERAL => {
+                ValidatedExprNode::StringLiteral(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::RAW_STRING_LITERAL => {
+                ValidatedExprNode::RawStringLiteral(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::BACKTICK_STRING_LITERAL => ValidatedExprNode::BacktickStringLiteral(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::BYTE_STRING_LITERAL => {
+                ValidatedExprNode::ByteStringLiteral(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::BINARY_EXPR => {
+                ValidatedExprNode::BinaryExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::IS_EXPR => {
+                ValidatedExprNode::IsExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::UNARY_EXPR => {
+                ValidatedExprNode::UnaryExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::CALL_EXPR => {
+                ValidatedExprNode::CallExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::INDEX_EXPR => {
+                ValidatedExprNode::IndexExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::TAGGED_TEMPLATE_EXPR => {
+                ValidatedExprNode::TaggedTemplateExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::OPTIONAL_CALL_EXPR => {
+                ValidatedExprNode::OptionalCallExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::OPTIONAL_INDEX_EXPR => {
+                ValidatedExprNode::OptionalIndexExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::FIELD_ACCESS_EXPR => {
+                ValidatedExprNode::FieldAccessExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::UPCAST_EXPR => {
+                ValidatedExprNode::UpcastExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::QUALIFIED_PATH_EXPR => {
+                ValidatedExprNode::QualifiedPathExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::SPEC_EXPR => {
+                ValidatedExprNode::SpecExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => ValidatedExprNode::OptionalFieldAccessExpr(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::ENV_ACCESS_EXPR => {
+                ValidatedExprNode::EnvAccessExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::PAREN_EXPR => {
+                ValidatedExprNode::ParenExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::IF_EXPR => {
+                ValidatedExprNode::IfExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::IF_LET_EXPR => {
+                ValidatedExprNode::IfLetExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::MATCH_EXPR => {
+                ValidatedExprNode::MatchExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::CATCH_EXPR => {
+                ValidatedExprNode::CatchExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::THROW_EXPR => {
+                ValidatedExprNode::ThrowExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::RETURN_EXPR => {
+                ValidatedExprNode::ReturnExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::BREAK_EXPR => {
+                ValidatedExprNode::BreakExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::CONTINUE_EXPR => {
+                ValidatedExprNode::ContinueExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::SPAWN_EXPR => {
+                ValidatedExprNode::SpawnExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::AWAIT_EXPR => {
+                ValidatedExprNode::AwaitExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::LAMBDA_EXPR => {
+                ValidatedExprNode::LambdaExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::FOR_EXPR => {
+                ValidatedExprNode::ForExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::OBJECT_LITERAL => {
+                ValidatedExprNode::ObjectLiteral(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::ARRAY_LITERAL => {
+                ValidatedExprNode::ArrayLiteral(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::MAP_LITERAL => {
+                ValidatedExprNode::MapLiteral(self.cast().expect("validated enum variant"))
+            }
+            _ => unreachable!("validated enum kind"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ValidatedBlockItem<'tree> {
+    LiteralExpr(Validated<'tree, ast::LiteralExpr>),
+    BlockExpr(Validated<'tree, ast::BlockExpr>),
+    PathExpr(Validated<'tree, ast::PathExpr>),
+    StringLiteral(Validated<'tree, ast::StringLiteral>),
+    RawStringLiteral(Validated<'tree, ast::RawStringLiteral>),
+    BacktickStringLiteral(Validated<'tree, ast::BacktickStringLiteral>),
+    ByteStringLiteral(Validated<'tree, ast::ByteStringLiteral>),
+    BinaryExpr(Validated<'tree, ast::BinaryExpr>),
+    IsExpr(Validated<'tree, ast::IsExpr>),
+    UnaryExpr(Validated<'tree, ast::UnaryExpr>),
+    CallExpr(Validated<'tree, ast::CallExpr>),
+    IndexExpr(Validated<'tree, ast::IndexExpr>),
+    TaggedTemplateExpr(Validated<'tree, ast::TaggedTemplateExpr>),
+    OptionalCallExpr(Validated<'tree, ast::OptionalCallExpr>),
+    OptionalIndexExpr(Validated<'tree, ast::OptionalIndexExpr>),
+    FieldAccessExpr(Validated<'tree, ast::FieldAccessExpr>),
+    UpcastExpr(Validated<'tree, ast::UpcastExpr>),
+    QualifiedPathExpr(Validated<'tree, ast::QualifiedPathExpr>),
+    SpecExpr(Validated<'tree, ast::SpecExpr>),
+    OptionalFieldAccessExpr(Validated<'tree, ast::OptionalFieldAccessExpr>),
+    EnvAccessExpr(Validated<'tree, ast::EnvAccessExpr>),
+    ParenExpr(Validated<'tree, ast::ParenExpr>),
+    IfExpr(Validated<'tree, ast::IfExpr>),
+    IfLetExpr(Validated<'tree, ast::IfLetExpr>),
+    MatchExpr(Validated<'tree, ast::MatchExpr>),
+    CatchExpr(Validated<'tree, ast::CatchExpr>),
+    ThrowExpr(Validated<'tree, ast::ThrowExpr>),
+    ReturnExpr(Validated<'tree, ast::ReturnExpr>),
+    BreakExpr(Validated<'tree, ast::BreakExpr>),
+    ContinueExpr(Validated<'tree, ast::ContinueExpr>),
+    SpawnExpr(Validated<'tree, ast::SpawnExpr>),
+    AwaitExpr(Validated<'tree, ast::AwaitExpr>),
+    LambdaExpr(Validated<'tree, ast::LambdaExpr>),
+    ForExpr(Validated<'tree, ast::ForExpr>),
+    ObjectLiteral(Validated<'tree, ast::ObjectLiteral>),
+    ArrayLiteral(Validated<'tree, ast::ArrayLiteral>),
+    MapLiteral(Validated<'tree, ast::MapLiteral>),
+    HeaderComment(Validated<'tree, ast::HeaderComment>),
+    WhileStmt(Validated<'tree, ast::WhileStmt>),
+    WhileLetStmt(Validated<'tree, ast::WhileLetStmt>),
+    LetStmt(Validated<'tree, ast::LetStmt>),
+    TypeBindingStmt(Validated<'tree, ast::TypeBindingStmt>),
+    BreakStmt(Validated<'tree, ast::BreakStmt>),
+    ContinueStmt(Validated<'tree, ast::ContinueStmt>),
+    ReturnStmt(Validated<'tree, ast::ReturnStmt>),
+    ThrowStmt(Validated<'tree, ast::ThrowStmt>),
+    DeferStmt(Validated<'tree, ast::DeferStmt>),
+    TestExprDef(Validated<'tree, ast::TestExprDef>),
+    TestsetDef(Validated<'tree, ast::TestsetDef>),
+}
+
+impl<'tree> Validated<'tree, ast::BlockItem> {
+    pub fn as_variant(self) -> ValidatedBlockItem<'tree> {
+        match self.syntax().kind() {
+            SyntaxKind::LITERAL_EXPR => {
+                ValidatedBlockItem::LiteralExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::BLOCK_EXPR => {
+                ValidatedBlockItem::BlockExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::PATH_EXPR => {
+                ValidatedBlockItem::PathExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::STRING_LITERAL => {
+                ValidatedBlockItem::StringLiteral(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::RAW_STRING_LITERAL => {
+                ValidatedBlockItem::RawStringLiteral(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::BACKTICK_STRING_LITERAL => ValidatedBlockItem::BacktickStringLiteral(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::BYTE_STRING_LITERAL => {
+                ValidatedBlockItem::ByteStringLiteral(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::BINARY_EXPR => {
+                ValidatedBlockItem::BinaryExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::IS_EXPR => {
+                ValidatedBlockItem::IsExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::UNARY_EXPR => {
+                ValidatedBlockItem::UnaryExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::CALL_EXPR => {
+                ValidatedBlockItem::CallExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::INDEX_EXPR => {
+                ValidatedBlockItem::IndexExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::TAGGED_TEMPLATE_EXPR => {
+                ValidatedBlockItem::TaggedTemplateExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::OPTIONAL_CALL_EXPR => {
+                ValidatedBlockItem::OptionalCallExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::OPTIONAL_INDEX_EXPR => {
+                ValidatedBlockItem::OptionalIndexExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::FIELD_ACCESS_EXPR => {
+                ValidatedBlockItem::FieldAccessExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::UPCAST_EXPR => {
+                ValidatedBlockItem::UpcastExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::QUALIFIED_PATH_EXPR => {
+                ValidatedBlockItem::QualifiedPathExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::SPEC_EXPR => {
+                ValidatedBlockItem::SpecExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => ValidatedBlockItem::OptionalFieldAccessExpr(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::ENV_ACCESS_EXPR => {
+                ValidatedBlockItem::EnvAccessExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::PAREN_EXPR => {
+                ValidatedBlockItem::ParenExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::IF_EXPR => {
+                ValidatedBlockItem::IfExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::IF_LET_EXPR => {
+                ValidatedBlockItem::IfLetExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::MATCH_EXPR => {
+                ValidatedBlockItem::MatchExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::CATCH_EXPR => {
+                ValidatedBlockItem::CatchExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::THROW_EXPR => {
+                ValidatedBlockItem::ThrowExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::RETURN_EXPR => {
+                ValidatedBlockItem::ReturnExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::BREAK_EXPR => {
+                ValidatedBlockItem::BreakExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::CONTINUE_EXPR => {
+                ValidatedBlockItem::ContinueExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::SPAWN_EXPR => {
+                ValidatedBlockItem::SpawnExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::AWAIT_EXPR => {
+                ValidatedBlockItem::AwaitExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::LAMBDA_EXPR => {
+                ValidatedBlockItem::LambdaExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::FOR_EXPR => {
+                ValidatedBlockItem::ForExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::OBJECT_LITERAL => {
+                ValidatedBlockItem::ObjectLiteral(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::ARRAY_LITERAL => {
+                ValidatedBlockItem::ArrayLiteral(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::MAP_LITERAL => {
+                ValidatedBlockItem::MapLiteral(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::HEADER_COMMENT => {
+                ValidatedBlockItem::HeaderComment(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::WHILE_STMT => {
+                ValidatedBlockItem::WhileStmt(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::WHILE_LET_STMT => {
+                ValidatedBlockItem::WhileLetStmt(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::LET_STMT => {
+                ValidatedBlockItem::LetStmt(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::TYPE_BINDING_STMT => {
+                ValidatedBlockItem::TypeBindingStmt(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::BREAK_STMT => {
+                ValidatedBlockItem::BreakStmt(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::CONTINUE_STMT => {
+                ValidatedBlockItem::ContinueStmt(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::RETURN_STMT => {
+                ValidatedBlockItem::ReturnStmt(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::THROW_STMT => {
+                ValidatedBlockItem::ThrowStmt(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::DEFER_STMT => {
+                ValidatedBlockItem::DeferStmt(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::TEST_EXPR_DEF => {
+                ValidatedBlockItem::TestExprDef(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::TESTSET_DEF => {
+                ValidatedBlockItem::TestsetDef(self.cast().expect("validated enum variant"))
+            }
+            _ => unreachable!("validated enum kind"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ValidatedPatternKind<'tree> {
+    ChainPattern(Validated<'tree, ast::ChainPattern>),
+    UnionPattern(Validated<'tree, ast::UnionPattern>),
+    BindingPattern(Validated<'tree, ast::BindingPattern>),
+    DestructurePattern(Validated<'tree, ast::DestructurePattern>),
+    ArrayPattern(Validated<'tree, ast::ArrayPattern>),
+    TypePattern(Validated<'tree, ast::TypePattern>),
+    UnreflectPattern(Validated<'tree, ast::UnreflectPattern>),
+    ParenPattern(Validated<'tree, ast::ParenPattern>),
+    WildcardPattern(Validated<'tree, ast::WildcardPattern>),
+}
+
+impl<'tree> Validated<'tree, ast::PatternKind> {
+    pub fn as_variant(self) -> ValidatedPatternKind<'tree> {
+        match self.syntax().kind() {
+            SyntaxKind::CHAIN_PATTERN => {
+                ValidatedPatternKind::ChainPattern(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::UNION_PATTERN => {
+                ValidatedPatternKind::UnionPattern(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::BINDING_PATTERN => {
+                ValidatedPatternKind::BindingPattern(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::DESTRUCTURE_PATTERN => ValidatedPatternKind::DestructurePattern(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::ARRAY_PATTERN => {
+                ValidatedPatternKind::ArrayPattern(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::TYPE_PATTERN => {
+                ValidatedPatternKind::TypePattern(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::UNREFLECT_PATTERN => {
+                ValidatedPatternKind::UnreflectPattern(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::PAREN_PATTERN => {
+                ValidatedPatternKind::ParenPattern(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::WILDCARD_PATTERN => {
+                ValidatedPatternKind::WildcardPattern(self.cast().expect("validated enum variant"))
+            }
+            _ => unreachable!("validated enum kind"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ValidatedBacktickSegmentNode<'tree> {
+    BacktickText(Validated<'tree, ast::BacktickText>),
+    BacktickInterpolation(Validated<'tree, ast::BacktickInterpolation>),
+    BacktickForOpen(Validated<'tree, ast::BacktickForOpen>),
+    BacktickEndfor(Validated<'tree, ast::BacktickEndfor>),
+    BacktickIfOpen(Validated<'tree, ast::BacktickIfOpen>),
+    BacktickElseIf(Validated<'tree, ast::BacktickElseIf>),
+    BacktickElse(Validated<'tree, ast::BacktickElse>),
+    BacktickEndif(Validated<'tree, ast::BacktickEndif>),
+}
+
+impl<'tree> Validated<'tree, ast::BacktickSegmentNode> {
+    pub fn as_variant(self) -> ValidatedBacktickSegmentNode<'tree> {
+        match self.syntax().kind() {
+            SyntaxKind::BACKTICK_TEXT => ValidatedBacktickSegmentNode::BacktickText(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::BACKTICK_INTERPOLATION => {
+                ValidatedBacktickSegmentNode::BacktickInterpolation(
+                    self.cast().expect("validated enum variant"),
+                )
+            }
+            SyntaxKind::BACKTICK_FOR_OPEN => ValidatedBacktickSegmentNode::BacktickForOpen(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::BACKTICK_ENDFOR => ValidatedBacktickSegmentNode::BacktickEndfor(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::BACKTICK_IF_OPEN => ValidatedBacktickSegmentNode::BacktickIfOpen(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::BACKTICK_ELSE_IF => ValidatedBacktickSegmentNode::BacktickElseIf(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::BACKTICK_ELSE => ValidatedBacktickSegmentNode::BacktickElse(
+                self.cast().expect("validated enum variant"),
+            ),
+            SyntaxKind::BACKTICK_ENDIF => ValidatedBacktickSegmentNode::BacktickEndif(
+                self.cast().expect("validated enum variant"),
+            ),
+            _ => unreachable!("validated enum kind"),
+        }
+    }
+}
