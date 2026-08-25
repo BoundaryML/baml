@@ -3428,7 +3428,7 @@ impl<'db> InferenceContext<'db> {
                 ok &= self.sub(&throws.0, &throws.1);
                 ok
             }
-            // `baml.AnyFunction` is compiler-derived for concrete function
+            // `reflect.AnyFunction` is compiler-derived for concrete function
             // values, rather than an ordinary impl obligation.  When a
             // generic consumer such as `reflect.call_any<R, E>` receives a
             // function value directly, carry its output channels into the
@@ -3443,7 +3443,7 @@ impl<'db> InferenceContext<'db> {
                     ..
                 },
                 TyKind::Interface(name, _, expected_pins, _),
-            ) if name.is_builtin_root_type("AnyFunction") => {
+            ) if name.is_reflect_root_type("AnyFunction") => {
                 let mut ok = true;
                 for (pin, expected_pin) in expected_pins {
                     let Some(actual_pin) = (match pin.as_str() {
@@ -3479,7 +3479,7 @@ impl<'db> InferenceContext<'db> {
                     ) = (actual.kind(), expected.kind())
                         && a_name == b_name
                         && a_args.len() == b_args.len()
-                        && (a_name.is_builtin_root_type("AnyFunction")
+                        && (a_name.is_reflect_root_type("AnyFunction")
                             || b_pins
                                 .iter()
                                 .all(|(pin, _)| a_pins.iter().any(|(a_pin, _)| a_pin == pin)))
@@ -4687,9 +4687,25 @@ impl<'db> InferenceContext<'db> {
         {
             return;
         }
-        let expected = Ty::intern(TyKind::Type {
-            attr: TyAttr::default(),
-        });
+        // The operand contract is `reflect.Type | reflect.TypeView`: a kind
+        // view is accepted and converts to the `type` value it wraps at the
+        // VM's type-operand boundary — the same explicit-computation-point
+        // model as `int + float`, never a subtyping edge.
+        let expected = Ty::intern(TyKind::Union(
+            vec![
+                Ty::intern(TyKind::Type {
+                    attr: TyAttr::default(),
+                }),
+                Ty::intern(TyKind::Interface(
+                    baml_type::QualifiedTypeName::from_dotted_path("reflect.TypeView"),
+                    Box::new([]),
+                    Box::new([]),
+                    TyAttr::default(),
+                )),
+            ]
+            .into(),
+            TyAttr::default(),
+        ));
         let saved_anchor = self.obligation_anchor.replace(operand);
         let fits = self.sub(&got, &expected);
         self.obligation_anchor = saved_anchor;

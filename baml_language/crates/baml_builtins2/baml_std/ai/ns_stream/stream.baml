@@ -138,6 +138,18 @@ class TurnStream {
     _require_terminal: string?,
     // whether a TurnDone was actually decoded before the stream ended.
     _saw_terminal: bool,
+    // Wire telemetry (LLMCall records), surfaced by final_turn().calls.
+    // _calls is the full oldest-first list; composite relays share it by
+    // reference to prepend failed legs. _wire_call is THIS stream's own
+    // exchange record (set by provider invoke_stream implementations), which
+    // ttft/duration stamping and SSE capture mutate in place.
+    _calls: root.events.LLMCall[],
+    _wire_call: root.events.LLMCall?,
+    _call_started: baml.time.Instant?,
+    // TTFT base: stamped when the SSE response opened (legacy TTFT semantics);
+    // falls back to _call_started when a provider did not set it.
+    _ttft_from: baml.time.Instant?,
+    _capture_sse: bool,
 
     // A turn stream over a live SSE connection. `decode` receives the raw
     // batch string from `sse.next()` (a JSON array of SseEvent objects; see
@@ -170,6 +182,11 @@ class TurnStream {
             _done: false,
             _require_terminal: require_terminal,
             _saw_terminal: false,
+            _calls: [],
+            _wire_call: null,
+            _call_started: null,
+            _ttft_from: null,
+            _capture_sse: false,
         }
     }
 
@@ -193,6 +210,11 @@ class TurnStream {
             _done: false,
             _require_terminal: null,
             _saw_terminal: false,
+            _calls: [],
+            _wire_call: null,
+            _call_started: null,
+            _ttft_from: null,
+            _capture_sse: false,
         }
     }
 
@@ -217,6 +239,41 @@ class TurnStream {
             _done: false,
             _require_terminal: null,
             _saw_terminal: false,
+            _calls: [],
+            _wire_call: null,
+            _call_started: null,
+            _ttft_from: null,
+            _capture_sse: false,
+        }
+    }
+
+    // Stamp time-to-first-token on this stream's wire record, once.
+    function _stamp_first_delta(self) -> void {
+        if let call: root.events.LLMCall = self._wire_call {
+            if (call.timing.ttft_ms == null) {
+                if let base: baml.time.Instant = self._ttft_from ?? self._call_started {
+                    call.timing.ttft_ms = base.elapsed().to_milliseconds();
+                }
+            }
+        }
+    }
+
+    // Append a raw SSE batch to the wire record when capture is on. Telemetry
+    // must never fail the stream, so a malformed batch is skipped.
+    function _capture_batch(self, batch: string) -> void {
+        if (!self._capture_sse) {
+            return;
+        }
+        if let call: root.events.LLMCall = self._wire_call {
+            let none: SseEvent[] = [];
+            let decoded = decode_sse_batch(batch) catch_all (e) {
+                _ => none,
+            };
+            let records = call.sse_responses ?? [];
+            for (let e in decoded) {
+                records.push(root.events.SseEventRecord { event: e.event, data: e.data, id: e.id });
+            }
+            call.sse_responses = records;
         }
     }
 
@@ -239,7 +296,7 @@ class TurnStream {
                 } else {
                     self._text
                 };
-                throw root.errors.NetworkFailure {
+                throw root.errors.NetworkFailure { status_code: null,
                     provider: provider,
                     detail: `stream ended before the provider's terminal event: the connection closed after ${self._text.length()} characters of assistant text with no end-of-turn event, so the turn is truncated`,
                     raw_body: partial,
@@ -261,6 +318,7 @@ class TurnStream {
                 self._pcursor += 1;
                 match (e) {
                     let d: TextDelta => {
+                        self._stamp_first_delta();
                         self._text = `${self._text}${d.text}`;
                         return d.text;
                     },
@@ -310,6 +368,7 @@ class TurnStream {
                             return Done {  };
                         },
                         let batch: string => {
+                            self._capture_batch(batch);
                             if let decode: (string) -> StreamEvent[] throws root.errors.InvokeError = self._decode {
                                 for (let e in decode(batch)) {
                                     self._pending.push(e);
@@ -327,6 +386,7 @@ class TurnStream {
                     // scripted: each chunk is one delta
                     match (self._chunks.at(self._cursor)) {
                         let c: string => {
+                            self._stamp_first_delta();
                             self._cursor += 1;
                             self._text = `${self._text}${c}`;
                             return c;
@@ -372,10 +432,18 @@ class TurnStream {
         } else {
             null
         };
+        if let call: root.events.LLMCall = self._wire_call {
+            if (call.timing.duration_ms == null) {
+                if let started: baml.time.Instant = self._call_started {
+                    call.timing.duration_ms = started.elapsed().to_milliseconds();
+                }
+            }
+        }
         root.ModelTurn {
             content: [root.content.Text { text: self._text }],
             stop_reason: self._stop_reason ?? root.content.StopReason.Complete,
             usage: usage,
+            calls: self._calls,
         }
     }
 }
@@ -444,6 +512,7 @@ class Stream<TStream, TFinal> {
 function from_spec<TStream, TFinal>(
     spec: root.FunctionSpec<TFinal>,
     client: StreamingClient? = null,
+    on_event: ((root.events.Event) -> void)? = null,
 ) -> Stream<TStream, TFinal> {
     if (!spec.tools().is_empty()) {
         throw baml.errors.InvalidArgument {
@@ -467,6 +536,14 @@ function from_spec<TStream, TFinal>(
     let provider = match (selected) {
         let c: root.Client => c.id(),
     };
+    let emit = root.events.guard(on_event);
+    let settled = false;
+    if let cb: (root.events.Event) -> void throws never = emit {
+        cb(root.events.RunStarted {
+            spec_name: spec.name(),
+            arguments: spec.arguments(),
+        });
+    }
     let turns = selected.invoke_stream(
         root.ModelTurnInput {
             prompt: spec.prompt_template,
@@ -477,11 +554,33 @@ function from_spec<TStream, TFinal>(
     );
     // The host-facing stream is `ai.stream.Stream`. It is provider-agnostic:
     // all it needs is a way to pull the next text delta from TurnStream.
-    let _ = provider;
     Stream {
         _next_text: () -> {
             match (turns.next()) {
-                let d: Done => null,
+                let d: Done => {
+                    // Settle: fold the completed turn (this is where the
+                    // previously-discarded streamed usage is recovered) and
+                    // emit the same events the Agent path emits. The flag
+                    // guards re-entry: a listener that pulls this same stream
+                    // (e.g. calls final() mid-callback) must not re-settle.
+                    if (!settled) {
+                        settled = true;
+                        if let cb: (root.events.Event) -> void throws never = emit {
+                            let turn = turns.final_turn();
+                            cb(root.events.AssistantMessage {
+                                content: turn.content,
+                                client_id: provider,
+                            });
+                            if let u: root.events.Usage = turn.usage {
+                                cb(u);
+                            }
+                            for (let call in turn.calls) {
+                                cb(call);
+                            }
+                        }
+                    }
+                    null
+                },
                 let s: string => s,
             } catch_all (e) {
                 _ => throw root.errors.normalize(e),

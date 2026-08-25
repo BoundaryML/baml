@@ -41,6 +41,7 @@ pub(crate) mod paint;
 pub(crate) mod playground_command;
 pub(crate) mod project_load;
 pub(crate) mod project_session;
+pub(crate) mod query_command;
 pub mod reporter;
 pub(crate) mod run_command;
 pub(crate) mod shutdown;
@@ -77,6 +78,20 @@ pub enum ExitCode {
     // same conditions); BEP-027 §"Exit codes" only mandates non-zero,
     // so we pick the conventional code and keep the two runtimes aligned.
     TargetError,
+    // `baml query` owns the same numeric range with its own meanings, so
+    // it gets its own variants rather than borrowing the test-shaped ones
+    // (its `3` is a budget, not a cancelled test run). Numbers below are
+    // the documented query contract and are part of its public surface.
+    /// The result is missing evidence: rows returned, completeness lost.
+    QueryIncomplete,
+    /// Invalid SQL, or a relation the caller is not authorized to read.
+    QueryInvalid,
+    /// A query budget (rows, wall-clock, decoded bytes) was exhausted.
+    QueryBudgetExhausted,
+    /// The query was cancelled before it completed.
+    QueryCancelled,
+    /// Any other query failure, including setup failures before execution.
+    QueryFailed,
 }
 
 impl From<ExitCode> for i32 {
@@ -95,6 +110,12 @@ impl From<ExitCode> for i32 {
             ExitCode::Other | ExitCode::InvalidArgs => 4,
             // No tests were found
             ExitCode::NoTestsRun => 5,
+            // `baml query` contract (documented per-command)
+            ExitCode::QueryIncomplete => 1,
+            ExitCode::QueryInvalid => 2,
+            ExitCode::QueryBudgetExhausted => 3,
+            ExitCode::QueryCancelled => 4,
+            ExitCode::QueryFailed => 5,
         }
     }
 }
@@ -115,6 +136,12 @@ impl From<ExitCode> for u32 {
             ExitCode::Other | ExitCode::InvalidArgs => 4,
             // No tests were found
             ExitCode::NoTestsRun => 5,
+            // `baml query` contract (documented per-command)
+            ExitCode::QueryIncomplete => 1,
+            ExitCode::QueryInvalid => 2,
+            ExitCode::QueryBudgetExhausted => 3,
+            ExitCode::QueryCancelled => 4,
+            ExitCode::QueryFailed => 5,
         }
     }
 }

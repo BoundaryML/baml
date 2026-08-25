@@ -140,6 +140,9 @@ pub(crate) enum Commands {
     #[command(about = "Remove segmented local profiler data")]
     Clean(crate::clean_command::CleanArgs),
 
+    #[command(about = "Query the local profile store with SQL")]
+    Query(crate::query_command::QueryArgs),
+
     // #[command(about = "Starts a server that translates LLM responses to BAML responses")]
     // Serve(baml_runtime::cli::serve::ServeArgs),
 
@@ -374,6 +377,7 @@ impl RuntimeCli {
             Commands::New(args) => args.run(),
             Commands::Check(args) => args.run(),
             Commands::Clean(args) => args.run(),
+            Commands::Query(args) => args.run(),
             Commands::Run(args) => args.run(),
             Commands::Playground(args) => args.run(),
             Commands::Pack(args) => args.run(),
@@ -406,6 +410,7 @@ impl Commands {
         match self {
             Self::Check(args) => args.from.is_some(),
             Self::Clean(args) => args.from.is_some(),
+            Self::Query(args) => args.from.is_some(),
             Self::Format(args) => args.from.is_some(),
             Self::Describe(args) => args.from.is_some(),
             Self::Generate(args) => args.has_legacy_project(),
@@ -428,6 +433,7 @@ impl Commands {
         match self {
             Self::Check(args) => args.from = Some(project.clone()),
             Self::Clean(args) => args.from = Some(project.clone()),
+            Self::Query(args) => args.from = Some(project.clone()),
             Self::Format(args) => args.from = Some(project.clone()),
             Self::Describe(args) => args.from = Some(project.clone()),
             Self::Generate(args) => args.apply_project(&project),

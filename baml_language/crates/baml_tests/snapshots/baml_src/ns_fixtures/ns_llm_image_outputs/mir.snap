@@ -2,20 +2,23 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 === MIR2 ===
-fn user.fixtures.llm_image_outputs.GenerateImage(prompt: string, client: null | ai.Client) -> image {
+fn user.fixtures.llm_image_outputs.GenerateImage(prompt: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> image {
     // Locals:
     let _0: image // _0 // return
     let _1: string // prompt // param
     let _2: null | ai.Client // client // param
-    let _3: bool
-    let _4: ai.RunResult<image>
-    let _5: ai.Agent<image>
-    let _6: reflect.Type
-    let _7: ai.FunctionSpec<image>
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.RunResult<image>
+    let _7: ai.Agent
+    let _8: reflect.Type
+    let _9: ai.FunctionSpec<image>
+    let _10: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -24,24 +27,35 @@ fn user.fixtures.llm_image_outputs.GenerateImage(prompt: string, client: null | 
     }
 
     bb2: {
-        _6 = load_type(image);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = call const fn user.fixtures.llm_image_outputs.GenerateImage$spec(copy _1) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<image, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image>>(copy _5, copy _7) -> [bb5];
+        _8 = load_type(unknown);
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3) -> [bb5];
     }
 
     bb5: {
-        _0 = copy _4.0;
-        goto -> bb6;
+        _9 = call const fn user.fixtures.llm_image_outputs.GenerateImage$spec(copy _1) -> [bb6];
     }
 
     bb6: {
+        _10 = load_type(image);
+        _6 = call const fn ai.Agent.run<copy _10>(copy _7, copy _9) -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _6.0;
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -134,7 +148,7 @@ fn user.fixtures.llm_image_outputs.GenerateImage$spec(prompt: string) -> ai.Func
     }
 
     bb1: {
-        _6 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
+        _6 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {
@@ -219,19 +233,21 @@ fn .<lambda(GenerateImage$spec, 0)>( __spec_output_format: ai.OutputFormat) -> a
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateImage$stream(prompt: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<image, image> {
+fn user.fixtures.llm_image_outputs.GenerateImage$stream(prompt: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<image, image> {
     // Locals:
     let _0: ai.stream.Stream<image, image> // _0 // return
     let _1: string // prompt // param
     let _2: null | ai.stream.StreamingClient // client // param
-    let _3: bool
-    let _4: ai.FunctionSpec<image>
-    let _5: reflect.Type
-    let _6: reflect.Type
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.FunctionSpec<image>
+    let _7: reflect.Type
+    let _8: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -240,34 +256,47 @@ fn user.fixtures.llm_image_outputs.GenerateImage$stream(prompt: string, client: 
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.llm_image_outputs.GenerateImage$spec(copy _1) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _5 = load_type(image);
-        _6 = load_type(image);
-        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
+        _6 = call const fn user.fixtures.llm_image_outputs.GenerateImage$spec(copy _1) -> [bb5];
+    }
+
+    bb5: {
+        _7 = load_type(image);
+        _8 = load_type(image);
+        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _2, copy _3) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: null | ai.Client) -> image[] {
+fn user.fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> image[] {
     // Locals:
     let _0: image[] // _0 // return
     let _1: string // prompt // param
     let _2: null | ai.Client // client // param
-    let _3: bool
-    let _4: ai.RunResult<image[]>
-    let _5: ai.Agent<image[]>
-    let _6: reflect.Type
-    let _7: ai.FunctionSpec<image[]>
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.RunResult<image[]>
+    let _7: ai.Agent
+    let _8: reflect.Type
+    let _9: ai.FunctionSpec<image[]>
+    let _10: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -276,24 +305,35 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: null
     }
 
     bb2: {
-        _6 = load_type(image[]);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet$spec(copy _1) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<image[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image[]>>(copy _5, copy _7) -> [bb5];
+        _8 = load_type(unknown);
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3) -> [bb5];
     }
 
     bb5: {
-        _0 = copy _4.0;
-        goto -> bb6;
+        _9 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet$spec(copy _1) -> [bb6];
     }
 
     bb6: {
+        _10 = load_type(image[]);
+        _6 = call const fn ai.Agent.run<copy _10>(copy _7, copy _9) -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _6.0;
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -386,7 +426,7 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet$spec(prompt: string) -> ai.F
     }
 
     bb1: {
-        _6 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
+        _6 = call const fn openai.ImageClient.new(const "gpt-image-1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {
@@ -471,19 +511,21 @@ fn .<lambda(GenerateImageSet$spec, 0)>( __spec_output_format: ai.OutputFormat) -
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateImageSet$stream(prompt: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<image[], image[]> {
+fn user.fixtures.llm_image_outputs.GenerateImageSet$stream(prompt: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<image[], image[]> {
     // Locals:
     let _0: ai.stream.Stream<image[], image[]> // _0 // return
     let _1: string // prompt // param
     let _2: null | ai.stream.StreamingClient // client // param
-    let _3: bool
-    let _4: ai.FunctionSpec<image[]>
-    let _5: reflect.Type
-    let _6: reflect.Type
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.FunctionSpec<image[]>
+    let _7: reflect.Type
+    let _8: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -492,34 +534,47 @@ fn user.fixtures.llm_image_outputs.GenerateImageSet$stream(prompt: string, clien
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet$spec(copy _1) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _5 = load_type(image[]);
-        _6 = load_type(image[]);
-        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
+        _6 = call const fn user.fixtures.llm_image_outputs.GenerateImageSet$spec(copy _1) -> [bb5];
+    }
+
+    bb5: {
+        _7 = load_type(image[]);
+        _8 = load_type(image[]);
+        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _2, copy _3) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, client: null | ai.Client) -> (string | image)[] {
+fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> (string | image)[] {
     // Locals:
     let _0: (string | image)[] // _0 // return
     let _1: string // prompt // param
     let _2: null | ai.Client // client // param
-    let _3: bool
-    let _4: ai.RunResult<(string | image)[]>
-    let _5: ai.Agent<(string | image)[]>
-    let _6: reflect.Type
-    let _7: ai.FunctionSpec<(string | image)[]>
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.RunResult<(string | image)[]>
+    let _7: ai.Agent
+    let _8: reflect.Type
+    let _9: ai.FunctionSpec<(string | image)[]>
+    let _10: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -528,24 +583,35 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, c
     }
 
     bb2: {
-        _6 = load_type((image | string)[]);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(copy _1) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<(string | image)[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<(string | image)[]>>(copy _5, copy _7) -> [bb5];
+        _8 = load_type(unknown);
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3) -> [bb5];
     }
 
     bb5: {
-        _0 = copy _4.0;
-        goto -> bb6;
+        _9 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(copy _1) -> [bb6];
     }
 
     bb6: {
+        _10 = load_type((string | image)[]);
+        _6 = call const fn ai.Agent.run<copy _10>(copy _7, copy _9) -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _6.0;
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -638,7 +704,7 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(prompt: stri
     }
 
     bb1: {
-        _6 = call const fn openai.ResponsesClient.new(const "gpt-4.1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
+        _6 = call const fn openai.ResponsesClient.new(const "gpt-4.1", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {
@@ -752,19 +818,21 @@ fn .<lambda(GenerateMixedImageNarrative$spec, 0)>( __spec_output_format: ai.Outp
     }
 }
 
-fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$stream(prompt: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<(string | image)[], (string | image)[]> {
+fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$stream(prompt: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<(string | image)[], (string | image)[]> {
     // Locals:
     let _0: ai.stream.Stream<(string | image)[], (string | image)[]> // _0 // return
     let _1: string // prompt // param
     let _2: null | ai.stream.StreamingClient // client // param
-    let _3: bool
-    let _4: ai.FunctionSpec<(string | image)[]>
-    let _5: reflect.Type
-    let _6: reflect.Type
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.FunctionSpec<(string | image)[]>
+    let _7: reflect.Type
+    let _8: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -773,16 +841,26 @@ fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$stream(prompt: st
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(copy _1) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _5 = load_type((image | string)[]);
-        _6 = load_type((image | string)[]);
-        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
+        _6 = call const fn user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(copy _1) -> [bb5];
+    }
+
+    bb5: {
+        _7 = load_type((image | string)[]);
+        _8 = load_type((image | string)[]);
+        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _2, copy _3) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }

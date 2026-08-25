@@ -1354,7 +1354,7 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
         },
     };
 
-    ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
+    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
 }
 
 // ---------------------------------------------------------------------------
@@ -1363,5 +1363,12 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
 
 function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let request = sign(client, build_request(client, input, preview = false));
-    parse_response(ai.wire.send_as<ConverseResponse>(request, "aws-bedrock"))
+    let sent = ai.wire.send_as_with_wire<ConverseResponse>(
+        request,
+        "aws-bedrock",
+        client.id(),
+        capture_wire = client.capture_wire,
+    );
+    let turn = parse_response(sent.value);
+    ai.ModelTurn { ...turn, calls: [sent.call] }
 }

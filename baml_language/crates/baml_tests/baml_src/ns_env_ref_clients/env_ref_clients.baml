@@ -101,7 +101,7 @@ function env_ref_api_key_reaches_the_wire() -> string {
                 api_key = env.HOME,
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(EnvRefEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(EnvRefEcho@spec("Say pong."));
             `${result.value}|${mock.last_request().header("authorization") ?? "<absent>"}`
         },
     )
@@ -126,7 +126,7 @@ function plain_string_api_key_still_works() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(EnvRefEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(EnvRefEcho@spec("Say pong."));
             `${result.value}|${mock.last_request().header("authorization") ?? "<absent>"}`
         },
     )
@@ -164,7 +164,7 @@ function env_ref_base_url_resolves_at_request_time() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(EnvRefEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(EnvRefEcho@spec("Say pong."));
             `${fell_through}|${result.value}|${mock.last_request().path()}`
         },
     )
@@ -452,7 +452,7 @@ function dynamic_client_selector_runs_against_the_mock() -> string {
                 base_url = mock.base_url(),
             );
             let spec = EnvRefDynamicEcho@spec("Say pong.");
-            let result = ai.Agent<string>.new(client = cl).run(spec);
+            let result = ai.Agent.new(client = cl).run(spec);
             `${spec.default_client.id()}|${result.value}`
         },
     )
@@ -473,7 +473,7 @@ function explicit_resolve_selector_runs_against_the_mock() -> string {
                 base_url = mock.base_url(),
             );
             let spec = EnvRefResolvedEcho@spec("Say pong.");
-            let result = ai.Agent<string>.new(client = cl).run(spec);
+            let result = ai.Agent.new(client = cl).run(spec);
             `${spec.default_client.id()}|${result.value}`
         },
     )

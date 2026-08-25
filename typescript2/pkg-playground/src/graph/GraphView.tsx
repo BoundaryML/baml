@@ -1,36 +1,33 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing public component filename.
 import {
+  Background,
+  BackgroundVariant,
+  Controls,
+  type NodeMouseHandler,
+  ReactFlow,
+  ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
+  useReactFlow,
+  useStore,
+} from '@xyflow/react';
+import {
+  type FC,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type FC,
 } from 'react';
-import {
-  ReactFlow,
-  ReactFlowProvider,
-  useNodesState,
-  useEdgesState,
-  useReactFlow,
-  useStore,
-  Controls,
-  Background,
-  BackgroundVariant,
-  type NodeMouseHandler,
-} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import type {
-  CallNode,
-  ControlFlowGraph,
-  GraphRuntimeOverlay,
-  Run,
-} from '../worker-protocol';
 import type { ResultRendererProps } from '../result-renderers';
-import type { ValueBodyCache } from '../value-body-cache';
 import { runToGraphNodeValues } from '../run-store-projections';
+import type { ValueBodyCache } from '../value-body-cache';
+import type { ControlFlowGraph, Run } from '../worker-protocol';
 import { getChrome } from './constants';
 import { cfgToGraphNodes, graphToReactflow } from './convert';
+import { ColorfulMarkerDefinitions, kEdgeTypes } from './edges';
 import { layoutGraph } from './layout';
 import {
   applyLevelOfDetail,
@@ -38,28 +35,20 @@ import {
   maxNodeDepth,
   zoomToRevealDepth,
 } from './lod';
+import { kNodeTypes } from './nodes';
+import { GraphThemeContext, useGraphTheme } from './theme';
+import type { NodeExecutionState, WorkflowEdge, WorkflowNode } from './types';
 import {
   groupValuePreviewSourceNodeId,
   isGroupValuePreviewNode,
   liftGroupValuePreviews,
 } from './value-previews';
-import { kNodeTypes } from './nodes';
-import { kEdgeTypes, ColorfulMarkerDefinitions } from './edges';
-import { GraphThemeContext, useGraphTheme } from './theme';
-import type {
-  GraphNode,
-  NodeExecutionState,
-  WorkflowNode,
-  WorkflowEdge,
-} from './types';
 
 interface GraphViewProps {
   graph: ControlFlowGraph;
   /** Function whose graph is displayed — keys the per-function layout
    *  direction memory. */
   functionName?: string | null;
-  graphRuntimeOverlay?: GraphRuntimeOverlay | null;
-  calls?: CallNode[];
   run?: Run | null;
   valueBodyCache?: ValueBodyCache;
   valueBodyCacheVersion?: number;
@@ -69,8 +58,6 @@ interface GraphViewProps {
   selectedNodeId: number | null;
   onNodeClick: (nodeId: number) => void;
 }
-
-const EMPTY_CALLS: CallNode[] = [];
 
 type LayoutDirection = 'horizontal' | 'vertical';
 
@@ -95,7 +82,9 @@ const DIRECTION_STORAGE_PREFIX = 'baml-graph-direction:';
 
 /** Per-function layout direction, remembered across sessions. Vertical is
  *  the default until the user toggles. */
-function storedDirection(functionName: string | null | undefined): LayoutDirection {
+function storedDirection(
+  functionName: string | null | undefined,
+): LayoutDirection {
   if (typeof window === 'undefined') return 'vertical';
   try {
     const v = window.localStorage.getItem(
@@ -149,116 +138,9 @@ interface GraphNodeRuntime {
   errorMessage?: string | null;
 }
 
-const statePriority: Record<NodeExecutionState, number> = {
-  'not-started': 0,
-  skipped: 0,
-  pending: 1,
-  cached: 2,
-  success: 3,
-  cancelled: 4,
-  running: 5,
-  error: 6,
-};
-
-function mergeState(
-  current: NodeExecutionState | undefined,
-  next: NodeExecutionState,
-): NodeExecutionState {
-  if (current == null) return next;
-  return statePriority[next] > statePriority[current] ? next : current;
-}
-
-function terminalRunState(status?: Run['status']): NodeExecutionState | null {
-  switch (status) {
-    case 'failed':
-    case 'panicked':
-      return 'error';
-    case 'cancelled':
-      return 'cancelled';
-    case 'succeeded':
-      return 'success';
-    default:
-      return null;
-  }
-}
-
-function callExecutionState(
-  call: CallNode,
-  runStatus?: Run['status'],
-): NodeExecutionState {
-  const terminal = terminalRunState(runStatus);
-  switch (call.status) {
-    case 'running':
-      return terminal ?? 'running';
-    case 'ok':
-    case 'exited':
-      return 'success';
-    case 'errored':
-      return 'error';
-    case 'cancelled':
-      return 'cancelled';
-    default:
-      call.status satisfies never;
-      return terminal ?? 'not-started';
-  }
-}
-
-function collectOverlayNodeRuntime(
-  graphNodes: GraphNode[],
-  overlay: GraphRuntimeOverlay | null | undefined,
-  calls: CallNode[],
-  runStatus?: Run['status'],
-  runError?: string | null,
-): Map<string, GraphNodeRuntime> {
-  if (!overlay || overlay.entries.length === 0 || calls.length === 0) {
-    return new Map();
-  }
-
-  const callById = new Map(calls.map((call) => [call.id, call]));
-  const parentById = new Map(graphNodes.map((node) => [node.id, node.parent]));
-  const direct = new Map<string, GraphNodeRuntime>();
-
-  for (const entry of overlay.entries) {
-    const nodeId = String(entry.cfgNodeId);
-    let executionState: NodeExecutionState | undefined;
-    let hasError = false;
-
-    for (const callNodeId of entry.callNodeIds) {
-      const call = callById.get(callNodeId);
-      if (!call) continue;
-      const callState = callExecutionState(call, runStatus);
-      executionState = mergeState(executionState, callState);
-      hasError = hasError || callState === 'error';
-    }
-
-    if (!executionState) continue;
-    direct.set(nodeId, {
-      executionState,
-      errorMessage: hasError ? (runError ?? undefined) : undefined,
-    });
-  }
-
-  const withAncestors = new Map(direct);
-  for (const [nodeId, runtime] of direct) {
-    let parentId = parentById.get(nodeId);
-    while (parentId != null) {
-      const prev = withAncestors.get(parentId);
-      withAncestors.set(parentId, {
-        executionState: mergeState(prev?.executionState, runtime.executionState),
-        errorMessage: runtime.errorMessage ?? prev?.errorMessage,
-      });
-      parentId = parentById.get(parentId);
-    }
-  }
-
-  return withAncestors;
-}
-
 function GraphViewInner({
   graph,
   functionName,
-  graphRuntimeOverlay,
-  calls = EMPTY_CALLS,
   run,
   valueBodyCache,
   valueBodyCacheVersion,
@@ -295,7 +177,7 @@ function GraphViewInner({
       graphNodes,
       graphEdges,
     );
-    return { graphNodes, rfNodes, rfEdges };
+    return { graphNodes, rfEdges, rfNodes };
     // `theme` is a dep so edge colors (baked in convert via getMarkerColors)
     // re-resolve when the surface theme flips.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -309,7 +191,10 @@ function GraphViewInner({
   //   • click — first 2 levels shown; click a node to expand deeper
   //   • all   — everything expanded
   // `expanded` holds containers the user clicked open; it layers on any mode.
-  const maxDepth = useMemo(() => maxNodeDepth(graphModel.rfNodes), [graphModel]);
+  const maxDepth = useMemo(
+    () => maxNodeDepth(graphModel.rfNodes),
+    [graphModel],
+  );
   const [expandMode, setExpandMode] = useState<ExpandMode>('click');
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -331,16 +216,13 @@ function GraphViewInner({
         ? CLICK_REVEAL_DEPTH
         : zoomToRevealDepth(viewportZoom, maxDepth);
 
-  const lodModel = useMemo(
-    () => {
-      const model = applyLevelOfDetail(graphModel.rfNodes, graphModel.rfEdges, {
-        revealDepth,
-        expanded,
-      });
-      return liftGroupValuePreviews(model.nodes, model.edges);
-    },
-    [graphModel, revealDepth, expanded],
-  );
+  const lodModel = useMemo(() => {
+    const model = applyLevelOfDetail(graphModel.rfNodes, graphModel.rfEdges, {
+      expanded,
+      revealDepth,
+    });
+    return liftGroupValuePreviews(model.nodes, model.edges);
+  }, [graphModel, revealDepth, expanded]);
 
   // Switching modes clears manual expansions and refits to the new extent.
   const selectExpandMode = useCallback((mode: ExpandMode) => {
@@ -365,33 +247,19 @@ function GraphViewInner({
     graphModel.graphNodes.find((node) => node.type === 'function')?.id ?? null;
   const graphNodeValues = useMemo(
     () =>
-      runToGraphNodeValues(run, graphRuntimeOverlay, valueBodyCache, {
+      runToGraphNodeValues(run, valueBodyCache, {
         rootGraphNodeId,
       }),
-    [
-      run,
-      graphRuntimeOverlay,
-      valueBodyCache,
-      valueBodyCacheVersion,
-      rootGraphNodeId,
-    ],
+    [run, valueBodyCache, valueBodyCacheVersion, rootGraphNodeId],
   );
 
   const runtimeInputsRef = useRef({
-    graphRuntimeOverlay,
-    calls,
-    runStatus: effectiveRunStatus,
-    runError: effectiveRunError,
-    graphNodeValues,
     customRenderers,
+    graphNodeValues,
   });
   runtimeInputsRef.current = {
-    graphRuntimeOverlay,
-    calls,
-    runStatus: effectiveRunStatus,
-    runError: effectiveRunError,
-    graphNodeValues,
     customRenderers,
+    graphNodeValues,
   };
 
   const graphNodesRef = useRef(graphModel.graphNodes);
@@ -400,20 +268,13 @@ function GraphViewInner({
   const decorateNodesWithRuntime = useCallback(
     (baseNodes: WorkflowNode[]): WorkflowNode[] => {
       const {
-        graphRuntimeOverlay: latestGraphRuntimeOverlay,
-        calls: latestCalls,
-        runStatus: latestRunStatus,
-        runError: latestRunError,
         graphNodeValues: latestGraphNodeValues,
         customRenderers: latestCustomRenderers,
       } = runtimeInputsRef.current;
-      const runtimeByNode = collectOverlayNodeRuntime(
-        graphNodesRef.current,
-        latestGraphRuntimeOverlay,
-        latestCalls,
-        latestRunStatus,
-        latestRunError,
-      );
+      // Per-node execution state needs a call-to-CFG-node mapping the run
+      // store no longer carries. Until it is rebuilt from profiles-v1 call
+      // sites, no node claims to have run or not run.
+      const runtimeByNode = new Map<string, GraphNodeRuntime>();
       const selectedId =
         selectedNodeIdRef.current == null
           ? null
@@ -442,22 +303,46 @@ function GraphViewInner({
           ...node,
           data: {
             ...node.data,
-            result: undefined,
-            hasResult: undefined,
-            valuePreviews,
-            executionState: executionState ?? ('not-started' as const),
-            errorMessage,
             customRenderers: latestCustomRenderers,
+            errorMessage,
+            executionState: executionState ?? ('not-started' as const),
+            hasResult: undefined,
+            result: undefined,
             selected:
               node.id === selectedId ||
               (previewSourceNodeId != null &&
                 previewSourceNodeId === selectedId),
+            valuePreviews,
           },
         };
       });
     },
     [],
   );
+
+  /**
+   * What about the value previews can change a node's SIZE.
+   *
+   * `graphNodeValues` is rebuilt whenever `run` changes identity, and the run
+   * store returns a fresh object for every patch: one per payload, log line,
+   * and status change. Keying layout on the map itself therefore restarted
+   * ELK continuously for the whole of a run, which is what made the graph
+   * flicker and blank while it was executing. Previews only alter geometry
+   * when their number or rendered state changes, so that is what layout
+   * watches; the decoration effect below still repaints on every update, so
+   * values stay live without moving anything.
+   */
+  const graphNodeValuesGeometryKey = useMemo(() => {
+    const parts: string[] = [];
+    for (const [nodeId, values] of graphNodeValues) {
+      parts.push(
+        `${nodeId}:${values.length}:${values
+          .map((value) => `${value.id}/${value.state}`)
+          .join(',')}`,
+      );
+    }
+    return parts.sort().join('|');
+  }, [graphNodeValues]);
 
   const layoutRunIdRef = useRef(0);
 
@@ -495,11 +380,9 @@ function GraphViewInner({
       });
   }, [
     lodModel,
-    graphRuntimeOverlay,
-    calls,
     effectiveRunStatus,
     effectiveRunError,
-    graphNodeValues,
+    graphNodeValuesGeometryKey,
     direction,
     wrap,
     setNodes,
@@ -543,8 +426,6 @@ function GraphViewInner({
   useEffect(() => {
     setNodes((nds) => decorateNodesWithRuntime(nds));
   }, [
-    graphRuntimeOverlay,
-    calls,
     effectiveRunStatus,
     effectiveRunError,
     graphNodeValues,
@@ -669,18 +550,20 @@ function GraphViewInner({
 
   return (
     <GraphThemeContext.Provider value={theme}>
-    <div
-      className={layoutReady ? 'baml-graph baml-graph--animate' : 'baml-graph'}
-      style={{ width: '100%', height: '100%', position: 'relative' }}
-    >
-      {/* Override @xyflow/react defaults:
+      <div
+        className={
+          layoutReady ? 'baml-graph baml-graph--animate' : 'baml-graph'
+        }
+        style={{ height: '100%', position: 'relative', width: '100%' }}
+      >
+        {/* Override @xyflow/react defaults:
             - .react-flow__node-group has a built-in light gray fill + 1px
               border (so nested groups stack into visible gray patches).
             - .react-flow__node-group.selected adds a square box-shadow halo
               on the (un-rounded) wrapper, which mismatches our rounded frame.
             - .react-flow__node:focus adds a browser outline on click.
           Strip all of those so our custom node styles render unobstructed. */}
-      <style>{`
+        <style>{`
         .react-flow__node-group,
         .react-flow__node.parent {
           background: transparent !important;
@@ -763,204 +646,204 @@ function GraphViewInner({
           }
         }
       `}</style>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeTypes={kNodeTypes}
-        edgeTypes={kEdgeTypes}
-        onNodeClick={handleNodeClick}
-        nodesDraggable={false}
-        nodesFocusable
-        edgesFocusable={false}
-        elementsSelectable
-        selectNodesOnDrag={false}
-        elevateNodesOnSelect={false}
-        elevateEdgesOnSelect={false}
-        panOnDrag={[0, 1, 2]}
-        panOnScroll
-        panActivationKeyCode={null}
-        fitView
-        fitViewOptions={{ minZoom: 0.3, maxZoom: 1.5, padding: 0.2 }}
-        proOptions={{ hideAttribution: true }}
-        colorMode={theme}
-      >
-        <Controls
-          position="bottom-left"
-          style={{ display: 'flex', flexDirection: 'row' }}
-        />
-        <Background
-          variant={BackgroundVariant.Dots}
-          color={chrome.backgroundDots}
-          gap={18}
-          size={1}
-        />
-        <ColorfulMarkerDefinitions />
-      </ReactFlow>
-      <button
-        onClick={() => {
-          refitAfterLayoutRef.current = true;
-          setDirection((d) => {
-            const next = d === 'horizontal' ? 'vertical' : 'horizontal';
-            storeDirection(functionName, next);
-            return next;
-          });
-        }}
-        style={{
-          position: 'absolute',
-          top: 10,
-          right: 10,
-          zIndex: 10,
-          width: 30,
-          height: 30,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 0,
-          borderRadius: 8,
-          border: `1px solid ${chrome.button.border}`,
-          background: chrome.button.bg,
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          color: chrome.button.text,
-          cursor: 'pointer',
-          fontSize: 14,
-          lineHeight: 1,
-          boxShadow: chrome.button.shadow,
-          transition: 'background 120ms ease, border-color 120ms ease',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = chrome.button.bgHover;
-          e.currentTarget.style.borderColor = chrome.button.borderHover;
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = chrome.button.bg;
-          e.currentTarget.style.borderColor = chrome.button.border;
-        }}
-        title={`Switch to ${direction === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
-        aria-label="Toggle layout direction"
-      >
-        {direction === 'horizontal' ? '\u2195' : '\u2194'}
-      </button>
-      {/* Bottom-right layout controls: aspect-ratio wrap toggle + expand mode. */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 10,
-          right: 10,
-          zIndex: 10,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        {/* Wrap toggle: bounded aspect ratio (chain wraps into rows) vs.
-            unbounded — full horizontal / full vertical single line. */}
+        <ReactFlow
+          colorMode={theme}
+          edges={edges}
+          edgesFocusable={false}
+          edgeTypes={kEdgeTypes}
+          elementsSelectable
+          elevateEdgesOnSelect={false}
+          elevateNodesOnSelect={false}
+          fitView
+          fitViewOptions={{ maxZoom: 1.5, minZoom: 0.3, padding: 0.2 }}
+          nodes={nodes}
+          nodesDraggable={false}
+          nodesFocusable
+          nodeTypes={kNodeTypes}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={handleNodeClick}
+          onNodesChange={onNodesChange}
+          panActivationKeyCode={null}
+          panOnDrag={[0, 1, 2]}
+          panOnScroll
+          proOptions={{ hideAttribution: true }}
+          selectNodesOnDrag={false}
+        >
+          <Controls
+            position="bottom-left"
+            style={{ display: 'flex', flexDirection: 'row' }}
+          />
+          <Background
+            color={chrome.backgroundDots}
+            gap={18}
+            size={1}
+            variant={BackgroundVariant.Dots}
+          />
+          <ColorfulMarkerDefinitions />
+        </ReactFlow>
         <button
-          type="button"
-          role="switch"
-          aria-checked={wrap}
-          aria-label="Wrap long chains into rows"
-          title={
-            wrap
-              ? 'Bounded: long chains wrap into rows. Click for unbounded (full horizontal/vertical).'
-              : 'Unbounded: full horizontal/vertical. Click to wrap long chains into rows.'
-          }
+          aria-label="Toggle layout direction"
           onClick={() => {
             refitAfterLayoutRef.current = true;
-            setWrap((w) => {
-              const next = !w;
-              storeWrap(next);
+            setDirection((d) => {
+              const next = d === 'horizontal' ? 'vertical' : 'horizontal';
+              storeDirection(functionName, next);
               return next;
             });
           }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-            padding: '5px 10px',
-            borderRadius: 10,
-            border: `1px solid ${wrap ? chrome.selectionRing.color : chrome.button.border}`,
-            background: chrome.button.bg,
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
-            boxShadow: chrome.button.shadow,
-            color: wrap ? chrome.selectionRing.color : chrome.button.text,
-            cursor: 'pointer',
-            fontSize: 11.5,
-            fontWeight: wrap ? 700 : 500,
-            fontFamily:
-              'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-            transition: 'color 120ms ease, border-color 120ms ease',
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = chrome.button.bgHover;
+            e.currentTarget.style.borderColor = chrome.button.borderHover;
           }}
-        >
-          <span aria-hidden="true" style={{ fontSize: 13, lineHeight: 1 }}>
-            {wrap ? '↵' : '→'}
-          </span>
-          Wrap
-        </button>
-        {/* Expand mode: how subgraphs are revealed (semantic zoom / click / all). */}
-        <div
-          role="radiogroup"
-          aria-label="Subgraph expand mode"
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = chrome.button.bg;
+            e.currentTarget.style.borderColor = chrome.button.border;
+          }}
           style={{
-            display: 'flex',
             alignItems: 'center',
-            gap: 4,
-            padding: '4px 6px',
-            borderRadius: 10,
+            backdropFilter: 'blur(8px)',
+            background: chrome.button.bg,
             border: `1px solid ${chrome.button.border}`,
-            background: chrome.button.bg,
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
+            borderRadius: 8,
             boxShadow: chrome.button.shadow,
-            fontFamily:
-              'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-          }}
-        >
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 600,
-            letterSpacing: '0.05em',
-            textTransform: 'uppercase',
             color: chrome.button.text,
-            opacity: 0.55,
-            padding: '0 2px',
+            cursor: 'pointer',
+            display: 'flex',
+            fontSize: 14,
+            height: 30,
+            justifyContent: 'center',
+            lineHeight: 1,
+            padding: 0,
+            position: 'absolute',
+            right: 10,
+            top: 10,
+            transition: 'background 120ms ease, border-color 120ms ease',
+            WebkitBackdropFilter: 'blur(8px)',
+            width: 30,
+            zIndex: 10,
+          }}
+          title={`Switch to ${direction === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
+          type="button"
+        >
+          {direction === 'horizontal' ? '\u2195' : '\u2194'}
+        </button>
+        {/* Bottom-right layout controls: aspect-ratio wrap toggle + expand mode. */}
+        <div
+          style={{
+            alignItems: 'center',
+            bottom: 10,
+            display: 'flex',
+            gap: 8,
+            position: 'absolute',
+            right: 10,
+            zIndex: 10,
           }}
         >
-          Expand
-        </span>
-        {EXPAND_MODES.map((m) => {
-          const on = expandMode === m.id;
-          return (
-            <button
-              key={m.id}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              title={m.title}
-              onClick={() => selectExpandMode(m.id)}
+          {/* Wrap toggle: bounded aspect ratio (chain wraps into rows) vs.
+            unbounded — full horizontal / full vertical single line. */}
+          <button
+            aria-checked={wrap}
+            aria-label="Wrap long chains into rows"
+            onClick={() => {
+              refitAfterLayoutRef.current = true;
+              setWrap((w) => {
+                const next = !w;
+                storeWrap(next);
+                return next;
+              });
+            }}
+            role="switch"
+            style={{
+              alignItems: 'center',
+              backdropFilter: 'blur(8px)',
+              background: chrome.button.bg,
+              border: `1px solid ${wrap ? chrome.selectionRing.color : chrome.button.border}`,
+              borderRadius: 10,
+              boxShadow: chrome.button.shadow,
+              color: wrap ? chrome.selectionRing.color : chrome.button.text,
+              cursor: 'pointer',
+              display: 'flex',
+              fontFamily:
+                'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+              fontSize: 11.5,
+              fontWeight: wrap ? 700 : 500,
+              gap: 5,
+              padding: '5px 10px',
+              transition: 'color 120ms ease, border-color 120ms ease',
+              WebkitBackdropFilter: 'blur(8px)',
+            }}
+            title={
+              wrap
+                ? 'Bounded: long chains wrap into rows. Click for unbounded (full horizontal/vertical).'
+                : 'Unbounded: full horizontal/vertical. Click to wrap long chains into rows.'
+            }
+            type="button"
+          >
+            <span aria-hidden="true" style={{ fontSize: 13, lineHeight: 1 }}>
+              {wrap ? '↵' : '→'}
+            </span>
+            Wrap
+          </button>
+          {/* Expand mode: how subgraphs are revealed (semantic zoom / click / all). */}
+          <div
+            aria-label="Subgraph expand mode"
+            role="radiogroup"
+            style={{
+              alignItems: 'center',
+              backdropFilter: 'blur(8px)',
+              background: chrome.button.bg,
+              border: `1px solid ${chrome.button.border}`,
+              borderRadius: 10,
+              boxShadow: chrome.button.shadow,
+              display: 'flex',
+              fontFamily:
+                'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+              gap: 4,
+              padding: '4px 6px',
+              WebkitBackdropFilter: 'blur(8px)',
+            }}
+          >
+            <span
               style={{
-                padding: '3px 9px',
-                borderRadius: 7,
-                fontSize: 11.5,
-                fontWeight: on ? 700 : 500,
-                cursor: 'pointer',
-                color: on ? chrome.selectionRing.color : chrome.button.text,
-                background: 'transparent',
-                border: `1px solid ${on ? chrome.selectionRing.color : 'transparent'}`,
-                transition: 'color 120ms ease, border-color 120ms ease',
+                color: chrome.button.text,
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: '0.05em',
+                opacity: 0.55,
+                padding: '0 2px',
+                textTransform: 'uppercase',
               }}
             >
-              {m.label}
-            </button>
-          );
-        })}
+              Expand
+            </span>
+            {EXPAND_MODES.map((m) => {
+              const on = expandMode === m.id;
+              return (
+                <button
+                  aria-pressed={on}
+                  key={m.id}
+                  onClick={() => selectExpandMode(m.id)}
+                  style={{
+                    background: 'transparent',
+                    border: `1px solid ${on ? chrome.selectionRing.color : 'transparent'}`,
+                    borderRadius: 7,
+                    color: on ? chrome.selectionRing.color : chrome.button.text,
+                    cursor: 'pointer',
+                    fontSize: 11.5,
+                    fontWeight: on ? 700 : 500,
+                    padding: '3px 9px',
+                    transition: 'color 120ms ease, border-color 120ms ease',
+                  }}
+                  title={m.title}
+                  type="button"
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
-    </div>
     </GraphThemeContext.Provider>
   );
 }

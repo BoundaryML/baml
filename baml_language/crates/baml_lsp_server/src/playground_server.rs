@@ -55,6 +55,16 @@ use crate::{
     playground_ws::{RunListFilter, RunListKind, RunListVisibility, WsInMessage, WsOutMessage},
 };
 
+/// Telemetry reads one session may run at once. Small on purpose: these are
+/// DataFusion queries and CAS reads, and a panel needs a couple in flight
+/// (the list plus the open execution), not a backlog.
+const MAX_INFLIGHT_TELEMETRY: usize = 4;
+
+/// Reported when that ceiling is reached. The client treats it as "skip this
+/// refresh" rather than as a failure, because the common cause is its own
+/// polling outrunning a slow query.
+const TELEMETRY_BUSY_CODE: &str = "telemetryBusy";
+
 #[derive(Debug, thiserror::Error)]
 #[error("Playground server requires either BAML_PLAYGROUND_DEV_PORT or BAML_PLAYGROUND_DIR")]
 pub(crate) struct PlaygroundNotConfigured;
@@ -815,6 +825,14 @@ fn build_router(
         DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
     )));
     let history_store = Arc::new(HistoryStore::new((*workspace_roots).clone()));
+    // Point the profiler at this workspace before any engine runs. Without
+    // it the global session keeps its default *relative* `.baml/profiles-v1`,
+    // which for a long-lived server resolves against whatever directory it
+    // started in -- so runs would be written where no reader looks.
+    if let Some(root) = workspace_roots.first() {
+        crate::playground_telemetry::configure_store_root(root);
+        crate::playground_telemetry::warn_if_multi_root(&workspace_roots);
+    }
     let ws_state = WsState {
         bex,
         broadcast_tx,
@@ -1456,15 +1474,52 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
     // Send current playground state.
     state.bex.request_playground_state();
 
+    // Telemetry reads run against DataFusion over the profile store and can
+    // take seconds on a large execution. Awaiting one inside the select
+    // below would stall this whole session: no further client messages, and
+    // no run-patch forwarding, so a live run's UI freezes while a panel
+    // loads. They run on their own tasks and hand their reply back here.
+    let (deferred_tx, mut deferred_rx) = tokio::sync::mpsc::channel::<WsOutMessage>(32);
+
+    // Bound how much telemetry work one session can have in flight. The
+    // channel above bounds queued *replies*, not running queries: moving
+    // these off the select loop removed the accidental serialisation that
+    // awaiting inline used to provide, so without this a client can start
+    // an unbounded number of profile-store queries and blocking CAS reads.
+    // Not only an adversarial case -- the panel polls every couple of
+    // seconds while a run is live, so any query slower than the poll
+    // interval would pile up on its own.
+    let telemetry_permits =
+        std::sync::Arc::new(tokio::sync::Semaphore::new(MAX_INFLIGHT_TELEMETRY));
+
     loop {
         tokio::select! {
+            deferred = deferred_rx.recv() => {
+                match deferred {
+                    Some(msg) => {
+                        if let Some(text) = to_ws_text(&msg)
+                            && sink.send(text).await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    None => break,
+                }
+            }
             client_msg = stream.next() => {
                 match client_msg {
                     Some(Ok(AxumWsMsg::Text(text))) => {
                         let text_str: &str = &text;
                         match serde_json::from_str::<WsInMessage>(text_str) {
                             Ok(msg) => {
-                                handle_ws_in_message(msg, &state, &mut sink).await;
+                                handle_ws_in_message(
+                                    msg,
+                                    &state,
+                                    &mut sink,
+                                    &deferred_tx,
+                                    &telemetry_permits,
+                                )
+                                .await;
                             }
                             Err(e) => {
                                 tracing::warn!("Playground WS: invalid message: {e}");
@@ -1737,10 +1792,21 @@ fn handle_test_run(
     });
 }
 
+/// The reply when a session already has its share of telemetry work running.
+fn telemetry_busy(request_id: u64) -> WsOutMessage {
+    WsOutMessage::CommandError {
+        code: TELEMETRY_BUSY_CODE.to_string(),
+        message: "Telemetry is already busy for this session; try again.".to_string(),
+        request_id,
+    }
+}
+
 async fn handle_ws_in_message(
     msg: WsInMessage,
     state: &WsState,
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
+    deferred: &tokio::sync::mpsc::Sender<WsOutMessage>,
+    telemetry_permits: &std::sync::Arc<tokio::sync::Semaphore>,
 ) {
     match msg {
         WsInMessage::StartRun {
@@ -1934,6 +2000,111 @@ async fn handle_ws_in_message(
                     .await;
                 }
             }
+        }
+
+        WsInMessage::ReadTelemetryMedia {
+            request_id,
+            project,
+            cid,
+        } => {
+            let Ok(permit) = telemetry_permits.clone().try_acquire_owned() else {
+                send_ws(sink, &telemetry_busy(request_id)).await;
+                return;
+            };
+            let project_root = history_project_root_for_project(&project);
+            let reply = deferred.clone();
+            let echoed_cid = cid.clone();
+            // Off the socket task entirely: reading the CAS is blocking work,
+            // and awaiting it here would stall the session loop.
+            tokio::task::spawn_blocking(move || {
+                let out = match crate::playground_telemetry::read_media(&project_root, &cid) {
+                    Ok(media) => WsOutMessage::TelemetryMedia {
+                        cid: echoed_cid,
+                        media: serde_json::to_value(&media).unwrap_or(serde_json::Value::Null),
+                        request_id,
+                    },
+                    Err(err) => WsOutMessage::CommandError {
+                        code: "telemetryMediaFailed".to_string(),
+                        message: format!("{err}"),
+                        request_id,
+                    },
+                };
+                let _ = reply.blocking_send(out);
+                drop(permit);
+            });
+        }
+
+        WsInMessage::ListExecutions {
+            request_id,
+            project,
+        } => {
+            let Ok(permit) = telemetry_permits.clone().try_acquire_owned() else {
+                send_ws(sink, &telemetry_busy(request_id)).await;
+                return;
+            };
+            let project_root = history_project_root_for_project(&project);
+            let reply = deferred.clone();
+            tokio::spawn(async move {
+                let out = match crate::playground_telemetry::list_executions(&project_root).await {
+                    Ok(executions) => WsOutMessage::ExecutionList {
+                        executions: executions
+                            .iter()
+                            .map(|row| serde_json::to_value(row).unwrap_or(serde_json::Value::Null))
+                            .collect(),
+                        request_id,
+                        store_missing: false,
+                    },
+                    // No store is the state before anything has run, not a
+                    // failure: the client shows an empty table, not an error.
+                    Err(crate::playground_telemetry::TelemetryError::NoStore(_)) => {
+                        WsOutMessage::ExecutionList {
+                            executions: Vec::new(),
+                            request_id,
+                            store_missing: true,
+                        }
+                    }
+                    Err(err) => WsOutMessage::CommandError {
+                        code: "telemetryQueryFailed".to_string(),
+                        message: format!("{err}"),
+                        request_id,
+                    },
+                };
+                let _ = reply.send(out).await;
+                drop(permit);
+            });
+        }
+
+        WsInMessage::OpenExecution {
+            request_id,
+            project,
+            execution_id,
+        } => {
+            let Ok(permit) = telemetry_permits.clone().try_acquire_owned() else {
+                send_ws(sink, &telemetry_busy(request_id)).await;
+                return;
+            };
+            let project_root = history_project_root_for_project(&project);
+            let reply = deferred.clone();
+            tokio::spawn(async move {
+                let out =
+                    match crate::playground_telemetry::read_execution(&project_root, &execution_id)
+                        .await
+                    {
+                        Ok(telemetry) => WsOutMessage::ExecutionTelemetry {
+                            execution_id,
+                            request_id,
+                            telemetry: serde_json::to_value(&telemetry)
+                                .unwrap_or(serde_json::Value::Null),
+                        },
+                        Err(err) => WsOutMessage::CommandError {
+                            code: "telemetryQueryFailed".to_string(),
+                            message: format!("{err}"),
+                            request_id,
+                        },
+                    };
+                let _ = reply.send(out).await;
+                drop(permit);
+            });
         }
 
         WsInMessage::Snapshot {

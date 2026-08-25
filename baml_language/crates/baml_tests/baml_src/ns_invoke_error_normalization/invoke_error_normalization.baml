@@ -65,7 +65,7 @@ function capture_client_timeout(client: ai.Client) -> unknown {
 }
 
 function capture_agent_timeout(client: ai.Client) -> unknown {
-    ai.Agent<string>.new(client = client).run(TimeoutSpec@spec()) catch_all (e) {
+    ai.Agent.new(client = client).run(TimeoutSpec@spec()) catch_all (e) {
         _ => e,
     }
 }
@@ -93,7 +93,7 @@ test "normalize_invoke_preserves_timeout_identity" {
 }
 
 test "normalize_invoke_preserves_failure_identity" {
-    let original = ai.errors.NetworkFailure { provider: "test", detail: "before", raw_body: null };
+    let original = ai.errors.NetworkFailure { status_code: null, provider: "test", detail: "before", raw_body: null };
     let normalized = ai.errors.normalize_invoke(original);
     original.detail = "after";
     assert.equal(normalized_kind(normalized), "NetworkFailure:after")

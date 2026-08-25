@@ -1568,7 +1568,33 @@ pub fn generate_project_bytecode_with_opt(
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_impl(db, options, opt, None, false, None)
+    let mut program = generate_impl(db, options, opt, None, false, None)?;
+    program.source_content_hash = Some(project_source_content_hash(db));
+    Ok(program)
+}
+
+/// The conservative source-content identity of this compile's project file
+/// set (profiling streams spec §2.3): any byte change in any project file, or
+/// a compiler version change, yields a new hash. Stdlib stubs are excluded —
+/// they are a compiler-build constant already covered by the version input.
+pub fn project_source_content_hash(db: &dyn crate::Db) -> [u8; 32] {
+    let files: Vec<(String, String)> = db
+        .project()
+        .files(db)
+        .iter()
+        .filter(|file| !file.path(db).to_string_lossy().starts_with("<builtin>/"))
+        .map(|file| {
+            (
+                file.path(db).to_string_lossy().into_owned(),
+                file.text(db).clone(),
+            )
+        })
+        .collect();
+    bex_vm_types::identity::program_content_hash(
+        files
+            .iter()
+            .map(|(path, text)| (path.as_str(), text.as_bytes())),
+    )
 }
 
 /// Compile ONLY the builtin stdlib into a standalone `Program` slice.
@@ -1609,7 +1635,9 @@ pub fn generate_project_bytecode_with_stdlib(
     opt: OptLevel,
     base: &Program,
 ) -> Result<Program, LoweringError> {
-    generate_impl(db, options, opt, Some(base), false, None)
+    let mut program = generate_impl(db, options, opt, Some(base), false, None)?;
+    program.source_content_hash = Some(project_source_content_hash(db));
+    Ok(program)
 }
 
 /// Compile and link a source consumer against independently emitted mounted
@@ -1764,6 +1792,8 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
 
     let program = bex_vm_types::link::link(&assembled)
         .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))?;
+    let mut program = program;
+    program.source_content_hash = Some(project_source_content_hash(db));
     Ok((program, assembled))
 }
 
@@ -4673,6 +4703,21 @@ fn topological_sort_packages(
             queue.extend(next);
         }
     }
+
+    // Kahn's algorithm cannot order the members of a dependency cycle: they
+    // never reach in-degree zero, so they would silently VANISH from the
+    // result — and with it from `package_init_order`, leaving their globals
+    // uninitialized. The package dependency graph is acyclic by construction;
+    // enforce it so a future edge cannot rot into that silent failure.
+    assert_eq!(
+        result.len(),
+        pkg_names.len(),
+        "package dependency cycle: {:?} cannot be topologically ordered",
+        pkg_names
+            .iter()
+            .filter(|name| !result.contains(name))
+            .collect::<Vec<_>>()
+    );
 
     result
 }

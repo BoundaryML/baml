@@ -184,7 +184,11 @@ async fn nested_type_walker_and_kind_specific_readback_work_end_to_end() {
                 && params[1].name == "label"
                 && params[1].type == reflect.Type.of<string>()
                 && function_view.return_type() == reflect.Type.of<bool>()
-                && function_schema.fields().length() == 0
+                // The kind views are ordinary wrapper classes: their one
+                // declared field is the wrapped `_ty`, visible to reflection
+                // like any other field.
+                && function_schema.fields().length() == 1
+                && function_schema.fields()[0].name == "_ty"
         }
 
         function intrinsic_checks() -> bool throws never {
@@ -369,7 +373,7 @@ async fn function_views_of_a_runtime_package_keep_its_definitions() {
             let param_enum = param.type.as_enum() ?? throw "expected a param enum"
             let param_row = param_enum.values().at(1) ?? throw "no param rows"
 
-            let callable = pkg.get_function<baml.AnyFunction<Returns = unknown, Throws = unknown>>(
+            let callable = pkg.get_function<reflect.AnyFunction<Returns = unknown, Throws = unknown>>(
                 "root.pick",
             ) ?? throw "missing callable"
             let sig = reflect.signature(callable)

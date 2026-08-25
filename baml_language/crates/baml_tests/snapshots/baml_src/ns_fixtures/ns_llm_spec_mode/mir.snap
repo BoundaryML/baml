@@ -36,20 +36,23 @@ fn user.fixtures.llm_spec_mode.more_tools() -> ai.tools.Tool[] {
     }
 }
 
-fn user.fixtures.llm_spec_mode.PlainChat(q: string, client: null | ai.Client) -> string {
+fn user.fixtures.llm_spec_mode.PlainChat(q: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // q // param
     let _2: null | ai.Client // client // param
-    let _3: bool
-    let _4: ai.RunResult<string>
-    let _5: ai.Agent<string>
-    let _6: reflect.Type
-    let _7: ai.FunctionSpec<string>
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.RunResult<string>
+    let _7: ai.Agent
+    let _8: reflect.Type
+    let _9: ai.FunctionSpec<string>
+    let _10: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -58,24 +61,35 @@ fn user.fixtures.llm_spec_mode.PlainChat(q: string, client: null | ai.Client) ->
     }
 
     bb2: {
-        _6 = load_type(string);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = call const fn user.fixtures.llm_spec_mode.PlainChat$spec(copy _1) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _8 = load_type(unknown);
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3) -> [bb5];
     }
 
     bb5: {
-        _0 = copy _4.0;
-        goto -> bb6;
+        _9 = call const fn user.fixtures.llm_spec_mode.PlainChat$spec(copy _1) -> [bb6];
     }
 
     bb6: {
+        _10 = load_type(string);
+        _6 = call const fn ai.Agent.run<copy _10>(copy _7, copy _9) -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _6.0;
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -168,7 +182,7 @@ fn user.fixtures.llm_spec_mode.PlainChat$spec(q: string) -> ai.FunctionSpec<stri
     }
 
     bb1: {
-        _6 = call const fn openai.ResponsesClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
+        _6 = call const fn openai.ResponsesClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {
@@ -282,19 +296,21 @@ fn .<lambda(PlainChat$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Pr
     }
 }
 
-fn user.fixtures.llm_spec_mode.PlainChat$stream(q: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.llm_spec_mode.PlainChat$stream(q: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: string // q // param
     let _2: null | ai.stream.StreamingClient // client // param
-    let _3: bool
-    let _4: ai.FunctionSpec<string>
-    let _5: reflect.Type
-    let _6: reflect.Type
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.FunctionSpec<string>
+    let _7: reflect.Type
+    let _8: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -303,34 +319,47 @@ fn user.fixtures.llm_spec_mode.PlainChat$stream(q: string, client: null | ai.str
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.llm_spec_mode.PlainChat$spec(copy _1) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _5 = load_type(string | null);
-        _6 = load_type(string);
-        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
+        _6 = call const fn user.fixtures.llm_spec_mode.PlainChat$spec(copy _1) -> [bb5];
+    }
+
+    bb5: {
+        _7 = load_type(string | null);
+        _8 = load_type(string);
+        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _2, copy _3) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }
 
-fn user.fixtures.llm_spec_mode.SpecAgent(q: string, client: null | ai.Client) -> fixtures.llm_spec_mode.Answer {
+fn user.fixtures.llm_spec_mode.SpecAgent(q: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> fixtures.llm_spec_mode.Answer {
     // Locals:
     let _0: fixtures.llm_spec_mode.Answer // _0 // return
     let _1: string // q // param
     let _2: null | ai.Client // client // param
-    let _3: bool
-    let _4: ai.RunResult<fixtures.llm_spec_mode.Answer>
-    let _5: ai.Agent<fixtures.llm_spec_mode.Answer>
-    let _6: reflect.Type
-    let _7: ai.FunctionSpec<fixtures.llm_spec_mode.Answer>
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.RunResult<fixtures.llm_spec_mode.Answer>
+    let _7: ai.Agent
+    let _8: reflect.Type
+    let _9: ai.FunctionSpec<fixtures.llm_spec_mode.Answer>
+    let _10: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -339,24 +368,35 @@ fn user.fixtures.llm_spec_mode.SpecAgent(q: string, client: null | ai.Client) ->
     }
 
     bb2: {
-        _6 = load_type(fixtures.llm_spec_mode.Answer);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = call const fn user.fixtures.llm_spec_mode.SpecAgent$spec(copy _1) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<fixtures.llm_spec_mode.Answer, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.llm_spec_mode.Answer>>(copy _5, copy _7) -> [bb5];
+        _8 = load_type(unknown);
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3) -> [bb5];
     }
 
     bb5: {
-        _0 = copy _4.0;
-        goto -> bb6;
+        _9 = call const fn user.fixtures.llm_spec_mode.SpecAgent$spec(copy _1) -> [bb6];
     }
 
     bb6: {
+        _10 = load_type(fixtures.llm_spec_mode.Answer);
+        _6 = call const fn ai.Agent.run<copy _10>(copy _7, copy _9) -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _6.0;
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -454,7 +494,7 @@ fn user.fixtures.llm_spec_mode.SpecAgent$spec(q: string) -> ai.FunctionSpec<fixt
     }
 
     bb2: {
-        _7 = call const fn openai.ResponsesClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
+        _7 = call const fn openai.ResponsesClient.new(const "gpt-4o-mini", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -565,20 +605,23 @@ fn .<lambda(SpecAgent$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Pr
     }
 }
 
-fn user.fixtures.llm_spec_mode.NamedTools(q: string, client: null | ai.Client) -> fixtures.llm_spec_mode.Answer {
+fn user.fixtures.llm_spec_mode.NamedTools(q: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> fixtures.llm_spec_mode.Answer {
     // Locals:
     let _0: fixtures.llm_spec_mode.Answer // _0 // return
     let _1: string // q // param
     let _2: null | ai.Client // client // param
-    let _3: bool
-    let _4: ai.RunResult<fixtures.llm_spec_mode.Answer>
-    let _5: ai.Agent<fixtures.llm_spec_mode.Answer>
-    let _6: reflect.Type
-    let _7: ai.FunctionSpec<fixtures.llm_spec_mode.Answer>
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.RunResult<fixtures.llm_spec_mode.Answer>
+    let _7: ai.Agent
+    let _8: reflect.Type
+    let _9: ai.FunctionSpec<fixtures.llm_spec_mode.Answer>
+    let _10: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -587,24 +630,35 @@ fn user.fixtures.llm_spec_mode.NamedTools(q: string, client: null | ai.Client) -
     }
 
     bb2: {
-        _6 = load_type(fixtures.llm_spec_mode.Answer);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = call const fn user.fixtures.llm_spec_mode.NamedTools$spec(copy _1) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<fixtures.llm_spec_mode.Answer, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<fixtures.llm_spec_mode.Answer>>(copy _5, copy _7) -> [bb5];
+        _8 = load_type(unknown);
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3) -> [bb5];
     }
 
     bb5: {
-        _0 = copy _4.0;
-        goto -> bb6;
+        _9 = call const fn user.fixtures.llm_spec_mode.NamedTools$spec(copy _1) -> [bb6];
     }
 
     bb6: {
+        _10 = load_type(fixtures.llm_spec_mode.Answer);
+        _6 = call const fn ai.Agent.run<copy _10>(copy _7, copy _9) -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _6.0;
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -700,7 +754,7 @@ fn user.fixtures.llm_spec_mode.NamedTools$spec(q: string) -> ai.FunctionSpec<fix
     }
 
     bb2: {
-        _6 = call const fn anthropic.AnthropicClient.new(const "claude-haiku-4-5", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
+        _6 = call const fn anthropic.AnthropicClient.new(const "claude-haiku-4-5", const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb3];
     }
 
     bb3: {

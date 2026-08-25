@@ -53,13 +53,13 @@ fn spec_llm_meta(parent: &FunctionDef) -> Option<&crate::ast::LlmBodyDef> {
     }
 }
 
-/// The function's own parameters — the compiler-injected `client` override
-/// belongs to the runner, never to a companion's surface.
+/// The function's own parameters — the compiler-injected `client` and
+/// `on_event` overrides belong to the runner, never to a companion's surface.
 fn own_params(parent: &FunctionDef) -> Vec<Param> {
     parent
         .params
         .iter()
-        .filter(|p| p.name.as_str() != "client")
+        .filter(|p| p.name.as_str() != "client" && p.name.as_str() != "on_event")
         .cloned()
         .collect()
 }
@@ -157,7 +157,15 @@ fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
 /// provider-neutral while preserving the parent's default-client semantics.
 fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
     spec_llm_meta(parent)?;
-    let params = parent.params.clone();
+    // Keep the injected `client` (default-client semantics) but not
+    // `on_event`: a network-free request preview never runs the agent, so
+    // there are no events to listen to.
+    let params: Vec<Param> = parent
+        .params
+        .iter()
+        .filter(|p| p.name.as_str() != "on_event")
+        .cloned()
+        .collect();
     let body = lower_expr_body::synthesize_spec_build_request_body(
         parent.name.as_str(),
         &own_params(parent),

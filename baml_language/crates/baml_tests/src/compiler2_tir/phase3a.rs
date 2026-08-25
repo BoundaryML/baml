@@ -223,10 +223,23 @@ function main() -> string {
         "render-prompt/build-request companions must preserve the defaulted argument as named:\n{tir}"
     );
     assert!(
-        tir.contains("ai.Agent.new<string>")
-            && tir.contains("Greet$spec(name, suffix = suffix)")
-            && tir.contains("ai.stream.from_spec(Greet$spec(name, suffix = suffix)"),
-        "direct and stream companions must name the defaulted spec argument:\n{tir}"
+        tir.contains(
+            "ai.Agent.new(client = client, on_event = on_event).run(Greet$spec(name, suffix = suffix)).value"
+        ),
+        "the direct-call companion must name the defaulted spec argument and thread on_event:\n{tir}"
+    );
+    // Bind the argument tuple to the from_spec call itself: the tuple must
+    // appear right after this marker's generic args, not just anywhere in the
+    // rendered TIR.
+    let stream_call = tir
+        .split("ai.stream.from_spec<")
+        .nth(1)
+        .unwrap_or_else(|| panic!("stream companion must call ai.stream.from_spec:\n{tir}"));
+    let window = &stream_call[..stream_call.len().min(200)];
+    assert!(
+        window
+            .contains("(Greet$spec(name, suffix = suffix), client = client, on_event = on_event)"),
+        "the stream companion must pass spec, client, and on_event to from_spec:\n{tir}"
     );
 }
 
@@ -902,7 +915,7 @@ function call_overrides() -> string {
     let tir = render_tir(&db, file);
 
     assert!(
-        tir.contains("function user.Ask(input: string, client: ai.Client | null = null)"),
+        tir.contains("function user.Ask(input: string, client: ai.Client | null = null, on_event:"),
         "{tir}"
     );
     assert!(

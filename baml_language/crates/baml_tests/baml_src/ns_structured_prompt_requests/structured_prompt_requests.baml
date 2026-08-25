@@ -98,7 +98,7 @@ test "generated companions apply defaulted llm arguments" {
 }
 
 test "generated build_request companion is reflection-visible" {
-    let f: baml.AnyFunction<
+    let f: reflect.AnyFunction<
         Returns = baml.http.Request,
         Throws = ai.errors.Failure
             | baml.errors.InvalidArgument

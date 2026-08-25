@@ -25,6 +25,8 @@ baml_fmt = { workspace = true }
 baml_lsp2_actions = { workspace = true }
 baml_lsp_server = { workspace = true }
 baml_project = { workspace = true }
+baml_query = { workspace = true }
+baml_query_profiles = { workspace = true }
 baml_release = { workspace = true }
 baml_surface = { workspace = true }
 baml_type = { workspace = true }
@@ -50,6 +52,7 @@ borsh = { workspace = true }
 clap = { workspace = true, features = [ "color", "env", "wrap_help" ] }
 console = { workspace = true }
 ctrlc = { workspace = true }
+datafusion = { workspace = true }
 flate2 = { workspace = true }
 hex = { workspace = true }
 indexmap = { workspace = true }

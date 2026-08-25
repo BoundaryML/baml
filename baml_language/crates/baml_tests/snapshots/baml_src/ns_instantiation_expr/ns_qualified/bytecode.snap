@@ -3,7 +3,7 @@ source: crates/baml_tests/src/corpus.rs
 ---
 function instantiation_expr.qualified.q_describe() -> string {
     load_type #0
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 

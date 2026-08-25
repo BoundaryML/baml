@@ -37,6 +37,10 @@ class ChatClient {
     top_p: float?,
     stop: string[]?,
     seed: int?,
+    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // records delivered through on_event. Status, headers, and timing are
+    // always recorded; this flag only gates the bodies.
+    capture_wire: bool,
 
     function new(
         model: string = "gpt-4o-mini",
@@ -53,6 +57,7 @@ class ChatClient {
         top_p: float? = null,
         stop: string[]? = null,
         seed: int? = null,
+        capture_wire: bool = true,
     ) -> ChatClient {
         ChatClient {
             model: model,
@@ -69,6 +74,7 @@ class ChatClient {
             top_p: top_p,
             stop: stop,
             seed: seed,
+            capture_wire: capture_wire,
         }
     }
 
@@ -138,6 +144,7 @@ class ChatClient {
                 self.compat(),
                 self.params(),
                 input,
+                capture_wire = self.capture_wire,
                 request_timeout_ms = self.request_timeout_ms,
             ) catch_all (e) {
                 _ => throw ai.errors.normalize_invoke(e),
@@ -151,6 +158,7 @@ class ChatClient {
                 self.compat(),
                 self.params(),
                 input,
+                capture_wire = self.capture_wire,
                 request_timeout_ms = self.request_timeout_ms,
                 time_to_first_token_timeout_ms = self.time_to_first_token_timeout_ms,
             ) catch_all (e) {

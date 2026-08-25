@@ -27,7 +27,7 @@ function output_format_options.$init_test_ns_output_format_options_output_format
     return
 }
 
-function output_format_options.OfAllLegacyOptions(client: ai.Client | null) -> output_format_options.OfOptionResult {
+function output_format_options.OfAllLegacyOptions(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> output_format_options.OfOptionResult {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -36,22 +36,27 @@ function output_format_options.OfAllLegacyOptions(client: ai.Client | null) -> o
     store_var client
 
   L0:
-    load_type output_format_options.OfOptionResult
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _4
-    call user.output_format_options.OfAllLegacyOptions$spec
     store_var _6
+    call user.output_format_options.OfAllLegacyOptions$spec
+    store_var _8
+    load_type output_format_options.OfOptionResult
     load_var2 3 4
-    load_type ai.Runner<output_format_options.OfOptionResult, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<output_format_options.OfOptionResult>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -110,6 +115,7 @@ function output_format_options.OfAllLegacyOptions$spec() -> ai.FunctionSpec<outp
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
+    load_const <omitted>
     call openai.ResponsesClient.new
     store_var _5
     load_const "OfAllLegacyOptions"
@@ -123,7 +129,7 @@ function output_format_options.OfAllLegacyOptions$spec() -> ai.FunctionSpec<outp
     return
 }
 
-function output_format_options.OfAllLegacyOptions$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<output_format_options.OfOptionResult$stream | null, output_format_options.OfOptionResult> {
+function output_format_options.OfAllLegacyOptions$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<output_format_options.OfOptionResult$stream | null, output_format_options.OfOptionResult> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -132,11 +138,20 @@ function output_format_options.OfAllLegacyOptions$stream(client: ai.stream.Strea
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     call user.output_format_options.OfAllLegacyOptions$spec
-    store_var _3
+    store_var _5
     load_type output_format_options.OfOptionResult$stream | null
     load_type output_format_options.OfOptionResult
-    load_var2 2 1
+    load_var2 3 1
+    load_var on_event
     call ai.stream.from_spec
     return
 }

@@ -499,7 +499,10 @@ impl BamlNamespaceClass for PackageReflectImpl {
             baml_type::TyAttr::default(),
         );
         register_class_witnesses(vm, class_ptr, &ty, witnesses);
-        Ok(Value::object(vm.tlab.alloc_type(TypeValue::new(ty))))
+        Ok({
+            let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
+            alloc_kind_view(vm, baml_type::type_kind::TypeKind::Class, ty_value)
+        })
     }
 
     fn builder(vm: &mut BexVm, name: &bex_str::BexStr) -> Value {
@@ -688,7 +691,10 @@ impl BamlNamespaceEnum for PackageReflectImpl {
             bex_vm_types::TypeHead::new(enum_ptr, type_tag),
             baml_type::TyAttr::default(),
         );
-        Ok(Value::object(vm.tlab.alloc_type(TypeValue::new(ty))))
+        Ok({
+            let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
+            alloc_kind_view(vm, baml_type::type_kind::TypeKind::Enum, ty_value)
+        })
     }
 
     fn get_value(
@@ -839,6 +845,7 @@ impl BamlNamespaceLiteral for PackageReflectImpl {
         };
         alloc_runtime_composite(
             vm,
+            baml_type::type_kind::TypeKind::Literal,
             bex_vm_types::RealizedTy::Literal(
                 literal,
                 baml_type::Freshness::Regular,
@@ -853,6 +860,7 @@ impl BamlNamespaceMap for PackageReflectImpl {
         let value = reflected_type_value(vm, *value);
         alloc_runtime_composite(
             vm,
+            baml_type::type_kind::TypeKind::Map,
             bex_vm_types::RealizedTy::Map {
                 key: Box::new(key.ty),
                 value: Box::new(value.ty),
@@ -876,14 +884,20 @@ impl BamlNamespaceUnion for PackageReflectImpl {
             .collect();
         Ok(alloc_runtime_composite(
             vm,
+            baml_type::type_kind::TypeKind::Union,
             bex_vm_types::RealizedTy::Union(members, baml_type::TyAttr::default()),
         ))
     }
 }
 
-fn reflected_ty(vm: &BexVm, value: Value) -> bex_vm_types::RealizedTy {
-    super::type_class::type_value_ty(vm, value)
-        .unwrap_or_else(|| unreachable!("kind method receiver must be Object::Type"))
+fn reflected_ty(
+    vm: &BexVm,
+    view: Value,
+    expected: baml_type::type_kind::TypeKind,
+) -> Result<bex_vm_types::RealizedTy, crate::errors::VmRustFnError> {
+    let ty_value = view_type_value(vm, view, expected)?;
+    Ok(super::type_class::type_value_ty(vm, ty_value)
+        .unwrap_or_else(|| unreachable!("view_type_value returns an Object::Type")))
 }
 
 /// Realize an interface field declaration against the exact interface
@@ -1065,8 +1079,16 @@ pub(super) fn reflected_type_value(vm: &BexVm, value: Value) -> TypeValue {
     (**type_value).clone()
 }
 
-fn alloc_runtime_composite(vm: &mut BexVm, ty: bex_vm_types::RealizedTy) -> Value {
-    Value::object(vm.tlab.alloc_type(TypeValue::new(ty)))
+/// Allocate a runtime composite type and wrap it in `kind`'s view: the
+/// composite constructors (`literal.new`, `map.new`, `union.new`) declare the
+/// kind views as their return types.
+fn alloc_runtime_composite(
+    vm: &mut BexVm,
+    kind: baml_type::type_kind::TypeKind,
+    ty: bex_vm_types::RealizedTy,
+) -> Value {
+    let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
+    alloc_kind_view(vm, kind, ty_value)
 }
 
 pub(super) struct ReflectedTypeRow {
@@ -1163,41 +1185,126 @@ pub(super) fn reflected_type_row(vm: &BexVm, value: Value) -> Result<ReflectedTy
     })
 }
 
+/// Allocate an instance of `kind`'s view class wrapping `type_value` (an
+/// `Object::Type`) in its `_ty` field.
+pub(crate) fn alloc_kind_view(
+    vm: &mut BexVm,
+    kind: baml_type::type_kind::TypeKind,
+    type_value: Value,
+) -> Value {
+    debug_assert!(matches!(
+        type_value.as_object_ptr().map(|ptr| vm.get_object(ptr)),
+        Some(Object::Type(_))
+    ));
+    let name = kind.class_name();
+    let class = vm.declaration_head(&name).unwrap_or_else(|| {
+        unreachable!("reflection kind class `{name}` is declared by the stdlib")
+    });
+    Value::object(vm.alloc_instance(class.ptr(), vec![type_value]))
+}
+
+/// Enforce a view's kind invariant on its `_ty` value: `_ty` is private by
+/// invariant, so a held type that does not classify as `expected` means user
+/// code overwrote the field — a BAML panic, never an answer computed from a
+/// state the API rules out. Returns `ty_value` (an `Object::Type`) on success.
+pub(crate) fn check_kind_invariant(
+    vm: &BexVm,
+    ty_value: Value,
+    expected: baml_type::type_kind::TypeKind,
+) -> Result<Value, crate::errors::VmRustFnError> {
+    let invariant_panic = |actual: &str| {
+        crate::errors::VmRustFnError::Panic(bex_vm_types::errors::VmPanic::UserPanic {
+            message: format!(
+                "reflect.{}.Type `_ty` holds a {actual} type; the field is private to \
+                 reflection and must keep its view's kind",
+                expected.namespace(),
+            ),
+        })
+    };
+    let Some(ty_ptr) = ty_value.as_object_ptr() else {
+        return Err(invariant_panic("non-`reflect.Type`"));
+    };
+    let Object::Type(type_value) = vm.get_object(ty_ptr) else {
+        return Err(invariant_panic("non-`reflect.Type`"));
+    };
+    let actual = baml_type::type_kind::classify_type(&type_value.ty);
+    if actual != expected {
+        return Err(invariant_panic(&format!("{}-kind", actual.namespace())));
+    }
+    Ok(ty_value)
+}
+
+/// If `value` is an instance of one of the nine kind views, its `_ty` value
+/// (no kind check — callers that accept `reflect.TypeView` accept any kind).
+pub(crate) fn as_view_type_value(vm: &BexVm, value: Value) -> Option<Value> {
+    let ptr = value.as_object_ptr()?;
+    let Object::Instance(instance) = vm.get_object(ptr) else {
+        return None;
+    };
+    let is_view = baml_type::type_kind::TypeKind::ALL.iter().any(|kind| {
+        vm.declaration_head(&kind.class_name())
+            .is_some_and(|head| head.ptr() == instance.class)
+    });
+    is_view.then(|| instance.fields[0].load())
+}
+
+/// The `Object::Type` value a kind-view instance wraps (`_ty`, its sole
+/// declared field), after enforcing the kind invariant.
+pub(crate) fn view_type_value(
+    vm: &BexVm,
+    view: Value,
+    expected: baml_type::type_kind::TypeKind,
+) -> Result<Value, crate::errors::VmRustFnError> {
+    // The receiver shape is guaranteed by static dispatch on the view class.
+    let ptr = view
+        .as_object_ptr()
+        .unwrap_or_else(|| unreachable!("kind-view receiver must be an instance"));
+    let Object::Instance(instance) = vm.get_object(ptr) else {
+        unreachable!("kind-view receiver must be an Object::Instance")
+    };
+    check_kind_invariant(vm, instance.fields[0].load(), expected)
+}
+
 fn reflected_class(
     vm: &BexVm,
-    value: Value,
-) -> (bex_vm_types::Class, Vec<bex_vm_types::RealizedTy>) {
-    let ptr = value
+    view: Value,
+) -> Result<(bex_vm_types::Class, Vec<bex_vm_types::RealizedTy>), crate::errors::VmRustFnError> {
+    let ty_value = view_type_value(vm, view, baml_type::type_kind::TypeKind::Class)?;
+    let ptr = ty_value
         .as_object_ptr()
-        .unwrap_or_else(|| unreachable!("class.Type receiver must be Object::Type"));
+        .unwrap_or_else(|| unreachable!("view_type_value returns an Object::Type"));
     let Object::Type(type_value) = vm.get_object(ptr) else {
-        unreachable!("class.Type receiver must be Object::Type")
+        unreachable!("view_type_value returns an Object::Type")
     };
     let bex_vm_types::RealizedTy::Class(head, args, _) = &type_value.ty else {
-        unreachable!("class.Type receiver must wrap a class type")
+        unreachable!("a Class-classified type is RealizedTy::Class")
     };
     debug_assert!(head.is_resolved());
     let Object::Class(class) = vm.get_object(head.ptr()) else {
         unreachable!("a class type's head points at Object::Class")
     };
-    ((**class).clone(), args.clone())
+    Ok(((**class).clone(), args.clone()))
 }
 
-fn reflected_enum(vm: &BexVm, value: Value) -> bex_vm_types::Enum {
-    let ptr = value
+fn reflected_enum(
+    vm: &BexVm,
+    view: Value,
+) -> Result<bex_vm_types::Enum, crate::errors::VmRustFnError> {
+    let ty_value = view_type_value(vm, view, baml_type::type_kind::TypeKind::Enum)?;
+    let ptr = ty_value
         .as_object_ptr()
-        .unwrap_or_else(|| unreachable!("enum.Type receiver must be Object::Type"));
+        .unwrap_or_else(|| unreachable!("view_type_value returns an Object::Type"));
     let Object::Type(type_value) = vm.get_object(ptr) else {
-        unreachable!("enum.Type receiver must be Object::Type")
+        unreachable!("view_type_value returns an Object::Type")
     };
     let bex_vm_types::RealizedTy::Enum(head, _) = &type_value.ty else {
-        unreachable!("enum.Type receiver must wrap an enum type")
+        unreachable!("an Enum-classified type is RealizedTy::Enum")
     };
     debug_assert!(head.is_resolved());
     let Object::Enum(enm) = vm.get_object(head.ptr()) else {
         unreachable!("an enum type's head points at Object::Enum")
     };
-    (**enm).clone()
+    Ok((**enm).clone())
 }
 
 fn opt_string(vm: &mut BexVm, value: Option<&str>) -> Value {
@@ -1444,19 +1551,26 @@ fn invalid_enum_value(vm: &BexVm, value: Value) -> crate::errors::VmRustFnError 
 }
 
 macro_rules! impl_as_type {
-    ($trait_name:ident) => {
-        fn as_type(_vm: &BexVm, r#type: &Value) -> Value {
-            *r#type
+    ($kind:ident, $view_ns:ident) => {
+        #[expect(
+            clippy::used_underscore_items,
+            reason = "the generated view accessor is named for the `_ty` field it reads"
+        )]
+        fn as_type(
+            vm: &BexVm,
+            r#type: &super::view::$view_ns::Type<'_>,
+        ) -> Result<Value, crate::errors::VmRustFnError> {
+            check_kind_invariant(vm, r#type._ty(), baml_type::type_kind::TypeKind::$kind)
         }
     };
 }
 
 impl BamlClassClassType for PackageReflectImpl {
-    impl_as_type!(BamlClassClassType);
+    impl_as_type!(Class, class);
 
-    fn fields(vm: &mut BexVm, r#type: &Value) -> Vec<Value> {
-        let (class, args) = reflected_class(vm, *r#type);
-        class
+    fn fields(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
+        let (class, args) = reflected_class(vm, *r#type)?;
+        Ok(class
             .fields
             .iter()
             .map(|field| {
@@ -1487,27 +1601,28 @@ impl BamlClassClassType for PackageReflectImpl {
                 }
                 .to_value(vm)
             })
-            .collect()
+            .collect())
     }
 
-    fn meta(vm: &mut BexVm, r#type: &Value) -> Value {
-        let (class, _) = reflected_class(vm, *r#type);
-        alloc_meta(
+    fn meta(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
+        let (class, _) = reflected_class(vm, *r#type)?;
+        Ok(alloc_meta(
             vm,
             class.alias.as_deref(),
             class.description.as_deref(),
             class.docstring.as_deref(),
             &class.other,
-        )
+        ))
     }
 }
 
 impl BamlClassEnumType for PackageReflectImpl {
-    impl_as_type!(BamlClassEnumType);
+    impl_as_type!(Enum, r#enum);
 
-    fn values(vm: &mut BexVm, r#type: &Value) -> Vec<Value> {
-        let enm = reflected_enum(vm, *r#type);
-        enm.variants
+    fn values(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
+        let enm = reflected_enum(vm, *r#type)?;
+        Ok(enm
+            .variants
             .iter()
             .map(|variant| {
                 let name = Value::object(vm.alloc_string(variant.name.as_str()));
@@ -1520,72 +1635,86 @@ impl BamlClassEnumType for PackageReflectImpl {
                 );
                 copy::r#enum::Value { name, meta }.to_value(vm)
             })
-            .collect()
+            .collect())
     }
 
-    fn meta(vm: &mut BexVm, r#type: &Value) -> Value {
-        let enm = reflected_enum(vm, *r#type);
-        alloc_meta(
+    fn meta(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
+        let enm = reflected_enum(vm, *r#type)?;
+        Ok(alloc_meta(
             vm,
             enm.alias.as_deref(),
             enm.description.as_deref(),
             enm.docstring.as_deref(),
             &enm.other,
-        )
+        ))
     }
 }
 
 impl BamlClassUnionType for PackageReflectImpl {
-    impl_as_type!(BamlClassUnionType);
+    impl_as_type!(Union, union);
 
-    fn member_types(vm: &mut BexVm, r#type: &Value) -> Vec<Value> {
-        let bex_vm_types::RealizedTy::Union(members, _) = reflected_ty(vm, *r#type) else {
-            unreachable!("union.Type receiver must wrap a union type")
+    fn member_types(
+        vm: &mut BexVm,
+        r#type: &Value,
+    ) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
+        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Union)?;
+        let bex_vm_types::RealizedTy::Union(members, _) = ty else {
+            unreachable!("a Union-classified type is RealizedTy::Union")
         };
-        members
+        Ok(members
             .into_iter()
             .map(|ty| Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(ty))))
-            .collect()
+            .collect())
     }
 }
 
 impl BamlClassArrayType for PackageReflectImpl {
-    impl_as_type!(BamlClassArrayType);
+    impl_as_type!(Array, array);
 
-    fn element_type(vm: &mut BexVm, r#type: &Value) -> Value {
-        let bex_vm_types::RealizedTy::List(element, _) = reflected_ty(vm, *r#type) else {
-            unreachable!("array.Type receiver must wrap an array type")
+    fn element_type(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
+        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Array)?;
+        let bex_vm_types::RealizedTy::List(element, _) = ty else {
+            unreachable!("an Array-classified type is RealizedTy::List")
         };
-        Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(*element)))
+        Ok(Value::object(
+            vm.alloc_type(bex_vm_types::types::TypeValue::new(*element)),
+        ))
     }
 }
 
 impl BamlClassMapType for PackageReflectImpl {
-    impl_as_type!(BamlClassMapType);
+    impl_as_type!(Map, map);
 
-    fn key_type(vm: &mut BexVm, r#type: &Value) -> Value {
-        let bex_vm_types::RealizedTy::Map { key, .. } = reflected_ty(vm, *r#type) else {
-            unreachable!("map.Type receiver must wrap a map type")
+    fn key_type(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
+        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Map)?;
+        let bex_vm_types::RealizedTy::Map { key, .. } = ty else {
+            unreachable!("a Map-classified type is RealizedTy::Map")
         };
-        Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(*key)))
+        Ok(Value::object(
+            vm.alloc_type(bex_vm_types::types::TypeValue::new(*key)),
+        ))
     }
 
-    fn value_type(vm: &mut BexVm, r#type: &Value) -> Value {
-        let bex_vm_types::RealizedTy::Map { value, .. } = reflected_ty(vm, *r#type) else {
-            unreachable!("map.Type receiver must wrap a map type")
+    fn value_type(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
+        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Map)?;
+        let bex_vm_types::RealizedTy::Map { value, .. } = ty else {
+            unreachable!("a Map-classified type is RealizedTy::Map")
         };
-        Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(*value)))
+        Ok(Value::object(
+            vm.alloc_type(bex_vm_types::types::TypeValue::new(*value)),
+        ))
     }
 }
 
 impl BamlClassFunctionType for PackageReflectImpl {
-    impl_as_type!(BamlClassFunctionType);
+    impl_as_type!(Function, function);
 
-    fn params(vm: &mut BexVm, r#type: &Value) -> Vec<Value> {
-        let bex_vm_types::RealizedTy::Function { params, .. } = reflected_ty(vm, *r#type) else {
-            unreachable!("function.Type receiver must wrap a function type")
+    fn params(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
+        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Function)?;
+        let bex_vm_types::RealizedTy::Function { params, .. } = ty else {
+            unreachable!("a Function-classified type is RealizedTy::Function")
         };
-        params
+        Ok(params
             .into_iter()
             .map(|param| {
                 let name = opt_string(vm, param.name.as_ref().map(baml_type::Name::as_str));
@@ -1599,29 +1728,44 @@ impl BamlClassFunctionType for PackageReflectImpl {
                 }
                 .to_value(vm)
             })
-            .collect()
+            .collect())
     }
 
-    fn return_type(vm: &mut BexVm, r#type: &Value) -> Value {
-        let bex_vm_types::RealizedTy::Function { ret, .. } = reflected_ty(vm, *r#type) else {
-            unreachable!("function.Type receiver must wrap a function type")
+    fn return_type(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
+        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Function)?;
+        let bex_vm_types::RealizedTy::Function { ret, .. } = ty else {
+            unreachable!("a Function-classified type is RealizedTy::Function")
         };
-        Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(*ret)))
+        Ok(Value::object(
+            vm.alloc_type(bex_vm_types::types::TypeValue::new(*ret)),
+        ))
     }
 }
 
 impl BamlClassInterfaceType for PackageReflectImpl {
-    impl_as_type!(BamlClassInterfaceType);
+    impl_as_type!(Interface, interface);
 
-    fn implemented_by(vm: &BexVm, r#type: &Value, other: &Value) -> bool {
-        <PackageReflectImpl as BamlClassType>::implemented_by(vm, r#type, other)
+    #[expect(
+        clippy::used_underscore_items,
+        reason = "the generated view accessor is named for the `_ty` field it reads"
+    )]
+    fn implemented_by(
+        vm: &BexVm,
+        r#type: &super::view::interface::Type<'_>,
+        other: &Value,
+    ) -> Result<bool, crate::errors::VmRustFnError> {
+        let ty_value =
+            check_kind_invariant(vm, r#type._ty(), baml_type::type_kind::TypeKind::Interface)?;
+        Ok(<PackageReflectImpl as BamlClassType>::implemented_by(
+            vm, &ty_value, other,
+        ))
     }
 }
 
 impl BamlClassLiteralType for PackageReflectImpl {
-    impl_as_type!(BamlClassLiteralType);
+    impl_as_type!(Literal, literal);
 }
 
 impl BamlClassPrimitiveType for PackageReflectImpl {
-    impl_as_type!(BamlClassPrimitiveType);
+    impl_as_type!(Primitive, primitive);
 }

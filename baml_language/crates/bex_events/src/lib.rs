@@ -1,6 +1,6 @@
 pub mod collector;
 pub mod history;
-pub mod ids;
+pub use bex_prof_store::ids;
 pub mod metadata;
 pub mod prof;
 pub mod run;

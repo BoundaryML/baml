@@ -64,8 +64,8 @@ impl FunctionCallContextBuilder {
         let boundary = BoundaryContext::new(BoundaryId::new_random());
         Self {
             host_call_id,
-            profile_intent: RootProfileIntent::UserBoundary {
-                boundary_id: boundary.boundary_id,
+            profile_intent: RootProfileIntent::UserRoot {
+                runtime_id: boundary.boundary_id,
             },
             boundary,
             logger: TraceLogger::disabled(),
@@ -91,8 +91,10 @@ impl FunctionCallContextBuilder {
     #[must_use]
     pub fn with_boundary_id(mut self, boundary_id: BoundaryId) -> Self {
         self.boundary.boundary_id = boundary_id;
-        if matches!(self.profile_intent, RootProfileIntent::UserBoundary { .. }) {
-            self.profile_intent = RootProfileIntent::UserBoundary { boundary_id };
+        if matches!(self.profile_intent, RootProfileIntent::UserRoot { .. }) {
+            self.profile_intent = RootProfileIntent::UserRoot {
+                runtime_id: boundary_id,
+            };
         }
         self
     }

@@ -11,7 +11,7 @@ class Tool {
     name: string,
     description: string,
     input_schema: map<string, unknown>, // JSON Schema for the arguments object
-    handler: baml.AnyFunction?, // signature-derived dispatch; null for raw tools
+    handler: reflect.AnyFunction?, // signature-derived dispatch; null for raw tools
     // Dynamic-source dispatch: the handler receives the validated-by-schema
     // argument map as one value. Set by raw_tool() when the schema does not
     // derive from a BAML signature (MCP servers, OpenAPI specs).
@@ -26,7 +26,7 @@ class Tool {
         if let rh: (map<string, unknown>) -> string throws unknown = self.raw_handler {
             return rh(args);
         }
-        if let h: baml.AnyFunction = self.handler {
+        if let h: reflect.AnyFunction = self.handler {
             let value = reflect.call_any(h, args) catch (e) {
                 let bad: reflect.InvalidArgumentError => {
                     throw baml.errors.InvalidArgument { message: `invalid arguments for ${self.name}: ${bad.to_string()}` }
@@ -41,7 +41,7 @@ class Tool {
 
 // The explicit constructor. `tools: [f]` normalizes through this.
 function tool(
-    handler: baml.AnyFunction,
+    handler: reflect.AnyFunction,
     name: string? = null,
     description: string? = null,
     on_error: ErrorMode? = null,

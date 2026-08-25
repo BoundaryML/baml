@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0062
 
   × non-exhaustive match on type reflect.array.Type | reflect.class.Type | reflect.enum.Type | reflect.function.Type | reflect.interface.Type | reflect.literal.Type | reflect.map.Type |
-  │ reflect.primitive.Type | reflect.union.Type; missing: reflect.function.Type {}
+  │ reflect.primitive.Type | reflect.union.Type; missing: reflect.function.Type { _ty: _ }
     ╭─[main.baml:2:3]
   2 │ ╭─▶   match (t.kind()) {
   3 │ │       reflect.class.Type => "class",

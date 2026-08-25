@@ -127,6 +127,7 @@ class ProbeClient {
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
             ai.ModelTurn {
+                calls: [],
                 content: [ai.content.Text { text: self.reply }],
                 stop_reason: ai.content.StopReason.Complete,
                 usage: null,
@@ -139,11 +140,11 @@ class ProbeClient {
 // ── Refused: the result type would keep naming the call-scoped parameter ────
 
 /// The B-1582 item-1 spelling, verbatim from the ticket. `ai.Agent<T>.new`
-/// returns `Agent<T>`, so the constructed value's published type is
-/// `Agent<unknown>` while the instance carries the real runtime class — the
-/// disagreement that later made `.run` fail to dispatch at all. The spec the
-/// runner is handed is the ticket's second inline slot, and `@spec<T>` embeds
-/// the parameter the same way, so both slots are named.
+/// returns a spec value that outlives the call, so its inline slot is still
+/// an escape. `Agent` itself is no longer generic — `Out` rides `run` and is
+/// inferred from the spec — so the ticket's first inline slot (the Agent
+/// turbofish) no longer exists; writing it is an ordinary arity error, and
+/// only the `@spec<T>` slot needs the name.
 #[test]
 fn agent_constructed_with_an_inline_runtime_type_is_refused() {
     assert_escapes(
@@ -157,11 +158,32 @@ fn agent_constructed_with_an_inline_runtime_type_is_refused() {
         }}
 
         function main(t: reflect.Type, c: ai.Client) -> unknown throws unknown {{
-            ai.Agent<unreflect(t)>.new(client = c).run(DynamicOutput@spec<unreflect(t)>())
+            ai.Agent.new(client = c).run(DynamicOutput@spec<unreflect(t)>())
         }}
         "##
         ),
-        2,
+        1,
+    );
+
+    // The retired spelling: a turbofish on the non-generic Agent is a plain
+    // arity error, not an escape.
+    let errors = compile_errors(&format!(
+        r##"
+        {PROBE_CLIENT}
+
+        function DynamicOutput<T>() -> T {{
+            client: DefaultClient
+            prompt: `${{ctx.output_format}}`
+        }}
+
+        function main(t: reflect.Type, c: ai.Client) -> unknown throws unknown {{
+            ai.Agent<unreflect(t)>.new(client = c).run(DynamicOutput@spec<unreflect(t)>())
+        }}
+        "##
+    ));
+    assert!(
+        errors.iter().any(|(code, _)| code == "E0005"),
+        "the Agent turbofish should be an arity error, got: {errors:?}"
     );
 }
 
@@ -924,8 +946,9 @@ function main() -> int throws unknown { unreflect(3).value }
 /// The refusal is only useful if its suggestion works. This is the ticket's
 /// Agent scenario (the #4501 oracle) rewritten exactly as E0168 spells it: the
 /// same program with `type Out = unreflect(...)` in front and `Out` in the
-/// slots. It compiles, dispatches through `implements Runner<Out>`, and parses
-/// the reflected output type.
+/// spec slot. It compiles, dispatches through the inherent `Agent.run<Out>`,
+/// and parses the reflected output type. (`Agent` itself is no longer
+/// generic, so the spec slot is the only one to name.)
 #[tokio::test]
 async fn applying_the_suggestion_compiles_and_runs() {
     let scenario = |bind: &str, slot: &str| {
@@ -943,7 +966,7 @@ async fn applying_the_suggestion_compiles_and_runs() {
                 "name": reflect.Type.of<string>(),
             }}).as_type()
             {bind}
-            let run = ai.Agent<{slot}>.new(
+            let run = ai.Agent.new(
                 client = ProbeClient {{ reply: `{{"name":"Pixel"}}` }},
             ).run(DynamicOutput@spec<{slot}>())
             reflect.class.get_field<string>(run.value, "name")
@@ -952,7 +975,7 @@ async fn applying_the_suggestion_compiles_and_runs() {
         )
     };
 
-    assert_escapes(&scenario("", "unreflect(output_type)"), 2);
+    assert_escapes(&scenario("", "unreflect(output_type)"), 1);
 
     // Exactly the rewrite E0168 prints: name the type first, then use the name.
     let applied = scenario("type Out = unreflect(output_type)", "Out");

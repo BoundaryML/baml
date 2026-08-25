@@ -208,9 +208,9 @@ fn user.fixtures.reflect_shadowing.helper(q: string) -> string {
 fn user.fixtures.reflect_shadowing.package_still_reachable() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: baml.AnyFunction<Returns = unknown, Throws = unknown> // f
+    let _1: reflect.AnyFunction<Returns = unknown, Throws = unknown> // f
     let _2: reflect.Signature // sig
-    let _3: baml.AnyFunction<Returns = unknown, Throws = unknown>
+    let _3: reflect.AnyFunction<Returns = unknown, Throws = unknown>
     let _4: (reflect.Type) -> string throws never
 
     bb0: {
@@ -221,7 +221,7 @@ fn user.fixtures.reflect_shadowing.package_still_reachable() -> string {
 
     bb1: {
         _4 = copy _2.3;
-        _0 = call const fn reflect.Type.baml.ToString.to_string(copy _4) -> [bb2];
+        _0 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _4) -> [bb2];
     }
 
     bb2: {

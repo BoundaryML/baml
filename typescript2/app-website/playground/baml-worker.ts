@@ -922,6 +922,20 @@ self.onmessage = async (event: MessageEvent) => {
       // Website playground does not request input from the user — stub the
       // response handler so the protocol union is exhaustive.
       return;
+
+    // Telemetry reads `.baml/profiles-v1` on disk, which only the local
+    // toolchain server can reach. The in-browser runtime has no such store.
+    case 'listExecutions':
+    case 'openExecution':
+    case 'readTelemetryMedia':
+      postOut({
+        code: 'telemetryUnavailable',
+        message:
+          'Telemetry needs the local profile store, which the in-browser runtime does not have.',
+        requestId: msg.requestId,
+        type: 'commandError',
+      });
+      return;
   }
 
   msg satisfies never;

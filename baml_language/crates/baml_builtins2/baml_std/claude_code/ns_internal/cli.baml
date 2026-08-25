@@ -284,7 +284,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
         baml.sys.ProcessOptions { cwd: c.cwd, env: null, timeout_ms: c.timeout_ms, stdin: null },
     ) catch_all (e) {
         _ => {
-            throw ai.errors.NetworkFailure {
+            throw ai.errors.NetworkFailure { status_code: null,
                 provider: "claude-code",
                 detail: `the Claude Code CLI could not start: ${e.to_string()}`,
                 raw_body: null,
@@ -304,7 +304,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     let exit = p.wait() catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw ai.errors.NetworkFailure {
+            throw ai.errors.NetworkFailure { status_code: null,
                 provider: "claude-code",
                 detail: `the Claude Code CLI did not terminate cleanly: ${e.to_string()}`,
                 raw_body: null,
@@ -382,5 +382,5 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     } else {
         content.push(ai.content.Text { text: baml.json.stringify(structured) });
     }
-    ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
+    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
 }

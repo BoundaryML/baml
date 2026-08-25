@@ -426,7 +426,12 @@ impl BamlClassClassBuilder for PackageReflectImpl {
         builder: &Value,
         implementations: &[Value],
     ) -> Result<Value, VmRustFnError> {
-        build_group(vm, *builder, implementations)
+        let ty_value = build_group(vm, *builder, implementations)?;
+        Ok(super::type_kinds::alloc_kind_view(
+            vm,
+            baml_type::type_kind::TypeKind::Class,
+            ty_value,
+        ))
     }
 }
 

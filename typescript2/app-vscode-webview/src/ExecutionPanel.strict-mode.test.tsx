@@ -1218,14 +1218,12 @@ class FakeRuntimePort implements RuntimePort {
 function runFixture(projectId: string, functionName: string): Run {
   return {
     boundaryId: 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
-    calls: [],
     cancellation: null,
     completedAtMs: null,
     createdAtMs: 100,
     cursor: 0,
     diagnostics: [],
     error: null,
-    graphRuntimeOverlay: null,
     payloads: [],
     request: {
       argsSummary: '{}',
@@ -1235,11 +1233,9 @@ function runFixture(projectId: string, functionName: string): Run {
       target: { functionName, kind: 'function' },
     },
     result: null,
-    rootCallNodeId: null,
     startedAtMs: null,
     status: 'pending',
     target: { functionName, kind: 'function' },
-    threads: [],
     timeAnchor: {
       epochCreatedAtMs: 100,
       traceZeroNs: '0',

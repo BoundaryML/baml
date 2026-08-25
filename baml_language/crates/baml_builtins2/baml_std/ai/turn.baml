@@ -16,6 +16,9 @@ class ModelTurn {
     content: root.content.Block[],
     stop_reason: root.content.StopReason,
     usage: root.events.Usage?,
+    // Every HTTP exchange behind this turn, oldest first: failed legs from
+    // retry/fallback wrappers, then the selected call (selected: true).
+    calls: root.events.LLMCall[],
 
     // The terminal Text block — the final candidate the runner parses.
     function terminal_text(self) -> string? {

@@ -2,19 +2,22 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 === MIR2 ===
-fn user.fixtures.json_llm_return_type.ExtractAny(client: null | ai.Client) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+fn user.fixtures.json_llm_return_type.ExtractAny(client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: null | ai.Client // client // param
-    let _2: bool
-    let _3: ai.RunResult<baml.json.json>
-    let _4: ai.Agent<baml.json.json>
-    let _5: reflect.Type
-    let _6: ai.FunctionSpec<baml.json.json>
+    let _2: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _3: bool
+    let _4: bool
+    let _5: ai.RunResult<baml.json.json>
+    let _6: ai.Agent
+    let _7: reflect.Type
+    let _8: ai.FunctionSpec<baml.json.json>
+    let _9: reflect.Type
 
     bb0: {
-        _2 = copy _1 == const <omitted>;
-        branch copy _2 -> [bb1, bb2];
+        _3 = copy _1 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
@@ -23,24 +26,35 @@ fn user.fixtures.json_llm_return_type.ExtractAny(client: null | ai.Client) -> in
     }
 
     bb2: {
-        _5 = load_type(baml.json.json);
-        _4 = call const fn ai.Agent.new<copy _5>(const <omitted>, const <omitted>, copy _1, const <omitted>, const <omitted>) -> [bb3];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb3, bb4];
     }
 
     bb3: {
-        _6 = call const fn user.fixtures.json_llm_return_type.ExtractAny$spec() -> [bb4];
+        _2 = const null;
+        goto -> bb4;
     }
 
     bb4: {
-        _3 = virtual_call run as ai.Runner<int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<baml.json.json>>(copy _4, copy _6) -> [bb5];
+        _7 = load_type(unknown);
+        _6 = call const fn ai.Agent.new<copy _7>(const <omitted>, const <omitted>, copy _1, const <omitted>, copy _2) -> [bb5];
     }
 
     bb5: {
-        _0 = copy _3.0;
-        goto -> bb6;
+        _8 = call const fn user.fixtures.json_llm_return_type.ExtractAny$spec() -> [bb6];
     }
 
     bb6: {
+        _9 = load_type(baml.json.json);
+        _5 = call const fn ai.Agent.run<copy _9>(copy _6, copy _8) -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _5.0;
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -220,18 +234,20 @@ fn .<lambda(ExtractAny$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.P
     }
 }
 
-fn user.fixtures.json_llm_return_type.ExtractAny$stream(client: null | ai.stream.StreamingClient) -> ai.stream.Stream<baml.json.json, baml.json.json> {
+fn user.fixtures.json_llm_return_type.ExtractAny$stream(client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<baml.json.json, baml.json.json> {
     // Locals:
     let _0: ai.stream.Stream<baml.json.json, baml.json.json> // _0 // return
     let _1: null | ai.stream.StreamingClient // client // param
-    let _2: bool
-    let _3: ai.FunctionSpec<baml.json.json>
-    let _4: reflect.Type
-    let _5: reflect.Type
+    let _2: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _3: bool
+    let _4: bool
+    let _5: ai.FunctionSpec<baml.json.json>
+    let _6: reflect.Type
+    let _7: reflect.Type
 
     bb0: {
-        _2 = copy _1 == const <omitted>;
-        branch copy _2 -> [bb1, bb2];
+        _3 = copy _1 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
@@ -240,16 +256,26 @@ fn user.fixtures.json_llm_return_type.ExtractAny$stream(client: null | ai.stream
     }
 
     bb2: {
-        _3 = call const fn user.fixtures.json_llm_return_type.ExtractAny$spec() -> [bb3];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb3, bb4];
     }
 
     bb3: {
-        _4 = load_type(baml.json.json$stream | null);
-        _5 = load_type(baml.json.json);
-        _0 = call const fn ai.stream.from_spec<copy _4, copy _5>(copy _3, copy _1) -> [bb4];
+        _2 = const null;
+        goto -> bb4;
     }
 
     bb4: {
+        _5 = call const fn user.fixtures.json_llm_return_type.ExtractAny$spec() -> [bb5];
+    }
+
+    bb5: {
+        _6 = load_type(baml.json.json$stream | null);
+        _7 = load_type(baml.json.json);
+        _0 = call const fn ai.stream.from_spec<copy _6, copy _7>(copy _5, copy _1, copy _2) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }

@@ -175,3 +175,62 @@ function stream_e2e_collect(text: string) -> StreamE2ECollectResult {
   let final_call = s.final();
   StreamE2ECollectResult { next_calls: next_calls, final_call: final_call }
 }
+
+// === Unified on_event coverage ===
+//
+// A scripted client with a canned parseable reply and fixed usage: the
+// keyless, network-free backing for the host-side `on_event` tests on the
+// plain (Agent) call path. The stream path reuses StreamStub + the replay
+// server instead (see customizable/test_on_event.py).
+class OnEventScriptedClient {
+  implements ai.Client {
+    function id(self) -> string {
+      "scripted"
+    }
+
+    function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+      let _ = input;
+      baml.http.Request { method: "POST", url: "https://example.invalid/x", headers: {}, body: "{}" }
+    }
+
+    function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+      let _ = input;
+      ai.ModelTurn {
+        // One hand-made wire record so hosts can assert the generated
+        // ai.events.LLMCall model arrives through on_event.
+        calls: [
+          ai.events.LLMCall {
+            client_name: "scripted",
+            provider: "scripted",
+            timing: ai.events.Timing { start_time_utc_ms: 1000n, duration_ms: 42n, ttft_ms: null },
+            http_request: null,
+            http_response: ai.events.HttpResponse { status: 200, headers: {}, body: null },
+            usage: null,
+            selected: true,
+            sse_responses: null,
+          },
+        ],
+        content: [ai.content.Text { text: "{\"name\": \"Ada\", \"email\": null}" }],
+        stop_reason: ai.content.StopReason.Complete,
+        usage: ai.events.Usage { input_tokens: 3, output_tokens: 5, cached_input_tokens: null, reasoning_tokens: null },
+      }
+    }
+  }
+}
+
+client OnEventScripted = OnEventScriptedClient {  };
+
+function on_event_probe(text: string) -> Resume {
+  client: OnEventScripted
+  prompt: `
+    Extract a resume from the following text.
+
+    Respond in JSON with this exact schema:
+    {"name": "string", "email": "string or null"}
+
+    Text:
+    ${text}
+
+    JSON:
+  `
+}

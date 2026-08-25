@@ -83,21 +83,6 @@ describe('findLatestGraphRunSnapshot', () => {
     ).toBe('newer');
   });
 
-  it('can select a workflow run that contains the displayed function', () => {
-    const run = runFixture('workflow', 100, {
-      calls: [
-        callFixture('root', 'throws.workflow'),
-        callFixture('child', 'throws.main'),
-      ],
-      target: { functionName: 'throws.workflow', kind: 'function' },
-    });
-
-    expect(
-      findLatestGraphRunSnapshot([run], 'throws.main', 'project', 1)
-        ?.boundaryId,
-    ).toBe('workflow');
-  });
-
   it('does not pair an obsolete run generation with the current graph', () => {
     const obsolete = runFixture('obsolete', 100);
 
@@ -114,14 +99,12 @@ function runFixture(
 ): Run {
   return {
     boundaryId,
-    calls: [],
     cancellation: null,
     completedAtMs: null,
     createdAtMs,
     cursor: 0,
     diagnostics: [],
     error: null,
-    graphRuntimeOverlay: null,
     payloads: [],
     request: {
       argsSummary: null,
@@ -131,33 +114,14 @@ function runFixture(
       target: { functionName: 'throws.main', kind: 'function' },
     },
     result: null,
-    rootCallNodeId: null,
     startedAtMs: createdAtMs,
     status: 'running',
     target: { functionName: 'throws.main', kind: 'function' },
-    threads: [],
     timeAnchor: {
       epochCreatedAtMs: createdAtMs,
       traceZeroNs: '0',
     },
     visibility: { kind: 'history' },
     ...overrides,
-  };
-}
-
-function callFixture(id: string, functionName: string): Run['calls'][number] {
-  return {
-    calleeSource: null,
-    callSiteSource: null,
-    endedAtNs: null,
-    functionId: id === 'root' ? 1 : 2,
-    functionName,
-    functionOrigin: null,
-    id,
-    parentId: id === 'root' ? null : 'root',
-    payloadIds: [],
-    startedAtNs: null,
-    status: 'ok',
-    threadId: 'thread',
   };
 }

@@ -2,7 +2,7 @@ class Field {
   name string
   type reflect.Type?
   meta reflect.Meta
-  /// Present only for handles returned from `baml.AnyClass.list_fields` or
+  /// Present only for handles returned from `reflect.AnyClass.list_fields` or
   /// `get_field`. Type-side descriptors returned by `Type.fields()` are
   /// intentionally ownerless.
   _owner unknown?
@@ -13,13 +13,13 @@ class Field {
 
   /// Read this field from its bound owner. An ownerless type-side descriptor
   /// returns `null`.
-  function value<T>(self) -> T? throws baml.errors.TypeMismatch {
-    let owner: baml.AnyClass = self._owner else {
+  function value<T>(self) -> T? throws reflect.errors.TypeMismatch {
+    let owner: reflect.AnyClass = self._owner else {
       return null
     }
     reflect.class.get_field<T>(owner, self.name) catch (e) {
       reflect.errors.CompilationError { message } => {
-        throw baml.errors.TypeMismatch { message: message }
+        throw reflect.errors.TypeMismatch { message: message }
       }
     }
   }
@@ -154,12 +154,20 @@ function get_field<T>(value: unknown, name: string) -> T throws reflect.errors.C
 
 /// A class-kind view of a `type` value. Users never construct this class.
 class Type {
+  /// The wrapped `type` value. Private by invariant: reflection natives are
+  /// its only readers, and each kind method panics if the held type no longer
+  /// classifies as this view's kind.
+  _ty reflect.Type
+
   implements reflect.TypeView {
     //baml:vm
+    //baml:fallible
     function as_type(self) -> reflect.Type throws never { $rust_function }
   }
   //baml:mut_vm
+  //baml:fallible
   function fields(self) -> Field[] throws never { $rust_function }
   //baml:mut_vm
+  //baml:fallible
   function meta(self) -> reflect.Meta throws never { $rust_function }
 }

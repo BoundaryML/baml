@@ -95,7 +95,7 @@ function unknown_error.UeRunnerImpl.UeRunner.run(self: unknown_error.UeRunnerImp
     return
 }
 
-function unknown_error.ue_call_reflect(target: baml.AnyFunction<Returns = bool, Throws = unknown>) -> bool {
+function unknown_error.ue_call_reflect(target: reflect.AnyFunction<Returns = bool, Throws = unknown>) -> bool {
     load_type bool
     load_type unknown
     load_var target
@@ -502,7 +502,7 @@ function unknown_error.ue_preserves_origin_trace() -> bool {
     return
 }
 
-function unknown_error.ue_reflect_boundary(target: baml.AnyFunction<Returns = bool, Throws = unknown>) -> bool {
+function unknown_error.ue_reflect_boundary(target: reflect.AnyFunction<Returns = bool, Throws = unknown>) -> bool {
     load_var target
     call user.unknown_error.ue_call_reflect
     jump L0

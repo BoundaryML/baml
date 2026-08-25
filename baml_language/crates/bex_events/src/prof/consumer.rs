@@ -90,10 +90,17 @@ pub(crate) fn consumer_main(control: &mpsc::Receiver<ControlMsg>, env: &Consumer
             match message {
                 ControlMsg::Flush(ack) => {
                     drain_to_idle(env);
+                    // Streams spec §5.6: publish everything publishable
+                    // before acknowledging the flush.
+                    crate::prof::backend::flush_sessions();
                     let _ = ack.send(());
                 }
                 ControlMsg::EngineClosed(engine_id) => {
                     drain_to_idle(env);
+                    // Publish the engine's finalized executions; executions
+                    // still `Open` at engine close are untouched (they read
+                    // Running while the stream is alive).
+                    crate::prof::backend::flush_sessions();
                     close_engine(engine_id);
                 }
             }
@@ -107,7 +114,15 @@ pub(crate) fn consumer_main(control: &mpsc::Receiver<ControlMsg>, env: &Consumer
         // segment only bounces its commit cache line against the producer.
         // The timeout remains the bounded-latency path for low-volume streams.
         service_once(env);
-        wake.park(env.wake_interval);
+        // The park timeout bounds the publication age trigger: a session
+        // with a sub-50ms publish_interval needs a correspondingly shorter
+        // park (streams spec §5.3).
+        let park =
+            crate::prof::backend::min_publish_interval().map_or(env.wake_interval, |interval| {
+                env.wake_interval
+                    .min(interval.max(Duration::from_millis(1)))
+            });
+        wake.park(park);
         wake.post_park();
     }
 }
