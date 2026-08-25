@@ -367,8 +367,9 @@ function main() -> string throws unknown {
     assert_eq!(output.result, Ok(BexExternalValue::String("E0010".into())));
 }
 
-/// A scripted `ai.Client` that answers with a fixed payload, so the Agent loop
-/// runs end to end without a network or an API key.
+/// A scripted `ai.Client` that answers with a fixed payload and records the
+/// rendered prompts, so the Agent loop can be observed end to end without a
+/// network or an API key.
 const PROBE_CLIENT: &str = r##"
 client DefaultClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
@@ -378,6 +379,7 @@ client DefaultClient = openai.ResponsesClient.new(
 
 class ProbeClient {
     reply: string,
+    requests: string[],
 
     implements ai.Client {
         function id(self) -> string {
@@ -385,12 +387,13 @@ class ProbeClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            let _ = input;
-            baml.http.Request { method: "POST", url: "https://probe.invalid", headers: {}, body: "{}" }
+            let prompt = input.prompt(ai.internal.build_output_format(input.output_type)).text();
+            let _ = self.requests.push(prompt);
+            baml.http.Request { method: "POST", url: "https://probe.invalid", headers: {}, body: prompt }
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
-            let _ = input;
+            let _ = self.render(input);
             ai.ModelTurn {
                 calls: [],
                 content: [ai.content.Text { text: self.reply }],
@@ -473,7 +476,7 @@ async fn agent_run_parses_a_reflected_output_type() {
             let direct = baml.sap.parse<Out>(`{{"name":"Pixel"}}`)
 
             let run = ai.Agent.new(
-                client = ProbeClient {{ reply: `{{"name":"Pixel"}}` }},
+                client = ProbeClient {{ reply: `{{"name":"Pixel"}}`, requests: [] }},
             ).run(DynamicOutput@spec<Out>())
 
             let direct_name = reflect.class.get_field<string>(direct, "name")
@@ -487,6 +490,99 @@ async fn agent_run_parses_a_reflected_output_type() {
         output.result,
         Ok(BexExternalValue::String("Pixel|Pixel".into()))
     );
+}
+
+/// The Agent runner must hand the runtime output definition to the client
+/// renderer. Parsing alone can pass while the model receives no schema, so
+/// exercise every reflected declaration origin through `ai.Agent.run` and
+/// inspect the request built by the client.
+#[tokio::test]
+async fn agent_runner_renders_reflected_output_schemas_on_the_wire() {
+    let source = format!(
+        r####"
+        {PROBE_CLIENT}
+
+        function DynamicOutput<T>() -> T {{
+            client: DefaultClient
+            prompt: `${{ctx.output_format()}}`
+        }}
+
+        function main() -> string throws unknown {{
+            let minted_class = reflect.class.new("MintedRecord", {{
+                "minted_field": reflect.Type.of<string>().meta(
+                    docstring = "Minted runner field docs",
+                ),
+            }}).as_type()
+            type MintedRecord = unreflect(minted_class)
+            let class_client = ProbeClient {{ reply: `{{"minted_field":"ok"}}`, requests: [] }}
+            let _ = ai.Agent.new(
+                client = class_client,
+            ).run(DynamicOutput@spec<MintedRecord>())
+
+            let minted_enum = reflect.enum.new(
+                "MintedChoice",
+                ["PENDING", "RUNNING"],
+            ).as_type()
+            type MintedChoice = unreflect(minted_enum)
+            let enum_client = ProbeClient {{ reply: `"RUNNING"`, requests: [] }}
+            let _ = ai.Agent.new(
+                client = enum_client,
+            ).run(DynamicOutput@spec<MintedChoice>())
+
+            let alpha = reflect.class.new("AlphaShape", {{
+                "alpha_only": reflect.Type.of<string>(),
+            }}).as_type()
+            let beta = reflect.class.new("BetaShape", {{
+                "beta_only": reflect.Type.of<int>(),
+            }}).as_type()
+            let union = reflect.union.new([alpha, beta]).as_type()
+            type MintedUnion = unreflect(union)
+            let union_client = ProbeClient {{ reply: `{{"alpha_only":"ok"}}`, requests: [] }}
+            let _ = ai.Agent.new(
+                client = union_client,
+            ).run(DynamicOutput@spec<MintedUnion>())
+
+            let package = reflect.Package.compile({{ "compiled.baml": `
+class CompiledRecord {{ compiled_field string }}
+` }})
+            let compiled = (package.get_class("root.CompiledRecord")
+                ?? throw "missing CompiledRecord").as_type()
+            type CompiledRecord = unreflect(compiled)
+            let compiled_client = ProbeClient {{ reply: `{{"compiled_field":"ok"}}`, requests: [] }}
+            let _ = ai.Agent.new(
+                client = compiled_client,
+            ).run(DynamicOutput@spec<CompiledRecord>())
+
+            let class_prompt = class_client.requests.at(0) ?? throw "missing class request"
+            let enum_prompt = enum_client.requests.at(0) ?? throw "missing enum request"
+            let union_prompt = union_client.requests.at(0) ?? throw "missing union request"
+            let compiled_prompt = compiled_client.requests.at(0) ?? throw "missing compiled request"
+            `${{class_prompt}}~~${{enum_prompt}}~~${{union_prompt}}~~${{compiled_prompt}}`
+        }}
+        "####
+    );
+    let output = baml_test!(&source);
+    let BexExternalValue::String(rendered) = output.result.expect("main must return") else {
+        panic!("main returns a string");
+    };
+    let prompts = rendered.split("~~").collect::<Vec<_>>();
+    assert_eq!(prompts.len(), 4, "{rendered}");
+    assert!(
+        prompts[0].contains("minted_field") && prompts[0].contains("Minted runner field docs"),
+        "{}",
+        prompts[0]
+    );
+    assert!(
+        prompts[1].contains("PENDING") && prompts[1].contains("RUNNING"),
+        "{}",
+        prompts[1]
+    );
+    assert!(
+        prompts[2].contains("alpha_only") && prompts[2].contains("beta_only"),
+        "{}",
+        prompts[2]
+    );
+    assert!(prompts[3].contains("compiled_field"), "{}", prompts[3]);
 }
 
 /// B-1582 follow-up: definitions crossed dispatch, but *identity* did not.
