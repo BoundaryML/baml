@@ -1762,6 +1762,10 @@ struct InferenceContext<'db> {
     /// Carriers already reported as escaping their call (E0168), so a callee
     /// road walked twice reports once.
     reported_runtime_escapes: rustc_hash::FxHashSet<ExprId>,
+    /// Runtime carriers can be reached by more than one inference road (for
+    /// example the claim and body passes over a catch pattern). Their
+    /// expression effects and diagnostics must still be inferred once.
+    validated_runtime_operands: rustc_hash::FxHashSet<ExprId>,
     /// Inline `unreflect(...)` carriers whose call publishes the parameter in
     /// its RESULT — the bare `-> T` included. The `?.` check consults this at
     /// the chain boundary, where the callee's signature is no longer reachable.
@@ -1831,6 +1835,7 @@ impl<'db> InferenceContext<'db> {
             wf_scope_env: std::cell::OnceCell::new(),
             runtime_dependent_call_params: FxHashMap::default(),
             reported_runtime_escapes: rustc_hash::FxHashSet::default(),
+            validated_runtime_operands: rustc_hash::FxHashSet::default(),
             runtime_slots_named_by_result: rustc_hash::FxHashSet::default(),
             result: InferenceResult::default(),
         }
@@ -1948,7 +1953,7 @@ impl<'db> InferenceContext<'db> {
             .iter()
             .any(|param| ty_mentions_param(&expected, param))
         {
-            return self.sub(&actual, &expected);
+            return self.probe_sub(&actual, &expected);
         }
 
         match (actual.kind(), expected.kind()) {
@@ -2082,6 +2087,19 @@ impl<'db> InferenceContext<'db> {
             (_, TyKind::AssociatedTypeProjection { .. }) => true,
             _ => false,
         }
+    }
+
+    /// Ask the ordinary relation for a verdict without retaining any bounds,
+    /// obligations, or deferred pairs deposited by that speculative check.
+    fn probe_sub(&mut self, actual: &Ty, expected: &Ty) -> bool {
+        let snapshot = self.table.snapshot();
+        let obligations_len = self.obligations.len();
+        let deferred_subs_len = self.deferred_subs.len();
+        let result = self.sub(actual, expected);
+        self.table.rollback_to(snapshot);
+        self.obligations.truncate(obligations_len);
+        self.deferred_subs.truncate(deferred_subs_len);
+        result
     }
 
     /// Checking mode: infer with the expectation, then constrain -
@@ -2420,18 +2438,17 @@ impl<'db> InferenceContext<'db> {
                 // instantiations). Interface views only (TIR's rule);
                 // the non-interface diagnostic is S17's.
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
-                let target = if let Some(target_ref) =
-                    self.type_refs.upcast_targets.get(&expr).copied()
-                {
-                    let (lowered, diagnostics) = self.lower_body_type_ref_at(
-                        target_ref,
-                        crate::lower::TypePosition::Existential,
-                    );
-                    self.queue_body_lowering_diagnostics(diagnostics);
-                    self.reject_expr_position_holes(&lowered, expr)
-                } else {
-                    Ty::error()
-                };
+                let target =
+                    if let Some(target_ref) = self.type_refs.upcast_targets.get(&expr).copied() {
+                        let (lowered, diagnostics) = self.lower_body_type_ref_at(
+                            target_ref,
+                            crate::lower::TypePosition::Existential,
+                        );
+                        self.queue_body_lowering_diagnostics(diagnostics);
+                        self.reject_expr_position_holes(&lowered, expr)
+                    } else {
+                        Ty::error()
+                    };
                 // The interface-view gate is a STRUCTURE demand: an
                 // alias naming an interface answers as the interface.
                 let target = self.expand_alias_ty(&target);
@@ -4972,6 +4989,9 @@ impl<'db> InferenceContext<'db> {
     }
 
     fn validate_runtime_type_operand(&mut self, body: &ExprBody, operand: ExprId) {
+        if !self.validated_runtime_operands.insert(operand) {
+            return;
+        }
         let got = self.infer_expr(body, operand, &Expectation::None);
         let pending_type = matches!(got.kind(), TyKind::Class(name, _, _)
             if name.package().as_str() == "reflect"

@@ -623,9 +623,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::Expr::Match {
-                scrutinee, arms, ..
+                scrutinee,
+                scrutinee_type,
+                arms,
             } => {
                 self.walk_expr(*scrutinee, body, source_map, true);
+                if let Some(type_id) = scrutinee_type {
+                    self.walk_type_operands(&body.type_annotations[*type_id], body, source_map);
+                }
                 for &arm_id in arms {
                     self.walk_match_arm(arm_id, body, source_map);
                 }
@@ -1261,6 +1266,20 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.emit_duplicate_param_diagnostics(&lambda.params);
         self.lambda_stack.push(scope_id);
         self.walk_parameter_defaults(&lambda.params, &lambda.defaults);
+
+        let metadata_scope = ExprMetadataScope::Body(scope_id);
+        self.expr_metadata_scope_stack.push(metadata_scope);
+        for param in &lambda.params {
+            if let Some(ty) = &param.type_expr {
+                self.walk_type_operands(ty, body, source_map);
+            }
+        }
+        if let Some(ty) = &lambda.return_type {
+            self.walk_type_operands(ty, body, source_map);
+        }
+        if let Some(ty) = &lambda.throws {
+            self.walk_type_operands(ty, body, source_map);
+        }
         if let Some(lambda_body) = lambda.body {
             // The body shares this arena, but it still gets its own metadata
             // namespace keyed by the lambda's scope. That keeps HIR agreeing
@@ -1269,13 +1288,11 @@ impl<'db> SemanticIndexBuilder<'db> {
             // mismatch here does not fail loudly: `path_resolution` simply
             // misses, flow narrowing silently stops inside every lambda, and
             // reconstructed closure signatures silently degrade to `unknown`.
-            let metadata_scope = ExprMetadataScope::Body(scope_id);
-            self.expr_metadata_scope_stack.push(metadata_scope);
             self.walk_expr(lambda_body, body, source_map, false);
-            let popped = self.expr_metadata_scope_stack.pop();
-            debug_assert_eq!(popped, Some(metadata_scope));
             self.analyze_lambda_captures(scope_id, body, source_map);
         }
+        let popped = self.expr_metadata_scope_stack.pop();
+        debug_assert_eq!(popped, Some(metadata_scope));
         self.lambda_stack.pop();
         self.pop_scope();
     }

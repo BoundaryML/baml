@@ -2116,6 +2116,7 @@ impl<'db> LoweringContext<'db> {
             Place::local(elem_local),
             Rvalue::Use(Operand::Copy(Place::Local(next_local))),
         );
+        self.emit_pattern_runtime_bindings_recursive(binding);
         self.bind_pattern_with_fresh_cells(elem_local, binding);
         let names: Vec<Name> = self.body.patterns[binding]
             .bound_names(&self.body.patterns)
@@ -10028,7 +10029,7 @@ impl LoweringContext<'_> {
     /// `TyTemplate::TypeArgRef` leaves; attempting it here would emit a broken
     /// `LoadType` instruction.
     fn check_type_of_intrinsic(
-        &self,
+        &mut self,
         callee: AstExprId,
         call_expr_id: AstExprId,
     ) -> Option<TyTemplate> {
@@ -10121,6 +10122,7 @@ impl LoweringContext<'_> {
         if matches!(type_arg.kind, AstTypeExprKind::Unreflect { .. }) {
             return None;
         }
+        self.emit_type_expr_runtime_bindings(&type_arg);
 
         // Include the enclosing class + function generic params so that `T`
         // in `reflect.Type.of<T>()` resolves to `Tir2Ty::TypeVar("T")` rather
@@ -10129,6 +10131,22 @@ impl LoweringContext<'_> {
         // then function params) mirrors TIR's `enclosing_class_generic_params
         // ++ user_generic_params` convention used in `callable.rs`.
         let generic_params = self.enclosing_generic_params();
+
+        // Nested runtime atoms have already been replaced by synthesized
+        // rigid parameters in TIR. Use that authoritative emission type so
+        // the template loads the slots bound just above instead of trying to
+        // lower the raw `unreflect(...)` syntax as a static type.
+        if let Some(crate::inference_provider::CallTypeArgPlan::Static {
+            emission_ty,
+            runtime_bindings,
+            ..
+        }) = self
+            .tir_call_plan(self.expr_metadata_key(call_expr_id))
+            .and_then(|plan| plan.slots.first())
+            && !runtime_bindings.is_empty()
+        {
+            return Some(self.ty_to_template(emission_ty, &generic_params));
+        }
 
         // ── 4. Build TyTemplate — TypeVar → TypeArgRef(N) ─────────────────────
         let template = self.type_expr_to_template(&type_arg, &generic_params);

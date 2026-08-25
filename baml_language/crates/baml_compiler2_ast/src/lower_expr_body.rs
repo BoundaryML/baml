@@ -1186,12 +1186,13 @@ impl LoweringContext {
         }
     }
 
-    /// Lower a type written inside this body, allocating each runtime carrier
-    /// into the body's expression arena before attaching it to the type atom.
-    fn lower_body_type_expr(
+    /// Allocate each runtime carrier in `type_expr` into this body's expression
+    /// arena, then attach those expression ids to the already-lowered type.
+    fn attach_body_type_operands(
         &mut self,
         type_expr: &baml_compiler_syntax::ast::TypeExpr,
-    ) -> TypeExpr {
+        ty: &mut TypeExpr,
+    ) {
         let mut operands = std::collections::HashMap::new();
         let mut preorder = type_expr.syntax().preorder();
         while let Some(event) = preorder.next() {
@@ -1210,8 +1211,17 @@ impl LoweringContext {
             // arguments inside it. Do not allocate those nested carriers again.
             preorder.skip_subtree();
         }
+        Self::attach_unreflect_operands(ty, &operands);
+    }
+
+    /// Lower a type written inside this body, allocating each runtime carrier
+    /// into the body's expression arena before attaching it to the type atom.
+    fn lower_body_type_expr(
+        &mut self,
+        type_expr: &baml_compiler_syntax::ast::TypeExpr,
+    ) -> TypeExpr {
         let mut ty = crate::lower_type_expr::lower_type_expr_node(type_expr, &mut self.diags);
-        Self::attach_unreflect_operands(&mut ty, &operands);
+        self.attach_body_type_operands(type_expr, &mut ty);
         ty
     }
 
@@ -2803,7 +2813,14 @@ impl LoweringContext {
             .flat_map(|args_node| args_node.children())
             .filter_map(baml_compiler_syntax::ast::AssociatedTypeDecl::cast)
             .filter_map(|binding| {
-                crate::lower_type_expr::lower_associated_type_binding(&binding, &mut self.diags)
+                let mut lowered = crate::lower_type_expr::lower_associated_type_binding(
+                    &binding,
+                    &mut self.diags,
+                )?;
+                if let Some(ty) = binding.default_or_binding() {
+                    self.attach_body_type_operands(&ty, &mut lowered.ty);
+                }
+                Some(lowered)
             })
             .collect();
 
@@ -5170,7 +5187,7 @@ impl LoweringContext {
         // recovery and ignored here — `LambdaDef` has nowhere to put them.
 
         // Lower parameter list — gives us Vec<Param>
-        let (params, defaults) = node
+        let (mut params, defaults) = node
             .children()
             .find(|n| n.kind() == SyntaxKind::PARAMETER_LIST)
             .and_then(ast::ParameterList::cast)
@@ -5185,6 +5202,24 @@ impl LoweringContext {
                 )
             })
             .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
+
+        if let Some(parameter_list) = node
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PARAMETER_LIST)
+            .and_then(ast::ParameterList::cast)
+        {
+            for parameter in parameter_list.params() {
+                let Some(type_expr) = parameter.ty() else {
+                    continue;
+                };
+                let span = parameter.syntax().span_range();
+                if let Some(lowered) = params.iter_mut().find(|param| param.span == span)
+                    && let Some(lowered_ty) = &mut lowered.type_expr
+                {
+                    self.attach_body_type_operands(&type_expr, lowered_ty);
+                }
+            }
+        }
 
         // Lower optional return type: the TYPE_EXPR that is a direct child of the
         // lambda node, appearing after PARAMETER_LIST but before THROWS_CLAUSE/BLOCK_EXPR.

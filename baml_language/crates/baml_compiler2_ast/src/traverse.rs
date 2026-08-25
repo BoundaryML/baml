@@ -109,9 +109,14 @@ impl ExprBody {
                 out.extend(else_branch.map(BodyNode::Expr));
             }
             Expr::Match {
-                scrutinee, arms, ..
+                scrutinee,
+                scrutinee_type,
+                arms,
             } => {
                 out.push(BodyNode::Expr(*scrutinee));
+                if let Some(type_id) = scrutinee_type {
+                    append_type_operands(&self.type_annotations[*type_id], out);
+                }
                 for arm in arms {
                     let arm = &self.match_arms[*arm];
                     self.pattern_expr_children(arm.pattern, out);

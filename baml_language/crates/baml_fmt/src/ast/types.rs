@@ -178,7 +178,7 @@ impl Printable for Type {
 pub struct UnreflectType {
     pub keyword: t::Word,
     pub open_paren: t::LParen,
-    pub operand: Box<crate::ast::Expression>,
+    pub operand: Option<Box<crate::ast::Expression>>,
     pub close_paren: t::RParen,
 }
 
@@ -189,9 +189,13 @@ impl FromCST for UnreflectType {
         let mut it = SyntaxNodeIter::new(&node);
         let keyword = it.expect_parse()?;
         let open_paren = it.expect_parse()?;
-        let operand = Box::new(crate::ast::Expression::from_cst(
-            it.expect_next("unreflect operand")?,
-        )?);
+        let operand = if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::R_PAREN) {
+            None
+        } else {
+            Some(Box::new(crate::ast::Expression::from_cst(
+                it.expect_next("unreflect operand")?,
+            )?))
+        };
         let close_paren = it.expect_parse()?;
         it.expect_end()?;
         Ok(Self {
@@ -207,7 +211,11 @@ impl Printable for UnreflectType {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.keyword);
         printer.print_raw_token(&self.open_paren);
-        let info = printer.print(&*self.operand, shape);
+        let info = self
+            .operand
+            .as_deref()
+            .map(|operand| printer.print(operand, shape))
+            .unwrap_or_else(PrintInfo::default_single_line);
         printer.print_raw_token(&self.close_paren);
         info
     }

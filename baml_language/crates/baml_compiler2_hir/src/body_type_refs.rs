@@ -189,7 +189,13 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, BodyTypeRefSour
                     expr_id,
                     type_args
                         .iter()
-                        .map(|arg| BodyTypeArgRef::Static(BodyTypeRefId(builder.lower(arg))))
+                        .map(|arg| match &arg.kind {
+                            TypeExprKind::Unreflect {
+                                operand: Some(operand),
+                                ..
+                            } => BodyTypeArgRef::Runtime { operand: *operand },
+                            _ => BodyTypeArgRef::Static(BodyTypeRefId(builder.lower(arg))),
+                        })
                         .collect(),
                 );
             }

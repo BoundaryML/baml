@@ -146,6 +146,21 @@ function main() -> bool {
 }
 
 #[tokio::test]
+async fn type_of_materializes_nested_unreflect_bindings_before_loading_the_template() {
+    let output = baml_test!(
+        r#"
+class Wrapper<T> { value T }
+
+function main() -> bool {
+    let t = reflect.Type.of<string>()
+    reflect.Type.of<Wrapper<unreflect(t)>>() == reflect.Type.of<Wrapper<string>>()
+}
+"#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
 async fn type_bindings_work_in_lambdas_and_nested_shadowing_uses_distinct_slots() {
     let output = baml_test!(
         r#"
