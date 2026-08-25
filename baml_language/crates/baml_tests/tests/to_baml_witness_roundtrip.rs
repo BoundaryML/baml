@@ -45,17 +45,18 @@ function as_named(value: Person) -> Named<Value = string> {
 }
 
 #[tokio::test]
-async fn same_named_runtime_declarations_round_trip_with_unique_source_names() {
+async fn same_named_runtime_declarations_are_rejected() {
     let output = baml_test!(
         r###"
 function main() -> bool throws unknown {
   let first = reflect.class.new("Choice", { "left": reflect.Type.of<string>() })
   let second = reflect.class.new("Choice", { "right": reflect.Type.of<int>() })
   let combined = reflect.union.new([first.as_type(), second.as_type()])
-  let source = combined.as_type().to_baml()
-  let compiled = reflect.Package.compile({ "choices.baml": source })
-  compiled.get_class("root.Choice") != null
-    && compiled.get_class("root.Choice_2") != null
+  let result = combined.as_type().to_baml() catch (e) {
+    reflect.errors.CompilationError => e.diagnostics[0].code,
+    _ => "wrong error",
+  }
+  result == "E0162"
 }
 "###
     );
@@ -63,7 +64,7 @@ function main() -> bool throws unknown {
 }
 
 #[tokio::test]
-async fn minted_and_compiled_same_named_declarations_round_trip() {
+async fn minted_and_compiled_same_named_declarations_are_rejected() {
     let output = baml_test!(
         r###"
 function main() -> bool throws unknown {
@@ -73,9 +74,31 @@ function main() -> bool throws unknown {
   let compiled_choice = package.get_class("root.Choice") ?? throw "missing Choice"
   let minted_choice = reflect.class.new("Choice", { "minted": reflect.Type.of<int>() })
   let combined = reflect.union.new([compiled_choice.as_type(), minted_choice.as_type()])
-  let round_trip = reflect.Package.compile({ "choices.baml": combined.as_type().to_baml() })
-  round_trip.get_class("root.Choice") != null
-    && round_trip.get_class("root.Choice_2") != null
+  let result = combined.as_type().to_baml() catch (e) {
+    reflect.errors.CompilationError => e.diagnostics[0].code,
+    _ => "wrong error",
+  }
+  result == "E0162"
+}
+"###
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn equivalent_same_named_runtime_declarations_fold_and_round_trip() {
+    let output = baml_test!(
+        r###"
+function main() -> bool throws unknown {
+  let first = reflect.class.new("Choice", { "value": reflect.Type.of<string>() })
+  let second = reflect.class.new("Choice", { "value": reflect.Type.of<string>() })
+  let combined = reflect.union.new([first.as_type(), second.as_type()])
+  let source = combined.as_type().to_baml()
+  let round_trip = reflect.Package.compile({ "choices.baml": source })
+  source.split("class Choice {").length() == 2
+    && round_trip.get_class("root.Choice") != null
+    && round_trip.get_class("root.Choice_2") == null
+    && round_trip.classes().length() == 1
 }
 "###
     );

@@ -59,9 +59,13 @@ impl BamlClassType for PackageReflectImpl {
         super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Union, union_ty)
     }
 
-    fn to_baml(vm: &BexVm, self_value: &Value) -> bex_str::BexStr {
+    fn to_baml(vm: &mut BexVm, self_value: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
         let type_value = cloned_type_value(vm, *self_value);
-        bex_str::BexStr::from(render_type_value_source(vm, &type_value))
+        reject_first_render_schema_error(vm, &type_value.ty)?;
+        Ok(bex_str::BexStr::from(render_type_value_source(
+            vm,
+            &type_value,
+        )))
     }
 
     fn meta(
@@ -137,15 +141,7 @@ impl BamlClassType for PackageReflectImpl {
         // Run the bounded specialization analysis first: the subsequent structural
         // interface walk keys every realization and would otherwise follow a
         // non-regular generic transform forever.
-        if let Some(message) = first_render_schema_error(vm, &type_value.ty) {
-            let diagnostic = super::type_kinds::compiler_diagnostic(
-                baml_compiler_diagnostics::DiagnosticId::ConflictingTypeDefinitionAtRender,
-                message,
-            );
-            return Err(VmRustFnError::thrown_fresh(
-                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
-            ));
-        }
+        reject_first_render_schema_error(vm, &type_value.ty)?;
         let mut visited = std::collections::HashSet::new();
         if let Some((field, open_ty)) =
             first_open_interface(vm, &type_value.ty, &root, &mut visited)
@@ -461,6 +457,22 @@ fn first_render_schema_error(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Optio
     validator
         .visit(ty, &RenderOrigins::root())
         .or_else(|| validator.first_recursive_alias_collision())
+}
+
+fn reject_first_render_schema_error(
+    vm: &mut BexVm,
+    ty: &bex_vm_types::RealizedTy,
+) -> Result<(), VmRustFnError> {
+    let Some(message) = first_render_schema_error(vm, ty) else {
+        return Ok(());
+    };
+    let diagnostic = super::type_kinds::compiler_diagnostic(
+        baml_compiler_diagnostics::DiagnosticId::ConflictingTypeDefinitionAtRender,
+        message,
+    );
+    Err(VmRustFnError::thrown_fresh(
+        super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+    ))
 }
 
 fn render_definition_display_name(vm: &BexVm, definition: &RenderDefinition) -> String {
@@ -1229,8 +1241,6 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
     }
 
     let mut spellings = indexmap::IndexMap::new();
-    let mut used = std::collections::HashSet::new();
-    let mut next_suffix = indexmap::IndexMap::<String, usize>::new();
     for ptr in enum_ptrs.iter().chain(&class_ptrs) {
         let (tag, base) = match vm.get_object(*ptr) {
             Object::Class(class) => (class.type_tag, class.name.display_name().to_string()),
@@ -1240,22 +1250,11 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
         if spellings.contains_key(&tag) {
             continue;
         }
-        let next = next_suffix.entry(base.clone()).or_insert(1);
-        let mut candidate = if *next == 1 {
-            base.clone()
-        } else {
-            format!("{base}_{next}")
-        };
-        while used.contains(&candidate) {
-            *next += 1;
-            candidate = format!("{base}_{next}");
-        }
-        *next += 1;
-        used.insert(candidate.clone());
-        spellings.insert(tag, candidate);
+        spellings.insert(tag, base);
     }
 
     let mut declarations = Vec::new();
+    let mut rendered_declarations = std::collections::HashSet::new();
     for ptr in &enum_ptrs {
         let Object::Enum(enm) = vm.get_object(*ptr) else {
             continue;
@@ -1263,6 +1262,9 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
         let name = spellings
             .get(&enm.type_tag)
             .map_or_else(|| enm.name.display_name().to_string(), Clone::clone);
+        if !rendered_declarations.insert(name.clone()) {
+            continue;
+        }
         let mut source = format!("enum {name} {{");
         for variant in &enm.variants {
             source.push_str("\n  ");
@@ -1292,6 +1294,9 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
         let name = spellings
             .get(&class.type_tag)
             .map_or_else(|| class.name.display_name().to_string(), Clone::clone);
+        if !rendered_declarations.insert(name.clone()) {
+            continue;
+        }
         let mut source = format!("class {name} {{");
         for field in &class.fields {
             source.push_str("\n  ");

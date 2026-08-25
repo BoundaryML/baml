@@ -1034,8 +1034,7 @@ pub fn build_output_format_content(
 ) -> self::OutputFormatContent {
     use std::collections::HashSet;
 
-    let mut names = OutputNames::default();
-    let mut content = self::OutputFormatContent::new(names.rename_ty(ty));
+    let mut content = self::OutputFormatContent::new(ty.clone());
     let mut visited = HashSet::new();
     let mut ancestry = Vec::new();
 
@@ -1046,7 +1045,6 @@ pub fn build_output_format_content(
         &mut content,
         &mut visited,
         &mut ancestry,
-        &mut names,
     ) {
         content.build_error = Some(error);
     }
@@ -1095,48 +1093,6 @@ enum OutputVisitKey {
 /// declaration identities the walk keys on.
 type LaneOrigins = baml_type::template::TyTemplateOrigins<::sys_types::DefKey>;
 
-#[derive(Default)]
-struct OutputNames {
-    by_head: IndexMap<::sys_types::DefKey, baml_type::Name>,
-    used: std::collections::HashSet<String>,
-    next_suffix: IndexMap<String, usize>,
-}
-
-impl OutputNames {
-    fn name(&mut self, head: &::sys_types::DefKey) -> baml_type::Name {
-        if let Some(name) = self.by_head.get(head) {
-            return name.clone();
-        }
-        let base = head.display_name().to_string();
-        let next = self.next_suffix.entry(base.clone()).or_insert(1);
-        let mut candidate = if *next == 1 {
-            base.clone()
-        } else {
-            format!("{base}_{next}")
-        };
-        while self.used.contains(&candidate) {
-            *next += 1;
-            candidate = format!("{base}_{next}");
-        }
-        *next += 1;
-        self.used.insert(candidate.clone());
-        let name = baml_type::Name::new(candidate);
-        self.by_head.insert(head.clone(), name.clone());
-        name
-    }
-
-    fn head(&mut self, head: &::sys_types::DefKey) -> ::sys_types::DefKey {
-        ::sys_types::DefKey::new(
-            head.tag(),
-            baml_type::DeclarationName::Anonymous(self.name(head)),
-        )
-    }
-
-    fn rename_ty(&mut self, ty: &SapTy) -> SapTy {
-        ty.map_heads(&mut |head| self.head(head))
-    }
-}
-
 struct ClassFrame {
     ty: SapTy,
     head: ::sys_types::DefKey,
@@ -1155,13 +1111,11 @@ fn walk_ty(
     content: &mut self::OutputFormatContent,
     visited: &mut std::collections::HashSet<OutputVisitKey>,
     ancestry: &mut Vec<ClassFrame>,
-    names: &mut OutputNames,
 ) -> Result<(), RenderError> {
     match ty {
         SapTy::Class(type_name, type_args, _) => {
-            let rendered_ty = names.rename_ty(ty);
-            let output_key = class_instantiation_key(&rendered_ty);
-            let output_name = names.name(type_name).to_string();
+            let output_key = class_instantiation_key(ty);
+            let output_name = type_name.display_name().to_string();
 
             // If this class is already on the ancestry stack, it's a recursive cycle.
             // Only mark classes from the cycle start, not unrelated ancestors.
@@ -1208,7 +1162,7 @@ fn walk_ty(
                     .map(|(field, field_type)| self::ClassField {
                         name: field.name.clone(),
                         alias: field.alias.clone(),
-                        field_type: names.rename_ty(field_type),
+                        field_type: field_type.clone(),
                         description: field.description.clone(),
                     })
                     .collect();
@@ -1241,15 +1195,7 @@ fn walk_ty(
                     } else {
                         LaneOrigins::opaque(ancestry.len())
                     };
-                    walk_ty(
-                        field_type,
-                        &field_origins,
-                        ctx,
-                        content,
-                        visited,
-                        ancestry,
-                        names,
-                    )?;
+                    walk_ty(field_type, &field_origins, ctx, content, visited, ancestry)?;
                 }
                 ancestry.pop();
             }
@@ -1260,7 +1206,7 @@ fn walk_ty(
                 return Ok(());
             }
             if let Some(enum_def) = find_enum_definition(ctx, type_name) {
-                let output_name = names.name(type_name).to_string();
+                let output_name = type_name.display_name().to_string();
                 // Skipped variants are already filtered out in bex_engine extraction.
                 let values: Vec<self::EnumValue> = enum_def
                     .variants
@@ -1299,60 +1245,28 @@ fn walk_ty(
                 return Ok(());
             }
             if let Some(target_ty) = find_type_alias_definition(ctx, type_name) {
-                let output_name = names.name(type_name).to_string();
+                let output_name = type_name.display_name().to_string();
                 content
                     .recursive_type_aliases
-                    .insert(output_name, names.rename_ty(target_ty));
+                    .insert(output_name, target_ty.clone());
                 let target_origins = LaneOrigins::opaque(ancestry.len());
-                walk_ty(
-                    target_ty,
-                    &target_origins,
-                    ctx,
-                    content,
-                    visited,
-                    ancestry,
-                    names,
-                )?;
+                walk_ty(target_ty, &target_origins, ctx, content, visited, ancestry)?;
             }
         }
         SapTy::List(inner, _) => {
             let inner_origins = origins.list_element();
-            walk_ty(
-                inner,
-                &inner_origins,
-                ctx,
-                content,
-                visited,
-                ancestry,
-                names,
-            )?;
+            walk_ty(inner, &inner_origins, ctx, content, visited, ancestry)?;
         }
         SapTy::Map { key, value, .. } => {
             let key_origins = origins.map_key();
             let value_origins = origins.map_value();
-            walk_ty(key, &key_origins, ctx, content, visited, ancestry, names)?;
-            walk_ty(
-                value,
-                &value_origins,
-                ctx,
-                content,
-                visited,
-                ancestry,
-                names,
-            )?;
+            walk_ty(key, &key_origins, ctx, content, visited, ancestry)?;
+            walk_ty(value, &value_origins, ctx, content, visited, ancestry)?;
         }
         SapTy::Union(members, _) => {
             for (index, member) in members.iter().enumerate() {
                 let member_origins = origins.union_member(index);
-                walk_ty(
-                    member,
-                    &member_origins,
-                    ctx,
-                    content,
-                    visited,
-                    ancestry,
-                    names,
-                )?;
+                walk_ty(member, &member_origins, ctx, content, visited, ancestry)?;
             }
         }
         _ => {}
@@ -1387,46 +1301,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn same_named_declarations_keep_distinct_output_schema_entries() {
-        let first = dynamic_key("Choice");
-        let second = dynamic_key("Choice");
-        let target = RuntimeTy::Union(
-            vec![
-                RuntimeTy::Class(first.clone(), Vec::new(), TyAttr::default()),
-                RuntimeTy::Class(second.clone(), Vec::new(), TyAttr::default()),
-            ],
-            TyAttr::default(),
-        );
-        let mut classes = indexmap::IndexMap::new();
-        classes.insert(
-            first.clone(),
-            ctx_class_definition(&first, vec![ctx_class_field("left", ty_string(), None)]),
-        );
-        classes.insert(
-            second.clone(),
-            ctx_class_definition(&second, vec![ctx_class_field("right", ty_int(), None)]),
-        );
-        let mut ctx = sys_types::SysOpContext::empty();
-        ctx.class_definitions = Arc::new(classes);
-
-        let content = build_output_format_content(&target, &ctx);
-        assert!(content.classes.contains_key("Choice"));
-        assert!(content.classes.contains_key("Choice_2"));
-        let rendered = content
-            .render(&RenderOptions {
-                hoist_classes: HoistClasses::All,
-                ..RenderOptions::default()
-            })
-            .unwrap()
-            .unwrap();
-        assert!(rendered.contains("Choice {"));
-        assert!(rendered.contains("Choice_2 {"));
-    }
-
-    #[test]
     fn duplicate_hoisted_enum_aliases_are_rejected() {
         let first = dynamic_key("Choice");
-        let second = dynamic_key("Choice");
+        let second = dynamic_key("Choice_2");
         let target = RuntimeTy::Union(
             vec![
                 RuntimeTy::Enum(first.clone(), TyAttr::default()),
@@ -1446,7 +1323,7 @@ mod tests {
         };
         let mut enums = indexmap::IndexMap::new();
         enums.insert(first, definition("Choice"));
-        enums.insert(second, definition("Choice"));
+        enums.insert(second, definition("Choice_2"));
         let mut ctx = sys_types::SysOpContext::empty();
         ctx.enum_definitions = Arc::new(enums);
 
@@ -1470,7 +1347,7 @@ mod tests {
     #[test]
     fn class_and_enum_hoisted_alias_collision_is_rejected() {
         let class_key = dynamic_key("Choice");
-        let enum_key = dynamic_key("Choice");
+        let enum_key = dynamic_key("Choice_2");
         let target = RuntimeTy::Union(
             vec![
                 RuntimeTy::Class(class_key.clone(), Vec::new(), TyAttr::default()),
@@ -1489,7 +1366,7 @@ mod tests {
         enums.insert(
             enum_key,
             sys_types::EnumDefinition {
-                name: "Choice".to_string(),
+                name: "Choice_2".to_string(),
                 description: None,
                 alias: Some("SharedChoice".to_string()),
                 variants: vec![sys_types::EnumVariantDefinition {
