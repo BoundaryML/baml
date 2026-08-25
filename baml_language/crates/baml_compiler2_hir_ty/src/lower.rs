@@ -750,7 +750,10 @@ impl<'db> LowerCtx<'db> {
         // Lexical generic names (including a body-local overlay appended to
         // the frame) shadow nominal type definitions. A multi-segment path
         // rooted in such a name is an associated projection, never a package
-        // or namespace path with the same spelling.
+        // or namespace path with the same spelling. Associated types are NOT
+        // in the frame and have no bare spelling: a reference must be written
+        // `Self.X` (the projection road below), so a bare associated-type
+        // name falls through to ordinary resolution and diagnoses unresolved.
         let generic_head = self
             .generic_params
             .iter()
@@ -1531,15 +1534,15 @@ pub fn function_generic_frame<'db>(
             extend_frame(&mut frame, data.generic_params.iter().map(|g| &g.name));
         }
         Some(MethodOwner::Interface(interface_loc)) => {
+            // Associated types are NOT frame slots: an associated type is
+            // uniquely determined by the `(Self, interface, name)` triple and
+            // has no bare spelling — a reference is written `Self.X`, lowers
+            // as a projection over the `Self` slot, and reduces through the
+            // resolver at use, instead of riding as copyable — and driftable —
+            // frame state.
             let data = baml_compiler2_ppir::item_data::interface_data(db, interface_loc);
             extend_frame(&mut frame, &[Name::new("Self")]);
             extend_frame(&mut frame, data.generic_params.iter().map(|g| &g.name));
-            let associated: Vec<Name> = data
-                .associated_types
-                .iter()
-                .map(|assoc| assoc.name.clone())
-                .collect();
-            extend_frame(&mut frame, &associated);
         }
         // Free impls (`implements<T extends I> J for T[]`): the impl's own
         // generics are the owner prefix, mirroring the class arm.
@@ -1636,10 +1639,17 @@ pub fn interface_generic_frame_params(names: &[Name]) -> Vec<ParamTy> {
     frame
 }
 
-/// The full interface frame: `[Self, params.., assoc..]` - the positional
-/// discipline every interface-scoped type (member signatures, fields,
-/// associated-type bounds and defaults) lowers in, instantiated by
+/// The full interface frame: `[Self, params..]` - the positional discipline
+/// every interface-scoped type (member signatures, fields, associated-type
+/// bounds and defaults) lowers in, instantiated by
 /// `interface_instantiation`'s vector of the same shape.
+///
+/// Associated types are NOT frame slots: each is uniquely determined by the
+/// `(Self, interface, name)` triple and has no bare spelling. A reference is
+/// written `Self.X`, lowers as a projection over the `Self` slot, and
+/// reduces at use - a pinned reference substitutes its pin, a concrete
+/// `Self` reduces through its impl, and a symbolic `Self` stays a rigid
+/// projection.
 pub fn interface_frame<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     interface: InterfaceLoc<'db>,
@@ -1647,7 +1657,6 @@ pub fn interface_frame<'db>(
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
     let mut names = vec![Name::new("Self")];
     names.extend(data.generic_params.iter().map(|g| g.name.clone()));
-    names.extend(data.associated_types.iter().map(|assoc| assoc.name.clone()));
     interface_generic_frame_params(&names)
 }
 

@@ -243,9 +243,9 @@ function interfaces_associated_types.CaeTask.drive(self: interfaces_associated_t
     return
 }
 
-function interfaces_associated_types.Describable.describe(self: interfaces_associated_types.Describable) -> #1 {
+function interfaces_associated_types.Describable.describe(self: interfaces_associated_types.Describable) -> (#0 as interfaces_associated_types.Describable).Output {
     load_var self
-    load_type interfaces_associated_types.Describable<Output = #1>
+    load_type interfaces_associated_types.Describable
     load_const "value"
     virtual_call nargs=1 ntypeargs=0
     store_var _0
@@ -255,7 +255,7 @@ function interfaces_associated_types.Describable.describe(self: interfaces_assoc
 
 function interfaces_associated_types.Fallible.value_plus_one(self: interfaces_associated_types.Fallible) -> int {
     load_var self
-    load_type interfaces_associated_types.Fallible<Error = #1>
+    load_type interfaces_associated_types.Fallible
     load_const "value"
     virtual_call nargs=1 ntypeargs=0
     store_var _2

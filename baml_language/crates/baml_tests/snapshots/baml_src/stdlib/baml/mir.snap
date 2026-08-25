@@ -4817,14 +4817,14 @@ fn baml.iter.Iterator.next(_1: void) -> void {
     }
 }
 
-fn baml.iter.Iterator.map(self: baml.iter.Iterator, fn: (Item) -> R throws E2) -> baml.iter.Iterator<Error = Error | E2, Item = R> {
+fn baml.iter.Iterator.map(self: baml.iter.Iterator, fn: ((Self as baml.iter.Iterator).Item) -> R throws E2) -> baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error | E2, Item = R> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = Error | E2, Item = R> // _0 // return
+    let _0: baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error | E2, Item = R> // _0 // return
     let _1: baml.iter.Iterator // self // param
-    let _2: (Item) -> R throws E2 // fn // param
+    let _2: ((Self as baml.iter.Iterator).Item) -> R throws E2 // fn // param
 
     bb0: {
-        _0 = baml.iter.Map<#1, #3, #2, #4> { copy _1, copy _2 };
+        _0 = baml.iter.Map<(#0 as baml.iter.Iterator).Item, #1, (#0 as baml.iter.Iterator).Error, #2> { copy _1, copy _2 };
         goto -> bb1;
     }
 
@@ -4833,14 +4833,14 @@ fn baml.iter.Iterator.map(self: baml.iter.Iterator, fn: (Item) -> R throws E2) -
     }
 }
 
-fn baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: (Item) -> bool throws E2) -> baml.iter.Iterator<Error = Error | E2, Item = Item> {
+fn baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: ((Self as baml.iter.Iterator).Item) -> bool throws E2) -> baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error | E2, Item = (Self as baml.iter.Iterator).Item> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = Error | E2, Item = Item> // _0 // return
+    let _0: baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error | E2, Item = (Self as baml.iter.Iterator).Item> // _0 // return
     let _1: baml.iter.Iterator // self // param
-    let _2: (Item) -> bool throws E2 // predicate // param
+    let _2: ((Self as baml.iter.Iterator).Item) -> bool throws E2 // predicate // param
 
     bb0: {
-        _0 = baml.iter.Filter<#1, #2, #3> { copy _1, copy _2 };
+        _0 = baml.iter.Filter<(#0 as baml.iter.Iterator).Item, (#0 as baml.iter.Iterator).Error, #1> { copy _1, copy _2 };
         goto -> bb1;
     }
 
@@ -4849,14 +4849,14 @@ fn baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: (Item) -> bool
     }
 }
 
-fn baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: (Item) -> null | R throws E2) -> baml.iter.Iterator<Error = Error | E2, Item = R> {
+fn baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: ((Self as baml.iter.Iterator).Item) -> null | R throws E2) -> baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error | E2, Item = R> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = Error | E2, Item = R> // _0 // return
+    let _0: baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error | E2, Item = R> // _0 // return
     let _1: baml.iter.Iterator // self // param
-    let _2: (Item) -> null | R throws E2 // fn // param
+    let _2: ((Self as baml.iter.Iterator).Item) -> null | R throws E2 // fn // param
 
     bb0: {
-        _0 = baml.iter.FilterMap<#1, #3, #2, #4> { copy _1, copy _2 };
+        _0 = baml.iter.FilterMap<(#0 as baml.iter.Iterator).Item, #1, (#0 as baml.iter.Iterator).Error, #2> { copy _1, copy _2 };
         goto -> bb1;
     }
 
@@ -4865,16 +4865,16 @@ fn baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: (Item) -> null | 
     }
 }
 
-fn baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: (Item) -> baml.iter.Iterable<Error = E3, Item = R> throws E2) -> baml.iter.Iterator<Error = Error | E2 | E3, Item = R> {
+fn baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: ((Self as baml.iter.Iterator).Item) -> baml.iter.Iterable<Error = E3, Item = R> throws E2) -> baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error | E2 | E3, Item = R> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = Error | E2 | E3, Item = R> // _0 // return
+    let _0: baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error | E2 | E3, Item = R> // _0 // return
     let _1: baml.iter.Iterator // self // param
-    let _2: (Item) -> baml.iter.Iterable<Error = E3, Item = R> throws E2 // fn // param
+    let _2: ((Self as baml.iter.Iterator).Item) -> baml.iter.Iterable<Error = E3, Item = R> throws E2 // fn // param
     let _3: baml.iter.Done
 
     bb0: {
         _3 = baml.iter.Done {  };
-        _0 = baml.iter.FlatMap<#1, #3, #2, #4, #5> { copy _1, copy _2, copy _3 };
+        _0 = baml.iter.FlatMap<(#0 as baml.iter.Iterator).Item, #1, (#0 as baml.iter.Iterator).Error, #2, #3> { copy _1, copy _2, copy _3 };
         goto -> bb1;
     }
 
@@ -4883,14 +4883,14 @@ fn baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: (Item) -> baml.iter
     }
 }
 
-fn baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = Error, Item = Item> {
+fn baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error, Item = (Self as baml.iter.Iterator).Item> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = Error, Item = Item> // _0 // return
+    let _0: baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error, Item = (Self as baml.iter.Iterator).Item> // _0 // return
     let _1: baml.iter.Iterator // self // param
     let _2: int // n // param
 
     bb0: {
-        _0 = baml.iter.StepBy<#1, #2> { copy _1, copy _2, const true };
+        _0 = baml.iter.StepBy<(#0 as baml.iter.Iterator).Item, (#0 as baml.iter.Iterator).Error> { copy _1, copy _2, const true };
         goto -> bb1;
     }
 
@@ -4899,19 +4899,19 @@ fn baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.iter.Ite
     }
 }
 
-fn baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Iterable<Error = E2, Item = Item>) -> baml.iter.Iterator<Error = Error | E2, Item = Item> {
+fn baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Iterable<Error = E2, Item = (Self as baml.iter.Iterator).Item>) -> baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error | E2, Item = (Self as baml.iter.Iterator).Item> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = Error | E2, Item = Item> // _0 // return
+    let _0: baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error | E2, Item = (Self as baml.iter.Iterator).Item> // _0 // return
     let _1: baml.iter.Iterator // self // param
-    let _2: baml.iter.Iterable<Error = E2, Item = Item> // other // param
-    let _3: baml.iter.Iterator<Error = E2, Item = Item>
+    let _2: baml.iter.Iterable<Error = E2, Item = (Self as baml.iter.Iterator).Item> // other // param
+    let _3: baml.iter.Iterator<Error = E2, Item = (Self as baml.iter.Iterator).Item>
 
     bb0: {
-        _3 = virtual_call iter as baml.iter.Iterable<Error = #3, Item = #1>(copy _2) -> [bb1];
+        _3 = virtual_call iter as baml.iter.Iterable<Error = #1, Item = (#0 as baml.iter.Iterator).Item>(copy _2) -> [bb1];
     }
 
     bb1: {
-        _0 = baml.iter.Chain<#1, #2, #3> { copy _1, copy _3, const false };
+        _0 = baml.iter.Chain<(#0 as baml.iter.Iterator).Item, (#0 as baml.iter.Iterator).Error, #1> { copy _1, copy _3, const false };
         goto -> bb2;
     }
 
@@ -4920,15 +4920,15 @@ fn baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Iterable<
     }
 }
 
-fn baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peekable<Item, Error> {
+fn baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peekable<(Self as baml.iter.Iterator).Item, (Self as baml.iter.Iterator).Error> {
     // Locals:
-    let _0: baml.iter.Peekable<Item, Error> // _0 // return
+    let _0: baml.iter.Peekable<(Self as baml.iter.Iterator).Item, (Self as baml.iter.Iterator).Error> // _0 // return
     let _1: baml.iter.Iterator // self // param
     let _2: baml.iter.Done
 
     bb0: {
         _2 = baml.iter.Done {  };
-        _0 = baml.iter.Peekable<#1, #2> { copy _1, copy _2, const false };
+        _0 = baml.iter.Peekable<(#0 as baml.iter.Iterator).Item, (#0 as baml.iter.Iterator).Error> { copy _1, copy _2, const false };
         goto -> bb1;
     }
 
@@ -4937,14 +4937,14 @@ fn baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peekable<I
     }
 }
 
-fn baml.iter.Iterator.take(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = Error, Item = Item> {
+fn baml.iter.Iterator.take(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error, Item = (Self as baml.iter.Iterator).Item> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = Error, Item = Item> // _0 // return
+    let _0: baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error, Item = (Self as baml.iter.Iterator).Item> // _0 // return
     let _1: baml.iter.Iterator // self // param
     let _2: int // n // param
 
     bb0: {
-        _0 = baml.iter.Take<#1, #2> { copy _1, copy _2 };
+        _0 = baml.iter.Take<(#0 as baml.iter.Iterator).Item, (#0 as baml.iter.Iterator).Error> { copy _1, copy _2 };
         goto -> bb1;
     }
 
@@ -4953,14 +4953,14 @@ fn baml.iter.Iterator.take(self: baml.iter.Iterator, n: int) -> baml.iter.Iterat
     }
 }
 
-fn baml.iter.Iterator.skip(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = Error, Item = Item> {
+fn baml.iter.Iterator.skip(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error, Item = (Self as baml.iter.Iterator).Item> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = Error, Item = Item> // _0 // return
+    let _0: baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error, Item = (Self as baml.iter.Iterator).Item> // _0 // return
     let _1: baml.iter.Iterator // self // param
     let _2: int // n // param
 
     bb0: {
-        _0 = baml.iter.Skip<#1, #2> { copy _1, copy _2 };
+        _0 = baml.iter.Skip<(#0 as baml.iter.Iterator).Item, (#0 as baml.iter.Iterator).Error> { copy _1, copy _2 };
         goto -> bb1;
     }
 
@@ -4969,14 +4969,14 @@ fn baml.iter.Iterator.skip(self: baml.iter.Iterator, n: int) -> baml.iter.Iterat
     }
 }
 
-fn baml.iter.Iterator.take_while(self: baml.iter.Iterator, predicate: (Item) -> bool throws E2) -> baml.iter.Iterator<Error = Error | E2, Item = Item> {
+fn baml.iter.Iterator.take_while(self: baml.iter.Iterator, predicate: ((Self as baml.iter.Iterator).Item) -> bool throws E2) -> baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error | E2, Item = (Self as baml.iter.Iterator).Item> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = Error | E2, Item = Item> // _0 // return
+    let _0: baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error | E2, Item = (Self as baml.iter.Iterator).Item> // _0 // return
     let _1: baml.iter.Iterator // self // param
-    let _2: (Item) -> bool throws E2 // predicate // param
+    let _2: ((Self as baml.iter.Iterator).Item) -> bool throws E2 // predicate // param
 
     bb0: {
-        _0 = baml.iter.TakeWhile<#1, #2, #3> { copy _1, copy _2, const false };
+        _0 = baml.iter.TakeWhile<(#0 as baml.iter.Iterator).Item, (#0 as baml.iter.Iterator).Error, #1> { copy _1, copy _2, const false };
         goto -> bb1;
     }
 
@@ -4985,14 +4985,14 @@ fn baml.iter.Iterator.take_while(self: baml.iter.Iterator, predicate: (Item) -> 
     }
 }
 
-fn baml.iter.Iterator.skip_while(self: baml.iter.Iterator, predicate: (Item) -> bool throws E2) -> baml.iter.Iterator<Error = Error | E2, Item = Item> {
+fn baml.iter.Iterator.skip_while(self: baml.iter.Iterator, predicate: ((Self as baml.iter.Iterator).Item) -> bool throws E2) -> baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error | E2, Item = (Self as baml.iter.Iterator).Item> {
     // Locals:
-    let _0: baml.iter.Iterator<Error = Error | E2, Item = Item> // _0 // return
+    let _0: baml.iter.Iterator<Error = (Self as baml.iter.Iterator).Error | E2, Item = (Self as baml.iter.Iterator).Item> // _0 // return
     let _1: baml.iter.Iterator // self // param
-    let _2: (Item) -> bool throws E2 // predicate // param
+    let _2: ((Self as baml.iter.Iterator).Item) -> bool throws E2 // predicate // param
 
     bb0: {
-        _0 = baml.iter.SkipWhile<#1, #2, #3> { copy _1, copy _2, const true };
+        _0 = baml.iter.SkipWhile<(#0 as baml.iter.Iterator).Item, (#0 as baml.iter.Iterator).Error, #1> { copy _1, copy _2, const true };
         goto -> bb1;
     }
 
@@ -5001,20 +5001,20 @@ fn baml.iter.Iterator.skip_while(self: baml.iter.Iterator, predicate: (Item) -> 
     }
 }
 
-fn baml.iter.Iterator.collect(self: baml.iter.Iterator) -> Item[] {
+fn baml.iter.Iterator.collect(self: baml.iter.Iterator) -> (Self as baml.iter.Iterator).Item[] {
     // Locals:
-    let _0: Item[] // _0 // return
+    let _0: (Self as baml.iter.Iterator).Item[] // _0 // return
     let _1: baml.iter.Iterator // self // param
-    let _2: Item[] // r
+    let _2: (Self as baml.iter.Iterator).Item[] // r
     let _3: int
-    let _4: baml.iter.Done | Item
+    let _4: baml.iter.Done | (Self as baml.iter.Iterator).Item
     let _5: bool
-    let _6: Item // x
-    let _7: Item
+    let _6: (Self as baml.iter.Iterator).Item // x
+    let _7: (Self as baml.iter.Iterator).Item
     let _8: reflect.Type
 
     bb0: {
-        _2 = []: #1[];
+        _2 = []: (#0 as baml.iter.Iterator).Item[];
         goto -> bb1;
     }
 
@@ -5023,7 +5023,7 @@ fn baml.iter.Iterator.collect(self: baml.iter.Iterator) -> Item[] {
     }
 
     bb2: {
-        _4 = virtual_call next as baml.iter.Iterator<Error = #2, Item = #1>(copy _1) -> [bb3];
+        _4 = virtual_call next as baml.iter.Iterator(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -5034,7 +5034,7 @@ fn baml.iter.Iterator.collect(self: baml.iter.Iterator) -> Item[] {
     bb4: {
         _6 = copy _4;
         _7 = copy _6;
-        _8 = load_type(#1);
+        _8 = load_type((#0 as baml.iter.Iterator).Item);
         _3 = call const fn baml.Array.push<copy _8>(copy _2, copy _7) -> [bb1];
     }
 
@@ -5048,18 +5048,18 @@ fn baml.iter.Iterator.collect(self: baml.iter.Iterator) -> Item[] {
     }
 }
 
-fn baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (A, Item) -> A throws E2, initial: A) -> A {
+fn baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (A, (Self as baml.iter.Iterator).Item) -> A throws E2, initial: A) -> A {
     // Locals:
     let _0: A // _0 // return
     let _1: baml.iter.Iterator // self // param
-    let _2: (A, Item) -> A throws E2 // fn // param
+    let _2: (A, (Self as baml.iter.Iterator).Item) -> A throws E2 // fn // param
     let _3: A // initial // param
     let _4: A // acc
-    let _5: baml.iter.Done | Item
+    let _5: baml.iter.Done | (Self as baml.iter.Iterator).Item
     let _6: bool
-    let _7: Item // x
+    let _7: (Self as baml.iter.Iterator).Item // x
     let _8: A
-    let _9: Item
+    let _9: (Self as baml.iter.Iterator).Item
 
     bb0: {
         _4 = copy _3;
@@ -5071,7 +5071,7 @@ fn baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (A, Item) -> A throws
     }
 
     bb2: {
-        _5 = virtual_call next as baml.iter.Iterator<Error = #2, Item = #1>(copy _1) -> [bb3];
+        _5 = virtual_call next as baml.iter.Iterator(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -5101,7 +5101,7 @@ fn baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
     let _0: int // _0 // return
     let _1: baml.iter.Iterator // self // param
     let _2: int // n
-    let _3: baml.iter.Done | Item
+    let _3: baml.iter.Done | (Self as baml.iter.Iterator).Item
     let _4: bool
 
     bb0: {
@@ -5114,7 +5114,7 @@ fn baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
     }
 
     bb2: {
-        _3 = virtual_call next as baml.iter.Iterator<Error = #2, Item = #1>(copy _1) -> [bb3];
+        _3 = virtual_call next as baml.iter.Iterator(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -5137,16 +5137,16 @@ fn baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
     }
 }
 
-fn baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (Item) -> void throws E2) -> void {
+fn baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: ((Self as baml.iter.Iterator).Item) -> void throws E2) -> void {
     // Locals:
     let _0: void // _0 // return
     let _1: baml.iter.Iterator // self // param
-    let _2: (Item) -> void throws E2 // fn // param
-    let _3: baml.iter.Done | Item
+    let _2: ((Self as baml.iter.Iterator).Item) -> void throws E2 // fn // param
+    let _3: baml.iter.Done | (Self as baml.iter.Iterator).Item
     let _4: bool
-    let _5: Item // x
+    let _5: (Self as baml.iter.Iterator).Item // x
     let _6: void
-    let _7: Item
+    let _7: (Self as baml.iter.Iterator).Item
 
     bb0: {
         goto -> bb1;
@@ -5157,7 +5157,7 @@ fn baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (Item) -> void thro
     }
 
     bb2: {
-        _3 = virtual_call next as baml.iter.Iterator<Error = #2, Item = #1>(copy _1) -> [bb3];
+        _3 = virtual_call next as baml.iter.Iterator(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -5181,16 +5181,16 @@ fn baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (Item) -> void thro
     }
 }
 
-fn baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (Item) -> bool throws E2) -> bool {
+fn baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: ((Self as baml.iter.Iterator).Item) -> bool throws E2) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: baml.iter.Iterator // self // param
-    let _2: (Item) -> bool throws E2 // predicate // param
-    let _3: baml.iter.Done | Item
+    let _2: ((Self as baml.iter.Iterator).Item) -> bool throws E2 // predicate // param
+    let _3: baml.iter.Done | (Self as baml.iter.Iterator).Item
     let _4: bool
-    let _5: Item // x
+    let _5: (Self as baml.iter.Iterator).Item // x
     let _6: bool
-    let _7: Item
+    let _7: (Self as baml.iter.Iterator).Item
 
     bb0: {
         goto -> bb1;
@@ -5201,7 +5201,7 @@ fn baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (Item) -> bool t
     }
 
     bb2: {
-        _3 = virtual_call next as baml.iter.Iterator<Error = #2, Item = #1>(copy _1) -> [bb3];
+        _3 = virtual_call next as baml.iter.Iterator(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -5234,17 +5234,17 @@ fn baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (Item) -> bool t
     }
 }
 
-fn baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (Item) -> bool throws E2) -> bool {
+fn baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: ((Self as baml.iter.Iterator).Item) -> bool throws E2) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: baml.iter.Iterator // self // param
-    let _2: (Item) -> bool throws E2 // predicate // param
-    let _3: baml.iter.Done | Item
+    let _2: ((Self as baml.iter.Iterator).Item) -> bool throws E2 // predicate // param
+    let _3: baml.iter.Done | (Self as baml.iter.Iterator).Item
     let _4: bool
-    let _5: Item // x
+    let _5: (Self as baml.iter.Iterator).Item // x
     let _6: bool
     let _7: bool
-    let _8: Item
+    let _8: (Self as baml.iter.Iterator).Item
 
     bb0: {
         goto -> bb1;
@@ -5255,7 +5255,7 @@ fn baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (Item) -> bool 
     }
 
     bb2: {
-        _3 = virtual_call next as baml.iter.Iterator<Error = #2, Item = #1>(copy _1) -> [bb3];
+        _3 = virtual_call next as baml.iter.Iterator(copy _1) -> [bb3];
     }
 
     bb3: {
@@ -5289,16 +5289,16 @@ fn baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (Item) -> bool 
     }
 }
 
-fn baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: (Item) -> bool throws E2) -> null | Item {
+fn baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: ((Self as baml.iter.Iterator).Item) -> bool throws E2) -> null | (Self as baml.iter.Iterator).Item {
     // Locals:
-    let _0: null | Item // _0 // return
+    let _0: null | (Self as baml.iter.Iterator).Item // _0 // return
     let _1: baml.iter.Iterator // self // param
-    let _2: (Item) -> bool throws E2 // predicate // param
-    let _3: baml.iter.Done | Item
+    let _2: ((Self as baml.iter.Iterator).Item) -> bool throws E2 // predicate // param
+    let _3: baml.iter.Done | (Self as baml.iter.Iterator).Item
     let _4: bool
-    let _5: Item // x
+    let _5: (Self as baml.iter.Iterator).Item // x
     let _6: bool
-    let _7: Item
+    let _7: (Self as baml.iter.Iterator).Item
 
     bb0: {
         goto -> bb1;
@@ -5309,7 +5309,7 @@ fn baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: (Item) -> bool t
     }
 
     bb2: {
-        _3 = virtual_call next as baml.iter.Iterator<Error = #2, Item = #1>(copy _1) -> [bb3];
+        _3 = virtual_call next as baml.iter.Iterator(copy _1) -> [bb3];
     }
 
     bb3: {

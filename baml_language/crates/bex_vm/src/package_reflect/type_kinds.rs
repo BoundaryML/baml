@@ -338,6 +338,9 @@ pub(super) fn register_class_witnesses(
         };
         let mut methods = IndexMap::new();
         let for_ty_pattern = bex_vm_types::TyTemplate::from(ty.clone());
+        // The default-body frame is `[Self, iface args..]` — associated types
+        // are not frame slots; the body's `Self.X` projection templates reduce
+        // through this rule's `interface_assoc` bindings at realization.
         let mut default_frame = vec![for_ty_pattern.clone()];
         default_frame.extend(
             witness
@@ -345,12 +348,6 @@ pub(super) fn register_class_witnesses(
                 .iter()
                 .cloned()
                 .map(bex_vm_types::TyTemplate::from),
-        );
-        default_frame.extend(
-            witness
-                .interface_assoc
-                .iter()
-                .map(|(_, ty)| bex_vm_types::TyTemplate::from(ty.clone())),
         );
         for method in &interface.methods {
             // A witness supplies fields only; every method comes from the

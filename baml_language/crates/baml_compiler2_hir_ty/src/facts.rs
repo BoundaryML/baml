@@ -178,26 +178,35 @@ impl TypeContext for Facts<'_> {
             ParamTy::new(0, Name::new("Self")),
             baml_type::TyAttr::default(),
         ));
+        let symbolic_self_plain = symbolic_self.to_plain();
         crate::impls::realized_assoc_bound(self.db, &target, &symbolic_self, &assoc)
             .and_then(|bound| bound.to_plain().as_interface())
             .map(|bound| {
                 // Reduce sibling-pin projections the substitution left behind
-                // (`Producer<(Self as Parser<Item = int>).Item>` -> the pin):
-                // TIR re-lowered the bound with the realized pins in scope, so
-                // its callers always saw the collapsed form; hir_ty realizes a
-                // once-lowered form by substitution, so collapse here at the
-                // oracle boundary.
+                // (`Producer<(Self as Parser).Item>` with `Item` pinned on the
+                // qualifier -> the pin): TIR re-lowered the bound with the
+                // realized pins in scope, so its callers always saw the
+                // collapsed form; hir_ty realizes a once-lowered form by
+                // substitution, so collapse here at the oracle boundary — the
+                // qualifier's own pins first (the declared bound's projection
+                // rides the pinless declaration ref, which `project` cannot
+                // answer from a bare symbolic `Self`), then normalize.
+                let collapse = |ty: &baml_type::Ty| {
+                    let collapsed = crate::interfaces::collapse_self_assoc_projections(
+                        ty,
+                        &[&symbolic_self_plain],
+                        Some(&interface.name),
+                        &interface.associated_types,
+                    );
+                    baml_type::normalize::normalize(&collapsed, self)
+                };
                 Interface {
                     name: bound.name,
-                    generics: bound
-                        .generics
-                        .iter()
-                        .map(|arg| baml_type::normalize::normalize(arg, self))
-                        .collect(),
+                    generics: bound.generics.iter().map(collapse).collect(),
                     associated_types: bound
                         .associated_types
                         .iter()
-                        .map(|(name, ty)| (name.clone(), baml_type::normalize::normalize(ty, self)))
+                        .map(|(name, ty)| (name.clone(), collapse(ty)))
                         .collect(),
                 }
             })
@@ -288,6 +297,24 @@ impl TypeContext for Facts<'_> {
             let Some(base_interned) = crate::impls::try_interned_ty(base) else {
                 return ProjectionStep::Opaque;
             };
+            // A pin inherited through the requires closure (`interface Child
+            // requires Parent<Item = int>`; the projection asks for
+            // `Parent.Item` on a `Child` existential): elaborate the base's
+            // closure and read the matching head's pin — rustc's supertrait
+            // elaboration, after the base's own reference and before its
+            // declared default.
+            for head in crate::impls::requires_heads(self.db, &base_target, &base_interned, 8) {
+                if !crate::impls::head_matches(&head, &target, &eq) {
+                    continue;
+                }
+                if let Some((_, ty)) = head
+                    .associated_types
+                    .iter()
+                    .find(|(name, _)| name == member)
+                {
+                    return ProjectionStep::Reduced(ty.to_plain());
+                }
+            }
             if let Some(default) =
                 crate::impls::realized_assoc_default(self.db, &base_target, &base_interned, member)
             {

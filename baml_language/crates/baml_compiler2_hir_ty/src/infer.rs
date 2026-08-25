@@ -420,6 +420,12 @@ pub enum MemberResolution<'db> {
     InterfaceConcreteMethod {
         impl_block: baml_compiler2_hir::loc::ImplLoc<'db>,
         func: baml_compiler2_hir::loc::FunctionLoc<'db>,
+        /// The callee's OWNER frame, carried from resolution (see
+        /// `MemberDeclarer::ImplMethod::frame_type_args`): impl generic
+        /// bindings for an override, `[Self, iface args..]` for a default.
+        frame_type_args: Vec<Ty>,
+        /// `true` when `func` is the interface's default body.
+        from_interface_default: bool,
     },
     /// A VIRTUAL interface-field access: read through the realized
     /// declaring-interface view (`view`, the runtime resolver's key)
@@ -6717,16 +6723,16 @@ impl<'db> InferenceContext<'db> {
             "interface method frame must open with the `Self` slot"
         );
 
-        // The frame is `[Self] ++ interface generics ++ associated slots ++ the
-        // method's own generics` (`lower::interface_frame`). A written
-        // qualifier realizes the middle two groups and they are PINNED from it:
-        // `Conv<int>` and `Conv<string>` are different interfaces a type may
-        // implement both of, so leaving their slots to inference would let two
-        // calls in one body unify against the same hole. Associated slots come
-        // from the same realization rather than from the source - they need not
-        // be written, being determined once `Self` is known.
+        // The frame is `[Self] ++ interface generics ++ the method's own
+        // generics` (`lower::interface_frame`). A written qualifier realizes
+        // the generics group and it is PINNED from it: `Conv<int>` and
+        // `Conv<string>` are different interfaces a type may implement both
+        // of, so leaving their slots to inference would let two calls in one
+        // body unify against the same hole. Associated types are not slots -
+        // signature references to them are projections over `Self`, reduced
+        // once `Self` is known.
         let interface_data = baml_compiler2_ppir::item_data::interface_data(self.db, interface);
-        let pinned = interface_data.generic_params.len() + interface_data.associated_types.len();
+        let pinned = interface_data.generic_params.len();
         // `lower::function_generic_frame` builds an interface method's frame
         // from this same `interface_data`, appending the method's own generics
         // after the two groups, so the frame is always at least this long.
@@ -9129,12 +9135,17 @@ impl<'db> InferenceContext<'db> {
                     method: member.clone(),
                 })
             }
-            MemberDeclarer::ImplMethod { block, func } => {
-                Some(MemberResolution::InterfaceConcreteMethod {
-                    impl_block: *block,
-                    func: *func,
-                })
-            }
+            MemberDeclarer::ImplMethod {
+                block,
+                func,
+                frame_type_args,
+                from_interface_default,
+            } => Some(MemberResolution::InterfaceConcreteMethod {
+                impl_block: *block,
+                func: *func,
+                frame_type_args: frame_type_args.clone(),
+                from_interface_default: *from_interface_default,
+            }),
             MemberDeclarer::ImplField { .. } => None,
             MemberDeclarer::ExternalMethod(callable) => {
                 Some(MemberResolution::External(callable.clone()))

@@ -2075,71 +2075,7 @@ pub fn first_failing_impl_bound<'db>(
     None
 }
 
-/// An interface method resolved on a [`ResolvedImpl`].
-pub struct ResolvedMethod<'db> {
-    /// The function providing the implementation: the impl block's own override,
-    /// or the interface's default method.
-    pub method: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    /// `true` when `method` is the interface's default body.
-    pub from_interface_default: bool,
-    /// Type arguments for the callee's generic frame, in frame order.
-    pub frame_type_args: Vec<Ty>,
-}
-
 impl<'db> ResolvedImpl<'db> {
-    /// Resolve `method` to its backing function and frame on this impl.
-    /// `method` MUST be declared on the resolved interface itself (interfaces
-    /// are bounds, not inheritance — the caller resolves the declaring
-    /// interface first).
-    pub fn get_method(
-        &self,
-        db: &'db dyn baml_compiler2_ppir::Db,
-        method: &Name,
-    ) -> Option<ResolvedMethod<'db>> {
-        use baml_compiler2_ppir::item_data::{function_data, interface_data};
-
-        let data = impl_data(db, self.impl_loc).as_ref().ok()?;
-
-        // The impl's own override, framed by the impl's generic params bound to
-        // the realized type arguments.
-        for &func_loc in &data.methods {
-            if function_data(db, func_loc).name == *method {
-                let frame_type_args = data
-                    .generic_params
-                    .iter()
-                    .map(|(name, _)| {
-                        self.bindings.get(name).cloned().unwrap_or(Ty::Unknown {
-                            attr: TyAttr::default(),
-                        })
-                    })
-                    .collect();
-                return Some(ResolvedMethod {
-                    method: func_loc,
-                    from_interface_default: false,
-                    frame_type_args,
-                });
-            }
-        }
-
-        // The interface's default — framed by the realized interface input args.
-        let iface_data = interface_data(db, data.interface);
-        for &fn_loc in &iface_data.default_methods {
-            if function_data(db, fn_loc).name == *method {
-                let frame_type_args = data
-                    .interface_args
-                    .iter()
-                    .map(|arg| substitute_ty(arg, &self.bindings))
-                    .collect();
-                return Some(ResolvedMethod {
-                    method: fn_loc,
-                    from_interface_default: true,
-                    frame_type_args,
-                });
-            }
-        }
-        None
-    }
-
     /// The interface this impl provides at its resolved instantiation:
     /// the declared interface with the impl's bindings substituted in.
     pub fn implemented_interface(

@@ -279,6 +279,15 @@ pub enum MemberDeclarer<'db> {
     ImplMethod {
         block: ImplLoc<'db>,
         func: FunctionLoc<'db>,
+        /// The callee's OWNER frame, realized by the impl match — the frame
+        /// the resolution CARRIES so the call site never re-derives it: the
+        /// impl's generic bindings (declaration order) for an override,
+        /// `[Self = receiver, iface args..]` for an inherited default.
+        frame_type_args: Vec<Ty>,
+        /// `true` when `func` is the interface's default body (which expects
+        /// the `[Self, iface args..]` convention), `false` for an override
+        /// (the impl-generics convention).
+        from_interface_default: bool,
     },
     /// A concrete receiver's interface FIELD through a matched impl.
     /// The backing class-field link is not resolved here yet, so
@@ -572,11 +581,43 @@ fn lookup_impl_member<'db>(
             member.declarer = match member.declarer {
                 MemberDeclarer::VirtualMethod { interface, method } => {
                     if let Some((block, func)) = resolved.source_dispatch(db, name) {
-                        MemberDeclarer::ImplMethod { block, func }
+                        // The override's frame: the impl's generic params
+                        // realized through the match, in declaration order. A
+                        // matched impl binds every declared param (E0207:
+                        // each appears in the for-type or the interface ref),
+                        // so an absent binding is a resolver bug, never a
+                        // state to paper over with a stand-in type.
+                        let frame_type_args = resolved
+                            .facts
+                            .generic_params()
+                            .iter()
+                            .map(|(param, _)| {
+                                resolved.bindings.get(param).cloned().unwrap_or_else(|| {
+                                    unreachable!(
+                                        "matched impl left generic `{}` unbound",
+                                        param.name()
+                                    )
+                                })
+                            })
+                            .collect();
+                        MemberDeclarer::ImplMethod {
+                            block,
+                            func,
+                            frame_type_args,
+                            from_interface_default: false,
+                        }
                     } else if let Some(block) = resolved.source_block() {
+                        // The inherited default's frame: `[Self = receiver,
+                        // iface args..]` — associated types are not slots.
+                        let mut frame_type_args =
+                            Vec::with_capacity(1 + implemented.generics.len());
+                        frame_type_args.push(receiver.clone());
+                        frame_type_args.extend(implemented.generics.iter().cloned());
                         MemberDeclarer::ImplMethod {
                             block,
                             func: method,
+                            frame_type_args,
+                            from_interface_default: true,
                         }
                     } else {
                         let callable = resolved
@@ -802,19 +843,14 @@ pub(crate) fn member_on_interface<'db>(
     if let Some(crate::package_interface::ExportedType::Interface {
         self_param,
         generic_params,
-        associated_types,
         fields,
         required_methods,
         default_methods,
         ..
     }) = crate::package_interface::mounted_type_row(db, &target.name)
     {
-        let instantiation = crate::impls::mounted_interface_instantiation(
-            target,
-            receiver,
-            generic_params,
-            associated_types,
-        )?;
+        let instantiation =
+            crate::impls::mounted_interface_instantiation(target, receiver, generic_params)?;
         if let Some(index) = fields.iter().position(|(field, ..)| field == name) {
             let (_, field_ty, _) = &fields[index];
             let field_ty =
@@ -1359,10 +1395,13 @@ fn external_interface_callable(
 }
 
 /// The interface frame's instantiation vector for a receiver:
-/// `[Self, args.., assoc..]` - `Self` is the receiver, args come from
-/// the reference, associated slots take the reference's pins or the
-/// symbolic projection through the receiver (which I5's oracle reduces
-/// when the facts determine it).
+/// `[Self, args..]` - `Self` is the receiver, args come from the
+/// reference. Associated types are not frame slots: interface-scoped
+/// types reference them as projections over the `Self` slot, which
+/// substitution turns into projections over the receiver - the oracle
+/// then reduces each through the reference's pin, the receiver's
+/// param-env bound, an existential's pins/defaults, or the matched impl
+/// (`Facts::project`'s candidate order).
 pub(crate) fn interface_instantiation(
     receiver: &Ty,
     target: &InterfaceRef,
@@ -1377,23 +1416,6 @@ pub(crate) fn interface_instantiation(
                 .cloned()
                 .unwrap_or_else(Ty::error),
         );
-    }
-    let interface_ref = target.clone();
-    for assoc in &data.associated_types {
-        let slot = target
-            .associated_types
-            .iter()
-            .find(|(name, _)| *name == assoc.name)
-            .map(|(_, ty)| ty.clone())
-            .unwrap_or_else(|| {
-                Ty::intern(TyKind::AssociatedTypeProjection {
-                    base: receiver.clone(),
-                    interface: interface_ref.clone(),
-                    member: assoc.name.clone(),
-                    attr: TyAttr::default(),
-                })
-            });
-        out.push(slot);
     }
     out
 }

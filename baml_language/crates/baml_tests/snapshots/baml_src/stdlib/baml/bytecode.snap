@@ -3606,23 +3606,23 @@ function baml.iter.Iterable$for$string.iter(self: string) -> baml.iter.Iterator<
     return
 }
 
-function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Iterable<Error = #3, Item = #1>) -> baml.iter.Iterator<Error = #2 | #3, Item = #1> {
+function baml.iter.Iterator.chain(self: baml.iter.Iterator, other: baml.iter.Iterable<Error = #1, Item = (#0 as baml.iter.Iterator).Item>) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #1, Item = (#0 as baml.iter.Iterator).Item> {
     load_var other
-    load_type baml.iter.Iterable<Error = #3, Item = #1>
+    load_type baml.iter.Iterable<Error = #1, Item = (#0 as baml.iter.Iterator).Item>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
     load_var2 1 3
     load_const false
+    load_type (#0 as baml.iter.Iterator).Item
+    load_type (#0 as baml.iter.Iterator).Error
     load_type #1
-    load_type #2
-    load_type #3
     init_instance<3> baml.iter.Chain .first, .other, .first_done
     return
 }
 
-function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> #1[] {
-    load_type #1
+function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> (#0 as baml.iter.Iterator).Item[] {
+    load_type (#0 as baml.iter.Iterator).Item
     alloc_array 0
     store_var r
 
@@ -3630,7 +3630,7 @@ function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> #1[] {
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type baml.iter.Iterator<Error = #2, Item = #1>
+    load_type baml.iter.Iterator
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _4
@@ -3640,7 +3640,7 @@ function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> #1[] {
     jump L2
 
   L1:
-    load_type #1
+    load_type (#0 as baml.iter.Iterator).Item
     load_var2 2 3
     call baml.Array.push
     pop 1
@@ -3659,7 +3659,7 @@ function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type baml.iter.Iterator<Error = #2, Item = #1>
+    load_type baml.iter.Iterator
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -3680,12 +3680,12 @@ function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int {
     return
 }
 
-function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> bool {
+function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> bool {
   L0:
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type baml.iter.Iterator<Error = #2, Item = #1>
+    load_type baml.iter.Iterator
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -3709,31 +3709,31 @@ function baml.iter.Iterator.every(self: baml.iter.Iterator, predicate: (#1) -> b
     return
 }
 
-function baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> baml.iter.Iterator<Error = #2 | #3, Item = #1> {
+function baml.iter.Iterator.filter(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #1, Item = (#0 as baml.iter.Iterator).Item> {
     load_var2 1 2
+    load_type (#0 as baml.iter.Iterator).Item
+    load_type (#0 as baml.iter.Iterator).Error
     load_type #1
-    load_type #2
-    load_type #3
     init_instance<3> baml.iter.Filter .source, .predicate
     return
 }
 
-function baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: (#1) -> #3 | null throws #4) -> baml.iter.Iterator<Error = #2 | #4, Item = #3> {
+function baml.iter.Iterator.filter_map(self: baml.iter.Iterator, fn: ((#0 as baml.iter.Iterator).Item) -> #1 | null throws #2) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #2, Item = #1> {
     load_var2 1 2
+    load_type (#0 as baml.iter.Iterator).Item
     load_type #1
-    load_type #3
+    load_type (#0 as baml.iter.Iterator).Error
     load_type #2
-    load_type #4
     init_instance<4> baml.iter.FilterMap .source, .func
     return
 }
 
-function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> #1 | null {
+function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> (#0 as baml.iter.Iterator).Item | null {
   L0:
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type baml.iter.Iterator<Error = #2, Item = #1>
+    load_type baml.iter.Iterator
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -3758,24 +3758,24 @@ function baml.iter.Iterator.find(self: baml.iter.Iterator, predicate: (#1) -> bo
     return
 }
 
-function baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: (#1) -> baml.iter.Iterable<Error = #5, Item = #3> throws #4) -> baml.iter.Iterator<Error = #2 | #4 | #5, Item = #3> {
+function baml.iter.Iterator.flat_map(self: baml.iter.Iterator, fn: ((#0 as baml.iter.Iterator).Item) -> baml.iter.Iterable<Error = #3, Item = #1> throws #2) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #2 | #3, Item = #1> {
     load_var2 1 2
     alloc_instance baml.iter.Done
+    load_type (#0 as baml.iter.Iterator).Item
     load_type #1
-    load_type #3
+    load_type (#0 as baml.iter.Iterator).Error
     load_type #2
-    load_type #4
-    load_type #5
+    load_type #3
     init_instance<5> baml.iter.FlatMap .source, .func, .inner
     return
 }
 
-function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (#1) -> void throws #3) -> void {
+function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: ((#0 as baml.iter.Iterator).Item) -> void throws #1) -> void {
   L0:
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type baml.iter.Iterator<Error = #2, Item = #1>
+    load_type baml.iter.Iterator
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -3795,27 +3795,27 @@ function baml.iter.Iterator.for_each(self: baml.iter.Iterator, fn: (#1) -> void 
     return
 }
 
-function baml.iter.Iterator.map(self: baml.iter.Iterator, fn: (#1) -> #3 throws #4) -> baml.iter.Iterator<Error = #2 | #4, Item = #3> {
+function baml.iter.Iterator.map(self: baml.iter.Iterator, fn: ((#0 as baml.iter.Iterator).Item) -> #1 throws #2) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #2, Item = #1> {
     load_var2 1 2
+    load_type (#0 as baml.iter.Iterator).Item
     load_type #1
-    load_type #3
+    load_type (#0 as baml.iter.Iterator).Error
     load_type #2
-    load_type #4
     init_instance<4> baml.iter.Map .source, .func
     return
 }
 
-function baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peekable<#1, #2> {
+function baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peekable<(#0 as baml.iter.Iterator).Item, (#0 as baml.iter.Iterator).Error> {
     load_var self
     alloc_instance baml.iter.Done
     load_const false
-    load_type #1
-    load_type #2
+    load_type (#0 as baml.iter.Iterator).Item
+    load_type (#0 as baml.iter.Iterator).Error
     init_instance<2> baml.iter.Peekable .source, .buffer, .has_buffer
     return
 }
 
-function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (#3, #1) -> #3 throws #4, initial: #3) -> #3 {
+function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (#1, (#0 as baml.iter.Iterator).Item) -> #1 throws #2, initial: #1) -> #1 {
     load_var initial
     store_var acc
 
@@ -3823,7 +3823,7 @@ function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (#3, #1) -> #3 
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type baml.iter.Iterator<Error = #2, Item = #1>
+    load_type baml.iter.Iterator
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _5
@@ -3844,30 +3844,30 @@ function baml.iter.Iterator.reduce(self: baml.iter.Iterator, fn: (#3, #1) -> #3 
     return
 }
 
-function baml.iter.Iterator.skip(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = #2, Item = #1> {
+function baml.iter.Iterator.skip(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error, Item = (#0 as baml.iter.Iterator).Item> {
     load_var2 1 2
-    load_type #1
-    load_type #2
+    load_type (#0 as baml.iter.Iterator).Item
+    load_type (#0 as baml.iter.Iterator).Error
     init_instance<2> baml.iter.Skip .source, .remaining
     return
 }
 
-function baml.iter.Iterator.skip_while(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> baml.iter.Iterator<Error = #2 | #3, Item = #1> {
+function baml.iter.Iterator.skip_while(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #1, Item = (#0 as baml.iter.Iterator).Item> {
     load_var2 1 2
     load_const true
+    load_type (#0 as baml.iter.Iterator).Item
+    load_type (#0 as baml.iter.Iterator).Error
     load_type #1
-    load_type #2
-    load_type #3
     init_instance<3> baml.iter.SkipWhile .source, .predicate, .skipping
     return
 }
 
-function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> bool {
+function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> bool {
   L0:
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type baml.iter.Iterator<Error = #2, Item = #1>
+    load_type baml.iter.Iterator
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -3890,29 +3890,29 @@ function baml.iter.Iterator.some(self: baml.iter.Iterator, predicate: (#1) -> bo
     return
 }
 
-function baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = #2, Item = #1> {
+function baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error, Item = (#0 as baml.iter.Iterator).Item> {
     load_var2 1 2
     load_const true
-    load_type #1
-    load_type #2
+    load_type (#0 as baml.iter.Iterator).Item
+    load_type (#0 as baml.iter.Iterator).Error
     init_instance<2> baml.iter.StepBy .source, .n, .first
     return
 }
 
-function baml.iter.Iterator.take(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = #2, Item = #1> {
+function baml.iter.Iterator.take(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error, Item = (#0 as baml.iter.Iterator).Item> {
     load_var2 1 2
-    load_type #1
-    load_type #2
+    load_type (#0 as baml.iter.Iterator).Item
+    load_type (#0 as baml.iter.Iterator).Error
     init_instance<2> baml.iter.Take .source, .remaining
     return
 }
 
-function baml.iter.Iterator.take_while(self: baml.iter.Iterator, predicate: (#1) -> bool throws #3) -> baml.iter.Iterator<Error = #2 | #3, Item = #1> {
+function baml.iter.Iterator.take_while(self: baml.iter.Iterator, predicate: ((#0 as baml.iter.Iterator).Item) -> bool throws #1) -> baml.iter.Iterator<Error = (#0 as baml.iter.Iterator).Error | #1, Item = (#0 as baml.iter.Iterator).Item> {
     load_var2 1 2
     load_const false
+    load_type (#0 as baml.iter.Iterator).Item
+    load_type (#0 as baml.iter.Iterator).Error
     load_type #1
-    load_type #2
-    load_type #3
     init_instance<3> baml.iter.TakeWhile .source, .predicate, .done
     return
 }

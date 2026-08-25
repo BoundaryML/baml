@@ -1,0 +1,77 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function dispatch_frames.$init_test_ns_dispatch_frames_dispatch_frames(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.dispatch_frames"
+    load_const "static call reaches an inherited default"
+    make_closure .<lambda($init_test_ns_dispatch_frames_dispatch_frames, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dispatch_frames"
+    load_const "static call reaches a generic impl override with its bindings"
+    make_closure .<lambda($init_test_ns_dispatch_frames_dispatch_frames, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dispatch_frames"
+    load_const "a generic interface default observes its pinned argument"
+    make_closure .<lambda($init_test_ns_dispatch_frames_dispatch_frames, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function dispatch_frames.Conv.describe(self: dispatch_frames.Conv<#1>) -> string {
+    load_type #1
+    call baml.root.ToString$for$reflect.Type.to_string
+    return
+}
+
+function dispatch_frames.Greeter.greet(self: dispatch_frames.Greeter) -> string {
+    load_const "default"
+    return
+}
+
+function dispatch_frames.Tagged$for$Box<T>.tag(self: dispatch_frames.Box<#0>) -> string {
+    load_type #0
+    call baml.root.ToString$for$reflect.Type.to_string
+    return
+}
+
+function dispatch_frames.call_adopted_default() -> string {
+    alloc_instance user.dispatch_frames.Adopts
+    load_type dispatch_frames.Greeter
+    load_const "greet"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function dispatch_frames.call_generic_interface_default() -> string {
+    alloc_instance user.dispatch_frames.Pinner
+    load_type dispatch_frames.Conv<int>
+    load_const "describe"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function dispatch_frames.call_generic_override() -> string {
+    load_const 1
+    load_type int
+    init_instance<1> user.dispatch_frames.Box .value
+    load_type dispatch_frames.Tagged
+    load_const "tag"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}

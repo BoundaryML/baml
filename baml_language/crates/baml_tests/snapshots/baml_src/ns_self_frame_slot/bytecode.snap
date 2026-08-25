@@ -233,7 +233,6 @@ function self_frame_slot.Croc.Marked.type_name(self: self_frame_slot.Croc) -> st
 function self_frame_slot.IntShelf.Store<int>.describe(self: self_frame_slot.IntShelf) -> string {
     load_type self_frame_slot.IntShelf
     load_type int
-    load_type string
     load_var self
     call user.self_frame_slot.Store.describe
     store_var _2
@@ -371,7 +370,7 @@ function self_frame_slot.Store.describe(self: self_frame_slot.Store<#1>) -> stri
     load_type #1
     call baml.root.ToString$for$reflect.Type.to_string
     store_var _7
-    load_type #2
+    load_type (#0 as self_frame_slot.Store<#1>).Key
     call baml.root.ToString$for$reflect.Type.to_string
     store_var _9
     load_var _5

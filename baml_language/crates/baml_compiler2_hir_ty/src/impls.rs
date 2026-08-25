@@ -28,8 +28,9 @@
 //!
 //! Deliberately NOT replicated from TIR (survey-recorded defects): the
 //! single-bound conjunction asymmetry (bounds are `Vec` end to end
-//! here), and `get_method`'s silent `Unknown` fill for unbound
-//! params (resolution here leaves methods to I3).
+//! here). Method frames are computed at `lookup_impl_member` from the
+//! match's bindings, where an unbound impl param is unreachable, never a
+//! stand-in type.
 
 use baml_compiler2_hir::{loc::ImplLoc, package::PackageId};
 use baml_type::{
@@ -650,8 +651,7 @@ pub(crate) fn realized_assoc_default(
             .find(|assoc| &assoc.name == member)?
             .default
             .as_ref()?;
-        let instantiation =
-            mounted_interface_instantiation(target, self_ty, generic_params, associated_types)?;
+        let instantiation = mounted_interface_instantiation(target, self_ty, generic_params)?;
         return Some(crate::lower::substitute_params(
             &Ty::from_plain(default),
             &instantiation,
@@ -685,8 +685,7 @@ pub(crate) fn realized_assoc_bound(
             .find(|assoc| &assoc.name == member)?
             .bound
             .as_ref()?;
-        let instantiation =
-            mounted_interface_instantiation(target, self_ty, generic_params, associated_types)?;
+        let instantiation = mounted_interface_instantiation(target, self_ty, generic_params)?;
         let bound_ty = Ty::intern(TyKind::Interface(
             bound.name.clone(),
             bound.generics.iter().map(Ty::from_plain).collect(),
@@ -730,33 +729,19 @@ fn assoc_realization_env<'db>(
     Some((interface, data))
 }
 
+/// The mounted twin of `method_resolution::interface_instantiation`:
+/// `[Self, args..]` - associated types are projection-only, reduced by the
+/// oracle at use rather than substituted as slots.
 pub(crate) fn mounted_interface_instantiation(
     target: &InterfaceRef,
     self_ty: &Ty,
     generic_params: &[ParamTy],
-    associated_types: &[crate::package_interface::ExportedAssociatedType],
 ) -> Option<Vec<Ty>> {
     if generic_params.len() != target.generics.len() {
         return None;
     }
     let mut out = vec![self_ty.clone()];
     out.extend(target.generics.iter().cloned());
-    for assoc in associated_types {
-        let ty = target
-            .associated_types
-            .iter()
-            .find(|(name, _)| name == &assoc.name)
-            .map(|(_, ty)| ty.clone())
-            .unwrap_or_else(|| {
-                Ty::intern(TyKind::AssociatedTypeProjection {
-                    base: self_ty.clone(),
-                    interface: target.clone(),
-                    member: assoc.name.clone(),
-                    attr: baml_type::TyAttr::default(),
-                })
-            });
-        out.push(ty);
-    }
     Some(out)
 }
 
@@ -1749,13 +1734,11 @@ fn direct_requires(
 ) -> Vec<InterfaceRef> {
     if let Some(crate::package_interface::ExportedType::Interface {
         generic_params,
-        associated_types,
         requires,
         ..
     }) = crate::package_interface::mounted_type_row(db, &of.name)
     {
-        let Some(instantiation) =
-            mounted_interface_instantiation(of, self_ty, generic_params, associated_types)
+        let Some(instantiation) = mounted_interface_instantiation(of, self_ty, generic_params)
         else {
             return Vec::new();
         };

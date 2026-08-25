@@ -654,43 +654,22 @@ fn build_packages(
         }
     }
     // The frame an inherited default of `iface_tn` is invoked with, for a rule
-    // implementing it at `for_ty_pattern` / `interface_args` / `interface_assoc`:
-    // the implementor type (`Self`) at slot 0, then the interface's generic args,
-    // then its associated types in declared order (all templates over the impl's
-    // generics). `realize_frame` substitutes the rule's bound args — recovered by
-    // matching `for_ty_pattern` against the receiver's concrete type — so slot 0
-    // realizes to exactly that concrete type. A non-generic interface with no
-    // associated types (`Equals`/`Compare`) yields just the `Self` slot.
-    let interface_frame = |iface_tn: &baml_type::TypeName,
-                           for_ty_pattern: &bex_vm_types::TyTemplate,
-                           interface_args: &[bex_vm_types::TyTemplate],
-                           interface_assoc: &[(Name, bex_vm_types::TyTemplate)]|
+    // implementing it at `for_ty_pattern` / `interface_args`: the implementor
+    // type (`Self`) at slot 0, then the interface's generic args (all
+    // templates over the impl's generics). Associated types are NOT frame
+    // slots — a default body references them as `Self.X` projection templates
+    // over slot 0, which the runtime reduces through this same rule's
+    // `interface_assoc` bindings at realization time. `realize_frame`
+    // substitutes the rule's bound args — recovered by matching
+    // `for_ty_pattern` against the receiver's concrete type — so slot 0
+    // realizes to exactly that concrete type. A non-generic interface
+    // (`Equals`/`Compare`) yields just the `Self` slot.
+    let interface_frame = |for_ty_pattern: &bex_vm_types::TyTemplate,
+                           interface_args: &[bex_vm_types::TyTemplate]|
      -> Vec<bex_vm_types::TyTemplate> {
         let mut frame: Vec<bex_vm_types::TyTemplate> = Vec::with_capacity(1 + interface_args.len());
         frame.push(for_ty_pattern.clone());
         frame.extend(interface_args.iter().cloned());
-        if let Some((_, _, decls)) = iface_assoc_decls.get(iface_tn) {
-            for (name, _) in decls {
-                // One slot per *declared* associated type, in order — so the frame
-                // width is always `1 (Self) + interface_args + assoc_count` and the
-                // method-level type args (appended after this frame at the call
-                // site) land at the De Bruijn indices the callee expects. The
-                // rule's bindings are complete (pinned or baked from the declared
-                // default), so every slot carries a real binding; a member absent
-                // here is a diagnosed incomplete impl (no pin, no default), kept
-                // at the top type for error recovery.
-                let slot = interface_assoc
-                    .iter()
-                    .find(|(an, _)| an == name)
-                    .map(|(_, t)| t.clone())
-                    .unwrap_or_else(|| {
-                        bex_vm_types::TyTemplate::from(baml_type::RealizedTy::Unknown {
-                            attr: TyAttr::default(),
-                        })
-                    });
-                frame.push(slot);
-            }
-        }
         frame
     };
     // Complete a rule's associated bindings: every declared member the impl
@@ -947,12 +926,7 @@ fn build_packages(
                     },
                 );
             }
-            let iface_frame = interface_frame(
-                &iface_tn,
-                &for_ty_pattern,
-                &interface_args,
-                &interface_assoc,
-            );
+            let iface_frame = interface_frame(&for_ty_pattern, &interface_args);
             merge_defaults(&mut methods, &iface_tn, &iface_frame);
             program_packages
                 .entry(pkg_info.package.clone())
@@ -1120,12 +1094,7 @@ fn build_packages(
                         ))
                     })
                     .collect();
-                let iface_frame = interface_frame(
-                    &iface_tn,
-                    &for_ty_pattern,
-                    &interface_args,
-                    &interface_assoc,
-                );
+                let iface_frame = interface_frame(&for_ty_pattern, &interface_args);
                 merge_defaults(&mut methods, &iface_tn, &iface_frame);
                 // The field table for this block, positional over the interface's own
                 // declared fields. Each entry is the class slot the interface field
@@ -4416,33 +4385,9 @@ fn compute_function_metadata<'db>(
             baml_type::TyAttr::default(),
         )
     };
-    // The declaring interface as a plain constraint (its qualified name at
-    // its own rigid params) - the qualifier each `Self.<assoc>` projection
-    // below is built against.
-    let self_declaring_interface: Option<baml_type::Interface> = enclosing_interface_loc
-        .zip(enclosing_interface)
-        .map(|(loc, iface)| {
-            let qtn = baml_compiler2_hir_ty::lower::qualify_def(
-                db,
-                baml_compiler2_hir::contributions::Definition::Interface(loc),
-                &iface.name,
-            );
-            let args = iface
-                .generic_params
-                .iter()
-                .map(|declared| {
-                    let param = enclosing_generics
-                        .iter()
-                        .find(|param| param.name() == &declared.name)
-                        .expect("interface generic parameter is in the function environment");
-                    Ty::TypeVar(param.clone(), baml_type::TyAttr::default())
-                })
-                .collect();
-            baml_type::Interface::new(qtn, args, Vec::new())
-        });
     let interface_signature_bindings: rustc_hash::FxHashMap<ParamTy, Ty> = match enclosing_interface
     {
-        Some(iface) => {
+        Some(_) => {
             let mut bindings: rustc_hash::FxHashMap<ParamTy, Ty> = enclosing_generics
                 .iter()
                 .map(|p| {
@@ -4452,31 +4397,15 @@ fn compute_function_metadata<'db>(
                     )
                 })
                 .collect();
+            // Associated types are not frame params: signature references to
+            // them already lower as `Self.X` projections, so only `Self` and
+            // the identity bindings remain to install.
             bindings.insert(
                 self_param
                     .clone()
                     .expect("interface method environment contains Self"),
                 self_var(),
             );
-            for assoc in &iface.associated_types {
-                let assoc_param = enclosing_generics
-                    .iter()
-                    .find(|param| param.name() == &assoc.name)
-                    .expect("associated type is in the function environment");
-                bindings.insert(
-                    assoc_param.clone(),
-                    Ty::AssociatedTypeProjection {
-                        base: Box::new(self_var()),
-                        // The declaring interface resolved above; we are in the
-                        // `Some(iface)` arm, so it is present.
-                        interface: Box::new(self_declaring_interface.clone().unwrap_or_else(
-                            || unreachable!("interface method has a declaring interface"),
-                        )),
-                        member: assoc.name.clone(),
-                        attr: baml_type::TyAttr::default(),
-                    },
-                );
-            }
             bindings
         }
         None => rustc_hash::FxHashMap::default(),

@@ -71,6 +71,14 @@ pub(crate) enum MemberResolution<'db> {
     InterfaceConcreteMethod {
         impl_loc: ImplLoc<'db>,
         func_loc: FunctionLoc<'db>,
+        /// The callee's OWNER frame, carried from resolution: the impl's
+        /// generic bindings (declaration order) for an override,
+        /// `[Self = receiver, iface args..]` for an inherited default. The
+        /// call site emits these ahead of the method's own type args per the
+        /// `[owner ++ own]` frame invariant — never re-derived by name.
+        frame_type_args: Vec<Tir2Ty>,
+        /// `true` when `func_loc` is the interface's default body.
+        from_interface_default: bool,
     },
     /// A VIRTUAL interface-field access through the realized declaring view.
     InterfaceVirtualField {
@@ -568,12 +576,20 @@ fn convert_resolution<'db>(resolution: &hir_infer::MemberResolution<'db>) -> Mem
                 method: method.clone(),
             }
         }
-        hir_infer::MemberResolution::InterfaceConcreteMethod { impl_block, func } => {
-            MemberResolution::InterfaceConcreteMethod {
-                impl_loc: *impl_block,
-                func_loc: *func,
-            }
-        }
+        hir_infer::MemberResolution::InterfaceConcreteMethod {
+            impl_block,
+            func,
+            frame_type_args,
+            from_interface_default,
+        } => MemberResolution::InterfaceConcreteMethod {
+            impl_loc: *impl_block,
+            func_loc: *func,
+            frame_type_args: frame_type_args
+                .iter()
+                .map(baml_type::interned::Ty::to_plain)
+                .collect(),
+            from_interface_default: *from_interface_default,
+        },
         hir_infer::MemberResolution::InterfaceVirtualField {
             interface,
             view,
