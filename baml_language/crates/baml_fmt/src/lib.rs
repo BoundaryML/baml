@@ -1435,6 +1435,22 @@ mod match_arm_jump_format_tests {
     use super::*;
 
     #[test]
+    fn match_without_scrutinee_parentheses_round_trips() {
+        let source = "function f(value: int) -> int { match value { 1 => 2, _ => 3 } }\n";
+        let expected = r#"function f(value: int) -> int {
+    match value {
+        1 => 2,
+        _ => 3,
+    }
+}
+"#;
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should accept bare scrutinee");
+        assert_eq!(formatted, expected);
+        assert_eq!(format(&formatted, &options).unwrap(), formatted);
+    }
+
+    #[test]
     fn braceless_break_and_continue_arms_wrap_into_blocks() {
         let source = r#"function f(n: int) -> int {
   let x = n;

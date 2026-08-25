@@ -90,10 +90,7 @@ impl Printable for Validated<'_, syntax_ast::FunctionDef> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let keyword = self.function_token();
         let name = self.name_token();
-        let generic_params = self.generic_param_list().map(|params| {
-            super::GenericParamList::from_cst(SyntaxElement::Node(params.syntax().clone()))
-                .expect("validated generic parameters")
-        });
+        let generic_params = self.generic_param_list();
         let params = self.parameter_list();
         let arrow = self
             .arrow_token()
@@ -127,7 +124,7 @@ impl Printable for Validated<'_, syntax_ast::FunctionDef> {
 fn print_function_layout(
     keyword: &impl Token,
     name: &impl Token,
-    generic_params: Option<&super::GenericParamList>,
+    generic_params: Option<&Validated<'_, syntax_ast::GenericParamList>>,
     params: &Validated<'_, syntax_ast::ParameterList>,
     arrow: &impl FunctionArrowLayout,
     return_type: &Validated<'_, syntax_ast::TypeExpr>,
@@ -228,15 +225,6 @@ fn print_function_layout(
 }
 
 #[derive(Clone)]
-struct RawToken(SyntaxToken);
-
-impl Token for RawToken {
-    fn span(&self) -> TextRange {
-        self.0.text_range()
-    }
-}
-
-#[derive(Clone)]
 enum ParameterToken {
     Cached(ValidatedSyntaxToken),
     Raw(SyntaxToken),
@@ -260,6 +248,48 @@ enum ParameterView<'tree> {
 enum ParameterType<'tree> {
     Cached(Validated<'tree, syntax_ast::TypeExpr>),
     Raw(syntax_ast::TypeExpr),
+}
+
+enum ParameterDefault<'tree> {
+    Cached(Validated<'tree, syntax_ast::ExprNode>),
+    Raw(syntax_ast::ExprNode),
+}
+
+impl Printable for ParameterDefault<'_> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            Self::Cached(expression) => expression.print(shape, printer),
+            Self::Raw(expression) => {
+                let range = expression.syntax().text_range();
+                printer.print_input_range_trimmed_start(range);
+                PrintInfo {
+                    multi_lined: printer.input[range].contains('\n'),
+                }
+            }
+        }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            Self::Cached(expression) => expression.leftmost_token(),
+            Self::Raw(expression) => expression
+                .syntax()
+                .first_token()
+                .expect("validated parameter default")
+                .text_range(),
+        }
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            Self::Cached(expression) => expression.rightmost_token(),
+            Self::Raw(expression) => expression
+                .syntax()
+                .last_token()
+                .expect("validated parameter default")
+                .text_range(),
+        }
+    }
 }
 
 impl Printable for ParameterType<'_> {
@@ -327,16 +357,10 @@ impl<'tree> ParameterView<'tree> {
         }
     }
 
-    fn default(&self) -> Option<super::Expression> {
+    fn default(&self) -> Option<ParameterDefault<'tree>> {
         match self {
-            Self::Cached(parameter) => {
-                let default = parameter.default_value()?;
-                super::Expression::from_cst(SyntaxElement::Node(default.syntax().clone())).ok()
-            }
-            Self::Raw(parameter) => {
-                let default = parameter.default_value()?;
-                super::Expression::from_cst(SyntaxElement::Node(default.syntax().clone())).ok()
-            }
+            Self::Cached(parameter) => parameter.default_value().map(ParameterDefault::Cached),
+            Self::Raw(parameter) => parameter.default_value().map(ParameterDefault::Raw),
         }
     }
 }
@@ -756,10 +780,7 @@ enum ClassLayoutItem<'tree> {
 impl Printable for Validated<'_, syntax_ast::ClassDef> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let inner_indent = shape.indent + printer.config.indent_width;
-        let generic_params = self.generic_param_list().map(|params| {
-            super::GenericParamList::from_cst(SyntaxElement::Node(params.syntax().clone()))
-                .expect("validated generic parameters")
-        });
+        let generic_params = self.generic_param_list();
         let mut elements = self.direct_elements().peekable();
         let mut items = Vec::new();
         while let Some(element) = elements.next() {
@@ -1969,119 +1990,6 @@ impl Printable for Validated<'_, syntax_ast::TestsetDef> {
     }
     fn rightmost_token(&self) -> TextRange {
         self.last_token_range()
-    }
-}
-
-impl Printable for syntax_ast::TestExprDef {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let mut expressions = self.expressions();
-        let name = super::Expression::from_cst(SyntaxElement::Node(
-            expressions
-                .next()
-                .expect("validated test name")
-                .syntax()
-                .clone(),
-        ))
-        .expect("validated test name");
-        let with_value = self.with_token().map(|_| {
-            super::Expression::from_cst(SyntaxElement::Node(
-                expressions
-                    .next()
-                    .expect("validated test runner")
-                    .syntax()
-                    .clone(),
-            ))
-            .expect("validated test runner")
-        });
-        let body = super::BlockExpr::from_cst(SyntaxElement::Node(
-            self.body().expect("validated test body").syntax().clone(),
-        ))
-        .expect("validated test body");
-        printer.print_raw_token(&RawToken(
-            self.test_token().expect("validated test keyword"),
-        ));
-        printer.print_str(" ");
-        printer.print(&name, shape.clone());
-        if let Some((keyword, value)) = self.with_token().zip(with_value.as_ref()) {
-            printer.print_str(" ");
-            printer.print_raw_token(&RawToken(keyword));
-            printer.print_str(" ");
-            printer.print(value, shape.clone());
-        }
-        printer.print_str(" ");
-        printer.print(&body, shape)
-    }
-
-    fn leftmost_token(&self) -> TextRange {
-        self.syntax()
-            .first_token()
-            .expect("validated test")
-            .text_range()
-    }
-
-    fn rightmost_token(&self) -> TextRange {
-        self.syntax()
-            .last_token()
-            .expect("validated test")
-            .text_range()
-    }
-}
-
-impl Printable for syntax_ast::TestsetDef {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let mut expressions = self.expressions();
-        let name = super::Expression::from_cst(SyntaxElement::Node(
-            expressions
-                .next()
-                .expect("validated test set name")
-                .syntax()
-                .clone(),
-        ))
-        .expect("validated test set name");
-        let with_value = self.with_token().map(|_| {
-            super::Expression::from_cst(SyntaxElement::Node(
-                expressions
-                    .next()
-                    .expect("validated test set runner")
-                    .syntax()
-                    .clone(),
-            ))
-            .expect("validated test set runner")
-        });
-        let body = super::BlockExpr::from_cst(SyntaxElement::Node(
-            self.body()
-                .expect("validated test set body")
-                .syntax()
-                .clone(),
-        ))
-        .expect("validated test set body");
-        printer.print_raw_token(&RawToken(
-            self.testset_token().expect("validated test set keyword"),
-        ));
-        printer.print_str(" ");
-        printer.print(&name, shape.clone());
-        if let Some((keyword, value)) = self.with_token().zip(with_value.as_ref()) {
-            printer.print_str(" ");
-            printer.print_raw_token(&RawToken(keyword));
-            printer.print_str(" ");
-            printer.print(value, shape.clone());
-        }
-        printer.print_str(" ");
-        printer.print(&body, shape)
-    }
-
-    fn leftmost_token(&self) -> TextRange {
-        self.syntax()
-            .first_token()
-            .expect("validated test set")
-            .text_range()
-    }
-
-    fn rightmost_token(&self) -> TextRange {
-        self.syntax()
-            .last_token()
-            .expect("validated test set")
-            .text_range()
     }
 }
 

@@ -316,7 +316,7 @@ where
         }
     }
 
-    pub(crate) fn token(&self, slot: usize, expected: SyntaxKind) -> Option<ValidatedSyntaxToken> {
+    pub(crate) fn token(&self, slot: usize) -> Option<ValidatedSyntaxToken> {
         let range = self.tree.field(self.id, slot);
         self.tree.field_elements[range.start as usize..range.end as usize]
             .iter()
@@ -325,7 +325,6 @@ where
                 element
                     .element
                     .as_token()
-                    .filter(|token| token.kind() == expected)
                     .map(|token| ValidatedSyntaxToken {
                         kind: token.kind(),
                         range: token.text_range(),

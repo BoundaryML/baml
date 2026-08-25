@@ -56,10 +56,16 @@ impl FunctionDef {
         support::children(&self.syntax)
     }
     pub fn function_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_FUNCTION)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_FUNCTION))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn generic_param_list(&self) -> Option<GenericParamList> {
         support::child(&self.syntax)
@@ -68,10 +74,16 @@ impl FunctionDef {
         support::child(&self.syntax)
     }
     pub fn arrow_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::ARROW)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::ARROW))
     }
     pub fn fat_arrow_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::FAT_ARROW)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::FAT_ARROW))
     }
     pub fn type_expr(&self) -> Option<TypeExpr> {
         support::child(&self.syntax)
@@ -106,16 +118,25 @@ impl ClassDef {
         support::children(&self.syntax)
     }
     pub fn class_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CLASS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CLASS))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn generic_param_list(&self) -> Option<GenericParamList> {
         support::child(&self.syntax)
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn field(&self) -> AstChildren<Field> {
         support::children(&self.syntax)
@@ -130,16 +151,19 @@ impl ClassDef {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
+            .filter(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -168,16 +192,25 @@ impl EnumDef {
         support::children(&self.syntax)
     }
     pub fn enum_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_ENUM)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_ENUM))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn generic_param_list(&self) -> Option<GenericParamList> {
         support::child(&self.syntax)
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn enum_variant(&self) -> AstChildren<EnumVariant> {
         support::children(&self.syntax)
@@ -186,16 +219,19 @@ impl EnumDef {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
+            .filter(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -224,16 +260,25 @@ impl InterfaceDef {
         support::children(&self.syntax)
     }
     pub fn interface_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_INTERFACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_INTERFACE))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn generic_param_list(&self) -> Option<GenericParamList> {
         support::child(&self.syntax)
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn method_sig(&self) -> AstChildren<MethodSig> {
         support::children(&self.syntax)
@@ -248,16 +293,19 @@ impl InterfaceDef {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
+            .filter(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -283,10 +331,16 @@ impl AstNode for ImplementsFor {
 
 impl ImplementsFor {
     pub fn implements_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_IMPLEMENTS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_IMPLEMENTS))
     }
     pub fn implement_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_IMPLEMENT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_IMPLEMENT))
     }
     pub fn generic_param_list(&self) -> Option<GenericParamList> {
         support::child(&self.syntax)
@@ -295,7 +349,10 @@ impl ImplementsFor {
         support::child(&self.syntax)
     }
     pub fn for_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_FOR)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_FOR))
     }
     pub fn implements_for_target(&self) -> Option<ImplementsForTarget> {
         support::child(&self.syntax)
@@ -304,7 +361,10 @@ impl ImplementsFor {
         support::child(&self.syntax)
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn function_def(&self) -> AstChildren<FunctionDef> {
         support::children(&self.syntax)
@@ -325,16 +385,19 @@ impl ImplementsFor {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
+            .filter(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -363,13 +426,19 @@ impl ClientDef {
         support::children(&self.syntax)
     }
     pub fn client_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CLIENT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CLIENT))
     }
     pub fn client_type(&self) -> Option<ClientType> {
         support::child(&self.syntax)
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
 }
 
@@ -398,19 +467,31 @@ impl ClientValueDef {
         support::children(&self.syntax)
     }
     pub fn client_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CLIENT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CLIENT))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::EQUALS))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
 }
 
@@ -439,10 +520,16 @@ impl TestDef {
         support::children(&self.syntax)
     }
     pub fn test_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_TEST)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_TEST))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
 }
 
@@ -471,13 +558,19 @@ impl TestExprDef {
         support::children(&self.syntax)
     }
     pub fn test_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_TEST)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_TEST))
     }
     pub fn name(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn with_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_WITH)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_WITH))
     }
     pub fn with_value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -512,13 +605,19 @@ impl TestsetDef {
         support::children(&self.syntax)
     }
     pub fn testset_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_TESTSET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_TESTSET))
     }
     pub fn name(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn with_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_WITH)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_WITH))
     }
     pub fn with_value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -581,10 +680,16 @@ impl GeneratorDef {
         support::children(&self.syntax)
     }
     pub fn generator_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_GENERATOR)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_GENERATOR))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn config_block(&self) -> Option<ConfigBlock> {
         support::child(&self.syntax)
@@ -616,10 +721,16 @@ impl RetryPolicyDef {
         support::children(&self.syntax)
     }
     pub fn retry_policy_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_RETRY_POLICY)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_RETRY_POLICY))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
 }
 
@@ -648,10 +759,16 @@ impl TemplateStringDef {
         support::children(&self.syntax)
     }
     pub fn template_string_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_TEMPLATE_STRING)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_TEMPLATE_STRING))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn parameter_list(&self) -> Option<ParameterList> {
         support::child(&self.syntax)
@@ -686,22 +803,34 @@ impl TypeAliasDef {
         support::children(&self.syntax)
     }
     pub fn type_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_TYPE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_TYPE))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn generic_param_list(&self) -> Option<GenericParamList> {
         support::child(&self.syntax)
     }
     pub fn equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::EQUALS))
     }
     pub fn type_expr(&self) -> Option<TypeExpr> {
         support::child(&self.syntax)
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
 }
 
@@ -727,10 +856,16 @@ impl AstNode for BlockAttribute {
 
 impl BlockAttribute {
     pub fn at_at_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::AT_AT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::AT_AT))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn attribute_args(&self) -> Option<AttributeArgs> {
         support::child(&self.syntax)
@@ -759,7 +894,10 @@ impl AstNode for GenericParamList {
 
 impl GenericParamList {
     pub fn less_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::LESS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::LESS))
     }
     pub fn generic_param(&self) -> AstChildren<GenericParam> {
         support::children(&self.syntax)
@@ -768,10 +906,13 @@ impl GenericParamList {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn greater_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::GREATER)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::GREATER))
     }
 }
 
@@ -797,7 +938,10 @@ impl AstNode for ParameterList {
 
 impl ParameterList {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn parameter(&self) -> AstChildren<Parameter> {
         support::children(&self.syntax)
@@ -806,10 +950,13 @@ impl ParameterList {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
 }
 
@@ -834,41 +981,68 @@ impl AstNode for TypeExpr {
 }
 
 impl TypeExpr {
-    pub fn raw_string_literal(&self) -> Option<RawStringLiteral> {
-        support::child(&self.syntax)
+    pub fn raw_string_literal(&self) -> AstChildren<RawStringLiteral> {
+        support::children(&self.syntax)
     }
-    pub fn minus_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::MINUS)
+    pub fn minus_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::MINUS))
     }
-    pub fn bigint_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::BIGINT_LITERAL)
+    pub fn bigint_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::BIGINT_LITERAL))
     }
-    pub fn integer_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::INTEGER_LITERAL)
+    pub fn integer_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::INTEGER_LITERAL))
     }
-    pub fn float_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::FLOAT_LITERAL)
+    pub fn float_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::FLOAT_LITERAL))
     }
-    pub fn true_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_TRUE)
+    pub fn true_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_TRUE))
     }
-    pub fn false_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_FALSE)
+    pub fn false_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_FALSE))
     }
-    pub fn null_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_NULL)
+    pub fn null_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_NULL))
     }
-    pub fn word_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+    pub fn word_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn dot_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::DOT)
+            .filter(|token| matches!(token.kind(), SyntaxKind::DOT))
     }
-    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+    pub fn l_paren_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn function_type_param(&self) -> AstChildren<FunctionTypeParam> {
         support::children(&self.syntax)
@@ -877,43 +1051,49 @@ impl TypeExpr {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
-    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+    pub fn r_paren_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
-    pub fn arrow_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::ARROW)
+    pub fn arrow_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::ARROW))
     }
-    pub fn type_expr(&self) -> Option<TypeExpr> {
-        support::child(&self.syntax)
+    pub fn type_expr(&self) -> AstChildren<TypeExpr> {
+        support::children(&self.syntax)
     }
-    pub fn throws_clause(&self) -> Option<ThrowsClause> {
-        support::child(&self.syntax)
+    pub fn throws_clause(&self) -> AstChildren<ThrowsClause> {
+        support::children(&self.syntax)
     }
     pub fn l_bracket_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::L_BRACKET)
+            .filter(|token| matches!(token.kind(), SyntaxKind::L_BRACKET))
     }
     pub fn r_bracket_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::R_BRACKET)
+            .filter(|token| matches!(token.kind(), SyntaxKind::R_BRACKET))
     }
     pub fn question_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::QUESTION)
+            .filter(|token| matches!(token.kind(), SyntaxKind::QUESTION))
     }
     pub fn pipe_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::PIPE)
+            .filter(|token| matches!(token.kind(), SyntaxKind::PIPE))
     }
     pub fn attribute(&self) -> AstChildren<Attribute> {
         support::children(&self.syntax)
@@ -942,7 +1122,10 @@ impl AstNode for ThrowsClause {
 
 impl ThrowsClause {
     pub fn throws_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_THROWS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_THROWS))
     }
 }
 
@@ -968,10 +1151,16 @@ impl AstNode for LlmFunctionBody {
 
 impl LlmFunctionBody {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -1023,16 +1212,25 @@ impl AstNode for Parameter {
 
 impl Parameter {
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COLON))
     }
     pub fn type_expr(&self) -> Option<TypeExpr> {
         support::child(&self.syntax)
     }
     pub fn equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::EQUALS))
     }
     pub fn default_value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -1061,10 +1259,16 @@ impl AstNode for ClientField {
 
 impl ClientField {
     pub fn client_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CLIENT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CLIENT))
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COLON))
     }
 }
 
@@ -1090,10 +1294,16 @@ impl AstNode for ToolsField {
 
 impl ToolsField {
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COLON))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -1122,10 +1332,16 @@ impl AstNode for PromptField {
 
 impl PromptField {
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COLON))
     }
 }
 
@@ -1151,7 +1367,10 @@ impl AstNode for BlockExpr {
 
 impl BlockExpr {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn block_item(&self) -> AstChildren<BlockItem> {
         support::children(&self.syntax)
@@ -1160,10 +1379,13 @@ impl BlockExpr {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
+            .filter(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -1192,10 +1414,16 @@ impl Field {
         support::children(&self.syntax)
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COLON))
     }
     pub fn type_expr(&self) -> Option<TypeExpr> {
         support::child(&self.syntax)
@@ -1224,7 +1452,10 @@ impl AstNode for ImplementsBlock {
 
 impl ImplementsBlock {
     pub fn implements_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_IMPLEMENTS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_IMPLEMENTS))
     }
     pub fn implements_target(&self) -> Option<ImplementsTarget> {
         support::child(&self.syntax)
@@ -1233,7 +1464,10 @@ impl ImplementsBlock {
         support::child(&self.syntax)
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn function_def(&self) -> AstChildren<FunctionDef> {
         support::children(&self.syntax)
@@ -1254,16 +1488,19 @@ impl ImplementsBlock {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
+            .filter(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -1289,16 +1526,19 @@ impl AstNode for RequiresClause {
 
 impl RequiresClause {
     pub fn requires_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_REQUIRES)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_REQUIRES))
     }
-    pub fn type_expr(&self) -> Option<TypeExpr> {
-        support::child(&self.syntax)
+    pub fn type_expr(&self) -> AstChildren<TypeExpr> {
+        support::children(&self.syntax)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
 }
 
@@ -1327,10 +1567,16 @@ impl MethodSig {
         support::children(&self.syntax)
     }
     pub fn function_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_FUNCTION)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_FUNCTION))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn generic_param_list(&self) -> Option<GenericParamList> {
         support::child(&self.syntax)
@@ -1339,10 +1585,16 @@ impl MethodSig {
         support::child(&self.syntax)
     }
     pub fn arrow_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::ARROW)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::ARROW))
     }
     pub fn fat_arrow_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::FAT_ARROW)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::FAT_ARROW))
     }
     pub fn type_expr(&self) -> Option<TypeExpr> {
         support::child(&self.syntax)
@@ -1374,16 +1626,28 @@ impl AstNode for AssociatedTypeDecl {
 
 impl AssociatedTypeDecl {
     pub fn type_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_TYPE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_TYPE))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn extends_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_EXTENDS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_EXTENDS))
     }
     pub fn equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::EQUALS))
     }
     pub fn binding(&self) -> Option<TypeExpr> {
         support::child(&self.syntax)
@@ -1434,7 +1698,10 @@ impl AstNode for InterfaceFieldLink {
 
 impl InterfaceFieldLink {
     pub fn as_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_AS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_AS))
     }
 }
 
@@ -1482,7 +1749,10 @@ impl AstNode for EnumVariant {
 
 impl EnumVariant {
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn attribute(&self) -> AstChildren<Attribute> {
         support::children(&self.syntax)
@@ -1511,10 +1781,16 @@ impl AstNode for Attribute {
 
 impl Attribute {
     pub fn at_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::AT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::AT))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn attribute_args(&self) -> Option<AttributeArgs> {
         support::child(&self.syntax)
@@ -1543,13 +1819,22 @@ impl AstNode for ClientType {
 
 impl ClientType {
     pub fn less_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::LESS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::LESS))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn greater_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::GREATER)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::GREATER))
     }
 }
 
@@ -1575,7 +1860,10 @@ impl AstNode for ConfigBlock {
 
 impl ConfigBlock {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn config_item(&self) -> AstChildren<ConfigItem> {
         support::children(&self.syntax)
@@ -1587,16 +1875,19 @@ impl ConfigBlock {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
+            .filter(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -1625,10 +1916,25 @@ impl ConfigItem {
         support::child(&self.syntax)
     }
     pub fn key_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_CLIENT
+                        | SyntaxKind::KW_RETRY_POLICY
+                        | SyntaxKind::KW_ENUM
+                        | SyntaxKind::KW_CLASS
+                )
+            })
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COLON))
     }
     pub fn config_block(&self) -> Option<ConfigBlock> {
         support::child(&self.syntax)
@@ -1659,8 +1965,11 @@ impl AstNode for StringLiteral {
 }
 
 impl StringLiteral {
-    pub fn quote_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::QUOTE)
+    pub fn quote_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::QUOTE))
     }
     pub fn any_element(&self) -> impl Iterator<Item = SyntaxElement> + '_ {
         self.syntax
@@ -1723,7 +2032,10 @@ impl AstNode for ConfigArray {
 
 impl ConfigArray {
     pub fn l_bracket_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACKET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACKET))
     }
     pub fn config_value(&self) -> AstChildren<ConfigValue> {
         support::children(&self.syntax)
@@ -1735,10 +2047,13 @@ impl ConfigArray {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn r_bracket_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACKET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACKET))
     }
 }
 
@@ -1792,7 +2107,10 @@ impl AstNode for GenericParam {
 
 impl GenericParam {
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn generic_param_bounds(&self) -> Option<GenericParamBounds> {
         support::child(&self.syntax)
@@ -1821,16 +2139,19 @@ impl AstNode for GenericParamBounds {
 
 impl GenericParamBounds {
     pub fn extends_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_EXTENDS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_EXTENDS))
     }
-    pub fn type_expr(&self) -> Option<TypeExpr> {
-        support::child(&self.syntax)
+    pub fn type_expr(&self) -> AstChildren<TypeExpr> {
+        support::children(&self.syntax)
     }
     pub fn and_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::AND)
+            .filter(|token| matches!(token.kind(), SyntaxKind::AND))
     }
 }
 
@@ -1856,7 +2177,10 @@ impl AstNode for TypeArgs {
 
 impl TypeArgs {
     pub fn less_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::LESS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::LESS))
     }
     pub fn type_expr(&self) -> AstChildren<TypeExpr> {
         support::children(&self.syntax)
@@ -1868,10 +2192,13 @@ impl TypeArgs {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn greater_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::GREATER)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::GREATER))
     }
 }
 
@@ -1897,13 +2224,22 @@ impl AstNode for FunctionTypeParam {
 
 impl FunctionTypeParam {
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
     }
     pub fn question_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::QUESTION)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::QUESTION))
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COLON))
     }
     pub fn type_expr(&self) -> Option<TypeExpr> {
         support::child(&self.syntax)
@@ -1932,7 +2268,10 @@ impl AstNode for AttributeArgs {
 
 impl AttributeArgs {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn expr_node(&self) -> AstChildren<ExprNode> {
         support::children(&self.syntax)
@@ -1941,10 +2280,13 @@ impl AttributeArgs {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
 }
 
@@ -1973,7 +2315,7 @@ impl Error {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::ERROR_TOKEN)
+            .filter(|token| matches!(token.kind(), SyntaxKind::ERROR_TOKEN))
     }
 }
 
@@ -1999,22 +2341,40 @@ impl AstNode for LiteralExpr {
 
 impl LiteralExpr {
     pub fn bigint_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::BIGINT_LITERAL)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::BIGINT_LITERAL))
     }
     pub fn integer_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::INTEGER_LITERAL)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::INTEGER_LITERAL))
     }
     pub fn float_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::FLOAT_LITERAL)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::FLOAT_LITERAL))
     }
     pub fn true_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_TRUE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_TRUE))
     }
     pub fn false_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_FALSE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_FALSE))
     }
     pub fn null_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_NULL)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_NULL))
     }
 }
 
@@ -2045,44 +2405,71 @@ impl PathExpr {
     pub fn generic_args(&self) -> Option<GenericArgs> {
         support::child(&self.syntax)
     }
-    pub fn word_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+    pub fn word_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
-    pub fn client_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CLIENT)
+    pub fn client_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_CLIENT))
     }
-    pub fn class_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CLASS)
+    pub fn class_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_CLASS))
     }
-    pub fn enum_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_ENUM)
+    pub fn enum_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_ENUM))
     }
-    pub fn interface_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_INTERFACE)
+    pub fn interface_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_INTERFACE))
     }
-    pub fn function_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_FUNCTION)
+    pub fn function_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_FUNCTION))
     }
-    pub fn implements_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_IMPLEMENTS)
+    pub fn implements_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_IMPLEMENTS))
     }
-    pub fn spawn_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_SPAWN)
+    pub fn spawn_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_SPAWN))
     }
-    pub fn await_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_AWAIT)
+    pub fn await_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_AWAIT))
     }
     pub fn dot_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::DOT)
+            .filter(|token| matches!(token.kind(), SyntaxKind::DOT))
     }
     pub fn double_colon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::DOUBLE_COLON)
+            .filter(|token| matches!(token.kind(), SyntaxKind::DOUBLE_COLON))
     }
 }
 
@@ -2167,100 +2554,196 @@ impl BinaryExpr {
         support::child(&self.syntax)
     }
     pub fn equals_equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::EQUALS_EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::EQUALS_EQUALS))
     }
     pub fn not_equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::NOT_EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::NOT_EQUALS))
     }
     pub fn less_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::LESS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::LESS))
     }
     pub fn greater_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::GREATER)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::GREATER))
     }
     pub fn less_equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::LESS_EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::LESS_EQUALS))
     }
     pub fn greater_equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::GREATER_EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::GREATER_EQUALS))
     }
     pub fn and_and_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::AND_AND)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::AND_AND))
     }
     pub fn or_or_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::OR_OR)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::OR_OR))
     }
     pub fn and_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::AND)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::AND))
     }
     pub fn pipe_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::PIPE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::PIPE))
     }
     pub fn caret_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::CARET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::CARET))
     }
     pub fn less_less_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::LESS_LESS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::LESS_LESS))
     }
     pub fn greater_greater_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::GREATER_GREATER)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::GREATER_GREATER))
     }
     pub fn plus_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::PLUS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::PLUS))
     }
     pub fn minus_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::MINUS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::MINUS))
     }
     pub fn star_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::STAR)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::STAR))
     }
     pub fn slash_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SLASH)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::SLASH))
     }
     pub fn percent_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::PERCENT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::PERCENT))
     }
     pub fn question_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::QUESTION)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::QUESTION))
     }
     pub fn question_question_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::QUESTION_QUESTION)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::QUESTION_QUESTION))
     }
     pub fn instanceof_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_INSTANCEOF)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_INSTANCEOF))
     }
     pub fn equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::EQUALS))
     }
     pub fn plus_equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::PLUS_EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::PLUS_EQUALS))
     }
     pub fn minus_equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::MINUS_EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::MINUS_EQUALS))
     }
     pub fn star_equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::STAR_EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::STAR_EQUALS))
     }
     pub fn slash_equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SLASH_EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::SLASH_EQUALS))
     }
     pub fn percent_equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::PERCENT_EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::PERCENT_EQUALS))
     }
     pub fn and_equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::AND_EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::AND_EQUALS))
     }
     pub fn pipe_equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::PIPE_EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::PIPE_EQUALS))
     }
     pub fn caret_equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::CARET_EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::CARET_EQUALS))
     }
     pub fn less_less_equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::LESS_LESS_EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::LESS_LESS_EQUALS))
     }
     pub fn greater_greater_equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::GREATER_GREATER_EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::GREATER_GREATER_EQUALS))
     }
     pub fn rhs(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -2292,7 +2775,10 @@ impl IsExpr {
         support::child(&self.syntax)
     }
     pub fn is_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_IS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_IS))
     }
     pub fn pattern(&self) -> Option<Pattern> {
         support::child(&self.syntax)
@@ -2321,19 +2807,34 @@ impl AstNode for UnaryExpr {
 
 impl UnaryExpr {
     pub fn not_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::NOT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::NOT))
     }
     pub fn minus_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::MINUS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::MINUS))
     }
     pub fn tilde_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::TILDE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::TILDE))
     }
     pub fn plus_plus_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::PLUS_PLUS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::PLUS_PLUS))
     }
     pub fn minus_minus_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::MINUS_MINUS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::MINUS_MINUS))
     }
     pub fn operand(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -2394,13 +2895,19 @@ impl IndexExpr {
         support::child(&self.syntax)
     }
     pub fn l_bracket_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACKET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACKET))
     }
     pub fn index(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn r_bracket_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACKET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACKET))
     }
 }
 
@@ -2458,7 +2965,10 @@ impl OptionalCallExpr {
         support::child(&self.syntax)
     }
     pub fn question_dot_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::QUESTION_DOT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::QUESTION_DOT))
     }
     pub fn call_args(&self) -> Option<CallArgs> {
         support::child(&self.syntax)
@@ -2490,16 +3000,25 @@ impl OptionalIndexExpr {
         support::child(&self.syntax)
     }
     pub fn question_dot_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::QUESTION_DOT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::QUESTION_DOT))
     }
     pub fn l_bracket_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACKET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACKET))
     }
     pub fn index(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn r_bracket_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACKET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACKET))
     }
 }
 
@@ -2528,10 +3047,29 @@ impl FieldAccessExpr {
         support::child(&self.syntax)
     }
     pub fn dot_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::DOT))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_CLIENT
+                        | SyntaxKind::KW_CLASS
+                        | SyntaxKind::KW_ENUM
+                        | SyntaxKind::KW_INTERFACE
+                        | SyntaxKind::KW_FUNCTION
+                        | SyntaxKind::KW_IMPLEMENTS
+                        | SyntaxKind::KW_SPAWN
+                        | SyntaxKind::KW_AWAIT
+                )
+            })
     }
 }
 
@@ -2560,10 +3098,16 @@ impl UpcastExpr {
         support::child(&self.syntax)
     }
     pub fn dot_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::DOT))
     }
     pub fn as_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_AS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_AS))
     }
     pub fn generic_args(&self) -> Option<GenericArgs> {
         support::child(&self.syntax)
@@ -2592,22 +3136,37 @@ impl AstNode for QualifiedPathExpr {
 
 impl QualifiedPathExpr {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
-    pub fn type_expr(&self) -> Option<TypeExpr> {
-        support::child(&self.syntax)
+    pub fn type_expr(&self) -> AstChildren<TypeExpr> {
+        support::children(&self.syntax)
     }
     pub fn as_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_AS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_AS))
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
     pub fn dot_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::DOT))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
 }
 
@@ -2633,10 +3192,16 @@ impl AstNode for SpecExpr {
 
 impl SpecExpr {
     pub fn at_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::AT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::AT))
     }
     pub fn spec_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
 }
 
@@ -2665,10 +3230,29 @@ impl OptionalFieldAccessExpr {
         support::child(&self.syntax)
     }
     pub fn question_dot_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::QUESTION_DOT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::QUESTION_DOT))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_CLIENT
+                        | SyntaxKind::KW_CLASS
+                        | SyntaxKind::KW_ENUM
+                        | SyntaxKind::KW_INTERFACE
+                        | SyntaxKind::KW_FUNCTION
+                        | SyntaxKind::KW_IMPLEMENTS
+                        | SyntaxKind::KW_SPAWN
+                        | SyntaxKind::KW_AWAIT
+                )
+            })
     }
 }
 
@@ -2694,13 +3278,22 @@ impl AstNode for EnvAccessExpr {
 
 impl EnvAccessExpr {
     pub fn env_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn dot_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::DOT))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
 }
 
@@ -2726,13 +3319,19 @@ impl AstNode for ParenExpr {
 
 impl ParenExpr {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn expr_node(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
 }
 
@@ -2758,7 +3357,10 @@ impl AstNode for IfExpr {
 
 impl IfExpr {
     pub fn if_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_IF)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_IF))
     }
     pub fn condition(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -2767,9 +3369,12 @@ impl IfExpr {
         support::child(&self.syntax)
     }
     pub fn else_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_ELSE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_ELSE))
     }
-    pub fn else_branch(&self) -> Option<BlockExpr> {
+    pub fn else_branch(&self) -> Option<ElseBranch> {
         support::child(&self.syntax)
     }
 }
@@ -2796,13 +3401,19 @@ impl AstNode for IfLetExpr {
 
 impl IfLetExpr {
     pub fn if_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_IF)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_IF))
     }
     pub fn pattern(&self) -> Option<Pattern> {
         support::child(&self.syntax)
     }
     pub fn equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::EQUALS))
     }
     pub fn scrutinee(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -2811,9 +3422,12 @@ impl IfLetExpr {
         support::child(&self.syntax)
     }
     pub fn else_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_ELSE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_ELSE))
     }
-    pub fn else_branch(&self) -> Option<BlockExpr> {
+    pub fn else_branch(&self) -> Option<ElseBranch> {
         support::child(&self.syntax)
     }
 }
@@ -2840,25 +3454,40 @@ impl AstNode for MatchExpr {
 
 impl MatchExpr {
     pub fn match_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_MATCH)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_MATCH))
     }
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn scrutinee(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COLON))
     }
     pub fn type_expr(&self) -> Option<TypeExpr> {
         support::child(&self.syntax)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn match_arm(&self) -> AstChildren<MatchArm> {
         support::children(&self.syntax)
@@ -2867,7 +3496,10 @@ impl MatchExpr {
         support::children(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -2922,7 +3554,10 @@ impl AstNode for ThrowExpr {
 
 impl ThrowExpr {
     pub fn throw_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_THROW)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_THROW))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -2951,7 +3586,10 @@ impl AstNode for ReturnExpr {
 
 impl ReturnExpr {
     pub fn return_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_RETURN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_RETURN))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -2980,7 +3618,10 @@ impl AstNode for BreakExpr {
 
 impl BreakExpr {
     pub fn break_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_BREAK)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_BREAK))
     }
 }
 
@@ -3006,7 +3647,10 @@ impl AstNode for ContinueExpr {
 
 impl ContinueExpr {
     pub fn continue_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CONTINUE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CONTINUE))
     }
 }
 
@@ -3032,22 +3676,28 @@ impl AstNode for SpawnExpr {
 
 impl SpawnExpr {
     pub fn spawn_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_SPAWN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_SPAWN))
     }
     pub fn name(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn with_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_WITH)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_WITH))
     }
-    pub fn expr_node(&self) -> Option<ExprNode> {
-        support::child(&self.syntax)
+    pub fn expr_node(&self) -> AstChildren<ExprNode> {
+        support::children(&self.syntax)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn body(&self) -> Option<BlockExpr> {
         support::child(&self.syntax)
@@ -3076,7 +3726,10 @@ impl AstNode for AwaitExpr {
 
 impl AwaitExpr {
     pub fn await_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_AWAIT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_AWAIT))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -3111,10 +3764,16 @@ impl LambdaExpr {
         support::child(&self.syntax)
     }
     pub fn fat_arrow_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::FAT_ARROW)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::FAT_ARROW))
     }
     pub fn arrow_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::ARROW)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::ARROW))
     }
     pub fn type_expr(&self) -> Option<TypeExpr> {
         support::child(&self.syntax)
@@ -3149,10 +3808,16 @@ impl AstNode for ForExpr {
 
 impl ForExpr {
     pub fn for_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_FOR)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_FOR))
     }
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn let_stmt(&self) -> AstChildren<LetStmt> {
         support::children(&self.syntax)
@@ -3164,16 +3829,19 @@ impl ForExpr {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::KW_IN)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_IN))
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
+            .filter(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
     pub fn body(&self) -> Option<BlockExpr> {
         support::child(&self.syntax)
@@ -3205,7 +3873,10 @@ impl ObjectLiteral {
         support::child(&self.syntax)
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn object_field(&self) -> AstChildren<ObjectField> {
         support::children(&self.syntax)
@@ -3217,10 +3888,13 @@ impl ObjectLiteral {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -3246,7 +3920,10 @@ impl AstNode for ArrayLiteral {
 
 impl ArrayLiteral {
     pub fn l_bracket_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACKET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACKET))
     }
     pub fn expr_node(&self) -> AstChildren<ExprNode> {
         support::children(&self.syntax)
@@ -3255,10 +3932,13 @@ impl ArrayLiteral {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn r_bracket_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACKET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACKET))
     }
 }
 
@@ -3284,7 +3964,10 @@ impl AstNode for MapLiteral {
 
 impl MapLiteral {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn object_field(&self) -> AstChildren<ObjectField> {
         support::children(&self.syntax)
@@ -3293,10 +3976,13 @@ impl MapLiteral {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -3322,7 +4008,10 @@ impl AstNode for WhileStmt {
 
 impl WhileStmt {
     pub fn while_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_WHILE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_WHILE))
     }
     pub fn condition(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -3354,19 +4043,31 @@ impl AstNode for WhileLetStmt {
 
 impl WhileLetStmt {
     pub fn while_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_WHILE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_WHILE))
     }
     pub fn let_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_LET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_LET))
     }
     pub fn const_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CONST)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CONST))
     }
     pub fn pattern(&self) -> Option<Pattern> {
         support::child(&self.syntax)
     }
     pub fn equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::EQUALS))
     }
     pub fn scrutinee(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -3398,28 +4099,43 @@ impl AstNode for LetStmt {
 
 impl LetStmt {
     pub fn let_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_LET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_LET))
     }
     pub fn const_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CONST)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CONST))
     }
     pub fn pattern(&self) -> Option<Pattern> {
         support::child(&self.syntax)
     }
     pub fn equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::EQUALS))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn else_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_ELSE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_ELSE))
     }
     pub fn block_expr(&self) -> Option<BlockExpr> {
         support::child(&self.syntax)
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
 }
 
@@ -3445,28 +4161,49 @@ impl AstNode for TypeBindingStmt {
 
 impl TypeBindingStmt {
     pub fn type_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_TYPE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_TYPE))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::EQUALS))
     }
     pub fn unreflect_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
 }
 
@@ -3492,10 +4229,16 @@ impl AstNode for BreakStmt {
 
 impl BreakStmt {
     pub fn break_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_BREAK)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_BREAK))
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
 }
 
@@ -3521,10 +4264,16 @@ impl AstNode for ContinueStmt {
 
 impl ContinueStmt {
     pub fn continue_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CONTINUE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CONTINUE))
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
 }
 
@@ -3550,13 +4299,19 @@ impl AstNode for ReturnStmt {
 
 impl ReturnStmt {
     pub fn return_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_RETURN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_RETURN))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
 }
 
@@ -3585,7 +4340,10 @@ impl ThrowStmt {
         support::child(&self.syntax)
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
 }
 
@@ -3611,7 +4369,10 @@ impl AstNode for DeferStmt {
 
 impl DeferStmt {
     pub fn defer_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_DEFER)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_DEFER))
     }
     pub fn body(&self) -> Option<BlockExpr> {
         support::child(&self.syntax)
@@ -3640,7 +4401,10 @@ impl AstNode for GenericArgs {
 
 impl GenericArgs {
     pub fn less_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::LESS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::LESS))
     }
     pub fn type_expr(&self) -> AstChildren<TypeExpr> {
         support::children(&self.syntax)
@@ -3652,10 +4416,13 @@ impl GenericArgs {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn greater_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::GREATER)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::GREATER))
     }
 }
 
@@ -3759,7 +4526,10 @@ impl AstNode for CallArgs {
 
 impl CallArgs {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn call_arg(&self) -> AstChildren<CallArg> {
         support::children(&self.syntax)
@@ -3768,10 +4538,13 @@ impl CallArgs {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
 }
 
@@ -3803,13 +4576,19 @@ impl MatchArm {
         support::child(&self.syntax)
     }
     pub fn fat_arrow_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::FAT_ARROW)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::FAT_ARROW))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn comma_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COMMA)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
 }
 
@@ -3835,7 +4614,10 @@ impl AstNode for MatchGuard {
 
 impl MatchGuard {
     pub fn if_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_IF)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_IF))
     }
     pub fn condition(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -3890,31 +4672,52 @@ impl AstNode for CatchClause {
 
 impl CatchClause {
     pub fn catch_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CATCH)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CATCH))
     }
     pub fn catch_all_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CATCH_ALL)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CATCH_ALL))
     }
     pub fn catch_all_panics_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CATCH_ALL_PANICS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CATCH_ALL_PANICS))
     }
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn catch_binding(&self) -> Option<CatchBinding> {
         support::child(&self.syntax)
     }
     pub fn comma_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COMMA)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn catch_stack_trace_binding(&self) -> Option<CatchStackTraceBinding> {
         support::child(&self.syntax)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn catch_arm(&self) -> AstChildren<CatchArm> {
         support::children(&self.syntax)
@@ -3923,7 +4726,10 @@ impl CatchClause {
         support::children(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -3949,7 +4755,10 @@ impl AstNode for CatchBinding {
 
 impl CatchBinding {
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
 }
 
@@ -3975,10 +4784,16 @@ impl AstNode for CatchStackTraceBinding {
 
 impl CatchStackTraceBinding {
     pub fn comma_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COMMA)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
 }
 
@@ -4010,13 +4825,19 @@ impl CatchArm {
         support::child(&self.syntax)
     }
     pub fn fat_arrow_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::FAT_ARROW)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::FAT_ARROW))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn comma_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COMMA)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
 }
 
@@ -4074,7 +4895,7 @@ impl ChainPattern {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COLON)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COLON))
     }
     pub fn rest(&self) -> AstChildren<ChainPatternItem> {
         support::children(&self.syntax)
@@ -4109,7 +4930,7 @@ impl UnionPattern {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::PIPE)
+            .filter(|token| matches!(token.kind(), SyntaxKind::PIPE))
     }
     pub fn rest(&self) -> AstChildren<PatternAtom> {
         support::children(&self.syntax)
@@ -4138,16 +4959,28 @@ impl AstNode for BindingPattern {
 
 impl BindingPattern {
     pub fn let_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_LET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_LET))
     }
     pub fn const_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CONST)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CONST))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COLON))
     }
     pub fn pattern(&self) -> Option<Pattern> {
         support::child(&self.syntax)
@@ -4176,25 +5009,34 @@ impl AstNode for DestructurePattern {
 
 impl DestructurePattern {
     pub fn let_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_LET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_LET))
     }
     pub fn const_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CONST)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CONST))
     }
     pub fn first_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn dot_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::DOT)
+            .filter(|token| matches!(token.kind(), SyntaxKind::DOT))
     }
     pub fn path_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::WORD)
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn generic_args(&self) -> Option<GenericArgs> {
         support::child(&self.syntax)
@@ -4203,7 +5045,10 @@ impl DestructurePattern {
         support::child(&self.syntax)
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn field_pattern(&self) -> AstChildren<FieldPattern> {
         support::children(&self.syntax)
@@ -4212,10 +5057,13 @@ impl DestructurePattern {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -4241,7 +5089,10 @@ impl AstNode for ArrayPattern {
 
 impl ArrayPattern {
     pub fn l_bracket_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACKET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACKET))
     }
     pub fn array_pattern_element(&self) -> AstChildren<ArrayPatternElement> {
         support::children(&self.syntax)
@@ -4250,13 +5101,19 @@ impl ArrayPattern {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::COMMA)
+            .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
     pub fn r_bracket_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACKET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACKET))
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COLON))
     }
     pub fn type_expr(&self) -> Option<TypeExpr> {
         support::child(&self.syntax)
@@ -4311,16 +5168,25 @@ impl AstNode for UnreflectPattern {
 
 impl UnreflectPattern {
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
 }
 
@@ -4346,13 +5212,19 @@ impl AstNode for ParenPattern {
 
 impl ParenPattern {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn pattern(&self) -> Option<Pattern> {
         support::child(&self.syntax)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
 }
 
@@ -4378,13 +5250,22 @@ impl AstNode for WildcardPattern {
 
 impl WildcardPattern {
     pub fn let_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_LET)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_LET))
     }
     pub fn const_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CONST)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_CONST))
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
 }
 
@@ -4410,10 +5291,16 @@ impl AstNode for FieldPattern {
 
 impl FieldPattern {
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COLON))
     }
     pub fn pattern(&self) -> Option<Pattern> {
         support::child(&self.syntax)
@@ -4442,7 +5329,10 @@ impl AstNode for ArrayPatternElement {
 
 impl ArrayPatternElement {
     pub fn dot_dot_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOT_DOT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::DOT_DOT))
     }
     pub fn pattern(&self) -> Option<Pattern> {
         support::child(&self.syntax)
@@ -4471,10 +5361,16 @@ impl AstNode for CallArg {
 
 impl CallArg {
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
     }
     pub fn equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::EQUALS)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::EQUALS))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -4503,16 +5399,25 @@ impl AstNode for UnreflectArg {
 
 impl UnreflectArg {
     pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
 }
 
@@ -4538,13 +5443,19 @@ impl AstNode for ObjectField {
 
 impl ObjectField {
     pub fn key_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
     }
     pub fn string_literal(&self) -> Option<StringLiteral> {
         support::child(&self.syntax)
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COLON)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::COLON))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -4573,7 +5484,10 @@ impl AstNode for SpreadElement {
 
 impl SpreadElement {
     pub fn dot_dot_dot_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOT_DOT_DOT)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::DOT_DOT_DOT))
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -4658,7 +5572,10 @@ impl AstNode for BacktickInterpolation {
 
 impl BacktickInterpolation {
     pub fn dollar_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOLLAR)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::DOLLAR))
     }
     pub fn expr_node(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
@@ -4690,31 +5607,52 @@ impl AstNode for BacktickForOpen {
 
 impl BacktickForOpen {
     pub fn dollar_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOLLAR)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::DOLLAR))
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn for_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_FOR)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_FOR))
     }
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn let_stmt(&self) -> Option<LetStmt> {
         support::child(&self.syntax)
     }
     pub fn in_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_IN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_IN))
     }
     pub fn expr_node(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -4740,16 +5678,28 @@ impl AstNode for BacktickEndfor {
 
 impl BacktickEndfor {
     pub fn dollar_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOLLAR)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::DOLLAR))
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn endfor_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -4775,25 +5725,43 @@ impl AstNode for BacktickIfOpen {
 
 impl BacktickIfOpen {
     pub fn dollar_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOLLAR)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::DOLLAR))
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn if_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_IF)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_IF))
     }
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn expr_node(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -4819,28 +5787,49 @@ impl AstNode for BacktickElseIf {
 
 impl BacktickElseIf {
     pub fn dollar_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOLLAR)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::DOLLAR))
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn else_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_ELSE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_ELSE))
     }
     pub fn if_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_IF)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_IF))
     }
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
     pub fn expr_node(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -4866,16 +5855,28 @@ impl AstNode for BacktickElse {
 
 impl BacktickElse {
     pub fn dollar_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOLLAR)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::DOLLAR))
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn else_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_ELSE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_ELSE))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -4901,16 +5902,28 @@ impl AstNode for BacktickEndif {
 
 impl BacktickEndif {
     pub fn dollar_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::DOLLAR)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::DOLLAR))
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::L_BRACE))
     }
     pub fn endif_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::R_BRACE))
     }
 }
 
@@ -6080,6 +7093,56 @@ impl From<TestExprDef> for BlockItem {
 impl From<TestsetDef> for BlockItem {
     fn from(node: TestsetDef) -> Self {
         Self::TestsetDef(node)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ElseBranch {
+    BlockExpr(BlockExpr),
+    IfExpr(IfExpr),
+    IfLetExpr(IfLetExpr),
+}
+
+impl AstNode for ElseBranch {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        matches!(
+            kind,
+            SyntaxKind::BLOCK_EXPR | SyntaxKind::IF_EXPR | SyntaxKind::IF_LET_EXPR
+        )
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        match syntax.kind() {
+            SyntaxKind::BLOCK_EXPR => Some(Self::BlockExpr(BlockExpr { syntax })),
+            SyntaxKind::IF_EXPR => Some(Self::IfExpr(IfExpr { syntax })),
+            SyntaxKind::IF_LET_EXPR => Some(Self::IfLetExpr(IfLetExpr { syntax })),
+            _ => None,
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        match self {
+            Self::BlockExpr(node) => node.syntax(),
+            Self::IfExpr(node) => node.syntax(),
+            Self::IfLetExpr(node) => node.syntax(),
+        }
+    }
+}
+
+impl From<BlockExpr> for ElseBranch {
+    fn from(node: BlockExpr) -> Self {
+        Self::BlockExpr(node)
+    }
+}
+
+impl From<IfExpr> for ElseBranch {
+    fn from(node: IfExpr) -> Self {
+        Self::IfExpr(node)
+    }
+}
+
+impl From<IfLetExpr> for ElseBranch {
+    fn from(node: IfLetExpr) -> Self {
+        Self::IfLetExpr(node)
     }
 }
 

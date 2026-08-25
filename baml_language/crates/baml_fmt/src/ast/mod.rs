@@ -6,9 +6,7 @@ mod statements;
 mod tokens;
 mod types;
 
-pub use baml_db::baml_compiler_syntax::{
-    FromCST, KnownKind, StrongAstError, SyntaxNodeIter, validated::nodes::*,
-};
+pub use baml_db::baml_compiler_syntax::{FromCST, KnownKind, StrongAstError, SyntaxNodeIter};
 use baml_db::baml_compiler_syntax::{ast as syntax_ast, validated::Validated};
 use rowan::TextRange;
 pub use tokens::*;

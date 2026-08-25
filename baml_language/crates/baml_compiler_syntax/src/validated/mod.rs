@@ -9,7 +9,6 @@ use crate::{
 mod arena;
 mod generated_schema;
 mod generated_tokens;
-pub mod nodes;
 
 pub use arena::{
     NodeId, Validated, ValidatedChildren, ValidatedDirectElements, ValidatedElement,

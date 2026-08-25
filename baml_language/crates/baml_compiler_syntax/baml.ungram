@@ -333,7 +333,7 @@ IfExpr =
   'if'
   condition:ExprNode
   then_branch:BlockExpr
-  ('else' else_branch:(BlockExpr | IfExpr | IfLetExpr))?
+  ('else' else_branch:ElseBranch)?
 
 IfLetExpr =
   'if'
@@ -341,7 +341,9 @@ IfLetExpr =
   '='
   scrutinee:ExprNode
   then_branch:BlockExpr
-  ('else' else_branch:(BlockExpr | IfExpr | IfLetExpr))?
+  ('else' else_branch:ElseBranch)?
+
+ElseBranch = BlockExpr | IfExpr | IfLetExpr
 
 MatchExpr =
   'match'

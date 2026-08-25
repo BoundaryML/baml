@@ -73,7 +73,7 @@ struct NodeField {
 
 struct TokenField {
     name: String,
-    kind: String,
+    kinds: Vec<String>,
     cardinality: Cardinality,
 }
 
@@ -491,21 +491,20 @@ fn generate_schema(grammar: &Grammar) -> Result<String> {
                     let method = field.name.replace("_token", "_tokens");
                     writeln!(
                         source,
-                        "    pub fn {method}(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {{ self.elements({slot}).filter_map(|element| element.token().filter(|token| token.kind() == SyntaxKind::{})) }}",
-                        field.kind
+                        "    pub fn {method}(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {{ self.elements({slot}).filter_map(|element| element.token()) }}"
                     )?;
                 }
                 Field::Token(field) if matches!(field.cardinality, Cardinality::Required) => {
                     writeln!(
                         source,
-                        "    pub fn {}(&self) -> ValidatedSyntaxToken {{ self.token({slot}, SyntaxKind::{}).expect(\"validated required token\") }}",
-                        field.name, field.kind
+                        "    pub fn {}(&self) -> ValidatedSyntaxToken {{ self.token({slot}).expect(\"validated required token\") }}",
+                        field.name
                     )?;
                 }
                 Field::Token(field) => writeln!(
                     source,
-                    "    pub fn {}(&self) -> Option<ValidatedSyntaxToken> {{ self.token({slot}, SyntaxKind::{}) }}",
-                    field.name, field.kind
+                    "    pub fn {}(&self) -> Option<ValidatedSyntaxToken> {{ self.token({slot}) }}",
+                    field.name
                 )?,
             }
         }
@@ -728,7 +727,7 @@ fn lower_rule(
                 name: label
                     .map(str::to_owned)
                     .unwrap_or_else(|| token_method_name(text)),
-                kind: token_kind(text)?,
+                kinds: vec![token_kind(text)?],
                 cardinality,
             }));
         }
@@ -744,6 +743,23 @@ fn lower_rule(
             }
         }
         Rule::Alt(rules) => {
+            if let Some(label) = label
+                && rules.iter().all(|rule| matches!(rule, Rule::Token(_)))
+            {
+                let kinds = rules
+                    .iter()
+                    .map(|rule| match rule {
+                        Rule::Token(token) => token_kind(&grammar[*token].name),
+                        _ => unreachable!("checked token alternative"),
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                fields.push(Field::Token(TokenField {
+                    name: label.to_owned(),
+                    kinds,
+                    cardinality,
+                }));
+                return Ok(());
+            }
             for rule in rules {
                 lower_rule(
                     grammar,
@@ -773,14 +789,52 @@ fn optional_cardinality(cardinality: Cardinality) -> Cardinality {
 }
 
 fn deduplicate_fields(fields: &mut Vec<Field>) {
-    let mut names = BTreeSet::new();
-    fields.retain(|field| {
-        let name = match field {
-            Field::Node(field) => &field.name,
-            Field::Token(field) => &field.name,
-        };
-        names.insert(name.clone())
-    });
+    let mut deduplicated = Vec::<Field>::new();
+    for field in fields.drain(..) {
+        let duplicate = deduplicated
+            .iter_mut()
+            .find(|existing| match (existing, &field) {
+                (Field::Node(existing), Field::Node(field)) => {
+                    existing.name == field.name && existing.ty == field.ty
+                }
+                (Field::Token(existing), Field::Token(field)) => {
+                    existing.name == field.name && existing.kinds == field.kinds
+                }
+                _ => false,
+            });
+        if let Some(existing) = duplicate {
+            let existing_cardinality = match existing {
+                Field::Node(field) => &mut field.cardinality,
+                Field::Token(field) => &mut field.cardinality,
+            };
+            let duplicate_cardinality = match &field {
+                Field::Node(field) => field.cardinality,
+                Field::Token(field) => field.cardinality,
+            };
+            *existing_cardinality = merge_cardinality(*existing_cardinality, duplicate_cardinality);
+        } else {
+            let name = match &field {
+                Field::Node(field) => &field.name,
+                Field::Token(field) => &field.name,
+            };
+            if !deduplicated.iter().any(|existing| match existing {
+                Field::Node(existing) => existing.name == *name,
+                Field::Token(existing) => existing.name == *name,
+            }) {
+                deduplicated.push(field);
+            }
+        }
+    }
+    *fields = deduplicated;
+}
+
+const fn merge_cardinality(left: Cardinality, right: Cardinality) -> Cardinality {
+    match (left, right) {
+        (Cardinality::Many, _) | (_, Cardinality::Many) => Cardinality::Many,
+        (Cardinality::Required, Cardinality::Required) => Cardinality::Many,
+        (Cardinality::Required, _) | (_, Cardinality::Required) => Cardinality::Required,
+        (Cardinality::Optional, Cardinality::Optional) => Cardinality::Optional,
+    }
 }
 
 fn generate_node(node: &NodeDef, source: &mut String) -> Result<()> {
@@ -851,14 +905,25 @@ fn generate_node(node: &NodeDef, source: &mut String) -> Result<()> {
                     let method = field.name.replace("_token", "_tokens");
                     writeln!(
                         source,
-                        "    pub fn {method}(&self) -> impl Iterator<Item = SyntaxToken> + '_ {{ self.syntax.children_with_tokens().filter_map(rowan::NodeOrToken::into_token).filter(|token| token.kind() == SyntaxKind::{}) }}",
-                        field.kind
+                        "    pub fn {method}(&self) -> impl Iterator<Item = SyntaxToken> + '_ {{ self.syntax.children_with_tokens().filter_map(rowan::NodeOrToken::into_token).filter(|token| matches!(token.kind(), {})) }}",
+                        field
+                            .kinds
+                            .iter()
+                            .map(|kind| format!("SyntaxKind::{kind}"))
+                            .collect::<Vec<_>>()
+                            .join(" | ")
                     )?;
                 }
                 Field::Token(field) => writeln!(
                     source,
-                    "    pub fn {}(&self) -> Option<SyntaxToken> {{ support::token(&self.syntax, SyntaxKind::{}) }}",
-                    field.name, field.kind
+                    "    pub fn {}(&self) -> Option<SyntaxToken> {{ self.syntax.children_with_tokens().filter_map(rowan::NodeOrToken::into_token).find(|token| matches!(token.kind(), {})) }}",
+                    field.name,
+                    field
+                        .kinds
+                        .iter()
+                        .map(|kind| format!("SyntaxKind::{kind}"))
+                        .collect::<Vec<_>>()
+                        .join(" | ")
                 )?,
             }
         }
@@ -1217,6 +1282,18 @@ mod tests {
         assert_eq!(
             optional_cardinality(Cardinality::Required),
             Cardinality::Optional
+        );
+    }
+
+    #[test]
+    fn duplicate_fields_preserve_repetition() {
+        assert_eq!(
+            merge_cardinality(Cardinality::Required, Cardinality::Many),
+            Cardinality::Many
+        );
+        assert_eq!(
+            merge_cardinality(Cardinality::Required, Cardinality::Required),
+            Cardinality::Many
         );
     }
 }

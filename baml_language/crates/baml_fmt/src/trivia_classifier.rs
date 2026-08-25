@@ -435,8 +435,6 @@ pub(crate) trait TriviaSliceExt {
 
     /// Length if printed with [`crate::printer::Printer::print_trivia_squished`].
     fn squished_len(&self, input: &str) -> usize;
-    /// Length if printed with [`crate::printer::Printer::try_print_trivia_single_line_squished`].
-    fn try_squished_len(&self, input: &str) -> Option<usize>;
 }
 
 impl TriviaSliceExt for [EmittableTrivia] {
@@ -466,9 +464,6 @@ impl TriviaSliceExt for [EmittableTrivia] {
         self.iter()
             .map(|t| t.single_line_len(input).unwrap_or_default())
             .sum()
-    }
-    fn try_squished_len(&self, input: &str) -> Option<usize> {
-        self.iter().map(|t| t.single_line_len(input)).sum()
     }
 }
 

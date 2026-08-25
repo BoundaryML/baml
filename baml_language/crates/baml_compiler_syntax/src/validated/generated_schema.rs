@@ -173,9 +173,9 @@ const RULE_ENV_ACCESS_EXPR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture {
 #[rustfmt::skip]
 const RULE_PAREN_EXPR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }]);
 #[rustfmt::skip]
-const RULE_IF_EXPR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_IF) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_EXPR]) }, SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::KW_ELSE) }, SchemaRule::Alt(&[SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_EXPR]) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::IF_EXPR]) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::IF_LET_EXPR]) }])]))]);
+const RULE_IF_EXPR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_IF) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_EXPR]) }, SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::KW_ELSE) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR]) }]))]);
 #[rustfmt::skip]
-const RULE_IF_LET_EXPR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_IF) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::PATTERN]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::EQUALS) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_EXPR]) }, SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::KW_ELSE) }, SchemaRule::Alt(&[SchemaRule::Capture { slot: 6, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_EXPR]) }, SchemaRule::Capture { slot: 6, rule: &SchemaRule::Node(&[SyntaxKind::IF_EXPR]) }, SchemaRule::Capture { slot: 6, rule: &SchemaRule::Node(&[SyntaxKind::IF_LET_EXPR]) }])]))]);
+const RULE_IF_LET_EXPR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_IF) }, SchemaRule::Capture { slot: 1, rule: &SchemaRule::Node(&[SyntaxKind::PATTERN]) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Token(SyntaxKind::EQUALS) }, SchemaRule::Capture { slot: 3, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_EXPR]) }, SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::KW_ELSE) }, SchemaRule::Capture { slot: 6, rule: &SchemaRule::Node(&[SyntaxKind::BLOCK_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR]) }]))]);
 #[rustfmt::skip]
 const RULE_MATCH_EXPR: SchemaRule = SchemaRule::Seq(&[SchemaRule::Capture { slot: 0, rule: &SchemaRule::Token(SyntaxKind::KW_MATCH) }, SchemaRule::Alt(&[SchemaRule::Seq(&[SchemaRule::Capture { slot: 1, rule: &SchemaRule::Token(SyntaxKind::L_PAREN) }, SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }, SchemaRule::Optional(&SchemaRule::Seq(&[SchemaRule::Capture { slot: 3, rule: &SchemaRule::Token(SyntaxKind::COLON) }, SchemaRule::Capture { slot: 4, rule: &SchemaRule::Node(&[SyntaxKind::TYPE_EXPR]) }])), SchemaRule::Capture { slot: 5, rule: &SchemaRule::Token(SyntaxKind::R_PAREN) }]), SchemaRule::Capture { slot: 2, rule: &SchemaRule::Node(&[SyntaxKind::LITERAL_EXPR, SyntaxKind::BLOCK_EXPR, SyntaxKind::PATH_EXPR, SyntaxKind::STRING_LITERAL, SyntaxKind::RAW_STRING_LITERAL, SyntaxKind::BACKTICK_STRING_LITERAL, SyntaxKind::BYTE_STRING_LITERAL, SyntaxKind::BINARY_EXPR, SyntaxKind::IS_EXPR, SyntaxKind::UNARY_EXPR, SyntaxKind::CALL_EXPR, SyntaxKind::INDEX_EXPR, SyntaxKind::TAGGED_TEMPLATE_EXPR, SyntaxKind::OPTIONAL_CALL_EXPR, SyntaxKind::OPTIONAL_INDEX_EXPR, SyntaxKind::FIELD_ACCESS_EXPR, SyntaxKind::UPCAST_EXPR, SyntaxKind::QUALIFIED_PATH_EXPR, SyntaxKind::SPEC_EXPR, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR, SyntaxKind::ENV_ACCESS_EXPR, SyntaxKind::PAREN_EXPR, SyntaxKind::IF_EXPR, SyntaxKind::IF_LET_EXPR, SyntaxKind::MATCH_EXPR, SyntaxKind::CATCH_EXPR, SyntaxKind::THROW_EXPR, SyntaxKind::RETURN_EXPR, SyntaxKind::BREAK_EXPR, SyntaxKind::CONTINUE_EXPR, SyntaxKind::SPAWN_EXPR, SyntaxKind::AWAIT_EXPR, SyntaxKind::LAMBDA_EXPR, SyntaxKind::FOR_EXPR, SyntaxKind::OBJECT_LITERAL, SyntaxKind::ARRAY_LITERAL, SyntaxKind::MAP_LITERAL]) }]), SchemaRule::Capture { slot: 6, rule: &SchemaRule::Token(SyntaxKind::L_BRACE) }, SchemaRule::Repeated(&SchemaRule::Alt(&[SchemaRule::Capture { slot: 7, rule: &SchemaRule::Node(&[SyntaxKind::MATCH_ARM]) }, SchemaRule::Capture { slot: 8, rule: &SchemaRule::Node(&[SyntaxKind::HEADER_COMMENT]) }])), SchemaRule::Capture { slot: 9, rule: &SchemaRule::Token(SyntaxKind::R_BRACE) }]);
 #[rustfmt::skip]
@@ -1090,12 +1090,10 @@ impl<'tree> Validated<'tree, ast::FunctionDef> {
         self.children(0)
     }
     pub fn function_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_FUNCTION)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn generic_param_list(&self) -> Option<Validated<'tree, ast::GenericParamList>> {
         self.child(3)
@@ -1104,10 +1102,10 @@ impl<'tree> Validated<'tree, ast::FunctionDef> {
         self.child(4).expect("validated required field")
     }
     pub fn arrow_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(5, SyntaxKind::ARROW)
+        self.token(5)
     }
     pub fn fat_arrow_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(6, SyntaxKind::FAT_ARROW)
+        self.token(6)
     }
     pub fn type_expr(&self) -> Validated<'tree, ast::TypeExpr> {
         self.child(7).expect("validated required field")
@@ -1125,19 +1123,16 @@ impl<'tree> Validated<'tree, ast::ClassDef> {
         self.children(0)
     }
     pub fn class_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_CLASS)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn generic_param_list(&self) -> Option<Validated<'tree, ast::GenericParamList>> {
         self.child(3)
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(4, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(4).expect("validated required token")
     }
     pub fn field(&self) -> ValidatedChildren<'tree, ast::Field> {
         self.children(5)
@@ -1149,22 +1144,13 @@ impl<'tree> Validated<'tree, ast::ClassDef> {
         self.children(7)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(8).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(8).filter_map(|element| element.token())
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(9).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
-        })
+        self.elements(9).filter_map(|element| element.token())
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(10, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(10).expect("validated required token")
     }
 }
 
@@ -1173,40 +1159,28 @@ impl<'tree> Validated<'tree, ast::EnumDef> {
         self.children(0)
     }
     pub fn enum_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_ENUM)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn generic_param_list(&self) -> Option<Validated<'tree, ast::GenericParamList>> {
         self.child(3)
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(4, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(4).expect("validated required token")
     }
     pub fn enum_variant(&self) -> ValidatedChildren<'tree, ast::EnumVariant> {
         self.children(5)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(6).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(6).filter_map(|element| element.token())
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(7).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
-        })
+        self.elements(7).filter_map(|element| element.token())
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(8, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(8).expect("validated required token")
     }
 }
 
@@ -1215,12 +1189,10 @@ impl<'tree> Validated<'tree, ast::InterfaceDef> {
         self.children(0)
     }
     pub fn interface_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_INTERFACE)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn generic_param_list(&self) -> Option<Validated<'tree, ast::GenericParamList>> {
         self.child(3)
@@ -1229,8 +1201,7 @@ impl<'tree> Validated<'tree, ast::InterfaceDef> {
         self.child(4)
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(5, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(5).expect("validated required token")
     }
     pub fn method_sig(&self) -> ValidatedChildren<'tree, ast::MethodSig> {
         self.children(6)
@@ -1242,31 +1213,22 @@ impl<'tree> Validated<'tree, ast::InterfaceDef> {
         self.children(8)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(9).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(9).filter_map(|element| element.token())
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(10).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
-        })
+        self.elements(10).filter_map(|element| element.token())
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(11, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(11).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::ImplementsFor> {
     pub fn implements_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0, SyntaxKind::KW_IMPLEMENTS)
+        self.token(0)
     }
     pub fn implement_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::KW_IMPLEMENT)
+        self.token(1)
     }
     pub fn generic_param_list(&self) -> Option<Validated<'tree, ast::GenericParamList>> {
         self.child(2)
@@ -1275,8 +1237,7 @@ impl<'tree> Validated<'tree, ast::ImplementsFor> {
         self.child(3).expect("validated required field")
     }
     pub fn for_token(&self) -> ValidatedSyntaxToken {
-        self.token(4, SyntaxKind::KW_FOR)
-            .expect("validated required token")
+        self.token(4).expect("validated required token")
     }
     pub fn implements_for_target(&self) -> Validated<'tree, ast::ImplementsForTarget> {
         self.child(5).expect("validated required field")
@@ -1285,8 +1246,7 @@ impl<'tree> Validated<'tree, ast::ImplementsFor> {
         self.child(6)
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(7, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(7).expect("validated required token")
     }
     pub fn function_def(&self) -> ValidatedChildren<'tree, ast::FunctionDef> {
         self.children(8)
@@ -1304,22 +1264,13 @@ impl<'tree> Validated<'tree, ast::ImplementsFor> {
         self.children(12)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(13).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(13).filter_map(|element| element.token())
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(14).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
-        })
+        self.elements(14).filter_map(|element| element.token())
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(15, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(15).expect("validated required token")
     }
 }
 
@@ -1328,15 +1279,13 @@ impl<'tree> Validated<'tree, ast::ClientDef> {
         self.children(0)
     }
     pub fn client_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_CLIENT)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn client_type(&self) -> Option<Validated<'tree, ast::ClientType>> {
         self.child(2)
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
     pub fn config_block(&self) -> Validated<'tree, ast::ConfigBlock> {
         self.child(4).expect("validated required field")
@@ -1348,22 +1297,19 @@ impl<'tree> Validated<'tree, ast::ClientValueDef> {
         self.children(0)
     }
     pub fn client_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_CLIENT)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn equals_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::EQUALS)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
     pub fn value(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(4).expect("validated required field")
     }
     pub fn semicolon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(5, SyntaxKind::SEMICOLON)
+        self.token(5)
     }
 }
 
@@ -1372,12 +1318,10 @@ impl<'tree> Validated<'tree, ast::TestDef> {
         self.children(0)
     }
     pub fn test_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_TEST)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn config_block(&self) -> Validated<'tree, ast::ConfigBlock> {
         self.child(3).expect("validated required field")
@@ -1389,14 +1333,13 @@ impl<'tree> Validated<'tree, ast::TestExprDef> {
         self.children(0)
     }
     pub fn test_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_TEST)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn name(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(2).expect("validated required field")
     }
     pub fn with_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(3, SyntaxKind::KW_WITH)
+        self.token(3)
     }
     pub fn with_value(&self) -> Option<Validated<'tree, ast::ExprNode>> {
         self.child(4)
@@ -1411,14 +1354,13 @@ impl<'tree> Validated<'tree, ast::TestsetDef> {
         self.children(0)
     }
     pub fn testset_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_TESTSET)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn name(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(2).expect("validated required field")
     }
     pub fn with_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(3, SyntaxKind::KW_WITH)
+        self.token(3)
     }
     pub fn with_value(&self) -> Option<Validated<'tree, ast::ExprNode>> {
         self.child(4)
@@ -1439,12 +1381,10 @@ impl<'tree> Validated<'tree, ast::GeneratorDef> {
         self.children(0)
     }
     pub fn generator_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_GENERATOR)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn config_block(&self) -> Validated<'tree, ast::ConfigBlock> {
         self.child(3).expect("validated required field")
@@ -1456,12 +1396,10 @@ impl<'tree> Validated<'tree, ast::RetryPolicyDef> {
         self.children(0)
     }
     pub fn retry_policy_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_RETRY_POLICY)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn config_block(&self) -> Validated<'tree, ast::ConfigBlock> {
         self.child(3).expect("validated required field")
@@ -1473,12 +1411,10 @@ impl<'tree> Validated<'tree, ast::TemplateStringDef> {
         self.children(0)
     }
     pub fn template_string_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_TEMPLATE_STRING)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn parameter_list(&self) -> Validated<'tree, ast::ParameterList> {
         self.child(3).expect("validated required field")
@@ -1493,36 +1429,31 @@ impl<'tree> Validated<'tree, ast::TypeAliasDef> {
         self.children(0)
     }
     pub fn type_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_TYPE)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn generic_param_list(&self) -> Option<Validated<'tree, ast::GenericParamList>> {
         self.child(3)
     }
     pub fn equals_token(&self) -> ValidatedSyntaxToken {
-        self.token(4, SyntaxKind::EQUALS)
-            .expect("validated required token")
+        self.token(4).expect("validated required token")
     }
     pub fn type_expr(&self) -> Validated<'tree, ast::TypeExpr> {
         self.child(5).expect("validated required field")
     }
     pub fn semicolon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(6, SyntaxKind::SEMICOLON)
+        self.token(6)
     }
 }
 
 impl<'tree> Validated<'tree, ast::BlockAttribute> {
     pub fn at_at_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::AT_AT)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn attribute_args(&self) -> Option<Validated<'tree, ast::AttributeArgs>> {
         self.child(2)
@@ -1531,139 +1462,103 @@ impl<'tree> Validated<'tree, ast::BlockAttribute> {
 
 impl<'tree> Validated<'tree, ast::GenericParamList> {
     pub fn less_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::LESS)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn generic_param(&self) -> ValidatedChildren<'tree, ast::GenericParam> {
         self.children(1)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(2).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(2).filter_map(|element| element.token())
     }
     pub fn greater_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::GREATER)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::ParameterList> {
     pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::L_PAREN)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn parameter(&self) -> ValidatedChildren<'tree, ast::Parameter> {
         self.children(1)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(2).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(2).filter_map(|element| element.token())
     }
     pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::R_PAREN)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::TypeExpr> {
-    pub fn string_literal(&self) -> Option<Validated<'tree, ast::StringLiteral>> {
-        self.child(0)
+    pub fn string_literal(&self) -> ValidatedChildren<'tree, ast::StringLiteral> {
+        self.children(0)
     }
-    pub fn raw_string_literal(&self) -> Option<Validated<'tree, ast::RawStringLiteral>> {
-        self.child(1)
+    pub fn raw_string_literal(&self) -> ValidatedChildren<'tree, ast::RawStringLiteral> {
+        self.children(1)
     }
-    pub fn minus_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::MINUS)
+    pub fn minus_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(2).filter_map(|element| element.token())
     }
-    pub fn bigint_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(3, SyntaxKind::BIGINT_LITERAL)
+    pub fn bigint_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(3).filter_map(|element| element.token())
     }
-    pub fn integer_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(4, SyntaxKind::INTEGER_LITERAL)
+    pub fn integer_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(4).filter_map(|element| element.token())
     }
-    pub fn float_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(5, SyntaxKind::FLOAT_LITERAL)
+    pub fn float_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(5).filter_map(|element| element.token())
     }
-    pub fn true_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(6, SyntaxKind::KW_TRUE)
+    pub fn true_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(6).filter_map(|element| element.token())
     }
-    pub fn false_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(7, SyntaxKind::KW_FALSE)
+    pub fn false_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(7).filter_map(|element| element.token())
     }
-    pub fn null_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(8, SyntaxKind::KW_NULL)
+    pub fn null_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(8).filter_map(|element| element.token())
     }
-    pub fn word_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(9, SyntaxKind::WORD)
+    pub fn word_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(9).filter_map(|element| element.token())
     }
     pub fn dot_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(10).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::DOT)
-        })
+        self.elements(10).filter_map(|element| element.token())
     }
-    pub fn type_args(&self) -> Option<Validated<'tree, ast::TypeArgs>> {
-        self.child(11)
+    pub fn type_args(&self) -> ValidatedChildren<'tree, ast::TypeArgs> {
+        self.children(11)
     }
-    pub fn l_paren_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(12, SyntaxKind::L_PAREN)
+    pub fn l_paren_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(12).filter_map(|element| element.token())
     }
     pub fn function_type_param(&self) -> ValidatedChildren<'tree, ast::FunctionTypeParam> {
         self.children(13)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(14).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(14).filter_map(|element| element.token())
     }
-    pub fn r_paren_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(15, SyntaxKind::R_PAREN)
+    pub fn r_paren_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(15).filter_map(|element| element.token())
     }
-    pub fn arrow_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(16, SyntaxKind::ARROW)
+    pub fn arrow_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(16).filter_map(|element| element.token())
     }
-    pub fn type_expr(&self) -> Option<Validated<'tree, ast::TypeExpr>> {
-        self.child(17)
+    pub fn type_expr(&self) -> ValidatedChildren<'tree, ast::TypeExpr> {
+        self.children(17)
     }
-    pub fn throws_clause(&self) -> Option<Validated<'tree, ast::ThrowsClause>> {
-        self.child(18)
+    pub fn throws_clause(&self) -> ValidatedChildren<'tree, ast::ThrowsClause> {
+        self.children(18)
     }
     pub fn l_bracket_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(19).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::L_BRACKET)
-        })
+        self.elements(19).filter_map(|element| element.token())
     }
     pub fn r_bracket_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(20).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::R_BRACKET)
-        })
+        self.elements(20).filter_map(|element| element.token())
     }
     pub fn question_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(21).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::QUESTION)
-        })
+        self.elements(21).filter_map(|element| element.token())
     }
     pub fn pipe_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(22).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::PIPE)
-        })
+        self.elements(22).filter_map(|element| element.token())
     }
     pub fn attribute(&self) -> ValidatedChildren<'tree, ast::Attribute> {
         self.children(23)
@@ -1672,8 +1567,7 @@ impl<'tree> Validated<'tree, ast::TypeExpr> {
 
 impl<'tree> Validated<'tree, ast::ThrowsClause> {
     pub fn throws_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_THROWS)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn type_expr(&self) -> Validated<'tree, ast::TypeExpr> {
         self.child(1).expect("validated required field")
@@ -1682,8 +1576,7 @@ impl<'tree> Validated<'tree, ast::ThrowsClause> {
 
 impl<'tree> Validated<'tree, ast::LlmFunctionBody> {
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn client_field(&self) -> Option<Validated<'tree, ast::ClientField>> {
         self.child(1)
@@ -1695,8 +1588,7 @@ impl<'tree> Validated<'tree, ast::LlmFunctionBody> {
         self.child(3)
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(4, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(4).expect("validated required token")
     }
 }
 
@@ -1707,17 +1599,17 @@ impl<'tree> Validated<'tree, ast::ExprFunctionBody> {
 }
 
 impl<'tree> Validated<'tree, ast::Parameter> {
-    pub fn name_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0, SyntaxKind::WORD)
+    pub fn name_token(&self) -> ValidatedSyntaxToken {
+        self.token(0).expect("validated required token")
     }
     pub fn colon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::COLON)
+        self.token(1)
     }
     pub fn type_expr(&self) -> Option<Validated<'tree, ast::TypeExpr>> {
         self.child(2)
     }
     pub fn equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(3, SyntaxKind::EQUALS)
+        self.token(3)
     }
     pub fn default_value(&self) -> Option<Validated<'tree, ast::ExprNode>> {
         self.child(4)
@@ -1726,12 +1618,10 @@ impl<'tree> Validated<'tree, ast::Parameter> {
 
 impl<'tree> Validated<'tree, ast::ClientField> {
     pub fn client_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_CLIENT)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn colon_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::COLON)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn value(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(2).expect("validated required field")
@@ -1740,12 +1630,10 @@ impl<'tree> Validated<'tree, ast::ClientField> {
 
 impl<'tree> Validated<'tree, ast::ToolsField> {
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn colon_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::COLON)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn value(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(2).expect("validated required field")
@@ -1754,12 +1642,10 @@ impl<'tree> Validated<'tree, ast::ToolsField> {
 
 impl<'tree> Validated<'tree, ast::PromptField> {
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn colon_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::COLON)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn value(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(2).expect("validated required field")
@@ -1768,22 +1654,16 @@ impl<'tree> Validated<'tree, ast::PromptField> {
 
 impl<'tree> Validated<'tree, ast::BlockExpr> {
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn block_item(&self) -> ValidatedChildren<'tree, ast::BlockItem> {
         self.children(1)
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(2).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
-        })
+        self.elements(2).filter_map(|element| element.token())
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
 }
 
@@ -1791,11 +1671,11 @@ impl<'tree> Validated<'tree, ast::Field> {
     pub fn block_attribute(&self) -> ValidatedChildren<'tree, ast::BlockAttribute> {
         self.children(0)
     }
-    pub fn name_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::WORD)
+    pub fn name_token(&self) -> ValidatedSyntaxToken {
+        self.token(1).expect("validated required token")
     }
     pub fn colon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::COLON)
+        self.token(2)
     }
     pub fn type_expr(&self) -> Option<Validated<'tree, ast::TypeExpr>> {
         self.child(3)
@@ -1804,8 +1684,7 @@ impl<'tree> Validated<'tree, ast::Field> {
 
 impl<'tree> Validated<'tree, ast::ImplementsBlock> {
     pub fn implements_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_IMPLEMENTS)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn implements_target(&self) -> Validated<'tree, ast::ImplementsTarget> {
         self.child(1).expect("validated required field")
@@ -1814,8 +1693,7 @@ impl<'tree> Validated<'tree, ast::ImplementsBlock> {
         self.child(2)
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
     pub fn function_def(&self) -> ValidatedChildren<'tree, ast::FunctionDef> {
         self.children(4)
@@ -1833,39 +1711,25 @@ impl<'tree> Validated<'tree, ast::ImplementsBlock> {
         self.children(8)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(9).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(9).filter_map(|element| element.token())
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(10).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
-        })
+        self.elements(10).filter_map(|element| element.token())
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(11, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(11).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::RequiresClause> {
     pub fn requires_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_REQUIRES)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
-    pub fn type_expr(&self) -> Validated<'tree, ast::TypeExpr> {
-        self.child(1).expect("validated required field")
+    pub fn type_expr(&self) -> ValidatedChildren<'tree, ast::TypeExpr> {
+        self.children(1)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(2).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(2).filter_map(|element| element.token())
     }
 }
 
@@ -1874,12 +1738,10 @@ impl<'tree> Validated<'tree, ast::MethodSig> {
         self.children(0)
     }
     pub fn function_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_FUNCTION)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn generic_param_list(&self) -> Option<Validated<'tree, ast::GenericParamList>> {
         self.child(3)
@@ -1888,10 +1750,10 @@ impl<'tree> Validated<'tree, ast::MethodSig> {
         self.child(4).expect("validated required field")
     }
     pub fn arrow_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(5, SyntaxKind::ARROW)
+        self.token(5)
     }
     pub fn fat_arrow_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(6, SyntaxKind::FAT_ARROW)
+        self.token(6)
     }
     pub fn type_expr(&self) -> Validated<'tree, ast::TypeExpr> {
         self.child(7).expect("validated required field")
@@ -1906,20 +1768,19 @@ impl<'tree> Validated<'tree, ast::MethodSig> {
 
 impl<'tree> Validated<'tree, ast::AssociatedTypeDecl> {
     pub fn type_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0, SyntaxKind::KW_TYPE)
+        self.token(0)
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn extends_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::KW_EXTENDS)
+        self.token(2)
     }
     pub fn bound(&self) -> Option<Validated<'tree, ast::TypeExpr>> {
         self.child(3)
     }
     pub fn equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(4, SyntaxKind::EQUALS)
+        self.token(4)
     }
     pub fn binding(&self) -> Option<Validated<'tree, ast::TypeExpr>> {
         self.child(5)
@@ -1934,16 +1795,13 @@ impl<'tree> Validated<'tree, ast::ImplementsTarget> {
 
 impl<'tree> Validated<'tree, ast::InterfaceFieldLink> {
     pub fn interface_field(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn as_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_AS)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn class_field(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
 }
 
@@ -1955,8 +1813,7 @@ impl<'tree> Validated<'tree, ast::ImplementsForTarget> {
 
 impl<'tree> Validated<'tree, ast::EnumVariant> {
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn attribute(&self) -> ValidatedChildren<'tree, ast::Attribute> {
         self.children(1)
@@ -1965,12 +1822,10 @@ impl<'tree> Validated<'tree, ast::EnumVariant> {
 
 impl<'tree> Validated<'tree, ast::Attribute> {
     pub fn at_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::AT)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn attribute_args(&self) -> Option<Validated<'tree, ast::AttributeArgs>> {
         self.child(2)
@@ -1979,23 +1834,19 @@ impl<'tree> Validated<'tree, ast::Attribute> {
 
 impl<'tree> Validated<'tree, ast::ClientType> {
     pub fn less_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::LESS)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn greater_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::GREATER)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::ConfigBlock> {
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn config_item(&self) -> ValidatedChildren<'tree, ast::ConfigItem> {
         self.children(1)
@@ -2004,22 +1855,13 @@ impl<'tree> Validated<'tree, ast::ConfigBlock> {
         self.children(2)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(3).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(3).filter_map(|element| element.token())
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(4).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
-        })
+        self.elements(4).filter_map(|element| element.token())
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(5, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(5).expect("validated required token")
     }
 }
 
@@ -2028,10 +1870,10 @@ impl<'tree> Validated<'tree, ast::ConfigItem> {
         self.child(0)
     }
     pub fn key_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::WORD)
+        self.token(1)
     }
     pub fn colon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::COLON)
+        self.token(2)
     }
     pub fn config_value(&self) -> Option<Validated<'tree, ast::ConfigValue>> {
         self.child(3)
@@ -2045,9 +1887,8 @@ impl<'tree> Validated<'tree, ast::ConfigItem> {
 }
 
 impl<'tree> Validated<'tree, ast::StringLiteral> {
-    pub fn quote_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::QUOTE)
-            .expect("validated required token")
+    pub fn quote_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(0).filter_map(|element| element.token())
     }
     pub fn any_element(&self) -> super::arena::ValidatedElements<'tree> {
         self.elements(1)
@@ -2068,8 +1909,7 @@ impl<'tree> Validated<'tree, ast::ConfigValue> {
 
 impl<'tree> Validated<'tree, ast::ConfigArray> {
     pub fn l_bracket_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::L_BRACKET)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn config_value(&self) -> ValidatedChildren<'tree, ast::ConfigValue> {
         self.children(1)
@@ -2078,15 +1918,10 @@ impl<'tree> Validated<'tree, ast::ConfigArray> {
         self.children(2)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(3).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(3).filter_map(|element| element.token())
     }
     pub fn r_bracket_token(&self) -> ValidatedSyntaxToken {
-        self.token(4, SyntaxKind::R_BRACKET)
-            .expect("validated required token")
+        self.token(4).expect("validated required token")
     }
 }
 
@@ -2098,8 +1933,7 @@ impl<'tree> Validated<'tree, ast::RawStringLiteral> {
 
 impl<'tree> Validated<'tree, ast::GenericParam> {
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn generic_param_bounds(&self) -> Option<Validated<'tree, ast::GenericParamBounds>> {
         self.child(1)
@@ -2108,25 +1942,19 @@ impl<'tree> Validated<'tree, ast::GenericParam> {
 
 impl<'tree> Validated<'tree, ast::GenericParamBounds> {
     pub fn extends_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_EXTENDS)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
-    pub fn type_expr(&self) -> Validated<'tree, ast::TypeExpr> {
-        self.child(1).expect("validated required field")
+    pub fn type_expr(&self) -> ValidatedChildren<'tree, ast::TypeExpr> {
+        self.children(1)
     }
     pub fn and_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(2).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::AND)
-        })
+        self.elements(2).filter_map(|element| element.token())
     }
 }
 
 impl<'tree> Validated<'tree, ast::TypeArgs> {
     pub fn less_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::LESS)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn type_expr(&self) -> ValidatedChildren<'tree, ast::TypeExpr> {
         self.children(1)
@@ -2135,27 +1963,22 @@ impl<'tree> Validated<'tree, ast::TypeArgs> {
         self.children(2)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(3).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(3).filter_map(|element| element.token())
     }
     pub fn greater_token(&self) -> ValidatedSyntaxToken {
-        self.token(4, SyntaxKind::GREATER)
-            .expect("validated required token")
+        self.token(4).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::FunctionTypeParam> {
     pub fn name_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0, SyntaxKind::WORD)
+        self.token(0)
     }
     pub fn question_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::QUESTION)
+        self.token(1)
     }
     pub fn colon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::COLON)
+        self.token(2)
     }
     pub fn type_expr(&self) -> Validated<'tree, ast::TypeExpr> {
         self.child(3).expect("validated required field")
@@ -2164,53 +1987,43 @@ impl<'tree> Validated<'tree, ast::FunctionTypeParam> {
 
 impl<'tree> Validated<'tree, ast::AttributeArgs> {
     pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::L_PAREN)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn expr_node(&self) -> ValidatedChildren<'tree, ast::ExprNode> {
         self.children(1)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(2).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(2).filter_map(|element| element.token())
     }
     pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::R_PAREN)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::Error> {
     pub fn error_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(0).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::ERROR_TOKEN)
-        })
+        self.elements(0).filter_map(|element| element.token())
     }
 }
 
 impl<'tree> Validated<'tree, ast::LiteralExpr> {
     pub fn bigint_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0, SyntaxKind::BIGINT_LITERAL)
+        self.token(0)
     }
     pub fn integer_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::INTEGER_LITERAL)
+        self.token(1)
     }
     pub fn float_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::FLOAT_LITERAL)
+        self.token(2)
     }
     pub fn true_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(3, SyntaxKind::KW_TRUE)
+        self.token(3)
     }
     pub fn false_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(4, SyntaxKind::KW_FALSE)
+        self.token(4)
     }
     pub fn null_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(5, SyntaxKind::KW_NULL)
+        self.token(5)
     }
 }
 
@@ -2221,46 +2034,38 @@ impl<'tree> Validated<'tree, ast::PathExpr> {
     pub fn generic_args(&self) -> Option<Validated<'tree, ast::GenericArgs>> {
         self.child(1)
     }
-    pub fn word_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::WORD)
+    pub fn word_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(2).filter_map(|element| element.token())
     }
-    pub fn client_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(3, SyntaxKind::KW_CLIENT)
+    pub fn client_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(3).filter_map(|element| element.token())
     }
-    pub fn class_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(4, SyntaxKind::KW_CLASS)
+    pub fn class_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(4).filter_map(|element| element.token())
     }
-    pub fn enum_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(5, SyntaxKind::KW_ENUM)
+    pub fn enum_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(5).filter_map(|element| element.token())
     }
-    pub fn interface_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(6, SyntaxKind::KW_INTERFACE)
+    pub fn interface_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(6).filter_map(|element| element.token())
     }
-    pub fn function_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(7, SyntaxKind::KW_FUNCTION)
+    pub fn function_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(7).filter_map(|element| element.token())
     }
-    pub fn implements_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(8, SyntaxKind::KW_IMPLEMENTS)
+    pub fn implements_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(8).filter_map(|element| element.token())
     }
-    pub fn spawn_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(9, SyntaxKind::KW_SPAWN)
+    pub fn spawn_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(9).filter_map(|element| element.token())
     }
-    pub fn await_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(10, SyntaxKind::KW_AWAIT)
+    pub fn await_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
+        self.elements(10).filter_map(|element| element.token())
     }
     pub fn dot_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(11).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::DOT)
-        })
+        self.elements(11).filter_map(|element| element.token())
     }
     pub fn double_colon_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(12).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::DOUBLE_COLON)
-        })
+        self.elements(12).filter_map(|element| element.token())
     }
 }
 
@@ -2281,100 +2086,100 @@ impl<'tree> Validated<'tree, ast::BinaryExpr> {
         self.child(0).expect("validated required field")
     }
     pub fn equals_equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::EQUALS_EQUALS)
+        self.token(1)
     }
     pub fn not_equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::NOT_EQUALS)
+        self.token(2)
     }
     pub fn less_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(3, SyntaxKind::LESS)
+        self.token(3)
     }
     pub fn greater_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(4, SyntaxKind::GREATER)
+        self.token(4)
     }
     pub fn less_equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(5, SyntaxKind::LESS_EQUALS)
+        self.token(5)
     }
     pub fn greater_equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(6, SyntaxKind::GREATER_EQUALS)
+        self.token(6)
     }
     pub fn and_and_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(7, SyntaxKind::AND_AND)
+        self.token(7)
     }
     pub fn or_or_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(8, SyntaxKind::OR_OR)
+        self.token(8)
     }
     pub fn and_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(9, SyntaxKind::AND)
+        self.token(9)
     }
     pub fn pipe_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(10, SyntaxKind::PIPE)
+        self.token(10)
     }
     pub fn caret_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(11, SyntaxKind::CARET)
+        self.token(11)
     }
     pub fn less_less_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(12, SyntaxKind::LESS_LESS)
+        self.token(12)
     }
     pub fn greater_greater_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(13, SyntaxKind::GREATER_GREATER)
+        self.token(13)
     }
     pub fn plus_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(14, SyntaxKind::PLUS)
+        self.token(14)
     }
     pub fn minus_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(15, SyntaxKind::MINUS)
+        self.token(15)
     }
     pub fn star_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(16, SyntaxKind::STAR)
+        self.token(16)
     }
     pub fn slash_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(17, SyntaxKind::SLASH)
+        self.token(17)
     }
     pub fn percent_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(18, SyntaxKind::PERCENT)
+        self.token(18)
     }
     pub fn question_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(19, SyntaxKind::QUESTION)
+        self.token(19)
     }
     pub fn question_question_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(20, SyntaxKind::QUESTION_QUESTION)
+        self.token(20)
     }
     pub fn instanceof_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(21, SyntaxKind::KW_INSTANCEOF)
+        self.token(21)
     }
     pub fn equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(22, SyntaxKind::EQUALS)
+        self.token(22)
     }
     pub fn plus_equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(23, SyntaxKind::PLUS_EQUALS)
+        self.token(23)
     }
     pub fn minus_equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(24, SyntaxKind::MINUS_EQUALS)
+        self.token(24)
     }
     pub fn star_equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(25, SyntaxKind::STAR_EQUALS)
+        self.token(25)
     }
     pub fn slash_equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(26, SyntaxKind::SLASH_EQUALS)
+        self.token(26)
     }
     pub fn percent_equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(27, SyntaxKind::PERCENT_EQUALS)
+        self.token(27)
     }
     pub fn and_equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(28, SyntaxKind::AND_EQUALS)
+        self.token(28)
     }
     pub fn pipe_equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(29, SyntaxKind::PIPE_EQUALS)
+        self.token(29)
     }
     pub fn caret_equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(30, SyntaxKind::CARET_EQUALS)
+        self.token(30)
     }
     pub fn less_less_equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(31, SyntaxKind::LESS_LESS_EQUALS)
+        self.token(31)
     }
     pub fn greater_greater_equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(32, SyntaxKind::GREATER_GREATER_EQUALS)
+        self.token(32)
     }
     pub fn rhs(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(33).expect("validated required field")
@@ -2386,8 +2191,7 @@ impl<'tree> Validated<'tree, ast::IsExpr> {
         self.child(0).expect("validated required field")
     }
     pub fn is_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::KW_IS)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn pattern(&self) -> Validated<'tree, ast::Pattern> {
         self.child(2).expect("validated required field")
@@ -2396,19 +2200,19 @@ impl<'tree> Validated<'tree, ast::IsExpr> {
 
 impl<'tree> Validated<'tree, ast::UnaryExpr> {
     pub fn not_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0, SyntaxKind::NOT)
+        self.token(0)
     }
     pub fn minus_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::MINUS)
+        self.token(1)
     }
     pub fn tilde_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::TILDE)
+        self.token(2)
     }
     pub fn plus_plus_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(3, SyntaxKind::PLUS_PLUS)
+        self.token(3)
     }
     pub fn minus_minus_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(4, SyntaxKind::MINUS_MINUS)
+        self.token(4)
     }
     pub fn operand(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(5).expect("validated required field")
@@ -2429,15 +2233,13 @@ impl<'tree> Validated<'tree, ast::IndexExpr> {
         self.child(0).expect("validated required field")
     }
     pub fn l_bracket_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::L_BRACKET)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn index(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(2).expect("validated required field")
     }
     pub fn r_bracket_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::R_BRACKET)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
 }
 
@@ -2455,8 +2257,7 @@ impl<'tree> Validated<'tree, ast::OptionalCallExpr> {
         self.child(0).expect("validated required field")
     }
     pub fn question_dot_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::QUESTION_DOT)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn call_args(&self) -> Validated<'tree, ast::CallArgs> {
         self.child(2).expect("validated required field")
@@ -2468,19 +2269,16 @@ impl<'tree> Validated<'tree, ast::OptionalIndexExpr> {
         self.child(0).expect("validated required field")
     }
     pub fn question_dot_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::QUESTION_DOT)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn l_bracket_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::L_BRACKET)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn index(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(3).expect("validated required field")
     }
     pub fn r_bracket_token(&self) -> ValidatedSyntaxToken {
-        self.token(4, SyntaxKind::R_BRACKET)
-            .expect("validated required token")
+        self.token(4).expect("validated required token")
     }
 }
 
@@ -2489,11 +2287,10 @@ impl<'tree> Validated<'tree, ast::FieldAccessExpr> {
         self.child(0).expect("validated required field")
     }
     pub fn dot_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::DOT)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
-    pub fn name_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::WORD)
+    pub fn name_token(&self) -> ValidatedSyntaxToken {
+        self.token(2).expect("validated required token")
     }
 }
 
@@ -2502,12 +2299,10 @@ impl<'tree> Validated<'tree, ast::UpcastExpr> {
         self.child(0).expect("validated required field")
     }
     pub fn dot_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::DOT)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn as_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::KW_AS)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn generic_args(&self) -> Validated<'tree, ast::GenericArgs> {
         self.child(3).expect("validated required field")
@@ -2516,27 +2311,22 @@ impl<'tree> Validated<'tree, ast::UpcastExpr> {
 
 impl<'tree> Validated<'tree, ast::QualifiedPathExpr> {
     pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::L_PAREN)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
-    pub fn type_expr(&self) -> Validated<'tree, ast::TypeExpr> {
-        self.child(1).expect("validated required field")
+    pub fn type_expr(&self) -> ValidatedChildren<'tree, ast::TypeExpr> {
+        self.children(1)
     }
     pub fn as_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::KW_AS)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::R_PAREN)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
     pub fn dot_token(&self) -> ValidatedSyntaxToken {
-        self.token(4, SyntaxKind::DOT)
-            .expect("validated required token")
+        self.token(4).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(5, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(5).expect("validated required token")
     }
 }
 
@@ -2545,12 +2335,10 @@ impl<'tree> Validated<'tree, ast::SpecExpr> {
         self.child(0).expect("validated required field")
     }
     pub fn at_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::AT)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn spec_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
 }
 
@@ -2559,47 +2347,40 @@ impl<'tree> Validated<'tree, ast::OptionalFieldAccessExpr> {
         self.child(0).expect("validated required field")
     }
     pub fn question_dot_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::QUESTION_DOT)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
-    pub fn name_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::WORD)
+    pub fn name_token(&self) -> ValidatedSyntaxToken {
+        self.token(2).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::EnvAccessExpr> {
     pub fn env_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn dot_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::DOT)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::ParenExpr> {
     pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::L_PAREN)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn expr_node(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(1).expect("validated required field")
     }
     pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::R_PAREN)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::IfExpr> {
     pub fn if_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_IF)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn condition(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(1).expect("validated required field")
@@ -2608,24 +2389,22 @@ impl<'tree> Validated<'tree, ast::IfExpr> {
         self.child(2).expect("validated required field")
     }
     pub fn else_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(3, SyntaxKind::KW_ELSE)
+        self.token(3)
     }
-    pub fn else_branch(&self) -> Option<Validated<'tree, ast::BlockExpr>> {
+    pub fn else_branch(&self) -> Option<Validated<'tree, ast::ElseBranch>> {
         self.child(4)
     }
 }
 
 impl<'tree> Validated<'tree, ast::IfLetExpr> {
     pub fn if_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_IF)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn pattern(&self) -> Validated<'tree, ast::Pattern> {
         self.child(1).expect("validated required field")
     }
     pub fn equals_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::EQUALS)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn scrutinee(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(3).expect("validated required field")
@@ -2634,36 +2413,34 @@ impl<'tree> Validated<'tree, ast::IfLetExpr> {
         self.child(4).expect("validated required field")
     }
     pub fn else_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(5, SyntaxKind::KW_ELSE)
+        self.token(5)
     }
-    pub fn else_branch(&self) -> Option<Validated<'tree, ast::BlockExpr>> {
+    pub fn else_branch(&self) -> Option<Validated<'tree, ast::ElseBranch>> {
         self.child(6)
     }
 }
 
 impl<'tree> Validated<'tree, ast::MatchExpr> {
     pub fn match_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_MATCH)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn l_paren_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::L_PAREN)
+        self.token(1)
     }
     pub fn scrutinee(&self) -> Option<Validated<'tree, ast::ExprNode>> {
         self.child(2)
     }
     pub fn colon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(3, SyntaxKind::COLON)
+        self.token(3)
     }
     pub fn type_expr(&self) -> Option<Validated<'tree, ast::TypeExpr>> {
         self.child(4)
     }
     pub fn r_paren_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(5, SyntaxKind::R_PAREN)
+        self.token(5)
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(6, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(6).expect("validated required token")
     }
     pub fn match_arm(&self) -> ValidatedChildren<'tree, ast::MatchArm> {
         self.children(7)
@@ -2672,8 +2449,7 @@ impl<'tree> Validated<'tree, ast::MatchExpr> {
         self.children(8)
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(9, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(9).expect("validated required token")
     }
 }
 
@@ -2688,8 +2464,7 @@ impl<'tree> Validated<'tree, ast::CatchExpr> {
 
 impl<'tree> Validated<'tree, ast::ThrowExpr> {
     pub fn throw_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_THROW)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn value(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(1).expect("validated required field")
@@ -2698,8 +2473,7 @@ impl<'tree> Validated<'tree, ast::ThrowExpr> {
 
 impl<'tree> Validated<'tree, ast::ReturnExpr> {
     pub fn return_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_RETURN)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn value(&self) -> Option<Validated<'tree, ast::ExprNode>> {
         self.child(1)
@@ -2708,38 +2482,31 @@ impl<'tree> Validated<'tree, ast::ReturnExpr> {
 
 impl<'tree> Validated<'tree, ast::BreakExpr> {
     pub fn break_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_BREAK)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::ContinueExpr> {
     pub fn continue_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_CONTINUE)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::SpawnExpr> {
     pub fn spawn_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_SPAWN)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn name(&self) -> Option<Validated<'tree, ast::ExprNode>> {
         self.child(1)
     }
     pub fn with_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::KW_WITH)
+        self.token(2)
     }
-    pub fn expr_node(&self) -> Option<Validated<'tree, ast::ExprNode>> {
-        self.child(3)
+    pub fn expr_node(&self) -> ValidatedChildren<'tree, ast::ExprNode> {
+        self.children(3)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(4).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(4).filter_map(|element| element.token())
     }
     pub fn body(&self) -> Validated<'tree, ast::BlockExpr> {
         self.child(5).expect("validated required field")
@@ -2748,8 +2515,7 @@ impl<'tree> Validated<'tree, ast::SpawnExpr> {
 
 impl<'tree> Validated<'tree, ast::AwaitExpr> {
     pub fn await_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_AWAIT)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn value(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(1).expect("validated required field")
@@ -2764,10 +2530,10 @@ impl<'tree> Validated<'tree, ast::LambdaExpr> {
         self.child(1).expect("validated required field")
     }
     pub fn fat_arrow_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::FAT_ARROW)
+        self.token(2)
     }
     pub fn arrow_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(3, SyntaxKind::ARROW)
+        self.token(3)
     }
     pub fn type_expr(&self) -> Option<Validated<'tree, ast::TypeExpr>> {
         self.child(4)
@@ -2782,11 +2548,10 @@ impl<'tree> Validated<'tree, ast::LambdaExpr> {
 
 impl<'tree> Validated<'tree, ast::ForExpr> {
     pub fn for_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_FOR)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn l_paren_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::L_PAREN)
+        self.token(1)
     }
     pub fn let_stmt(&self) -> ValidatedChildren<'tree, ast::LetStmt> {
         self.children(2)
@@ -2795,21 +2560,13 @@ impl<'tree> Validated<'tree, ast::ForExpr> {
         self.children(3)
     }
     pub fn in_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(4).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::KW_IN)
-        })
+        self.elements(4).filter_map(|element| element.token())
     }
     pub fn semicolon_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(5).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::SEMICOLON)
-        })
+        self.elements(5).filter_map(|element| element.token())
     }
     pub fn r_paren_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(6, SyntaxKind::R_PAREN)
+        self.token(6)
     }
     pub fn body(&self) -> Validated<'tree, ast::BlockExpr> {
         self.child(7).expect("validated required field")
@@ -2821,8 +2578,7 @@ impl<'tree> Validated<'tree, ast::ObjectLiteral> {
         self.child(0)
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn object_field(&self) -> ValidatedChildren<'tree, ast::ObjectField> {
         self.children(2)
@@ -2831,64 +2587,46 @@ impl<'tree> Validated<'tree, ast::ObjectLiteral> {
         self.children(3)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(4).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(4).filter_map(|element| element.token())
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(5, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(5).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::ArrayLiteral> {
     pub fn l_bracket_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::L_BRACKET)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn expr_node(&self) -> ValidatedChildren<'tree, ast::ExprNode> {
         self.children(1)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(2).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(2).filter_map(|element| element.token())
     }
     pub fn r_bracket_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::R_BRACKET)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::MapLiteral> {
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn object_field(&self) -> ValidatedChildren<'tree, ast::ObjectField> {
         self.children(1)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(2).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(2).filter_map(|element| element.token())
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::WhileStmt> {
     pub fn while_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_WHILE)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn condition(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(1).expect("validated required field")
@@ -2900,21 +2638,19 @@ impl<'tree> Validated<'tree, ast::WhileStmt> {
 
 impl<'tree> Validated<'tree, ast::WhileLetStmt> {
     pub fn while_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_WHILE)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn let_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::KW_LET)
+        self.token(1)
     }
     pub fn const_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::KW_CONST)
+        self.token(2)
     }
     pub fn pattern(&self) -> Validated<'tree, ast::Pattern> {
         self.child(3).expect("validated required field")
     }
     pub fn equals_token(&self) -> ValidatedSyntaxToken {
-        self.token(4, SyntaxKind::EQUALS)
-            .expect("validated required token")
+        self.token(4).expect("validated required token")
     }
     pub fn scrutinee(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(5).expect("validated required field")
@@ -2926,94 +2662,85 @@ impl<'tree> Validated<'tree, ast::WhileLetStmt> {
 
 impl<'tree> Validated<'tree, ast::LetStmt> {
     pub fn let_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0, SyntaxKind::KW_LET)
+        self.token(0)
     }
     pub fn const_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::KW_CONST)
+        self.token(1)
     }
     pub fn pattern(&self) -> Validated<'tree, ast::Pattern> {
         self.child(2).expect("validated required field")
     }
     pub fn equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(3, SyntaxKind::EQUALS)
+        self.token(3)
     }
     pub fn value(&self) -> Option<Validated<'tree, ast::ExprNode>> {
         self.child(4)
     }
     pub fn else_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(5, SyntaxKind::KW_ELSE)
+        self.token(5)
     }
     pub fn block_expr(&self) -> Option<Validated<'tree, ast::BlockExpr>> {
         self.child(6)
     }
     pub fn semicolon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(7, SyntaxKind::SEMICOLON)
+        self.token(7)
     }
 }
 
 impl<'tree> Validated<'tree, ast::TypeBindingStmt> {
     pub fn type_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_TYPE)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn equals_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::EQUALS)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn unreflect_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
     pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(4, SyntaxKind::L_PAREN)
-            .expect("validated required token")
+        self.token(4).expect("validated required token")
     }
     pub fn value(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(5).expect("validated required field")
     }
     pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(6, SyntaxKind::R_PAREN)
-            .expect("validated required token")
+        self.token(6).expect("validated required token")
     }
     pub fn semicolon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(7, SyntaxKind::SEMICOLON)
+        self.token(7)
     }
 }
 
 impl<'tree> Validated<'tree, ast::BreakStmt> {
     pub fn break_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_BREAK)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn semicolon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::SEMICOLON)
+        self.token(1)
     }
 }
 
 impl<'tree> Validated<'tree, ast::ContinueStmt> {
     pub fn continue_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_CONTINUE)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn semicolon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::SEMICOLON)
+        self.token(1)
     }
 }
 
 impl<'tree> Validated<'tree, ast::ReturnStmt> {
     pub fn return_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_RETURN)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn value(&self) -> Option<Validated<'tree, ast::ExprNode>> {
         self.child(1)
     }
     pub fn semicolon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::SEMICOLON)
+        self.token(2)
     }
 }
 
@@ -3022,14 +2749,13 @@ impl<'tree> Validated<'tree, ast::ThrowStmt> {
         self.child(0).expect("validated required field")
     }
     pub fn semicolon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::SEMICOLON)
+        self.token(1)
     }
 }
 
 impl<'tree> Validated<'tree, ast::DeferStmt> {
     pub fn defer_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_DEFER)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn body(&self) -> Validated<'tree, ast::BlockExpr> {
         self.child(1).expect("validated required field")
@@ -3038,8 +2764,7 @@ impl<'tree> Validated<'tree, ast::DeferStmt> {
 
 impl<'tree> Validated<'tree, ast::GenericArgs> {
     pub fn less_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::LESS)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn type_expr(&self) -> ValidatedChildren<'tree, ast::TypeExpr> {
         self.children(1)
@@ -3048,15 +2773,10 @@ impl<'tree> Validated<'tree, ast::GenericArgs> {
         self.children(2)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(3).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(3).filter_map(|element| element.token())
     }
     pub fn greater_token(&self) -> ValidatedSyntaxToken {
-        self.token(4, SyntaxKind::GREATER)
-            .expect("validated required token")
+        self.token(4).expect("validated required token")
     }
 }
 
@@ -3080,22 +2800,16 @@ impl<'tree> Validated<'tree, ast::Pattern> {
 
 impl<'tree> Validated<'tree, ast::CallArgs> {
     pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::L_PAREN)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn call_arg(&self) -> ValidatedChildren<'tree, ast::CallArg> {
         self.children(1)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(2).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(2).filter_map(|element| element.token())
     }
     pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::R_PAREN)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
 }
 
@@ -3107,21 +2821,19 @@ impl<'tree> Validated<'tree, ast::MatchArm> {
         self.child(1)
     }
     pub fn fat_arrow_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::FAT_ARROW)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn value(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(3).expect("validated required field")
     }
     pub fn comma_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(4, SyntaxKind::COMMA)
+        self.token(4)
     }
 }
 
 impl<'tree> Validated<'tree, ast::MatchGuard> {
     pub fn if_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::KW_IF)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn condition(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(1).expect("validated required field")
@@ -3136,23 +2848,22 @@ impl<'tree> Validated<'tree, ast::MatchPattern> {
 
 impl<'tree> Validated<'tree, ast::CatchClause> {
     pub fn catch_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0, SyntaxKind::KW_CATCH)
+        self.token(0)
     }
     pub fn catch_all_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::KW_CATCH_ALL)
+        self.token(1)
     }
     pub fn catch_all_panics_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::KW_CATCH_ALL_PANICS)
+        self.token(2)
     }
     pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::L_PAREN)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
     pub fn catch_binding(&self) -> Validated<'tree, ast::CatchBinding> {
         self.child(4).expect("validated required field")
     }
     pub fn comma_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(5, SyntaxKind::COMMA)
+        self.token(5)
     }
     pub fn catch_stack_trace_binding(
         &self,
@@ -3160,12 +2871,10 @@ impl<'tree> Validated<'tree, ast::CatchClause> {
         self.child(6)
     }
     pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(7, SyntaxKind::R_PAREN)
-            .expect("validated required token")
+        self.token(7).expect("validated required token")
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(8, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(8).expect("validated required token")
     }
     pub fn catch_arm(&self) -> ValidatedChildren<'tree, ast::CatchArm> {
         self.children(9)
@@ -3174,26 +2883,22 @@ impl<'tree> Validated<'tree, ast::CatchClause> {
         self.children(10)
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(11, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(11).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::CatchBinding> {
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::CatchStackTraceBinding> {
     pub fn comma_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::COMMA)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
 }
 
@@ -3207,14 +2912,13 @@ impl<'tree> Validated<'tree, ast::CatchArm> {
         self.child(1)
     }
     pub fn fat_arrow_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::FAT_ARROW)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn value(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(3).expect("validated required field")
     }
     pub fn comma_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(4, SyntaxKind::COMMA)
+        self.token(4)
     }
 }
 
@@ -3229,11 +2933,7 @@ impl<'tree> Validated<'tree, ast::ChainPattern> {
         self.child(0).expect("validated required field")
     }
     pub fn colon_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(1).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COLON)
-        })
+        self.elements(1).filter_map(|element| element.token())
     }
     pub fn rest(&self) -> ValidatedChildren<'tree, ast::ChainPatternItem> {
         self.children(2)
@@ -3245,11 +2945,7 @@ impl<'tree> Validated<'tree, ast::UnionPattern> {
         self.child(0).expect("validated required field")
     }
     pub fn pipe_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(1).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::PIPE)
-        })
+        self.elements(1).filter_map(|element| element.token())
     }
     pub fn rest(&self) -> ValidatedChildren<'tree, ast::PatternAtom> {
         self.children(2)
@@ -3258,17 +2954,16 @@ impl<'tree> Validated<'tree, ast::UnionPattern> {
 
 impl<'tree> Validated<'tree, ast::BindingPattern> {
     pub fn let_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0, SyntaxKind::KW_LET)
+        self.token(0)
     }
     pub fn const_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::KW_CONST)
+        self.token(1)
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn colon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(3, SyntaxKind::COLON)
+        self.token(3)
     }
     pub fn pattern(&self) -> Option<Validated<'tree, ast::Pattern>> {
         self.child(4)
@@ -3277,28 +2972,19 @@ impl<'tree> Validated<'tree, ast::BindingPattern> {
 
 impl<'tree> Validated<'tree, ast::DestructurePattern> {
     pub fn let_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0, SyntaxKind::KW_LET)
+        self.token(0)
     }
     pub fn const_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::KW_CONST)
+        self.token(1)
     }
     pub fn first_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn dot_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(3).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::DOT)
-        })
+        self.elements(3).filter_map(|element| element.token())
     }
     pub fn path_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(4).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::WORD)
-        })
+        self.elements(4).filter_map(|element| element.token())
     }
     pub fn generic_args(&self) -> Option<Validated<'tree, ast::GenericArgs>> {
         self.child(5)
@@ -3307,46 +2993,34 @@ impl<'tree> Validated<'tree, ast::DestructurePattern> {
         self.child(6)
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(7, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(7).expect("validated required token")
     }
     pub fn field_pattern(&self) -> ValidatedChildren<'tree, ast::FieldPattern> {
         self.children(8)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(9).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(9).filter_map(|element| element.token())
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(10, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(10).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::ArrayPattern> {
     pub fn l_bracket_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::L_BRACKET)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn array_pattern_element(&self) -> ValidatedChildren<'tree, ast::ArrayPatternElement> {
         self.children(1)
     }
     pub fn comma_tokens(&self) -> impl Iterator<Item = ValidatedSyntaxToken> + 'tree {
-        self.elements(2).filter_map(|element| {
-            element
-                .token()
-                .filter(|token| token.kind() == SyntaxKind::COMMA)
-        })
+        self.elements(2).filter_map(|element| element.token())
     }
     pub fn r_bracket_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::R_BRACKET)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
     pub fn colon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(4, SyntaxKind::COLON)
+        self.token(4)
     }
     pub fn type_expr(&self) -> Option<Validated<'tree, ast::TypeExpr>> {
         self.child(5)
@@ -3361,56 +3035,49 @@ impl<'tree> Validated<'tree, ast::TypePattern> {
 
 impl<'tree> Validated<'tree, ast::UnreflectPattern> {
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::L_PAREN)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn value(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(2).expect("validated required field")
     }
     pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::R_PAREN)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::ParenPattern> {
     pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::L_PAREN)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn pattern(&self) -> Validated<'tree, ast::Pattern> {
         self.child(1).expect("validated required field")
     }
     pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::R_PAREN)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::WildcardPattern> {
     pub fn let_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0, SyntaxKind::KW_LET)
+        self.token(0)
     }
     pub fn const_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::KW_CONST)
+        self.token(1)
     }
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::FieldPattern> {
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn colon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::COLON)
+        self.token(1)
     }
     pub fn pattern(&self) -> Option<Validated<'tree, ast::Pattern>> {
         self.child(2)
@@ -3419,7 +3086,7 @@ impl<'tree> Validated<'tree, ast::FieldPattern> {
 
 impl<'tree> Validated<'tree, ast::ArrayPatternElement> {
     pub fn dot_dot_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0, SyntaxKind::DOT_DOT)
+        self.token(0)
     }
     pub fn pattern(&self) -> Option<Validated<'tree, ast::Pattern>> {
         self.child(1)
@@ -3428,10 +3095,10 @@ impl<'tree> Validated<'tree, ast::ArrayPatternElement> {
 
 impl<'tree> Validated<'tree, ast::CallArg> {
     pub fn name_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0, SyntaxKind::WORD)
+        self.token(0)
     }
     pub fn equals_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(1, SyntaxKind::EQUALS)
+        self.token(1)
     }
     pub fn value(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(2).expect("validated required field")
@@ -3440,31 +3107,28 @@ impl<'tree> Validated<'tree, ast::CallArg> {
 
 impl<'tree> Validated<'tree, ast::UnreflectArg> {
     pub fn name_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::L_PAREN)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn value(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(2).expect("validated required field")
     }
     pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::R_PAREN)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::ObjectField> {
     pub fn key_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(0, SyntaxKind::WORD)
+        self.token(0)
     }
     pub fn string_literal(&self) -> Option<Validated<'tree, ast::StringLiteral>> {
         self.child(1)
     }
     pub fn colon_token(&self) -> Option<ValidatedSyntaxToken> {
-        self.token(2, SyntaxKind::COLON)
+        self.token(2)
     }
     pub fn value(&self) -> Option<Validated<'tree, ast::ExprNode>> {
         self.child(3)
@@ -3473,8 +3137,7 @@ impl<'tree> Validated<'tree, ast::ObjectField> {
 
 impl<'tree> Validated<'tree, ast::SpreadElement> {
     pub fn dot_dot_dot_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::DOT_DOT_DOT)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn value(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(1).expect("validated required field")
@@ -3495,8 +3158,7 @@ impl<'tree> Validated<'tree, ast::BacktickText> {
 
 impl<'tree> Validated<'tree, ast::BacktickInterpolation> {
     pub fn dollar_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::DOLLAR)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn expr_node(&self) -> Option<Validated<'tree, ast::ExprNode>> {
         self.child(1)
@@ -3508,159 +3170,127 @@ impl<'tree> Validated<'tree, ast::BacktickInterpolation> {
 
 impl<'tree> Validated<'tree, ast::BacktickForOpen> {
     pub fn dollar_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::DOLLAR)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn for_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::KW_FOR)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::L_PAREN)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
     pub fn let_stmt(&self) -> Validated<'tree, ast::LetStmt> {
         self.child(4).expect("validated required field")
     }
     pub fn in_token(&self) -> ValidatedSyntaxToken {
-        self.token(5, SyntaxKind::KW_IN)
-            .expect("validated required token")
+        self.token(5).expect("validated required token")
     }
     pub fn expr_node(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(6).expect("validated required field")
     }
     pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(7, SyntaxKind::R_PAREN)
-            .expect("validated required token")
+        self.token(7).expect("validated required token")
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(8, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(8).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::BacktickEndfor> {
     pub fn dollar_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::DOLLAR)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn endfor_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::BacktickIfOpen> {
     pub fn dollar_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::DOLLAR)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn if_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::KW_IF)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::L_PAREN)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
     pub fn expr_node(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(4).expect("validated required field")
     }
     pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(5, SyntaxKind::R_PAREN)
-            .expect("validated required token")
+        self.token(5).expect("validated required token")
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(6, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(6).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::BacktickElseIf> {
     pub fn dollar_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::DOLLAR)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn else_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::KW_ELSE)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn if_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::KW_IF)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
     pub fn l_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(4, SyntaxKind::L_PAREN)
-            .expect("validated required token")
+        self.token(4).expect("validated required token")
     }
     pub fn expr_node(&self) -> Validated<'tree, ast::ExprNode> {
         self.child(5).expect("validated required field")
     }
     pub fn r_paren_token(&self) -> ValidatedSyntaxToken {
-        self.token(6, SyntaxKind::R_PAREN)
-            .expect("validated required token")
+        self.token(6).expect("validated required token")
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(7, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(7).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::BacktickElse> {
     pub fn dollar_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::DOLLAR)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn else_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::KW_ELSE)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
 }
 
 impl<'tree> Validated<'tree, ast::BacktickEndif> {
     pub fn dollar_token(&self) -> ValidatedSyntaxToken {
-        self.token(0, SyntaxKind::DOLLAR)
-            .expect("validated required token")
+        self.token(0).expect("validated required token")
     }
     pub fn l_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(1, SyntaxKind::L_BRACE)
-            .expect("validated required token")
+        self.token(1).expect("validated required token")
     }
     pub fn endif_token(&self) -> ValidatedSyntaxToken {
-        self.token(2, SyntaxKind::WORD)
-            .expect("validated required token")
+        self.token(2).expect("validated required token")
     }
     pub fn r_brace_token(&self) -> ValidatedSyntaxToken {
-        self.token(3, SyntaxKind::R_BRACE)
-            .expect("validated required token")
+        self.token(3).expect("validated required token")
     }
 }
 
@@ -4118,6 +3748,30 @@ impl<'tree> Validated<'tree, ast::BlockItem> {
             }
             SyntaxKind::TESTSET_DEF => {
                 ValidatedBlockItem::TestsetDef(self.cast().expect("validated enum variant"))
+            }
+            _ => unreachable!("validated enum kind"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ValidatedElseBranch<'tree> {
+    BlockExpr(Validated<'tree, ast::BlockExpr>),
+    IfExpr(Validated<'tree, ast::IfExpr>),
+    IfLetExpr(Validated<'tree, ast::IfLetExpr>),
+}
+
+impl<'tree> Validated<'tree, ast::ElseBranch> {
+    pub fn as_variant(self) -> ValidatedElseBranch<'tree> {
+        match self.syntax().kind() {
+            SyntaxKind::BLOCK_EXPR => {
+                ValidatedElseBranch::BlockExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::IF_EXPR => {
+                ValidatedElseBranch::IfExpr(self.cast().expect("validated enum variant"))
+            }
+            SyntaxKind::IF_LET_EXPR => {
+                ValidatedElseBranch::IfLetExpr(self.cast().expect("validated enum variant"))
             }
             _ => unreachable!("validated enum kind"),
         }

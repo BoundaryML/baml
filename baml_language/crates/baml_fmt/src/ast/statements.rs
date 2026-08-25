@@ -4,671 +4,570 @@
 // well below it. The size difference is acknowledged here rather than
 // boxed because `Statement` is constructed transiently during formatting,
 // not stored at scale.
-use baml_db::baml_compiler_syntax::validated::nodes::{
-    BreakStmt, ContinueStmt, ExpressionStmt, ForArgs, ForBinding, ForCStyleArgs, ForIteratorArgs,
-    ForStmt, LetStmt, ReturnStmt, Statement, WhileLetStmt, WhileStmt,
+use baml_db::baml_compiler_syntax::{
+    SyntaxKind, ast as raw_ast,
+    validated::{Validated, ValidatedBlockItem, ValidatedSyntaxToken},
 };
 use rowan::TextRange;
 
 use crate::{
     ast::Token,
-    printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
+    printer::{PrintInfo, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt,
 };
 
-trait ForCStyleArgsLayout {
-    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo>;
+#[derive(Clone, Copy)]
+enum ValidatedBlockEntry<'tree> {
+    Item {
+        item: Validated<'tree, raw_ast::BlockItem>,
+        semicolon: Option<ValidatedSyntaxToken>,
+    },
+    Semicolon(ValidatedSyntaxToken),
 }
 
-trait ForIteratorArgsLayout {
-    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo>;
+fn validated_block_entries(
+    block: Validated<'_, raw_ast::BlockExpr>,
+) -> Vec<ValidatedBlockEntry<'_>> {
+    let mut entries = Vec::new();
+    for element in block.direct_elements() {
+        if let Some(item) = element.node::<raw_ast::BlockItem>() {
+            entries.push(ValidatedBlockEntry::Item {
+                item,
+                semicolon: None,
+            });
+        } else if let Some(token) = element.token()
+            && token.kind() == SyntaxKind::SEMICOLON
+        {
+            if let Some(ValidatedBlockEntry::Item { item, semicolon }) = entries.last_mut()
+                && item.cast::<raw_ast::ExprNode>().is_some()
+                && semicolon.is_none()
+            {
+                *semicolon = Some(token);
+            } else {
+                entries.push(ValidatedBlockEntry::Semicolon(token));
+            }
+        }
+    }
+    entries
 }
 
-impl Printable for Statement {
+fn validated_expr_statement_needs_semicolon(expr: Validated<'_, raw_ast::ExprNode>) -> bool {
+    !matches!(
+        expr.as_variant(),
+        baml_db::baml_compiler_syntax::validated::ValidatedExprNode::IfExpr(_)
+            | baml_db::baml_compiler_syntax::validated::ValidatedExprNode::IfLetExpr(_)
+            | baml_db::baml_compiler_syntax::validated::ValidatedExprNode::MatchExpr(_)
+            | baml_db::baml_compiler_syntax::validated::ValidatedExprNode::LambdaExpr(_)
+            | baml_db::baml_compiler_syntax::validated::ValidatedExprNode::SpawnExpr(_)
+            | baml_db::baml_compiler_syntax::validated::ValidatedExprNode::TaggedTemplateExpr(_)
+            | baml_db::baml_compiler_syntax::validated::ValidatedExprNode::UpcastExpr(_)
+            | baml_db::baml_compiler_syntax::validated::ValidatedExprNode::QualifiedPathExpr(_)
+            | baml_db::baml_compiler_syntax::validated::ValidatedExprNode::SpecExpr(_)
+            | baml_db::baml_compiler_syntax::validated::ValidatedExprNode::ThrowExpr(_)
+            | baml_db::baml_compiler_syntax::validated::ValidatedExprNode::AwaitExpr(_)
+            | baml_db::baml_compiler_syntax::validated::ValidatedExprNode::ForExpr(_)
+    )
+}
+
+impl Printable for ValidatedBlockEntry<'_> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            Statement::Expr(expression_stmt) => expression_stmt.print(shape, printer),
-            Statement::Let(let_stmt) => let_stmt.print(shape, printer),
-            Statement::While(while_stmt) => while_stmt.print(shape, printer),
-            Statement::WhileLet(while_let_stmt) => while_let_stmt.print(shape, printer),
-            Statement::Return(return_stmt) => return_stmt.print(shape, printer),
-            Statement::Break(break_stmt) => break_stmt.print(shape, printer),
-            Statement::Continue(continue_stmt) => continue_stmt.print(shape, printer),
-            Statement::For(for_stmt) => for_stmt.print(shape, printer),
-            Statement::HeaderComment(header_comment) => {
-                printer.print_raw_token(header_comment);
-                PrintInfo::default_single_line()
-            }
-            Statement::EmptySemicolon(semicolon) => {
+            Self::Semicolon(semicolon) => {
                 printer.print_raw_token(semicolon);
                 PrintInfo::default_single_line()
             }
-            Statement::TestExpr(test_expr_decl) => test_expr_decl.print(shape, printer),
-            Statement::TestSet(test_set_decl) => test_set_decl.print(shape, printer),
-            Statement::Unknown(range) => {
-                printer.print_input_range_trimmed_start(*range);
-                PrintInfo::default_multi_lined()
+            Self::Item { item, semicolon } => {
+                let info = item.print(shape, printer);
+                if let Some(semicolon) = semicolon {
+                    printer.print_trivia_squished(printer.trivia.get_trailing_for_element(item));
+                    printer.print_trivia_squished(
+                        printer.trivia.get_for_range_split(semicolon.span()).0,
+                    );
+                    printer.print_raw_token(semicolon);
+                } else if item
+                    .cast::<raw_ast::ExprNode>()
+                    .is_some_and(validated_expr_statement_needs_semicolon)
+                {
+                    printer.print_str(";");
+                }
+                info
             }
         }
     }
+
     fn leftmost_token(&self) -> TextRange {
         match self {
-            Statement::Expr(expr) => expr.leftmost_token(),
-            Statement::Let(let_stmt) => let_stmt.leftmost_token(),
-            Statement::While(while_stmt) => while_stmt.leftmost_token(),
-            Statement::WhileLet(while_let_stmt) => while_let_stmt.leftmost_token(),
-            Statement::Return(return_stmt) => return_stmt.leftmost_token(),
-            Statement::Break(break_stmt) => break_stmt.leftmost_token(),
-            Statement::Continue(continue_stmt) => continue_stmt.leftmost_token(),
-            Statement::For(for_stmt) => for_stmt.leftmost_token(),
-            Statement::HeaderComment(header_comment) => header_comment.span(),
-            Statement::EmptySemicolon(semicolon) => semicolon.span(),
-            Statement::TestExpr(t) => t.leftmost_token(),
-            Statement::TestSet(t) => t.leftmost_token(),
-            Statement::Unknown(range) => *range,
+            Self::Item { item, .. } => item.first_token_range(),
+            Self::Semicolon(token) => token.span(),
         }
     }
+
     fn rightmost_token(&self) -> TextRange {
         match self {
-            Statement::Expr(expr) => expr.rightmost_token(),
-            Statement::Let(let_stmt) => let_stmt.rightmost_token(),
-            Statement::While(while_stmt) => while_stmt.rightmost_token(),
-            Statement::WhileLet(while_let_stmt) => while_let_stmt.rightmost_token(),
-            Statement::Return(return_stmt) => return_stmt.rightmost_token(),
-            Statement::Break(break_stmt) => break_stmt.rightmost_token(),
-            Statement::Continue(continue_stmt) => continue_stmt.rightmost_token(),
-            Statement::For(for_stmt) => for_stmt.rightmost_token(),
-            Statement::HeaderComment(header_comment) => header_comment.span(),
-            Statement::EmptySemicolon(semicolon) => semicolon.span(),
-            Statement::TestExpr(t) => t.rightmost_token(),
-            Statement::TestSet(t) => t.rightmost_token(),
-            Statement::Unknown(range) => *range,
+            Self::Item {
+                item: _,
+                semicolon: Some(semicolon),
+            } => semicolon.span(),
+            Self::Item { item, .. } => item.last_token_range(),
+            Self::Semicolon(token) => token.span(),
         }
     }
 }
 
-impl Printable for ExpressionStmt {
+impl Printable for Validated<'_, raw_ast::BlockExpr> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let info = printer.print(&self.expr, shape);
-        if let Some(semicolon) = &self.semicolon {
-            // Trivia between expr and semicolon
-            let expr_trailing = printer.trivia.get_trailing_for_element(&self.expr);
-            printer.print_trivia_squished(expr_trailing);
-            let (semicolon_leading, _) = printer.trivia.get_for_range_split(semicolon.span());
-            printer.print_trivia_squished(semicolon_leading);
-            printer.print_raw_token(semicolon);
-        } else if self.expr.statement_needs_semicolon() {
+        let open = self.l_brace_token();
+        let close = self.r_brace_token();
+        let mut entries = validated_block_entries(*self);
+        let tail = entries.last().copied().and_then(|entry| match entry {
+            ValidatedBlockEntry::Item {
+                item,
+                semicolon: None,
+            } => item.cast::<raw_ast::ExprNode>(),
+            _ => None,
+        });
+        if tail.is_some() {
+            entries.pop();
+        }
+        if entries.is_empty() && tail.is_none() {
+            let (_, open_trailing) = printer.trivia.get_for_range_split(open.span());
+            let (close_leading, _) = printer.trivia.get_for_range_split(close.span());
+            if !open_trailing.iter().any(crate::EmittableTrivia::is_comment)
+                && !close_leading.iter().any(crate::EmittableTrivia::is_comment)
+            {
+                printer.print_raw_token(&open);
+                printer.print_raw_token(&close);
+                return PrintInfo::default_single_line();
+            }
+        }
+        printer.print_raw_token(&open);
+        printer.print_trivia_all_trailing_for(open.span());
+        printer.print_newline();
+        let inner_indent = shape.indent + printer.config.indent_width;
+        for (index, entry) in entries.iter().enumerate() {
+            if index == 0 {
+                let (leading, trailing) = printer.trivia.get_for_element(entry);
+                printer.print_trivia_with_newline(leading.trim_leading_blanks(), inner_indent);
+                printer.print_spaces(inner_indent);
+                entry.print(
+                    Shape::standalone(printer.config.line_width, inner_indent),
+                    printer,
+                );
+                printer.print_trivia_trailing(trailing);
+            } else {
+                printer.print_standalone_with_trivia(entry, inner_indent);
+            }
+            printer.print_newline();
+        }
+        if let Some(tail) = tail {
+            let (leading, trailing) = printer.trivia.get_for_element(&tail);
+            let leading = if entries.is_empty() {
+                leading.trim_leading_blanks()
+            } else {
+                leading
+            };
+            printer.print_trivia_with_newline(leading, inner_indent);
+            printer.print_spaces(inner_indent);
+            tail.print(
+                Shape::standalone(printer.config.line_width, inner_indent),
+                printer,
+            );
+            printer.print_trivia_trailing(trailing);
+            printer.print_newline();
+        }
+        printer.print_trivia_with_newline(
+            printer
+                .trivia
+                .get_for_range_split(close.span())
+                .0
+                .trim_trailing_blanks(),
+            inner_indent,
+        );
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&close);
+        PrintInfo::default_multi_lined()
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.l_brace_token().span()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.r_brace_token().span()
+    }
+}
+
+impl Printable for Validated<'_, raw_ast::BlockItem> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self.as_variant() {
+            ValidatedBlockItem::HeaderComment(node) => {
+                printer.print_input_range_trimmed_start(node.text_range());
+                PrintInfo::default_single_line()
+            }
+            ValidatedBlockItem::WhileStmt(node) => node.print(shape, printer),
+            ValidatedBlockItem::WhileLetStmt(node) => node.print(shape, printer),
+            ValidatedBlockItem::LetStmt(node) => node.print(shape, printer),
+            ValidatedBlockItem::BreakStmt(node) => node.print(shape, printer),
+            ValidatedBlockItem::ContinueStmt(node) => node.print(shape, printer),
+            ValidatedBlockItem::ReturnStmt(node) => node.print(shape, printer),
+            ValidatedBlockItem::TestExprDef(node) => node.print(shape, printer),
+            ValidatedBlockItem::TestsetDef(node) => node.print(shape, printer),
+            ValidatedBlockItem::ForExpr(node) => node.print(shape, printer),
+            ValidatedBlockItem::LiteralExpr(_)
+            | ValidatedBlockItem::BlockExpr(_)
+            | ValidatedBlockItem::PathExpr(_)
+            | ValidatedBlockItem::StringLiteral(_)
+            | ValidatedBlockItem::RawStringLiteral(_)
+            | ValidatedBlockItem::BacktickStringLiteral(_)
+            | ValidatedBlockItem::ByteStringLiteral(_)
+            | ValidatedBlockItem::BinaryExpr(_)
+            | ValidatedBlockItem::IsExpr(_)
+            | ValidatedBlockItem::UnaryExpr(_)
+            | ValidatedBlockItem::CallExpr(_)
+            | ValidatedBlockItem::IndexExpr(_)
+            | ValidatedBlockItem::TaggedTemplateExpr(_)
+            | ValidatedBlockItem::OptionalCallExpr(_)
+            | ValidatedBlockItem::OptionalIndexExpr(_)
+            | ValidatedBlockItem::FieldAccessExpr(_)
+            | ValidatedBlockItem::UpcastExpr(_)
+            | ValidatedBlockItem::QualifiedPathExpr(_)
+            | ValidatedBlockItem::SpecExpr(_)
+            | ValidatedBlockItem::OptionalFieldAccessExpr(_)
+            | ValidatedBlockItem::EnvAccessExpr(_)
+            | ValidatedBlockItem::ParenExpr(_)
+            | ValidatedBlockItem::IfExpr(_)
+            | ValidatedBlockItem::IfLetExpr(_)
+            | ValidatedBlockItem::MatchExpr(_)
+            | ValidatedBlockItem::CatchExpr(_)
+            | ValidatedBlockItem::ThrowExpr(_)
+            | ValidatedBlockItem::ReturnExpr(_)
+            | ValidatedBlockItem::BreakExpr(_)
+            | ValidatedBlockItem::ContinueExpr(_)
+            | ValidatedBlockItem::SpawnExpr(_)
+            | ValidatedBlockItem::AwaitExpr(_)
+            | ValidatedBlockItem::LambdaExpr(_)
+            | ValidatedBlockItem::ObjectLiteral(_)
+            | ValidatedBlockItem::ArrayLiteral(_)
+            | ValidatedBlockItem::MapLiteral(_) => self
+                .cast::<raw_ast::ExprNode>()
+                .expect("validated expression block item")
+                .print(shape, printer),
+            ValidatedBlockItem::TypeBindingStmt(_) | ValidatedBlockItem::ThrowStmt(_) => {
+                let range = TextRange::new(
+                    self.first_token_range().start(),
+                    self.last_token_range().end(),
+                );
+                printer.print_input_range_trimmed_start(range);
+                PrintInfo {
+                    multi_lined: printer.input[range].contains('\n'),
+                }
+            }
+            ValidatedBlockItem::DeferStmt(node) => {
+                let range = TextRange::new(
+                    node.first_token_range().start(),
+                    node.last_token_range().end(),
+                );
+                printer.print_input_range_trimmed_start(range);
+                PrintInfo {
+                    multi_lined: printer.input[range].contains('\n'),
+                }
+            }
+        }
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.first_token_range()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.last_token_range()
+    }
+}
+
+fn print_binding_introducer(
+    let_token: Option<ValidatedSyntaxToken>,
+    const_token: Option<ValidatedSyntaxToken>,
+    printer: &mut Printer,
+) {
+    if let Some(keyword) = let_token.or(const_token) {
+        printer.print_raw_token(&keyword);
+        printer.print_str(" ");
+        if printer.print_trivia_squished(printer.trivia.get_for_range_split(keyword.span()).1) > 0 {
+            printer.print_str(" ");
+        }
+    }
+}
+
+fn print_validated_for_binding(
+    binding: Validated<'_, raw_ast::LetStmt>,
+    shape: Shape,
+    printer: &mut Printer,
+) -> PrintInfo {
+    print_binding_introducer(binding.let_token(), binding.const_token(), printer);
+    binding.pattern().print(shape, printer)
+}
+
+fn print_validated_for_iterator(
+    expression: Validated<'_, raw_ast::ForExpr>,
+    shape: Shape,
+    printer: &mut Printer,
+) -> PrintInfo {
+    let open = expression.l_paren_token();
+    let close = expression.r_paren_token();
+    if let Some(open) = open {
+        printer.print_raw_token(&open);
+    }
+    let bindings = expression.let_stmt().collect::<Vec<_>>();
+    let values = expression.expr_node().collect::<Vec<_>>();
+    let mut info = if let Some(binding) = bindings.first().copied() {
+        print_validated_for_binding(binding, shape.clone(), printer)
+    } else if let Some(binding) = values.first().copied() {
+        binding.print(shape.clone(), printer)
+    } else {
+        PrintInfo::default_single_line()
+    };
+    printer.print_str(" ");
+    let in_token = expression
+        .in_tokens()
+        .next()
+        .expect("validated iterator for expression");
+    printer.print_raw_token(&in_token);
+    printer.print_str(" ");
+    let iterable = if bindings.is_empty() {
+        values.get(1).copied()
+    } else {
+        values.first().copied()
+    }
+    .expect("validated iterator expression");
+    info.multi_lined |= iterable.print(shape, printer).multi_lined;
+    if let Some(close) = close {
+        printer.print_raw_token(&close);
+    }
+    info
+}
+
+fn print_validated_for_c_style(
+    expression: Validated<'_, raw_ast::ForExpr>,
+    shape: Shape,
+    printer: &mut Printer,
+) -> PrintInfo {
+    let open = expression
+        .l_paren_token()
+        .expect("validated C-style for open paren");
+    let close = expression
+        .r_paren_token()
+        .expect("validated C-style for close paren");
+    let binding = expression.let_stmt().next();
+    let values = expression.expr_node().collect::<Vec<_>>();
+    let mut info = PrintInfo::default_single_line();
+    printer.print_raw_token(&open);
+    let offset = usize::from(binding.is_none());
+    if let Some(binding) = binding {
+        info.multi_lined |= binding.print(shape.clone(), printer).multi_lined;
+    } else if let Some(initializer) = values.first() {
+        info.multi_lined |= initializer.print(shape.clone(), printer).multi_lined;
+        printer.print_str(";");
+    } else {
+        printer.print_str(";");
+    }
+    printer.print_str(" ");
+    if let Some(condition) = values.get(offset) {
+        info.multi_lined |= condition.print(shape.clone(), printer).multi_lined;
+    }
+    printer.print_str(";");
+    printer.print_str(" ");
+    if let Some(update) = values.get(offset + 1) {
+        info.multi_lined |= update.print(shape, printer).multi_lined;
+    }
+    printer.print_raw_token(&close);
+    info
+}
+
+impl Printable for Validated<'_, raw_ast::ForExpr> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.for_token());
+        printer.print_str(" ");
+        let mut info = if self.in_tokens().next().is_some() {
+            print_validated_for_iterator(*self, shape.clone(), printer)
+        } else {
+            print_validated_for_c_style(*self, shape.clone(), printer)
+        };
+        printer.print_str(" ");
+        info.multi_lined |= self.body().print(shape, printer).multi_lined;
+        info
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.for_token().span()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.body().rightmost_token()
+    }
+}
+
+impl Printable for Validated<'_, raw_ast::LetStmt> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        print_binding_introducer(self.let_token(), self.const_token(), printer);
+        let pattern = self.pattern();
+        let mut info = pattern.print(shape.clone(), printer);
+        if let Some((equals, value)) = self.equals_token().zip(self.value()) {
+            printer.print_str(" ");
+            printer.print_raw_token(&equals);
+            printer.print_str(" ");
+            printer.print_trivia_squished(printer.trivia.get_for_range_split(equals.span()).1);
+            printer.print_trivia_squished(printer.trivia.get_leading_for_element(&value));
+            info.multi_lined |= value.print(shape.clone(), printer).multi_lined;
+            if self.else_token().is_some() || self.semicolon_token().is_some() {
+                printer.print_trivia_squished(printer.trivia.get_trailing_for_element(&value));
+            }
+        }
+        if let Some((keyword, block)) = self.else_token().zip(self.block_expr()) {
+            let (leading, trailing) = printer.trivia.get_for_range_split(keyword.span());
+            printer.print_str(" ");
+            printer.print_trivia_squished(leading);
+            printer.print_raw_token(&keyword);
+            printer.print_str(" ");
+            printer.print_trivia_squished(trailing);
+            info.multi_lined |= block.print(shape, printer).multi_lined;
+        }
+        if let Some(semicolon) = self.semicolon_token() {
+            printer.print_trivia_squished(printer.trivia.get_for_range_split(semicolon.span()).0);
+            printer.print_raw_token(&semicolon);
+        } else {
             printer.print_str(";");
         }
         info
     }
+
     fn leftmost_token(&self) -> TextRange {
-        self.expr.leftmost_token()
+        self.first_token_range()
     }
+
     fn rightmost_token(&self) -> TextRange {
-        if let Some(semicolon) = &self.semicolon {
-            semicolon.span()
-        } else {
-            self.expr.rightmost_token()
-        }
+        self.last_token_range()
     }
 }
 
-impl Printable for LetStmt {
+impl Printable for Validated<'_, raw_ast::WhileStmt> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let mut multi_lined = false;
-
-        if let Some(let_keyword) = &self.let_keyword {
-            printer.print_raw_token(let_keyword);
-            printer.print_str(" ");
-            // Preserve trivia between the introducer and the pattern — e.g.
-            // `let /*keep*/ [x]` would otherwise lose the comment.
-            let (_, let_trailing) = printer.trivia.get_for_range_split(let_keyword.span());
-            if printer.print_trivia_squished(let_trailing) > 0 {
-                printer.print_str(" ");
-            }
-        }
-        // Simple binding patterns carry `let`, the binding name, and any `: T` narrow.
-        multi_lined |= printer.print(&self.pattern, shape.clone()).multi_lined;
-
-        if let Some((equals, expr)) = &self.initializer {
-            let (_, equals_trailing) = printer.trivia.get_for_range_split(equals.span());
-            printer.print_str(" ");
-            printer.print_raw_token(equals);
-            printer.print_str(" ");
-            printer.print_trivia_squished(equals_trailing);
-            let expr_leading = printer.trivia.get_leading_for_element(expr);
-            printer.print_trivia_squished(expr_leading);
-            multi_lined |= printer.print(expr, shape.clone()).multi_lined;
-            // Trailing trivia between the initializer expression and what
-            // follows: a semicolon, or an `else { … }` tail. Either way,
-            // print it so inline comments aren't dropped.
-            if (self.else_branch.is_none() && self.semicolon.is_some())
-                || self.else_branch.is_some()
-            {
-                let expr_trailing = printer.trivia.get_trailing_for_element(expr);
-                printer.print_trivia_squished(expr_trailing);
-            }
-        }
-
-        if let Some(else_branch) = self.else_branch.as_deref() {
-            let (else_kw, block) = else_branch;
-            // Preserve trivia adjacent to the `else` keyword instead of
-            // hardcoding bare spaces — a `// note` between the init and
-            // `else`, or between `else` and the block, would otherwise be
-            // dropped.
-            let (else_leading, else_trailing) = printer.trivia.get_for_range_split(else_kw.span());
-            printer.print_str(" ");
-            printer.print_trivia_squished(else_leading);
-            printer.print_raw_token(else_kw);
-            printer.print_str(" ");
-            printer.print_trivia_squished(else_trailing);
-            multi_lined |= printer.print(block, shape).multi_lined;
-        }
-
-        if let Some(semicolon) = &self.semicolon {
-            let (semicolon_leading, _) = printer.trivia.get_for_range_split(semicolon.span());
-            printer.print_trivia_squished(semicolon_leading);
-            printer.print_raw_token(semicolon);
-        } else {
-            printer.print_str(";");
-        }
-        PrintInfo { multi_lined }
-    }
-    fn leftmost_token(&self) -> TextRange {
-        if let Some(let_keyword) = &self.let_keyword {
-            let_keyword.span()
-        } else {
-            self.pattern.leftmost_token()
-        }
-    }
-    fn rightmost_token(&self) -> TextRange {
-        if let Some(semicolon) = &self.semicolon {
-            return semicolon.span();
-        }
-        if let Some(else_branch) = self.else_branch.as_deref() {
-            return else_branch.1.rightmost_token();
-        }
-        if let Some((_, expr)) = &self.initializer {
-            return expr.rightmost_token();
-        }
-        self.pattern.rightmost_token()
-    }
-}
-
-impl Printable for WhileStmt {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
+        printer.print_raw_token(&self.while_token());
         printer.print_str(" ");
-
-        let condition_shape = Shape {
-            width: shape.width,
-            indent: shape.indent,
-            first_line_offset: shape.first_line_offset + const { "while ".len() },
-        };
-        printer.print(&self.condition, condition_shape);
-
-        printer.print_str(" ");
-
-        let body_shape = Shape {
-            width: shape.width,
-            indent: shape.indent,
-            first_line_offset: 0, // irrelevant since body new-lines immediately after `{`
-        };
-        printer.print(&self.body, body_shape);
-        PrintInfo::default_multi_lined()
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.body.rightmost_token()
-    }
-}
-
-impl Printable for WhileLetStmt {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
-        printer.print_str(" ");
-        // A standalone `let` is present only for array-pattern heads; for other
-        // heads the `let` lives inside the pattern. No parens around the pattern
-        // or scrutinee (mirrors `if let`, unlike plain `while`).
-        if let Some(let_keyword) = &self.let_keyword {
-            printer.print_raw_token(let_keyword);
-            printer.print_str(" ");
-            let (_, trailing) = printer.trivia.get_for_range_split(let_keyword.span());
-            if printer.print_trivia_squished(trailing) > 0 {
-                printer.print_str(" ");
-            }
-        }
-        printer.print(&self.pattern, shape.clone());
-        printer.print_str(" ");
-        printer.print_raw_token(&self.equals);
-        printer.print_str(" ");
-        printer.print(&*self.scrutinee, shape.clone());
-        printer.print_str(" ");
-
-        let body_shape = Shape {
-            width: shape.width,
-            indent: shape.indent,
-            first_line_offset: 0, // irrelevant since body new-lines immediately after `{`
-        };
-        printer.print(&self.body, body_shape);
-        PrintInfo::default_multi_lined()
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.body.rightmost_token()
-    }
-}
-
-impl Printable for ForStmt {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
-        printer.print_str(" ");
-        printer.print(&self.args, shape.clone());
-        printer.print_str(" ");
-        printer.print(&self.body, shape);
-        PrintInfo::default_multi_lined()
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.body.rightmost_token()
-    }
-}
-
-impl Printable for ForArgs {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        match self {
-            ForArgs::Iterator(iter) => iter.print(shape, printer),
-            ForArgs::CStyle(cstyle) => cstyle.print(shape, printer),
-        }
-    }
-    fn leftmost_token(&self) -> TextRange {
-        match self {
-            ForArgs::Iterator(iter) => iter.leftmost_token(),
-            ForArgs::CStyle(cstyle) => cstyle.leftmost_token(),
-        }
-    }
-    fn rightmost_token(&self) -> TextRange {
-        match self {
-            ForArgs::Iterator(iter) => iter.rightmost_token(),
-            ForArgs::CStyle(cstyle) => cstyle.rightmost_token(),
-        }
-    }
-}
-
-impl PrintMultiLine for ForCStyleArgs {
-    /// Multi-line layout: each section (init, condition, update) on its own
-    /// indented line. Parens wrap the entire construct.
-    ///
-    /// ```baml
-    /// (
-    ///     let i = 0;
-    ///     i < some_long_expression;
-    ///     i = i + 1
-    /// )
-    /// ```
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let inner_shape = Shape::standalone(
-            printer.config.line_width,
-            shape.indent + printer.config.indent_width,
+        self.condition().print(
+            Shape {
+                first_line_offset: shape.first_line_offset + "while ".len(),
+                ..shape
+            },
+            printer,
         );
-
-        printer.print_raw_token(&self.open_paren);
-        printer.print_trivia_all_trailing_for(self.open_paren.span());
-        printer.print_newline();
-
-        let (init_leading, init_trailing) = printer.trivia.get_for_element(&self.init);
-        printer.print_trivia_with_newline(init_leading.trim_blanks(), inner_shape.indent);
-        printer.print_spaces(inner_shape.indent);
-        self.init.print(inner_shape.clone(), printer);
-        printer.print_trivia_trailing(init_trailing);
-        printer.print_newline();
-
-        let (cond_leading, cond_trailing) = printer.trivia.get_for_element(&self.condition);
-        printer.print_trivia_with_newline(cond_leading.trim_blanks(), inner_shape.indent);
-        printer.print_spaces(inner_shape.indent);
-        self.condition.print(inner_shape.clone(), printer);
-        printer.print_trivia_squished(cond_trailing); // always squished before `;`
-
-        let (semi_leading, semi_trailing) =
-            printer.trivia.get_for_range_split(self.semicolon.span());
-        printer.print_trivia_squished(semi_leading); // always squished before `;`
-        printer.print_raw_token(&self.semicolon);
-        printer.print_trivia_trailing(semi_trailing);
-        printer.print_newline();
-
-        let (update_leading, update_trailing) = printer.trivia.get_for_element(&*self.update);
-        printer.print_trivia_with_newline(update_leading.trim_blanks(), inner_shape.indent);
-        printer.print_spaces(inner_shape.indent);
-        self.update.print(inner_shape.clone(), printer);
-        printer.print_trivia_trailing(update_trailing);
-        printer.print_newline();
-
-        let (close_paren_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        printer.print_trivia_with_newline(close_paren_leading.trim_blanks(), inner_shape.indent);
-
-        printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_paren);
+        printer.print_str(" ");
+        self.body().print(shape, printer);
         PrintInfo::default_multi_lined()
     }
-}
 
-impl ForCStyleArgsLayout for ForCStyleArgs {
-    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.open_paren);
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
-        printer.try_print_trivia_single_line_squished(open_trailing)?;
-
-        let (init_leading, init_trailing) = printer.trivia.get_for_element(&self.init);
-        printer.try_print_trivia_single_line_squished(init_leading)?;
-        if printer
-            .print(&self.init, Shape::unlimited_single_line())
-            .multi_lined
-        {
-            return None;
-        }
-        printer.try_print_trivia_single_line_squished(init_trailing)?;
-        printer.print_str(" ");
-
-        let (cond_leading, cond_trailing) = printer.trivia.get_for_element(&self.condition);
-        printer.try_print_trivia_single_line_squished(cond_leading)?;
-        if printer
-            .print(&self.condition, Shape::unlimited_single_line())
-            .multi_lined
-        {
-            return None;
-        }
-        printer.print_trivia_squished(cond_trailing); // always squished before `;`
-
-        let (semi_leading, semi_trailing) =
-            printer.trivia.get_for_range_split(self.semicolon.span());
-        printer.print_trivia_squished(semi_leading); // always squished before `;`
-        printer.print_raw_token(&self.semicolon);
-        printer.try_print_trivia_single_line_squished(semi_trailing)?;
-        printer.print_str(" ");
-
-        let (update_leading, update_trailing) = printer.trivia.get_for_element(&*self.update);
-        printer.try_print_trivia_single_line_squished(update_leading)?;
-        if printer
-            .print(&*self.update, Shape::unlimited_single_line())
-            .multi_lined
-        {
-            return None;
-        }
-        printer.try_print_trivia_single_line_squished(update_trailing)?;
-
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        printer.try_print_trivia_single_line_squished(close_leading)?;
-        printer.print_raw_token(&self.close_paren);
-
-        if printer.output.len() > shape.width {
-            None
-        } else {
-            Some(PrintInfo::default_single_line())
-        }
-    }
-}
-
-impl Printable for ForCStyleArgs {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
-            .unwrap_or_else(|| self.print_multi_line(shape, printer))
-    }
     fn leftmost_token(&self) -> TextRange {
-        self.open_paren.span()
+        self.while_token().span()
     }
+
     fn rightmost_token(&self) -> TextRange {
-        self.close_paren.span()
+        self.body().rightmost_token()
     }
 }
 
-impl PrintMultiLine for ForIteratorArgs {
-    /// Multi-line layout: the iterator expression wraps to an indented new line
-    /// after the `in` keyword.
-    ///
-    /// ```baml
-    /// for (
-    ///     let variable in some_long_iterator_expression
-    /// )
-    /// ```
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let inner_shape =
-            Shape::standalone(shape.width, shape.indent + printer.config.indent_width);
-
-        if let Some(open_paren) = &self.open_paren {
-            printer.print_raw_token(open_paren);
-            printer.print_trivia_all_trailing_for(open_paren.span());
-            printer.print_newline();
-            let binding_leading = match &self.binding {
-                ForBinding::Let(let_stmt) => printer.trivia.get_leading_for_element(&**let_stmt),
-                ForBinding::Bare(word) => printer.trivia.get_for_range_split(word.span()).0,
-            };
-            printer.print_trivia_with_newline(binding_leading, inner_shape.indent);
-            printer.print_spaces(inner_shape.indent);
-        }
-
-        match &self.binding {
-            ForBinding::Let(let_stmt) => {
-                if let Some(let_keyword) = &let_stmt.let_keyword {
-                    printer.print_raw_token(let_keyword);
-                    printer.print_spaces(1);
-                    // Preserve trivia between `let` and the pattern.
-                    let (_, let_trailing) = printer.trivia.get_for_range_split(let_keyword.span());
-                    if printer.print_trivia_squished(let_trailing) > 0 {
-                        printer.print_spaces(1);
-                    }
-                }
-                printer.print(&let_stmt.pattern, inner_shape.clone());
-            }
-            ForBinding::Bare(word) => {
-                printer.print_raw_token(word);
-            }
-        }
+impl Printable for Validated<'_, raw_ast::WhileLetStmt> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.while_token());
         printer.print_str(" ");
-        printer.print_raw_token(&self.in_keyword);
-        printer.print_spaces(1);
-
-        let (_, in_trailing) = printer.trivia.get_for_range_split(self.in_keyword.span());
-        let (expr_leading, expr_trailing) = printer.trivia.get_for_element(&self.expression);
-        printer.print_trivia_squished(in_trailing);
-        printer.print_trivia_squished(expr_leading);
-        let curr_line_len = printer.current_line_len();
-        let offset = curr_line_len.saturating_sub(inner_shape.indent);
-        let expr_shape = Shape {
-            width: printer.config.line_width.saturating_sub(curr_line_len),
-            indent: inner_shape.indent,
-            first_line_offset: offset,
-        };
-        self.expression.print(expr_shape, printer);
-        printer.print_trivia_trailing(expr_trailing);
-
-        if let Some(close_paren) = &self.close_paren {
-            printer.print_newline();
-            let (close_paren_leading, _) = printer.trivia.get_for_range_split(close_paren.span());
-            printer.print_trivia_with_newline(close_paren_leading, inner_shape.indent);
-            printer.print_spaces(shape.indent);
-            printer.print_raw_token(close_paren);
-        }
+        print_binding_introducer(self.let_token(), self.const_token(), printer);
+        self.pattern().print(shape.clone(), printer);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.equals_token());
+        printer.print_str(" ");
+        self.scrutinee().print(shape.clone(), printer);
+        printer.print_str(" ");
+        self.body().print(shape, printer);
         PrintInfo::default_multi_lined()
     }
-}
 
-impl ForIteratorArgsLayout for ForIteratorArgs {
-    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        if let Some(open_paren) = &self.open_paren {
-            printer.print_raw_token(open_paren);
-            let (_, open_trailing) = printer.trivia.get_for_range_split(open_paren.span());
-            printer.try_print_trivia_single_line_squished(open_trailing)?;
-        }
-
-        match &self.binding {
-            ForBinding::Let(let_stmt) => {
-                if let Some(let_keyword) = &let_stmt.let_keyword {
-                    printer.print_raw_token(let_keyword);
-                    printer.print_spaces(1);
-                    // Preserve trivia between `let` and the pattern.
-                    let (_, let_trailing) = printer.trivia.get_for_range_split(let_keyword.span());
-                    if printer.print_trivia_squished(let_trailing) > 0 {
-                        printer.print_spaces(1);
-                    }
-                }
-                if printer
-                    .print(&let_stmt.pattern, Shape::unlimited_single_line())
-                    .multi_lined
-                {
-                    return None;
-                }
-            }
-            ForBinding::Bare(word) => {
-                printer.print_raw_token(word);
-            }
-        }
-        printer.print_str(" ");
-        printer.print_raw_token(&self.in_keyword);
-        printer.print_str(" ");
-
-        let (_, in_trailing) = printer.trivia.get_for_range_split(self.in_keyword.span());
-        let (expr_leading, expr_trailing) = printer.trivia.get_for_element(&self.expression);
-        printer.print_trivia_squished(in_trailing);
-        printer.print_trivia_squished(expr_leading);
-        if printer
-            .print(&self.expression, Shape::unlimited_single_line())
-            .multi_lined
-        {
-            return None;
-        }
-        printer.try_print_trivia_single_line_squished(expr_trailing)?;
-
-        if let Some(close_paren) = &self.close_paren {
-            let (close_leading, _) = printer.trivia.get_for_range_split(close_paren.span());
-            printer.try_print_trivia_single_line_squished(close_leading)?;
-            printer.print_raw_token(close_paren);
-        }
-
-        if printer.output.len() > shape.width {
-            None
-        } else {
-            Some(PrintInfo::default_single_line())
-        }
-    }
-}
-
-impl Printable for ForIteratorArgs {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
-            .unwrap_or_else(|| self.print_multi_line(shape, printer))
-    }
     fn leftmost_token(&self) -> TextRange {
-        if let Some(open_paren) = &self.open_paren {
-            return open_paren.span();
-        }
-        match &self.binding {
-            ForBinding::Let(let_stmt) => let_stmt
-                .let_keyword
-                .as_ref()
-                .map(Token::span)
-                .unwrap_or_else(|| let_stmt.pattern.leftmost_token()),
-            ForBinding::Bare(word) => word.span(),
-        }
+        self.while_token().span()
     }
+
     fn rightmost_token(&self) -> TextRange {
-        if let Some(close_paren) = &self.close_paren {
-            return close_paren.span();
-        }
-        self.expression.rightmost_token()
+        self.body().rightmost_token()
     }
 }
 
-impl Printable for ReturnStmt {
+impl Printable for Validated<'_, raw_ast::ReturnStmt> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
-        if self.value.is_some() || self.semicolon.is_some() {
-            // kw is not the last element
-            let (_, kw_trailing) = printer.trivia.get_for_range_split(self.keyword.span());
-            printer.print_trivia_squished(kw_trailing);
+        let keyword = self.return_token();
+        printer.print_raw_token(&keyword);
+        if self.value().is_some() || self.semicolon_token().is_some() {
+            printer.print_trivia_squished(printer.trivia.get_for_range_split(keyword.span()).1);
         }
-
-        if let Some(value) = &self.value {
-            let (value_leading, value_trailing) = printer.trivia.get_for_element(value);
+        if let Some(value) = self.value() {
             printer.print_str(" ");
-            printer.print_trivia_squished(value_leading);
-            printer.print(value, shape);
-            if self.semicolon.is_some() {
-                // value is not the last element
-                printer.print_trivia_squished(value_trailing);
+            let (leading, trailing) = printer.trivia.get_for_element(&value);
+            printer.print_trivia_squished(leading);
+            value.print(shape, printer);
+            if self.semicolon_token().is_some() {
+                printer.print_trivia_squished(trailing);
             }
         }
-
-        if let Some(semicolon) = &self.semicolon {
-            let (semicolon_leading, _) = printer.trivia.get_for_range_split(semicolon.span());
-            printer.print_trivia_squished(semicolon_leading);
-            printer.print_raw_token(semicolon);
+        if let Some(semicolon) = self.semicolon_token() {
+            printer.print_trivia_squished(printer.trivia.get_for_range_split(semicolon.span()).0);
+            printer.print_raw_token(&semicolon);
         } else {
             printer.print_str(";");
         }
-
         PrintInfo::default_single_line()
     }
+
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.return_token().span()
     }
+
     fn rightmost_token(&self) -> TextRange {
-        if let Some(semicolon) = &self.semicolon {
-            return semicolon.span();
-        }
-        if let Some(value) = &self.value {
-            return value.rightmost_token();
-        }
-        self.keyword.span()
+        self.last_token_range()
     }
 }
 
-impl Printable for BreakStmt {
+impl Printable for Validated<'_, raw_ast::BreakStmt> {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
-
-        if let Some(semicolon) = self.semicolon.as_ref() {
-            printer.print_raw_token(semicolon);
+        printer.print_raw_token(&self.break_token());
+        if let Some(semicolon) = self.semicolon_token() {
+            printer.print_raw_token(&semicolon);
         } else {
             printer.print_str(";");
         }
-
         PrintInfo::default_single_line()
     }
+
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.break_token().span()
     }
+
     fn rightmost_token(&self) -> TextRange {
-        self.semicolon
-            .as_ref()
-            .map_or(self.keyword.span(), Token::span)
+        self.last_token_range()
     }
 }
 
-impl Printable for ContinueStmt {
+impl Printable for Validated<'_, raw_ast::ContinueStmt> {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
-        if let Some(semicolon) = self.semicolon.as_ref() {
-            printer.print_raw_token(semicolon);
+        printer.print_raw_token(&self.continue_token());
+        if let Some(semicolon) = self.semicolon_token() {
+            printer.print_raw_token(&semicolon);
         } else {
             printer.print_str(";");
         }
         PrintInfo::default_single_line()
     }
+
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.continue_token().span()
     }
+
     fn rightmost_token(&self) -> TextRange {
-        self.semicolon
-            .as_ref()
-            .map_or(self.keyword.span(), Token::span)
+        self.last_token_range()
     }
 }
