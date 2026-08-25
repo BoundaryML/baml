@@ -114,9 +114,11 @@ class reflect.errors.CompilationError$stream {
 }
 class reflect.errors.EvaluationError {
   message: string
+  cause: unknown
 }
 class reflect.errors.EvaluationError$stream {
   message: string | null
+  cause: unknown
 }
 class reflect.errors.SessionBusy {
   message: string
@@ -332,7 +334,7 @@ function reflect.diagnostics(self: ?) -> reflect.Diagnostic[]  [builtin]
 function reflect.diagnostics(self: ?) -> reflect.Diagnostic[]  [builtin]
 function reflect.enums(self: ?) -> map<string, reflect.enum.Type>  [builtin]
 function reflect.eval(self: ?, source: string) -> T  [expr] {
-  { let artifact = self._compile(source) } self._finish(artifact) catch (_) { _ => throw reflect.errors.EvaluationError { message: "session evaluatio..." } }
+  { let artifact = self._compile(source) } self._finish(artifact) catch (_) { _ => { let cause = context.root_cause(); throw reflect.errors.EvaluationError { message: cause.to_string(), cause: cause.error } } }
 }
 function reflect.functions(self: ?) -> map<string, reflect.function.Type>  [builtin]
 function reflect.get(self: ?, name: string) -> T?  [expr] {

@@ -678,9 +678,13 @@ fn reflect.Session.eval(self: reflect.Session, source: string) -> T {
     let _3: reflect.CompileArtifact // artifact
     let _4: reflect.Type
     let _5: unknown // _
-    let _6: reflect.CompileArtifact
-    let _7: reflect.Type
-    let _8: reflect.errors.EvaluationError
+    let _6: unknown
+    let _7: reflect.CompileArtifact
+    let _8: reflect.Type
+    let _9: baml.errors.ErrorContext // cause
+    let _10: reflect.errors.EvaluationError
+    let _11: string
+    let _12: unknown
 
     bb0: {
         _4 = load_type(#0);
@@ -688,9 +692,9 @@ fn reflect.Session.eval(self: reflect.Session, source: string) -> T {
     }
 
     bb1: {
-        _6 = copy _3;
-        _7 = load_type(#0);
-        _0 = call const fn reflect.Session._finish<copy _7>(copy _1, copy _6) -> [bb2, unwind: bb3];
+        _7 = copy _3;
+        _8 = load_type(#0);
+        _0 = call const fn reflect.Session._finish<copy _8>(copy _1, copy _7) -> [bb2, unwind: bb3];
     }
 
     bb2: {
@@ -702,8 +706,17 @@ fn reflect.Session.eval(self: reflect.Session, source: string) -> T {
     }
 
     bb4: {
-        _8 = reflect.errors.EvaluationError { const "session evaluation failed" };
-        throw copy _8;
+        _9 = call const fn baml.errors.ErrorContext.root_cause(copy _6) -> [bb5];
+    }
+
+    bb5: {
+        _11 = virtual_call to_string as baml.ToString(copy _9) -> [bb6];
+    }
+
+    bb6: {
+        _12 = copy _9.0;
+        _10 = reflect.errors.EvaluationError { copy _11, copy _12 };
+        throw copy _10;
     }
 }
 

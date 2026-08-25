@@ -297,8 +297,14 @@ class Session {
 
   function eval<T>(self, source: string) -> T throws reflect.errors.CompilationError | reflect.errors.EvaluationError | reflect.errors.SessionBusy {
     let artifact = self._compile<T>(source)
-    self._finish<T>(artifact) catch (_) {
-      _ => throw reflect.errors.EvaluationError { message: "session evaluation failed" }
+    self._finish<T>(artifact) catch (_, context) {
+      _ => {
+        let cause = context.root_cause()
+        throw reflect.errors.EvaluationError {
+          message: cause.to_string(),
+          cause: cause.error,
+        }
+      }
     }
   }
 

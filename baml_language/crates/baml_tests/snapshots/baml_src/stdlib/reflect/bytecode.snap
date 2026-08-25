@@ -329,8 +329,17 @@ function reflect.Session.eval(self: reflect.Session, source: string) -> #0 {
     jump L0
     load_var _
     throw_if_panic
-    load_const "session evaluation failed"
-    init_instance reflect.errors.EvaluationError .message
+    load_var _6
+    call baml.errors.ErrorContext.root_cause
+    store_var cause
+    load_var cause
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _11
+    load_var2 7 6
+    load_field .error
+    init_instance reflect.errors.EvaluationError .message, .cause
     throw
 
   L0:
