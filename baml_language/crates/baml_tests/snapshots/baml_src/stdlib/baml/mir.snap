@@ -20,7 +20,142 @@ fn baml.Bigint.to_int = builtin(vm)
 
 fn baml.Bigint.parse = builtin(vm)
 
-fn baml.Bigint.random = builtin(vm)
+fn baml.Bigint.random(lower: bigint, upper: bigint, rng: baml.random.Rng) -> bigint {
+    // Locals:
+    let _0: bigint // _0 // return
+    let _1: bigint // lower // param
+    let _2: bigint // upper // param
+    let _3: baml.random.Rng // rng // param
+    let _4: bool
+    let _5: bool
+    let _6: baml.errors.InvalidArgument
+    let _7: string
+    let _8: string
+    let _9: string
+    let _10: string
+    let _11: string
+    let _12: reflect.Type
+    let _13: string
+    let _14: reflect.Type
+    let _15: int // width
+    let _16: bigint // r
+    let _17: uint8array
+    let _18: int
+    let _19: bool
+    let _20: bigint
+    let _21: uint8array
+    let _22: int
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = call const fn baml.random.SystemRandom.get() -> [bb2];
+    }
+
+    bb2: {
+        _5 = copy _1 >= copy _2;
+        branch copy _5 -> [bb11, bb3];
+    }
+
+    bb3: {
+        _15 = call const fn baml.Bigint._random_byte_count(copy _1, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        _18 = copy _15;
+        _17 = virtual_call random as baml.random.Rng(copy _3, copy _18) -> [bb5];
+    }
+
+    bb5: {
+        _16 = call const fn baml.Bigint._random_in_range(copy _17, copy _1, copy _2) -> [bb6];
+    }
+
+    bb6: {
+        _20 = copy _16;
+        _19 = copy _20 == copy _2;
+        branch copy _19 -> [bb9, bb7];
+    }
+
+    bb7: {
+        _0 = copy _16;
+        goto -> bb8;
+    }
+
+    bb8: {
+        return;
+    }
+
+    bb9: {
+        _22 = copy _15;
+        _21 = virtual_call random as baml.random.Rng(copy _3, copy _22) -> [bb10];
+    }
+
+    bb10: {
+        _16 = call const fn baml.Bigint._random_in_range(copy _21, copy _1, copy _2) -> [bb6];
+    }
+
+    bb11: {
+        _12 = load_type(bigint);
+        _11 = call const fn baml.String.from<copy _12>(copy _1) -> [bb12];
+    }
+
+    bb12: {
+        _10 = const "bigint.random: lower (" + copy _11;
+        _9 = copy _10 + const ") must be less than upper (";
+        _14 = load_type(bigint);
+        _13 = call const fn baml.String.from<copy _14>(copy _2) -> [bb13];
+    }
+
+    bb13: {
+        _8 = copy _9 + copy _13;
+        _7 = copy _8 + const ")";
+        _6 = baml.errors.InvalidArgument { copy _7 };
+        throw copy _6;
+    }
+}
+
+fn baml.Bigint._random_byte_count = builtin(vm)
+
+fn baml.Bigint._random_in_range = builtin(vm)
+
+fn baml.Bool.random(rng: baml.random.Rng) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: baml.random.Rng // rng // param
+    let _2: bool
+    let _3: int
+    let _4: int
+    let _5: uint8array
+    let _6: 0
+
+    bb0: {
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _1 = call const fn baml.random.SystemRandom.get() -> [bb2];
+    }
+
+    bb2: {
+        _5 = virtual_call random as baml.random.Rng(copy _1, const 1_i64) -> [bb3];
+    }
+
+    bb3: {
+        _6 = const 0_i64;
+        _4 = copy _5[_6];
+        _3 = copy _4 & const 128_i64;
+        _0 = copy _3 == const 128_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
 
 fn baml.Comparable.compare(_1: void, _2: void) -> void {
     // Locals:
@@ -1548,7 +1683,36 @@ fn baml.Float.to_degrees(self: baml.Float) -> float {
 
 fn baml.Float.parse = builtin(vm)
 
-fn baml.Float.random = builtin(vm)
+fn baml.Float.random(rng: baml.random.Rng) -> float {
+    // Locals:
+    let _0: float // _0 // return
+    let _1: baml.random.Rng // rng // param
+    let _2: bool
+    let _3: int
+
+    bb0: {
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _1 = call const fn baml.random.SystemRandom.get() -> [bb2];
+    }
+
+    bb2: {
+        _3 = virtual_call random_int as baml.random.Rng(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _0 = call const fn baml.Float._unit_from_draw(copy _3) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn baml.Float._unit_from_draw = builtin(vm)
 
 fn baml.Float.pi = builtin(vm)
 
@@ -1590,7 +1754,95 @@ fn baml.Int.count_ones = builtin(vm)
 
 fn baml.Int.parse = builtin(vm)
 
-fn baml.Int.random = builtin(vm)
+fn baml.Int.random(lower: int, upper: int, rng: baml.random.Rng) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // lower // param
+    let _2: int // upper // param
+    let _3: baml.random.Rng // rng // param
+    let _4: bool
+    let _5: bool
+    let _6: baml.errors.InvalidArgument
+    let _7: string
+    let _8: string
+    let _9: string
+    let _10: string
+    let _11: string
+    let _12: reflect.Type
+    let _13: string
+    let _14: reflect.Type
+    let _15: int // r
+    let _16: int
+    let _17: bool
+    let _18: int
+    let _19: int
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = call const fn baml.random.SystemRandom.get() -> [bb2];
+    }
+
+    bb2: {
+        _5 = copy _1 >= copy _2;
+        branch copy _5 -> [bb10, bb3];
+    }
+
+    bb3: {
+        _16 = virtual_call random_int as baml.random.Rng(copy _3) -> [bb4];
+    }
+
+    bb4: {
+        _15 = call const fn baml.Int._random_in_range(copy _16, copy _1, copy _2) -> [bb5];
+    }
+
+    bb5: {
+        _18 = copy _15;
+        _17 = copy _18 == copy _2;
+        branch copy _17 -> [bb8, bb6];
+    }
+
+    bb6: {
+        _0 = copy _15;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+
+    bb8: {
+        _19 = virtual_call random_int as baml.random.Rng(copy _3) -> [bb9];
+    }
+
+    bb9: {
+        _15 = call const fn baml.Int._random_in_range(copy _19, copy _1, copy _2) -> [bb5];
+    }
+
+    bb10: {
+        _12 = load_type(int);
+        _11 = call const fn baml.String.from<copy _12>(copy _1) -> [bb11];
+    }
+
+    bb11: {
+        _10 = const "int.random: lower (" + copy _11;
+        _9 = copy _10 + const ") must be less than upper (";
+        _14 = load_type(int);
+        _13 = call const fn baml.String.from<copy _14>(copy _2) -> [bb12];
+    }
+
+    bb12: {
+        _8 = copy _9 + copy _13;
+        _7 = copy _8 + const ")";
+        _6 = baml.errors.InvalidArgument { copy _7 };
+        throw copy _6;
+    }
+}
+
+fn baml.Int._random_in_range = builtin(vm)
 
 fn baml.Int.max_value() -> int {
     // Locals:
@@ -8393,7 +8645,7 @@ fn baml.random.Rng.random_int(self: baml.random.Rng) -> int {
     let _0: int // _0 // return
     let _1: baml.random.Rng // self // param
     let _2: uint8array // bytes
-    let _3: int // magnitude
+    let _3: int
     let _4: int
     let _5: int
     let _6: int
@@ -8401,110 +8653,83 @@ fn baml.random.Rng.random_int(self: baml.random.Rng) -> int {
     let _8: int
     let _9: int
     let _10: int
-    let _11: int
-    let _12: int
-    let _13: uint8array
-    let _14: 0
-    let _15: int
-    let _16: int
-    let _17: uint8array
-    let _18: 1
-    let _19: int
-    let _20: int
-    let _21: uint8array
-    let _22: 2
-    let _23: int
-    let _24: int
-    let _25: uint8array
-    let _26: 3
-    let _27: int
-    let _28: int
-    let _29: uint8array
-    let _30: 4
-    let _31: int
-    let _32: int
-    let _33: uint8array
-    let _34: 5
-    let _35: int
-    let _36: int
-    let _37: uint8array
-    let _38: 6
-    let _39: int
-    let _40: uint8array
-    let _41: 7
-    let _42: bool
-    let _43: int
-    let _44: int
-    let _45: uint8array
-    let _46: 0
-    let _47: int
-    let _48: int
+    let _11: uint8array
+    let _12: 0
+    let _13: int
+    let _14: int
+    let _15: uint8array
+    let _16: 1
+    let _17: int
+    let _18: int
+    let _19: uint8array
+    let _20: 2
+    let _21: int
+    let _22: int
+    let _23: uint8array
+    let _24: 3
+    let _25: int
+    let _26: int
+    let _27: uint8array
+    let _28: 4
+    let _29: int
+    let _30: int
+    let _31: uint8array
+    let _32: 5
+    let _33: int
+    let _34: int
+    let _35: uint8array
+    let _36: 6
+    let _37: int
+    let _38: uint8array
+    let _39: 7
 
     bb0: {
         _2 = virtual_call random as baml.random.Rng(copy _1, const 8_i64) -> [bb1];
     }
 
     bb1: {
-        _13 = copy _2;
-        _14 = const 0_i64;
-        _12 = copy _13[_14];
-        _11 = copy _12 & const 63_i64;
-        _10 = copy _11 << const 56_i64;
-        _17 = copy _2;
-        _18 = const 1_i64;
-        _16 = copy _17[_18];
-        _15 = copy _16 << const 48_i64;
-        _9 = copy _10 | copy _15;
-        _21 = copy _2;
-        _22 = const 2_i64;
-        _20 = copy _21[_22];
-        _19 = copy _20 << const 40_i64;
-        _8 = copy _9 | copy _19;
-        _25 = copy _2;
-        _26 = const 3_i64;
-        _24 = copy _25[_26];
-        _23 = copy _24 << const 32_i64;
-        _7 = copy _8 | copy _23;
-        _29 = copy _2;
-        _30 = const 4_i64;
-        _28 = copy _29[_30];
-        _27 = copy _28 << const 24_i64;
-        _6 = copy _7 | copy _27;
-        _33 = copy _2;
-        _34 = const 5_i64;
-        _32 = copy _33[_34];
-        _31 = copy _32 << const 16_i64;
-        _5 = copy _6 | copy _31;
-        _37 = copy _2;
-        _38 = const 6_i64;
-        _36 = copy _37[_38];
-        _35 = copy _36 << const 8_i64;
-        _4 = copy _5 | copy _35;
-        _40 = copy _2;
-        _41 = const 7_i64;
-        _39 = copy _40[_41];
-        _3 = copy _4 | copy _39;
-        _45 = copy _2;
-        _46 = const 0_i64;
-        _44 = copy _45[_46];
-        _43 = copy _44 & const 64_i64;
-        _42 = copy _43 == const 0_i64;
-        branch copy _42 -> [bb3, bb2];
+        _11 = copy _2;
+        _12 = const 0_i64;
+        _10 = copy _11[_12];
+        _9 = copy _10 << const 56_i64;
+        _15 = copy _2;
+        _16 = const 1_i64;
+        _14 = copy _15[_16];
+        _13 = copy _14 << const 48_i64;
+        _8 = copy _9 | copy _13;
+        _19 = copy _2;
+        _20 = const 2_i64;
+        _18 = copy _19[_20];
+        _17 = copy _18 << const 40_i64;
+        _7 = copy _8 | copy _17;
+        _23 = copy _2;
+        _24 = const 3_i64;
+        _22 = copy _23[_24];
+        _21 = copy _22 << const 32_i64;
+        _6 = copy _7 | copy _21;
+        _27 = copy _2;
+        _28 = const 4_i64;
+        _26 = copy _27[_28];
+        _25 = copy _26 << const 24_i64;
+        _5 = copy _6 | copy _25;
+        _31 = copy _2;
+        _32 = const 5_i64;
+        _30 = copy _31[_32];
+        _29 = copy _30 << const 16_i64;
+        _4 = copy _5 | copy _29;
+        _35 = copy _2;
+        _36 = const 6_i64;
+        _34 = copy _35[_36];
+        _33 = copy _34 << const 8_i64;
+        _3 = copy _4 | copy _33;
+        _38 = copy _2;
+        _39 = const 7_i64;
+        _37 = copy _38[_39];
+        _0 = copy _3 | copy _37;
+        goto -> bb2;
     }
 
     bb2: {
-        _48 = copy _3;
-        _47 = const 0_i64 - copy _48;
-        _0 = copy _47 - const 1_i64;
-        goto -> bb4;
-    }
-
-    bb3: {
-        _0 = copy _3;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }

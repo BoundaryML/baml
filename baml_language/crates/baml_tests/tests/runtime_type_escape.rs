@@ -21,12 +21,14 @@
 //! no spelling reaches a runtime failure.
 
 use baml_compiler_diagnostics::Severity;
-use baml_project::{collect_diagnostics, testing::setup_test_db};
-use baml_tests::baml_test;
+use baml_tests::{
+    baml_test,
+    stdlib_prefix::{check_user_files, setup_test_db},
+};
 use bex_engine::BexExternalValue;
 
 fn compile_errors(source: &str) -> Vec<(String, String)> {
-    collect_diagnostics(&setup_test_db(source))
+    check_user_files(&setup_test_db(source))
         .into_iter()
         .filter(|diagnostic| diagnostic.severity == Severity::Error)
         .map(|diagnostic| (diagnostic.code().to_string(), diagnostic.message))
@@ -77,7 +79,7 @@ fn render_errors(source: &str) -> String {
     use baml_compiler_diagnostics::render::{DiagnosticFormat, RenderConfig, render_diagnostics};
 
     let db = setup_test_db(source);
-    let diagnostics: Vec<_> = collect_diagnostics(&db)
+    let diagnostics: Vec<_> = check_user_files(&db)
         .into_iter()
         .filter(|diagnostic| diagnostic.severity == Severity::Error)
         .collect();
@@ -221,7 +223,7 @@ function main(t: reflect.Type) -> unknown throws unknown { wrap<unreflect(t)>(1)
 /// The same report from the CALL side, whose span and rewrite travel a
 /// different road than the class literal's: the slot span comes from
 /// `DiagnosticLocation::UnreflectArg` through `AstSourceMap`, and the rewrite
-/// is assembled in `TirDiagnostic::render_with_type_refs` from the file text.
+/// is assembled in `TirDiagnostic::render_with_body_type_refs` from the file text.
 /// The code+message assertions above would not notice either degrading.
 #[test]
 fn the_report_at_a_call_site_names_the_slot_and_spells_the_fix() {

@@ -229,9 +229,21 @@ function int_random_in_range_and_covers_endpoints() -> bool {
     let i = 0;
     while (i < 1000) {
         let r = int.random(0, 10);
-        if (r < 0 || r >= 10) { ok = false } else { null }
-        if (r == 0) { saw_lo = true } else { null }
-        if (r == 9) { saw_hi = true } else { null }
+        if (r < 0 || r >= 10) {
+            ok = false
+        } else {
+            null
+        }
+        if (r == 0) {
+            saw_lo = true
+        } else {
+            null
+        }
+        if (r == 9) {
+            saw_hi = true
+        } else {
+            null
+        }
         i = i + 1
     }
     ok && saw_lo && saw_hi
@@ -247,7 +259,11 @@ function int_random_negative_range() -> bool {
     let i = 0;
     while (i < 200) {
         let r = int.random(-5, 5);
-        if (r < -5 || r >= 5) { ok = false } else { null }
+        if (r < -5 || r >= 5) {
+            ok = false
+        } else {
+            null
+        }
         i = i + 1
     }
     ok
@@ -264,7 +280,11 @@ function int_random_single_element_range() -> bool {
     let i = 0;
     while (i < 50) {
         let r = int.random(0, 1);
-        if (r != 0) { ok = false } else { null }
+        if (r != 0) {
+            ok = false
+        } else {
+            null
+        }
         i = i + 1
     }
     ok
@@ -274,16 +294,15 @@ test "int_random_single_element_range" {
     assert.is_true(int_random_single_element_range())
 }
 
-// int_random_full_range_returns_some_int: one call spanning the full i63 range.
-// Just verifying the call succeeds and the result is a finite int (always true
-// once it returns without throwing).
-function int_random_full_range_returns_some_int() -> bool {
+// One call spanning the widest representable half-open int range. Just verify
+// that the call succeeds and excludes the upper endpoint.
+function int_random_widest_range_returns_some_int() -> bool {
     let r = int.random(int.min_value(), int.max_value());
-    r >= int.min_value() && r <= int.max_value()
+    r >= int.min_value() && r < int.max_value()
 }
 
-test "int_random_full_range_returns_some_int" {
-    assert.is_true(int_random_full_range_returns_some_int())
+test "int_random_widest_range_returns_some_int" {
+    assert.is_true(int_random_widest_range_returns_some_int())
 }
 
 // int_random_distinct_values_in_wide_range: 100 samples from [0, 1000).
@@ -296,8 +315,16 @@ function int_random_distinct_values_in_wide_range() -> bool {
     let i = 0;
     while (i < 100) {
         let r = int.random(0, 1000);
-        if (r < min_seen) { min_seen = r } else { null }
-        if (r > max_seen) { max_seen = r } else { null }
+        if (r < min_seen) {
+            min_seen = r
+        } else {
+            null
+        }
+        if (r > max_seen) {
+            max_seen = r
+        } else {
+            null
+        }
         i = i + 1
     }
     (max_seen - min_seen) >= 500
@@ -305,6 +332,56 @@ function int_random_distinct_values_in_wide_range() -> bool {
 
 test "int_random_distinct_values_in_wide_range" {
     assert.is_true(int_random_distinct_values_in_wide_range())
+}
+
+class FixedBytesRng {
+    draw: uint8array,
+
+    implements baml.random.Rng {
+        function random(self, bytes: int) -> uint8array {
+            self.draw
+        }
+    }
+}
+
+test "random_int_maps_all_i63_bits" {
+    let all_ones = FixedBytesRng { draw: b"\xff\xff\xff\xff\xff\xff\xff\xff" };
+    let all_zeros = FixedBytesRng { draw: b"\x00\x00\x00\x00\x00\x00\x00\x00" };
+    let sign_only = FixedBytesRng { draw: b"\x40\x00\x00\x00\x00\x00\x00\x00" };
+    let max = FixedBytesRng { draw: b"\x3f\xff\xff\xff\xff\xff\xff\xff" };
+    assert.equal(all_ones.random_int(), -1);
+    assert.equal(all_zeros.random_int(), 0);
+    assert.equal(sign_only.random_int(), int.min_value());
+    assert.equal(max.random_int(), int.max_value())
+}
+
+class RejectionThenAcceptedRng {
+    calls: int,
+
+    implements baml.random.Rng {
+        function random(self, bytes: int) -> uint8array {
+            let empty = b"";
+            empty
+        }
+
+        function random_int(self) -> int {
+            self.calls += 1;
+            if (self.calls == 1) {
+                // The maximum draw is in the three-value rejection tail for
+                // [0, 5).
+                int.max_value()
+            } else {
+                // This maps to 4 after rebiasing from the signed i63 domain.
+                int.min_value() + 4
+            }
+        }
+    }
+}
+
+test "int_random_rejection_boundary" {
+    let rng = RejectionThenAcceptedRng { calls: 0 };
+    assert.equal(int.random(0, 5, rng = rng), 4);
+    assert.equal(rng.calls, 2)
 }
 
 // Throw tests (deterministic — included regardless of randomness skip).
@@ -587,9 +664,17 @@ test "int_count_zeros_plus_count_ones_equals_64" {
 // Valid arithmetic right up to the boundary must NOT spuriously throw. Helpers
 // take runtime args so the ops aren't constant-folded — they run through the
 // VM's checked AddInt/SubInt/MulInt opcodes.
-function int_add_(a: int, b: int) -> int { a + b }
-function int_sub_(a: int, b: int) -> int { a - b }
-function int_mul_(a: int, b: int) -> int { a * b }
+function int_add_(a: int, b: int) -> int {
+    a + b
+}
+
+function int_sub_(a: int, b: int) -> int {
+    a - b
+}
+
+function int_mul_(a: int, b: int) -> int {
+    a * b
+}
 
 test "int_add_at_max_boundary_no_overflow" {
     // (MAX - 1) + 1 == MAX
@@ -651,14 +736,14 @@ test "int_binary_literal" {
 }
 
 test "int_prefixed_zero" {
-    assert.equal(0x0, 0)
-    assert.equal(0o0, 0)
+    assert.equal(0x0, 0);
+    assert.equal(0o0, 0);
     assert.equal(0b0, 0)
 }
 
 test "int_negative_prefixed" {
-    assert.equal(-0xFF, -255)
-    assert.equal(-0b1010, -10)
+    assert.equal(-0xFF, -255);
+    assert.equal(-0b1010, -10);
     assert.equal(-0o755, -493)
 }
 
@@ -695,8 +780,8 @@ test "int_hex_max_value" {
 // Bitwise ops read naturally with hex/binary operands (previously the bit
 // patterns had to be spelled in decimal).
 test "int_hex_bitwise" {
-    assert.equal(0xCAFE & 0xFF, 0xFE)
-    assert.equal(0b1100 | 0b0011, 0b1111)
+    assert.equal(0xCAFE & 0xFF, 0xFE);
+    assert.equal(0b1100 | 0b0011, 0b1111);
     assert.equal(0b1100 ^ 0b1010, 0b0110)
 }
 

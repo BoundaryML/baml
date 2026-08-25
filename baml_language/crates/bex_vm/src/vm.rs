@@ -17,7 +17,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use baml_compiler_diagnostics::runtime_type;
-use baml_type::{Name, normalize::TypeContext};
+use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use smallvec::SmallVec;
 
 /// Lower named host `TypeVar` bindings to the positional De Bruijn `type_args`
@@ -4898,30 +4898,30 @@ impl BexVm {
         }))
     }
 
-    /// `int << r`, validated: a negative count throws `NegativeBitShift`, and a
-    /// result outside the i63 range throws `IntegerOverflow` (e.g. `1 << 62`).
-    /// `checked_shl` also rules out the shift-amount UB of a raw `<<`.
+    /// Evaluate `int << r` with the shared i63 semantics used by constant
+    /// folding. A negative count throws `NegativeBitShift`.
     #[inline]
     fn int_shl(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        let Ok(shift) = u32::try_from(r) else {
-            return Err(self.negative_bit_shift(r));
+        let Some(l) = Int63::new(l) else {
+            verifier_unreachable!()
         };
-        match l.checked_shl(shift).and_then(Value::try_int) {
-            Some(v) => Ok(v),
-            None => Err(self.integer_overflow(format!("{l} << {r} overflows int"))),
+        match l.shift_left(r) {
+            Ok(value) => Ok(Value::int(value.get())),
+            Err(IntShiftError::NegativeCount(count)) => Err(self.negative_bit_shift(count)),
         }
     }
 
-    /// `int >> r` (arithmetic), validated: a negative count throws
-    /// `NegativeBitShift`. The result is always within i63 (magnitude only
-    /// shrinks); a count `>= 64` saturates to the sign bit (`min(63)` avoids the
-    /// shift-amount UB of a raw `>>`).
+    /// Evaluate `int >> r` with the shared i63 semantics used by constant
+    /// folding. A negative count throws `NegativeBitShift`.
     #[inline]
     fn int_shr(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        let Ok(shift) = u32::try_from(r) else {
-            return Err(self.negative_bit_shift(r));
+        let Some(l) = Int63::new(l) else {
+            verifier_unreachable!()
         };
-        Ok(Value::int(l >> shift.min(63)))
+        match l.shift_right(r) {
+            Ok(value) => Ok(Value::int(value.get())),
+            Err(IntShiftError::NegativeCount(count)) => Err(self.negative_bit_shift(count)),
+        }
     }
 
     /// Allocate a `baml.panics.*` class instance using pre-resolved pointers.
@@ -7475,9 +7475,8 @@ impl BexVm {
                 // than wrapping or raw-Rust-panicking. Only `*` can overflow
                 // i64 from i63 operands (so it needs checked_mul); +, -, /, %
                 // can't, so a plain op + i63 range-check suffices. And/Or/Xor of
-                // two i63 values stay in range, but `<<` can leave it (e.g.
-                // `1 << 62`), so Shl/Shr are validated (overflow + negative
-                // count) too.
+                // two i63 values stay in range, and `<<` truncates back into it
+                // (see `int_shl`); both shifts still reject a negative count.
                 BinOp::Add => self.finish_int(l.wrapping_add(r), l, '+', r)?,
                 BinOp::Sub => self.finish_int(l.wrapping_sub(r), l, '-', r)?,
                 BinOp::Mul => self.int_arith_result(l.checked_mul(r), l, '*', r)?,
