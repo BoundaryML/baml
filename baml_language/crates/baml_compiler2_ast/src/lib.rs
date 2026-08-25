@@ -24,7 +24,7 @@ pub use ast::*;
 /// Re-exported from [`baml_base::escape::unescape_string_literal`] so existing
 /// callers don't need to change their import path.
 pub use baml_base::escape::unescape_string_literal;
-pub use disambiguate::is_field_attr;
+pub use disambiguate::{FIELD_ATTR_NAMES, is_field_attr};
 pub use docstring::extract_docstring;
 pub use lower_cst::{
     lower_file, lower_file_with_path, lower_file_with_path_and_test_owner,

@@ -185,6 +185,35 @@ impl Completions {
         });
     }
 
+    /// A declaration keyword with its skeleton: accepting `class` writes
+    /// `class Name { … }` with tab stops, not the bare word. The label and
+    /// filter stay the keyword, so typing narrows exactly as before.
+    pub(super) fn add_declaration(&mut self, keyword: &str, snippet: &str) {
+        self.push(Completion {
+            label: keyword.to_string(),
+            source_range: self.source_range,
+            insert: CompletionInsert::Snippet(snippet.to_string()),
+            kind: CompletionKind::Keyword,
+            detail: None,
+            documentation: baml_builtins2::language_topic(keyword)
+                .map(|topic| topic.summary.clone()),
+            relevance: CompletionRelevance::default(),
+        });
+    }
+
+    /// An `@attribute` name the compiler gives meaning to.
+    pub(super) fn add_attribute(&mut self, name: &str) {
+        self.push(Completion {
+            label: name.to_string(),
+            source_range: self.source_range,
+            insert: CompletionInsert::Plain(name.to_string()),
+            kind: CompletionKind::Attribute,
+            detail: None,
+            documentation: baml_builtins2::language_topic(name).map(|topic| topic.summary.clone()),
+            relevance: CompletionRelevance::default(),
+        });
+    }
+
     /// A keyword that can open a form the grammar accepts at the position.
     pub(super) fn add_keyword(&mut self, keyword: &str) {
         self.push(Completion {

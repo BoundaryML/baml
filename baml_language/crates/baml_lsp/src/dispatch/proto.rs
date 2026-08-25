@@ -172,6 +172,7 @@ pub(super) fn completion_item(
             baml_ide::CompletionKind::Package => lsp_types::CompletionItemKind::MODULE,
             baml_ide::CompletionKind::TypeParam => lsp_types::CompletionItemKind::TYPE_PARAMETER,
             baml_ide::CompletionKind::BuiltinType => lsp_types::CompletionItemKind::STRUCT,
+            baml_ide::CompletionKind::Attribute => lsp_types::CompletionItemKind::PROPERTY,
             baml_ide::CompletionKind::Keyword => lsp_types::CompletionItemKind::KEYWORD,
             baml_ide::CompletionKind::Other => lsp_types::CompletionItemKind::TEXT,
         }),

@@ -58,9 +58,25 @@ pub(crate) enum CompletionAnalysis<'db> {
     RecordField {
         literal: resolve::ObjectLiteralPosition<'db>,
     },
+    /// An item is being declared: `⎸` at the top of a file or inside a
+    /// class/interface/implements body — the declaration keywords the
+    /// grammar accepts there.
+    Item { container: ItemContainer },
+    /// An `@attribute` name.
+    Attribute,
     /// A position no provider knows yet. Additive by construction: an
     /// unclassified position offers nothing rather than guessing.
     Unsupported,
+}
+
+/// Which body an item declaration is being written in, which decides the
+/// keyword vocabulary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ItemContainer {
+    TopLevel,
+    Class,
+    Interface,
+    Impl,
 }
 
 /// What a written name at the position IS. The kind selects which view of a
@@ -132,7 +148,15 @@ impl<'db> CompletionContext<'db> {
 
         // Classify on the speculative tree, then resolve what the
         // classification located against the real file's recorded facts.
-        let analysis = match classify(&token) {
+        let position = classify(&token);
+        // An accepted attribute replaces the WHOLE name: `@stream.⎸` is one
+        // dotted attribute name, and the fragment-only range would splice
+        // `stream.stream.done`.
+        let source_range = match &position {
+            Position::Attribute { name_start } => TextRange::new((*name_start).min(offset), offset),
+            _ => source_range,
+        };
+        let analysis = match position {
             Position::Dotted { dot, kind } => match dot_target(db, file, dot) {
                 Some(qualifier) => CompletionAnalysis::Path {
                     kind,
@@ -163,6 +187,8 @@ impl<'db> CompletionContext<'db> {
                 kind: PathKind::Expr,
                 qualifier: None,
             },
+            Position::Item { container } => CompletionAnalysis::Item { container },
+            Position::Attribute { .. } => CompletionAnalysis::Attribute,
             Position::Unsupported => CompletionAnalysis::Unsupported,
         };
 
@@ -221,6 +247,15 @@ enum Position {
     FieldSlot {
         literal: TextSize,
     },
+    /// An item declaration slot.
+    Item {
+        container: ItemContainer,
+    },
+    /// An `@attribute` name; `name_start` is where the name begins (after
+    /// the `@`), so accepting a dotted name replaces the whole fragment.
+    Attribute {
+        name_start: TextSize,
+    },
     Expression,
     Unsupported,
 }
@@ -238,6 +273,32 @@ fn classify(token: &SyntaxToken) -> Position {
     // match/catch arm (patterns parse as TYPE_PATTERN around a TYPE_EXPR).
     // The kind rides along on the dotted form: `baml.⎸` in a type slot
     // resolves through the same DotTarget and filters to types.
+    // BEFORE the type check: an `@name` nests INSIDE the annotated
+    // `TYPE_EXPR`, and before the dot check: `@stream.⎸` is one attribute
+    // name, not a qualified path. `@@` block attributes are builtin-only
+    // machinery and offer nothing.
+    if let Some(attribute) = token
+        .parent_ancestors()
+        .find(|node| node.kind() == SyntaxKind::ATTRIBUTE)
+    {
+        let ats = attribute
+            .text()
+            .to_string()
+            .bytes()
+            .take_while(|b| *b == b'@')
+            .count();
+        // At most two `@`s can lead an attribute; the cast cannot truncate.
+        return Position::Attribute {
+            name_start: attribute.text_range().start()
+                + TextSize::from(u32::try_from(ats).unwrap_or(u32::MAX)),
+        };
+    }
+    if token
+        .parent_ancestors()
+        .any(|node| node.kind() == SyntaxKind::BLOCK_ATTRIBUTE)
+    {
+        return Position::Unsupported;
+    }
     let in_type = token
         .parent_ancestors()
         .any(|node| node.kind() == SyntaxKind::TYPE_EXPR);
@@ -275,6 +336,26 @@ fn classify(token: &SyntaxToken) -> Position {
                 return Position::Expression;
             }
             _ => {}
+        }
+    }
+    // Item slots: a bare WORD the parser could only read as the start of a
+    // declaration (top level) or as a field name (class-like bodies — where
+    // a declaration keyword is equally writable).
+    if token.kind() == SyntaxKind::WORD {
+        let container = match token.parent().map(|parent| parent.kind()) {
+            Some(SyntaxKind::SOURCE_FILE) => Some(ItemContainer::TopLevel),
+            Some(SyntaxKind::FIELD) => {
+                token.parent_ancestors().find_map(|node| match node.kind() {
+                    SyntaxKind::CLASS_DEF => Some(ItemContainer::Class),
+                    SyntaxKind::INTERFACE_DEF => Some(ItemContainer::Interface),
+                    SyntaxKind::IMPLEMENTS_FOR => Some(ItemContainer::Impl),
+                    _ => None,
+                })
+            }
+            _ => None,
+        };
+        if let Some(container) = container {
+            return Position::Item { container };
         }
     }
     Position::Unsupported

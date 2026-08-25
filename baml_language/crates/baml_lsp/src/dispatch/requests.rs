@@ -102,12 +102,13 @@ pub fn server_capabilities(encoding: PositionEncoding, open_panel: bool) -> Serv
             file_operations: None,
         }),
         diagnostic_provider: None,
-        // `.` is the only trigger character: every other position that
-        // completes does so from a typed prefix, which the editor already
-        // requests on. Items ship fully formed (signature, docs, edit), so
-        // there is nothing for a resolve round-trip to add.
+        // `.` (member/qualifier access) and `@` (attribute names) are the
+        // trigger characters: every other position completes from a typed
+        // prefix, which the editor already requests on. Items ship fully
+        // formed (signature, docs, edit), so there is nothing for a resolve
+        // round-trip to add.
         completion_provider: Some(lsp_types::CompletionOptions {
-            trigger_characters: Some(vec![".".to_owned()]),
+            trigger_characters: Some(vec![".".to_owned(), "@".to_owned()]),
             resolve_provider: Some(false),
             ..lsp_types::CompletionOptions::default()
         }),

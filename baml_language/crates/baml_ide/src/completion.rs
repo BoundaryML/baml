@@ -22,6 +22,7 @@
 mod args;
 mod completions;
 mod context;
+mod declarations;
 mod item;
 mod members;
 mod record;
@@ -79,6 +80,12 @@ pub fn completions(
         }
         CompletionAnalysis::RecordField { literal } => {
             record::complete(db, file, literal, &mut out);
+        }
+        CompletionAnalysis::Item { container } => {
+            declarations::complete_items(*container, &mut out);
+        }
+        CompletionAnalysis::Attribute => {
+            declarations::complete_attributes(&mut out);
         }
         CompletionAnalysis::Unsupported => {}
     }
@@ -1020,5 +1027,121 @@ function f() -> int throws <[CURSOR]
             labels.contains(&"MyError") && labels.contains(&"baml"),
             "{labels:?}"
         );
+    }
+
+    // ── Item positions and attributes (C4) ──────────────────────────────────
+
+    #[test]
+    fn top_level_offers_declaration_keywords() {
+        let test = CursorTest::new("<[CURSOR]\n\nclass Later {\n    x: int\n}\n");
+        let items = complete(&test);
+        let labels = labels(&items);
+        for keyword in [
+            "class",
+            "function",
+            "enum",
+            "interface",
+            "type",
+            "test",
+            "let",
+        ] {
+            assert!(labels.contains(&keyword), "missing `{keyword}`: {labels:?}");
+        }
+        // Expression keywords and names do not open a declaration.
+        for absent in ["return", "await", "Later"] {
+            assert!(
+                !labels.contains(&absent),
+                "`{absent}` is not an item: {labels:?}"
+            );
+        }
+        let class = items.iter().find(|item| item.label == "class").unwrap();
+        assert_eq!(class.kind, CompletionKind::Keyword);
+        // Accepting a declaration writes its skeleton with tab stops; the
+        // plain-text downgrade collapses to `class Name { }`-shaped text
+        // for clients without snippet support.
+        assert_eq!(
+            class.insert,
+            CompletionInsert::Snippet("class ${1:Name} {\n\t$0\n}".to_string())
+        );
+        let test_item = items.iter().find(|item| item.label == "test").unwrap();
+        assert_eq!(
+            test_item.insert,
+            CompletionInsert::Snippet("test \"${1:name}\" {\n\t$0\n}".to_string())
+        );
+    }
+
+    #[test]
+    fn class_and_interface_bodies_offer_their_own_vocabulary() {
+        let class = CursorTest::new("class C {\n    x: int\n    <[CURSOR]\n}\n");
+        let items = complete(&class);
+        let labels_class = labels(&items);
+        assert!(
+            labels_class.contains(&"function") && labels_class.contains(&"implements"),
+            "{labels_class:?}"
+        );
+        assert!(
+            !labels_class.contains(&"class"),
+            "no nested classes: {labels_class:?}"
+        );
+
+        let iface = CursorTest::new("interface I {\n    f: int\n    <[CURSOR]\n}\n");
+        let items = complete(&iface);
+        let labels_iface = labels(&items);
+        assert!(
+            labels_iface.contains(&"function") && labels_iface.contains(&"type"),
+            "associated types and methods: {labels_iface:?}"
+        );
+        // The interface method skeleton is the bodyless required form and
+        // spells `throws` — interface signatures must declare one (E0170),
+        // so the snippet teaches the rule.
+        let function = items.iter().find(|item| item.label == "function").unwrap();
+        assert_eq!(
+            function.insert,
+            CompletionInsert::Snippet(
+                "function ${1:name}(${2:self}) -> $3 throws ${4:never}".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn attribute_position_offers_the_compilers_names() {
+        let test = CursorTest::new("class C {\n    x: int @<[CURSOR]\n}\n");
+        let items = complete(&test);
+        let labels = labels(&items);
+        for name in [
+            "alias",
+            "description",
+            "skip",
+            "stream.done",
+            "stream.with_state",
+        ] {
+            assert!(labels.contains(&name), "missing `{name}`: {labels:?}");
+        }
+        assert!(
+            items
+                .iter()
+                .all(|item| item.kind == CompletionKind::Attribute)
+        );
+    }
+
+    #[test]
+    fn a_dotted_attribute_fragment_replaces_the_whole_name() {
+        // `@stream.⎸` is ONE dotted attribute name: accepting `stream.done`
+        // must replace `stream.` too, not splice `stream.stream.done`.
+        let test = CursorTest::new("class C {\n    x: int @stream.<[CURSOR]\n}\n");
+        let items = complete(&test);
+        let done = items
+            .iter()
+            .find(|item| item.label == "stream.done")
+            .unwrap_or_else(|| unreachable!("the dotted names are offered"));
+        let text = test.cursor.file.text(&test.db);
+        assert_eq!(&text[done.source_range], "stream.");
+    }
+
+    #[test]
+    fn an_enum_body_offers_nothing() {
+        // Variant names are the reader's own; there is nothing to offer.
+        let test = CursorTest::new("enum E {\n    A\n    <[CURSOR]\n}\n");
+        assert!(complete(&test).is_empty());
     }
 }

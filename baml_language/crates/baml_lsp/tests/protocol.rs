@@ -1095,7 +1095,7 @@ fn completion_after_a_dot_offers_the_receivers_members() {
 }
 
 #[test]
-fn completion_is_advertised_with_the_dot_trigger() {
+fn completion_is_advertised_with_its_trigger_characters() {
     let capabilities = baml_lsp::dispatch::server_capabilities(
         baml_lsp::position_codec::PositionEncoding::UTF16,
         false,
@@ -1103,7 +1103,11 @@ fn completion_is_advertised_with_the_dot_trigger() {
     let completion = capabilities
         .completion_provider
         .expect("completion is always available; it needs no host");
-    assert_eq!(completion.trigger_characters, Some(vec![".".to_owned()]));
+    // `.` opens member/qualifier lists; `@` opens attribute names.
+    assert_eq!(
+        completion.trigger_characters,
+        Some(vec![".".to_owned(), "@".to_owned()])
+    );
     assert_eq!(completion.resolve_provider, Some(false));
 }
 

@@ -66,6 +66,8 @@ pub enum CompletionKind {
     TypeParam,
     /// A builtin type alias (`int`, `string`, `json`).
     BuiltinType,
+    /// An `@attribute` name.
+    Attribute,
     Keyword,
     /// An item kind with no completion-specific presentation.
     Other,
