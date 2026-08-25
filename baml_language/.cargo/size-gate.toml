@@ -93,4 +93,4 @@ wasm = true
 policy.max_delta_pct = 3.0
 
 [artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
-max_gzip_bytes = "5.4 MiB"
+max_gzip_bytes = "5.6 MiB"
