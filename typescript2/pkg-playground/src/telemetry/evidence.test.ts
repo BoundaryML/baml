@@ -861,3 +861,78 @@ describe('errored calls without captures', () => {
     expect(evidence.errors).toHaveLength(0);
   });
 });
+
+describe('subtree waiting is order independent', () => {
+  const leaf = () =>
+    callPath({
+      awaitNs: 40 * MS,
+      callPathId: 'leaf',
+      fqn: 'baml.http._send',
+      parentCallPathId: 'root',
+    });
+  const root = () =>
+    callPath({ awaitNs: 0, callPathId: 'root', fqn: 'user.main' });
+
+  it('rolls waiting up whichever order the rows arrive in', () => {
+    // `CALL_PATHS_SQL` has no ORDER BY, so row order is whatever the query
+    // returns. An earlier version used one Set as both cycle guard and
+    // visited marker: a child seen before its parent contributed zero
+    // upward, silently dropping that subtree's waiting.
+    const parentFirst = buildEvidence(
+      telemetry({ callPaths: [root(), leaf()] }),
+    );
+    const childFirst = buildEvidence(
+      telemetry({ callPaths: [leaf(), root()] }),
+    );
+    const rootOf = (e: typeof parentFirst) =>
+      e.contexts.find((c) => c.id === 'root')?.subtreeAwaitMs;
+    expect(rootOf(parentFirst)).toBe(40);
+    expect(rootOf(childFirst)).toBe(40);
+  });
+
+  it('still terminates on a cyclic parent chain', () => {
+    const evidence = buildEvidence(
+      telemetry({
+        callPaths: [
+          callPath({ awaitNs: 1 * MS, callPathId: 'a', parentCallPathId: 'b' }),
+          callPath({ awaitNs: 2 * MS, callPathId: 'b', parentCallPathId: 'a' }),
+        ],
+      }),
+    );
+    expect(evidence.contexts).toHaveLength(2);
+  });
+});
+
+describe('status honesty', () => {
+  it('does not call a call with no end fact succeeded', () => {
+    // `calls_v1.status` is NULL when the call never returned. Defaulting to
+    // success painted an unfinished call green.
+    const evidence = buildEvidence(
+      telemetry({
+        calls: [
+          call({ callId: 'c1', durationNs: null, endedNs: null, status: null }),
+        ],
+      }),
+    );
+    expect(evidence.spans[0].status).toBe('running');
+  });
+
+  it('still reads a terminal exit as a success', () => {
+    const evidence = buildEvidence(
+      telemetry({ calls: [call({ callId: 'c1', status: 'exited' })] }),
+    );
+    expect(evidence.spans[0].status).toBe('succeeded');
+  });
+});
+
+describe('large executions', () => {
+  it('does not overflow the stack on many spans', () => {
+    // These arrays are bounded only by the query row cap; spreading them
+    // into Math.min threw RangeError on exactly the big executions the
+    // panel exists to explain.
+    const many = Array.from({ length: 200_000 }, (_, i) =>
+      call({ callId: `c${i}`, startedNs: (i + 1) * MS }),
+    );
+    expect(() => buildEvidence(telemetry({ calls: many }))).not.toThrow();
+  });
+});

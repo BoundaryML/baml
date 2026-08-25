@@ -2193,8 +2193,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   // Names of LLM functions — only these have a meaningful raw (un-parsed LLM
   // output) vs parsed distinction, so the Parsed/Raw toggle is shown only for
   // them. expr functions just return a structured value (raw == parsed).
-  const llmFunctionNames = new Set(
-    functions.filter((f) => f.kind === 'llm').map((f) => f.name),
+  // A fresh Set on every render invalidates the telemetry evidence memo
+  // that takes it as an input, so the whole projection is rebuilt each time
+  // anything in this panel re-renders.
+  const llmFunctionNames = useMemo(
+    () => new Set(functions.filter((f) => f.kind === 'llm').map((f) => f.name)),
+    [functions],
   );
   // Signatures for the Telemetry inspectors: reviewers asked to see what a
   // function takes and returns while reading its trace.

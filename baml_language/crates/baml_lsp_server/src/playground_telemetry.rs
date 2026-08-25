@@ -63,6 +63,17 @@ const EXECUTIONS_SQL: &str = "
     LIMIT 200
 ";
 
+/// One execution by id. The list query is capped, so filtering its rows in
+/// Rust would leave an older execution with threads and calls populated but
+/// no execution row at all.
+const EXECUTION_BY_ID_SQL: &str = "
+    SELECT execution_id, entry_fqn, source_label, revision_id, status,
+           index_state, value_state, started_at, duration_ns, total_calls,
+           total_errors, calls_retained, threads_total
+    FROM threads_v1
+    WHERE parent_thread_id IS NULL AND execution_id = $1
+";
+
 /// One execution's thread lanes, including the root.
 const THREADS_SQL: &str = "
     SELECT thread_id, parent_thread_id, spawn_call_id, spawn_fqn,
@@ -131,9 +142,46 @@ pub fn store_root_for_project(project_root: &Path) -> PathBuf {
 /// Point the global profiler session's store at this project, mirroring what
 /// the CLI does at project load. Without it the session falls back to a
 /// *relative* `.baml/profiles-v1`, which for a long-lived server resolves
-/// against whatever directory it happened to start in. First call wins.
+/// against whatever directory it happened to start in.
+///
+/// The profiler's store root is process-global and set once, so a server
+/// holding several workspace roots writes every run it starts into the
+/// first root's store, while [`store_root_for_project`] reads each project
+/// from its own. Runs a project starts elsewhere -- from the CLI, say --
+/// still land in that project's store and read back correctly; it is only
+/// playground-initiated runs in a second root that are recorded under the
+/// first. Making that per-project needs a profiler session per project,
+/// which the engine's single global session does not offer, so this reports
+/// the limit instead of hiding it.
 pub fn configure_store_root(project_root: &Path) {
-    let _ = ProfilerSession::configure_global_store_root(project_root.join(".baml/profiles-v1"));
+    let store = project_root.join(".baml/profiles-v1");
+    if ProfilerSession::configure_global_store_root(store.clone()) {
+        tracing::info!("Telemetry: profiler writes to {}", store.display());
+    } else {
+        tracing::debug!(
+            "Telemetry: profiler store root already set; {} not applied",
+            store.display()
+        );
+    }
+}
+
+/// Warn when the workspace has more than one root, because runs this server
+/// starts in the others are recorded under the first.
+pub fn warn_if_multi_root(workspace_roots: &[std::path::PathBuf]) {
+    if workspace_roots.len() <= 1 {
+        return;
+    }
+    let others: Vec<String> = workspace_roots[1..]
+        .iter()
+        .map(|root| root.display().to_string())
+        .collect();
+    tracing::warn!(
+        "Telemetry: the profiler writes one store per process, so runs started \
+         here for {} are recorded under {}. Those projects will look empty in \
+         the Telemetry tab; run them from the CLI to record them in place.",
+        others.join(", "),
+        workspace_roots[0].display()
+    );
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -404,11 +452,11 @@ pub async fn read_execution(
     execution_id: &str,
 ) -> Result<ExecutionTelemetry, TelemetryError> {
     let id = [execution_id.to_string()];
-    let execution = query(project_root, EXECUTIONS_SQL, &[])
+    let execution = query(project_root, EXECUTION_BY_ID_SQL, &id)
         .await?
         .iter()
         .flat_map(execution_rows)
-        .find(|row| row.execution_id == execution_id);
+        .next();
     let threads = query(project_root, THREADS_SQL, &id)
         .await?
         .iter()

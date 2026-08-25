@@ -821,6 +821,7 @@ fn build_router(
     // started in -- so runs would be written where no reader looks.
     if let Some(root) = workspace_roots.first() {
         crate::playground_telemetry::configure_store_root(root);
+        crate::playground_telemetry::warn_if_multi_root(&workspace_roots);
     }
     let ws_state = WsState {
         bex,
@@ -1463,15 +1464,40 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
     // Send current playground state.
     state.bex.request_playground_state();
 
+    // Telemetry reads run against DataFusion over the profile store and can
+    // take seconds on a large execution. Awaiting one inside the select
+    // below would stall this whole session: no further client messages, and
+    // no run-patch forwarding, so a live run's UI freezes while a panel
+    // loads. They run on their own tasks and hand their reply back here.
+    let (deferred_tx, mut deferred_rx) = tokio::sync::mpsc::channel::<WsOutMessage>(32);
+
     loop {
         tokio::select! {
+            deferred = deferred_rx.recv() => {
+                match deferred {
+                    Some(msg) => {
+                        if let Some(text) = to_ws_text(&msg)
+                            && sink.send(text).await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    None => break,
+                }
+            }
             client_msg = stream.next() => {
                 match client_msg {
                     Some(Ok(AxumWsMsg::Text(text))) => {
                         let text_str: &str = &text;
                         match serde_json::from_str::<WsInMessage>(text_str) {
                             Ok(msg) => {
-                                handle_ws_in_message(msg, &state, &mut sink).await;
+                                handle_ws_in_message(
+                                    msg,
+                                    &state,
+                                    &mut sink,
+                                    &deferred_tx,
+                                )
+                                .await;
                             }
                             Err(e) => {
                                 tracing::warn!("Playground WS: invalid message: {e}");
@@ -1748,6 +1774,7 @@ async fn handle_ws_in_message(
     msg: WsInMessage,
     state: &WsState,
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
+    deferred: &tokio::sync::mpsc::Sender<WsOutMessage>,
 ) {
     match msg {
         WsInMessage::StartRun {
@@ -1949,47 +1976,25 @@ async fn handle_ws_in_message(
             cid,
         } => {
             let project_root = history_project_root_for_project(&project);
+            let reply = deferred.clone();
             let echoed_cid = cid.clone();
-            // Reading the CAS is blocking work; keep it off the socket task.
-            let result = tokio::task::spawn_blocking(move || {
-                crate::playground_telemetry::read_media(&project_root, &cid)
-            })
-            .await;
-            match result {
-                Ok(Ok(media)) => {
-                    send_ws(
-                        sink,
-                        &WsOutMessage::TelemetryMedia {
-                            cid: echoed_cid,
-                            media: serde_json::to_value(&media).unwrap_or(serde_json::Value::Null),
-                            request_id,
-                        },
-                    )
-                    .await;
-                }
-                Ok(Err(err)) => {
-                    send_ws(
-                        sink,
-                        &WsOutMessage::CommandError {
-                            request_id,
-                            code: "telemetryMediaFailed".to_string(),
-                            message: format!("{err}"),
-                        },
-                    )
-                    .await;
-                }
-                Err(err) => {
-                    send_ws(
-                        sink,
-                        &WsOutMessage::CommandError {
-                            request_id,
-                            code: "telemetryMediaFailed".to_string(),
-                            message: format!("media read panicked: {err}"),
-                        },
-                    )
-                    .await;
-                }
-            }
+            // Off the socket task entirely: reading the CAS is blocking work,
+            // and awaiting it here would stall the session loop.
+            tokio::task::spawn_blocking(move || {
+                let out = match crate::playground_telemetry::read_media(&project_root, &cid) {
+                    Ok(media) => WsOutMessage::TelemetryMedia {
+                        cid: echoed_cid,
+                        media: serde_json::to_value(&media).unwrap_or(serde_json::Value::Null),
+                        request_id,
+                    },
+                    Err(err) => WsOutMessage::CommandError {
+                        code: "telemetryMediaFailed".to_string(),
+                        message: format!("{err}"),
+                        request_id,
+                    },
+                };
+                let _ = reply.blocking_send(out);
+            });
         }
 
         WsInMessage::ListExecutions {
@@ -1997,47 +2002,34 @@ async fn handle_ws_in_message(
             project,
         } => {
             let project_root = history_project_root_for_project(&project);
-            match crate::playground_telemetry::list_executions(&project_root).await {
-                Ok(executions) => {
-                    let executions = executions
-                        .iter()
-                        .map(|row| serde_json::to_value(row).unwrap_or(serde_json::Value::Null))
-                        .collect();
-                    send_ws(
-                        sink,
-                        &WsOutMessage::ExecutionList {
-                            request_id,
-                            executions,
-                            store_missing: false,
-                        },
-                    )
-                    .await;
-                }
-                // No store is the state before anything has run, not a
-                // failure: the client shows an empty table, not an error.
-                Err(crate::playground_telemetry::TelemetryError::NoStore(_)) => {
-                    send_ws(
-                        sink,
-                        &WsOutMessage::ExecutionList {
-                            request_id,
+            let reply = deferred.clone();
+            tokio::spawn(async move {
+                let out = match crate::playground_telemetry::list_executions(&project_root).await {
+                    Ok(executions) => WsOutMessage::ExecutionList {
+                        executions: executions
+                            .iter()
+                            .map(|row| serde_json::to_value(row).unwrap_or(serde_json::Value::Null))
+                            .collect(),
+                        request_id,
+                        store_missing: false,
+                    },
+                    // No store is the state before anything has run, not a
+                    // failure: the client shows an empty table, not an error.
+                    Err(crate::playground_telemetry::TelemetryError::NoStore(_)) => {
+                        WsOutMessage::ExecutionList {
                             executions: Vec::new(),
-                            store_missing: true,
-                        },
-                    )
-                    .await;
-                }
-                Err(err) => {
-                    send_ws(
-                        sink,
-                        &WsOutMessage::CommandError {
                             request_id,
-                            code: "telemetryQueryFailed".to_string(),
-                            message: format!("{err}"),
-                        },
-                    )
-                    .await;
-                }
-            }
+                            store_missing: true,
+                        }
+                    }
+                    Err(err) => WsOutMessage::CommandError {
+                        code: "telemetryQueryFailed".to_string(),
+                        message: format!("{err}"),
+                        request_id,
+                    },
+                };
+                let _ = reply.send(out).await;
+            });
         }
 
         WsInMessage::OpenExecution {
@@ -2046,31 +2038,26 @@ async fn handle_ws_in_message(
             execution_id,
         } => {
             let project_root = history_project_root_for_project(&project);
-            match crate::playground_telemetry::read_execution(&project_root, &execution_id).await {
-                Ok(telemetry) => {
-                    send_ws(
-                        sink,
-                        &WsOutMessage::ExecutionTelemetry {
-                            request_id,
+            let reply = deferred.clone();
+            tokio::spawn(async move {
+                let out =
+                    match crate::playground_telemetry::read_execution(&project_root, &execution_id)
+                        .await
+                    {
+                        Ok(telemetry) => WsOutMessage::ExecutionTelemetry {
                             execution_id,
+                            request_id,
                             telemetry: serde_json::to_value(&telemetry)
                                 .unwrap_or(serde_json::Value::Null),
                         },
-                    )
-                    .await;
-                }
-                Err(err) => {
-                    send_ws(
-                        sink,
-                        &WsOutMessage::CommandError {
-                            request_id,
+                        Err(err) => WsOutMessage::CommandError {
                             code: "telemetryQueryFailed".to_string(),
                             message: format!("{err}"),
+                            request_id,
                         },
-                    )
-                    .await;
-                }
-            }
+                    };
+                let _ = reply.send(out).await;
+            });
         }
 
         WsInMessage::Snapshot {

@@ -64,6 +64,7 @@ import type {
   ThreadLane,
   ValueAvailability,
 } from './evidence';
+import { maxOf } from './evidence';
 import {
   formatClock,
   formatCount,
@@ -873,9 +874,11 @@ const OverviewTab: FC<{
 }> = ({ execution, evidence, openContext, openSpan }) => {
   const rootTotal = Math.max(
     1,
-    ...evidence.contexts
-      .filter((context) => context.parentId == null)
-      .map((context) => context.totalMs),
+    maxOf(
+      evidence.contexts
+        .filter((context) => context.parentId == null)
+        .map((context) => context.totalMs),
+    ),
   );
   const hotContexts = evidence.contexts
     .filter((context) => !context.folded && context.parentId != null)
@@ -1500,7 +1503,7 @@ const TraceTab: FC<{
 
   const totalMs = Math.max(
     evidence.durationMs ?? 0,
-    ...evidence.spans.map((span) => span.startMs + (span.durationMs ?? 0)),
+    maxOf(evidence.spans.map((span) => span.startMs + (span.durationMs ?? 0))),
     1,
   );
   const selectedSpan =
@@ -1973,9 +1976,11 @@ const TimingsTab: FC<{
   );
   const rootTotalMs = Math.max(
     1,
-    ...evidence.contexts
-      .filter((context) => context.parentId == null)
-      .map((context) => context.totalMs),
+    maxOf(
+      evidence.contexts
+        .filter((context) => context.parentId == null)
+        .map((context) => context.totalMs),
+    ),
   );
   const selected =
     evidence.contexts.find((context) => context.id === selectedContextId) ??
@@ -2442,7 +2447,7 @@ const FlameGraph: FC<{
   const zoomed = zoomId ? findNode(shown, zoomId) : null;
   const trail = zoomId ? (pathToNode(shown, zoomId) ?? []) : [];
   const visibleRoots = zoomed ? [zoomed] : shown;
-  const total = Math.max(1, ...visibleRoots.map((r) => metric(r.context)));
+  const total = Math.max(1, maxOf(visibleRoots.map((r) => metric(r.context))));
 
   // A zoom that survives a toggle would point at a node no longer shown.
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset on toggle

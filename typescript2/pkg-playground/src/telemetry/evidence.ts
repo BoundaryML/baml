@@ -275,6 +275,26 @@ export interface Evidence {
 
 const NS_PER_MS = 1_000_000;
 
+/**
+ * Fold rather than spread.
+ *
+ * These arrays hold one entry per retained span, bounded only by the
+ * query's row limit. Spreading a hundred thousand arguments into
+ * `Math.min` overflows the call stack and throws, so the panel would fail
+ * on exactly the large executions it exists to explain.
+ */
+export function minOf(values: number[]): number {
+  let smallest = Number.POSITIVE_INFINITY;
+  for (const value of values) if (value < smallest) smallest = value;
+  return Number.isFinite(smallest) ? smallest : 0;
+}
+
+export function maxOf(values: number[]): number {
+  let largest = Number.NEGATIVE_INFINITY;
+  for (const value of values) if (value > largest) largest = value;
+  return Number.isFinite(largest) ? largest : 0;
+}
+
 function ms(ns: number | null | undefined): number | null {
   return ns == null ? null : ns / NS_PER_MS;
 }
@@ -300,8 +320,17 @@ function statusOf(status: string | null | undefined): TelemetryStatus {
     // it succeeded would be a lie.
     case 'abandoned':
       return 'failed';
-    default:
+    case 'succeeded':
+    case 'ok':
       return 'succeeded';
+    case 'exited':
+      // An explicit terminal exit is not a failure.
+      return 'succeeded';
+    default:
+      // No status means no end fact: `calls_v1.status` is NULL for a call
+      // that never returned. Defaulting to success painted an unfinished
+      // call green, which is the opposite of what happened.
+      return 'running';
   }
 }
 
@@ -476,7 +505,7 @@ export function buildEvidence(
     ...telemetry.threads.map((thread) => thread.startedNs),
     ...telemetry.calls.map((call) => call.startedNs),
   ].filter((value): value is number => value != null);
-  const zeroNs = starts.length > 0 ? Math.min(...starts) : 0;
+  const zeroNs = starts.length > 0 ? minOf(starts) : 0;
   const offsetMs = (ns: number | null): number =>
     ns == null ? 0 : (ns - zeroNs) / NS_PER_MS;
 
@@ -509,9 +538,9 @@ export function buildEvidence(
     (path) => path.parentCallPathId == null && path.edgeKind === 'root',
   );
   const laneEnd = Math.max(
+    maxOf(threads.map((lane) => lane.lastMs ?? lane.firstMs)),
+    maxOf(spans.map((span) => span.startMs + (span.durationMs ?? 0))),
     0,
-    ...threads.map((lane) => lane.lastMs ?? lane.firstMs),
-    ...spans.map((span) => span.startMs + (span.durationMs ?? 0)),
   );
   const durationMs =
     ms(telemetry.execution?.durationNs) ??
@@ -659,22 +688,35 @@ function assignSubtreeAwait(contexts: ContextNode[]): void {
     else childrenOf.set(context.parentId, [context]);
   }
 
-  const seen = new Set<string>();
+  // Computed totals, so a node reached twice returns its real total rather
+  // than zero. An earlier version used one `Set` for both the cycle guard
+  // and the visited marker: a child processed before its parent by the
+  // outer loop then contributed 0 upward, silently dropping that whole
+  // subtree's waiting. `CALL_PATHS_SQL` has no ORDER BY, so which rows hit
+  // that path was down to whatever order the query returned.
+  const computed = new Map<string, number>();
+  const inProgress = new Set<string>();
+
   const total = (context: ContextNode): number => {
-    // A cycle would be a malformed tree; stopping keeps this total rather
-    // than hanging the panel.
-    if (seen.has(context.id)) return 0;
-    seen.add(context.id);
+    const done = computed.get(context.id);
+    if (done !== undefined) return done;
+    // A cycle would be a malformed tree; contributing zero for the back
+    // edge keeps the walk finite without hanging the panel.
+    if (inProgress.has(context.id)) return 0;
+    inProgress.add(context.id);
+
     let sum = context.awaitMs ?? 0;
     for (const child of childrenOf.get(context.id) ?? []) {
       sum += total(child);
     }
+
+    inProgress.delete(context.id);
+    computed.set(context.id, sum);
     context.subtreeAwaitMs = sum;
     return sum;
   };
-  for (const context of contexts) {
-    if (!seen.has(context.id)) total(context);
-  }
+
+  for (const context of contexts) total(context);
 }
 
 function sourceRef(
@@ -763,7 +805,7 @@ function reparentToRetainedAncestors(
   spans: SpanNode[],
   threads: TelemetryThread[],
 ): void {
-  const retained = new Map(spans.map((span) => [span.id, span]));
+  const retained = new Set(spans.map((span) => span.id));
   const spawnCallByThread = new Map(
     threads
       .filter((thread) => thread.spawnCallId != null)
@@ -785,28 +827,36 @@ function reparentToRetainedAncestors(
     else byThread.set(key, [span]);
   }
 
+  // Sweep each lane with a stack rather than scanning every other span on
+  // it. Comparing each span against all its lane-mates is quadratic, which
+  // is fine for the handful of spans a root-only policy keeps and hangs the
+  // panel outright once a run retains thousands.
+  const containerOf = new Map<string, string | null>();
+  for (const lane of byThread.values()) {
+    const ordered = [...lane].sort(
+      (left, right) =>
+        left.startMs - right.startMs || endOf(right) - endOf(left),
+    );
+    const open: SpanNode[] = [];
+    for (const span of ordered) {
+      // Anything ending before this span does cannot contain it. Ordering
+      // by start means the survivor on top is the innermost container.
+      let top = open.at(-1);
+      while (top !== undefined && endOf(top) < endOf(span)) {
+        open.pop();
+        top = open.at(-1);
+      }
+      containerOf.set(span.id, top?.id ?? null);
+      open.push(span);
+    }
+  }
+
   for (const span of spans) {
     if (span.parentId != null && retained.has(span.parentId)) continue;
 
-    const siblings = byThread.get(span.threadId ?? '') ?? [];
-    let best: SpanNode | null = null;
-    for (const candidate of siblings) {
-      if (candidate.id === span.id) continue;
-      if (candidate.startMs > span.startMs) continue;
-      if (endOf(candidate) < endOf(span)) continue;
-      // Innermost wins: the latest-starting enclosing span is the nearest
-      // ancestor. On equal starts the longer one is the outer frame.
-      if (
-        best == null ||
-        candidate.startMs > best.startMs ||
-        (candidate.startMs === best.startMs && endOf(candidate) < endOf(best))
-      ) {
-        best = candidate;
-      }
-    }
-
-    if (best) {
-      span.parentId = best.id;
+    const container = containerOf.get(span.id) ?? null;
+    if (container != null && container !== span.id) {
+      span.parentId = container;
       continue;
     }
 
