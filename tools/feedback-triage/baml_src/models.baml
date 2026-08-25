@@ -26,6 +26,9 @@ class Feedback {
     body: string,
     source: FeedbackSource,
     author: Author,
+    /// Toolchain version the reporter saw the bug on (e.g. "0.17.0");
+    /// "unknown" when the report does not say.
+    toolchain: string,
     comments: Comment[],
     /// Issues already linked to this feedback (empty until triaged).
     issue_ids: string[],

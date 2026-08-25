@@ -1,6 +1,8 @@
-// The triage pipeline: feedback in -> (already fixed | enriched ticket) out.
+// The triage pipeline: feedback -> repro -> already fixed? -> (end | issue).
 //
-//   extract_repro (LLM) -> run_repro (in-process reflect compile) -> enrich_ticket (LLM)
+//   extract_repro (LLM) -> run_repro (in-process reflect compile)
+//     -> Fixed: stop
+//     -> otherwise: enrich_ticket (LLM: ticket + more repros) -> Issue
 //
 // Repros are checked with baml.reflect.Package.compile — no subprocess, no VM
 // shellout. A repro carries an Expectation describing the CORRECT behavior;
@@ -90,6 +92,7 @@ function extract_repro(fb: Feedback) -> Repro {
             command; "instructions" says what to look at after running it.
         - "setup" is null unless env vars or flags are genuinely required.
 
+        Reporter's toolchain: ${fb.toolchain}
         Report title: ${fb.title}
         Report body:
         ${fb.body}
@@ -164,7 +167,29 @@ function repro_main_output(pkg: baml.reflect.Package) -> string {
 }
 
 /// Run a repro against the toolchain executing this program.
+/// The in-process check compiles (and, for should_evaluate_to, evaluates)
+/// the repro's files. That covers `baml check` / `baml run` / `baml build`
+/// surfaces; `baml generate`, `baml test`, `baml fmt`, `baml pack` ... can
+/// fail even when the sources compile, so they are never auto-verdicted.
+function command_covered_by_compile(command: string) -> bool {
+    let c = command.trim();
+    c.starts_with("baml check") || c.starts_with("baml run") || c.starts_with("baml build")
+}
+
 function run_repro(repro: Repro) -> ReproRun {
+    if (!command_covered_by_compile(repro.command)) {
+        match (repro.expectation) {
+            let e: RequiresInspection => null,
+            _ => {
+                return ReproRun {
+                    verdict: Verdict.Inconclusive,
+                    observed: "command-dependent repro ("
+                        + repro.command.trim()
+                        + ") is not verifiable by an in-process compile; requires inspection",
+                };
+            },
+        };
+    };
     match (repro.expectation) {
         let e: RequiresInspection => {
             ReproRun {
@@ -258,6 +283,10 @@ class IssueDraft {
     description: string,
     subsystem: Subsystem,
     resolution_plan: string?,
+    /// 1-2 further repros exercising the same defect from a different angle
+    /// (another surface, a variant trigger); the minimal repro is added
+    /// separately.
+    more_repros: Repro[],
 }
 
 /// Write a fully enriched ticket for a bug confirmed (or unconfirmed) on the
@@ -280,9 +309,15 @@ function enrich_ticket(fb: Feedback, repro: Repro, run: ReproRun) -> IssueDraft 
         - resolution_plan: a short outline of a plausible fix (files/phases to
           look at, suggested approach), or null if you cannot say anything
           non-obvious.
+        - more_repros: 1-2 additional repros for the SAME defect that a
+          maintainer would want alongside the minimal one — a variant trigger
+          or another command surface. Same shape as the minimal repro
+          (files + command + expectation); empty if nothing meaningful adds.
 
-        Original report: ${fb.title}
+        Original report (toolchain ${fb.toolchain}): ${fb.title}
         ${fb.body}
+
+        Minimal repro command: ${repro.command}
 
         Minimal repro files:
         ${format_files(repro.files)}
@@ -328,12 +363,12 @@ function reproduce(fb: Feedback) -> Reproduction throws unknown {
 /// from create_ticket so tests can exercise it with a cached draft.
 function assemble_issue(fb: Feedback, r: Reproduction, draft: IssueDraft) -> Issue {
     Issue {
-        id: "ISSUE-" + baml.time.Instant.now().to_timestamp_milliseconds().to_string(),
+        id: "ISSUE-" + baml.id.new(),
         title: draft.title,
         description: draft.description,
         shepherd: null,
         subsystem: draft.subsystem,
-        repros: [r.repro],
+        repros: [r.repro].concat(draft.more_repros),
         version: toolchain_version(),
         feedback_ids: [fb.id],
         status: Open { state: "open" },
@@ -350,7 +385,7 @@ function create_ticket(fb: Feedback, r: Reproduction) -> Issue throws unknown {
 
 /// The whole flow: reproduce, then ticket unless already fixed.
 function triage(fb: Feedback) -> TriageResult throws unknown {
-    log.info({ "stage": "start", "feedback": fb.id, "reporter": author_identity(fb.author) });
+    log.info({ "stage": "start", "feedback": fb.id });
     let r = reproduce(fb);
     TriageResult {
         feedback_id: fb.id,
@@ -438,10 +473,7 @@ function format_files(files: map<string, string>) -> string {
 
 class IssueTruth {
     title: string,
-    fixed: bool,
-    subsystem: Subsystem,
-    /// The repro the maintainer put in the GitHub issue (first code fence).
-    /// Every properly-formatted issue in the test database has one.
+    /// The maintainer's own repro from the GitHub issue (verbatim).
     reference_repro: string?,
 }
 
@@ -519,54 +551,119 @@ class Metrics {
     }
 }
 
-// ---------- Repro quality judge (LLM) ----------
+// ---------- Repro keyword match ----------
+//
+// Scoring is keyword RECALL, not a holistic similarity score. An LLM reads
+// the maintainer's reference repro once per issue and names its load-bearing
+// tokens; our repro is then matched deterministically against them. A
+// holistic judge penalised missing scaffolding (mock servers, comparison
+// runs, verification steps) that has nothing to do with the trigger.
 
-class ReproJudgment {
-    /// 0.0 (unrelated) .. 1.0 (equivalent trigger for the same defect).
-    similarity: float,
-    /// What our repro misses relative to the reference, if anything.
-    missing: string?,
+class ReproKeywords {
+    /// 3-8 INPUT tokens a repro must contain to exercise this defect: the
+    /// baml subcommand and flags, and the BAML constructs / identifiers /
+    /// option names or values at the heart of the trigger. Never outputs
+    /// (error text, panics, tool output) — a repro is what you run, not what
+    /// you see. Verbatim substrings of the reference; no paraphrase, no prose.
+    keywords: string[],
 }
 
-/// Judge whether OUR generated repro exercises the same defect as the
-/// maintainer's reference repro from the GitHub issue.
-function judge_repro(ours: string, reference: string) -> ReproJudgment {
+/// Name the load-bearing tokens of a maintainer's reference repro.
+function extract_keywords(reference: string) -> ReproKeywords {
     client: Triage
     prompt: `
-        Two bug reproductions for the same BAML toolchain issue, each a baml
-        command plus project files. Judge whether OURS triggers the same
-        defect as the REFERENCE (the maintainer's own repro from the issue
-        tracker). Similarity is about the defect being exercised — same
-        command surface, same trigger — not formatting or naming:
-        1.0 = same trigger, same expected failure; 0.7 = same defect, weaker
-        or partial trigger; 0.4 = plausibly related; 0.0 = different bug.
+        Below is a maintainer's reproduction for a BAML toolchain bug (a baml
+        command plus project files). List the INPUT keywords a DIFFERENT repro
+        must contain to be exercising the same defect: the baml subcommand and
+        any flags, and the language constructs, identifiers, option names or
+        values the bug hinges on. Inputs only — never error messages, panic
+        text, stack frames or other observed output; those describe the
+        outcome, not the repro. Skip scaffolding (generic generator/client
+        blocks, verification steps, prose), file names, and anything a repro
+        could reasonably rename. Write "baml" for the CLI, never "baml-cli".
+        Each keyword must appear verbatim in the reference. 3 to 8 keywords.
 
         REFERENCE:
         ${reference}
 
-        OURS:
-        ${ours}
-
         ${ctx.output_format}
     `
+}
+
+class KeywordMatch {
+    hit: string[],
+    missed: string[],
+    /// hit / total, 0.0 when there are no keywords.
+    score: float,
+}
+
+/// "baml-cli" and "baml" name the same binary.
+function normalize_cli(s: string) -> string {
+    s.replace("baml-cli ", "baml ")
+}
+
+/// Case-insensitive substring match of each keyword against our repro text.
+function keyword_score(ours: string, keywords: string[]) -> KeywordMatch {
+    let hay = normalize_cli(ours.to_lower_case());
+    let hit: string[] = [];
+    let missed: string[] = [];
+    for (let k in keywords) {
+        if (hay.includes(normalize_cli(k.to_lower_case()))) {
+            hit.push(k);
+        } else {
+            missed.push(k);
+        };
+    }
+    let score = if (keywords.length() == 0) {
+        0.0
+    } else {
+        (1.0 * hit.length()) / (1.0 * keywords.length())
+    };
+    KeywordMatch { hit: hit, missed: missed, score: score }
+}
+
+/// Reference keywords per issue, cached in <dir>/keywords.json so every
+/// feedback record for an issue (and every rerun) shares one extraction.
+function reference_keywords(dir: string, issue_key: string, reference: string) -> string[]? {
+    let path = dir + "/keywords.json";
+    let cache: map<string, string[]> = if (baml.fs.exists(path)) {
+        baml.json.from_string<map<string, string[]>>(baml.fs.read(path))
+    } else {
+        {}
+    };
+    let cached = cache.get(issue_key);
+    if (cached != null) {
+        return cached;
+    };
+    let extracted = retry<ReproKeywords>(2, () -> ReproKeywords throws unknown {
+        extract_keywords(reference)
+    });
+    if (extracted == null) {
+        return null;
+    };
+    let kws = extracted.keywords;
+    cache.set(issue_key, kws);
+    baml.fs.write(path, baml.json.stringify_pretty(cache.to_json()));
+    kws
 }
 
 // ---------- Feedback -> issue repro-match eval ----------
 //
 // THE metric: from each synthetic feedback, does extract_repro produce the
 // same repro the maintainer put in the GitHub issue? Nothing is executed —
-// judge_repro compares our (command + files) against the reference.
+// our (command + files) is matched against the reference's keywords.
 
 class EvalRow {
     feedback_id: string,
     issue_number: int,
     command: string,
-    /// judge_repro similarity vs the issue's reference repro.
-    similarity: float?,
-    /// similarity >= 0.7 — same defect exercised.
+    /// fraction of the reference's keywords present in our repro; null when
+    /// extraction failed or no keywords could be derived for the issue.
+    keyword_recall: float?,
+    /// keyword_recall >= 0.7 — same defect exercised.
     matched: bool,
-    /// what our repro misses relative to the reference, per the judge.
-    missing: string?,
+    hit: string[],
+    missed: string[],
 }
 
 /// Resumable: rows persist per feedback; rerunning skips scored rows.
@@ -595,12 +692,11 @@ function run_eval(dir: string = "eval") -> null {
         let repro = retry<Repro>(3, () -> Repro throws unknown {
             extract_repro(fb)
         });
-        let judged = if (repro == null) {
+        let keywords = reference_keywords(dir, issue_number.to_string(), reference);
+        let scored = if (repro == null || keywords == null) {
             null
         } else {
-            retry<ReproJudgment>(2, () -> ReproJudgment throws unknown {
-                judge_repro(format_repro(repro ?? baml.sys.panic("unreachable")), reference)
-            })
+            keyword_score(format_repro(repro ?? baml.sys.panic("unreachable")), keywords ?? [])
         };
 
         rows.push(
@@ -608,93 +704,27 @@ function run_eval(dir: string = "eval") -> null {
                 feedback_id: fid,
                 issue_number: issue_number,
                 command: repro?.command ?? "<extract failed>",
-                similarity: judged?.similarity,
-                matched: (judged?.similarity ?? 0.0) >= 0.7,
-                missing: judged?.missing,
+                keyword_recall: scored?.score,
+                matched: (scored?.score ?? 0.0) >= 0.7,
+                hit: scored?.hit ?? [],
+                missed: scored?.missed ?? [],
             },
         );
         baml.fs.write(dir + "/results-partial.json", baml.json.stringify_pretty(rows.to_json()));
-        log.info({ "scored": fid, "similarity": judged?.similarity });
+        log.info({ "scored": fid, "keyword_recall": scored?.score, "missed": scored?.missed });
     }
 
     let m = Metrics.new();
     for (let row in rows) {
-        m.hit("extracted", row.similarity != null);
+        m.hit("extracted", row.command != "<extract failed>");
         m.hit("repro_match", row.matched);
-        let s = row.similarity;
+        let s = row.keyword_recall;
         if (s != null) {
-            m.add("similarity", s ?? 0.0);
+            m.add("keyword_recall", s ?? 0.0);
         };
     }
     let summary = { "metrics": m.report().to_json(), "rows": rows.to_json() };
     baml.fs.write(dir + "/results.json", baml.json.stringify_pretty(summary.to_json()));
-    null
-}
-
-// ---------- Enrichment-only eval ----------
-// Scores JUST enrich_ticket: can it autopopulate a good ticket from feedback
-// alone? The repro/checker stages are stubbed out so each row is one LLM call.
-//   baml run -e 'run_enrichment_eval()'
-
-class EnrichmentRow {
-    feedback_id: string,
-    issue_number: int,
-    subsystem: Subsystem,
-    subsystem_expected: Subsystem,
-    subsystem_match: bool,
-    ticket_title: string,
-    description_len: int,
-    has_resolution_plan: bool,
-}
-
-function run_enrichment_eval(dir: string = "eval") -> null {
-    let gt = load_ground_truth(dir = dir);
-    let m = Metrics.new();
-    let rows: EnrichmentRow[] = [];
-
-    for (let fid in gt.feedback_to_issue.keys()) {
-        let issue_number = gt.feedback_to_issue.get(fid) ?? 0;
-        let truth = gt.issues.get(issue_number.to_string())
-            ?? baml.sys.panic("no ground truth for issue " + issue_number.to_string());
-
-        let fb = baml.json.from_string<Feedback>(baml.fs.read(dir + "/feedback/" + fid + ".json"));
-        let stub_repro = Repro {
-            files: {},
-            command: "baml run main.baml",
-            setup: null,
-            expectation: RequiresInspection { check: "requires_inspection", instructions: "not yet reproduced" },
-        };
-        let stub_run = ReproRun { verdict: Verdict.Inconclusive, observed: "repro not attempted" };
-
-        let draft = retry<IssueDraft>(3, () -> IssueDraft throws unknown {
-            enrich_ticket(fb, stub_repro, stub_run)
-        });
-        if (draft == null) {
-            log.warn({ "feedback": fid, "skipped": "enrich failed after retries" });
-            continue;
-        };
-
-        m.hit("subsystem_match", draft.subsystem == truth.subsystem);
-        m.hit("has_resolution_plan", draft.resolution_plan != null);
-        m.add("description_len", 1.0 * draft.description.length());
-
-        rows.push(
-            EnrichmentRow {
-                feedback_id: fid,
-                issue_number: issue_number,
-                subsystem: draft.subsystem,
-                subsystem_expected: truth.subsystem,
-                subsystem_match: draft.subsystem == truth.subsystem,
-                ticket_title: draft.title,
-                description_len: draft.description.length(),
-                has_resolution_plan: draft.resolution_plan != null,
-            },
-        );
-        baml.fs.write("eval/enrichment-partial.json", baml.json.stringify_pretty(rows.to_json()));
-    }
-
-    let summary = { "metrics": m.report().to_json(), "rows": rows.to_json() };
-    baml.fs.write(dir + "/enrichment-results.json", baml.json.stringify_pretty(summary.to_json()));
     null
 }
 
@@ -712,6 +742,7 @@ testset "feedback" {
               "body": "…",
               "source": "Github",
               "author": { "email": null, "github": "octocat", "device_id": "dev-9" },
+              "toolchain": "0.17.0",
               "comments": [],
               "issue_ids": []
             }
@@ -730,9 +761,22 @@ testset "feedback" {
 }
 
 testset "run_repro" {
+    test "command-dependent repro is never auto-verdicted" {
+        let r = Repro {
+            files: { "main.baml": "function f() -> int { 42 }" },
+            command: "baml generate",
+            setup: null,
+            expectation: ShouldCompile { check: "should_compile" },
+        };
+        let run = run_repro(r);
+        assert.equal(run.verdict, Verdict.Inconclusive);
+        assert.contains(run.observed, "command-dependent");
+    }
+
     test "requires_inspection is inconclusive" {
         let r = Repro {
             files: {},
+            command: "baml fmt main.baml",
             setup: null,
             expectation: RequiresInspection { check: "requires_inspection", instructions: "look at fmt output" },
         };
@@ -790,7 +834,15 @@ testset "llm_parsing" {
               "title": "Array.at returns wrong element",
               "description": "…",
               "subsystem": "StdLibrary",
-              "resolution_plan": "audit bounds check in array intrinsics"
+              "resolution_plan": "audit bounds check in array intrinsics",
+              "more_repros": [
+                {
+                  "files": { "main.baml": "function repro_main() -> json { [1].at(-1) ?? -1 }" },
+                  "command": "baml run -e repro_main()",
+                  "setup": null,
+                  "expectation": { "check": "should_evaluate_to", "expected": -1 }
+                }
+              ]
             }
         "#;
         let draft = enrich_ticket$parse(raw);
@@ -800,6 +852,7 @@ testset "llm_parsing" {
             body: "b",
             source: FeedbackSource.BamlFeedback,
             author: Author { email: "a@b.c", github: null, device_id: null },
+            toolchain: "0.16.0",
             comments: [],
             issue_ids: [],
         };
@@ -812,6 +865,7 @@ testset "llm_parsing" {
         let run = ReproRun { verdict: Verdict.StillBroken, observed: "still rejected" };
         let issue = assemble_issue(fb, Reproduction { repro: repro, run: run }, draft);
         assert.equal(issue.subsystem, Subsystem.StdLibrary);
+        assert.equal(issue.repros.length(), 2);
         assert.contains(issue.id, "ISSUE-");
         match (issue.status) {
             let s: Open => assert.equal(s.state, "open"),
@@ -819,10 +873,24 @@ testset "llm_parsing" {
         }
     }
 
-    test "judge_repro reply parses" {
-        let raw = #"{ "similarity": 0.8, "missing": null }"#;
-        let j = judge_repro$parse(raw);
-        assert.equal(j.similarity, 0.8);
+    test "extract_keywords reply parses" {
+        let raw = #"{ "keywords": ["baml generate", "output_type = \"rust\"", "throws"] }"#;
+        let k = extract_keywords$parse(raw);
+        assert.equal(k.keywords.length(), 3);
+    }
+
+    test "keyword_score is case-insensitive recall and ignores the cli spelling" {
+        let m = keyword_score(
+            "$ baml generate\n\n--- baml.toml ---\noutput_type = \"rust\"",
+            ["baml-cli generate", "output_type = \"rust\"", "throws", "-F beta"],
+        );
+        assert.equal(m.hit.length(), 2);
+        assert.equal(m.missed.length(), 2);
+        assert.equal(m.score, 0.5);
+    }
+
+    test "keyword_score with no keywords is zero" {
+        assert.equal(keyword_score("anything", []).score, 0.0);
     }
 }
 
@@ -867,6 +935,7 @@ function smoke() -> null {
     let fixed = run_repro(
         Repro {
             files: { "main.baml": "function repro_main() -> json { 1 + 1 }" },
+            command: "baml run main.baml",
             setup: null,
             expectation: ShouldEvaluateTo { check: "should_evaluate_to", expected: 2 },
         },
@@ -876,6 +945,7 @@ function smoke() -> null {
     let broken = run_repro(
         Repro {
             files: { "main.baml": "function repro_main() -> json { 1 + 1 }" },
+            command: "baml run main.baml",
             setup: null,
             expectation: ShouldEvaluateTo { check: "should_evaluate_to", expected: 3 },
         },
@@ -886,6 +956,7 @@ function smoke() -> null {
     let rejected = run_repro(
         Repro {
             files: { "main.baml": "function f() -> int { \"not an int\" }" },
+            command: "baml check",
             setup: null,
             expectation: ShouldNotCompile { check: "should_not_compile", diagnostic_contains: null },
         },
