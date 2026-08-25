@@ -1188,11 +1188,37 @@ fn resolution_to_item_ref(
             })
         }
         MemberResolution::InterfaceConcreteMethod { impl_loc, func_loc } => {
-            // A statically-resolved interface-method call. Route it through the interface's
-            // method ref — the runtime dispatches on the concrete receiver's registered impl,
-            // which is correct. (A direct static call to `func_loc` is a valid optimization,
-            // not required for correctness; it is deferred.)
+            // A statically-resolved interface-method call.
             let block = baml_compiler2_ppir::item_data::impl_block_data(db, *impl_loc);
+
+            // When the impl provides its own frame-free override, call it
+            // directly: the impl block binds no generic params, so the callee
+            // needs no frame type args and the resolved function IS the body
+            // this call must run. Routing such a call through the interface's
+            // method ref instead would (for a defaulted method) name the
+            // interface's default-body global, which direct-calls the default
+            // with an empty frame — its `Self`-typed templates then have no
+            // slot to substitute and the call traps at runtime.
+            let impl_is_frame_free = match &block.subject {
+                baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } => {
+                    generics.is_empty()
+                }
+                baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
+                    baml_compiler2_hir_ty::lower::class_generic_frame(db, *class).is_empty()
+                }
+            };
+            if impl_is_frame_free && block.methods.contains(func_loc) {
+                return Some(def_to_item_ref(db, Definition::Function(*func_loc)));
+            }
+
+            // BUG: the remaining shapes (a generic impl's override, or an
+            // impl inheriting the interface default) are still routed through
+            // the interface's method ref. For a defaulted method that global
+            // IS the default body, so a direct call runs it without the
+            // `Self`/impl frame it needs — the same trap the branch above
+            // avoids. These shapes should lower as virtual dispatch on the
+            // receiver (the rule carries the frame); today they are only
+            // reached by paths that never executed before this arm existed.
             let impl_pkg = file_package(db, impl_loc.file(db));
             let impl_pkg_items = baml_compiler2_ppir::package_items(
                 db,
@@ -1579,7 +1605,7 @@ fn package_lowering_data<'db>(
             );
         }
 
-        // `baml.AnyClass` keeps its ratified reflection-backed default methods
+        // `reflect.AnyClass` keeps its ratified reflection-backed default methods
         // in the `baml` package, while `reflect` depends on `baml` for the
         // interface and core error types. Avoiding a dependency cycle is
         // intentional, but MIR still needs the root reflect package's concrete

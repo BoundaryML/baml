@@ -1,6 +1,6 @@
 //! Closed BEP-066 reflection-kind classification.
 
-use crate::{ConcreteRealizedTy, Name, QualifiedTypeName, RealizedTy, TyAttr};
+use crate::{Name, QualifiedTypeName, RealizedTy};
 
 /// The nine sealed runtime views of a reflected `type` value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -50,10 +50,6 @@ impl TypeKind {
             vec![Name::new(self.namespace())],
             Name::new("Type"),
         )
-    }
-
-    pub fn concrete_class_ty(self) -> ConcreteRealizedTy {
-        ConcreteRealizedTy::Class(self.class_name(), Vec::new(), TyAttr::default())
     }
 }
 
@@ -165,7 +161,7 @@ pub fn builtin_companion_of(name: &QualifiedTypeName) -> Option<BuiltinCompanion
     })
 }
 
-/// Whether a nominal class inhabits the compiler-derived `baml.AnyClass`
+/// Whether a nominal class inhabits the compiler-derived `reflect.AnyClass`
 /// interface. Ordinary classes do. Within the sealed reflection-kind family,
 /// only the class-kind value view is intentionally admitted.
 pub fn class_inhabits_any_class(name: &QualifiedTypeName) -> bool {

@@ -76,13 +76,10 @@ class Type {
       other: map<string, string>? = null,
     ) -> reflect.WithMeta<reflect.Type> throws never { $rust_function }
 
-    /// Returns the type name as a human-readable string.
-    implements baml.ToString {
-        function to_string(self) -> string throws never {
-            self._to_string_impl()
-        }
-    }
-
+    // `baml.ToString` is implemented for `reflect.Type` by an out-of-body
+    // `implement` block beside the interface (baml/conversions.baml): the
+    // `reflect` package deliberately references nothing from `baml`, so the
+    // stdlib dependency graph stays acyclic by construction.
     //baml:vm
     function _to_string_impl(self) -> string throws never {
         $rust_function

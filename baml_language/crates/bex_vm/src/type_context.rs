@@ -43,7 +43,7 @@ impl TypeContext<TypeHead> for BexVm {
     /// pointing at it.
     ///
     /// This is one of the few places a name legitimately enters the runtime:
-    /// the algebra's `baml.AnyFunction` special case is spelled as a name in
+    /// the algebra's `reflect.AnyFunction` special case is spelled as a name in
     /// the algebra's own source. It resolves through the package surfaces —
     /// never by content-addressing a guess — so the head it returns carries the
     /// declaration's real tag and pointer.

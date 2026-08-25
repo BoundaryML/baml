@@ -343,7 +343,7 @@ impl<'vm> ImplResolver<'vm> {
         let any_class = self
             .vm
             .declaration_head(&baml_type::QualifiedTypeName::from_dotted_path(
-                "baml.AnyClass",
+                "reflect.AnyClass",
             ));
         if any_class.is_some_and(|head| head == iface) {
             return matches!(

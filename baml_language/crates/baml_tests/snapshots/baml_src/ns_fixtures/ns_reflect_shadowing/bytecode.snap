@@ -52,7 +52,7 @@ function fixtures.reflect_shadowing.package_still_reachable() -> string {
     load_const user.fixtures.reflect_shadowing.helper
     call reflect.signature
     load_field .returns
-    call reflect.Type.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 

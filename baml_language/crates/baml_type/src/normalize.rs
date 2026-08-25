@@ -48,7 +48,7 @@ use crate::{
 /// still goes through [`TypeContext::head_lookup`] per call, which is cheap for
 /// a name-based context and a registry hit for a runtime one.
 static ANY_FUNCTION: std::sync::LazyLock<QualifiedTypeName> = std::sync::LazyLock::new(|| {
-    QualifiedTypeName::new(Name::new("baml"), Vec::new(), Name::new("AnyFunction"))
+    QualifiedTypeName::new(Name::new("reflect"), Vec::new(), Name::new("AnyFunction"))
 });
 
 /// Whether `head` is the [`ANY_FUNCTION`] declaration, decided by identity
@@ -64,7 +64,7 @@ fn is_any_function<H: Head, C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
 
 /// The compiler-derived interface every class value inhabits.
 static ANY_CLASS: std::sync::LazyLock<QualifiedTypeName> = std::sync::LazyLock::new(|| {
-    QualifiedTypeName::new(Name::new("baml"), Vec::new(), Name::new("AnyClass"))
+    QualifiedTypeName::new(Name::new("reflect"), Vec::new(), Name::new("AnyClass"))
 });
 
 /// [`is_any_function`] for [`ANY_CLASS`].
@@ -73,7 +73,7 @@ fn is_any_class<H: Head, C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
         .is_some_and(|any_class| *head == any_class)
 }
 
-/// Whether a nominal class head inhabits `baml.AnyClass`. Ordinary classes do.
+/// Whether a nominal class head inhabits `reflect.AnyClass`. Ordinary classes do.
 /// Within the sealed reflection-kind family, only the class-kind value view is
 /// intentionally admitted.
 ///
@@ -145,7 +145,7 @@ pub trait TypeContext<H: Head = QualifiedTypeName> {
     /// its heap and hands back a handle — state only the context has, and the
     /// reason this cannot live on [`Head`].
     ///
-    /// Used for the algebra's one nominal special case, `baml.AnyFunction`,
+    /// Used for the algebra's one nominal special case, `reflect.AnyFunction`,
     /// whose pins are covariant unlike every other interface.
     ///
     /// `None` means the declaration could not be resolved *at all*, and fails
@@ -766,7 +766,7 @@ impl<H: Head> NormalTy<H> {
     /// (`reflect.<kind>.Type`).
     ///
     /// The algebra's second nominal special case, recognized the same way as the
-    /// first (`baml.AnyFunction`): by asking the context for each known name's
+    /// first (`reflect.AnyFunction`): by asking the context for each known name's
     /// head and comparing, never by inspecting the head itself. A head is opaque
     /// here — see [`Head`](crate::Head) — so the context is the only thing that
     /// can turn a name the algebra knows into a head it can compare.
@@ -1983,7 +1983,7 @@ impl<H: Head> NormalTy<H> {
                 })
             }
 
-            // `baml.AnyClass` is compiler-derived for class values. The stdlib
+            // `reflect.AnyClass` is compiler-derived for class values. The stdlib
             // blanket impl supplies default-method dispatch, but cannot define
             // membership by itself without also admitting primitives and
             // containers. Keep this before the general impl-registry arm so
@@ -1999,7 +1999,7 @@ impl<H: Head> NormalTy<H> {
                 )
             }
 
-            // BEP-062: `baml.AnyFunction` is a compiler builtin implemented by
+            // BEP-062: `reflect.AnyFunction` is a compiler builtin implemented by
             // every function type, with the parameter list erased. Conformance
             // is derived right here rather than from an `implements` block
             // (function types are not impl subjects): the return type must fit

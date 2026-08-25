@@ -1386,11 +1386,11 @@ fn equal_requires_singleton_with_unoverridable_eq() {
     assert!(!definitely_equal(&class("Dog"), &class("Dog"), &ctx));
 }
 
-// ── baml.AnyClass ──────────────────────────────────────────────────────────
+// ── reflect.AnyClass ──────────────────────────────────────────────────────────
 
 fn any_class() -> Ty {
     Ty::Interface(
-        QualifiedTypeName::new(Name::new("baml"), vec![], Name::new("AnyClass")),
+        QualifiedTypeName::new(Name::new("reflect"), vec![], Name::new("AnyClass")),
         vec![],
         vec![],
         TyAttr::default(),
@@ -1434,14 +1434,14 @@ fn any_class_admits_only_the_class_reflection_kind_view() {
     }
 }
 
-// ── BEP-062: baml.AnyFunction ──────────────────────────────────────────────
+// ── BEP-062: reflect.AnyFunction ──────────────────────────────────────────────
 
-/// `baml.AnyFunction<...pins>` with the given associated-type pins. An empty
+/// `reflect.AnyFunction<...pins>` with the given associated-type pins. An empty
 /// list models a pre-default-fill existential (lowering normally fills
 /// `Returns`/`Throws` with `unknown`).
 fn any_function(pins: Vec<(&str, Ty)>) -> Ty {
     Ty::Interface(
-        QualifiedTypeName::new(Name::new("baml"), vec![], Name::new("AnyFunction")),
+        QualifiedTypeName::new(Name::new("reflect"), vec![], Name::new("AnyFunction")),
         vec![],
         pins.into_iter().map(|(n, t)| (Name::new(n), t)).collect(),
         TyAttr::default(),

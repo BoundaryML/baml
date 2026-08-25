@@ -526,10 +526,16 @@ pub fn package_dependencies<'db>(
         "boundary" => vec![],
         // "baml" depends on "log" so stdlib code can call log.info/debug/etc.
         "baml" => vec![PackageId::new(db, Name::new("log"))],
-        // Reflection is a true root package. It uses the core baml interfaces
-        // and errors, while `reflect.Type` annotations lower directly to the
-        // compiler metatype and therefore do not create a baml -> reflect edge.
-        "reflect" => vec![PackageId::new(db, Name::new("baml"))],
+        // Reflection is a true root package with NO dependencies: it
+        // deliberately references nothing from `baml` (its typed reads throw
+        // `reflect.errors.TypeMismatch`, and `AnyFunction`/`AnyClass` live
+        // here). The one cross-package tie runs the other way — `baml`
+        // implements its `ToString` for `reflect.Type` beside the interface
+        // (conversions.baml), which needs no `baml -> reflect` edge because
+        // `reflect.Type` is the compiler metatype. Keeping both directions
+        // empty keeps the stdlib dependency graph acyclic by construction;
+        // emit's topological package sort asserts that invariant.
+        "reflect" => vec![],
         // The "testing" and "assert" packages depend on "baml" only.
         "testing" | "assert" => vec![PackageId::new(db, Name::new("baml"))],
         // The "ai" package uses BAML primitives and runtime type reflection.

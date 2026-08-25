@@ -3425,7 +3425,7 @@ impl<'db> InferenceContext<'db> {
                 ok &= self.sub(&throws.0, &throws.1);
                 ok
             }
-            // `baml.AnyFunction` is compiler-derived for concrete function
+            // `reflect.AnyFunction` is compiler-derived for concrete function
             // values, rather than an ordinary impl obligation.  When a
             // generic consumer such as `reflect.call_any<R, E>` receives a
             // function value directly, carry its output channels into the
@@ -3440,7 +3440,7 @@ impl<'db> InferenceContext<'db> {
                     ..
                 },
                 TyKind::Interface(name, _, expected_pins, _),
-            ) if name.is_builtin_root_type("AnyFunction") => {
+            ) if name.is_reflect_root_type("AnyFunction") => {
                 let mut ok = true;
                 for (pin, expected_pin) in expected_pins {
                     let Some(actual_pin) = (match pin.as_str() {
@@ -3476,7 +3476,7 @@ impl<'db> InferenceContext<'db> {
                     ) = (actual.kind(), expected.kind())
                         && a_name == b_name
                         && a_args.len() == b_args.len()
-                        && (a_name.is_builtin_root_type("AnyFunction")
+                        && (a_name.is_reflect_root_type("AnyFunction")
                             || b_pins
                                 .iter()
                                 .all(|(pin, _)| a_pins.iter().any(|(a_pin, _)| a_pin == pin)))

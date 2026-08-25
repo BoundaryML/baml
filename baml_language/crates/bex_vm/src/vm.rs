@@ -2330,7 +2330,7 @@ impl BexVm {
     /// read off the declaration itself.
     ///
     /// The one name→head channel inside the VM, for the boundaries that
-    /// genuinely start from a name (the algebra's `baml.AnyFunction` case, host
+    /// genuinely start from a name (the algebra's `reflect.AnyFunction` case, host
     /// conversion, codegen FQN constants). Everything interior already holds a
     /// head and must deref it instead: content-addressing a name into a tag
     /// would fabricate an identity rather than resolve one, and cannot see a

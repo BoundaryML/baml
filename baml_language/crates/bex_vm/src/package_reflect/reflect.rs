@@ -2242,7 +2242,7 @@ fn ty_never() -> RealizedTy {
     }
 }
 
-/// The two natives' parameters are statically `baml.AnyFunction`, so a
+/// The two natives' parameters are statically `reflect.AnyFunction`, so a
 /// non-callable here means the coercion rule and the runtime disagree — an
 /// internal invariant break, not a user error.
 fn non_callable_error(what: &str) -> VmRustFnError {

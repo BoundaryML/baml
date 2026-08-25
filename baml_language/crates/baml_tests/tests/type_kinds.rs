@@ -369,7 +369,7 @@ async fn function_views_of_a_runtime_package_keep_its_definitions() {
             let param_enum = param.type.as_enum() ?? throw "expected a param enum"
             let param_row = param_enum.values().at(1) ?? throw "no param rows"
 
-            let callable = pkg.get_function<baml.AnyFunction<Returns = unknown, Throws = unknown>>(
+            let callable = pkg.get_function<reflect.AnyFunction<Returns = unknown, Throws = unknown>>(
                 "root.pick",
             ) ?? throw "missing callable"
             let sig = reflect.signature(callable)

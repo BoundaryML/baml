@@ -806,7 +806,7 @@ pub fn impls_for_type<'db>(
             // concrete-member provider. Keep its blanket witness out of the
             // concrete receiver lookup tier so established fields and methods
             // named `get`, `name`, `type`, and so on retain their resolution.
-            // Explicit `baml.AnyClass` receivers dispatch through
+            // Explicit `reflect.AnyClass` receivers dispatch through
             // `resolve_impl`, where the witness remains available.
             provides_concrete_members(&implemented.name)
         })
@@ -818,7 +818,7 @@ pub fn impls_for_type<'db>(
 /// narrowing, so its blanket default methods must stay out of both the ground
 /// registry and the inference-variable method probe.
 pub(crate) fn provides_concrete_members(interface: &TypeName) -> bool {
-    !interface.is_builtin_root_type("AnyClass")
+    !interface.is_reflect_root_type("AnyClass")
 }
 
 /// Compiler-derived interfaces may deliberately narrow a blanket stdlib impl.
@@ -831,7 +831,7 @@ fn derived_impl_allows(
     concrete: &Ty,
     interface: &TypeName,
 ) -> bool {
-    if !interface.is_builtin_root_type("AnyClass") {
+    if !interface.is_reflect_root_type("AnyClass") {
         return true;
     }
     let normalized = baml_type::normalize::normalize_interned(concrete, &AliasOnlyFacts::new(db));

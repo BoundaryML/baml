@@ -261,13 +261,13 @@ function ue_reflect_origin() -> bool {
 }
 
 function ue_call_reflect(
-    target: baml.AnyFunction<Returns = bool, Throws = unknown>,
+    target: reflect.AnyFunction<Returns = bool, Throws = unknown>,
 ) -> bool {
     reflect.call_any(target, {})
 }
 
 function ue_reflect_boundary(
-    target: baml.AnyFunction<Returns = bool, Throws = unknown>,
+    target: reflect.AnyFunction<Returns = bool, Throws = unknown>,
 ) -> bool throws baml.errors.UnknownError {
     ue_call_reflect(target) catch_all (error) {
         _ => throw baml.errors.UnknownError.with_message<never>(error, "reflect call failed"),
@@ -275,7 +275,7 @@ function ue_reflect_boundary(
 }
 
 function ue_reflect_preserves_context() -> bool {
-    let target: baml.AnyFunction<Returns = bool, Throws = unknown> = ue_reflect_origin;
+    let target: reflect.AnyFunction<Returns = bool, Throws = unknown> = ue_reflect_origin;
     ue_reflect_boundary(target) catch_all (error, context) {
         baml.errors.UnknownError => {
             context.stack_trace.frames.some((frame: baml.errors.StackFrame) -> bool {

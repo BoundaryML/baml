@@ -2966,10 +2966,10 @@ fn ai.internal._from_shorthand(shorthand: string) -> ai.Client {
     }
 }
 
-fn ai.internal._schema_for_signature(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> map<string, unknown> {
+fn ai.internal._schema_for_signature(handler: reflect.AnyFunction<Returns = unknown, Throws = unknown>) -> map<string, unknown> {
     // Locals:
     let _0: map<string, unknown> // _0 // return
-    let _1: baml.AnyFunction<Returns = unknown, Throws = unknown> // handler // param
+    let _1: reflect.AnyFunction<Returns = unknown, Throws = unknown> // handler // param
     let _2: reflect.Signature // sig
     let _3: map<string, unknown> // props
     let _4: string[] // required
@@ -5238,7 +5238,7 @@ fn ai.internal.validate_output_type(return_type: reflect.Type) -> void {
     }
 
     bb9: {
-        _11 = call const fn reflect.Type.baml.ToString.to_string(copy _1) -> [bb10];
+        _11 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _1) -> [bb10];
     }
 
     bb10: {
@@ -7725,12 +7725,12 @@ fn ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> string
     let _4: null | ((map<string, unknown>) -> string throws unknown)
     let _5: (map<string, unknown>) -> string throws unknown // rh
     let _6: (map<string, unknown>) -> string throws unknown
-    let _7: null | baml.AnyFunction<Returns = unknown, Throws = unknown>
-    let _8: null | baml.AnyFunction<Returns = unknown, Throws = unknown>
-    let _9: baml.AnyFunction<Returns = unknown, Throws = unknown> // h
+    let _7: null | reflect.AnyFunction<Returns = unknown, Throws = unknown>
+    let _8: null | reflect.AnyFunction<Returns = unknown, Throws = unknown>
+    let _9: reflect.AnyFunction<Returns = unknown, Throws = unknown> // h
     let _10: unknown // value
     let _11: unknown // e
-    let _12: baml.AnyFunction<Returns = unknown, Throws = unknown>
+    let _12: reflect.AnyFunction<Returns = unknown, Throws = unknown>
     let _13: reflect.Type
     let _14: reflect.Type
     let _15: unknown
@@ -7765,7 +7765,7 @@ fn ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> string
     bb1: {
         _7 = copy _1.3;
         _8 = copy _7;
-        _8 = narrow_bind copy _8 as Interface(QualifiedTypeName { pkg: Dep("baml"), namespace: [], name: "AnyFunction" }, [], [("Returns", BuiltinUnknown { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }), ("Throws", BuiltinUnknown { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb2];
+        _8 = narrow_bind copy _8 as Interface(QualifiedTypeName { pkg: Dep("reflect"), namespace: [], name: "AnyFunction" }, [], [("Returns", BuiltinUnknown { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }), ("Throws", BuiltinUnknown { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }) -> [bb4, bb2];
     }
 
     bb2: {
@@ -7844,10 +7844,10 @@ fn ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> string
     }
 }
 
-fn ai.tools.tool(handler: baml.AnyFunction<Returns = unknown, Throws = unknown>, name: string | null, description: string | null, on_error: null | ai.tools.ErrorMode) -> ai.tools.Tool {
+fn ai.tools.tool(handler: reflect.AnyFunction<Returns = unknown, Throws = unknown>, name: string | null, description: string | null, on_error: null | ai.tools.ErrorMode) -> ai.tools.Tool {
     // Locals:
     let _0: ai.tools.Tool // _0 // return
-    let _1: baml.AnyFunction<Returns = unknown, Throws = unknown> // handler // param
+    let _1: reflect.AnyFunction<Returns = unknown, Throws = unknown> // handler // param
     let _2: string | null // name // param
     let _3: string | null // description // param
     let _4: null | ai.tools.ErrorMode // on_error // param
@@ -10169,7 +10169,7 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
     bb24: {
         _82 = const "Expected zero or one " + copy _83;
         _81 = copy _82 + const " output for ";
-        _87 = call const fn reflect.Type.baml.ToString.to_string(copy _4) -> [bb25];
+        _87 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _4) -> [bb25];
     }
 
     bb25: {
@@ -10279,7 +10279,7 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
     }
 
     bb44: {
-        _42 = call const fn reflect.Type.baml.ToString.to_string(copy _4) -> [bb45];
+        _42 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _4) -> [bb45];
     }
 
     bb45: {
@@ -10371,7 +10371,7 @@ fn ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: string) -
     bb61: {
         _110 = const "the " + copy _111;
         _109 = copy _110 + const " output did not fit ";
-        _115 = call const fn reflect.Type.baml.ToString.to_string(copy _4) -> [bb62];
+        _115 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _4) -> [bb62];
     }
 
     bb62: {

@@ -1,4 +1,4 @@
-//! End-to-end coverage for the read-only `baml.AnyClass` reflection surface.
+//! End-to-end coverage for the read-only `reflect.AnyClass` reflection surface.
 
 use baml_compiler_diagnostics::Severity;
 use baml_tests::{
@@ -20,7 +20,7 @@ fn compile_error_codes(source: &str) -> Vec<String> {
 fn requires_any_class_rejects_a_primitive_implementor() {
     let errors = compile_error_codes(
         r#"
-        interface Tagged requires baml.AnyClass {
+        interface Tagged requires reflect.AnyClass {
             function tag(self) -> string throws never
         }
 
@@ -45,7 +45,7 @@ fn any_class_blanket_bound_does_not_expose_members_on_nonclasses() {
 
         class Box<T> { value T }
 
-        implements<T extends baml.AnyClass> Wrapped for Box<T> {
+        implements<T extends reflect.AnyClass> Wrapped for Box<T> {
             function tag(self) -> string { "wrapped:" + self.value.type().to_string() }
         }
 
@@ -67,7 +67,7 @@ async fn requires_and_bounded_impl_membership_agree_for_real_classes() {
         class Record { label string }
         class Box<T> { value T }
 
-        interface Tagged requires baml.AnyClass {
+        interface Tagged requires reflect.AnyClass {
             function tag(self) -> string throws never
         }
 
@@ -79,7 +79,7 @@ async fn requires_and_bounded_impl_membership_agree_for_real_classes() {
             function wrapped(self) -> string throws never
         }
 
-        implements<T extends baml.AnyClass> Wrapped for Box<T> {
+        implements<T extends reflect.AnyClass> Wrapped for Box<T> {
             function wrapped(self) -> string { "wrapped:" + self.value.name() }
         }
 
@@ -112,9 +112,9 @@ async fn runtime_minted_class_narrows_and_exercises_the_complete_surface() {
             prompt: `Extract ${text}.\n${ctx.output_format}`
         }
 
-        function mismatch_is_catchable(value: baml.AnyClass) -> bool throws never {
+        function mismatch_is_catchable(value: reflect.AnyClass) -> bool throws never {
             let ignored = value.get<int>("first") catch (e) {
-                baml.errors.TypeMismatch { message } => {
+                reflect.errors.TypeMismatch { message } => {
                     return message.includes("field `VetrecLike.first`")
                 }
             }
@@ -133,7 +133,7 @@ async fn runtime_minted_class_narrows_and_exercises_the_complete_surface() {
             let opaque = Extract$parse<unreflect(runtime_t.as_type())>(
                 `{"first":"one","second":"two","third":null,"fourth":"four","fifth":"five"}`,
             )
-            let record: baml.AnyClass = opaque else {
+            let record: reflect.AnyClass = opaque else {
                 throw "Expected class"
             }
 
@@ -175,7 +175,7 @@ async fn membership_is_class_only_with_the_ratified_kind_view_exception() {
         type Callback = (value: int) -> string throws never
 
         function narrows(value: unknown) -> bool throws never {
-            let class_value: baml.AnyClass = value else {
+            let class_value: reflect.AnyClass = value else {
                 return false
             }
             class_value.type() == reflect.Type.of_value(value)
@@ -226,10 +226,10 @@ async fn reflected_membership_and_static_field_handles_agree_with_narrowing() {
         }
 
         function main() -> bool throws unknown {
-            let any_class_t = reflect.Type.of<baml.AnyClass>()
+            let any_class_t = reflect.Type.of<reflect.AnyClass>()
             let any_class_view = any_class_t.as_interface() ?? throw "AnyClass interface"
             let point = Point { x: 7 }
-            let narrowed: baml.AnyClass = point else {
+            let narrowed: reflect.AnyClass = point else {
                 throw "Expected class"
             }
             let field: reflect.class.Field = narrowed.get_field("x") else {
@@ -305,7 +305,7 @@ async fn concrete_members_keep_precedence_until_explicitly_narrowed() {
             let methods = ExistingMethods {}
             let boxed = OutOfBodyBox.new("out-of-body")
             let boxed_value = boxed.get()
-            let reflected: baml.AnyClass = fields else {
+            let reflected: reflect.AnyClass = fields else {
                 throw "Expected class"
             }
 
