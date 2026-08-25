@@ -30,9 +30,12 @@ rustls = [ "aws-crypto" ]
 [dependencies]
 baml_compiler2_visualization = { workspace = true }
 baml_path = { workspace = true }
+baml_query = { workspace = true }
+baml_query_profiles = { workspace = true }
 baml_version = { workspace = true }
 bex_events = { workspace = true }
 bex_heap = { workspace = true }
+bex_prof_store = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_native = { workspace = true, features = [ "bundle-http" ] }
@@ -42,7 +45,9 @@ anyhow = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }
 crossbeam-channel = { workspace = true }
+datafusion = { workspace = true }
 futures = { workspace = true }
+hex = { workspace = true }
 indexmap = { workspace = true }
 lsp-server = { workspace = true }
 lsp-types = { workspace = true }
@@ -67,6 +72,7 @@ webbrowser = { workspace = true }
 [dev-dependencies]
 bex_vm_types = { workspace = true }
 tempfile = { workspace = true }
+tokio = { workspace = true, features = [ "macros", "rt-multi-thread" ] }
 
 [package.metadata.ci]
 wasm_support = false
