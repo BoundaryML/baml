@@ -20,6 +20,7 @@ mod tests {
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
@@ -102,6 +103,7 @@ mod tests {
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
@@ -138,6 +140,7 @@ mod tests {
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
@@ -172,6 +175,7 @@ mod tests {
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
@@ -237,6 +241,7 @@ mod tests {
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
@@ -271,6 +276,7 @@ mod tests {
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
@@ -305,6 +311,7 @@ mod tests {
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
@@ -340,6 +347,7 @@ mod tests {
             Command::new("dotnet")
                 .args([
                     "run",
+                    "--no-build",
                     "--project",
                     project.to_str().expect("project path is not UTF-8"),
                     "--configuration",
@@ -401,6 +409,7 @@ mod tests {
         Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
@@ -462,6 +471,7 @@ mod tests {
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
@@ -498,6 +508,7 @@ mod tests {
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",
@@ -590,6 +601,7 @@ mod tests {
         let output = Command::new("dotnet")
             .args([
                 "run",
+                "--no-build",
                 "--project",
                 project.to_str().expect("project path is not UTF-8"),
                 "--configuration",

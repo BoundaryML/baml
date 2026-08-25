@@ -967,10 +967,11 @@ jobs:
             echo "$fresh"
           fi
 
-      # The C# suite is serialized (every fixture shares the bridge
-      # project's obj/) and each test is a full `dotnet run -c Release`, so
-      # the job's wall time is ~12 cold Roslyn compiles in a row. Cache the
-      # NuGet package folder and every project's bin/obj between runs.
+      # The C# fixtures all build the shared bridge project and, without a
+      # cache, every CI run pays the full set of Roslyn compiles from
+      # scratch (setup.sh builds them as one solution; the tests run with
+      # --no-build). Cache the NuGet package folder and every project's
+      # bin/obj between runs so the setup build is incremental.
       # MSBuild's up-to-date check is mtime-based and a fresh checkout (plus
       # the build.rs client regeneration) stamps every input with the
       # current time, so restoring bin/obj alone changes nothing; the

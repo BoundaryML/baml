@@ -59,9 +59,20 @@ verify_negative() {
   printf '%s=CS0411\n' "$case_name"
 }
 
-verify_negative BareNullInference
-verify_negative ResultOnlyInference
-verify_negative RawNullableInference
-verify_negative StaticNullInference
+# Each case restores and builds into its own artifacts directory, so the
+# four builds share nothing and can run concurrently. `wait -n`-free
+# collection: wait on each pid and fold failures, so one bad case never
+# hides another's log (fail() output goes to stderr as before).
+pids=()
+verify_negative BareNullInference & pids+=("$!")
+verify_negative ResultOnlyInference & pids+=("$!")
+verify_negative RawNullableInference & pids+=("$!")
+verify_negative StaticNullInference & pids+=("$!")
+
+failed=0
+for pid in "${pids[@]}"; do
+  wait "$pid" || failed=1
+done
+[[ "$failed" -eq 0 ]] || exit 1
 
 printf 'csharp_generics_generated_compile_matrix=ok\n'

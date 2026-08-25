@@ -19,17 +19,17 @@ rust-sdk-fixture = { max-threads = 2 }
 # forgiving but not immune under CI load. Funnel the whole package through one
 # in-flight gradle at a time (see the package-wide override below).
 java-gradle-serial = { max-threads = 1 }
-# C# fixtures share the bridge project's MSBuild obj directory.
-csharp-sdk-fixture = { max-threads = 1 }
+# C# needs no test group: the fixtures share the bridge project's MSBuild
+# obj directory, but setup.sh/setup.ps1 build all of them in one solution
+# build and the tests execute with `dotnet run --no-build`, so no MSBuild
+# runs at test time. The only test-time builders are the trimmed-publish
+# test (sole writer to the shared obj) and the generics compile-negative
+# matrix (isolated via --artifacts-path).
 typescript-web-workers = { max-threads = 1 }
 
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_rust)'
 test-group = 'rust-sdk-fixture'
-
-[[profile.default.overrides]]
-filter = 'package(=sdk_test_csharp)'
-test-group = 'csharp-sdk-fixture'
 
 [[profile.default.overrides]]
 filter = 'package(=sdk_test_typescript_web) & test(/::vitest_workers$/)'
