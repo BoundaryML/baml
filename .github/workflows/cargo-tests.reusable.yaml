@@ -911,6 +911,15 @@ jobs:
         include: ${{ fromJSON(needs.sdk-test-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: ${{ matrix.timeout }}
+    env:
+      # MSBuild reads environment variables as global properties. The .NET
+      # SDK embeds the git commit into every build by default (SourceLink
+      # json + SourceRevisionId in InformationalVersion), which changes a
+      # CoreCompile input on every push and would defeat the C# MSBuild
+      # cache below for any new commit. Test builds need neither; only
+      # dotnet reads these, so the other SDK matrix legs are unaffected.
+      EnableSourceLink: "false"
+      IncludeSourceRevisionInInformationalVersion: "false"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -936,6 +945,27 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.301
+
+      # The SDK install is freshly stamped every run, and its targets files
+      # and reference packs are MSBuild inputs (e.g. Microsoft.Common.targets
+      # regenerates AssemblyAttributes.cs, a CoreCompile input), which alone
+      # invalidates every output the cache below restores. The SDK's content
+      # is pinned by dotnet-version, so backdating it is safe.
+      - name: "Backdate .NET SDK install"
+        if: matrix.sdk-label == 'csharp'
+        shell: bash
+        run: |
+          dotnet_root="$(dirname "$(readlink -f "$(command -v dotnet)")")"
+          echo "dotnet root: $dotnet_root"
+          find "$dotnet_root" -exec touch -t 200001010000 {} + 2>/dev/null || true
+          if command -v sudo >/dev/null; then
+            sudo find "$dotnet_root" -exec touch -t 200001010000 {} + 2>/dev/null || true
+          fi
+          fresh="$(find "$dotnet_root" -newermt 2001-01-01 | head -5)"
+          if [ -n "$fresh" ]; then
+            echo "WARNING: some SDK files kept fresh mtimes (cache will under-hit):"
+            echo "$fresh"
+          fi
 
       # The C# suite is serialized (every fixture shares the bridge
       # project's obj/) and each test is a full `dotnet run -c Release`, so

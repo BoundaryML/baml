@@ -28,11 +28,14 @@ import json
 import os
 import sys
 
-# Everything the C# projects compile lives under these two trees: the bridge
-# library + tools, and the fixture programs with their generated clients.
+# Everything the C# projects compile lives under these trees: the bridge
+# library + tools, the fixture programs with their generated clients, and the
+# .proto definitions the bridge's protobuf codegen target consumes (they live
+# with the Rust cffi types, outside the C# trees).
 ROOTS = [
     "baml_language/sdks/csharp",
     "baml_language/sdk_tests/crates/csharp",
+    "baml_language/crates/bridge_ctypes/types",
 ]
 # bin/obj are build outputs (cached wholesale, never hashed); .baml is BAML's
 # own runtime state (profile CAS + locks written during test execution) —
