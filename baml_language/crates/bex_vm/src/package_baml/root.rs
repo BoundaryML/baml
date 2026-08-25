@@ -11,12 +11,12 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 
 use super::{
-    BamlPackageBaml, Continuation, NativeCallResult, PackageBamlImpl, PassThroughContinuation,
+    BamlPackageBaml, Continuation, NativeCallResult, PackageBamlImpl,
     array::{
         NaturalDomain, compare_natural_values, is_primitive_array_values,
         validate_natural_order_with_vm,
     },
-    make_compare_callee, make_to_string_callee,
+    make_to_string_callee,
 };
 use crate::{
     BexVm, VmPanic,
@@ -27,19 +27,6 @@ impl BamlPackageBaml for PackageBamlImpl {
     fn deep_copy(vm: &mut BexVm, value: &Value) -> Value {
         let mut copied_objects = HashMap::new();
         deep_copy_value_recursive(vm, *value, &mut copied_objects)
-    }
-
-    /// `baml._float_total_cmp(a, b)` — three-way comparison in BAML's total
-    /// float order, backing `Comparable for float`. Shares its definition with
-    /// the float domain of `compare_natural_values` (the `_rust_sort` fast
-    /// path) and with `baml.ops.Compare for float`, so no two float orderings
-    /// in the language can disagree.
-    fn _float_total_cmp(a: f64, b: f64) -> i64 {
-        match bex_vm_types::float_order::cmp(a, b) {
-            std::cmp::Ordering::Less => -1,
-            std::cmp::Ordering::Equal => 0,
-            std::cmp::Ordering::Greater => 1,
-        }
     }
 
     /// `baml._is_primitive_array(arr)` — `Sortable.sort`'s dispatch guard:
@@ -103,25 +90,6 @@ impl BamlPackageBaml for PackageBamlImpl {
             Err(e) => return NativeCallResult::Error(e.into()),
         }
         NativeCallResult::Done(*arr)
-    }
-
-    /// `baml._compare_shim(a, b)` — the dispatch shim for the `Sortable`
-    /// blanket `sort`'s comparator path. Resolves `Comparable.compare` on
-    /// `a`'s runtime class and yields to it with `b`; the comparison's `int`
-    /// result (or thrown error) is returned straight through. See
-    /// `make_compare_callee` for why the sort cannot dispatch `compare`
-    /// itself.
-    fn _compare_shim(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
-        let callee = match make_compare_callee(vm, *a) {
-            Ok(ptr) => ptr,
-            Err(e) => return NativeCallResult::Error(e),
-        };
-        NativeCallResult::YieldToCall {
-            callee,
-            args: vec![*b],
-            type_args: vec![],
-            continuation: Box::new(PassThroughContinuation),
-        }
     }
 
     /// `baml._to_string_default(value)` renders `value` for `string.from`,

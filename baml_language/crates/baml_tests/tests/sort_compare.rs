@@ -1,4 +1,5 @@
-//! Spike tests for the `Comparable` / `Sortable` array-sort design
+//! Spike tests for the `Sortable` array-sort design, now built on
+//! `baml.ops.Compare`
 //! (thoughts/sam-projects/array-sort/01b-option-5-tdd-plan.md, Phase 1).
 //!
 //! These tests pin the three pieces of type-system machinery the design
@@ -16,8 +17,11 @@
 //!   1c. A two-`Self` method (`compare(self, other: Self)`) called through a
 //!       bounded type variable.
 //!
-//! Later phases (the real `Comparable`/`Sortable` stdlib work) build on these;
-//! see `baml_src/ns_arrays/arrays.baml` for the runtime characterization net.
+//! The stdlib `Sortable` work builds on these; see
+//! `baml_src/ns_arrays/arrays.baml` for the runtime characterization net.
+//! `baml.ops.Compare` carries no associated error (`cmp` is `throws never`),
+//! so the associated-type machinery is pinned only through the throwaway
+//! interfaces here.
 
 use std::collections::HashSet;
 
@@ -67,10 +71,9 @@ fn assert_compile_error_contains(source: &str, needle: &str) {
 
 // ── 1a: projection-valued associated-type binding in a blanket impl ─────────
 //
-// The throwaway scaffolding mirrors the eventual `Comparable`/`Sortable`
-// shape: `HasErr` plays `Comparable` (associated error `E`), `Wrap` plays
-// `Sortable` (associated error `WE` bound per-impl to the *projection*
-// `(T as HasErr).E`).
+// The throwaway scaffolding mirrors a fallible-ordering shape: `HasErr`
+// carries an associated error `E`, and `Wrap` (playing `Sortable`) binds `WE`
+// per-impl to the *projection* `(T as HasErr).E`.
 
 const SPIKE_1A_SCAFFOLD: &str = r#"
     interface HasErr {
@@ -245,18 +248,23 @@ fn spike_1c_interface_typed_values_cannot_call_two_self_method() {
     );
 }
 
-// ── Phase 2 repro: user-class Comparable dispatch (fast harness) ────────────
+// ── Phase 2 repro: user-class Compare dispatch (fast harness) ──────────────
 
 #[test]
-fn phase2_user_class_missing_cmperror_binding_is_error() {
-    // `Comparable.CompareError` is undefaulted, so omitting `type CompareError` is a
-    // compile error — the binding is mandatory (E0001), distinct from the
-    // method's `throws` (E0120).
+fn missing_undefaulted_assoc_binding_is_error() {
+    // An UNDEFAULTED associated type must be bound by every impl — a compile
+    // error (E0001) distinct from the method's `throws` (E0120). The stdlib no
+    // longer has such an interface (`baml.ops.Compare` carries no associated
+    // type since `cmp` is `throws never`), so this uses a throwaway one.
     assert_compile_error_contains(
         r#"
+        interface Ordered {
+            type CompareError
+            function compare(self, other: Self) -> int throws Self.CompareError
+        }
         class Score {
             points: int
-            implements baml.Comparable {
+            implements Ordered {
                 function compare(self, other: Self) -> int throws never {
                     if (self.points < other.points) { -1 }
                     else if (self.points > other.points) { 1 }
@@ -270,17 +278,17 @@ fn phase2_user_class_missing_cmperror_binding_is_error() {
 }
 
 #[tokio::test]
-async fn phase2_user_class_compare_direct_call_mir_optimized() {
+async fn user_class_cmp_direct_call_mir_optimized() {
     let output = baml_tests::baml_test_optimized!(
         r#"
         class Score {
             points: int
-            implements baml.Comparable {
-                type CompareError = never
-                function compare(self, other: Self) -> int throws never {
-                    if (self.points < other.points) { -1 }
-                    else if (self.points > other.points) { 1 }
-                    else { 0 }
+            implements baml.ops.Equals {
+                function eq(self, other: Self) -> bool throws never { self.points == other.points }
+            }
+            implements baml.ops.Compare {
+                function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+                    self.points.cmp(other.points)
                 }
             }
         }
@@ -288,7 +296,11 @@ async fn phase2_user_class_compare_direct_call_mir_optimized() {
         function main() -> int throws never {
             let high = Score { points: 9 }
             let low = Score { points: 1 }
-            return high.compare(low)
+            return match (high.cmp(low)) {
+                baml.ops.Ordering.Less => -1,
+                baml.ops.Ordering.Equal => 0,
+                baml.ops.Ordering.Greater => 1,
+            }
         }
         "#
     );
@@ -297,7 +309,7 @@ async fn phase2_user_class_compare_direct_call_mir_optimized() {
 
 // ── Phase 3: `Sortable` blanket impl + projection normalization ─────────────
 //
-// Canonical scaffold mirrors the real stdlib: `Comparable`-style interface
+// Canonical scaffold mirrors a fallible-ordering shape: a `compare`-style interface
 // with an UNDEFAULTED associated error (`type CE`, no `= never`), a
 // `Sortable`-style blanket impl binding `SE = T.CE`, and user classes that
 // bind `CE` explicitly (to `never` or a concrete error).
@@ -305,13 +317,13 @@ async fn phase2_user_class_compare_direct_call_mir_optimized() {
 // Defaulting the associated error would work too — a bare bound pins nothing,
 // so an implementor that overrides the default still satisfies it (see
 // `phase3_defaulted_assoc_override_satisfies_bare_bound` below). The stdlib
-// leaves `Comparable.CompareError` undefaulted as a matter of style, not
+// leaves its associated error undefaulted as a matter of style, not
 // necessity.
 
 const PHASE3_SCAFFOLD: &str = r#"
     interface Cmp2 {
         type CE
-        function comp(self, other: Self) -> int throws Self.CE
+        function comp(self, other: Self) -> baml.ops.Ordering throws Self.CE
     }
 
     interface Srt2 {
@@ -323,7 +335,7 @@ const PHASE3_SCAFFOLD: &str = r#"
         type SE = T.CE
 
         function srt(self) -> Self throws T.CE {
-            self.sort_by((a: T, b: T) -> int throws T.CE { a.comp(b) })
+            self.sort_by((a: T, b: T) -> baml.ops.Ordering throws T.CE { a.comp(b) })
         }
     }
 
@@ -333,7 +345,7 @@ const PHASE3_SCAFFOLD: &str = r#"
         v: int
         implements Cmp2 {
             type CE = never
-            function comp(self, other: Self) -> int throws never { return 0 }
+            function comp(self, other: Self) -> baml.ops.Ordering throws never { return baml.ops.Ordering.Equal }
         }
     }
 
@@ -341,7 +353,7 @@ const PHASE3_SCAFFOLD: &str = r#"
         v: int
         implements Cmp2 {
             type CE = Boom2
-            function comp(self, other: Self) -> int throws Boom2 { return 0 }
+            function comp(self, other: Self) -> baml.ops.Ordering throws Boom2 { return baml.ops.Ordering.Equal }
         }
     }
 "#;
@@ -402,7 +414,7 @@ fn phase3_out_of_body_impl_on_builtin_normalizes_to_never() {
 
         implements Cmp2 for int {{
             type CE = never
-            function comp(self, other: Self) -> int throws never {{ return 0 }}
+            function comp(self, other: Self) -> baml.ops.Ordering throws never {{ return baml.ops.Ordering.Equal }}
         }}
 
         function f(xs: int[]) -> int[] throws never {{
@@ -420,7 +432,7 @@ fn phase3_out_of_body_impl_on_builtin_with_error_throws_it() {
 
         implements Cmp2 for int {{
             type CE = Boom2
-            function comp(self, other: Self) -> int throws Boom2 {{ return 0 }}
+            function comp(self, other: Self) -> baml.ops.Ordering throws Boom2 {{ return baml.ops.Ordering.Equal }}
         }}
 
         function f(xs: int[]) -> int[] throws Boom2 {{
@@ -440,7 +452,7 @@ fn phase3_defaulted_assoc_override_satisfies_bare_bound() {
         r#"
         interface CmpD {
             type CE = never
-            function comp(self, other: Self) -> int throws Self.CE
+            function comp(self, other: Self) -> baml.ops.Ordering throws Self.CE
         }
 
         interface SrtD {
@@ -451,7 +463,7 @@ fn phase3_defaulted_assoc_override_satisfies_bare_bound() {
         implements<T extends CmpD> SrtD for T[] {
             type SE = T.CE
             function srt(self) -> Self throws T.CE {
-                self.sort_by((a: T, b: T) -> int throws T.CE { a.comp(b) })
+                self.sort_by((a: T, b: T) -> baml.ops.Ordering throws T.CE { a.comp(b) })
             }
         }
 
@@ -461,7 +473,7 @@ fn phase3_defaulted_assoc_override_satisfies_bare_bound() {
             v: int
             implements CmpD {
                 type CE = BoomD
-                function comp(self, other: Self) -> int throws BoomD { return 0 }
+                function comp(self, other: Self) -> baml.ops.Ordering throws BoomD { return baml.ops.Ordering.Equal }
             }
         }
 
@@ -480,16 +492,15 @@ fn phase3_defaulted_assoc_override_satisfies_bare_bound() {
 // ── Phase 5: deliberate breaking changes (now compile errors) ───────────────
 //
 // After the cutover, `sort()` is the `Sortable` blanket method requiring
-// `T implements Comparable`. Element types that cannot implement `Comparable`
+// `T implements baml.ops.Compare`. Element types that cannot implement it
 // — unions (including optionals) and user classes without an impl — no longer
 // compile, where the old native `Array.sort` accepted them and threw at
 // runtime.
 
 #[test]
 fn phase5_union_int_float_sort_is_compile_error() {
-    // A union element can't implement `Comparable`, so `T.CompareError` stays
-    // un-normalizable and surfaces as an unhandled-throws error naming the
-    // union (`int | float.CompareError`).
+    // A union element can't implement `baml.ops.Compare`, so the `Sortable`
+    // blanket impl does not apply and the error names the union.
     assert_compile_error_contains(
         r#"
         function f() -> null throws never {
@@ -519,10 +530,10 @@ fn phase5_optional_element_sort_is_compile_error() {
 
 #[test]
 fn phase5_sort_by_key_nullable_key_is_compile_error() {
-    // `sort_by_key` now requires `U extends Comparable` (it orders by the key's
-    // natural order). A nullable key (`int?` = a union) cannot implement
-    // `Comparable`, so `U.CompareError` stays un-normalizable (named after the
-    // union key type) — replacing the old runtime `InvalidArgument` rejection.
+    // `sort_by_key` requires `U extends baml.ops.Compare` (it orders by the
+    // key's natural order). A nullable key (`int?` = a union) cannot implement
+    // `Compare`, so the bound is unsatisfied (named after the union key type) —
+    // replacing the old runtime `InvalidArgument` rejection.
     assert_compile_error_contains(
         r#"
         function f() -> null throws never {
@@ -550,8 +561,8 @@ fn phase5_union_int_string_sort_is_compile_error() {
 }
 
 #[test]
-fn phase5_class_without_comparable_sort_is_compile_error() {
-    // E0007: the array type has no `sort` member (no `Comparable` impl, so
+fn phase5_class_without_compare_sort_is_compile_error() {
+    // E0007: the array type has no `sort` member (no `Compare` impl, so
     // the `Sortable` blanket impl doesn't apply). phase6 pins the full
     // message shape; here we pin the offending type and member.
     let source = r#"
@@ -604,11 +615,11 @@ fn match_dispatch_array_type_arms_reachable_but_t_is_not_refined() {
     // returned as `T[]` without type-variable refinement.
     let errors = collect_compile_errors(
         r#"
-        function fast_g<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
+        function fast_g<T extends baml.ops.Compare>(xs: T[]) -> T[] throws never {
             return xs
         }
 
-        function dispatch_f<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
+        function dispatch_f<T extends baml.ops.Compare>(xs: T[]) -> T[] throws never {
             match (xs) {
                 int[] => fast_g(xs),
                 bigint[] => fast_g(xs),
@@ -634,19 +645,19 @@ fn match_dispatch_array_type_arms_reachable_but_t_is_not_refined() {
 }
 
 const ELEMENT_DISPATCH_SCAFFOLD: &str = r#"
-    function is_fast<T extends baml.Comparable>(xs: T[]) -> bool throws never {
+    function is_fast<T extends baml.ops.Compare>(xs: T[]) -> bool throws never {
         return xs.length() == 0
     }
 
-    function fast_g<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
+    function fast_g<T extends baml.ops.Compare>(xs: T[]) -> T[] throws never {
         return xs
     }
 
-    function slow_g<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
+    function slow_g<T extends baml.ops.Compare>(xs: T[]) -> T[] throws never {
         return xs
     }
 
-    function dispatch_f<T extends baml.Comparable>(xs: T[]) -> T[] throws T.CompareError {
+    function dispatch_f<T extends baml.ops.Compare>(xs: T[]) -> T[] throws never {
         if (is_fast(xs)) {
             fast_g(xs)
         } else {
@@ -658,8 +669,8 @@ const ELEMENT_DISPATCH_SCAFFOLD: &str = r#"
 #[test]
 fn element_is_dispatch_compiles() {
     // The fallback shape: a boolean guard routing between two generic callees
-    // instantiated at the *symbolic* `T` (return `T[]`, throws `T.CompareError`)
-    // with no refinement anywhere.
+    // instantiated at the *symbolic* `T` (return `T[]`) with no refinement
+    // anywhere.
     assert_zero_compile_errors(ELEMENT_DISPATCH_SCAFFOLD);
 }
 
@@ -677,8 +688,8 @@ fn element_is_dispatch_int_callsite_normalizes_to_never() {
 
 #[test]
 fn element_is_dispatch_float_callsite_normalizes_to_never() {
-    // Relies on the 02-plan float decision: `float.CompareError = never`
-    // (BAML's total float order), so a `float[]` call site needs no handling.
+    // Relies on the float decision: `Compare for float` is BAML's total float
+    // order and `throws never`, so a `float[]` call site needs no handling.
     assert_zero_compile_errors(&format!(
         r#"
         {ELEMENT_DISPATCH_SCAFFOLD}
@@ -689,32 +700,6 @@ fn element_is_dispatch_float_callsite_normalizes_to_never() {
     ));
 }
 
-#[test]
-fn element_is_dispatch_user_error_callsite_requires_handling() {
-    assert_compile_error_contains(
-        &format!(
-            r#"
-            {ELEMENT_DISPATCH_SCAFFOLD}
-
-            class DispatchBoom {{ message: string }}
-
-            class DispatchErr {{
-                v: int
-                implements baml.Comparable {{
-                    type CompareError = DispatchBoom
-                    function compare(self, other: Self) -> int throws DispatchBoom {{ return 0 }}
-                }}
-            }}
-
-            function use_err(xs: DispatchErr[]) -> DispatchErr[] throws never {{
-                dispatch_f(xs)
-            }}
-            "#
-        ),
-        "DispatchBoom",
-    );
-}
-
 // ── 02 Phase 5: performance / parity for the native fast path ───────────────
 
 #[tokio::test]
@@ -723,7 +708,7 @@ async fn perf_large_int_array_uses_native_fast_path() {
     // comparator path (CPS insertion sort) would make O(n²) ≈ 10⁷–10⁸ yields
     // into BAML and blow the coarse bound below by orders of magnitude — the
     // bound is the assertion that primitives no longer route through
-    // `sort_by` + `_compare_shim`.
+    // `sort_by` + an `a.cmp(b)` comparator.
     let start = std::time::Instant::now();
     let output = baml_test!(
         r#"
@@ -766,9 +751,9 @@ async fn perf_large_int_array_uses_native_fast_path() {
 
 #[test]
 fn phase6_sort_error_message_names_the_array_type() {
-    // The `Resume[].sort()` failure (no `Comparable` impl) names the array type
+    // The `Resume[].sort()` failure (no `Compare` impl) names the array type
     // and the missing `sort` member, with a stable `E0007` code. (A richer
-    // "implement Comparable or use sort_by" hint would live in the diagnostic
+    // "implement baml.ops.Compare or use sort_by" hint would live in the diagnostic
     // rendering layer rather than the `TirTypeError` Display — deferred.)
     let errors = collect_compile_errors(
         r#"

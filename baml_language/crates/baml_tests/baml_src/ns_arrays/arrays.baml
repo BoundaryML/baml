@@ -96,20 +96,18 @@ test "array_sort_floats" {
     assert.equal(xs, expected)
 }
 
-// PHASE-5 cutover: `sort()` is now the `Sortable` blanket method requiring
-// `T implements Comparable`. The previously-runtime rejections below became
-// compile errors and moved to Rust `assert_compile_error_*` tests in
-// `tests/comparable_sort.rs` (`phase5_*`):
-//   • `(int | float)[].sort()` — unions can't implement `Comparable`
+// `sort()` is the `Sortable` blanket method requiring `T implements
+// baml.ops.Compare`. The previously-runtime rejections below are compile
+// errors, covered by Rust `assert_compile_error_*` tests in
+// `tests/sort_compare.rs` (`phase5_*`):
+//   • `(int | float)[].sort()` — unions can't implement `Compare`
 //   • `(float | bigint)[].sort()` — likewise
 //   • `int?[].sort()` (optional = union)
-//   • `ArraySortItem[].sort()` (class without a `Comparable` impl)
+//   • `ArraySortItem[].sort()` (class without a `Compare` impl)
 //   • `(int | string)[].sort()` — rollback now pinned via `sort_by`
 //     (`array_sort_by_callback_throws`)
-// 02-PLAN cutover (reverses the 01b NaN decision): `float` now binds
-// `type CompareError = never` and orders by BAML's total float order, so
-// `float[].sort()` no longer rejects NaN — NaN sorts deterministically
-// after +inf.
+// `float` orders by BAML's total float order, so `float[].sort()` accepts NaN —
+// it sorts deterministically after +inf.
 test "array_sort_nan_sorts_last" {
     let xs = [1.0, float.nan()];
     xs.sort();
@@ -124,14 +122,14 @@ test "array_sort_nan_sorts_last" {
 
 test "array_sort_by_descending" {
     let xs = [1, 3, 2];
-    xs.sort_by((a: int, b: int) -> int { b - a });
+    xs.sort_by((a: int, b: int) -> baml.ops.Ordering { b.cmp(a) });
     let expected = [3, 2, 1];
     assert.equal(xs, expected)
 }
 
 test "array_sort_by_returns_self" {
     let xs = [1, 3, 2];
-    let result = xs.sort_by((a: int, b: int) -> int { a - b });
+    let result = xs.sort_by((a: int, b: int) -> baml.ops.Ordering { a.cmp(b) });
     assert.is_true(result == xs);
     result.push(4);
     let expected = [1, 2, 3, 4];
@@ -141,9 +139,9 @@ test "array_sort_by_returns_self" {
 test "array_sort_by_callback_throws" {
     let xs = [1, 3, 2];
     let caught = {
-        xs.sort_by((a: int, b: int) -> int throws string {
+        xs.sort_by((a: int, b: int) -> baml.ops.Ordering throws string {
             if (a == 2 || b == 2) { throw "bad compare" }
-            a - b
+            a.cmp(b)
         });
         false
     } catch (e) {
@@ -159,12 +157,12 @@ test "array_sort_by_later_merge_throw_does_not_write_back" {
     let xs = [4, 3, 2, 1];
     let comparisons = 0;
     assert.is_true({
-        xs.sort_by((a: int, b: int) -> int throws string {
+        xs.sort_by((a: int, b: int) -> baml.ops.Ordering throws string {
             comparisons += 1;
             // The first two calls sort the width-1 runs. The third call is the
             // first comparison in the next merge pass.
             if (comparisons == 3) { throw "later merge failed" }
-            a - b
+            a.cmp(b)
         });
         false
     } catch (e) {
@@ -183,7 +181,7 @@ test "array_sort_by_is_stable" {
         ArraySortItem { key: 2, label: "c", nullable: 2 },
         ArraySortItem { key: 1, label: "d", nullable: 1 }
     ];
-    xs.sort_by((a: ArraySortItem, b: ArraySortItem) -> int { a.key - b.key });
+    xs.sort_by((a: ArraySortItem, b: ArraySortItem) -> baml.ops.Ordering { a.key.cmp(b.key) });
     let labels = xs.map((x: ArraySortItem) -> string { x.label });
     let expected = ["b", "d", "a", "c"];
     assert.equal(labels, expected)
@@ -201,9 +199,9 @@ test "array_sort_by_comparison_count_is_n_log_n" {
         i -= 1;
     }
     let comparisons = 0;
-    xs.sort_by((a: int, b: int) -> int {
+    xs.sort_by((a: int, b: int) -> baml.ops.Ordering {
         comparisons += 1;
-        a - b
+        a.cmp(b)
     });
     assert.is_true(comparisons <= 4096);
     assert.equal(xs.at(0), 1);
@@ -216,9 +214,9 @@ test "array_sort_by_comparison_count_is_n_log_n" {
 test "array_sort_by_comparator_order_is_deterministic" {
     let seen: string[] = [];
     let xs = [4, 3, 2, 1];
-    xs.sort_by((a: int, b: int) -> int {
+    xs.sort_by((a: int, b: int) -> baml.ops.Ordering {
         seen.push(`${a}:${b}`);
-        a - b
+        a.cmp(b)
     });
     let expected = ["4:3", "2:1", "3:1", "3:2"];
     assert.equal(seen, expected)
@@ -317,9 +315,9 @@ test "array_sort_by_key_throw_does_not_write_back" {
     assert.equal(xs, expected)
 }
 
-// `sort_by_key` now requires the key type to be `Comparable` (it sorts by the
-// key's natural order, `Comparable.compare`). A nullable key (`int?` = a union)
-// cannot implement `Comparable`, so it is a *compile* error rather than the old
+// `sort_by_key` requires the key type to implement `baml.ops.Compare` (it sorts
+// by the key's natural order, `Compare.cmp`). A nullable key (`int?` = a union)
+// cannot implement `Compare`, so it is a *compile* error rather than the old
 // runtime `InvalidArgument` — pinned by the Rust test
 // `phase5_sort_by_key_nullable_key_is_compile_error`.
 

@@ -14,8 +14,8 @@
 //!   `Remainder`/`Negate` for the numeric primitives)
 //! - `root` — `BamlPackageBaml` (`deep_copy`, the numeric-array
 //!   reductions `_sum_int` / `_sum_float` / `_mean_float` / `_median_float`,
-//!   the saturating `_trunc_to_int`, and the `Sortable.sort` shims
-//!   `_compare_shim` / `_is_primitive_array` / `_rust_sort` / `_float_total_cmp`)
+//!   the saturating `_trunc_to_int`, and the `Sortable.sort` fast path
+//!   `_is_primitive_array` / `_rust_sort`)
 //!
 //! # Adding a new builtin
 //!
@@ -123,7 +123,7 @@ pub trait Continuation: Send {
 }
 
 /// Returns the dispatched callee's result unchanged. Shared by the single-call
-/// shims (`_compare_shim` and `string.to<T>`'s `from_string` dispatch) whose
+/// shims (`string.to<T>`'s `from_string` dispatch, `reflect.call_any`) whose
 /// only job is to dispatch one call and surface its value.
 pub(crate) struct PassThroughContinuation;
 
@@ -217,38 +217,6 @@ pub use generated::*;
 /// The VM's native function implementations.
 pub struct PackageBamlImpl;
 
-/// For a value `v` whose type implements `baml.Comparable`, look up the
-/// matching `compare` function and return a `BoundMethod { compare, receiver: v }`.
-///
-/// Resolution reads the impl-rule tables (`shim_rule_method`) — the block's
-/// spelling (in-body or out-of-body) is display-only and never consulted.
-/// The bound method has `receiver = v` baked in, so the VM inserts it as `self`
-/// and the comparison call only passes the `other` argument
-/// (`YieldToCall { args: [other] }`).
-///
-/// Used by the native `baml._compare_shim` (`root.rs`) that the BAML
-/// `Sortable.sort` passes to `sort_by` on its non-primitive path: `compare`'s
-/// two `Self` params make it undispatchable through an interface-typed value,
-/// so the per-pair comparison is resolved here on the receiver's runtime class
-/// (the homogeneous `T[]` guarantees the other element shares that class).
-pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, VmRustFnError> {
-    let resolved =
-        shim_rule_method(vm, v, "Comparable", "compare").map_err(VmRustFnError::InternalError)?;
-    let Some(resolved) = resolved else {
-        // `T extends Comparable` is checked at compile time, so no applicable
-        // rule means the bound and the impl-rule tables disagree - an invariant
-        // violation, not a condition the caller could have avoided. It also
-        // could not be reported on the declared `throws T.CompareError`
-        // channel.
-        return Err(VmRustFnError::InternalError(
-            VmInternalError::MissingNativeFunction {
-                name: "_compare_shim: element type does not implement Comparable".to_string(),
-            },
-        ));
-    };
-    Ok(rule_bound_method(vm, v, resolved))
-}
-
 /// A rule-resolved shim callee: one method entry of the receiver's impl rule,
 /// with its realized frame.
 pub(super) struct ShimRuleMethod {
@@ -325,8 +293,9 @@ fn rule_bound_method(vm: &mut BexVm, v: Value, resolved: ShimRuleMethod) -> Heap
 /// `to_string`, resolve it through the impl rules and return a
 /// `BoundMethod { to_string, receiver: v }`. `Ok(None)` when `v`'s type has no
 /// rule or its rule adopts the structural default body — the caller then
-/// renders `v` with the structural default. Used by the native
-/// `baml._to_string_shim` (`root.rs`) backing `string.from`.
+/// renders `v` with the structural default. Used by the override-honoring
+/// walker behind `baml._to_string_default` (`root.rs`), which renders nested
+/// values for `string.from`.
 pub(super) fn make_to_string_callee(
     vm: &mut BexVm,
     v: Value,

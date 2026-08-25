@@ -151,219 +151,6 @@ fn baml.Bool.random(rng: baml.random.Rng) -> bool {
     }
 }
 
-fn baml.Comparable.compare(_1: void, _2: void) -> void {
-    // Locals:
-    let _0: void // return
-    let _1: void // param
-    let _2: void // param
-
-    bb0: {
-        unreachable;
-    }
-}
-
-fn baml.<(int as baml.Comparable)>.compare(self: int, other: int) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // self // param
-    let _2: int // other // param
-    let _3: bool
-    let _4: bool
-
-    bb0: {
-        _3 = copy _1 < copy _2;
-        branch copy _3 -> [bb4, bb1];
-    }
-
-    bb1: {
-        _4 = copy _1 > copy _2;
-        branch copy _4 -> [bb3, bb2];
-    }
-
-    bb2: {
-        _0 = const 0_i64;
-        goto -> bb5;
-    }
-
-    bb3: {
-        _0 = const 1_i64;
-        goto -> bb5;
-    }
-
-    bb4: {
-        _0 = const -1_i64;
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn baml.<(bigint as baml.Comparable)>.compare(self: bigint, other: bigint) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: bigint // self // param
-    let _2: bigint // other // param
-    let _3: bool
-    let _4: bool
-
-    bb0: {
-        _3 = copy _1 < copy _2;
-        branch copy _3 -> [bb4, bb1];
-    }
-
-    bb1: {
-        _4 = copy _1 > copy _2;
-        branch copy _4 -> [bb3, bb2];
-    }
-
-    bb2: {
-        _0 = const 0_i64;
-        goto -> bb5;
-    }
-
-    bb3: {
-        _0 = const 1_i64;
-        goto -> bb5;
-    }
-
-    bb4: {
-        _0 = const -1_i64;
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn baml.<(string as baml.Comparable)>.compare(self: string, other: string) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: string // self // param
-    let _2: string // other // param
-    let _3: bool
-    let _4: bool
-
-    bb0: {
-        _3 = copy _1 < copy _2;
-        branch copy _3 -> [bb4, bb1];
-    }
-
-    bb1: {
-        _4 = copy _1 > copy _2;
-        branch copy _4 -> [bb3, bb2];
-    }
-
-    bb2: {
-        _0 = const 0_i64;
-        goto -> bb5;
-    }
-
-    bb3: {
-        _0 = const 1_i64;
-        goto -> bb5;
-    }
-
-    bb4: {
-        _0 = const -1_i64;
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
-    }
-}
-
-fn baml.Sortable.sort(_1: void) -> void {
-    // Locals:
-    let _0: void // return
-    let _1: void // param
-
-    bb0: {
-        unreachable;
-    }
-}
-
-fn baml.<(#0[] as baml.Sortable)>.sort(self: T[]) -> T[] {
-    // Locals:
-    let _0: T[] // _0 // return
-    let _1: T[] // self // param
-    let _2: bool
-    let _3: reflect.Type
-    let _4: reflect.Type
-    let _5: (T, T) -> int throws (T as baml.Comparable).CompareError
-    let _6: reflect.Type
-    let _7: reflect.Type
-
-    bb0: {
-        _3 = load_type(#0);
-        _2 = call const fn baml._is_primitive_array<copy _3>(copy _1) -> [bb1];
-    }
-
-    bb1: {
-        branch copy _2 -> [bb3, bb2];
-    }
-
-    bb2: {
-        _5 = make_closure lambda[0]<1 type_args>();
-        _6 = load_type((#0 as baml.Comparable).CompareError);
-        _7 = load_type(#0);
-        _0 = call const fn baml.Array.sort_by<copy _7, copy _6>(copy _1, copy _5) -> [bb4];
-    }
-
-    bb3: {
-        _4 = load_type(#0[]);
-        _0 = call const fn baml._rust_sort<copy _4>(copy _1) -> [bb4];
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(sort, 0)>(a: T, b: T) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: T // a // param
-    let _2: T // b // param
-    let _3: reflect.Type
-
-    bb0: {
-        _3 = load_type(#0);
-        _0 = call const fn baml._compare_shim<copy _3>(copy _1, copy _2) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml._compare_shim = builtin(vm)
-
-fn baml.<(float as baml.Comparable)>.compare(self: float, other: float) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: float // self // param
-    let _2: float // other // param
-
-    bb0: {
-        _0 = call const fn baml._float_total_cmp(copy _1, copy _2) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn baml._float_total_cmp = builtin(vm)
-
-fn baml._is_primitive_array = builtin(vm)
-
-fn baml._rust_sort = builtin(vm)
-
 fn baml.Array.filled = builtin(vm)
 
 fn baml.Array.generate(length: int, f: (int) -> T throws E) -> T[] {
@@ -599,7 +386,7 @@ fn baml.Array.sort_by_key(self: baml.Array, key: (T) -> U throws E) -> T[] {
     let _26: int
     let _27: reflect.Type
     let _28: int[]
-    let _29: (int, int) -> int throws (U as baml.Comparable).CompareError
+    let _29: (int, int) -> baml.ops.Ordering throws never
     let _30: reflect.Type
     let _31: reflect.Type
     let _32: T[] // sorted
@@ -689,7 +476,7 @@ fn baml.Array.sort_by_key(self: baml.Array, key: (T) -> U throws E) -> T[] {
 
     bb10: {
         _29 = make_closure lambda[0]<3 type_args>(copy _9);
-        _30 = load_type((#1 as baml.Comparable).CompareError);
+        _30 = load_type(never);
         _31 = load_type(int);
         _28 = call const fn baml.Array.sort_by<copy _31, copy _30>(copy _20, copy _29) -> [bb11];
     }
@@ -785,9 +572,9 @@ fn baml.Array.sort_by_key(self: baml.Array, key: (T) -> U throws E) -> T[] {
 }
 
 // lambda[0]
-fn .<lambda(Array.sort_by_key, 0)>(i: int, j: int) -> int {
+fn .<lambda(Array.sort_by_key, 0)>(i: int, j: int) -> baml.ops.Ordering {
     // Locals:
-    let _0: int // _0 // return
+    let _0: baml.ops.Ordering // _0 // return
     let _1: int // i // param
     let _2: int // j // param
     let _3: null | U
@@ -824,16 +611,16 @@ fn .<lambda(Array.sort_by_key, 0)>(i: int, j: int) -> int {
     bb4: {
         _10 = copy _7;
         _11 = copy _10;
-        _0 = virtual_call compare as baml.Comparable(copy _6, copy _11) -> [bb7];
+        _0 = virtual_call cmp as baml.ops.Compare(copy _6, copy _11) -> [bb7];
     }
 
     bb5: {
-        _0 = const 0_i64;
+        _0 = const baml.ops.Ordering.Equal;
         goto -> bb7;
     }
 
     bb6: {
-        _0 = const 0_i64;
+        _0 = const baml.ops.Ordering.Equal;
         goto -> bb7;
     }
 
@@ -13099,6 +12886,73 @@ fn baml.yaml.deserialize(s: string) -> T {
         return;
     }
 }
+
+fn baml.Sortable.sort(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.<(#0[] as baml.Sortable)>.sort(self: T[]) -> T[] {
+    // Locals:
+    let _0: T[] // _0 // return
+    let _1: T[] // self // param
+    let _2: bool
+    let _3: reflect.Type
+    let _4: reflect.Type
+    let _5: (T, T) -> baml.ops.Ordering throws never
+    let _6: reflect.Type
+    let _7: reflect.Type
+
+    bb0: {
+        _3 = load_type(#0);
+        _2 = call const fn baml._is_primitive_array<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        branch copy _2 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _5 = make_closure lambda[0]<1 type_args>();
+        _6 = load_type(never);
+        _7 = load_type(#0);
+        _0 = call const fn baml.Array.sort_by<copy _7, copy _6>(copy _1, copy _5) -> [bb4];
+    }
+
+    bb3: {
+        _4 = load_type(#0[]);
+        _0 = call const fn baml._rust_sort<copy _4>(copy _1) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(sort, 0)>(a: T, b: T) -> baml.ops.Ordering {
+    // Locals:
+    let _0: baml.ops.Ordering // _0 // return
+    let _1: T // a // param
+    let _2: T // b // param
+
+    bb0: {
+        _0 = virtual_call cmp as baml.ops.Compare(copy _1, copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml._is_primitive_array = builtin(vm)
+
+fn baml._rust_sort = builtin(vm)
 
 fn baml.String.from(value: T) -> string {
     // Locals:

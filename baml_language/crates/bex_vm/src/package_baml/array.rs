@@ -124,26 +124,15 @@ fn expect_bool(vm: &BexVm, value: Value) -> Result<bool, NativeCallResult> {
     }
 }
 
-fn expect_int(vm: &BexVm, value: Value) -> Result<i64, NativeCallResult> {
-    if let Some(i) = value.as_int() {
-        Ok(i)
-    } else {
-        Err(NativeCallResult::from(VmInternalError::TypeError {
-            expected: bex_vm_types::types::Type::Int,
-            got: vm.type_of(&value),
-        }))
-    }
-}
-
 // ── Natural-order sort machinery (`baml._rust_sort` fast path) ───────────────
 //
 // `Sortable.sort` routes homogeneous primitive arrays (int/bigint/string/
 // float) here via the `_is_primitive_array` guard; everything else goes
-// through `sort_by` + `_compare_shim`. The float domain orders by
+// through `sort_by` with an `a.cmp(b)` comparator. The float domain orders by
 // `float_order::cmp` — BAML's total float order, which gives NaN a defined
-// position — shared with `_float_total_cmp` (which backs `Comparable for
-// float`) and with the comparison opcodes, so the fast path and the
-// comparator path can never disagree on an ordering.
+// position — the same definition `baml.ops.Compare for float` and the
+// comparison opcodes use, so the fast path and the comparator path can never
+// disagree on an ordering.
 // The mixed-domain / null / non-primitive rejections below are defensive:
 // `_rust_sort` is only reached for arrays the type system already proved
 // homogeneous primitive.
@@ -781,16 +770,23 @@ impl SortByContinuation {
 
 impl Continuation for SortByContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        let cmp = match expect_int(vm, value) {
-            Ok(i) => i,
-            Err(e) => return e,
+        // The comparator is typed `-> baml.ops.Ordering throws never`, so a
+        // non-`Ordering` return is a compiler/VM invariant break rather than a
+        // possible runtime value.
+        let Some(cmp) = super::ops::ordering_from_value(vm, value) else {
+            return NativeCallResult::from(VmInternalError::TypeError {
+                expected: bex_vm_types::types::Type::Object(ObjectType::Variant),
+                got: vm.type_of(&value),
+            });
         };
-        if cmp <= 0 {
-            self.merged.push(self.source[self.left]);
-            self.left += 1;
-        } else {
+        // Stability: take the left run's element unless it strictly follows the
+        // right one, so `Equal` preserves the original relative order.
+        if cmp.is_gt() {
             self.merged.push(self.source[self.right]);
             self.right += 1;
+        } else {
+            self.merged.push(self.source[self.left]);
+            self.left += 1;
         }
         self.advance(vm)
     }

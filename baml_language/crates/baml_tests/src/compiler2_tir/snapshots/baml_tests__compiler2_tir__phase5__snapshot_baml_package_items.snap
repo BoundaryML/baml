@@ -6,7 +6,6 @@ namespace baml:
   class Array<T> { methods: [filled, generate, length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice] }
   class Bigint { methods: [abs, isqrt, pow, ilog, to_int, parse, random, _random_byte_count, _random_in_range] }
   class Bool { methods: [random] }
-  type Comparable
   type Concrete
   class Float { methods: [is_nan, is_infinite, is_finite, abs, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, _unit_from_draw, pi, e, golden_ratio, nan, inf] }
   type FloatStats
@@ -22,8 +21,6 @@ namespace baml:
   type ToString
   class Uint8Array { methods: [length, at, push, pop, concat, includes, index_of, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort] }
   function _cleanup_begin<T>
-  function _compare_shim<T>
-  function _float_total_cmp
   function _from_json_shim<T>
   function _is_primitive_array<T>
   function _median_float

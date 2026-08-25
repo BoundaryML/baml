@@ -10,7 +10,7 @@ function baml.<(#0[] as baml.Sortable)>.sort(self: #0[]) -> #0[] {
 
   L0:
     load_type #0
-    load_type (#0 as baml.Comparable).CompareError
+    load_type never
     load_var self
     load_type #0
     make_closure .<lambda(sort, 0)>, captures=0, ntypeargs=1
@@ -23,39 +23,6 @@ function baml.<(#0[] as baml.Sortable)>.sort(self: #0[]) -> #0[] {
     call baml._rust_sort
 
   L2:
-    return
-}
-
-function baml.<(bigint as baml.Comparable)>.compare(self: bigint, other: bigint) -> int {
-    load_var2 1 2
-    cmp_bigint_op <
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
-    load_var2 1 2
-    cmp_bigint_op >
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const 0
-    jump L4
-
-  L2:
-    load_const 1
-    jump L4
-
-  L3:
-    load_const -1
-
-  L4:
-    return
-}
-
-function baml.<(float as baml.Comparable)>.compare(self: float, other: float) -> int {
-    load_var2 1 2
-    call baml._float_total_cmp
     return
 }
 
@@ -100,33 +67,6 @@ function baml.<(float[] as baml.Summable)>.sum(self: float[]) -> float {
     return
 }
 
-function baml.<(int as baml.Comparable)>.compare(self: int, other: int) -> int {
-    load_var2 1 2
-    cmp_int_op <
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
-    load_var2 1 2
-    cmp_int_op >
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const 0
-    jump L4
-
-  L2:
-    load_const 1
-    jump L4
-
-  L3:
-    load_const -1
-
-  L4:
-    return
-}
-
 function baml.<(int[] as baml.Summable)>.sum(self: int[]) -> int {
     load_var self
     call baml._sum_int
@@ -136,33 +76,6 @@ function baml.<(int[] as baml.Summable)>.sum(self: int[]) -> int {
 function baml.<(reflect.Type as baml.ToString)>.to_string(self: reflect.Type) -> string {
     load_var self
     call reflect.Type._to_string_impl
-    return
-}
-
-function baml.<(string as baml.Comparable)>.compare(self: string, other: string) -> int {
-    load_var2 1 2
-    cmp_op <
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
-    load_var2 1 2
-    cmp_op >
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const 0
-    jump L4
-
-  L2:
-    load_const 1
-    jump L4
-
-  L3:
-    load_const -1
-
-  L4:
     return
 }
 
@@ -459,7 +372,7 @@ function baml.Array.slice(self: #0[], start: int, end: int) -> #0[] {
 function baml.Array.some(self: #0[], predicate: (#0) -> bool throws #1) -> bool {
 }
 
-function baml.Array.sort_by(self: #0[], compare: (#0, #0) -> int throws #1) -> #0[] {
+function baml.Array.sort_by(self: #0[], compare: (#0, #0) -> baml.ops.Ordering throws #1) -> #0[] {
 }
 
 function baml.Array.sort_by_key(self: #0[], key: (#0) -> #1 throws #2) -> #0[] {
@@ -528,7 +441,7 @@ function baml.Array.sort_by_key(self: #0[], key: (#0) -> #1 throws #2) -> #0[] {
 
   L5:
     load_type int
-    load_type (#1 as baml.Comparable).CompareError
+    load_type never
     load_var order
     load_type #0
     load_type #1
@@ -1291,12 +1204,6 @@ function baml.Uint8Array.zeroes(size: int) -> uint8array {
 }
 
 function baml._cleanup_begin(value: #0) -> bool {
-}
-
-function baml._compare_shim(a: #0, b: #0) -> int {
-}
-
-function baml._float_total_cmp(a: float, b: float) -> int {
 }
 
 function baml._from_json_shim(j: baml.json.json) -> #0 {

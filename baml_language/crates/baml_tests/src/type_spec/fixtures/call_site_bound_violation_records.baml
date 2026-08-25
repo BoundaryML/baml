@@ -9,7 +9,7 @@
 // channel - `int` does not implement `Need`, so the call-site
 // Implements obligation fails definitively (zero impl candidates).
 // The same path enforces stdlib bounds like `sort_by_key`'s
-// `U extends Comparable`. S17 renders the diagnostic.
+// `U extends baml.ops.Compare`. S17 renders the diagnostic.
 interface Need {
     function need(self) -> int throws never
 }

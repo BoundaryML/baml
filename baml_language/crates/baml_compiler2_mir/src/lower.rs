@@ -1838,8 +1838,8 @@ struct LoweringContext<'db> {
     // `path_segment_types` for a lambda-parameter receiver (`(a: T) -> a.m()`),
     // so interface dispatch on such a receiver falls back to this map to learn
     // its static type — e.g. a bounded type variable whose `extends` bound
-    // names the dispatching interface (`a.compare(b)` where `T extends
-    // Comparable`). Saved/restored across nested lambdas.
+    // names the dispatching interface (`a.cmp(b)` where `T extends
+    // baml.ops.Compare`). Saved/restored across nested lambdas.
     lambda_param_tir_types: FxHashMap<Name, Tir2Ty>,
 
     /// The `(local, resolved static type)` of the value the enclosing `match` is
@@ -7465,8 +7465,7 @@ impl<'db> LoweringContext<'db> {
     /// concrete `implements` block has already been resolved to the block's
     /// subject — the *MIR local* type keeps the unresolved `Self` (see
     /// `lower_signature_runtime_ty`), and reading that instead would deoptimize
-    /// `int`'s `baml.Comparable` impl (`<(int as baml.Comparable)>.compare`)
-    /// and friends off the opcode path.
+    /// `baml.ops.Compare$for$int.cmp` and friends off the opcode path.
     fn ordering_uses_primitive_opcode(&self, lhs: AstExprId, rhs: AstExprId) -> bool {
         /// `arith_primitive`, minus the `null`-transparency carve-out.
         fn orderable(ty: &RuntimeTy) -> bool {

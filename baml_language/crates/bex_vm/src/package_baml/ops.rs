@@ -674,3 +674,26 @@ fn equals_qtn() -> TypeName {
         Name::new("Equals"),
     )
 }
+
+/// Read a `baml.ops.Ordering` value back as a Rust [`std::cmp::Ordering`].
+///
+/// Matches on the variant's declared NAME rather than its index, so reordering
+/// the enum in `comparison.baml` cannot silently invert a sort. `None` for any
+/// value that is not an `Ordering` variant — a `throws never` comparator
+/// returning something else is a compiler/VM invariant break, which callers
+/// surface as an internal error rather than guessing an order.
+pub(super) fn ordering_from_value(vm: &BexVm, value: Value) -> Option<std::cmp::Ordering> {
+    let ptr = value.as_object_ptr()?;
+    let Object::Variant(variant) = vm.get_object(ptr) else {
+        return None;
+    };
+    let Object::Enum(enm) = vm.get_object(variant.enm) else {
+        return None;
+    };
+    match enm.variants.get(variant.index)?.name.as_str() {
+        "Less" => Some(std::cmp::Ordering::Less),
+        "Equal" => Some(std::cmp::Ordering::Equal),
+        "Greater" => Some(std::cmp::Ordering::Greater),
+        _ => None,
+    }
+}
