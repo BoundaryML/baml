@@ -140,21 +140,27 @@ pub fn new(
     );
 
     let diagnostics = baml_db::collect_diagnostics(&db);
-    let errors: Vec<String> = diagnostics
+    if diagnostics
         .iter()
-        .filter(|d| d.severity == baml_compiler_diagnostics::Severity::Error)
-        .map(|d| {
-            let location = d
-                .primary_span()
-                .and_then(|span| db.file_id_to_path(span.file_id))
-                .map(|path| format!("{}: ", path.display()))
-                .unwrap_or_default();
-            format!("{location}{}", d.message)
-        })
-        .collect();
-    if !errors.is_empty() {
+        .any(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
+    {
+        let source_files = baml_compiler2_hir::compiler2_all_files(&db);
+        let sources = source_files
+            .iter()
+            .map(|file| (file.file_id(&db), file.text(&db).clone()))
+            .collect();
+        let file_paths = source_files
+            .iter()
+            .map(|file| (file.file_id(&db), file.path(&db)))
+            .collect();
+        let message = baml_compiler_diagnostics::render::render_diagnostics(
+            &diagnostics,
+            &sources,
+            &file_paths,
+            &baml_compiler_diagnostics::render::RenderConfig::agent(),
+        );
         return Err(RuntimeError::Compilation {
-            message: format!("{} compile error(s):\n{}", errors.len(), errors.join("\n")),
+            message,
         });
     }
     let program = db
@@ -214,6 +220,25 @@ mod bytecode_artifact_tests {
     use sys_native::SysOpsExt as _;
 
     use super::*;
+
+    #[test]
+    fn synchronous_build_returns_rendered_source_diagnostics() {
+        let root = vfs::VfsPath::new(vfs::MemoryFS::new());
+        let files = HashMap::from([(
+            FsPath::from_str("/p/a.baml".to_string()),
+            "function main() -> int { nope( }".to_string(),
+        )]);
+
+        let error = match new(root, sys_ops::SysOps::native(), files) {
+            Ok(_) => panic!("invalid source unexpectedly compiled"),
+            Err(error) => error.to_string(),
+        };
+
+        assert!(error.contains("a.baml:1:"), "{error}");
+        assert!(error.contains("error[E"), "{error}");
+        assert!(error.contains("unexpected token"), "{error}");
+        assert!(!error.contains("Bex is outdated"), "{error}");
+    }
 
     #[test]
     fn rejects_format_skew_before_decoding_the_program() {
