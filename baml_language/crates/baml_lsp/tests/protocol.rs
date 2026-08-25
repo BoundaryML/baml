@@ -1410,6 +1410,41 @@ fn inlay_hints_appear_for_inferred_let_types() {
     );
 }
 
+#[test]
+fn inlay_hints_appear_for_inferred_throws() {
+    let mut harness = Harness::new();
+    harness.fs.add_project(&harness.ws);
+    let fixture = "class Boom {}\n\nfunction fail() -> int {\n    throw Boom {}\n}\n";
+    harness.fs.write(harness.ws.join("main.baml"), fixture);
+    harness.init_session(SessionKey(1), &[lsp_types::PositionEncodingKind::UTF16]);
+    harness.settle();
+
+    let uri = harness.uri("main.baml");
+    let response = harness
+        .request(
+            SessionKey(1),
+            "textDocument/inlayHint",
+            serde_json::json!({
+                "textDocument": { "uri": uri },
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 5, "character": 0 },
+                },
+            }),
+        )
+        .expect("inlay hints succeed");
+    let hints = response.as_array().expect("hint array");
+    let hint = hints
+        .iter()
+        .find(|hint| hint["label"] == " throws Boom")
+        .unwrap_or_else(|| panic!("inferred throws hint present, got: {hints:?}"));
+    assert_eq!(hint["kind"], 1);
+    assert_eq!(
+        hint["position"],
+        serde_json::json!({ "line": 2, "character": 22 })
+    );
+}
+
 // ── 2.3b-3 substrate: cancellation, incremental sync, diffing, rescue ────
 
 /// `$/cancelRequest` cancels the running read's Salsa token: the parked job

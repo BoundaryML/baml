@@ -738,7 +738,9 @@ pub(super) fn inlay_hint(
             position: codec.offset_to_position(u32::from(annotation.offset)),
             label: lsp_types::InlayHintLabel::String(annotation.label.clone()),
             kind: Some(match annotation.kind {
-                baml_ide::AnnotationKind::Type => lsp_types::InlayHintKind::TYPE,
+                baml_ide::AnnotationKind::Type | baml_ide::AnnotationKind::Throws => {
+                    lsp_types::InlayHintKind::TYPE
+                }
                 baml_ide::AnnotationKind::Parameter => lsp_types::InlayHintKind::PARAMETER,
             }),
             text_edits: None,

@@ -1,4 +1,5 @@
-//! Inline type / parameter-name annotations for BAML files (inlay hints).
+//! Inline type, inferred-throws, and parameter-name annotations for BAML
+//! files (inlay hints).
 //!
 //! Provides `file_annotations(db, file) -> &Vec<InlineAnnotation>` — a Salsa
 //! tracked query that walks expression-body functions in a file
@@ -19,6 +20,17 @@
 //!
 //! The hint is positioned at the end of the pattern span (just after the
 //! variable name token).
+//!
+//! ## Inferred throws hints on function declarations
+//!
+//! For each user-written function without an explicit `throws` clause, we
+//! display its inferred non-`never` throws contract after the return type:
+//!
+//! ```baml
+//! function load() -> Data  // -> function load() -> Data throws baml.errors.Io
+//! ```
+//!
+//! The hint is positioned at the end of the return-type span.
 //!
 //! ## Parameter-name hints on call expressions
 //!
@@ -73,6 +85,8 @@ type SemanticIndex<'a> = baml_compiler2_hir::semantic_index::FileSemanticIndex<'
 pub enum AnnotationKind {
     /// A type hint after a variable name: `x: int`
     Type,
+    /// An inferred throws contract after a function return type.
+    Throws,
     /// A parameter-name hint before a call argument: `name:`
     Parameter,
 }
@@ -129,7 +143,31 @@ pub fn file_annotations(
         // calls, and since we don't recurse into skipped functions, their
         // internals stay hidden.
         match func_data.metadata.origin {
-            FunctionOrigin::UserDefined | FunctionOrigin::Internal => {}
+            FunctionOrigin::UserDefined => {
+                if func_data.throws.is_none()
+                    && let Some(return_type) = func_data.return_type
+                {
+                    let throws = baml_compiler2_hir_ty::callable::callable_throws(db, func_loc).0;
+                    if !should_suppress_type(&throws) {
+                        let source_map =
+                            baml_compiler2_ppir::item_data::function_source_map(db, func_loc);
+                        let return_type_span = source_map.type_refs.span(return_type);
+                        if !return_type_span.is_empty() {
+                            out.push(InlineAnnotation {
+                                offset: return_type_span.end(),
+                                label: format!(
+                                    " throws {}",
+                                    display_ty_for_file(db, file, &throws)
+                                ),
+                                kind: AnnotationKind::Throws,
+                                padding_left: false,
+                                padding_right: true,
+                            });
+                        }
+                    }
+                }
+            }
+            FunctionOrigin::Internal => {}
             FunctionOrigin::Companion | FunctionOrigin::AutoDerive => continue,
         }
         if baml_compiler2_ppir::item_data::function_llm_meta(db, func_loc).is_some() {
@@ -594,6 +632,57 @@ class Greeter {
         assert!(
             labels.iter().any(|label| label.starts_with(": ")),
             "expected a let type hint inside the method body, got {labels:?}"
+        );
+    }
+
+    #[test]
+    fn annotations_show_inferred_throws_on_function_declarations() {
+        let mut builder = ProjectTest::builder();
+        let source = r#"
+class Boom {}
+
+function direct() -> int {
+    throw Boom {}
+}
+
+function propagated() -> int {
+    direct()
+}
+
+function explicit() -> int throws Boom {
+    throw Boom {}
+}
+
+function safe() -> int {
+    1
+}
+"#;
+        builder.source("main.baml", source);
+        let project = builder.build();
+
+        let hints = file_annotations(&project.db, project.files[0]);
+        let throws_hints: Vec<_> = hints
+            .iter()
+            .filter(|hint| hint.kind == AnnotationKind::Throws)
+            .collect();
+
+        assert_eq!(
+            throws_hints
+                .iter()
+                .map(|hint| hint.label.as_str())
+                .collect::<Vec<_>>(),
+            vec![" throws Boom", " throws Boom"]
+        );
+        let expected_offsets =
+            ["function direct() -> int", "function propagated() -> int"].map(|signature| {
+                TextSize::try_from(source.find(signature).unwrap() + signature.len()).unwrap()
+            });
+        assert_eq!(
+            throws_hints
+                .iter()
+                .map(|hint| hint.offset)
+                .collect::<Vec<_>>(),
+            expected_offsets
         );
     }
 
