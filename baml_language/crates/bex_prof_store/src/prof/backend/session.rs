@@ -204,6 +204,11 @@ fn configured_store_root() -> &'static OnceLock<std::path::PathBuf> {
     &CONFIGURED
 }
 
+fn global_setup_diagnostic_cell() -> &'static OnceLock<SetupDiagnostic> {
+    static DIAGNOSTIC: OnceLock<SetupDiagnostic> = OnceLock::new();
+    &DIAGNOSTIC
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AwaitClockInvalid;
 
@@ -470,8 +475,22 @@ impl ProfilerSession {
             {
                 config.store_root.clone_from(root);
             }
-            Self::from_config(config).0
+            let (session, diagnostic) = Self::from_config(config);
+            if let Some(diagnostic) = diagnostic {
+                let _ = global_setup_diagnostic_cell().set(diagnostic);
+            }
+            session
         })
+    }
+
+    /// The setup diagnostic the global session produced when it came up
+    /// disabled: the one explanation for "the run succeeded but wrote no
+    /// store". `None` while the global session is uninitialized or healthy.
+    /// Hosts surface it in their verbose/diagnostic channel — a profiling
+    /// failure must never break the program, but it must be discoverable.
+    #[must_use]
+    pub fn global_setup_diagnostic() -> Option<SetupDiagnostic> {
+        global_setup_diagnostic_cell().get().cloned()
     }
 
     /// Resolves the global session's store root before its first use (the

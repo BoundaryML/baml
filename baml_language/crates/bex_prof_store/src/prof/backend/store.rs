@@ -125,7 +125,16 @@ pub struct StoreOpenError {
 
 impl std::fmt::Display for StoreOpenError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "profiling store open failed: {:?}", self.reason)
+        // The OS error is the diagnosis ("os error 5"); the reason alone
+        // only restates the symptom.
+        match &self.source {
+            Some(source) => write!(
+                formatter,
+                "profiling store open failed: {:?} ({source})",
+                self.reason
+            ),
+            None => write!(formatter, "profiling store open failed: {:?}", self.reason),
+        }
     }
 }
 

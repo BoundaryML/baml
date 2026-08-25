@@ -49,7 +49,10 @@ fn query_reads_back_a_run_with_the_documented_contract() {
     let dir = temp.path();
     project(dir);
 
-    let run = run_baml_cli(&cli, dir, &["run", "main"]);
+    // `-v` surfaces the profiler's setup diagnostic on stderr: when the
+    // store is missing, the failure message below carries the reason
+    // instead of just the symptom.
+    let run = run_baml_cli(&cli, dir, &["run", "main", "-v"]);
     assert!(
         run.status.success(),
         "baml run: {}",
@@ -57,7 +60,8 @@ fn query_reads_back_a_run_with_the_documented_contract() {
     );
     assert!(
         dir.join(".baml/profiles-v1/streams").is_dir(),
-        "the run writes the profile store"
+        "the run writes the profile store; stderr: {}",
+        String::from_utf8_lossy(&run.stderr)
     );
 
     // Executions idiom, table output, complete outcome, exit 0.
