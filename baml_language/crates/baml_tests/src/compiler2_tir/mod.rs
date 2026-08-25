@@ -134,6 +134,20 @@ pub(crate) mod support {
         }
     }
 
+    fn type_expr_desc(type_expr: &baml_compiler2_ast::TypeExpr, body: &ExprBody) -> String {
+        let mut rendered = type_expr.to_string();
+        let mut operands = Vec::new();
+        type_expr.unreflect_operands(&mut operands);
+        for operand in operands {
+            rendered = rendered.replacen(
+                "unreflect(…)",
+                &format!("unreflect({})", expr_desc(operand, body)),
+                1,
+            );
+        }
+        rendered
+    }
+
     fn expr_desc(expr_id: ExprId, body: &ExprBody) -> String {
         let expr = &body.exprs[expr_id];
         match expr {
@@ -257,15 +271,7 @@ pub(crate) mod support {
                 } else {
                     let tys: Vec<_> = type_args
                         .iter()
-                        .map(|arg| match &arg.kind {
-                            baml_compiler2_ast::TypeExprKind::Unreflect {
-                                operand: Some(operand),
-                                ..
-                            } => {
-                                format!("unreflect({})", expr_desc(*operand, body))
-                            }
-                            _ => arg.to_string(),
-                        })
+                        .map(|arg| type_expr_desc(arg, body))
                         .collect();
                     format!("<{}>", tys.join(", "))
                 };

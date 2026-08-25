@@ -1949,11 +1949,13 @@ impl<'db> InferenceContext<'db> {
         if matches!(expected.kind(), TyKind::TypeVar(param, _) if runtime_params.contains(param)) {
             return true;
         }
-        if !runtime_params
-            .iter()
-            .any(|param| ty_mentions_param(&expected, param))
+        if !actual.has_infer()
+            && !expected.has_infer()
+            && !runtime_params
+                .iter()
+                .any(|param| ty_mentions_param(&expected, param))
         {
-            return self.probe_sub(&actual, &expected);
+            return self.cached_subtype(&actual, &expected);
         }
 
         match (actual.kind(), expected.kind()) {
@@ -2085,21 +2087,13 @@ impl<'db> InferenceContext<'db> {
             // Projections are resolved by `Sub`; their head may legitimately
             // differ from the concrete type they reduce to.
             (_, TyKind::AssociatedTypeProjection { .. }) => true,
+            // Open inference and rigid generic leaves carry no statically
+            // inspectable shape. The committed `Sub` relation immediately
+            // after this guard owns their bounds and obligations.
+            (TyKind::Infer { .. } | TyKind::TypeVar(..), _)
+            | (_, TyKind::Infer { .. } | TyKind::TypeVar(..)) => true,
             _ => false,
         }
-    }
-
-    /// Ask the ordinary relation for a verdict without retaining any bounds,
-    /// obligations, or deferred pairs deposited by that speculative check.
-    fn probe_sub(&mut self, actual: &Ty, expected: &Ty) -> bool {
-        let snapshot = self.table.snapshot();
-        let obligations_len = self.obligations.len();
-        let deferred_subs_len = self.deferred_subs.len();
-        let result = self.sub(actual, expected);
-        self.table.rollback_to(snapshot);
-        self.obligations.truncate(obligations_len);
-        self.deferred_subs.truncate(deferred_subs_len);
-        result
     }
 
     /// Checking mode: infer with the expectation, then constrain -
@@ -8200,6 +8194,14 @@ impl<'db> InferenceContext<'db> {
         self.report_escaping_carriers(call, escaping, escape);
     }
 
+    /// A class literal publishes its instantiated class type directly. Every
+    /// inline runtime slot is therefore embedded in that result, including
+    /// carriers nested inside a nominal argument.
+    fn report_object_runtime_type_escape(&mut self, object: ExprId) {
+        let escaping = self.escaping_carriers(object, |_| true);
+        self.report_escaping_carriers(object, escaping, RuntimeTypeEscape::Value);
+    }
+
     /// The carrier expressions of `call`'s inline `unreflect(...)` slots whose
     /// parameter `escapes`.
     fn escaping_carriers(
@@ -8649,7 +8651,7 @@ impl<'db> InferenceContext<'db> {
         for spread in spreads {
             self.check_expr(body, spread.expr, &object_ty);
         }
-        self.report_runtime_type_escape(object, &object_ty, RuntimeTypeEscape::Value);
+        self.report_object_runtime_type_escape(object);
         object_ty
     }
 
@@ -8777,7 +8779,7 @@ impl<'db> InferenceContext<'db> {
         for spread in spreads {
             self.check_expr(body, spread.expr, &object_ty);
         }
-        self.report_runtime_type_escape(object, &object_ty, RuntimeTypeEscape::Value);
+        self.report_object_runtime_type_escape(object);
         object_ty
     }
 

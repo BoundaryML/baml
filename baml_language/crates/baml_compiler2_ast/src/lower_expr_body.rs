@@ -13,12 +13,12 @@ use text_size::TextRange;
 use crate::{
     LoweringDiagnostic,
     ast::{
-        ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
-        CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionDefaults,
-        LambdaDef, LambdaKind, LetDef, LetOrigin, Literal, LoopOrigin, MapExprEntry, MatchArm,
-        MatchArmId, ObjectExprField, Param, PatId, Pattern, SpreadField, Stmt, StmtId,
-        TemplateIfBranch, TemplateSegment, TemplateTag, TypeAnnotId, TypeExpr, TypeExprKind,
-        UnaryOp,
+        ArrayRestPat, AssignOp, AssociatedTypeBinding, AstSourceMap, BinaryOp, CallArg, CatchArm,
+        CatchArmId, CatchClause, CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat,
+        FunctionDefaults, LambdaDef, LambdaKind, LetDef, LetOrigin, Literal, LoopOrigin,
+        MapExprEntry, MatchArm, MatchArmId, ObjectExprField, Param, PatId, Pattern, SpreadField,
+        Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag, TypeAnnotId, TypeExpr,
+        TypeExprKind, UnaryOp,
     },
 };
 
@@ -1223,6 +1223,24 @@ impl LoweringContext {
         let mut ty = crate::lower_type_expr::lower_type_expr_node(type_expr, &mut self.diags);
         self.attach_body_type_operands(type_expr, &mut ty);
         ty
+    }
+
+    /// Lower an associated binding written in this body through the same
+    /// body-aware road as every other type expression. The item-level helper
+    /// cannot allocate `unreflect(...)` carriers into this expression arena.
+    fn lower_body_associated_type_binding(
+        &mut self,
+        binding: &baml_compiler_syntax::ast::AssociatedTypeDecl,
+    ) -> Option<AssociatedTypeBinding> {
+        let name = binding.name()?;
+        let ty = binding
+            .default_or_binding()
+            .map(|ty| self.lower_body_type_expr(&ty))
+            .unwrap_or_else(|| TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
+        Some(AssociatedTypeBinding {
+            name: Name::new(name.text()),
+            ty: Box::new(ty),
+        })
     }
 
     fn warn_const_introducer(&mut self, span: TextRange) {
@@ -2812,16 +2830,7 @@ impl LoweringContext {
             .filter(|args_node| args_node.kind() == SyntaxKind::TYPE_ARGS)
             .flat_map(|args_node| args_node.children())
             .filter_map(baml_compiler_syntax::ast::AssociatedTypeDecl::cast)
-            .filter_map(|binding| {
-                let mut lowered = crate::lower_type_expr::lower_associated_type_binding(
-                    &binding,
-                    &mut self.diags,
-                )?;
-                if let Some(ty) = binding.default_or_binding() {
-                    self.attach_body_type_operands(&ty, &mut lowered.ty);
-                }
-                Some(lowered)
-            })
+            .filter_map(|binding| self.lower_body_associated_type_binding(&binding))
             .collect();
 
         let fields: Vec<FieldPat> = node
