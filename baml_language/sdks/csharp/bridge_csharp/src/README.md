@@ -57,16 +57,16 @@ class. The unsuffixed method is synchronous; the `Async` method returns a
 token:
 
 ```csharp
-using CsharpSlice;
+using CsharpBasicCalls;
 
-string result = Functions.PrimitiveSlice(
+string result = Functions.BasicCalls(
     flag: true,
     count: 42,
     ratio: 1.25,
     text: "hello",
     nullable: null,
     cancellationToken);
-string asyncResult = await Functions.PrimitiveSliceAsync(
+string asyncResult = await Functions.BasicCallsAsync(
     flag: false,
     count: -17,
     ratio: -2.5,
@@ -267,7 +267,7 @@ Catch the narrowest useful type:
 ```csharp
 try
 {
-    _ = await Functions.PrimitiveSliceAsync(
+    _ = await Functions.BasicCallsAsync(
         true, 1, 1.0, text, null, cancellationToken);
 }
 catch (BamlTypeMismatchException error)
@@ -321,7 +321,7 @@ public sealed class PrimitiveService : IPrimitiveService
     public Task<string> EchoAsync(
         string text,
         CancellationToken cancellationToken) =>
-        CsharpSlice.Functions.PrimitiveSliceAsync(
+        CsharpBasicCalls.Functions.BasicCallsAsync(
             flag: true,
             count: 1,
             ratio: 1.0,
