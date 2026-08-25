@@ -991,8 +991,12 @@ jobs:
             baml_language/sdks/csharp/**/bin
             baml_language/sdk_tests/crates/csharp/*/obj
             baml_language/sdk_tests/crates/csharp/*/bin
-          key: csharp-msbuild-v1-${{ matrix.os-label }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: csharp-msbuild-v1-${{ matrix.os-label }}-
+          # The pinned SDK version is part of the key (no versionless
+          # fallback): the backdate step trusts the SDK's content because
+          # dotnet-version pins it, so an SDK bump must start a cold cache
+          # rather than lean on secondary invalidation signals.
+          key: csharp-msbuild-v1-${{ matrix.os-label }}-sdk10.0.301-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: csharp-msbuild-v1-${{ matrix.os-label }}-sdk10.0.301-
 
       - name: "Backdate unchanged C# sources"
         if: matrix.sdk-label == 'csharp'
