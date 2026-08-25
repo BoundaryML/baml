@@ -2,10 +2,9 @@
 source: crates/baml_tests/src/type_spec/sweep.rs
 expression: report
 ---
-hir_ty error-channel entries: 3
+hir_ty error-channel entries: 2
 panics: 0
 
 == hir_ty error channel
 ns_optional_chain_type_args/optional_chain_type_args.baml:8220..8247 `animal(whi...peak<int>()`: expected user.optional_chain_type_args.Speaker, got user.optional_chain_type_args.Cat | user.optional_chain_type_args.Dog
 ns_optional_chain_type_args/optional_chain_type_args.baml:8638..8662 `pair(which)?.tag<bool>()`: expected user.optional_chain_type_args.Tagged, got user.optional_chain_type_args.Pair<int> | user.optional_chain_type_args.Pair<string>
-ns_runtime_type_binding_generic_calls/runtime_type_binding_generic_calls.baml:3109..3125 `EmptyOf<Bound>()`: expected Bound[], got Bound[]

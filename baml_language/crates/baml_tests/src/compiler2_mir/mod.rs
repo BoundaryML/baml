@@ -788,7 +788,7 @@ function f(t: reflect.Type, value: unknown) -> bool {
 #[test]
 fn nested_runtime_type_atoms_bind_slots_before_loading_templates() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Wrapper<T> { value T }
@@ -808,7 +808,7 @@ function f(t: reflect.Type, value: unknown) -> bool {
 }
 "#,
     );
-    baml_project::testing::assert_no_diagnostic_errors(&db);
+    baml_db::testing::assert_no_diagnostic_errors(&db);
     mir_snapshot!(
         "nested_runtime_type_atoms_bind_slots_before_loading_templates",
         render_mir(&db, file)

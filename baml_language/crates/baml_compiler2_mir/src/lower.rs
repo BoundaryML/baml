@@ -1754,6 +1754,11 @@ struct LoweringContext<'db> {
     /// captured cells or object fields after a successful test.
     tested_pattern_values: HashMap<PatMetadataKey, Local>,
     atomic_pattern_test: bool,
+    /// Runtime type operands already lowered in this lexical frame. Pattern
+    /// lowering can visit the same scoped binding during both structural-let
+    /// pre-emission and an or-alternative's runtime test; its expression must
+    /// still execute only once.
+    emitted_runtime_type_binding_operands: HashSet<ExprMetadataKey>,
 
     // The FileScopeId of the expression body currently being lowered.
     // Updated when descending into lambda bodies (Phase 3+).
@@ -2380,6 +2385,7 @@ impl<'db> LoweringContext<'db> {
             match_scrutinee: None,
             tested_pattern_values: HashMap::new(),
             atomic_pattern_test: false,
+            emitted_runtime_type_binding_operands: HashSet::new(),
             current_scope: func_scope_id,
             current_metadata_scope: MetadataScope::Body(func_scope_id),
             body: expr_body,
@@ -2462,6 +2468,7 @@ impl<'db> LoweringContext<'db> {
             match_scrutinee: None,
             tested_pattern_values: HashMap::new(),
             atomic_pattern_test: false,
+            emitted_runtime_type_binding_operands: HashSet::new(),
             current_scope: let_scope_id,
             current_metadata_scope: MetadataScope::Body(let_scope_id),
             body: expr_body,
@@ -10352,6 +10359,10 @@ impl LoweringContext<'_> {
 
     fn emit_scoped_type_binding(&mut self, binding: &crate::inference_provider::ScopedTypeBinding) {
         let value = if let Some(operand) = binding.operand {
+            let key = self.expr_metadata_key(operand);
+            if !self.emitted_runtime_type_binding_operands.insert(key) {
+                return;
+            }
             self.lower_to_operand(operand)
         } else if let Some(template_ty) = &binding.template_ty {
             let generic_params = self.enclosing_generic_params();

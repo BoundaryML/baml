@@ -76,7 +76,11 @@ impl<'db> InferenceContext<'db> {
         let scrut_ty = match written_scrutinee {
             Some(type_ref) => {
                 let mut nested = Vec::new();
-                super::collect_unreflect_type_refs(&self.type_refs.store, type_ref, &mut nested);
+                super::collect_unreflect_type_refs(
+                    &self.type_refs.store,
+                    self.type_refs.raw_id(type_ref),
+                    &mut nested,
+                );
                 for (_, operand) in nested {
                     self.validate_runtime_type_operand(body, operand);
                 }
@@ -435,7 +439,11 @@ impl<'db> InferenceContext<'db> {
         let mut operands = Vec::new();
         for type_ref in written_refs {
             let mut nested = Vec::new();
-            super::collect_unreflect_type_refs(&self.type_refs.store, type_ref, &mut nested);
+            super::collect_unreflect_type_refs(
+                &self.type_refs.store,
+                self.type_refs.raw_id(type_ref),
+                &mut nested,
+            );
             operands.extend(nested.into_iter().map(|(_, operand)| operand));
         }
         for operand in operands {

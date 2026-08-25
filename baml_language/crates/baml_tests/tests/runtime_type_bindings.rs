@@ -125,6 +125,32 @@ async fn scoped_type_binding_evaluates_once_types_contracts_and_widens_on_escape
 }
 
 #[tokio::test]
+async fn structural_let_or_pattern_evaluates_each_unreflect_operand_once() {
+    let output = baml_test!(
+        r#"
+class First<T> { value unknown }
+class Counter {
+    evaluations int
+
+    function operand(self) -> reflect.Type {
+        self.evaluations += 1
+        reflect.Type.of<string>()
+    }
+}
+
+function main() -> bool {
+    let counter = Counter { evaluations: 0 }
+    let candidate: unknown = First<string> { value: "ok" }
+    let First<unreflect(counter.operand())> { value: let bound }
+        | let bound = candidate
+    counter.evaluations == 1 && bound == "ok"
+}
+"#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
 async fn nested_unreflect_annotations_and_patterns_use_realized_templates() {
     let output = baml_test!(
         r#"
