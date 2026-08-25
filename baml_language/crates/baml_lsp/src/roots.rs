@@ -103,7 +103,19 @@ impl RootsView {
             .as_ref()
             .and_then(|dir| presentation_path.strip_prefix(dir).ok())
         {
-            Some(rest) => Path::new(BUILTIN_PREFIX).join(rest),
+            // Spelled with `/` by hand: the database stores virtual paths
+            // byte-for-byte with forward slashes on every platform (the
+            // `<builtin>/` wire contract), and `PathBuf` equality is
+            // byte-wise — a `Path::join` here would use `\` on Windows and
+            // miss every file-map lookup.
+            Some(rest) => {
+                let mut db_path = String::from(BUILTIN_PREFIX);
+                for component in rest.components() {
+                    db_path.push('/');
+                    db_path.push_str(&component.as_os_str().to_string_lossy());
+                }
+                PathBuf::from(db_path)
+            }
             None => presentation_path.to_path_buf(),
         }
     }

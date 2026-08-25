@@ -43,20 +43,24 @@ policy.max_delta_pct = 3.0
 # Reclaiming the `syn` cost would mean dropping prettyplease (raw,
 # unformatted generated SDK output).
 #
-# Ceilings are canary's re-pegged numbers (which include the `baml query`
-# engine, measured at `panic = "abort"`) scaled by the ~1.25x unwind ratio
-# measured when `[profile.release]` moved to `panic = "unwind"` (see the
-# profile note in Cargo.toml: baml-cli 24.65 MiB abort -> 30.87 MiB unwind
-# on aarch64-apple-darwin). The daily baseline refresh re-pegs these to CI's
-# recorded sizes.
+# Ceilings are ~3% above the first unwind binaries CI actually measured
+# (run 32893558553 on cf74e4881, after `[profile.release]` moved to
+# `panic = "unwind"`). The earlier estimate — canary's abort numbers scaled
+# by the 1.25x unwind ratio measured on aarch64-apple-darwin — undershot:
+# the real ratio is platform-specific (~1.30x on macOS, ~1.49x on
+# x86_64-windows-msvc, where SEH tables are costlier and the CI runner has
+# no llvm-strip, so file size is the unstripped binary). Linux was not
+# measured on that run (job cancelled); its ceiling extrapolates the macOS
+# correction and firms up when CI records it. The daily baseline refresh
+# re-pegs the baselines to CI's recorded sizes.
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = "59.7 MiB"
+max_file_bytes = "62.0 MiB"
 
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "76.9 MiB"
+max_file_bytes = "80.9 MiB"
 
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = "66.0 MiB"
+max_file_bytes = "78.8 MiB"
 
 [artifacts.packed-program]
 kind = "pack"

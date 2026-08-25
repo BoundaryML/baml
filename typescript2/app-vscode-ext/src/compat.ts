@@ -19,6 +19,14 @@ export type BamlServerMetadata = {
   capabilities?: string[];
 };
 
-export function isProtocolCompatible(serverProtocol: number, serverMinClientProtocol: number, clientRange: BamlProtocolRange): boolean {
-  return serverProtocol >= clientRange.min && serverProtocol <= clientRange.max && clientRange.max >= serverMinClientProtocol;
+export function isProtocolCompatible(
+  serverProtocol: number,
+  serverMinClientProtocol: number,
+  clientRange: BamlProtocolRange,
+): boolean {
+  return (
+    serverProtocol >= clientRange.min &&
+    serverProtocol <= clientRange.max &&
+    clientRange.max >= serverMinClientProtocol
+  );
 }

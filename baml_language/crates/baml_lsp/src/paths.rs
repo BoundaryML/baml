@@ -203,9 +203,14 @@ mod tests {
 
         let db_path = Path::new("<builtin>/std/prelude.baml");
         let uri = uri_for_db_path(&roots, db_path).expect("materialized stdlib has a URI");
+        // Compare as URIs: both sides then pass through the same URL
+        // normalization. Comparing `uri.to_file_path()` against the joined
+        // path would fail on Windows, where `canonicalize` spells the
+        // directory with the `\\?\` verbatim prefix and the URL round trip
+        // (correctly) drops it.
         assert_eq!(
-            uri.to_file_path().unwrap(),
-            stdlib_dir.join("std").join("prelude.baml")
+            uri,
+            Url::from_file_path(stdlib_dir.join("std").join("prelude.baml")).unwrap()
         );
         assert_eq!(canonical_document_path(&roots, &uri).unwrap(), db_path);
     }

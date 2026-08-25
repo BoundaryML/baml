@@ -675,8 +675,15 @@ fn stdlib_paths_round_trip_through_the_materialized_directory() {
         .map(|entry| entry.path.join("prelude.baml"))
         .expect("a stdlib root");
     let uri = baml_lsp::paths::uri_for_db_path(h.state.roots(), &db_path).unwrap();
-    let presented = uri.to_file_path().unwrap();
-    assert!(presented.starts_with(&canonical_dir), "{presented:?}");
+    // Prefix-compare as URIs: both sides then pass through the same URL
+    // normalization. A `Path::starts_with` against the canonical directory
+    // would fail on Windows, where `canonicalize` spells it with the `\\?\`
+    // verbatim prefix and the URL round trip (correctly) drops it.
+    assert!(
+        uri.as_str()
+            .starts_with(Url::from_file_path(&canonical_dir).unwrap().as_str()),
+        "{uri}"
+    );
     assert_eq!(
         baml_lsp::paths::canonical_document_path(h.state.roots(), &uri).unwrap(),
         db_path

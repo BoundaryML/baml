@@ -231,6 +231,15 @@ pub fn canonicalize_lossy(path: &Path) -> PathBuf {
         if let Some(name) = ancestor.file_name() {
             remainder.push(name.to_os_string());
         }
+        // Stop before the bare root/prefix: canonicalizing it resolves no
+        // symlinks (on unix `/` is its own canonical form), and on Windows it
+        // SUCCEEDS by resolving to the current drive — grafting a
+        // never-existing unix-spelled path (`/fixture/…`) onto
+        // `\\?\C:\fixture\…` and changing the stored spelling per platform.
+        // A path with no existing named ancestor is kept exactly as spelled.
+        if parent.file_name().is_none() {
+            break;
+        }
         if let Ok(canonical) = parent.canonicalize() {
             let mut out = canonical;
             for name in remainder.into_iter().rev() {
@@ -245,7 +254,24 @@ pub fn canonicalize_lossy(path: &Path) -> PathBuf {
 
 /// Drop `.` components and resolve `..` lexically (popping at a root or
 /// prefix is a no-op, matching `..` at `/`).
+///
+/// A path with nothing to normalize is returned byte-for-byte as spelled:
+/// rebuilding it from components would rejoin them with the platform
+/// separator, and on Windows that rewrites the virtual `<builtin>/pkg/…`
+/// paths to `<builtin>\pkg\…` — breaking every consumer of the `<builtin>/`
+/// prefix contract (the compiler's builtin-syntax gate, emit's builtin
+/// filter, `bex_vm_types::link`), which must see the same spelling on every
+/// platform.
 fn lexically_normalize(path: &Path) -> PathBuf {
+    let needs_normalization = path.components().any(|component| {
+        matches!(
+            component,
+            std::path::Component::CurDir | std::path::Component::ParentDir
+        )
+    });
+    if !needs_normalization {
+        return path.to_path_buf();
+    }
     let mut out = PathBuf::new();
     for component in path.components() {
         match component {
@@ -1050,6 +1076,53 @@ mod tests {
             assert_eq!(db.root_files(root).len(), expected);
         }
         assert_eq!(db.workspace_root(), Some(workspace));
+    }
+
+    #[test]
+    fn fixture_paths_with_no_existing_ancestor_stay_as_spelled() {
+        // Test fixtures use absolute unix-spelled paths under a root that
+        // exists on no platform. Their only "existing ancestor" is the bare
+        // filesystem root, which the ancestor walk must not canonicalize:
+        // on Windows that succeeds by resolving to the current drive and
+        // grafts the path onto `\\?\C:\…`, so relative rendering (describe
+        // listings, `relative_source_path`) diverges from every other
+        // platform's snapshot.
+        let fixture = Path::new("/no-such-fixture-root/ns_x/file.baml");
+        assert_eq!(canonicalize_lossy(fixture).as_os_str(), fixture.as_os_str());
+    }
+
+    #[test]
+    fn virtual_paths_are_stored_byte_for_byte_as_spelled() {
+        // The `<builtin>/` prefix is a wire contract read by string
+        // comparison (the compiler's builtin-syntax gate, emit's builtin
+        // filter, `bex_vm_types::link`), so the stored spelling must keep its
+        // forward slashes on every platform. Rebuilding the path from
+        // components would rejoin with `\` on Windows; the byte-level
+        // assertions here are what a component-wise `Path` comparison would
+        // miss.
+        let virtual_path = Path::new("<builtin>/baml/string.baml");
+        assert_eq!(
+            canonicalize_lossy(virtual_path).as_os_str(),
+            virtual_path.as_os_str()
+        );
+
+        let mut db = ProjectDatabase::new();
+        db.ensure_stdlib_sources();
+        for root in db.source_roots() {
+            for file in db.root_files(root) {
+                let path = file.path(&db);
+                assert!(
+                    path.to_string_lossy().starts_with("<builtin>/"),
+                    "stdlib path lost its wire spelling: {}",
+                    path.display()
+                );
+                assert!(
+                    !path.to_string_lossy().contains('\\'),
+                    "stdlib path grew a platform separator: {}",
+                    path.display()
+                );
+            }
+        }
     }
 
     #[test]
