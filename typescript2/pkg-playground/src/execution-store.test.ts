@@ -1,93 +1,38 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { applyRunPatch, createExecutionStore } from './execution-store';
-import type { Run, RunPatch } from './worker-protocol';
 import type { RunStoreClient } from './run-store-client';
+import type { Run, RunPatch } from './worker-protocol';
 
 describe('execution-store', () => {
   it('applies RunStore patches without mutating the original snapshot', () => {
     const initial = runFixture('run-1', 100);
     const patch: RunPatch = {
       boundaryId: 'run-1',
-      cursor: 4,
       changes: [
+        { status: 'succeeded', type: 'setStatus' },
         {
-          type: 'upsertThreadNode',
-          thread: {
-            id: 'thread_node_1',
-            parentThreadId: null,
-            parentCallNodeId: null,
-            name: null,
-            startedAtNs: '10',
-            endedAtNs: null,
-            status: 'running',
-            callNodeIds: ['call_node_1'],
-          },
-        },
-        {
-          type: 'upsertCallNode',
-          call: {
-            id: 'call_node_1',
-            threadId: 'thread_node_1',
-            parentId: null,
-            functionId: 1,
-            functionName: 'main',
-            functionOrigin: null,
-            calleeSource: null,
-            callSiteSource: null,
-            startedAtNs: '20',
-            endedAtNs: null,
-            status: 'running',
-            payloadIds: [],
-          },
-        },
-        { type: 'setRootCallNode', callNodeId: 'call_node_1' },
-        {
-          type: 'setGraphRuntimeOverlay',
-          overlay: {
-            boundaryId: 'run-1',
-            projectGeneration: 1,
-            entries: [],
-            unattachedCallNodeIds: ['call_node_1'],
-            diagnostics: [
-              {
-                severity: 'info',
-                code: 'GraphOverlayCallSiteUnavailable',
-                message: 'no call site',
-                callNodeId: null,
-                payloadId: null,
-              },
-            ],
-          },
-        },
-        { type: 'setStatus', status: 'succeeded' },
-        {
-          type: 'complete',
           outcome: {
-            status: 'succeeded',
             result: {
-              valueRef: null,
-              value: 'ok',
               rendererHint: null,
               supportingPayloadIds: [],
+              value: 'ok',
+              valueRef: null,
             },
+            status: 'succeeded',
           },
+          type: 'complete',
         },
       ],
+      cursor: 4,
     };
 
     const next = applyRunPatch(initial, patch);
 
     expect(initial.cursor).toBe(0);
-    expect(initial.calls).toHaveLength(0);
+    expect(initial.status).toBe('running');
     expect(next.cursor).toBe(4);
     expect(next.status).toBe('succeeded');
-    expect(next.rootCallNodeId).toBe('call_node_1');
-    expect(next.graphRuntimeOverlay?.unattachedCallNodeIds).toEqual([
-      'call_node_1',
-    ]);
-    expect(next.calls).toHaveLength(1);
-    expect(next.threads[0]?.callNodeIds).toEqual(['call_node_1']);
     expect(next.result?.value).toBe('ok');
   });
 
@@ -115,36 +60,36 @@ describe('execution-store', () => {
   it('starts test runs through the RunStore client and follows the snapshot cursor', async () => {
     const client = mockRunStoreClient();
     const testRun = runFixture('test-run', 300, {
-      target: { kind: 'test', generation: 4, testName: 'suite/test' },
+      cursor: 7,
       request: {
-        projectId: 'project',
-        projectGeneration: 4,
-        target: { kind: 'test', generation: 4, testName: 'suite/test' },
         argsSummary: null,
         optionsSummary: null,
+        projectGeneration: 4,
+        projectId: 'project',
+        target: { generation: 4, kind: 'test', testName: 'suite/test' },
       },
-      cursor: 7,
+      target: { generation: 4, kind: 'test', testName: 'suite/test' },
     });
     vi.mocked(client.startTestRun).mockResolvedValue('test-run');
     vi.mocked(client.snapshot).mockResolvedValue(testRun);
     vi.mocked(client.subscribe).mockReturnValue({
-      subscriptionId: 'sub-test-run',
       events: emptyAsyncIterable(),
+      subscriptionId: 'sub-test-run',
       unsubscribe: vi.fn(),
     });
     const store = createExecutionStore(client);
 
     await expect(
       store.startTestRun({
-        project: 'project',
         generation: 4,
+        project: 'project',
         testName: 'suite/test',
       }),
     ).resolves.toBe('test-run');
 
     expect(client.startTestRun).toHaveBeenCalledWith({
-      project: 'project',
       generation: 4,
+      project: 'project',
       testName: 'suite/test',
     });
     expect(client.snapshot).toHaveBeenCalledWith('test-run');
@@ -162,33 +107,29 @@ function runFixture(
 ): Run {
   return {
     boundaryId,
-    target: { kind: 'function', functionName: 'main' },
-    visibility: { kind: 'history' },
-    status: 'running',
-    createdAtMs,
-    startedAtMs: createdAtMs,
+    cancellation: null,
     completedAtMs: null,
+    createdAtMs,
+    cursor: 0,
+    diagnostics: [],
+    error: null,
+    payloads: [],
+    request: {
+      argsSummary: null,
+      optionsSummary: null,
+      projectGeneration: 1,
+      projectId: 'project',
+      target: { functionName: 'main', kind: 'function' },
+    },
+    result: null,
+    startedAtMs: createdAtMs,
+    status: 'running',
+    target: { functionName: 'main', kind: 'function' },
     timeAnchor: {
       epochCreatedAtMs: createdAtMs,
       traceZeroNs: '0',
     },
-    request: {
-      projectId: 'project',
-      projectGeneration: 1,
-      target: { kind: 'function', functionName: 'main' },
-      argsSummary: null,
-      optionsSummary: null,
-    },
-    result: null,
-    error: null,
-    cancellation: null,
-    rootCallNodeId: null,
-    graphRuntimeOverlay: null,
-    calls: [],
-    threads: [],
-    payloads: [],
-    diagnostics: [],
-    cursor: 0,
+    visibility: { kind: 'history' },
     ...overrides,
   };
 }
@@ -197,18 +138,18 @@ async function* emptyAsyncIterable<T>(): AsyncIterable<T> {}
 
 function mockRunStoreClient(): RunStoreClient {
   return {
+    cancelRun: vi.fn(),
+    dispose: vi.fn(),
+    listHistory: vi.fn(),
+    listRuns: vi.fn(),
+    openHistory: vi.fn(),
+    readValue: vi.fn(),
+    respondToEnv: vi.fn(),
+    respondToInput: vi.fn(),
+    snapshot: vi.fn(),
     startRun: vi.fn(),
     startTestRun: vi.fn(),
-    cancelRun: vi.fn(),
-    respondToInput: vi.fn(),
-    respondToEnv: vi.fn(),
-    listRuns: vi.fn(),
-    listHistory: vi.fn(),
-    openHistory: vi.fn(),
-    snapshot: vi.fn(),
-    readValue: vi.fn(),
     subscribe: vi.fn(),
     unsubscribe: vi.fn(),
-    dispose: vi.fn(),
   } as unknown as RunStoreClient;
 }

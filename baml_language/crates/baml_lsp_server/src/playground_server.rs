@@ -815,6 +815,13 @@ fn build_router(
         DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
     )));
     let history_store = Arc::new(HistoryStore::new((*workspace_roots).clone()));
+    // Point the profiler at this workspace before any engine runs. Without
+    // it the global session keeps its default *relative* `.baml/profiles-v1`,
+    // which for a long-lived server resolves against whatever directory it
+    // started in -- so runs would be written where no reader looks.
+    if let Some(root) = workspace_roots.first() {
+        crate::playground_telemetry::configure_store_root(root);
+    }
     let ws_state = WsState {
         bex,
         broadcast_tx,
@@ -1928,6 +1935,136 @@ async fn handle_ws_in_message(
                         &WsOutMessage::CommandError {
                             request_id,
                             code: "historyOpenFailed".to_string(),
+                            message: format!("{err}"),
+                        },
+                    )
+                    .await;
+                }
+            }
+        }
+
+        WsInMessage::ReadTelemetryMedia {
+            request_id,
+            project,
+            cid,
+        } => {
+            let project_root = history_project_root_for_project(&project);
+            let echoed_cid = cid.clone();
+            // Reading the CAS is blocking work; keep it off the socket task.
+            let result = tokio::task::spawn_blocking(move || {
+                crate::playground_telemetry::read_media(&project_root, &cid)
+            })
+            .await;
+            match result {
+                Ok(Ok(media)) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::TelemetryMedia {
+                            cid: echoed_cid,
+                            media: serde_json::to_value(&media).unwrap_or(serde_json::Value::Null),
+                            request_id,
+                        },
+                    )
+                    .await;
+                }
+                Ok(Err(err)) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::CommandError {
+                            request_id,
+                            code: "telemetryMediaFailed".to_string(),
+                            message: format!("{err}"),
+                        },
+                    )
+                    .await;
+                }
+                Err(err) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::CommandError {
+                            request_id,
+                            code: "telemetryMediaFailed".to_string(),
+                            message: format!("media read panicked: {err}"),
+                        },
+                    )
+                    .await;
+                }
+            }
+        }
+
+        WsInMessage::ListExecutions {
+            request_id,
+            project,
+        } => {
+            let project_root = history_project_root_for_project(&project);
+            match crate::playground_telemetry::list_executions(&project_root).await {
+                Ok(executions) => {
+                    let executions = executions
+                        .iter()
+                        .map(|row| serde_json::to_value(row).unwrap_or(serde_json::Value::Null))
+                        .collect();
+                    send_ws(
+                        sink,
+                        &WsOutMessage::ExecutionList {
+                            request_id,
+                            executions,
+                            store_missing: false,
+                        },
+                    )
+                    .await;
+                }
+                // No store is the state before anything has run, not a
+                // failure: the client shows an empty table, not an error.
+                Err(crate::playground_telemetry::TelemetryError::NoStore(_)) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::ExecutionList {
+                            request_id,
+                            executions: Vec::new(),
+                            store_missing: true,
+                        },
+                    )
+                    .await;
+                }
+                Err(err) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::CommandError {
+                            request_id,
+                            code: "telemetryQueryFailed".to_string(),
+                            message: format!("{err}"),
+                        },
+                    )
+                    .await;
+                }
+            }
+        }
+
+        WsInMessage::OpenExecution {
+            request_id,
+            project,
+            execution_id,
+        } => {
+            let project_root = history_project_root_for_project(&project);
+            match crate::playground_telemetry::read_execution(&project_root, &execution_id).await {
+                Ok(telemetry) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::ExecutionTelemetry {
+                            request_id,
+                            execution_id,
+                            telemetry: serde_json::to_value(&telemetry)
+                                .unwrap_or(serde_json::Value::Null),
+                        },
+                    )
+                    .await;
+                }
+                Err(err) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::CommandError {
+                            request_id,
+                            code: "telemetryQueryFailed".to_string(),
                             message: format!("{err}"),
                         },
                     )

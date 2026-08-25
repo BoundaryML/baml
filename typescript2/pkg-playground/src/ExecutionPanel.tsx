@@ -28,7 +28,6 @@ import {
   reconcileArgs,
   typeLookupFrom,
 } from './args-form-model';
-import { CapturedValueCard } from './CapturedValueCard';
 import { ApiKeysDialog } from './components/ApiKeysDialog';
 import { CopyButton } from './components/CopyButton';
 import { ErrorDisplay } from './components/ErrorDisplay';
@@ -49,7 +48,6 @@ import {
   selectDefaultFunctionName,
   selectMainFunctionName,
 } from './default-function-selection';
-import { ExecutionProfileView } from './ExecutionProfileView';
 import { useEnvVars } from './envAtoms';
 import type { ExecutionStoreSnapshot } from './execution-store';
 import { createExecutionStore, type ExecutionStore } from './execution-store';
@@ -77,9 +75,7 @@ import {
 import {
   decodeRunResultValue,
   type RunStoreDisplayRun,
-  type RunTraceLog,
   runToDisplayRun,
-  runToTraceRows,
 } from './run-store-projections';
 import type { RuntimePort } from './runtime-port';
 import {
@@ -88,9 +84,9 @@ import {
   type SerializedTestSet,
 } from './serialized-test-tree';
 import { companionFunctionName } from './shared/companion-functions';
+import { TelemetryView } from './telemetry/TelemetryView';
+import { useTelemetry } from './telemetry/use-telemetry';
 import { collectLatestTestRunResults } from './test-run-results';
-import { ValueRenderer } from './ValueRenderer';
-import type { ValueBodyCache } from './value-body-cache';
 import { createValueBodyCache } from './value-body-cache';
 import {
   type BoundaryId,
@@ -112,6 +108,8 @@ registerBuiltinResultRenderers();
 const LOGS_PANEL_DEFAULT_HEIGHT = 180;
 const LOGS_PANEL_MIN_HEIGHT = 40;
 const LOGS_PANEL_MAX_HEIGHT = 620;
+/** Space the run tab keeps for the args block and a usable graph. */
+const LOGS_PANEL_RESERVED_HEIGHT = 260;
 
 const IS_MAC =
   typeof navigator !== 'undefined' && /Mac|iP/.test(navigator.platform);
@@ -288,7 +286,7 @@ export interface ExecutionPanelProps {
   /** Called whenever the selected project changes. */
   onSelectedProjectChange?: (project: string | null) => void;
   /** Tab shown on mount (default 'run'). Embedded views often want 'graph'. */
-  initialTab?: 'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl';
+  initialTab?: 'run' | 'graph' | 'telemetry' | 'prompt' | 'curl';
   /** Auto-select this function once the project reports it (applied once). */
   initialFunctionName?: string;
   /** Auto-run this test once the test tree reports it (applied once). */
@@ -490,199 +488,6 @@ const CollectionDebugView: FC<CollectionDebugViewProps> = ({
   );
 };
 
-const traceStatusClass = (status: Run['calls'][number]['status']): string => {
-  switch (status) {
-    case 'ok':
-      return 'bg-vsc-green';
-    case 'errored':
-      return 'bg-vsc-red';
-    case 'cancelled':
-    case 'exited':
-      return 'bg-vsc-yellow';
-    case 'running':
-      return 'bg-vsc-text-muted';
-    default:
-      status satisfies never;
-      return 'bg-vsc-text-muted';
-  }
-};
-
-function formatTraceMs(value: number | null): string {
-  if (value == null) return '';
-  if (value < 1) return `${value.toFixed(2)}ms`;
-  if (value < 100) return `${value.toFixed(1)}ms`;
-  return `${Math.round(value)}ms`;
-}
-
-function traceLogLevelClass(level: string | null): string {
-  switch (level) {
-    case 'error':
-      return 'text-vsc-red';
-    case 'warn':
-      return 'text-vsc-yellow';
-    case 'debug':
-      return 'text-vsc-text-muted';
-    case 'info':
-    case null:
-      return 'text-vsc-accent';
-    default:
-      return 'text-vsc-text-muted';
-  }
-}
-
-function traceValueStateLabel(value: {
-  state: RunTraceLog['state'];
-}): string | null {
-  switch (value.state) {
-    case 'available':
-      return null;
-    case 'loading':
-      return 'loading';
-    case 'pending':
-      return 'pending';
-    case 'omitted':
-      return 'omitted';
-    case 'truncated':
-      return 'truncated';
-    case 'missing':
-      return 'missing';
-    case 'lost':
-      return 'lost';
-    case 'error':
-      return 'error';
-    case 'unavailable':
-      return 'unavailable';
-    default:
-      value.state satisfies never;
-      return null;
-  }
-}
-
-const TraceLogView: FC<{ log: RunTraceLog }> = ({ log }) => {
-  const stateLabel = traceValueStateLabel(log);
-  return (
-    <div className="rounded border border-vsc-border-subtle bg-vsc-surface/60 px-2 py-1">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <span
-          className={cn(
-            'font-vsc-mono text-[10px] uppercase',
-            traceLogLevelClass(log.level),
-          )}
-        >
-          {log.level ?? 'log'}
-        </span>
-        {log.sourceLine != null && (
-          <span className="text-vsc-text-faint text-[10px]">
-            :{log.sourceLine}
-          </span>
-        )}
-        <span className="min-w-0 truncate text-vsc-text-muted text-[11px]">
-          {log.message}
-        </span>
-        {stateLabel && (
-          <span className="ml-auto shrink-0 rounded border border-vsc-border-subtle px-1 py-0.5 text-[10px] text-vsc-text-faint">
-            {stateLabel}
-          </span>
-        )}
-      </div>
-      {log.value !== null && (
-        <div className="mt-1 overflow-x-auto">
-          <ValueRenderer displayMode="inline" value={log.value} />
-        </div>
-      )}
-      {log.diagnostic && (
-        <div className="mt-1 text-[10px] text-vsc-text-faint">
-          {log.diagnostic}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const TraceTimelineView: FC<{
-  run: Run | undefined;
-  valueBodyCache: ValueBodyCache;
-}> = ({ run, valueBodyCache }) => {
-  const rows = runToTraceRows(run, valueBodyCache);
-  if (rows.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
-        No trace yet
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex-1 overflow-auto bg-vsc-bg font-vsc-mono text-xs">
-      <div className="min-w-[560px] p-2">
-        {rows.map((row) => (
-          <div
-            className="grid grid-cols-[72px_minmax(200px,1fr)_80px] gap-2 items-center border-b border-vsc-border-subtle py-1"
-            key={row.id}
-          >
-            <div className="text-[10px] text-vsc-text-faint text-right">
-              {formatTraceMs(row.offsetMs)}
-            </div>
-            <div className="min-w-0">
-              <div
-                className="flex items-center gap-1.5 min-w-0"
-                style={{ paddingLeft: Math.min(row.depth, 12) * 12 }}
-              >
-                <span
-                  className={cn(
-                    'w-1.5 h-1.5 rounded-full shrink-0',
-                    traceStatusClass(row.status),
-                  )}
-                />
-                <span className="text-vsc-text truncate">
-                  {row.functionName}
-                </span>
-                {row.sourceLine != null && (
-                  <span className="text-vsc-text-faint text-[10px] shrink-0">
-                    :{row.sourceLine}
-                  </span>
-                )}
-              </div>
-              <div className="relative mt-1 h-1.5 rounded bg-vsc-surface overflow-hidden">
-                <div
-                  className="absolute top-0 bottom-0 rounded bg-vsc-accent"
-                  style={{
-                    left: `${row.spanLeftPct}%`,
-                    width: `${row.spanWidthPct}%`,
-                  }}
-                />
-              </div>
-              {row.logs.length > 0 && (
-                <div
-                  className="mt-1.5 space-y-1"
-                  style={{ paddingLeft: Math.min(row.depth, 12) * 12 + 10 }}
-                >
-                  {row.logs.map((log) => (
-                    <TraceLogView key={log.id} log={log} />
-                  ))}
-                </div>
-              )}
-              {row.callValues.length > 0 && (
-                <div
-                  className="mt-1.5 space-y-1"
-                  style={{ paddingLeft: Math.min(row.depth, 12) * 12 + 10 }}
-                >
-                  {row.callValues.map((value) => (
-                    <CapturedValueCard compact key={value.id} value={value} />
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="text-[10px] text-vsc-text-faint">
-              {formatTraceMs(row.durationMs)}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -852,7 +657,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const cfgRequestIdsRef = useRef<Map<string, number>>(new Map());
   const [workflowCacheVersion, setWorkflowCacheVersion] = useState(0);
   const [activeTab, setActiveTab] = useState<
-    'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl'
+    'run' | 'graph' | 'telemetry' | 'prompt' | 'curl'
   >(initialTab ?? 'run');
   const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(
     null,
@@ -880,6 +685,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const [logsPanelHeight, setLogsPanelHeight] = useState(
     LOGS_PANEL_DEFAULT_HEIGHT,
   );
+  // The element the logs strip is positioned inside. Its height, not the
+  // window's, is what bounds how far the strip may grow.
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const resizingRef = useRef(false);
   const [resultModes, setResultModes] = useState<
     Record<string, 'parsed' | 'raw'>
@@ -1538,6 +1346,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           // These are handled by MonacoEditor, ignore here
           break;
 
+        case 'executionList':
+        case 'executionTelemetry':
+        case 'telemetryMedia':
+          // Resolved by the run store client's pending-request table.
+          break;
+
         default:
           data satisfies never;
       }
@@ -1874,6 +1688,28 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     [sidebarWidth],
   );
 
+  // Clamping only while dragging is not enough: a height that was fine can
+  // become too tall when the panel itself shrinks -- the editor splitter
+  // moves, or the window gets shorter -- and the strip then covers the graph
+  // without anyone having touched it.
+  useEffect(() => {
+    const element = panelRef.current;
+    if (!element) return;
+    const clamp = () => {
+      const available = element.clientHeight;
+      if (!available) return;
+      const maxHeight = Math.max(
+        LOGS_PANEL_MIN_HEIGHT,
+        Math.min(LOGS_PANEL_MAX_HEIGHT, available - LOGS_PANEL_RESERVED_HEIGHT),
+      );
+      setLogsPanelHeight((current) => Math.min(current, maxHeight));
+    };
+    clamp();
+    const observer = new ResizeObserver(clamp);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
   const onLogsResizeStart = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -1882,9 +1718,17 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
       const onMouseMove = (moveE: MouseEvent) => {
         const delta = startY - moveE.clientY;
+        // Leave room for the args block and a usable graph. Without this the
+        // strip could grow past the panel: the graph keeps its own minimum
+        // height, overflows the space left for it, and disappears behind the
+        // absolutely positioned strip.
+        const available = panelRef.current?.clientHeight ?? window.innerHeight;
         const maxHeight = Math.max(
           LOGS_PANEL_MIN_HEIGHT,
-          Math.min(LOGS_PANEL_MAX_HEIGHT, window.innerHeight - 220),
+          Math.min(
+            LOGS_PANEL_MAX_HEIGHT,
+            available - LOGS_PANEL_RESERVED_HEIGHT,
+          ),
         );
         setLogsPanelHeight(
           Math.max(
@@ -2352,6 +2196,46 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const llmFunctionNames = new Set(
     functions.filter((f) => f.kind === 'llm').map((f) => f.name),
   );
+  // Signatures for the Telemetry inspectors: reviewers asked to see what a
+  // function takes and returns while reading its trace.
+  const functionSignatures = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const info of functions) {
+      if (info.signature) map.set(info.name, info.signature);
+    }
+    return map;
+  }, [functions]);
+
+  // Telemetry reads the profile store, so it refreshes when a run completes
+  // rather than following the in-memory run patches.
+  const completedRunCount = executionSnapshot.runs.filter(
+    (run) => run.completedAtMs != null,
+  ).length;
+  const telemetry = useTelemetry({
+    active: activeTab === 'telemetry',
+    client: runStoreClient,
+    llmFunctions: llmFunctionNames,
+    project: selectedProject,
+    revision: completedRunCount,
+  });
+  const handleOpenTelemetrySource = useCallback(
+    (file: string, line: number | null) => {
+      onNavigateToSource?.({ column: 1, filePath: file, line: line ?? 1 });
+    },
+    [onNavigateToSource],
+  );
+  // Media bytes are fetched per value, on demand: a captured image is
+  // megabytes, and the panel must open without waiting for any of them.
+  const handleLoadTelemetryMedia = useCallback(
+    (cid: string) => {
+      if (!selectedProject) {
+        return Promise.reject(new Error('no project selected'));
+      }
+      return runStoreClient.readTelemetryMedia(selectedProject, cid);
+    },
+    [runStoreClient, selectedProject],
+  );
+
   const latestGraphRunSnapshot = useMemo(
     () =>
       findLatestGraphRunSnapshot(
@@ -2708,6 +2592,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           if (!runtimeControlsDisabled) void onRunFunction();
         }}
         onValueChange={(v) => setActiveTab(v as typeof activeTab)}
+        ref={panelRef}
         // Panel-scoped run shortcut: fires for focus anywhere inside the
         // playground (form fields, raw input, graph) without stealing
         // Cmd/Ctrl+Enter from the host's code editor.
@@ -2758,11 +2643,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 <TabsTrigger className="py-1 h-7" value="graph">
                   Graph
                 </TabsTrigger>
-                <TabsTrigger className="py-1 h-7" value="trace">
-                  Trace
-                </TabsTrigger>
-                <TabsTrigger className="py-1 h-7" value="flame">
-                  Flame
+                <TabsTrigger className="py-1 h-7" value="telemetry">
+                  Telemetry
                 </TabsTrigger>
                 {canPreviewPrompt && (
                   <TabsTrigger className="py-1 h-7" value="prompt">
@@ -3330,13 +3212,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   {workflowSwitcherBar}
                   {controlFlowGraph ? (
                     <GraphView
-                      calls={latestGraphRunSnapshot?.calls}
                       customRenderers={resultRenderers}
                       functionName={graphTargetName}
                       graph={controlFlowGraph}
-                      graphRuntimeOverlay={
-                        latestGraphRunSnapshot?.graphRuntimeOverlay
-                      }
                       onNodeClick={handleGraphNodeClick}
                       run={latestGraphRunSnapshot ?? null}
                       runError={latestGraphRunSnapshot?.error?.message ?? null}
@@ -3352,27 +3230,25 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   )}
                 </TabsContent>
 
-                {/* Trace timeline */}
+                {/* Telemetry: executions, and one execution's evidence */}
                 <TabsContent
                   className="flex-1 min-h-0 mt-0 flex flex-col"
                   style={{ minHeight: 300 }}
-                  value="trace"
+                  value="telemetry"
                 >
-                  <TraceTimelineView
-                    run={latestGraphRunSnapshot}
-                    valueBodyCache={valueBodyCache}
+                  <TelemetryView
+                    error={telemetry.error}
+                    evidence={telemetry.evidence}
+                    executions={telemetry.executions}
+                    loading={telemetry.loading}
+                    onLoadMedia={handleLoadTelemetryMedia}
+                    onOpenSource={handleOpenTelemetrySource}
+                    onRefresh={telemetry.refresh}
+                    onSelect={telemetry.select}
+                    selectedId={telemetry.selectedId}
+                    signatures={functionSignatures}
+                    storeMissing={telemetry.storeMissing}
                   />
-                </TabsContent>
-
-                {/* Profile flamegraph */}
-                <TabsContent
-                  className="flex-1 min-h-0 mt-0 flex flex-col"
-                  style={{ minHeight: 300 }}
-                  value="flame"
-                >
-                  {activeTab === 'flame' && (
-                    <ExecutionProfileView run={latestGraphRunSnapshot} />
-                  )}
                 </TabsContent>
 
                 {/* Prompt preview */}
@@ -3530,13 +3406,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     {workflowSwitcherBar}
                     {controlFlowGraph ? (
                       <GraphView
-                        calls={latestGraphRunSnapshot?.calls}
                         customRenderers={resultRenderers}
                         functionName={graphTargetName}
                         graph={controlFlowGraph}
-                        graphRuntimeOverlay={
-                          latestGraphRunSnapshot?.graphRuntimeOverlay
-                        }
                         onNodeClick={handleGraphNodeClick}
                         run={latestGraphRunSnapshot ?? null}
                         runError={
