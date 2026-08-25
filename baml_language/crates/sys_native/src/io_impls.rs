@@ -2953,6 +2953,19 @@ impl io::IoNamespaceHttp for NativeSysOps {
                             tokio::time::timeout_at(deadline, byte_stream.next())
                                 .await
                                 .map_err(|_elapsed| ())
+                                // The combinator polls the stream before the
+                                // clock, so a wakeup delayed past the deadline
+                                // can still return buffered data. The budget
+                                // runs to the first PARSED event: data the
+                                // task only got to after the deadline elapsed
+                                // is a timeout, not a save.
+                                .and_then(|chunk| {
+                                    if tokio::time::Instant::now() >= deadline {
+                                        Err(())
+                                    } else {
+                                        Ok(chunk)
+                                    }
+                                })
                         };
                         match outcome {
                             Ok(chunk) => chunk,
