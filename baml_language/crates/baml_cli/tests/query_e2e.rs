@@ -19,6 +19,11 @@ fn run_baml_cli(built: &Path, dir: &Path, args: &[&str]) -> Output {
     }
     cmd.current_dir(dir);
     cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
+    // This suite IS profiling-dependent: CI keeps BAML_PROFILE=0 for the
+    // general matrix (Windows disk hygiene) and profiling tests opt back
+    // in explicitly. The store lands in this test's tempdir, so nothing
+    // outlives the test.
+    cmd.env("BAML_PROFILE", "1");
     cmd.env("BAML_OUTPUT_PRESET", "human");
     cmd.env("BAML_HOME", &home);
     cmd.env_remove("BAML_LOG");
