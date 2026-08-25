@@ -880,7 +880,7 @@ function call_overrides() -> string {
     let tir = render_tir(&db, file);
 
     assert!(
-        tir.contains("function user.Ask(input: string, client: ai.Client | null = null)"),
+        tir.contains("function user.Ask(input: string, client: ai.Client | null = null, on_event:"),
         "{tir}"
     );
     assert!(
