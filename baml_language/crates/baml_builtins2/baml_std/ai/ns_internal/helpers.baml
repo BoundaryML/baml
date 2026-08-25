@@ -16,7 +16,32 @@ function _schema_for_signature(handler: baml.AnyFunction) -> map<string, unknown
 // Bound as `ctx` inside a compiler-desugared `@spec` prompt template.
 // `output_format` is the one placeholder the BEP allows.
 class SpecCtx {
-    output_format: string,
+    _output_format: root.OutputFormat,
+
+    function output_format(
+        self,
+        prefix: string | null | OutputFormatDefault = OutputFormatDefault.Auto,
+        or_splitter: string | OutputFormatDefault = OutputFormatDefault.Auto,
+        enum_value_prefix: string | null | OutputFormatDefault = OutputFormatDefault.Auto,
+        hoisted_class_prefix: string | null | OutputFormatDefault = OutputFormatDefault.Auto,
+        always_hoist_enums: bool | OutputFormatDefault = OutputFormatDefault.Auto,
+        quote_class_fields: bool | OutputFormatDefault = OutputFormatDefault.Auto,
+        hoist_classes: bool | "auto" | string[] | OutputFormatDefault = OutputFormatDefault.Auto,
+        map_style: "angle" | "object" | OutputFormatDefault = OutputFormatDefault.Auto,
+        render_null_as: string | null | OutputFormatDefault = OutputFormatDefault.Auto,
+    ) -> string throws never {
+        self._output_format._render(
+            prefix = prefix,
+            or_splitter = or_splitter,
+            enum_value_prefix = enum_value_prefix,
+            hoisted_class_prefix = hoisted_class_prefix,
+            always_hoist_enums = always_hoist_enums,
+            quote_class_fields = quote_class_fields,
+            hoist_classes = hoist_classes,
+            map_style = map_style,
+            render_null_as = render_null_as,
+        )
+    }
 }
 
 /// Assemble a structural `ai.Prompt` from a tagged template's flattened

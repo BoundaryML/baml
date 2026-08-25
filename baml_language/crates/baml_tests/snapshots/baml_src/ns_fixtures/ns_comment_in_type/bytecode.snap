@@ -58,10 +58,7 @@ function fixtures.comment_in_type.CommentAfterArrow$render_prompt() -> ai.Prompt
     call user.fixtures.comment_in_type.CommentAfterArrow$spec
     store_var _1
     load_type string
-    call ai.wire.render_output_format
-    store_var _2
-    load_type string
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }
@@ -163,10 +160,7 @@ function fixtures.comment_in_type.FunctionWithComments$render_prompt(a: string, 
     call user.fixtures.comment_in_type.FunctionWithComments$spec
     store_var _3
     load_type string
-    call ai.wire.render_output_format
-    store_var _4
-    load_type string
-    load_var2 3 4
+    load_var _3
     call ai.FunctionSpec.prompt
     return
 }

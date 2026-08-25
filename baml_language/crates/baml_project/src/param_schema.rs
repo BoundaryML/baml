@@ -40,7 +40,7 @@ const MAX_DEPTH: usize = 64;
 
 /// The compiler appends a synthetic trailing `client: ai.Client? = null`
 /// parameter to every LLM function. `client` is a reserved parameter name on LLM functions
-/// (`reject_reserved_llm_client_params`), so a trailing param with this name
+/// (`reject_reserved_llm_params`), so a trailing param with this name
 /// can only be the injected one. The form must not render it.
 const INJECTED_CLIENT_PARAM_NAME: &str = "client";
 
@@ -814,7 +814,7 @@ client GPT4 = openai.ResponsesClient.new(model = "gpt-4o");
 
 function Extract(text: string) -> string {
   client: GPT4
-  prompt: `${text} ${ctx.output_format}`
+  prompt: `${text} ${ctx.output_format()}`
 }
 
 function Plain(x: int) -> int { x }

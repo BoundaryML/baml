@@ -105,10 +105,7 @@ function type_reflection.GetBar$render_prompt() -> ai.Prompt {
     call user.type_reflection.GetBar$spec
     store_var _1
     load_type type_reflection.Bar
-    call ai.wire.render_output_format
-    store_var _2
-    load_type type_reflection.Bar
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }
@@ -207,10 +204,7 @@ function type_reflection.GetFoo$render_prompt() -> ai.Prompt {
     call user.type_reflection.GetFoo$spec
     store_var _1
     load_type type_reflection.Foo
-    call ai.wire.render_output_format
-    store_var _2
-    load_type type_reflection.Foo
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }

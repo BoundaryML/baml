@@ -5,7 +5,7 @@ class Foo {
 function Bar(foo: Foo) -> Foo {
   client: "openai/gpt-4o"
   prompt: `
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 

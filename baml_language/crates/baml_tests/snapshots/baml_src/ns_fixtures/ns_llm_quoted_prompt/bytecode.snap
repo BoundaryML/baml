@@ -61,10 +61,7 @@ function fixtures.llm_quoted_prompt.BacktickPrompt$render_prompt(topic: string) 
     call user.fixtures.llm_quoted_prompt.BacktickPrompt$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -173,10 +170,7 @@ function fixtures.llm_quoted_prompt.QuotedPrompt$render_prompt(topic: string) ->
     call user.fixtures.llm_quoted_prompt.QuotedPrompt$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }

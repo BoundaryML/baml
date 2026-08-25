@@ -61,10 +61,7 @@ function fixtures.llm_image_outputs.GenerateImage$render_prompt(prompt: string) 
     call user.fixtures.llm_image_outputs.GenerateImage$spec
     store_var _2
     load_type image
-    call ai.wire.render_output_format
-    store_var _3
-    load_type image
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -188,10 +185,7 @@ function fixtures.llm_image_outputs.GenerateImageSet$render_prompt(prompt: strin
     call user.fixtures.llm_image_outputs.GenerateImageSet$spec
     store_var _2
     load_type image[]
-    call ai.wire.render_output_format
-    store_var _3
-    load_type image[]
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -314,11 +308,8 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative$render_prompt(pr
     load_var prompt
     call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec
     store_var _2
-    load_type (image | string)[]
-    call ai.wire.render_output_format
-    store_var _3
     load_type (string | image)[]
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }

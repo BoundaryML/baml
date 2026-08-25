@@ -26,6 +26,6 @@ function BacktickPrompt(topic: string) -> string {
         Write one sentence about ${topic}.
         An escaped marker stays literal and does not warn: \${topic}
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }

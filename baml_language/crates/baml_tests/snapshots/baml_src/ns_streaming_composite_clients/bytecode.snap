@@ -147,10 +147,7 @@ function streaming_composite_clients.CompositeStreamSpec$render_prompt() -> ai.P
     call user.streaming_composite_clients.CompositeStreamSpec$spec
     store_var _1
     load_type string
-    call ai.wire.render_output_format
-    store_var _2
-    load_type string
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }

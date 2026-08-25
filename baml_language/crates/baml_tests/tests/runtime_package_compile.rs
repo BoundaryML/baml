@@ -17,7 +17,7 @@ client TestClient = openai.ResponsesClient.new(
 
 function Extract<T>(document: string) -> T {
   client: TestClient
-  prompt: `Extract the document using this schema:\n${ctx.output_format}`
+  prompt: `Extract the document using this schema:\n${ctx.output_format()}`
 }
 
 function main() -> string throws unknown {

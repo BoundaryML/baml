@@ -215,10 +215,7 @@ function env_ref_clients.EnvRefDynamicEcho$render_prompt(question: string) -> ai
     call user.env_ref_clients.EnvRefDynamicEcho$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -338,10 +335,7 @@ function env_ref_clients.EnvRefEcho$render_prompt(question: string) -> ai.Prompt
     call user.env_ref_clients.EnvRefEcho$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -465,10 +459,7 @@ function env_ref_clients.EnvRefResolvedEcho$render_prompt(question: string) -> a
     call user.env_ref_clients.EnvRefResolvedEcho$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -578,10 +569,7 @@ function env_ref_clients.LiveEnvRefEcho$render_prompt(question: string) -> ai.Pr
     call user.env_ref_clients.LiveEnvRefEcho$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -690,10 +678,7 @@ function env_ref_clients.LiveEnvRefFallbackEcho$render_prompt(question: string) 
     call user.env_ref_clients.LiveEnvRefFallbackEcho$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }

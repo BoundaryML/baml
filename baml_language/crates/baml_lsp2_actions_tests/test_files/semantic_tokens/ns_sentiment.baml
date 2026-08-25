@@ -27,7 +27,7 @@ function classify(text: string) -> Verdict {
 
         Text: ${text}
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 
@@ -117,5 +117,5 @@ function classify(text: string) -> Verdict {
 // ns_sentiment.baml:28:9 (string) len=4 "Text"
 // ns_sentiment.baml:28:13 (string) len=1 ":"
 // ns_sentiment.baml:28:17 (parameter) len=4 "text"
-// ns_sentiment.baml:30:15 (property) len=13 "output_format"
+// ns_sentiment.baml:30:15 (method) len=13 "output_format"
 // ns_sentiment.baml:31:5 (string) len=1 "`"

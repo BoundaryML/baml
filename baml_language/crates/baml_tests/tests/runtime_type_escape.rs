@@ -151,7 +151,7 @@ fn agent_constructed_with_an_inline_runtime_type_is_refused() {
 
         function DynamicOutput<T>() -> T {{
             client: DefaultClient
-            prompt: `${{ctx.output_format}}`
+            prompt: `${{ctx.output_format()}}`
         }}
 
         function main(t: reflect.Type, c: ai.Client) -> unknown throws unknown {{
@@ -520,7 +520,7 @@ fn a_result_that_is_the_parameter_stays_legal() {
 
         function Extract<T>(document: string) -> T {{
             client: DefaultClient
-            prompt: `${{document}} ${{ctx.output_format}}`
+            prompt: `${{document}} ${{ctx.output_format()}}`
         }}
 
         function main(t: reflect.Type, document: string) -> unknown throws unknown {{
@@ -540,7 +540,7 @@ fn a_result_that_never_mentions_the_parameter_stays_legal() {
 
         function Extract<T>(document: string) -> T {{
             client: DefaultClient
-            prompt: `${{document}} ${{ctx.output_format}}`
+            prompt: `${{document}} ${{ctx.output_format()}}`
         }}
 
         function main(t: reflect.Type, document: string) -> string throws unknown {{
@@ -788,7 +788,7 @@ fn a_streaming_call_with_an_inline_runtime_type_is_refused_twice() {
 
         function Extract<T>(document: string) -> T {{
             client: DefaultClient
-            prompt: `${{document}} ${{ctx.output_format}}`
+            prompt: `${{document}} ${{ctx.output_format()}}`
         }}
 
         function main(t: reflect.Type, document: string) -> unknown throws unknown {{
@@ -933,7 +933,7 @@ async fn applying_the_suggestion_compiles_and_runs() {
 
         function DynamicOutput<T>() -> T {{
             client: DefaultClient
-            prompt: `${{ctx.output_format}}`
+            prompt: `${{ctx.output_format()}}`
         }}
 
         function main() -> string throws unknown {{

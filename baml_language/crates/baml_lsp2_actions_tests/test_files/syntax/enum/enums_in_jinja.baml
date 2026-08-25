@@ -18,7 +18,7 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
         Priority Display: ${priority}
         Nullable Display: ${nullable_status ?? "none"}
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 

@@ -33,7 +33,7 @@ function TestNullableEnumComparisons(input: MyInput) -> string {
     Priority: ${input.nullable_priority ?? "none"}
     Union: ${input.status_or_string ?? "none"}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
     `
 }
 
@@ -43,7 +43,7 @@ function TestCrossNullableEnumComparisons(input: MyInput, other_input: MyInput) 
     First: ${input.regular_status}
     Second: ${other_input.regular_status}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
     `
 }
 

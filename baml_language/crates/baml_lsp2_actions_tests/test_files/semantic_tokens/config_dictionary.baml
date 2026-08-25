@@ -1,7 +1,7 @@
 // The colon-free config dictionary surface now lives in test args blocks.
 function DictionaryProbe(payload: string) -> string {
   client: "openai/gpt-4o-mini"
-  prompt: `Use ${payload} ${ctx.output_format}`
+  prompt: `Use ${payload} ${ctx.output_format()}`
 }
 
 test DictionaryTest {
@@ -71,8 +71,8 @@ test DictionaryTest {
 // config_dictionary.baml:4:11 (string) len=1 "`"
 // config_dictionary.baml:4:12 (string) len=3 "Use"
 // config_dictionary.baml:4:18 (parameter) len=7 "payload"
-// config_dictionary.baml:4:33 (property) len=13 "output_format"
-// config_dictionary.baml:4:47 (string) len=1 "`"
+// config_dictionary.baml:4:33 (method) len=13 "output_format"
+// config_dictionary.baml:4:49 (string) len=1 "`"
 // config_dictionary.baml:7:1 (keyword) len=4 "test"
 // config_dictionary.baml:7:6 (struct) [declaration] len=14 "DictionaryTest"
 // config_dictionary.baml:8:3 (property) len=9 "functions"

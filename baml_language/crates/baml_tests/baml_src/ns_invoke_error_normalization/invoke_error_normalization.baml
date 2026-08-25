@@ -14,7 +14,7 @@ function normalized_kind(error: ai.errors.RaisedInClient) -> string {
 
 function TimeoutSpec() -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `Return one string. ${ctx.output_format}`
+    prompt: `Return one string. ${ctx.output_format()}`
 }
 
 class TimeoutInvocationProbe {

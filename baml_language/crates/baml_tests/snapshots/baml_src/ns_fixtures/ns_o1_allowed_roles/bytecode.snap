@@ -61,10 +61,7 @@ function fixtures.o1_allowed_roles.AskGpt4o$render_prompt(question: string) -> a
     call user.fixtures.o1_allowed_roles.AskGpt4o$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -173,10 +170,7 @@ function fixtures.o1_allowed_roles.AskO1$render_prompt(question: string) -> ai.P
     call user.fixtures.o1_allowed_roles.AskO1$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }

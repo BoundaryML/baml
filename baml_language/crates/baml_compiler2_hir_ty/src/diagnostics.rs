@@ -488,6 +488,8 @@ pub enum TirTypeError {
     /// implicit `.to_string()` can't run on a possibly-null value; the user
     /// must coalesce (`${x ?? "…"}`) or unwrap first.
     InterpolatedValueMaybeNull { ty: Ty },
+    /// The output-format method was referenced without being called.
+    OutputFormatNotCalled,
     /// BEP-049 §11: an untagged `${expr}` interpolates a value whose type has
     /// no `to_string` method, so it can't be implicitly stringified.
     TypeNotInterpolatable { ty: Ty },
@@ -1555,6 +1557,9 @@ impl fmt::Display for TirTypeError {
                 "cannot interpolate a value of type `{}` — it may be null; coalesce with `?? \"…\"` or unwrap it first",
                 ty.render_user_facing()
             ),
+            TirTypeError::OutputFormatNotCalled => {
+                write!(f, "`output_format` must be called; use `output_format()`")
+            }
             TirTypeError::ConditionAlwaysConstant { ty, always_true } => {
                 let (always, never) = if *always_true {
                     ("truthy", "falsy")

@@ -100,29 +100,18 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt$render_prompt(topic: string) -> 
     let _0: ai.Prompt // _0 // return
     let _1: string // topic // param
     let _2: ai.FunctionSpec<string>
-    let _3: string
-    let _4: reflect.Type
-    let _5: reflect.Type
+    let _3: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.llm_quoted_prompt.QuotedPrompt$spec(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(string);
-        goto -> bb2;
+        _3 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _3>(copy _2) -> [bb2];
     }
 
     bb2: {
-        _3 = call const fn ai.wire.render_output_format(copy _4) -> [bb3];
-    }
-
-    bb3: {
-        _5 = load_type(string);
-        _0 = call const fn ai.FunctionSpec.prompt<copy _5>(copy _2, copy _3) -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }
@@ -132,7 +121,7 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt$spec(topic: string) -> ai.Functi
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // topic // param
     let _2: map<string, unknown>
-    let _3: (string) -> ai.Prompt throws never
+    let _3: (ai.OutputFormat) -> ai.Prompt throws never
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
     let _6: ai.Client
@@ -159,10 +148,10 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt$spec(topic: string) -> ai.Functi
 }
 
 // lambda[0]
-fn .<lambda(QuotedPrompt$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
+fn .<lambda(QuotedPrompt$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
-    let _1: string //  __spec_output_format // param
+    let _1: ai.OutputFormat //  __spec_output_format // param
     let _2: baml.TaggedString //  __spec_tagged_prompt
     let _3: string[] //  __tt_parts
     let _4: unknown[] //  __tt_values
@@ -340,29 +329,18 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt$render_prompt(topic: string) -
     let _0: ai.Prompt // _0 // return
     let _1: string // topic // param
     let _2: ai.FunctionSpec<string>
-    let _3: string
-    let _4: reflect.Type
-    let _5: reflect.Type
+    let _3: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.llm_quoted_prompt.BacktickPrompt$spec(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(string);
-        goto -> bb2;
+        _3 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _3>(copy _2) -> [bb2];
     }
 
     bb2: {
-        _3 = call const fn ai.wire.render_output_format(copy _4) -> [bb3];
-    }
-
-    bb3: {
-        _5 = load_type(string);
-        _0 = call const fn ai.FunctionSpec.prompt<copy _5>(copy _2, copy _3) -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }
@@ -372,7 +350,7 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt$spec(topic: string) -> ai.Func
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // topic // param [captured]
     let _2: map<string, unknown>
-    let _3: (string) -> ai.Prompt throws never
+    let _3: (ai.OutputFormat) -> ai.Prompt throws never
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
     let _6: ai.Client
@@ -399,10 +377,10 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt$spec(topic: string) -> ai.Func
 }
 
 // lambda[0]
-fn .<lambda(BacktickPrompt$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
+fn .<lambda(BacktickPrompt$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
-    let _1: string //  __spec_output_format // param
+    let _1: ai.OutputFormat //  __spec_output_format // param
     let _2: ai.internal.SpecCtx // ctx
     let _3: baml.TaggedString //  __spec_tagged_prompt
     let _4: string[] //  __tt_parts
@@ -468,19 +446,22 @@ fn .<lambda(BacktickPrompt$spec, 0)>( __spec_output_format: string) -> ai.Prompt
     bb3: {
         _6 = const "";
         _21 = copy _5;
-        _22 = copy _2.0;
-        _23 = load_type(unknown);
-        _20 = call const fn baml.Array.push<copy _23>(copy _21, copy _22) -> [bb4];
+        _22 = call const fn ai.internal.SpecCtx.output_format(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb4];
     }
 
     bb4: {
-        _25 = copy _4;
-        _26 = copy _6;
-        _27 = load_type(string);
-        _24 = call const fn baml.Array.push<copy _27>(copy _25, copy _26) -> [bb5];
+        _23 = load_type(unknown);
+        _20 = call const fn baml.Array.push<copy _23>(copy _21, copy _22) -> [bb5];
     }
 
     bb5: {
+        _25 = copy _4;
+        _26 = copy _6;
+        _27 = load_type(string);
+        _24 = call const fn baml.Array.push<copy _27>(copy _25, copy _26) -> [bb6];
+    }
+
+    bb6: {
         _28 = copy _4;
         _29 = copy _5;
         _3 = baml.TaggedString { copy _28, copy _29 };
@@ -488,10 +469,10 @@ fn .<lambda(BacktickPrompt$spec, 0)>( __spec_output_format: string) -> ai.Prompt
         _30 = copy _31.0;
         _33 = copy _3;
         _32 = copy _33.1;
-        _0 = call const fn ai.internal.assemble_llm_prompt(copy _30, copy _32) -> [bb6];
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _30, copy _32) -> [bb7];
     }
 
-    bb6: {
+    bb7: {
         return;
     }
 }

@@ -270,6 +270,12 @@ fn new_mode_failures_have_good_diagnostics() {
             "has no member `output_format_with`",
         ),
         (
+            "bare_output_format",
+            "client: C",
+            "prompt: `${ctx.output_format}`",
+            "`output_format` must be called; use `output_format()`",
+        ),
+        (
             "bad_client",
             "client: Nope",
             "prompt: `Hi ${name}!`",
@@ -324,6 +330,35 @@ fn new_mode_failures_have_good_diagnostics() {
             diags.join("\n")
         );
     }
+}
+
+#[test]
+fn output_format_must_be_called_on_context_values() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function bare(render_ctx: ai.Context) -> string {
+  `${render_ctx.output_format}`
+}
+
+function called(render_ctx: ai.Context) -> string {
+  `${render_ctx.output_format()}`
+}
+
+function stringified(render_ctx: ai.Context) -> string {
+  `${render_ctx.output_format.to_string()}`
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    let message = "`output_format` must be called; use `output_format()`";
+
+    assert_eq!(
+        tir.matches(message).count(),
+        2,
+        "bare output_format references should fail while calls remain valid:\n{tir}"
+    );
 }
 
 #[test]

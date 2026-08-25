@@ -876,7 +876,7 @@ mod tests {
         db.set_project_root(root);
         db.add_or_update_file(
             root.join("main.baml").as_path(),
-            "class Resume { name string }\nfunction ExtractResume(resume: string) -> Resume {\n    client: \"openai/gpt-4o\"\n    prompt: `Extract resume from ${resume} ${ctx.output_format}`\n}\n",
+            "class Resume { name string }\nfunction ExtractResume(resume: string) -> Resume {\n    client: \"openai/gpt-4o\"\n    prompt: `Extract resume from ${resume} ${ctx.output_format()}`\n}\n",
         );
 
         let pool = build_symbol_pool(&db);
@@ -914,7 +914,7 @@ class Resume { name string }
 
 function ExtractResume(resume: string) -> Resume {
   client: "openai/gpt-4o"
-  prompt: `Extract resume from ${resume} ${ctx.output_format}`
+  prompt: `Extract resume from ${resume} ${ctx.output_format()}`
 }
 "##,
         );
@@ -953,11 +953,11 @@ function ExtractResume(resume: string) -> Resume {
 class Extractor {
   function extract(self, text: string, suffix: string = "!") -> string {
     client: "openai/gpt-4o"
-    prompt: `Extract ${text}${suffix} ${ctx.output_format}`
+    prompt: `Extract ${text}${suffix} ${ctx.output_format()}`
   }
   function summarize(text: string, suffix: string = "!") -> string {
     client: "openai/gpt-4o"
-    prompt: `Summarize ${text}${suffix} ${ctx.output_format}`
+    prompt: `Summarize ${text}${suffix} ${ctx.output_format()}`
   }
 }
 "##,

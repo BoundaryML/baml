@@ -1,5 +1,5 @@
 // Two or more class fields that serialize to the same JSON key produce an
-// unsatisfiable schema (B-615): `ctx.output_format` renders duplicate keys and
+// unsatisfiable schema (B-615): `ctx.output_format()` renders duplicate keys and
 // a required shadowed field can never be parsed. Each of these classes must be
 // rejected with E0149.
 

@@ -15,7 +15,7 @@ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<M
   prompt: `
     Merge these: ${i1} ${i2}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 
@@ -31,7 +31,7 @@ function InOutLiteralStringUnionMapKey(
 
     ${i2}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 

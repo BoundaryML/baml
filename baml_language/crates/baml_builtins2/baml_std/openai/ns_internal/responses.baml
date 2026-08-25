@@ -748,7 +748,7 @@ function _openai_request(
     stream: bool,
     preview: bool = false,
 ) -> baml.http.Request {
-    let prompt = input.prompt(ai.wire.render_output_format(input.output_type));
+    let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
     let items = openai_lower_prompt(prompt, preview = preview);
     // sanitize BEFORE lowering: foreign reasoning, empty turns and orphaned
     // tool calls are everyone's problem, fixed once in ai.wire.

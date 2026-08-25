@@ -100,29 +100,18 @@ fn user.fixtures.retry_policy.UseRetryClient$render_prompt(input: string) -> ai.
     let _0: ai.Prompt // _0 // return
     let _1: string // input // param
     let _2: ai.FunctionSpec<string>
-    let _3: string
-    let _4: reflect.Type
-    let _5: reflect.Type
+    let _3: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.retry_policy.UseRetryClient$spec(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(string);
-        goto -> bb2;
+        _3 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _3>(copy _2) -> [bb2];
     }
 
     bb2: {
-        _3 = call const fn ai.wire.render_output_format(copy _4) -> [bb3];
-    }
-
-    bb3: {
-        _5 = load_type(string);
-        _0 = call const fn ai.FunctionSpec.prompt<copy _5>(copy _2, copy _3) -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }
@@ -132,7 +121,7 @@ fn user.fixtures.retry_policy.UseRetryClient$spec(input: string) -> ai.FunctionS
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // input // param [captured]
     let _2: map<string, unknown>
-    let _3: (string) -> ai.Prompt throws never
+    let _3: (ai.OutputFormat) -> ai.Prompt throws never
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
     let _6: ai.Client
@@ -159,10 +148,10 @@ fn user.fixtures.retry_policy.UseRetryClient$spec(input: string) -> ai.FunctionS
 }
 
 // lambda[0]
-fn .<lambda(UseRetryClient$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
+fn .<lambda(UseRetryClient$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
-    let _1: string //  __spec_output_format // param
+    let _1: ai.OutputFormat //  __spec_output_format // param
     let _2: baml.TaggedString //  __spec_tagged_prompt
     let _3: string[] //  __tt_parts
     let _4: unknown[] //  __tt_values

@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 // Two or more enum variants that serialize to the same JSON key produce an
 // unsatisfiable schema (B-649, mirroring the class-field case in B-615):
-// `ctx.output_format` renders duplicate labels and a value the model returns
+// `ctx.output_format()` renders duplicate labels and a value the model returns
 // under the shared label can never be resolved back to a unique variant. Each
 // of these enums must be rejected with E0149. (Key matching is case-sensitive,
 // mirroring emit's raw string equality on variant names/aliases.)

@@ -5585,7 +5585,7 @@ fn attach_function_metadata<'db>(
     // The stream return type is now carried by the synthesized `$stream` companion's
     // own `return_type` (see ppir's `companion_stream_return_type`), so the old
     // emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
-    // of `ctx.output_format` should be re-verified against canary's streaming.
+    // of `ctx.output_format()` should be re-verified against canary's streaming.
     if let Some(llm_meta) = function_llm_meta(db, func_loc)
         && let Some(client) = &llm_meta.client_name
     {

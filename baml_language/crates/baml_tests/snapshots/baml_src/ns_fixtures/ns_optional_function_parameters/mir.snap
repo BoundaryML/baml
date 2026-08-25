@@ -336,29 +336,18 @@ fn user.fixtures.optional_function_parameters.AskDocs$render_prompt(query: strin
     let _2: int // max_results // param
     let _3: string // filter // param
     let _4: ai.FunctionSpec<string>
-    let _5: string
-    let _6: reflect.Type
-    let _7: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _4 = call const fn user.fixtures.optional_function_parameters.AskDocs$spec(copy _1, copy _2, copy _3) -> [bb1];
     }
 
     bb1: {
-        _6 = load_type(string);
-        goto -> bb2;
+        _5 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _5>(copy _4) -> [bb2];
     }
 
     bb2: {
-        _5 = call const fn ai.wire.render_output_format(copy _6) -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(string);
-        _0 = call const fn ai.FunctionSpec.prompt<copy _7>(copy _4, copy _5) -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }
@@ -370,7 +359,7 @@ fn user.fixtures.optional_function_parameters.AskDocs$spec(query: string, max_re
     let _2: int // max_results // param [captured]
     let _3: string // filter // param [captured]
     let _4: map<string, unknown>
-    let _5: (string) -> ai.Prompt throws never
+    let _5: (ai.OutputFormat) -> ai.Prompt throws never
     let _6: ai.tools.Toolbox
     let _7: ai.tools.Tool[]
     let _8: ai.Client
@@ -397,10 +386,10 @@ fn user.fixtures.optional_function_parameters.AskDocs$spec(query: string, max_re
 }
 
 // lambda[0]
-fn .<lambda(AskDocs$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
+fn .<lambda(AskDocs$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
-    let _1: string //  __spec_output_format // param
+    let _1: ai.OutputFormat //  __spec_output_format // param
     let _2: baml.TaggedString //  __spec_tagged_prompt
     let _3: string[] //  __tt_parts
     let _4: unknown[] //  __tt_values

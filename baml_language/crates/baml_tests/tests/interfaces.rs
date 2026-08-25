@@ -2450,7 +2450,7 @@ fn llm_function_can_return_interface_type() {
             client: GPT4o
             prompt: `
                 Identify the animal from the description: ${description}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
         "##,
@@ -2486,7 +2486,7 @@ fn llm_function_returning_interface_enumerates_implementors_in_schema() {
             client: GPT4o
             prompt: `
                 Identify the animal: ${description}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
         "##,
@@ -2805,7 +2805,7 @@ fn llm_function_with_interface_array_return_compiles() {
             client: GPT4o
             prompt: `
                 Identify every animal mentioned in ${description}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
         "##,
@@ -2831,7 +2831,7 @@ fn llm_function_with_interface_in_union_return_compiles() {
             prompt: `
                 If ${description} clearly identifies an animal, return one.
                 Otherwise, paraphrase the description.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
         "##,
@@ -2860,7 +2860,7 @@ fn llm_function_takes_interface_typed_parameter_compiles() {
             client: GPT4o
             prompt: `
                 Describe the animal named ${a.name}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
         "##,

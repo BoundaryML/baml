@@ -9,14 +9,14 @@ function user.GetBoxedInt(client: ai.Client | null = null) -> user.Box<int> thro
   ai.Agent.new<Box<int>>(client = client).run(GetBoxedInt$spec()).value : user.Box<int>
 }
 function user.GetBoxedInt$spec() -> ai.FunctionSpec<user.Box<int>> throws never {
-  ai.FunctionSpec { spec_name: "GetBoxedInt", args: map {  }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Dummy) } : ai.FunctionSpec<user.Box<int>>
+  ai.FunctionSpec { spec_name: "GetBoxedInt", args: map {  }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Dummy) } : ai.FunctionSpec<user.Box<int>>
 }
 lambda user.GetBoxedInt$spec {
 }
 block user.GetBoxedInt$spec {
 }
 function user.GetBoxedInt$render_prompt() -> ai.Prompt throws never {
-  GetBoxedInt$spec().prompt(output_format = ai.wire.render_output_format(reflect.Type.of<Box<int>>())) : ai.Prompt
+  GetBoxedInt$spec().prompt() : ai.Prompt
 }
 function user.GetBoxedInt$build_request(client: ai.Client | null = null) -> baml.http.Request throws never {
   GetBoxedInt$spec().build_request(override_client = client) : baml.http.Request

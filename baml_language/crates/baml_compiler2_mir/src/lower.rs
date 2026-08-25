@@ -7947,7 +7947,7 @@ impl<'db> LoweringContext<'db> {
             _ => None,
         };
         let sysop_callee = callee_expr.and_then(|callee| self.sys_op_callee(callee));
-        // A method-convention sys-op call (e.g. `ctx.output_format_with(...)`) has
+        // A method-convention sys-op call (e.g. `output_format._render(...)`) has
         // a receiver-relative `param_index` — TIR strips `self` via
         // `skip_self_param` when building the call plan — but the callee's default
         // arena (`function_parameter_defaults`) is indexed self-inclusive. Shift

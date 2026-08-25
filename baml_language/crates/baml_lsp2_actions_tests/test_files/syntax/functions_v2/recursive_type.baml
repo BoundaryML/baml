@@ -12,7 +12,7 @@ function GetTreeLen(input: BinaryNode) -> int {
     INPUT:
     ${input}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 
@@ -24,7 +24,7 @@ function BuildTree(input: int) -> BinaryNode {
     INPUT:
     ${input}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 

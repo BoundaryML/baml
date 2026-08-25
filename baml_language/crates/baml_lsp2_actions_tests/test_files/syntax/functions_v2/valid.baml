@@ -67,7 +67,7 @@ function TestEnumStringEquality(color: Color) -> string {
   prompt: `
     The color is: ${color}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 
@@ -76,7 +76,7 @@ function TestEnumInExpressions(color: Color) -> string {
   prompt: `
     Classify the color ${color}.
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 

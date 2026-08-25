@@ -61,10 +61,7 @@ function fixtures.stream_llm_inferred_typeargs.TestFunc$render_prompt(input: str
     call user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }

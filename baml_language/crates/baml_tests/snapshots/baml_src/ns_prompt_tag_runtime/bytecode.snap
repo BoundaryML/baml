@@ -102,21 +102,21 @@ function prompt_tag_runtime.$init_test_ns_prompt_tag_runtime_prompt_tag_runtime(
     pop 1
     load_var registry
     load_const "root.prompt_tag_runtime"
-    load_const "prompt_interpolates_ctx_output_format_with"
+    load_const "prompt_interpolates_ctx_output_format_options"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 14)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.prompt_tag_runtime"
-    load_const "prompt_output_format_with_omits_leading_optional_arg"
+    load_const "prompt_output_format_omits_leading_optional_arg"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 15)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.prompt_tag_runtime"
-    load_const "prompt_output_format_with_can_render_null_as_omit"
+    load_const "prompt_output_format_can_render_null_as_omit"
     make_closure .<lambda($init_test_ns_prompt_tag_runtime_prompt_tag_runtime, 16)>, 0
     load_const null
     call testing.TestCollector.register_test_at
@@ -192,10 +192,7 @@ function prompt_tag_runtime.PtRenderPerson$render_prompt() -> ai.Prompt {
     call user.prompt_tag_runtime.PtRenderPerson$spec
     store_var _1
     load_type prompt_tag_runtime.Person
-    call ai.wire.render_output_format
-    store_var _2
-    load_type prompt_tag_runtime.Person
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }
@@ -312,10 +309,7 @@ function prompt_tag_runtime.PtStructuredGreeting$render_prompt(name: string) -> 
     call user.prompt_tag_runtime.PtStructuredGreeting$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -439,10 +433,7 @@ function prompt_tag_runtime.PtStructuredImage$render_prompt(photo: image) -> ai.
     call user.prompt_tag_runtime.PtStructuredImage$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -543,8 +534,7 @@ function prompt_tag_runtime.pt_class_array_interp_fn() -> string {
     load_type unknown
     alloc_map 0
     load_const null
-    load_const null
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.text
@@ -576,7 +566,7 @@ function prompt_tag_runtime.pt_ctx_output_format_fn() -> string {
     make_cell
     store_var ?2
     load_type prompt_tag_runtime.Person
-    sys_op ai.internal.render_output_format
+    sys_op ai.internal.build_output_format
     store_var of
     load_const "c"
     load_const "openai"
@@ -589,8 +579,7 @@ function prompt_tag_runtime.pt_ctx_output_format_fn() -> string {
     load_type unknown
     alloc_map 0
     load_var of
-    load_const null
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, ._output_format
     store_deref ?2
     load_var ctx
     make_closure .<tagged(pt_ctx_output_format_fn, 0)>, 1
@@ -666,8 +655,7 @@ function prompt_tag_runtime.pt_nested_media_fn() -> string {
     load_type unknown
     alloc_map 0
     load_const null
-    load_const null
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.text
@@ -702,26 +690,20 @@ function prompt_tag_runtime.pt_nested_tostring_and_media_fn() -> string {
     load_type unknown
     alloc_map 0
     load_const null
-    load_const null
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.text
     return
 }
 
-function prompt_tag_runtime.pt_output_format_with_null_as_omit_fn() -> string {
-    load_var ?2
+function prompt_tag_runtime.pt_output_format_null_as_omit_fn() -> string {
+    load_var ?1
     make_cell
-    store_var ?2
+    store_var ?1
     load_type prompt_tag_runtime.PersonNick
-    store_var rt
-    load_var rt
-    sys_op ai.internal.render_output_format
-    store_var _7
-    load_var rt
     sys_op ai.internal.build_output_format
-    store_var _9
+    store_var _7
     load_const "c"
     load_const "openai"
     load_const "user"
@@ -732,32 +714,27 @@ function prompt_tag_runtime.pt_output_format_with_null_as_omit_fn() -> string {
     load_type string
     load_type unknown
     alloc_map 0
-    load_var2 3 4
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
-    store_deref ?2
+    load_var _7
+    init_instance ai.Context .client, .tags, ._output_format
+    store_deref ?1
     load_var ctx
-    make_closure .<tagged(pt_output_format_with_null_as_omit_fn, 0)>, 1
+    make_closure .<tagged(pt_output_format_null_as_omit_fn, 0)>, 1
     call ai.prompt
     store_var render
-    load_deref ?2
+    load_deref ?1
     load_var render
     call_indirect
     call ai.Prompt.text
     return
 }
 
-function prompt_tag_runtime.pt_output_format_with_omitted_leading_fn() -> string {
-    load_var ?2
+function prompt_tag_runtime.pt_output_format_omitted_leading_fn() -> string {
+    load_var ?1
     make_cell
-    store_var ?2
+    store_var ?1
     load_type prompt_tag_runtime.Person
-    store_var rt
-    load_var rt
-    sys_op ai.internal.render_output_format
-    store_var _7
-    load_var rt
     sys_op ai.internal.build_output_format
-    store_var _9
+    store_var _7
     load_const "c"
     load_const "openai"
     load_const "user"
@@ -768,32 +745,27 @@ function prompt_tag_runtime.pt_output_format_with_omitted_leading_fn() -> string
     load_type string
     load_type unknown
     alloc_map 0
-    load_var2 3 4
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
-    store_deref ?2
+    load_var _7
+    init_instance ai.Context .client, .tags, ._output_format
+    store_deref ?1
     load_var ctx
-    make_closure .<tagged(pt_output_format_with_omitted_leading_fn, 0)>, 1
+    make_closure .<tagged(pt_output_format_omitted_leading_fn, 0)>, 1
     call ai.prompt
     store_var render
-    load_deref ?2
+    load_deref ?1
     load_var render
     call_indirect
     call ai.Prompt.text
     return
 }
 
-function prompt_tag_runtime.pt_output_format_with_prefix_fn() -> string {
-    load_var ?2
+function prompt_tag_runtime.pt_output_format_prefix_fn() -> string {
+    load_var ?1
     make_cell
-    store_var ?2
+    store_var ?1
     load_type prompt_tag_runtime.Person
-    store_var rt
-    load_var rt
-    sys_op ai.internal.render_output_format
-    store_var _7
-    load_var rt
     sys_op ai.internal.build_output_format
-    store_var _9
+    store_var _7
     load_const "c"
     load_const "openai"
     load_const "user"
@@ -804,14 +776,14 @@ function prompt_tag_runtime.pt_output_format_with_prefix_fn() -> string {
     load_type string
     load_type unknown
     alloc_map 0
-    load_var2 3 4
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
-    store_deref ?2
+    load_var _7
+    init_instance ai.Context .client, .tags, ._output_format
+    store_deref ?1
     load_var ctx
-    make_closure .<tagged(pt_output_format_with_prefix_fn, 0)>, 1
+    make_closure .<tagged(pt_output_format_prefix_fn, 0)>, 1
     call ai.prompt
     store_var render
-    load_deref ?2
+    load_deref ?1
     load_var render
     call_indirect
     call ai.Prompt.text
@@ -842,8 +814,7 @@ function prompt_tag_runtime.pt_parent_tostring_owns_media_fn() -> string {
     load_type unknown
     alloc_map 0
     load_const null
-    load_const null
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.text
@@ -893,8 +864,7 @@ function prompt_tag_runtime.pt_role_messages_fn() -> string {
     load_type unknown
     alloc_map 0
     load_const null
-    load_const null
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.text
@@ -909,7 +879,6 @@ function prompt_tag_runtime.pt_spec_prompt_media_fn() -> string {
     store_var _5
     load_type string
     load_var _5
-    load_const <omitted>
     call ai.FunctionSpec.prompt
     call ai.Prompt.messages
     load_const 0
@@ -924,7 +893,6 @@ function prompt_tag_runtime.pt_spec_prompt_messages_fn() -> ai.PromptMessage[] {
     store_var _2
     load_type string
     load_var _2
-    load_const <omitted>
     call ai.FunctionSpec.prompt
     call ai.Prompt.messages
     return
@@ -953,8 +921,7 @@ function prompt_tag_runtime.pt_tostring_override_fn() -> string {
     load_type unknown
     alloc_map 0
     load_const null
-    load_const null
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.text
@@ -982,8 +949,7 @@ function prompt_tag_runtime.pt_unqualified_prompt_fn() -> string {
     load_type unknown
     alloc_map 0
     load_const null
-    load_const null
-    init_instance ai.Context .client, .tags, .output_format, ._output_format
+    init_instance ai.Context .client, .tags, ._output_format
     load_var render
     call_indirect
     call ai.Prompt.text

@@ -277,7 +277,7 @@ function images_render(
     // The schema block an ordinary client injects is noise for an image
     // endpoint (`Return an image output.` is the only shape it can produce),
     // so the rendered prompt carries the authored text alone.
-    let text = _oai_images_prompt_text(input.prompt(""), journal);
+    let text = _oai_images_prompt_text(input.prompt(ai.internal.build_output_format(input.output_type)), journal);
     let request = OaImagesRequest {
         model: c.model,
         prompt: text,

@@ -39,7 +39,7 @@ function MapAlias(m: Graph) -> Graph {
 
       ${m}
 
-      ${ctx.output_format}
+      ${ctx.output_format()}
     `
 }
 
@@ -50,7 +50,7 @@ function NestedAlias(c: Combination) -> Combination {
 
       ${c}
 
-      ${ctx.output_format}
+      ${ctx.output_format()}
     `
 }
 
@@ -61,7 +61,7 @@ function MergeAliasAttributes(money: int) -> MergeAttrs {
 
       ${money}
 
-      ${ctx.output_format}
+      ${ctx.output_format()}
     `
 }
 

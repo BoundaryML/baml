@@ -27,7 +27,7 @@ function ExtractReceipt(receipt: image | string) -> Receipt {
     Extract info from this receipt:
     ${receipt}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 
@@ -84,7 +84,7 @@ function ExtractResume(resume_text: string) -> Resume {
     ${resume_text}
     ---
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
 
     JSON:
   `
@@ -135,7 +135,7 @@ function ClassifyMessage(message: Message) -> Category {
     ${message.userName}: ${message.message}
     ---
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
 
     Response:
   `
@@ -217,7 +217,7 @@ function UseTool(user_message: string) -> WeatherAPI {
     ${user_message}
     ---
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
 
     JSON:
   `
@@ -251,7 +251,7 @@ function ChooseOneTool(user_message: string) -> WeatherAPI2 | SendEmail {
     ${user_message}
     ---
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
 
     JSON:
   `
@@ -284,7 +284,7 @@ function ChooseNTools(user_message: string) -> (WeatherAPI2 | SendEmail)[] {
     ${user_message}
     ---
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
 
     JSON:
   `
@@ -334,7 +334,7 @@ function DescribeImage(myImage: image) -> ImageDescription {
   prompt: `
     Describe this in 2 sentences: ${myImage}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 
@@ -413,7 +413,7 @@ function ExtractResumeUsingOllama(resume_text: string) -> OResume {
     ${resume_text}
     ---
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
 
     JSON:
   `
@@ -468,7 +468,7 @@ function ClassifyMessageUsingOllama(message: OMessage) -> OCategory {
     ${message.userName}: ${message.message}
     ---
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
 
     Response:
   `
@@ -545,7 +545,7 @@ function GetOrderInfo(email: Email) -> OrderInfo {
     Email Body: ${email.body}
     -------
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
 
     Before you output the JSON, please explain your
     reasoning step-by-step. Here is an example on how to do this:
@@ -614,7 +614,7 @@ function ClassifyMessageWithSymbol(input: string) -> MyClass {
 
     INPUT: ${input}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
 
     Response:
   `
@@ -643,7 +643,7 @@ function ClassifyMessageWithRoles(input: string) -> MyCategory {
     Classify the following INPUT into ONE
     of the following categories:
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
 
     INPUT: ${input}
 
@@ -712,7 +712,7 @@ function ClassifyConversation(messages: UserMessage[]) -> Category[] {
     ${messages}
 
     Use the following categories:
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 

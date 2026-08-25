@@ -73,10 +73,7 @@ function fixtures.testset_vibes_nested.ClassifySentiment$render_prompt(text: str
     call user.fixtures.testset_vibes_nested.ClassifySentiment$spec
     store_var _2
     load_type fixtures.testset_vibes_nested.Sentiment
-    call ai.wire.render_output_format
-    store_var _3
-    load_type fixtures.testset_vibes_nested.Sentiment
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -185,10 +182,7 @@ function fixtures.testset_vibes_nested.ClassifySentiment2$render_prompt(text: st
     call user.fixtures.testset_vibes_nested.ClassifySentiment2$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -326,10 +320,7 @@ function fixtures.testset_vibes_nested.GenerateTests$render_prompt(count: int, t
     call user.fixtures.testset_vibes_nested.GenerateTests$spec
     store_var _3
     load_type string[]
-    call ai.wire.render_output_format
-    store_var _4
-    load_type string[]
-    load_var2 3 4
+    load_var _3
     call ai.FunctionSpec.prompt
     return
 }

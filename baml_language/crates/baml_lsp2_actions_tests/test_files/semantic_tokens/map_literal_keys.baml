@@ -15,7 +15,7 @@ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<M
   prompt: `
     Merge these: ${i1} ${i2}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 
@@ -31,7 +31,7 @@ function InOutLiteralStringUnionMapKey(
 
     ${i2}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 
@@ -231,7 +231,7 @@ function InOutLiteralStringUnionMapKey(
 // map_literal_keys.baml:16:16 (string) len=1 ":"
 // map_literal_keys.baml:16:20 (parameter) len=2 "i1"
 // map_literal_keys.baml:16:26 (parameter) len=2 "i2"
-// map_literal_keys.baml:18:11 (property) len=13 "output_format"
+// map_literal_keys.baml:18:11 (method) len=13 "output_format"
 // map_literal_keys.baml:19:3 (string) len=1 "`"
 // map_literal_keys.baml:22:1 (keyword) len=8 "function"
 // map_literal_keys.baml:22:10 (function) [declaration] len=29 "InOutLiteralStringUnionMapKey"
@@ -279,5 +279,5 @@ function InOutLiteralStringUnionMapKey(
 // map_literal_keys.baml:28:16 (string) len=1 ":"
 // map_literal_keys.baml:30:7 (parameter) len=2 "i1"
 // map_literal_keys.baml:32:7 (parameter) len=2 "i2"
-// map_literal_keys.baml:34:11 (property) len=13 "output_format"
+// map_literal_keys.baml:34:11 (method) len=13 "output_format"
 // map_literal_keys.baml:35:3 (string) len=1 "`"
