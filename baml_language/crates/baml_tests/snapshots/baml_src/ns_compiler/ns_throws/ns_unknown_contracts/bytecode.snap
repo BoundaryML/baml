@@ -1,0 +1,70 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function compiler.throws.unknown_contracts.$init_test_ns_compiler_ns_throws_ns_unknown_contracts_precision(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.compiler.throws.unknown_contracts"
+    load_const "rejects an unknown bound when the body does not throw"
+    make_closure .<lambda($init_test_ns_compiler_ns_throws_ns_unknown_contracts_precision, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.throws.unknown_contracts"
+    load_const "rejects an unknown bound when inference finds a narrower type"
+    make_closure .<lambda($init_test_ns_compiler_ns_throws_ns_unknown_contracts_precision, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.throws.unknown_contracts"
+    load_const "a union containing unknown still requires an unknown throw"
+    make_closure .<lambda($init_test_ns_compiler_ns_throws_ns_unknown_contracts_precision, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.throws.unknown_contracts"
+    load_const "a concrete union bound may include an unused member"
+    make_closure .<lambda($init_test_ns_compiler_ns_throws_ns_unknown_contracts_precision, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.throws.unknown_contracts"
+    load_const "an escaping unknown satisfies direct and aliased bounds"
+    make_closure .<lambda($init_test_ns_compiler_ns_throws_ns_unknown_contracts_precision, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.throws.unknown_contracts"
+    load_const "signature and callback unknown boundaries compile"
+    make_closure .<lambda($init_test_ns_compiler_ns_throws_ns_unknown_contracts_precision, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.throws.unknown_contracts"
+    load_const "unknown propagating through a call satisfies the bound"
+    make_closure .<lambda($init_test_ns_compiler_ns_throws_ns_unknown_contracts_precision, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.throws.unknown_contracts"
+    load_const "a mixed bound compiles when every member can escape"
+    make_closure .<lambda($init_test_ns_compiler_ns_throws_ns_unknown_contracts_precision, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.compiler.throws.unknown_contracts"
+    load_const "an unused concrete member does not invalidate a satisfied unknown bound"
+    make_closure .<lambda($init_test_ns_compiler_ns_throws_ns_unknown_contracts_precision, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}

@@ -1892,7 +1892,8 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::CallbackThrowsContractViolation { .. } => {
             DiagnosticId::ThrowsContractViolation
         }
-        TirTypeError::ExtraneousThrowsDeclaration { .. } => DiagnosticId::ThrowsContractExtraneous,
+        TirTypeError::ExtraneousThrowsDeclaration { .. }
+        | TirTypeError::ImpreciseUnknownThrows { .. } => DiagnosticId::ThrowsContractExtraneous,
         TirTypeError::CannotInferTypeParameter { .. } => DiagnosticId::UnknownType,
         TirTypeError::TypeParamShadowed { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,

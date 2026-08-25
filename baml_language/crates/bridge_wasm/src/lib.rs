@@ -90,7 +90,12 @@ pub fn version() -> String {
 /// Get the Git commit used to build the `bridge_wasm` crate.
 #[wasm_bindgen(js_name = commitHash)]
 pub fn commit_hash() -> String {
-    env!("BRIDGE_WASM_GIT_SHA").to_string()
+    let git_sha = env!("BRIDGE_WASM_GIT_SHA");
+    if git_sha.is_empty() {
+        String::new()
+    } else {
+        git_sha.to_owned()
+    }
 }
 
 /// Returns the build timestamp (unix seconds) for hot-reload / build-identity checks.

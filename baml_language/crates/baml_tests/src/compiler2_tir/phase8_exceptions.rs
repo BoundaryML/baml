@@ -107,6 +107,25 @@ fn extraneous_throws_declaration_is_warning() {
 }
 
 #[test]
+fn open_throws_contract_keeps_other_extraneous_members_as_warning() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"class UnusedError {}
+
+function f(value: unknown) -> int throws unknown | UnusedError {
+  throw value
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("??") && output.contains("extraneous throws declaration: UnusedError"),
+        "expected the unused concrete member to remain a warning, got:\n{output}"
+    );
+}
+
+#[test]
 fn match_bare_type_arm_narrows_scrutinee_in_arm_scope() {
     let mut db = make_db();
     let file = db.file(
