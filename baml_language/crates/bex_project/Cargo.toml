@@ -63,11 +63,7 @@ tracing = { workspace = true }
 vfs = { workspace = true }
 
 [build-dependencies]
-baml_base = { workspace = true }
-baml_builtins2 = { workspace = true }
 baml_compiler2_emit = { workspace = true }
-baml_compiler2_hir = { workspace = true }
-baml_compiler2_hir_ty = { workspace = true }
 baml_project = { workspace = true }
 baml_version = { workspace = true }
 borsh = { workspace = true }
