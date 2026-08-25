@@ -6817,7 +6817,7 @@ impl<'db> LoweringContext<'db> {
                 self.class_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty)
             {
                 debug_assert!(
-                    self.class_fields.contains_key(&tn),
+                    self.is_interface_type_name(&tn) || self.class_fields.contains_key(&tn),
                     "MIR field-access lowering has no class_fields row for `{tn}`"
                 );
                 if let Some(fields) = self.class_fields.get(&tn) {
@@ -11100,7 +11100,7 @@ impl<'db> LoweringContext<'db> {
         // Look up field index from class_fields
         let field_idx = if let RuntimeTy::Class(tn, _, _) = &unwrapped_ty {
             debug_assert!(
-                self.class_fields.contains_key(tn),
+                self.is_interface_type_name(tn) || self.class_fields.contains_key(tn),
                 "MIR field-access lowering has no class_fields row for `{tn}`"
             );
             self.class_fields
@@ -13109,7 +13109,7 @@ impl LoweringContext<'_> {
                         self.class_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty)
                     {
                         debug_assert!(
-                            self.class_fields.contains_key(&tn),
+                            self.is_interface_type_name(&tn) || self.class_fields.contains_key(&tn),
                             "MIR field-access lowering has no class_fields row for `{tn}`"
                         );
                         if let Some(fields) = self.class_fields.get(&tn) {
@@ -13248,7 +13248,7 @@ impl LoweringContext<'_> {
                 let unwrapped_ty = base_ty.strip_null();
                 if let RuntimeTy::Class(tn, _, _) = &unwrapped_ty {
                     debug_assert!(
-                        self.class_fields.contains_key(tn),
+                        self.is_interface_type_name(tn) || self.class_fields.contains_key(tn),
                         "MIR field-access lowering has no class_fields row for `{tn}`"
                     );
                     if let Some(fields) = self.class_fields.get(tn) {

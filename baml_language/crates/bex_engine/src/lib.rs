@@ -6957,8 +6957,8 @@ impl BexEngine {
         // In the consumer compile world, a runtime declaration is spelled
         // `alias.<item name>`: the mount surface is the only channel that
         // names it there, whatever its home world called it. Compiled
-        // declarations keep their own qualified names — those mean the
-        // same thing in every compile world.
+        // declarations from another dependency keep their qualified names;
+        // declarations local to this mounted package relocate to its alias.
         let wire_head =
             |head: &bex_vm_types::TypeHead| -> Result<baml_type::TypeName, EngineError> {
                 if !head.is_resolved() {
@@ -6967,13 +6967,22 @@ impl BexEngine {
                     });
                 }
                 if vm.heap.is_compile_time_ptr(head.ptr()) {
-                    return head
+                    let name = head
                         .declared_name()
                         .ok_or_else(|| EngineError::TypeMismatch {
                             message: format!(
                                 "mounted type `{export_name}` names an unnameable compiled head"
                             ),
-                        });
+                        })?;
+                    return Ok(if name.is_local() {
+                        baml_type::QualifiedTypeName::new(
+                            baml_type::Name::new(alias),
+                            name.namespace().clone(),
+                            name.name().clone(),
+                        )
+                    } else {
+                        name
+                    });
                 }
                 let item = match vm.get_object(head.ptr()) {
                     Object::Class(class) => class.name.item_name().clone(),
@@ -7044,9 +7053,111 @@ impl BexEngine {
                 })
             })
             .collect::<Result<Vec<_>, EngineError>>()?;
-        // Witnesses live on the impl rules now, not beside the type; a
-        // mount no longer restates them.
-        let witnesses = Vec::new();
+        // Dynamic witness rules are heap objects rather than TypeValue sidecars,
+        // but the consumer compiler cannot see this VM's dispatch table. Project
+        // the root class's rules into the mount artifact so type checking in the
+        // consumer world sees the same conformances as runtime dispatch.
+        let witnesses = match &value.ty {
+            bex_vm_types::RealizedTy::Class(head, _, _) if head.is_resolved() => {
+                let Object::Class(class) = vm.get_object(head.ptr()) else {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "mounted type `{export_name}` has a non-class declaration head"
+                        ),
+                    });
+                };
+                vm.dynamic_dispatch
+                    .rules_for_class(head.ptr())
+                    .into_iter()
+                    .map(|rule_ptr| {
+                        let Object::ImplRule(rule) = vm.get_object(rule_ptr) else {
+                            return Err(EngineError::TypeMismatch {
+                                message: format!(
+                                    "mounted type `{export_name}` has an invalid witness rule"
+                                ),
+                            });
+                        };
+                        let Object::Interface(interface) = vm.get_object(rule.interface_head)
+                        else {
+                            return Err(EngineError::TypeMismatch {
+                                message: format!(
+                                    "mounted type `{export_name}` has an invalid witness interface"
+                                ),
+                            });
+                        };
+                        if interface.fields.len() != rule.field_links.len() {
+                            return Err(EngineError::TypeMismatch {
+                                message: format!(
+                                    "mounted type `{export_name}` has an incomplete witness field map"
+                                ),
+                            });
+                        }
+                        let interface_head = bex_vm_types::TypeHead::new(
+                            rule.interface_head,
+                            interface.type_tag,
+                        );
+                        let interface_name = wire_head(&interface_head)?;
+                        let interface_args = rule
+                            .interface_args
+                            .iter()
+                            .map(|ty| {
+                                let ty = bex_vm_types::RealizedTy::try_from(ty).map_err(|error| {
+                                    EngineError::TypeMismatch {
+                                        message: format!(
+                                            "mounted type `{export_name}` has an unrealized witness argument: {error}"
+                                        ),
+                                    }
+                                })?;
+                                let ty = bex_vm_types::RuntimeTy::from(ty);
+                                wire_ty(&ty)
+                            })
+                            .collect::<Result<Vec<_>, EngineError>>()?;
+                        let associated_types = rule
+                            .interface_assoc
+                            .iter()
+                            .map(|(name, ty)| {
+                                let ty = bex_vm_types::RealizedTy::try_from(ty).map_err(|error| {
+                                    EngineError::TypeMismatch {
+                                        message: format!(
+                                            "mounted type `{export_name}` has an unrealized witness associated type: {error}"
+                                        ),
+                                    }
+                                })?;
+                                let ty = bex_vm_types::RuntimeTy::from(ty);
+                                Ok((name.clone(), wire_ty(&ty)?))
+                            })
+                            .collect::<Result<Vec<_>, EngineError>>()?;
+                        let field_links = interface
+                            .fields
+                            .iter()
+                            .zip(rule.field_links.iter())
+                            .map(|(field, slot)| {
+                                let class_field = class.fields.get(*slot as usize).ok_or_else(|| {
+                                    EngineError::TypeMismatch {
+                                        message: format!(
+                                            "mounted type `{export_name}` has an out-of-range witness field link"
+                                        ),
+                                    }
+                                })?;
+                                Ok((
+                                    field.name.clone(),
+                                    baml_type::Name::new(&class_field.name),
+                                ))
+                            })
+                            .collect::<Result<Vec<_>, EngineError>>()?;
+                        Ok((
+                            baml_type::Interface::new(
+                                interface_name,
+                                interface_args,
+                                associated_types,
+                            ),
+                            field_links,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, EngineError>>()?
+            }
+            _ => Vec::new(),
+        };
         let ty = value
             .ty
             .try_map_heads(&mut |head| wire_head(head))

@@ -428,12 +428,38 @@ function main() -> bool throws unknown {
   })
   let app = reflect.Package.current().with_types({ "MountedTicket": mounted })
   let s = reflect.Session.new(packages = { "app": app })
-  s.eval(#"let ticket = app.MountedTicket { subject: "visible" }
-ticket.subject"#) == "visible"
+  s.eval(`let ticket = app.MountedTicket { subject: "visible" }
+ticket.subject`) == "visible"
 }
 "####
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn session_export_alias_preserves_nested_mounted_field_types() {
+    let output = baml_test!(
+        r####"
+function main() -> string throws unknown {
+  let inner = reflect.class.new("MountedInner", {
+    "value": reflect.Type.of<string>(),
+  })
+  let outer = reflect.class.new("MountedOuter", {
+    "inner": inner.as_type(),
+  })
+  let app = reflect.Package.current().with_types({ "OuterAlias": outer })
+  let s = reflect.Session.new(packages = { "app": app })
+  s.eval<string>(`let outer = app.OuterAlias {
+  inner: app.MountedInner { value: "visible" },
+}
+outer.inner.value`)
+}
+"####
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("visible".into()))
+    );
 }
 
 #[tokio::test]

@@ -703,8 +703,13 @@ fn enrich_runtime_mount(
                             && fields.iter().all(|(name, ..)| source_identifier(name)) =>
                     {
                         let mut source = format!("class {} {{\n", mount.export_name);
-                        for (field, ..) in fields {
-                            writeln!(&mut source, "  {field} unknown")
+                        for (field, ty, _) in fields {
+                            let ty = if viewpoint.hides_type(ty) {
+                                "unknown".to_string()
+                            } else {
+                                ty.to_string()
+                            };
+                            writeln!(&mut source, "  {field} {ty}")
                                 .expect("writing to String is infallible");
                         }
                         source.push_str("}\n");

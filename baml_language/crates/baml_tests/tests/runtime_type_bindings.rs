@@ -83,6 +83,33 @@ function Items() -> Item[] { [Item { value: "bound" }] }
 "####;
 
 #[tokio::test]
+async fn with_types_carries_runtime_witnesses_into_consumer_compilation() {
+    let output = baml_test!(
+        r####"
+interface Labelled {
+  label string
+}
+
+function main() -> bool throws unknown {
+  let witness = reflect.interface.implementation<Labelled>()
+    .field("label", class_field = "display_name")
+  let person = reflect.class.new("InternalPerson", {
+    "display_name": reflect.Type.of<string>(),
+  }, implementations = [witness])
+  let app = reflect.Package.current().with_types({ "PersonAlias": person })
+  let compiled = reflect.Package.compile({ "consumer.baml": `
+function as_label(value: app.PersonAlias) -> app.Labelled {
+  value
+}
+` }, packages = { "app": app })
+  compiled.functions().get("root.as_label") != null
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
 async fn scenario_four_pattern_two_mounts_a_runtime_type_as_a_static_name() {
     let output = baml_test!(PATTERN_TWO_SOURCE);
     assert_eq!(

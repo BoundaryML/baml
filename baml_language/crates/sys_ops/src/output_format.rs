@@ -30,6 +30,12 @@ pub enum RenderError {
         first: String,
         second: String,
     },
+    #[error("Enums '{first}' and '{second}' both render as '{rendered_name}' in the output schema")]
+    RenderedEnumNameCollision {
+        rendered_name: String,
+        first: String,
+        second: String,
+    },
 }
 
 /// A value within an enum definition for output format rendering.
@@ -152,6 +158,7 @@ impl OutputFormatContent {
         let hoisted_classes = self.compute_hoisted_classes(options);
         let hoisted_enums = self.compute_hoisted_enums(options);
         self.validate_hoisted_class_names(&hoisted_classes)?;
+        self.validate_hoisted_enum_names(&hoisted_enums)?;
 
         let prefix = self.get_prefix(options, &hoisted_classes);
 
@@ -380,6 +387,31 @@ impl OutputFormatContent {
             if let Some(first) = definitions_by_rendered_name.get(&rendered_name) {
                 if first != definition_key {
                     return Err(RenderError::RenderedClassNameCollision {
+                        rendered_name,
+                        first: first.clone(),
+                        second: definition_key.clone(),
+                    });
+                }
+            } else {
+                definitions_by_rendered_name.insert(rendered_name, definition_key.clone());
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_hoisted_enum_names(
+        &self,
+        hoisted: &indexmap::IndexSet<String>,
+    ) -> Result<(), RenderError> {
+        let mut definitions_by_rendered_name = IndexMap::<String, String>::new();
+        for definition_key in hoisted {
+            let Some(enm) = self.find_enum(definition_key) else {
+                continue;
+            };
+            let rendered_name = rendered_name(&enm.name, enm.alias.as_ref()).to_string();
+            if let Some(first) = definitions_by_rendered_name.get(&rendered_name) {
+                if first != definition_key {
+                    return Err(RenderError::RenderedEnumNameCollision {
                         rendered_name,
                         first: first.clone(),
                         second: definition_key.clone(),
@@ -1397,6 +1429,50 @@ mod tests {
             .unwrap();
         assert!(rendered.contains("Choice {"));
         assert!(rendered.contains("Choice_2 {"));
+    }
+
+    #[test]
+    fn duplicate_hoisted_enum_aliases_are_rejected() {
+        let first = dynamic_key("Choice");
+        let second = dynamic_key("Choice");
+        let target = RuntimeTy::Union(
+            vec![
+                RuntimeTy::Enum(first.clone(), TyAttr::default()),
+                RuntimeTy::Enum(second.clone(), TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        let definition = |name: &str| sys_types::EnumDefinition {
+            name: name.to_string(),
+            description: None,
+            alias: Some("SharedChoice".to_string()),
+            variants: vec![sys_types::EnumVariantDefinition {
+                name: "Value".to_string(),
+                description: None,
+                alias: None,
+            }],
+        };
+        let mut enums = indexmap::IndexMap::new();
+        enums.insert(first, definition("Choice"));
+        enums.insert(second, definition("Choice"));
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.enum_definitions = Arc::new(enums);
+
+        let content = build_output_format_content(&target, &ctx);
+        let error = content
+            .render(&RenderOptions {
+                always_hoist_enums: RenderSetting::Always(true),
+                ..RenderOptions::default()
+            })
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedEnumNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
+        ));
     }
 
     // -------------------------------------------------------------------------
