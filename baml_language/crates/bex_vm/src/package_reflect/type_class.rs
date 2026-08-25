@@ -61,7 +61,7 @@ impl BamlClassType for PackageReflectImpl {
 
     fn to_baml(vm: &mut BexVm, self_value: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
         let type_value = cloned_type_value(vm, *self_value);
-        reject_first_render_schema_error(vm, &type_value.ty)?;
+        reject_first_type_value_render_schema_error(vm, &type_value)?;
         Ok(bex_str::BexStr::from(render_type_value_source(
             vm,
             &type_value,
@@ -445,7 +445,11 @@ impl RenderDefinitionValidator<'_> {
 /// name shared by non-equivalent declarations, a non-regular recursive generic
 /// (whose specializations would grow forever), or two distinct recursive
 /// classes hoisted under one rendered name.
-fn first_render_schema_error(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Option<String> {
+fn first_render_schema_error_with_definitions(
+    vm: &BexVm,
+    ty: &bex_vm_types::RealizedTy,
+    definitions: impl IntoIterator<Item = RenderDefinition>,
+) -> Option<String> {
     let mut validator = RenderDefinitionValidator {
         vm,
         by_display_name: std::collections::HashMap::new(),
@@ -454,16 +458,51 @@ fn first_render_schema_error(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Optio
         recursive_classes: std::collections::HashSet::new(),
         rendered_classes: Vec::new(),
     };
-    validator
-        .visit(ty, &RenderOrigins::root())
-        .or_else(|| validator.first_recursive_alias_collision())
+    if let Some(error) = validator.visit(ty, &RenderOrigins::root()) {
+        return Some(error);
+    }
+    for definition in definitions {
+        if let Some(error) = validator.check_name(&definition) {
+            return Some(error);
+        }
+    }
+    validator.first_recursive_alias_collision()
+}
+
+fn first_render_schema_error(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Option<String> {
+    first_render_schema_error_with_definitions(vm, ty, std::iter::empty())
+}
+
+fn first_type_value_render_schema_error(vm: &BexVm, type_value: &TypeValue) -> Option<String> {
+    let (class_ptrs, enum_ptrs) = expanded_type_value_nominals(vm, type_value);
+    let definitions = enum_ptrs
+        .into_iter()
+        .map(RenderDefinition::Enum)
+        .chain(class_ptrs.into_iter().map(RenderDefinition::Class));
+    first_render_schema_error_with_definitions(vm, &type_value.ty, definitions)
 }
 
 fn reject_first_render_schema_error(
     vm: &mut BexVm,
     ty: &bex_vm_types::RealizedTy,
 ) -> Result<(), VmRustFnError> {
-    let Some(message) = first_render_schema_error(vm, ty) else {
+    let message = first_render_schema_error(vm, ty);
+    reject_render_schema_error(vm, message)
+}
+
+fn reject_first_type_value_render_schema_error(
+    vm: &mut BexVm,
+    type_value: &TypeValue,
+) -> Result<(), VmRustFnError> {
+    let message = first_type_value_render_schema_error(vm, type_value);
+    reject_render_schema_error(vm, message)
+}
+
+fn reject_render_schema_error(
+    vm: &mut BexVm,
+    message: Option<String>,
+) -> Result<(), VmRustFnError> {
+    let Some(message) = message else {
         return Ok(());
     };
     let diagnostic = super::type_kinds::compiler_diagnostic(
@@ -1169,7 +1208,10 @@ fn render_witness_sources(
     }
 }
 
-fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
+fn expanded_type_value_nominals(
+    vm: &BexVm,
+    type_value: &TypeValue,
+) -> (Vec<bex_vm_types::HeapPtr>, Vec<bex_vm_types::HeapPtr>) {
     // The type's heads reach every declaration it depends on, and each runtime
     // declaration's `owner` reaches the package that declared it — so the set
     // to render is a walk, not a table. A package contributes its whole surface
@@ -1239,6 +1281,12 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
             }
         }
     }
+
+    (class_ptrs, enum_ptrs)
+}
+
+fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
+    let (class_ptrs, enum_ptrs) = expanded_type_value_nominals(vm, type_value);
 
     let mut spellings = indexmap::IndexMap::new();
     for ptr in enum_ptrs.iter().chain(&class_ptrs) {
@@ -1395,6 +1443,102 @@ mod renderability_tests {
 
     fn attr() -> baml_type::TyAttr {
         baml_type::TyAttr::default()
+    }
+
+    fn empty_package() -> bex_vm_types::types::Package {
+        bex_vm_types::types::Package {
+            exported_names: Vec::new(),
+            classes: indexmap::IndexMap::new(),
+            enums: indexmap::IndexMap::new(),
+            interfaces: indexmap::IndexMap::new(),
+            impl_rules: indexmap::IndexMap::new(),
+            functions: indexmap::IndexMap::new(),
+            type_aliases: indexmap::IndexMap::new(),
+            interface_blob: Vec::new(),
+            test_init: None,
+            mounted_types: indexmap::IndexMap::new(),
+            kind: bex_vm_types::types::PackageKind::default(),
+        }
+    }
+
+    fn alloc_test_class(
+        vm: &mut BexVm,
+        name: &str,
+        description: Option<&str>,
+        owner: bex_vm_types::HeapPtr,
+    ) -> (bex_vm_types::HeapPtr, baml_type::typetag::TypeTag) {
+        let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
+        let ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
+            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new(name)),
+            fields: Vec::new(),
+            description: description.map(str::to_string),
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::new(),
+            type_tag,
+            ty_attr: attr(),
+            has_cleanup: false,
+            generic_param_count: 0,
+            owner,
+        })));
+        (ptr, type_tag)
+    }
+
+    fn package_member_name(name: &str) -> bex_vm_types::types::LocalName {
+        bex_vm_types::types::LocalName {
+            namespace: Vec::new(),
+            name: baml_type::Name::new(name),
+        }
+    }
+
+    #[test]
+    fn package_expansion_rejects_non_equivalent_same_name_members() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let first_package = vm.tlab.alloc(Object::Package(Box::new(empty_package())));
+        let second_package = vm.tlab.alloc(Object::Package(Box::new(empty_package())));
+
+        let (first_root, first_root_tag) =
+            alloc_test_class(&mut vm, "FirstRoot", None, first_package);
+        let (second_root, second_root_tag) =
+            alloc_test_class(&mut vm, "SecondRoot", None, second_package);
+        let (first_shared, _) =
+            alloc_test_class(&mut vm, "Shared", Some("first definition"), first_package);
+        let (second_shared, _) =
+            alloc_test_class(&mut vm, "Shared", Some("second definition"), second_package);
+
+        let Object::Package(package) = vm.get_object_mut(first_package) else {
+            unreachable!("test package pointer")
+        };
+        package
+            .classes
+            .insert(package_member_name("Shared"), first_shared);
+        let Object::Package(package) = vm.get_object_mut(second_package) else {
+            unreachable!("test package pointer")
+        };
+        package
+            .classes
+            .insert(package_member_name("Shared"), second_shared);
+
+        let type_value = TypeValue::new(bex_vm_types::RealizedTy::Union(
+            vec![
+                bex_vm_types::RealizedTy::Class(
+                    bex_vm_types::TypeHead::new(first_root, first_root_tag),
+                    Vec::new(),
+                    attr(),
+                ),
+                bex_vm_types::RealizedTy::Class(
+                    bex_vm_types::TypeHead::new(second_root, second_root_tag),
+                    Vec::new(),
+                    attr(),
+                ),
+            ],
+            attr(),
+        ));
+
+        assert_eq!(
+            first_type_value_render_schema_error(&vm, &type_value).as_deref(),
+            Some("type `Shared` has non-equivalent definitions in the same LLM render context")
+        );
     }
 
     #[test]

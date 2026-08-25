@@ -38,6 +38,14 @@ pub enum RenderError {
         first: String,
         second: String,
     },
+    #[error(
+        "Type alias definitions for '{rendered_name}' have non-equivalent targets '{first}' and '{second}'"
+    )]
+    RenderedTypeAliasNameCollision {
+        rendered_name: String,
+        first: String,
+        second: String,
+    },
 }
 
 /// A value within an enum definition for output format rendering.
@@ -1246,9 +1254,19 @@ fn walk_ty(
             }
             if let Some(target_ty) = find_type_alias_definition(ctx, type_name) {
                 let output_name = type_name.display_name().to_string();
-                content
-                    .recursive_type_aliases
-                    .insert(output_name, target_ty.clone());
+                if let Some(first) = content.recursive_type_aliases.get(&output_name) {
+                    if first != target_ty {
+                        return Err(RenderError::RenderedTypeAliasNameCollision {
+                            rendered_name: output_name,
+                            first: first.to_string(),
+                            second: target_ty.to_string(),
+                        });
+                    }
+                } else {
+                    content
+                        .recursive_type_aliases
+                        .insert(output_name, target_ty.clone());
+                }
                 let target_origins = LaneOrigins::opaque(ancestry.len());
                 walk_ty(target_ty, &target_origins, ctx, content, visited, ancestry)?;
             }
@@ -1421,6 +1439,58 @@ mod tests {
                 second,
             } if rendered_name == "SharedChoice" && first == "SharedChoice" && second == "Choice"
         ));
+    }
+
+    #[test]
+    fn same_name_type_aliases_with_different_targets_are_rejected() {
+        let first = dynamic_key("SharedAlias");
+        let second = dynamic_key("SharedAlias");
+        let target = RuntimeTy::Union(
+            vec![
+                RuntimeTy::TypeAlias(first.clone(), TyAttr::default()),
+                RuntimeTy::TypeAlias(second.clone(), TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        let mut aliases = indexmap::IndexMap::new();
+        aliases.insert(first, ty_string());
+        aliases.insert(second, ty_int());
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.type_alias_definitions = Arc::new(aliases);
+
+        let error = build_output_format_content(&target, &ctx)
+            .render(&RenderOptions::default())
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedTypeAliasNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "SharedAlias" && first == "string" && second == "int"
+        ));
+    }
+
+    #[test]
+    fn same_name_type_aliases_with_equivalent_targets_fold_once() {
+        let first = dynamic_key("SharedAlias");
+        let second = dynamic_key("SharedAlias");
+        let target = RuntimeTy::Union(
+            vec![
+                RuntimeTy::TypeAlias(first.clone(), TyAttr::default()),
+                RuntimeTy::TypeAlias(second.clone(), TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        let mut aliases = indexmap::IndexMap::new();
+        aliases.insert(first, ty_string());
+        aliases.insert(second, ty_string());
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.type_alias_definitions = Arc::new(aliases);
+
+        let content = build_output_format_content(&target, &ctx);
+        assert_eq!(content.recursive_type_aliases.len(), 1);
+        assert!(content.render(&RenderOptions::default()).is_ok());
     }
 
     // -------------------------------------------------------------------------

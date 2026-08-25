@@ -15,7 +15,7 @@ client TestClient = openai.ResponsesClient.new(
 
 function Extract<T>() -> T {
   client: TestClient
-  prompt: `${ctx.output_format}`
+  prompt: `${ctx.output_format()}`
 }
 
 function Check<T>(expected: reflect.Type, document: string) -> bool throws unknown {
@@ -32,20 +32,20 @@ class StaticInner {
 
 function main() -> bool throws unknown {
   let inner = reflect.class.new("Inner", { "x": reflect.Type.of<string>() })
-  let inner_array = inner.as_type().array()
+  let inner_array = inner.as_type().array().as_type()
   let holder_array = reflect.class.new("HolderArray", { "bs": inner_array }).as_type()
   let holder_map = reflect.class.new("HolderMap", {
     "by_name": reflect.map.new(reflect.Type.of<string>(), inner.as_type()).as_type(),
   }).as_type()
   let minted_enum = reflect.enum.new("MintedState", ["Ready", "Done"])
-  let enum_array = minted_enum.as_type().array()
+  let enum_array = minted_enum.as_type().array().as_type()
 
   let compiled_package = reflect.Package.compile({
     "compiled.baml": "class CompiledInner { x string }",
   })
   let compiled_inner = compiled_package.get_class("root.CompiledInner")
     ?? throw "missing CompiledInner"
-  let compiled_array = compiled_inner.as_type().array()
+  let compiled_array = compiled_inner.as_type().array().as_type()
   let compiled_holder_array = reflect.class.new("CompiledHolderArray", {
     "bs": compiled_array,
   }).as_type()
@@ -58,35 +58,35 @@ function main() -> bool throws unknown {
 
   let array_ok = {
     type T = unreflect(holder_array)
-    Check<T>(holder_array, #"{"bs":[{"x":"one"}]}"#)
+    Check<T>(holder_array, `{"bs":[{"x":"one"}]}`)
   }
   let empty_array_ok = {
     type T = unreflect(holder_array)
-    Check<T>(holder_array, #"{"bs":[]}"#)
+    Check<T>(holder_array, `{"bs":[]}`)
   }
   let map_ok = {
     type T = unreflect(holder_map)
-    Check<T>(holder_map, #"{"by_name":{"one":{"x":"one"}}}"#)
+    Check<T>(holder_map, `{"by_name":{"one":{"x":"one"}}}`)
   }
   let enum_ok = {
     type T = unreflect(enum_array)
-    Check<T>(enum_array, #"["Ready","Done"]"#)
+    Check<T>(enum_array, `["Ready","Done"]`)
   }
   let top_level_array_ok = {
     type T = unreflect(inner_array)
-    Check<T>(inner_array, #"[{"x":"one"}]"#)
+    Check<T>(inner_array, `[{"x":"one"}]`)
   }
   let compiled_array_ok = {
     type T = unreflect(compiled_holder_array)
-    Check<T>(compiled_holder_array, #"{"bs":[{"x":"one"}]}"#)
+    Check<T>(compiled_holder_array, `{"bs":[{"x":"one"}]}`)
   }
   let compiled_map_ok = {
     type T = unreflect(compiled_holder_map)
-    Check<T>(compiled_holder_map, #"{"by_name":{"one":{"x":"one"}}}"#)
+    Check<T>(compiled_holder_map, `{"by_name":{"one":{"x":"one"}}}`)
   }
   let static_control_ok = {
     type T = unreflect(static_holder)
-    Check<T>(static_holder, #"{"bs":[{"x":"one"}]}"#)
+    Check<T>(static_holder, `{"bs":[{"x":"one"}]}`)
   }
 
   array_ok && empty_array_ok && map_ok && enum_ok && top_level_array_ok
