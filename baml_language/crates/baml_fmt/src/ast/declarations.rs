@@ -7,7 +7,7 @@ use rowan::{TextRange, ast::AstNode as _};
 use super::expressions::FunctionArrowLayout;
 use crate::{
     EmittableTrivia,
-    ast::{BlockAttribute, Token, tokens as t},
+    ast::{Token, tokens as t},
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt as _,
 };
@@ -1037,12 +1037,7 @@ impl Printable for ImplementsLayoutItem<'_> {
                 info
             }
             ImplementsLayoutItem::Function(function) => function.print(shape, printer),
-            ImplementsLayoutItem::BlockAttribute(attribute) => {
-                let attribute =
-                    BlockAttribute::from_cst(SyntaxElement::Node(attribute.syntax().clone()))
-                        .expect("validated block attribute");
-                attribute.print(shape, printer)
-            }
+            ImplementsLayoutItem::BlockAttribute(attribute) => attribute.print(shape, printer),
         }
     }
 
@@ -1184,11 +1179,7 @@ impl Printable for ClassLayoutItem<'_> {
             }
             ClassLayoutItem::Function(function) => function.print(shape, printer),
             ClassLayoutItem::Implements(block) => block.print(shape, printer),
-            ClassLayoutItem::BlockAttribute(attr) => {
-                let attr = BlockAttribute::from_cst(SyntaxElement::Node(attr.syntax().clone()))
-                    .expect("validated block attribute");
-                attr.print(shape, printer)
-            }
+            ClassLayoutItem::BlockAttribute(attr) => attr.print(shape, printer),
         }
     }
     fn leftmost_token(&self) -> TextRange {
@@ -1300,11 +1291,7 @@ impl Printable for EnumLayoutItem<'_> {
                 printer.print_str(",");
                 info
             }
-            EnumLayoutItem::BlockAttribute(attr) => {
-                let attr = BlockAttribute::from_cst(SyntaxElement::Node(attr.syntax().clone()))
-                    .expect("validated block attribute");
-                attr.print(shape, printer)
-            }
+            EnumLayoutItem::BlockAttribute(attr) => attr.print(shape, printer),
         }
     }
     fn leftmost_token(&self) -> TextRange {
@@ -1338,13 +1325,7 @@ impl PrintMultiLine for Validated<'_, syntax_ast::EnumVariant> {
     /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let name = self.name_token();
-        let attributes = self
-            .attribute()
-            .map(|attribute| {
-                super::Attribute::from_cst(SyntaxElement::Node(attribute.syntax().clone()))
-                    .expect("validated enum attribute")
-            })
-            .collect::<Vec<_>>();
+        let attributes = self.attribute().collect::<Vec<_>>();
         printer.print_raw_token(&name);
 
         if attributes.is_empty() {
@@ -1377,13 +1358,7 @@ impl EnumVariantLayout for Validated<'_, syntax_ast::EnumVariant> {
     /// in the event that the printer is unable to fit the enum variant on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         let name = self.name_token();
-        let attributes = self
-            .attribute()
-            .map(|attribute| {
-                super::Attribute::from_cst(SyntaxElement::Node(attribute.syntax().clone()))
-                    .expect("validated enum attribute")
-            })
-            .collect::<Vec<_>>();
+        let attributes = self.attribute().collect::<Vec<_>>();
         printer.print_raw_token(&name);
         let (_, name_trailing) = printer.trivia.get_for_range_split(name.span());
         printer.try_print_trivia_single_line_squished(name_trailing)?;
@@ -1462,7 +1437,7 @@ impl Printable for Validated<'_, syntax_ast::ClientType> {
 
 enum ConfigBlockLayoutMember<'tree> {
     Item(Validated<'tree, syntax_ast::ConfigItem>),
-    BlockAttribute(BlockAttribute),
+    BlockAttribute(Validated<'tree, syntax_ast::BlockAttribute>),
 }
 
 fn config_block_items<'tree>(
@@ -1481,10 +1456,7 @@ fn config_block_items<'tree>(
                 let attribute = element
                     .node::<syntax_ast::BlockAttribute>()
                     .expect("validated block attribute");
-                ConfigBlockLayoutMember::BlockAttribute(
-                    BlockAttribute::from_cst(SyntaxElement::Node(attribute.syntax().clone()))
-                        .expect("validated block attribute"),
-                )
+                ConfigBlockLayoutMember::BlockAttribute(attribute)
             }
             _ => continue,
         };
@@ -1535,10 +1507,10 @@ impl Printable for Validated<'_, syntax_ast::ConfigBlock> {
         items.sort_by_cached_key(|(member, _)| match member {
             ConfigBlockLayoutMember::BlockAttribute(attribute) => (
                 0,
-                attribute
-                    .name_parts_str(printer.input)
-                    .collect::<Vec<_>>()
-                    .join("."),
+                syntax_ast::BlockAttribute::cast(attribute.syntax().clone())
+                    .expect("validated block attribute")
+                    .full_name()
+                    .unwrap_or_default(),
             ),
             ConfigBlockLayoutMember::Item(_) => (1, String::new()),
         });
@@ -1724,9 +1696,6 @@ impl Printable for Validated<'_, syntax_ast::ConfigItem> {
         };
         multi_lined |= printer.print(&value, value_shape).multi_lined;
         for attribute in self.attribute() {
-            let attribute =
-                super::Attribute::from_cst(SyntaxElement::Node(attribute.syntax().clone()))
-                    .expect("validated config item attribute");
             let leading = printer.trivia.get_leading_for_element(&attribute);
             printer.print_str(" ");
             printer.print_trivia_squished(leading);

@@ -2402,6 +2402,16 @@ impl Attribute {
             Some(segments.join("."))
         }
     }
+
+    pub fn non_wrappable_len(&self) -> usize {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| !token.kind().is_trivia())
+            .map(|token| usize::from(token.text_range().len()))
+            .sum::<usize>()
+            + usize::from(self.attribute_args().is_some())
+    }
 }
 
 /// An element within a block expression.

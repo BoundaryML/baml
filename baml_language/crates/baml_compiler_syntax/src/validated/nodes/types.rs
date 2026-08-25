@@ -1,6 +1,8 @@
-use super::{Attribute, Literal};
+use rowan::ast::AstNode as _;
+
+use super::Literal;
 use crate::{
-    SyntaxElement, SyntaxKind, TextRange,
+    SyntaxElement, SyntaxKind, TextRange, ast as raw_ast,
     validated::{FromCST, KnownKind, StrongAstError, SyntaxNodeIter, tokens as t},
 };
 
@@ -386,9 +388,9 @@ impl UnionTypeMember {
             } else if let Some(attr) = it.next_if_kind(SyntaxKind::ATTRIBUTE) {
                 // Attributes
                 let mut attrs = Vec::new();
-                attrs.push(Attribute::from_cst(attr)?);
+                attrs.push(raw_attribute(attr)?);
                 while let Some(attr) = it.next_if_kind(SyntaxKind::ATTRIBUTE) {
-                    attrs.push(Attribute::from_cst(attr)?);
+                    attrs.push(raw_attribute(attr)?);
                 }
                 ty = UnionTypeMember::Constrained(ConstrainedType {
                     ty: Box::new(ty),
@@ -620,7 +622,13 @@ impl FromCST for FunctionTypeParam {
 pub struct ConstrainedType<T> {
     pub ty: Box<T>,
     /// Should not be empty: if it is, just use the inner type
-    pub attrs: Vec<Attribute>,
+    pub attrs: Vec<raw_ast::Attribute>,
+}
+
+fn raw_attribute(element: SyntaxElement) -> Result<raw_ast::Attribute, StrongAstError> {
+    let node = StrongAstError::assert_is_node(element)?;
+    StrongAstError::assert_kind_node(&node, SyntaxKind::ATTRIBUTE)?;
+    Ok(raw_ast::Attribute::cast(node).expect("checked attribute"))
 }
 
 impl From<ConstrainedType<UnionTypeMember>> for ConstrainedType<Type> {
