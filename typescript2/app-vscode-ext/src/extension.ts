@@ -113,41 +113,22 @@ function getPlaygroundDir(context: vscode.ExtensionContext): string | undefined 
   return fs.existsSync(playgroundDir) ? playgroundDir : undefined;
 }
 
-function isPowerShellShell(): boolean {
-  if (process.platform !== 'win32') {
-    return false;
-  }
-  const shell = vscode.env.shell.toLowerCase();
-  return shell.includes('powershell') || /(^|[\\/])pwsh(?:\.exe)?$/.test(shell);
-}
-
-function shellQuote(value: string): string {
-  if (process.platform === 'win32') {
-    if (isPowerShellShell()) {
-      return `'${value.replace(/'/g, "''")}'`;
-    }
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return `'${value.replace(/'/g, "'\\''")}'`;
-}
-
-function playgroundCommandForPath(projectPath?: string): { command: string; cwd?: string } {
-  const bin = `${isPowerShellShell() ? '& ' : ''}${shellQuote(wrapperPath)}`;
+function playgroundArgsForPath(projectPath?: string): { args: string[]; cwd?: string } {
   if (!projectPath) {
-    return { command: `${bin} playground` };
+    return { args: ['playground'] };
   }
 
   try {
     const stat = fs.statSync(projectPath);
     if (stat.isFile()) {
       return {
-        command: `${bin} playground --file ${shellQuote(projectPath)}`,
+        args: ['playground', '--file', projectPath],
         cwd: path.dirname(projectPath),
       };
     }
     if (stat.isDirectory()) {
       return {
-        command: `${bin} playground --from ${shellQuote(projectPath)}`,
+        args: ['playground', '--from', projectPath],
         cwd: projectPath,
       };
     }
@@ -155,19 +136,22 @@ function playgroundCommandForPath(projectPath?: string): { command: string; cwd?
     // Fall through to --from. The CLI will surface the real path error.
   }
 
-  return {
-    command: `${bin} playground --from ${shellQuote(projectPath)}`,
-  };
+  return { args: ['playground', '--from', projectPath] };
 }
 
 function openPlaygroundInBrowserTerminal(projectPath?: string): void {
-  const { command, cwd } = playgroundCommandForPath(projectPath);
+  const { args, cwd } = playgroundArgsForPath(projectPath);
+  // The CLI IS the terminal's process (no shell): a shell-hosted server gets
+  // killed about a second in when the Python extension reclaims the new
+  // terminal to type its venv activation (it interrupts the foreground
+  // process first). No shell also means no quoting and no shell integration.
   const terminal = vscode.window.createTerminal({
     name: 'BAML Playground',
+    shellPath: wrapperPath,
+    shellArgs: args,
     ...(cwd ? { cwd } : {}),
   });
   terminal.show(false);
-  terminal.sendText(command);
 }
 
 function createClient(context: vscode.ExtensionContext): LanguageClient {

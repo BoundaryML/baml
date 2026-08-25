@@ -221,15 +221,20 @@ pub fn external_to_outbound(
     Ok(BamlOutboundValue { value: variant })
 }
 
+/// Serialize a `BexExternalValue` to durable artifact-safe outbound bytes
+/// (`BamlOutboundValue` protobuf) — what playground hosts inline into a
+/// completed run's result so the client can render it (the wire spells it
+/// base64 under the `baml.outbound.base64` renderer-hint family).
+pub fn artifact_safe_outbound_bytes(value: &BexExternalValue) -> Result<Vec<u8>, CtypesError> {
+    use prost::Message;
+    Ok(artifact_safe_external_to_outbound(value)?.encode_to_vec())
+}
+
 /// Convert `BexExternalValue` to a durable artifact-safe `BamlOutboundValue`.
 ///
 /// Unlike [`external_to_outbound`], this entry point never inserts into the CFFI
 /// handle table and never serializes host/process-local handle keys. Opaque or
 /// callable values become renderable omission descriptors.
-#[allow(
-    dead_code,
-    reason = "Phase 7 guardrail seam; production host trace serializer API is not designed yet"
-)]
 pub(crate) fn artifact_safe_external_to_outbound(
     value: &BexExternalValue,
 ) -> Result<BamlOutboundValue, CtypesError> {

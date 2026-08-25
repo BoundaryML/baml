@@ -10,6 +10,7 @@ import { cn } from '../lib/utils';
 interface RunReportShape {
   outcome?: string;
   duration_ms?: number;
+  message?: string | null;
 }
 
 interface TestReportShape {
@@ -88,16 +89,23 @@ export const TestReportRenderer: FC<ResultRendererProps> = ({
             return (
               <div
                 key={i}
-                className="flex items-center gap-2 text-xs font-vsc-mono py-0.5 px-2 rounded bg-vsc-bg-alt"
+                className="text-xs font-vsc-mono py-0.5 px-2 rounded bg-vsc-bg-alt"
               >
-                <RunIcon size={12} className={runInfo.color} />
-                <span className={cn('text-[11px]', runInfo.color)}>
-                  {runInfo.label}
-                </span>
-                {(run.duration_ms ?? 0) > 0 && (
-                  <span className="text-vsc-text-faint ml-auto">
-                    {formatDuration(run.duration_ms!)}
+                <div className="flex items-center gap-2">
+                  <RunIcon size={12} className={runInfo.color} />
+                  <span className={cn('text-[11px]', runInfo.color)}>
+                    {runInfo.label}
                   </span>
+                  {(run.duration_ms ?? 0) > 0 && (
+                    <span className="text-vsc-text-faint ml-auto">
+                      {formatDuration(run.duration_ms!)}
+                    </span>
+                  )}
+                </div>
+                {run.message && (
+                  <pre className="whitespace-pre-wrap m-0 mt-1 pl-5 text-[11px] text-vsc-text max-h-[200px] overflow-auto">
+                    {run.message}
+                  </pre>
                 )}
               </div>
             );

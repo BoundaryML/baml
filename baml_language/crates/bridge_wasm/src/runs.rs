@@ -405,12 +405,30 @@ fn complete_wasm_run(
     }
 }
 
-fn root_value_success_outcome(value_ref: Option<ValueRef>, renderer_hint: &str) -> RunOutcome {
+fn root_value_success_outcome_with_value(
+    value_ref: Option<ValueRef>,
+    value: Option<Vec<u8>>,
+    renderer_hint: &str,
+) -> RunOutcome {
     RunOutcome::Succeeded(RunResult {
         value_ref,
+        value,
         renderer_hint: Some(renderer_hint.to_string()),
         supporting_payload_ids: Vec::new(),
     })
+}
+
+/// The completed run's value, inlined as artifact-safe outbound bytes so the
+/// client has something to render — without it a test report (the pass/fail
+/// verdict and its error messages) or a function result completes as a bare
+/// "succeeded" with an empty pane. An encode failure degrades to `None`
+/// (status still reaches the client) rather than failing the run.
+fn inline_result_value(value: &bex_project::BexExternalValue) -> Option<Vec<u8>> {
+    // An encode failure degrades to `None` (the run's status still reaches
+    // the client) rather than failing the run; this crate has no logging
+    // facility to also report it, and the failure is deterministic per value
+    // shape, so the desktop host's logged variant covers diagnosis.
+    bridge_ctypes::artifact_safe_outbound_bytes(value).ok()
 }
 
 fn drain_wasm_logs(
@@ -746,7 +764,11 @@ impl BamlWasmRuntime {
                         &logger,
                     );
                     let outcome = match traced.value {
-                        Ok(_result) => root_value_success_outcome(None, "baml.outbound.base64"),
+                        Ok(result) => root_value_success_outcome_with_value(
+                            None,
+                            inline_result_value(&result),
+                            "baml.outbound.base64",
+                        ),
                         Err(e) => runtime_error_outcome_with_ref(&e, None),
                     };
                     complete_wasm_run(&callback, &run_store, &history_store, boundary_id, outcome);
@@ -863,7 +885,11 @@ impl BamlWasmRuntime {
                         &logger,
                     );
                     let outcome = match traced.value {
-                        Ok(_result) => root_value_success_outcome(None, "baml.outbound.base64"),
+                        Ok(result) => root_value_success_outcome_with_value(
+                            None,
+                            inline_result_value(&result),
+                            "baml.outbound.base64",
+                        ),
                         Err(e) => runtime_error_outcome_with_ref(&e, None),
                     };
                     complete_wasm_run(&callback, &run_store, &history_store, boundary_id, outcome);
@@ -1372,7 +1398,11 @@ impl BamlWasmRuntime {
                         &logger,
                     );
                     let outcome = match traced.value {
-                        Ok(_result) => root_value_success_outcome(None, "testReport"),
+                        Ok(result) => root_value_success_outcome_with_value(
+                            None,
+                            inline_result_value(&result),
+                            "testReport",
+                        ),
                         Err(e) => runtime_error_outcome_with_ref(&e, None),
                     };
                     complete_wasm_run(&callback, &run_store, &history_store, boundary_id, outcome);
@@ -1546,6 +1576,7 @@ mod history_tests {
                 boundary_id,
                 &RunOutcome::Succeeded(RunResult {
                     value_ref: None,
+                    value: None,
                     renderer_hint: None,
                     supporting_payload_ids: Vec::new(),
                 }),
