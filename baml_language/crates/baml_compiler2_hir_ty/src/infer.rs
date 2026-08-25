@@ -4684,9 +4684,25 @@ impl<'db> InferenceContext<'db> {
         {
             return;
         }
-        let expected = Ty::intern(TyKind::Type {
-            attr: TyAttr::default(),
-        });
+        // The operand contract is `reflect.Type | reflect.TypeView`: a kind
+        // view is accepted and converts to the `type` value it wraps at the
+        // VM's type-operand boundary — the same explicit-computation-point
+        // model as `int + float`, never a subtyping edge.
+        let expected = Ty::intern(TyKind::Union(
+            vec![
+                Ty::intern(TyKind::Type {
+                    attr: TyAttr::default(),
+                }),
+                Ty::intern(TyKind::Interface(
+                    baml_type::QualifiedTypeName::from_dotted_path("reflect.TypeView"),
+                    Box::new([]),
+                    Box::new([]),
+                    TyAttr::default(),
+                )),
+            ]
+            .into(),
+            TyAttr::default(),
+        ));
         let saved_anchor = self.obligation_anchor.replace(operand);
         let fits = self.sub(&got, &expected);
         self.obligation_anchor = saved_anchor;

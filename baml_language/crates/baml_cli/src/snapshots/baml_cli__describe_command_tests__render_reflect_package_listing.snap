@@ -39,8 +39,8 @@ class            reflect.errors.SessionBusy       <builtin>/reflect/ns_errors/er
 class            reflect.function.Parameter       <builtin>/reflect/ns_function/function.baml:1
 class            reflect.function.Type            <builtin>/reflect/ns_function/function.baml:9
 class            reflect.interface.Type           <builtin>/reflect/ns_interface/interface.baml:2
-class            reflect.interface.Implementation <builtin>/reflect/ns_interface/interface.baml:13
-function         reflect.interface.implementation <builtin>/reflect/ns_interface/interface.baml:28
+class            reflect.interface.Implementation <builtin>/reflect/ns_interface/interface.baml:20
+function         reflect.interface.implementation <builtin>/reflect/ns_interface/interface.baml:35
 function         reflect.literal.new              <builtin>/reflect/ns_literal/literal.baml:2
 class            reflect.literal.Type             <builtin>/reflect/ns_literal/literal.baml:7
 function         reflect.map.new                  <builtin>/reflect/ns_map/map.baml:2

@@ -184,7 +184,11 @@ async fn nested_type_walker_and_kind_specific_readback_work_end_to_end() {
                 && params[1].name == "label"
                 && params[1].type == reflect.Type.of<string>()
                 && function_view.return_type() == reflect.Type.of<bool>()
-                && function_schema.fields().length() == 0
+                // The kind views are ordinary wrapper classes: their one
+                // declared field is the wrapped `_ty`, visible to reflection
+                // like any other field.
+                && function_schema.fields().length() == 1
+                && function_schema.fields()[0].name == "_ty"
         }
 
         function intrinsic_checks() -> bool throws never {

@@ -73,31 +73,6 @@ fn is_any_class<H: Head, C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
         .is_some_and(|any_class| *head == any_class)
 }
 
-/// Whether a nominal class head inhabits `reflect.AnyClass`. Ordinary classes do.
-/// Within the sealed reflection-kind family, only the class-kind value view is
-/// intentionally admitted.
-///
-/// Decided by identity against the heads `ctx` uses for the kind classes, not
-/// by inspecting `head` — the head-generic counterpart of
-/// [`crate::type_kind::class_inhabits_any_class`]. Only reached when the
-/// supertype is `AnyClass` itself, so the walk over the nine is not on any hot
-/// path.
-fn head_inhabits_any_class<H: Head, C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
-    let mut is_kind_view = false;
-    for kind in crate::type_kind::TypeKind::ALL {
-        let Some(kind_head) = ctx.head_lookup(&kind.class_name()) else {
-            continue;
-        };
-        if *head == kind_head {
-            is_kind_view = true;
-            if matches!(kind, crate::type_kind::TypeKind::Class) {
-                return true;
-            }
-        }
-    }
-    !is_kind_view
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTEXT
 // ═══════════════════════════════════════════════════════════════════════════
@@ -426,7 +401,7 @@ pub trait TypeContext<H: Head = QualifiedTypeName> {
     where
         Self: Sized,
     {
-        NormalTy::canonical(a, self).is_disjoint_from(&NormalTy::canonical(b, self), self)
+        NormalTy::canonical(a, self).is_disjoint_from(&NormalTy::canonical(b, self))
     }
 
     /// Whether a broad `==` between operands of types `a` and `b` is always `true`.
@@ -468,7 +443,7 @@ pub trait TypeContext<H: Head = QualifiedTypeName> {
     {
         let a = NormalTy::canonical(a, self);
         let b = NormalTy::canonical(b, self);
-        if a.is_disjoint_from(&b, self) {
+        if a.is_disjoint_from(&b) {
             Some(false)
         } else if a.is_unoverridable_singleton() && a == b {
             Some(true)
@@ -762,25 +737,7 @@ impl<H: Head> NormalTy<H> {
     /// Top-level concrete category of this type, or `None` for a non-ground head
     /// (union, interface, hole, type variable, …) for which no disjointness is
     /// provable.
-    /// Whether `head` is one of the reflection type-kind classes
-    /// (`reflect.<kind>.Type`).
-    ///
-    /// The algebra's second nominal special case, recognized the same way as the
-    /// first (`reflect.AnyFunction`): by asking the context for each known name's
-    /// head and comparing, never by inspecting the head itself. A head is opaque
-    /// here — see [`Head`](crate::Head) — so the context is the only thing that
-    /// can turn a name the algebra knows into a head it can compare.
-    fn head_is_type_kind_class<C: TypeContext<H>>(head: &H, ctx: &C) -> bool {
-        crate::type_kind::TypeKind::ALL.iter().any(|kind| {
-            // `TypeKind::class_name` is the one source of the kind-view
-            // spelling; duplicating it here is how a package rename silently
-            // un-recognizes the whole family.
-            ctx.head_lookup(&kind.class_name())
-                .is_some_and(|known| &known == head)
-        })
-    }
-
-    fn head_category<C: TypeContext<H>>(&self, ctx: &C) -> Option<Category> {
+    fn head_category(&self) -> Option<Category> {
         Some(match self {
             NormalTy::Int | NormalTy::Literal(Literal::Int(_)) => Category::Int,
             NormalTy::Bigint | NormalTy::Literal(Literal::Bigint(_)) => Category::Bigint,
@@ -795,7 +752,6 @@ impl<H: Head> NormalTy<H> {
             NormalTy::Type => Category::Type,
             NormalTy::Resource => Category::Resource,
             NormalTy::PromptAst => Category::PromptAst,
-            NormalTy::Class(name, _) if Self::head_is_type_kind_class(name, ctx) => Category::Type,
             NormalTy::Class(..) => Category::Class,
             NormalTy::List(_) => Category::List,
             NormalTy::Map { .. } => Category::Map,
@@ -807,7 +763,7 @@ impl<H: Head> NormalTy<H> {
             // happens here). A non-constructor body head (e.g. a still-unguarded
             // union, pending the ε-closure step) answers `None` through the arms
             // below — conservative.
-            NormalTy::Mu { body, .. } => return body.head_category(ctx),
+            NormalTy::Mu { body, .. } => return body.head_category(),
             // Not a ground concrete head — nothing provable. (A free `RecVar`
             // only occurs under its binder, which the μ arm above looks through.)
             NormalTy::Interface(..)
@@ -901,7 +857,7 @@ impl<H: Head> NormalTy<H> {
 
     /// Whether no value of `self` can ever be `==`-equal to a value of `other`
     /// (the structural core of [`definitely_disjoint`]).
-    fn is_disjoint_from<C: TypeContext<H>>(&self, other: &NormalTy<H>, ctx: &C) -> bool {
+    fn is_disjoint_from(&self, other: &NormalTy<H>) -> bool {
         match (self, other) {
             // A μ is its unfolding — expose the constructor head before the
             // structural arms. Terminates without an assumption set because
@@ -922,12 +878,12 @@ impl<H: Head> NormalTy<H> {
             {
                 false
             }
-            (NormalTy::Mu { .. }, _) => self.unfold().is_disjoint_from(other, ctx),
-            (_, NormalTy::Mu { .. }) => self.is_disjoint_from(&other.unfold(), ctx),
+            (NormalTy::Mu { .. }, _) => self.unfold().is_disjoint_from(other),
+            (_, NormalTy::Mu { .. }) => self.is_disjoint_from(&other.unfold()),
 
             // A union is disjoint from `rhs` iff every member is.
-            (NormalTy::Union(members), rhs) => members.iter().all(|m| m.is_disjoint_from(rhs, ctx)),
-            (lhs, NormalTy::Union(members)) => members.iter().all(|m| lhs.is_disjoint_from(m, ctx)),
+            (NormalTy::Union(members), rhs) => members.iter().all(|m| m.is_disjoint_from(rhs)),
+            (lhs, NormalTy::Union(members)) => members.iter().all(|m| lhs.is_disjoint_from(m)),
 
             // Generic constructors are invariant and their type arguments are real
             // instance data, so two instantiations are disjoint as soon as one
@@ -965,7 +921,7 @@ impl<H: Head> NormalTy<H> {
                 !matches!(x, Literal::Float(_)) && !matches!(y, Literal::Float(_)) && x != y
             }
             (NormalTy::Literal(lit), rhs) | (rhs, NormalTy::Literal(lit)) => {
-                match rhs.head_category(ctx) {
+                match rhs.head_category() {
                     Some(cat) => cat != Category::of_literal(lit),
                     None => false,
                 }
@@ -973,7 +929,7 @@ impl<H: Head> NormalTy<H> {
 
             // Otherwise: disjoint iff both are ground concrete heads of different
             // categories (`int` vs `string`, `list` vs `map`, a class vs an enum).
-            _ => match (self.head_category(ctx), other.head_category(ctx)) {
+            _ => match (self.head_category(), other.head_category()) {
                 (Some(x), Some(y)) => x != y,
                 _ => false,
             },
@@ -1988,15 +1944,10 @@ impl<H: Head> NormalTy<H> {
             // membership by itself without also admitting primitives and
             // containers. Keep this before the general impl-registry arm so
             // static coercion and the VM's shared runtime type matcher agree.
-            // Of the nine sealed reflection-kind classes, only the class-kind
-            // view is admitted by the ratified surface.
             (sub, NormalTy::Interface(qn, _, _))
                 if is_any_class(qn, ctx) && !matches!(sub, NormalTy::Interface(..)) =>
             {
-                matches!(
-                    sub,
-                    NormalTy::Class(head, _) if head_inhabits_any_class(head, ctx)
-                )
+                matches!(sub, NormalTy::Class(..))
             }
 
             // BEP-062: `reflect.AnyFunction` is a compiler builtin implemented by
@@ -2075,14 +2026,6 @@ impl<H: Head> NormalTy<H> {
                 a1.iter()
                     .zip(a2.iter())
                     .all(|(a, b)| a.invariant_compatible(b, ctx, assumptions))
-            }
-            // BEP-066: the nine reflection-kind classes form one sealed family
-            // beneath the `type` carrier. Because membership is hard-coded to
-            // builtin qualified names, user classes cannot acquire this edge.
-            (NormalTy::Class(name, _), NormalTy::Type)
-                if Self::head_is_type_kind_class(name, ctx) =>
-            {
-                true
             }
             (NormalTy::List(a), NormalTy::List(b)) => a.invariant_compatible(b, ctx, assumptions),
             (NormalTy::Map { key: k1, value: v1 }, NormalTy::Map { key: k2, value: v2 }) => {

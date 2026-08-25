@@ -1004,13 +1004,6 @@ fn switch_member_tag_sufficient(member: &RuntimeTy, scrutinee: Option<&RuntimeTy
         // the shared `ENUM` tag can't express, so always take the precise chain.
         RuntimeTy::EnumVariant(..) => false,
         RuntimeTy::Class(name, args, _) => {
-            // Reflection-kind classes are transparent views over an
-            // `Object::Type`: their precise `is` test inspects the wrapped
-            // realized type, while `TypeTag` sees only the outer `TYPE` tag.
-            // A tag switch would therefore miss every kind arm.
-            if baml_type::type_kind::is_type_kind_class(name) {
-                return false;
-            }
             if args.is_empty() {
                 return true;
             }

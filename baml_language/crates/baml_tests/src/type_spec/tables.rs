@@ -539,7 +539,7 @@ function sc_companion() -> baml.Map<string, int> throws never {
     assert!(errors.iter().any(|error| matches!(
         error,
         TirTypeError::TypeMismatch { expected, got }
-            if expected.render_canonical() == "reflect.Type" && got.render_canonical() == "42"
+            if expected.render_canonical() == "reflect.Type | reflect.TypeView" && got.render_canonical() == "42"
     )));
     assert_eq!(extraction_throws.as_deref(), Some("unknown"));
     assert_eq!(session_args, Some(vec!["unknown".to_string()]));
@@ -617,7 +617,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
             matches!(
                 &diag.error,
                 TirTypeError::TypeMismatch { expected, got }
-                    if expected.render_canonical() == "reflect.Type" && got.render_canonical() == "42"
+                    if expected.render_canonical() == "reflect.Type | reflect.TypeView" && got.render_canonical() == "42"
             )
         });
         saw_static_shape_error |= result.diagnostics.iter().any(|diag| {
@@ -788,7 +788,7 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
             matches!(
                 &diag.error,
                 TirTypeError::TypeMismatch { expected, got }
-                    if expected.render_canonical() == "reflect.Type" && got.render_canonical() == "42"
+                    if expected.render_canonical() == "reflect.Type | reflect.TypeView" && got.render_canonical() == "42"
             )
         });
         let inferred_body = baml_compiler2_ppir::body(&db, owner);

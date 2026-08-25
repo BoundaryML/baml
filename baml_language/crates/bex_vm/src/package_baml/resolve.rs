@@ -14,11 +14,7 @@
 
 use std::borrow::Cow;
 
-use baml_type::{
-    Literal, Name,
-    normalize::TypeContext,
-    type_kind::{is_type_kind_tag, tag_inhabits_any_class},
-};
+use baml_type::{Literal, Name, normalize::TypeContext};
 use bex_vm_types::{
     RealizedTy, TyTemplate, TypeHead, errors::VmInternalError, types::RuntimeImplRule,
 };
@@ -336,20 +332,16 @@ impl<'vm> ImplResolver<'vm> {
         stack: &mut Vec<Obligation>,
     ) -> bool {
         // The blanket stdlib impl exists to supply AnyClass's default-method
-        // dispatch. Membership is narrower: class values only, and among the
-        // sealed reflection-kind views only `reflect.class.Type`. Keep the
-        // carve-out at the recursive proof seam so nested bounds cannot observe
-        // the blanket rule's broader receiver.
+        // dispatch. Membership is narrower: class values only. Keep the
+        // narrowing at the recursive proof seam so nested bounds cannot
+        // observe the blanket rule's broader receiver.
         let any_class = self
             .vm
             .declaration_head(&baml_type::QualifiedTypeName::from_dotted_path(
                 "reflect.AnyClass",
             ));
         if any_class.is_some_and(|head| head == iface) {
-            return matches!(
-                concrete_ty,
-                RealizedTy::Class(head, _, _) if tag_inhabits_any_class(head.tag())
-            );
+            return matches!(concrete_ty, RealizedTy::Class(..));
         }
 
         // Key on the normalized (literal/enum-variant → base) type so `1` and `int`
@@ -482,15 +474,6 @@ impl<'vm> ImplResolver<'vm> {
         concrete: &RealizedTy,
         bindings: &mut [Option<RealizedTy>],
     ) -> bool {
-        // Reflection kind classes are the sealed runtime refinements of `type`.
-        // Keep `implement I for type` rules applicable when the dynamic receiver
-        // is one of those refinements (notably TypeValue's tostring override).
-        if matches!(pattern, TyTemplate::Type { .. })
-            && matches!(concrete, RealizedTy::Class(head, _, _) if is_type_kind_tag(head.tag()))
-        {
-            return true;
-        }
-
         // A fully-realized pattern carries no frame refs or holes: compare it to the
         // concrete type semantically (union-order-insensitive, matching the type
         // checker) through the canonical fact-opaque `StructuralEquivCtx`. The

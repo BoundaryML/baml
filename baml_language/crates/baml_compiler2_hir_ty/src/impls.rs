@@ -36,7 +36,6 @@ use baml_type::{
     Name, ParamTy, TypeName,
     interned::{InterfaceRef, Ty, TyKind},
     normalize::{TypeContext, equivalent_interned},
-    type_kind::class_inhabits_any_class,
 };
 use rustc_hash::FxHashMap;
 
@@ -835,10 +834,7 @@ fn derived_impl_allows(
         return true;
     }
     let normalized = baml_type::normalize::normalize_interned(concrete, &AliasOnlyFacts::new(db));
-    matches!(
-        normalized.kind(),
-        TyKind::Class(name, _, _) if class_inhabits_any_class(name)
-    )
+    matches!(normalized.kind(), TyKind::Class(..))
 }
 
 #[salsa::interned]

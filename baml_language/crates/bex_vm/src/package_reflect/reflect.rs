@@ -243,7 +243,12 @@ impl TypeContext<bex_vm_types::TypeHead> for PackageSubtypeContext<'_> {
 
 fn package_class_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, class_ptr: HeapPtr) -> Value {
     if let Some(runtime_type) = runtime_type {
-        return Value::object(runtime_type);
+        let ty_value = Value::object(runtime_type);
+        return super::type_kinds::alloc_kind_view(
+            vm,
+            baml_type::type_kind::TypeKind::Class,
+            ty_value,
+        );
     }
     let Object::Class(class) = vm.get_object(class_ptr) else {
         unreachable!("Package.classes only contains class pointers")
@@ -253,12 +258,18 @@ fn package_class_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, class_ptr: 
         Vec::new(),
         class.ty_attr.clone(),
     );
-    Value::object(vm.tlab.alloc_type(TypeValue::new(ty)))
+    let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
+    super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Class, ty_value)
 }
 
 fn package_enum_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, enum_ptr: HeapPtr) -> Value {
     if let Some(runtime_type) = runtime_type {
-        return Value::object(runtime_type);
+        let ty_value = Value::object(runtime_type);
+        return super::type_kinds::alloc_kind_view(
+            vm,
+            baml_type::type_kind::TypeKind::Enum,
+            ty_value,
+        );
     }
     let Object::Enum(enm) = vm.get_object(enum_ptr) else {
         unreachable!("Package.enums only contains enum pointers")
@@ -267,7 +278,8 @@ fn package_enum_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, enum_ptr: He
         bex_vm_types::TypeHead::new(enum_ptr, enm.type_tag),
         enm.ty_attr.clone(),
     );
-    Value::object(vm.tlab.alloc_type(TypeValue::new(ty)))
+    let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
+    super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Enum, ty_value)
 }
 
 fn package_interface_type(
@@ -276,7 +288,12 @@ fn package_interface_type(
     interface_ptr: HeapPtr,
 ) -> Value {
     if let Some(runtime_type) = runtime_type {
-        return Value::object(runtime_type);
+        let ty_value = Value::object(runtime_type);
+        return super::type_kinds::alloc_kind_view(
+            vm,
+            baml_type::type_kind::TypeKind::Interface,
+            ty_value,
+        );
     }
     let Object::Interface(interface) = vm.get_object(interface_ptr) else {
         unreachable!("Package.interfaces only contains interface pointers")
@@ -287,7 +304,8 @@ fn package_interface_type(
         Vec::new(),
         TyAttr::default(),
     );
-    Value::object(vm.tlab.alloc_type(TypeValue::new(ty)))
+    let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
+    super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Interface, ty_value)
 }
 
 fn allocate_runtime_declaration_types(
@@ -406,8 +424,11 @@ fn function_type(vm: &mut BexVm, package: HeapPtr, name: &LocalName) -> Option<V
     let callable = package_function_value(vm, package, name)?;
     let signature = vm.callable_signature(callable)?;
     let ty = callee_fn_ty(&signature);
-    Some(Value::object(
-        vm.alloc_type(bex_vm_types::types::TypeValue::new(ty)),
+    let ty_value = Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(ty)));
+    Some(super::type_kinds::alloc_kind_view(
+        vm,
+        baml_type::type_kind::TypeKind::Function,
+        ty_value,
     ))
 }
 
@@ -1095,13 +1116,24 @@ impl BamlClassPackage for PackageReflectImpl {
                     format!("duplicate exported type name `{export}`"),
                 ));
             }
-            let Some(type_ptr) = value.as_object_ptr() else {
+            let Some(mut type_ptr) = value.as_object_ptr() else {
                 return Err(compilation_error(
                     vm,
                     DiagnosticId::TypeMismatch,
                     format!("with_types value for `{export}` must be a type"),
                 ));
             };
+            // A kind view mounts the `type` value it wraps.
+            if let Some(ty_value) = super::type_kinds::as_view_type_value(vm, *value) {
+                let Some(inner) = ty_value.as_object_ptr() else {
+                    return Err(compilation_error(
+                        vm,
+                        DiagnosticId::TypeMismatch,
+                        format!("with_types value for `{export}` must be a type"),
+                    ));
+                };
+                type_ptr = inner;
+            }
             let Object::Type(type_value) = vm.get_object(type_ptr) else {
                 return Err(compilation_error(
                     vm,

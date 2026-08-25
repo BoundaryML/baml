@@ -166,7 +166,7 @@ async fn runtime_minted_class_narrows_and_exercises_the_complete_surface() {
 }
 
 #[tokio::test]
-async fn membership_is_class_only_with_the_ratified_kind_view_exception() {
+async fn membership_is_class_only_and_kind_views_are_ordinary_classes() {
     let output = baml_test!(
         r#"
         class Point { x int }
@@ -193,16 +193,18 @@ async fn membership_is_class_only_with_the_ratified_kind_view_exception() {
             let primitive_kind = reflect.Type.of<int>().as_primitive() ?? throw "primitive kind"
             let function_kind = reflect.Type.of<Callback>().as_function() ?? throw "function kind"
 
+            // The nine kind views are ordinary wrapper classes, so every one
+            // of them narrows to `AnyClass` like any other class instance.
             narrows(Point { x: 1 })
                 && narrows(class_kind)
-                && !narrows(enum_kind)
-                && !narrows(union_kind)
-                && !narrows(literal_kind)
-                && !narrows(array_kind)
-                && !narrows(map_kind)
-                && !narrows(interface_kind)
-                && !narrows(primitive_kind)
-                && !narrows(function_kind)
+                && narrows(enum_kind)
+                && narrows(union_kind)
+                && narrows(literal_kind)
+                && narrows(array_kind)
+                && narrows(map_kind)
+                && narrows(interface_kind)
+                && narrows(primitive_kind)
+                && narrows(function_kind)
                 && !narrows(1)
                 && !narrows("text")
                 && !narrows(Color.Red)
@@ -243,7 +245,7 @@ async fn reflected_membership_and_static_field_handles_agree_with_narrowing() {
             reflect.Type.of<Point>().implements(any_class_t)
                 && any_class_view.implemented_by(reflect.Type.of<Point>())
                 && reflect.Type.of<reflect.class.Type>().implements(any_class_t)
-                && !reflect.Type.of<reflect.enum.Type>().implements(any_class_t)
+                && reflect.Type.of<reflect.enum.Type>().implements(any_class_t)
                 && !reflect.Type.of<int>().implements(any_class_t)
                 && narrowed.name() == "Point"
                 && narrowed.attributes().alias == "point"

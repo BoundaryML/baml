@@ -5,8 +5,10 @@ source: crates/baml_tests/src/corpus.rs
 
 --- <builtin>/reflect/ns_array/array.baml ---
 class reflect.array.Type {
+  _ty: reflect.Type
 }
 class reflect.array.Type$stream {
+  _ty: unknown
 }
 function reflect.array.as_type(self: ?) -> reflect.Type  [builtin]
 function reflect.array.element_type(self: ?) -> reflect.Type  [builtin]
@@ -47,8 +49,10 @@ class reflect.class.PendingType$stream {
   _resolved: unknown | null
 }
 class reflect.class.Type {
+  _ty: reflect.Type
 }
 class reflect.class.Type$stream {
+  _ty: unknown
 }
 function reflect.class._build(self: ?, implementations: reflect.interface.Implementation[]) -> reflect.class.Type  [builtin]
 function reflect.class._new(name: string, fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>>, implementations: reflect.interface.Implementation[]) -> reflect.class.Type  [builtin]
@@ -79,8 +83,10 @@ function reflect.class.value(self: ?) -> T?  [expr] {
 
 --- <builtin>/reflect/ns_enum/enum.baml ---
 class reflect.enum.Type {
+  _ty: reflect.Type
 }
 class reflect.enum.Type$stream {
+  _ty: unknown
 }
 class reflect.enum.Value {
   name: string
@@ -137,8 +143,10 @@ class reflect.function.Parameter$stream {
   optional: bool | null
 }
 class reflect.function.Type {
+  _ty: reflect.Type
 }
 class reflect.function.Type$stream {
+  _ty: unknown
 }
 function reflect.function.as_type(self: ?) -> reflect.Type  [builtin]
 function reflect.function.params(self: ?) -> reflect.function.Parameter[]  [builtin]
@@ -152,8 +160,10 @@ class reflect.interface.Implementation$stream {
   _handle: $rust_type
 }
 class reflect.interface.Type {
+  _ty: reflect.Type
 }
 class reflect.interface.Type$stream {
+  _ty: unknown
 }
 function reflect.interface.as_type(self: ?) -> reflect.Type  [builtin]
 function reflect.interface.field(self: ?, interface_field: string, class_field: string? = null) -> reflect.interface.Implementation  [builtin]
@@ -162,16 +172,20 @@ function reflect.interface.implemented_by(self: ?, other: reflect.Type) -> bool 
 
 --- <builtin>/reflect/ns_literal/literal.baml ---
 class reflect.literal.Type {
+  _ty: reflect.Type
 }
 class reflect.literal.Type$stream {
+  _ty: unknown
 }
 function reflect.literal.as_type(self: ?) -> reflect.Type  [builtin]
 function reflect.literal.new(value: string | int | bool) -> reflect.literal.Type  [builtin]
 
 --- <builtin>/reflect/ns_map/map.baml ---
 class reflect.map.Type {
+  _ty: reflect.Type
 }
 class reflect.map.Type$stream {
+  _ty: unknown
 }
 function reflect.map.as_type(self: ?) -> reflect.Type  [builtin]
 function reflect.map.key_type(self: ?) -> reflect.Type  [builtin]
@@ -180,15 +194,19 @@ function reflect.map.value_type(self: ?) -> reflect.Type  [builtin]
 
 --- <builtin>/reflect/ns_primitive/primitive.baml ---
 class reflect.primitive.Type {
+  _ty: reflect.Type
 }
 class reflect.primitive.Type$stream {
+  _ty: unknown
 }
 function reflect.primitive.as_type(self: ?) -> reflect.Type  [builtin]
 
 --- <builtin>/reflect/ns_union/union.baml ---
 class reflect.union.Type {
+  _ty: reflect.Type
 }
 class reflect.union.Type$stream {
+  _ty: unknown
 }
 function reflect.union.as_type(self: ?) -> reflect.Type  [builtin]
 function reflect.union.member_types(self: ?) -> reflect.Type[]  [builtin]

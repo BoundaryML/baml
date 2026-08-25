@@ -34,30 +34,30 @@ class Type {
     //baml:vm
     function to_baml(self) -> string throws never { $rust_function }
 
-    /// Returns the precise kind view of this type value. The view preserves
-    /// the receiver's identity.
-    //baml:vm
+    /// Returns the precise kind view of this type value: a freshly
+    /// allocated view instance wrapping the receiver in its `_ty` field.
+    //baml:mut_vm
     function kind(self) -> reflect.TypeKind throws never {
         $rust_function
     }
 
-    //baml:vm
+    //baml:mut_vm
     function as_class(self) -> reflect.class.Type? throws never { $rust_function }
-    //baml:vm
+    //baml:mut_vm
     function as_enum(self) -> reflect.enum.Type? throws never { $rust_function }
-    //baml:vm
+    //baml:mut_vm
     function as_union(self) -> reflect.union.Type? throws never { $rust_function }
-    //baml:vm
+    //baml:mut_vm
     function as_literal(self) -> reflect.literal.Type? throws never { $rust_function }
-    //baml:vm
+    //baml:mut_vm
     function as_array(self) -> reflect.array.Type? throws never { $rust_function }
-    //baml:vm
+    //baml:mut_vm
     function as_map(self) -> reflect.map.Type? throws never { $rust_function }
-    //baml:vm
+    //baml:mut_vm
     function as_interface(self) -> reflect.interface.Type? throws never { $rust_function }
-    //baml:vm
+    //baml:mut_vm
     function as_primitive(self) -> reflect.primitive.Type? throws never { $rust_function }
-    //baml:vm
+    //baml:mut_vm
     function as_function(self) -> reflect.function.Type? throws never { $rust_function }
 
     /// Internal shared-render-boundary guard for BEP-066 R-1 and R-3.
