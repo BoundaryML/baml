@@ -248,6 +248,40 @@ pub fn package_impl_locs<'db>(
     out
 }
 
+/// Every source impl block whose HEAD names `interface`, across all packages
+/// contributing files — the definition-site inverse of [`impls_for_type`]'s
+/// per-receiver scan, for `describe`/IDE surfaces ("who implements this?").
+///
+/// Matching is nominal on the head's qualified name (implements is nominal):
+/// every generic instantiation of `Foo` names `Foo`, so instantiations are not
+/// distinguished here. Order is deterministic — packages sorted by name (via
+/// [`all_packages`]), blocks in source order within each. Mounted and
+/// precompiled packages ship no source blocks, so their impls are not listed.
+#[salsa::tracked(returns(ref))]
+pub fn impls_naming_interface<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+) -> Vec<ImplLoc<'db>> {
+    let name = &baml_compiler2_ppir::item_data::interface_data(db, interface).name;
+    let target = crate::lower::qualify_def(
+        db,
+        baml_compiler2_hir::contributions::Definition::Interface(interface),
+        name,
+    );
+    let mut out = Vec::new();
+    for &package in all_packages(db) {
+        for &block in package_impl_locs(db, package) {
+            let Some(facts) = impl_facts(db, block).as_ref() else {
+                continue;
+            };
+            if facts.interface.name == target {
+                out.push(block);
+            }
+        }
+    }
+    out
+}
+
 /// The fact-poor equality context (TIR's `AliasEquivCtx`): aliases and
 /// enum variants only. Everything else answers the conservative default,
 /// which is both sufficient (matching is invariant equality) and the

@@ -57,7 +57,8 @@ pub use completion::{
 pub use cursor_context::{CursorContext, find_source_file, playground_cursor_context};
 pub use definition::definition_at;
 pub use describe::{
-    DepRef, MethodRef, RefSite, SymbolDescription, describe, describe_by_definition,
+    DepRef, ImplRow, InterfaceMember, InterfaceMemberCategory, ItemKind, LocalKind, MemberKind,
+    MethodRef, RefSite, SymbolDescription, SymbolKind, describe, describe_by_definition,
     describe_item_member,
 };
 pub use env_vars::all_env_var_names;
@@ -72,9 +73,12 @@ pub use param_schema::{FieldSchema, FieldSchemaField, ParamSchema, TypeSchema};
 pub use resolve::{Location, SymbolTarget, symbol_at, target_definition};
 pub use search::{SearchHit, SymbolInfo, search_ranked, search_symbols};
 pub use symbol_pool::build_symbol_pool;
+// `symbols::SymbolKind` (the legacy flat listing kind) stays module-qualified:
+// the unqualified name belongs to `describe::SymbolKind`, the payload-carrying
+// kind of a symbol description.
 pub use symbols::{
-    FunctionListing, FunctionOrigin, FunctionSourcePosition, FunctionSymbol, Symbol, SymbolKind,
-    TestSymbol, list_functions_with_metadata, list_tests_with_metadata,
+    FunctionListing, FunctionOrigin, FunctionSourcePosition, FunctionSymbol, Symbol, TestSymbol,
+    list_functions_with_metadata, list_tests_with_metadata,
 };
 // Editor primitive: cursor-position token lookup. First-class API — callers
 // (e.g. the playground cursor context) must not depend on feature modules'

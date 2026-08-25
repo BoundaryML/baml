@@ -265,8 +265,15 @@ impl TypeInfo {
         members.extend(
             required_methods
                 .iter()
-                .chain(default_methods.iter())
                 .map(|method| format!("    {}", method.signature)),
+        );
+        // A defaulted method's body is an implementation detail the block
+        // elides; the `{ ... }` marks that a default exists (an implementor
+        // may omit it), distinguishing it from a bare required signature.
+        members.extend(
+            default_methods
+                .iter()
+                .map(|method| format!("    {} {{ ... }}", method.signature)),
         );
         if members.is_empty() {
             return header;
@@ -1483,7 +1490,7 @@ pub fn resolved_function_sig_parts<'db>(
 /// One associated-type declaration line, sans indentation/terminator
 /// (`type Item extends Bar = Baz`). Shared by the interface body block and
 /// the associated-type hover.
-fn render_associated_type(
+pub(crate) fn render_associated_type(
     iface_data: &baml_compiler2_ppir::item_data::InterfaceData<'_>,
     assoc: &baml_compiler2_ppir::item_data::AssociatedTypeData,
 ) -> String {
@@ -2249,7 +2256,9 @@ function example(a: Meters, b: Meters) -> Meters {
         );
         let info = info_at(&test);
         let block = info.to_hover_block();
-        let expected = "interface Store {\n    type Item extends Store;\n    capacity: int,\n    function get(self, key: string) -> string throws never\n    function get_or(self, key: string, fallback: string) -> string throws never\n}";
+        // The `{ ... }` suffix marks `get_or` as defaulted (an implementor
+        // may omit it), distinguishing it from the bare required signature.
+        let expected = "interface Store {\n    type Item extends Store;\n    capacity: int,\n    function get(self, key: string) -> string throws never\n    function get_or(self, key: string, fallback: string) -> string throws never { ... }\n}";
         assert_eq!(block, expected);
         assert_eq!(info.owner_path(), Some("user"));
     }

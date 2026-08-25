@@ -184,6 +184,36 @@ pub fn display_owner_ty(ty: &Ty) -> String {
     ty.render_with(&OwnerTyRender)
 }
 
+/// Render `ty` for a `baml describe` row: every named type in the
+/// paste-back spelling of [`QualifiedTypeName::render_addressable`]
+/// (`string`, `Foo`, `root.ns.Foo`, `baml.json.JsonObject`), so a type a
+/// row names can be fed straight back into `baml describe` from any scope.
+pub fn display_addressable_ty(ty: &Ty) -> String {
+    ty.render_with(&AddressableTyRender)
+}
+
+/// Strategy for [`display_addressable_ty`]: [`OwnerTyRender`] with the QTN
+/// spelling swapped for the describe addressing convention.
+struct AddressableTyRender;
+
+impl TyRenderStrategy for AddressableTyRender {
+    fn qtn(&self, qtn: &QualifiedTypeName) -> String {
+        qtn.render_addressable()
+    }
+
+    fn type_var(&self, name: &Name) -> String {
+        if baml_type::is_synthetic_effect_param(name) {
+            "callback".to_string()
+        } else {
+            name.to_string()
+        }
+    }
+
+    fn show_evolving(&self) -> bool {
+        false
+    }
+}
+
 /// Strategy for [`display_owner_ty`]: [`PlainTyRender`] plus the companion
 /// alias collapse of [`display_ty_canonical_for_file`].
 struct OwnerTyRender;

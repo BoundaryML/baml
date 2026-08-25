@@ -32,9 +32,10 @@ use crate::{
 pub struct SymbolDescription {
     /// The symbol's name.
     pub name: String,
-    /// Symbol kind (Class, Enum, Function, …).
-    #[serde(serialize_with = "serialize_kind")]
-    pub kind: DefinitionKind,
+    /// What the symbol IS, with the kind-specific payload inside — a class
+    /// cannot lack its method sections, an interface cannot carry another
+    /// kind's members, only a member has a container.
+    pub kind: SymbolKind,
     /// The file where the symbol is defined (in-memory handle, not serialized).
     #[serde(skip)]
     pub file: SourceFile,
@@ -58,17 +59,167 @@ pub struct SymbolDescription {
     pub dependencies: Vec<DepRef>,
     /// Sites where this symbol is used.
     pub references: Vec<RefSite>,
-    /// Instance methods (first param `self`) for classes.
-    pub instance_methods: Vec<MethodRef>,
-    /// Static methods (no `self` param) for classes.
-    pub static_methods: Vec<MethodRef>,
-    /// The containing class/enum for members.
-    pub container: Option<DepRef>,
-    /// Canonical fully-qualified name to print in the header, shown only when
-    /// the symbol is not at package root (`root.ns.Foo`) or is a builtin with a
-    /// lowercase alias (`string`). `None` for a top-level user symbol at package
-    /// root (e.g. `User`), where the bare name in the header is already canonical.
-    pub canonical_fqn: Option<String>,
+}
+
+/// A described symbol's kind, carrying exactly the payload that kind of
+/// symbol has. The one total mapping from the compiler's flat
+/// [`DefinitionKind`] is [`classify_definition_kind`]; the reverse
+/// projection (for display labels and kind-based coloring) is
+/// [`Self::definition_kind`].
+#[derive(Clone, Serialize)]
+pub enum SymbolKind {
+    Class {
+        /// See [`SymbolKind::canonical_fqn`].
+        canonical_fqn: Option<String>,
+        /// Instance methods (first param `self`).
+        instance_methods: Vec<MethodRef>,
+        /// Static methods (no `self` param).
+        static_methods: Vec<MethodRef>,
+    },
+    Interface {
+        /// See [`SymbolKind::canonical_fqn`].
+        canonical_fqn: Option<String>,
+        /// The declared member surface in rendering priority order —
+        /// associated types, fields, required methods, defaulted methods.
+        /// Each member carries its facets separately (declaration,
+        /// docstring, body) so a renderer can enumerate every declaration
+        /// before disclosing any docstring, and docstrings before any body.
+        members: Vec<InterfaceMember>,
+        /// Impl blocks whose head names this interface.
+        implementations: Vec<ImplRow>,
+    },
+    /// Any other top-level item (function, enum, type alias, client, …).
+    Item {
+        kind: ItemKind,
+        /// See [`SymbolKind::canonical_fqn`].
+        canonical_fqn: Option<String>,
+    },
+    /// A member of a containing item.
+    Member {
+        kind: MemberKind,
+        /// The containing item, when it resolved.
+        container: Option<DepRef>,
+    },
+    /// A local inside a function.
+    Local { kind: LocalKind },
+}
+
+/// A top-level item kind with no describe-specific payload (classes and
+/// interfaces have their own [`SymbolKind`] variants).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum ItemKind {
+    Enum,
+    TypeAlias,
+    Function,
+    TemplateString,
+    Client,
+    Test,
+    RetryPolicy,
+    Let,
+}
+
+/// An intra-item member kind — the [`DefinitionKind::is_member`] set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum MemberKind {
+    Field,
+    AssociatedType,
+    Method,
+    Variant,
+}
+
+/// A local's kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum LocalKind {
+    Parameter,
+    Binding,
+}
+
+impl SymbolKind {
+    /// The compiler's flat kind, for display labels and kind-based coloring.
+    pub fn definition_kind(&self) -> DefinitionKind {
+        match self {
+            SymbolKind::Class { .. } => DefinitionKind::Class,
+            SymbolKind::Interface { .. } => DefinitionKind::Interface,
+            SymbolKind::Item { kind, .. } => match kind {
+                ItemKind::Enum => DefinitionKind::Enum,
+                ItemKind::TypeAlias => DefinitionKind::TypeAlias,
+                ItemKind::Function => DefinitionKind::Function,
+                ItemKind::TemplateString => DefinitionKind::TemplateString,
+                ItemKind::Client => DefinitionKind::Client,
+                ItemKind::Test => DefinitionKind::Test,
+                ItemKind::RetryPolicy => DefinitionKind::RetryPolicy,
+                ItemKind::Let => DefinitionKind::Let,
+            },
+            SymbolKind::Member { kind, .. } => match kind {
+                MemberKind::Field => DefinitionKind::Field,
+                MemberKind::AssociatedType => DefinitionKind::AssociatedType,
+                MemberKind::Method => DefinitionKind::Method,
+                MemberKind::Variant => DefinitionKind::Variant,
+            },
+            SymbolKind::Local { kind } => match kind {
+                LocalKind::Parameter => DefinitionKind::Parameter,
+                LocalKind::Binding => DefinitionKind::Binding,
+            },
+        }
+    }
+
+    /// Canonical fully-qualified name to print in the header, `Some` only
+    /// when it differs from the bare name (a builtin alias like `string`, or
+    /// a namespaced/dependency type like `root.ns.Foo`) — a top-level user
+    /// symbol at package root shows its bare name, which is already
+    /// canonical. Members and locals never carry one: their headers show the
+    /// bare name, and a member's owner is the container row.
+    pub fn canonical_fqn(&self) -> Option<&str> {
+        match self {
+            SymbolKind::Class { canonical_fqn, .. }
+            | SymbolKind::Interface { canonical_fqn, .. }
+            | SymbolKind::Item { canonical_fqn, .. } => canonical_fqn.as_deref(),
+            SymbolKind::Member { .. } | SymbolKind::Local { .. } => None,
+        }
+    }
+
+    /// The containing item — `Some` only for a member that resolved one.
+    pub fn container(&self) -> Option<&DepRef> {
+        match self {
+            SymbolKind::Member { container, .. } => container.as_ref(),
+            SymbolKind::Class { .. }
+            | SymbolKind::Interface { .. }
+            | SymbolKind::Item { .. }
+            | SymbolKind::Local { .. } => None,
+        }
+    }
+}
+
+/// The families a [`DefinitionKind`] partitions into for describe. THE one
+/// exhaustive mapping: a new compiler kind fails compilation here, forcing a
+/// decision about which payload its descriptions carry.
+enum KindClass {
+    Class,
+    Interface,
+    Item(ItemKind),
+    Member(MemberKind),
+    Local(LocalKind),
+}
+
+fn classify_definition_kind(kind: DefinitionKind) -> KindClass {
+    match kind {
+        DefinitionKind::Class => KindClass::Class,
+        DefinitionKind::Interface => KindClass::Interface,
+        DefinitionKind::Enum => KindClass::Item(ItemKind::Enum),
+        DefinitionKind::TypeAlias => KindClass::Item(ItemKind::TypeAlias),
+        DefinitionKind::Function => KindClass::Item(ItemKind::Function),
+        DefinitionKind::TemplateString => KindClass::Item(ItemKind::TemplateString),
+        DefinitionKind::Client => KindClass::Item(ItemKind::Client),
+        DefinitionKind::Test => KindClass::Item(ItemKind::Test),
+        DefinitionKind::RetryPolicy => KindClass::Item(ItemKind::RetryPolicy),
+        DefinitionKind::Let => KindClass::Item(ItemKind::Let),
+        DefinitionKind::Field => KindClass::Member(MemberKind::Field),
+        DefinitionKind::AssociatedType => KindClass::Member(MemberKind::AssociatedType),
+        DefinitionKind::Method => KindClass::Member(MemberKind::Method),
+        DefinitionKind::Variant => KindClass::Member(MemberKind::Variant),
+        DefinitionKind::Binding => KindClass::Local(LocalKind::Binding),
+        DefinitionKind::Parameter => KindClass::Local(LocalKind::Parameter),
+    }
 }
 
 /// A method of a class, surfaced in `describe` so methods are always
@@ -88,6 +239,73 @@ pub struct MethodRef {
     /// Byte range of the full method definition (1-based line range when rendered).
     #[serde(serialize_with = "serialize_range")]
     pub item_range: TextRange,
+}
+
+/// Which slot of an interface's declared surface a member occupies, in the
+/// rendering priority order `baml describe` uses: associated types first,
+/// then fields, required methods, defaulted methods.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InterfaceMemberCategory {
+    AssociatedType,
+    Field,
+    RequiredMethod,
+    DefaultMethod,
+}
+
+impl InterfaceMemberCategory {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            InterfaceMemberCategory::AssociatedType => "associated type",
+            InterfaceMemberCategory::Field => "field",
+            InterfaceMemberCategory::RequiredMethod => "required method",
+            InterfaceMemberCategory::DefaultMethod => "default method",
+        }
+    }
+}
+
+/// One member of an interface's declared surface, with its facets separated
+/// so a renderer can admit them independently: the one-line declaration is
+/// the enumeration, the docstring and (for defaulted methods) the body are
+/// progressively-disclosed detail behind it.
+#[derive(Clone, Serialize)]
+pub struct InterfaceMember {
+    pub category: InterfaceMemberCategory,
+    pub name: String,
+    /// The declaration line exactly as the reconstructed interface block
+    /// spells it: `type Item extends Bar;`, `name: string,`, a method
+    /// signature — a defaulted method carries a `{ ... }` suffix marking its
+    /// elided body.
+    pub declaration: String,
+    /// Full docstring (every line), if any.
+    pub docstring: Option<String>,
+    /// Defaulted methods only: the full definition source with leading doc
+    /// comments stripped (the docstring facet carries those).
+    pub body: Option<String>,
+    #[serde(skip)]
+    pub file: SourceFile,
+    pub file_path: String,
+    /// Byte range of the member's declaration (methods: the whole definition).
+    #[serde(serialize_with = "serialize_range")]
+    pub item_range: TextRange,
+}
+
+/// An impl block whose head names the described interface.
+#[derive(Clone, Serialize)]
+pub struct ImplRow {
+    /// `implement <Head> for <Target>` in canonical spelling.
+    pub display: String,
+    #[serde(skip)]
+    pub file: SourceFile,
+    pub file_path: String,
+    /// Byte range of the impl block.
+    #[serde(serialize_with = "serialize_range")]
+    pub span: TextRange,
+    /// Byte range of the head's interface mention (`Named` in
+    /// `implement Named for Robot`) — the site this row REPLACES in the
+    /// reference list, so the two sections never double-report one mention.
+    #[serde(serialize_with = "serialize_range")]
+    pub head_span: TextRange,
 }
 
 /// A symbol referenced in the signature of another symbol.
@@ -217,6 +435,15 @@ pub fn describe_item_member(
         }
     }
 
+    // Interface members (methods, fields, associated types) are declared on
+    // the interface's own item data — the outline walk below never descends
+    // into interfaces, so this arm is their only road.
+    if let Definition::Interface(iface_loc) = parent_def {
+        if let Some(desc) = describe_interface_member(db, files, iface_loc, member_name) {
+            return Some(desc);
+        }
+    }
+
     let (parent_file, parent_name_span) = crate::syntax::definition_span(db, parent_def)?;
 
     // Get the parent's name from the source text.
@@ -290,31 +517,77 @@ fn describe_top_level(
     let resolved_type = resolve_type_for_item(db, definition);
 
     // ── Reference finding ────────────────────────────────────────────────────
-    let references = find_references(db, files, file, sym.name_span, item_range);
+    let mut references = find_references(db, files, file, sym.name_span, item_range);
 
-    // ── Methods + canonical FQN (classes) ────────────────────────────────────
-    let (instance_methods, static_methods, canonical_fqn) =
-        class_methods_and_fqn(db, sym, definition);
+    // ── Kind payload ─────────────────────────────────────────────────────────
+    let kind = match classify_definition_kind(sym.kind) {
+        KindClass::Class => {
+            let (instance_methods, static_methods) = match definition {
+                Some(Definition::Class(class_loc)) => collect_class_methods(db, class_loc),
+                _ => (Vec::new(), Vec::new()),
+            };
+            SymbolKind::Class {
+                canonical_fqn: canonical_fqn(db, sym, definition),
+                instance_methods,
+                static_methods,
+            }
+        }
+        KindClass::Interface => {
+            let (members, implementations) = match definition {
+                Some(Definition::Interface(iface_loc)) => (
+                    collect_interface_members(db, iface_loc),
+                    collect_interface_impls(db, iface_loc),
+                ),
+                _ => (Vec::new(), Vec::new()),
+            };
+            SymbolKind::Interface {
+                canonical_fqn: canonical_fqn(db, sym, definition),
+                members,
+                implementations,
+            }
+        }
+        KindClass::Item(kind) => SymbolKind::Item {
+            kind,
+            canonical_fqn: canonical_fqn(db, sym, definition),
+        },
+        // `describe_symbol` routes members and locals to their own builders;
+        // one reaching this path (a search hit with no member context)
+        // describes with no container — honest absence.
+        KindClass::Member(kind) => SymbolKind::Member {
+            kind,
+            container: None,
+        },
+        KindClass::Local(kind) => SymbolKind::Local { kind },
+    };
+
+    // An impl-head mention (`implement Named for …`, `implements Named {`)
+    // is reported by the implementations section; keeping it in the
+    // reference list too would double-count the same site.
+    if let SymbolKind::Interface {
+        implementations, ..
+    } = &kind
+    {
+        references.retain(|reference| {
+            !implementations.iter().any(|imp| {
+                imp.file == reference.file && imp.head_span.contains_range(reference.range)
+            })
+        });
+    }
 
     // Body block, with non-doc comments removed (CST-token based, so `//`
     // inside string/prompt literals is never touched):
     // - class: fields-only reconstruction (methods get their own sections),
     //   prefixed with the full `///` docstring;
+    // - interface: the signature-only member surface (an interface is its
+    //   contract; default bodies are implementation detail behind drill-in),
+    //   prefixed with the full `///` docstring;
     // - builtin function: the signature only, never the native body block;
     // - everything else: the real source body.
-    let full_body = if matches!(sym.kind, DefinitionKind::Class) {
-        let mut body = String::new();
-        if let Some(doc) = &docstring {
-            for line in doc.lines() {
-                if line.is_empty() {
-                    body.push_str("///\n");
-                } else {
-                    body.push_str("/// ");
-                    body.push_str(line);
-                    body.push('\n');
-                }
-            }
-        }
+    let full_body = if matches!(
+        kind,
+        SymbolKind::Class { .. } | SymbolKind::Interface { .. }
+    ) {
+        let mut body = docstring_lines(docstring.as_deref());
         body.push_str(&shape);
         body
     } else {
@@ -325,7 +598,7 @@ fn describe_top_level(
 
     Some(SymbolDescription {
         name: sym.name.clone(),
-        kind: sym.kind,
+        kind,
         file_path: file_path_string(db, file),
         file,
         name_span: sym.name_span,
@@ -336,10 +609,6 @@ fn describe_top_level(
         resolved_type,
         dependencies,
         references,
-        instance_methods,
-        static_methods,
-        container: None,
-        canonical_fqn,
     })
 }
 
@@ -353,6 +622,9 @@ fn describe_member(
     sym: &SymbolInfo,
 ) -> Option<SymbolDescription> {
     let file = sym.file;
+    let KindClass::Member(member_kind) = classify_definition_kind(sym.kind) else {
+        return None;
+    };
 
     // Find the member's CST node (FIELD or ENUM_VARIANT).
     let member_range = find_member_range(db, file, sym.name_span, sym.kind)?;
@@ -403,7 +675,10 @@ fn describe_member(
 
     Some(SymbolDescription {
         name: sym.name.clone(),
-        kind: sym.kind,
+        kind: SymbolKind::Member {
+            kind: member_kind,
+            container,
+        },
         file_path: file_path_string(db, file),
         file,
         name_span: sym.name_span,
@@ -414,10 +689,6 @@ fn describe_member(
         resolved_type,
         dependencies: Vec::new(),
         references,
-        instance_methods: Vec::new(),
-        static_methods: Vec::new(),
-        container,
-        canonical_fqn: None,
     })
 }
 
@@ -485,7 +756,9 @@ fn describe_locals(
 
                 results.push(SymbolDescription {
                     name: name.to_string(),
-                    kind: DefinitionKind::Parameter,
+                    kind: SymbolKind::Local {
+                        kind: LocalKind::Parameter,
+                    },
                     file_path: file_path_string(db, file),
                     file,
                     name_span: param_span,
@@ -496,10 +769,6 @@ fn describe_locals(
                     resolved_type: Some(type_str),
                     dependencies: vec![make_function_dep(db, func_loc, &func_name)],
                     references: param_refs,
-                    instance_methods: Vec::new(),
-                    static_methods: Vec::new(),
-                    container: None,
-                    canonical_fqn: None,
                 });
             }
 
@@ -607,7 +876,9 @@ fn describe_locals(
 
                     results.push(SymbolDescription {
                         name: name.to_string(),
-                        kind: DefinitionKind::Binding,
+                        kind: SymbolKind::Local {
+                            kind: LocalKind::Binding,
+                        },
                         file_path: file_path_string(db, file),
                         file,
                         name_span: binding_span,
@@ -618,10 +889,6 @@ fn describe_locals(
                         resolved_type: Some(type_str),
                         dependencies: vec![make_function_dep(db, func_loc, &func_name)],
                         references: binding_refs,
-                        instance_methods: Vec::new(),
-                        static_methods: Vec::new(),
-                        container: None,
-                        canonical_fqn: None,
                     });
                 }
             }
@@ -896,6 +1163,296 @@ fn collect_class_methods(
     (instance, statics)
 }
 
+// ── Interface surface ────────────────────────────────────────────────────────
+
+/// Collect an interface's declared member surface in rendering priority
+/// order: associated types, fields, required methods, defaulted methods.
+///
+/// Declarations use the same renderers as the hover/shape block
+/// ([`crate::info::render_associated_type`], the arena `TypeRef` renderer,
+/// `resolved_function_sig_parts` + `method_sig_style`), so a member reads
+/// identically in every surface; the facet split (docstring, body) is what
+/// this adds over the flat block.
+fn collect_interface_members(
+    db: &dyn baml_compiler2_ppir::Db,
+    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
+) -> Vec<InterfaceMember> {
+    let file = iface_loc.file(db);
+    let file_path = file_path_string(db, file);
+    let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+    let source_map = baml_compiler2_ppir::item_data::interface_source_map(db, iface_loc);
+
+    let mut out = Vec::new();
+
+    // Associated types. `docstring: None` is honest absence: assoc-type doc
+    // comments are not lowered into `AssociatedTypeData` today; the facet
+    // fills in if they ever are.
+    for (assoc, spans) in iface
+        .associated_types
+        .iter()
+        .zip(&source_map.associated_type_spans)
+    {
+        out.push(InterfaceMember {
+            category: InterfaceMemberCategory::AssociatedType,
+            name: assoc.name.as_str().to_string(),
+            declaration: format!("{};", crate::info::render_associated_type(iface, assoc)),
+            docstring: None,
+            body: None,
+            file,
+            file_path: file_path.clone(),
+            item_range: spans.span,
+        });
+    }
+
+    // Fields.
+    for (field, name_span) in iface.fields.iter().zip(&source_map.field_name_spans) {
+        let item_range =
+            find_member_range(db, file, *name_span, DefinitionKind::Field).unwrap_or(*name_span);
+        out.push(InterfaceMember {
+            category: InterfaceMemberCategory::Field,
+            name: field.name.as_str().to_string(),
+            declaration: format!(
+                "{}: {},",
+                field.name.as_str(),
+                render::display_type_ref(&iface.type_refs, field.type_ref)
+            ),
+            docstring: field.docstring.clone(),
+            body: None,
+            file,
+            file_path: file_path.clone(),
+            item_range,
+        });
+    }
+
+    // Methods: required before defaulted, each group in source order.
+    let mut required = Vec::new();
+    let mut defaulted = Vec::new();
+    for &method_loc in &iface.methods {
+        let m = baml_compiler2_ppir::item_data::function_data(db, method_loc);
+        if m.metadata.is_language_internal {
+            continue;
+        }
+        let signature = crate::info::resolved_function_sig_parts(db, method_loc, None).render(
+            db,
+            file,
+            crate::info::method_sig_style(),
+        );
+        let span = baml_compiler2_ppir::item_data::function_source_map(db, method_loc).span;
+        let name = m.name.as_str().to_string();
+        if baml_compiler2_ppir::item_data::function_has_body(db, method_loc) {
+            defaulted.push(InterfaceMember {
+                category: InterfaceMemberCategory::DefaultMethod,
+                name,
+                declaration: format!("{signature} {{ ... }}"),
+                docstring: m.docstring.clone(),
+                body: Some(strip_leading_doc_lines(&clean_body_source(db, file, span))),
+                file,
+                file_path: file_path.clone(),
+                item_range: span,
+            });
+        } else {
+            required.push(InterfaceMember {
+                category: InterfaceMemberCategory::RequiredMethod,
+                name,
+                declaration: signature,
+                docstring: m.docstring.clone(),
+                body: None,
+                file,
+                file_path: file_path.clone(),
+                item_range: span,
+            });
+        }
+    }
+    out.extend(required);
+    out.extend(defaulted);
+    out
+}
+
+/// Collect the impl blocks whose head names this interface, as renderable
+/// rows. Enumeration is the compiler's
+/// ([`baml_compiler2_hir_ty::impls::impls_naming_interface`]); this only
+/// projects each block into its display spelling and location.
+fn collect_interface_impls(
+    db: &dyn baml_compiler2_ppir::Db,
+    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
+) -> Vec<ImplRow> {
+    baml_compiler2_hir_ty::impls::impls_naming_interface(db, iface_loc)
+        .iter()
+        .filter_map(|&block| {
+            let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).as_ref()?;
+            let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
+            let file = block.file(db);
+            let source_map = baml_compiler2_ppir::item_data::impl_block_source_map(db, block);
+            Some(ImplRow {
+                display: render_impl_row(facts),
+                file,
+                file_path: file_path_string(db, file),
+                span: source_map.span,
+                head_span: source_map.type_refs.span(data.interface_target),
+            })
+        })
+        .collect()
+}
+
+/// `implement <Head> for <Target>`: the head's short name plus any written
+/// generic arguments and associated-type pins, the for-target in the
+/// canonical owner spelling (`int`, `T[]`, `user.Foo`). The head keeps its
+/// SHORT name deliberately — every row sits under the interface it names, so
+/// repeating the full path would be noise; the variation a reader scans for
+/// is the instantiation and the implementor.
+fn render_impl_row(facts: &baml_compiler2_hir_ty::impls::ImplFacts<'_>) -> String {
+    let iface = &facts.interface;
+    let mut head = iface.name.name().as_str().to_string();
+    let mut args: Vec<String> = iface
+        .generics
+        .iter()
+        .map(|generic| render::display_addressable_ty(&generic.to_plain()))
+        .collect();
+    args.extend(iface.associated_types.iter().map(|(name, ty)| {
+        format!(
+            "{} = {}",
+            name.as_str(),
+            render::display_addressable_ty(&ty.to_plain())
+        )
+    }));
+    if !args.is_empty() {
+        head.push('<');
+        head.push_str(&args.join(", "));
+        head.push('>');
+    }
+    format!(
+        "implement {head} for {}",
+        render::display_addressable_ty(&facts.for_ty_pattern.to_plain())
+    )
+}
+
+/// Describe one interface member (drill-in): a method (required or
+/// defaulted), a field, or an associated type. This is the target the member
+/// enumeration points at — a required method shows its docstring and
+/// signature (it HAS no body), a defaulted method also shows its body.
+/// Returns `None` if the interface declares no such member.
+fn describe_interface_member(
+    db: &dyn baml_compiler2_ppir::Db,
+    files: &[SourceFile],
+    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
+    member_name: &str,
+) -> Option<SymbolDescription> {
+    let file = iface_loc.file(db);
+    let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
+    let source_map = baml_compiler2_ppir::item_data::interface_source_map(db, iface_loc);
+
+    // The owning interface is the container for every member form.
+    let container = crate::syntax::definition_span(db, Definition::Interface(iface_loc)).map(
+        |(cfile, cspan)| DepRef {
+            name: iface.name.as_str().to_string(),
+            kind: DefinitionKind::Interface,
+            file_path: file_path_string(db, cfile),
+            file: cfile,
+            name_span: cspan,
+        },
+    );
+
+    // Methods — required and defaulted alike are real function items.
+    if let Some(&method_loc) = iface.methods.iter().find(|&&loc| {
+        let m = baml_compiler2_ppir::item_data::function_data(db, loc);
+        m.name.as_str() == member_name && !m.metadata.is_language_internal
+    }) {
+        let m = baml_compiler2_ppir::item_data::function_data(db, method_loc);
+        let method_map = baml_compiler2_ppir::item_data::function_source_map(db, method_loc);
+        let method_span = method_map.span;
+        let signature = crate::info::resolved_function_sig_parts(db, method_loc, None).render(
+            db,
+            file,
+            crate::info::method_sig_style(),
+        );
+        let full_body = if baml_compiler2_ppir::item_data::function_has_body(db, method_loc) {
+            docstring_prefixed_body(
+                m.docstring.as_deref(),
+                &clean_body_source(db, file, method_span),
+            )
+        } else {
+            let mut body = docstring_lines(m.docstring.as_deref());
+            body.push_str(&signature);
+            body
+        };
+        // A spanless name (`TextRange::default()` fill) falls back to the
+        // declaration span, same as `make_function_dep`.
+        let name_span = if method_map.name_span == TextRange::default() {
+            TextRange::empty(method_span.start())
+        } else {
+            method_map.name_span
+        };
+        let references = find_references(db, files, file, name_span, method_span);
+        return Some(SymbolDescription {
+            name: m.name.as_str().to_string(),
+            kind: SymbolKind::Member {
+                kind: MemberKind::Method,
+                container,
+            },
+            file_path: file_path_string(db, file),
+            file,
+            name_span,
+            item_range: method_span,
+            shape: signature.clone(),
+            full_body,
+            docstring: m.docstring.clone(),
+            resolved_type: Some(signature),
+            dependencies: Vec::new(),
+            references,
+        });
+    }
+
+    // Fields — the shared member path handles FIELD nodes; it only needs the
+    // name span, which the interface's source map records.
+    if let Some((idx, _)) = iface
+        .fields
+        .iter()
+        .enumerate()
+        .find(|(_, f)| f.name.as_str() == member_name)
+    {
+        let name_span = source_map.field_name_spans.get(idx).copied()?;
+        let sym = SymbolInfo {
+            name: member_name.to_string(),
+            kind: DefinitionKind::Field,
+            file,
+            name_span,
+            container_name: Some(iface.name.as_str().to_string()),
+        };
+        return describe_member(db, files, &sym);
+    }
+
+    // Associated types.
+    if let Some((idx, assoc)) = iface
+        .associated_types
+        .iter()
+        .enumerate()
+        .find(|(_, a)| a.name.as_str() == member_name)
+    {
+        let spans = source_map.associated_type_spans.get(idx)?;
+        let declaration = crate::info::render_associated_type(iface, assoc);
+        let references = find_references(db, files, file, spans.name_span, spans.span);
+        return Some(SymbolDescription {
+            name: member_name.to_string(),
+            kind: SymbolKind::Member {
+                kind: MemberKind::AssociatedType,
+                container,
+            },
+            file_path: file_path_string(db, file),
+            file,
+            name_span: spans.name_span,
+            item_range: spans.span,
+            shape: format!("{}.{declaration}", iface.name.as_str()),
+            full_body: declaration.clone(),
+            docstring: None,
+            resolved_type: Some(declaration),
+            dependencies: Vec::new(),
+            references,
+        });
+    }
+
+    None
+}
+
 /// Describe a single class method (drill-in): its canonical signature, source
 /// body, docstring, and owning class. The body is shown for user methods; a
 /// builtin/native body (`$rust_function`, …) is elided to just the signature.
@@ -941,21 +1498,14 @@ fn describe_class_method(
         baml_compiler2_ppir::function_body(db, method_loc).as_ref(),
         baml_compiler2_hir::body::FunctionBody::Builtin(_)
     ) {
-        let mut body = String::new();
-        if let Some(docstring) = &m.docstring {
-            for line in docstring.lines() {
-                body.push_str("///");
-                if !line.is_empty() {
-                    body.push(' ');
-                    body.push_str(line);
-                }
-                body.push('\n');
-            }
-        }
+        let mut body = docstring_lines(m.docstring.as_deref());
         body.push_str(&signature);
         body
     } else {
-        clean_body_source(db, file, method_span)
+        docstring_prefixed_body(
+            m.docstring.as_deref(),
+            &clean_body_source(db, file, method_span),
+        )
     };
 
     let name_span = function_def_name_span(db, file, method_span, member_name)
@@ -977,7 +1527,10 @@ fn describe_class_method(
 
     Some(SymbolDescription {
         name: m.name.as_str().to_string(),
-        kind: DefinitionKind::Method,
+        kind: SymbolKind::Member {
+            kind: MemberKind::Method,
+            container,
+        },
         file_path: file_path_string(db, file),
         file,
         name_span,
@@ -988,10 +1541,6 @@ fn describe_class_method(
         resolved_type: Some(signature),
         dependencies: Vec::new(),
         references,
-        instance_methods: Vec::new(),
-        static_methods: Vec::new(),
-        container,
-        canonical_fqn: None,
     })
 }
 
@@ -1067,34 +1616,22 @@ fn collect_method_signature_deps(
     }
 }
 
-/// Resolve a top-level symbol's methods (for classes) and canonical FQN.
+/// Resolve a top-level symbol's canonical FQN for its description header.
 ///
-/// The canonical FQN is returned as `Some` only when it differs from the bare
-/// `sym.name` — i.e. when the header should show it in parentheses (a builtin
-/// alias like `string`, or a namespaced/dependency type like
-/// `root.ns.Foo`). A user type at package root returns `None`.
-fn class_methods_and_fqn(
+/// `Some` only when it differs from the bare `sym.name` — i.e. when the
+/// header should show it in parentheses (a builtin alias like `string`, or a
+/// namespaced/dependency type like `root.ns.Foo`). A user type at package
+/// root (or an unresolved symbol) returns `None`.
+fn canonical_fqn(
     db: &dyn baml_compiler2_ppir::Db,
     sym: &SymbolInfo,
     def: Option<Definition<'_>>,
-) -> (Vec<MethodRef>, Vec<MethodRef>, Option<String>) {
-    let Some(def) = def else {
-        return (Vec::new(), Vec::new(), None);
-    };
-
+) -> Option<String> {
+    let def = def?;
     let name = baml_base::Name::new(&sym.name);
     let qtn = baml_compiler2_hir_ty::lower::qualify_def(db, def, &name);
     let fqn = qtn.render_addressable();
-    let canonical_fqn = (fqn != sym.name).then_some(fqn);
-
-    let (instance, statics) = match def {
-        baml_compiler2_hir::contributions::Definition::Class(class_loc) => {
-            collect_class_methods(db, class_loc)
-        }
-        _ => (Vec::new(), Vec::new()),
-    };
-
-    (instance, statics, canonical_fqn)
+    (fqn != sym.name).then_some(fqn)
 }
 
 // ── Type resolution ──────────────────────────────────────────────────────────
@@ -1618,6 +2155,60 @@ fn file_path_string(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Strin
     file.path(db).display().to_string()
 }
 
+/// Render a docstring back as `/// `-prefixed source lines (trailing
+/// newline included), or an empty string for `None`.
+fn docstring_lines(docstring: Option<&str>) -> String {
+    let mut out = String::new();
+    for line in docstring.unwrap_or_default().lines() {
+        if line.is_empty() {
+            out.push_str("///\n");
+        } else {
+            out.push_str("/// ");
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// Drop the leading `///` doc-comment lines from a cleaned member source.
+/// Used where the docstring is its own facet, rendered (and budgeted)
+/// separately from the definition text.
+fn strip_leading_doc_lines(text: &str) -> String {
+    text.lines()
+        .skip_while(|line| line.trim_start().starts_with("///"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// A method drill-in body: the docstring as `///` lines (indented to match
+/// the body's first line, so the slice reads as it does in the file)
+/// followed by the definition source. Method source-map spans start at the
+/// `function` keyword, so the docstring must be re-attached — and any doc
+/// lines the slice does carry are stripped first, so no span shape can
+/// double them.
+fn docstring_prefixed_body(docstring: Option<&str>, body: &str) -> String {
+    let body = strip_leading_doc_lines(body);
+    let indent: String = body
+        .lines()
+        .next()
+        .map(|line| line.chars().take_while(|c| c.is_whitespace()).collect())
+        .unwrap_or_default();
+    let mut out = String::new();
+    for line in docstring.unwrap_or_default().lines() {
+        out.push_str(&indent);
+        if line.is_empty() {
+            out.push_str("///\n");
+        } else {
+            out.push_str("/// ");
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out.push_str(&body);
+    out
+}
+
 /// Slice a text range from file text, trimming leading blank lines.
 /// The source text over `range` with non-doc comments removed.
 ///
@@ -1832,14 +2423,18 @@ mod tests {
             let (line, _col) = offset_to_line_col(text, offset);
 
             let fqn = desc
-                .canonical_fqn
-                .as_deref()
+                .kind
+                .canonical_fqn()
                 .map(|f| format!("  ({f})"))
                 .unwrap_or_default();
             writeln!(
                 out,
                 "{} {}{}  {}:{}",
-                desc.kind, desc.name, fqn, filename, line
+                desc.kind.definition_kind(),
+                desc.name,
+                fqn,
+                filename,
+                line
             )
             .unwrap();
             if let Some(ref doc) = desc.docstring {
@@ -1852,25 +2447,63 @@ mod tests {
                 }
             }
             writeln!(out, "shape: {}", desc.shape).unwrap();
-            if !desc.instance_methods.is_empty() {
-                writeln!(out, "methods:").unwrap();
-                for m in &desc.instance_methods {
-                    if let Some(doc) = &m.docstring {
-                        writeln!(out, "  /// {doc}").unwrap();
+            if let super::SymbolKind::Interface {
+                members,
+                implementations,
+                ..
+            } = &desc.kind
+            {
+                if !members.is_empty() {
+                    writeln!(out, "members:").unwrap();
+                    for m in members {
+                        writeln!(out, "  [{}] {}", m.category.as_str(), m.declaration).unwrap();
+                        if let Some(doc) = &m.docstring {
+                            for line in doc.lines() {
+                                if line.is_empty() {
+                                    writeln!(out, "    ///").unwrap();
+                                } else {
+                                    writeln!(out, "    /// {line}").unwrap();
+                                }
+                            }
+                        }
+                        if let Some(body) = &m.body {
+                            writeln!(out, "    (body: {} lines)", body.lines().count()).unwrap();
+                        }
                     }
-                    writeln!(out, "  {}", m.signature).unwrap();
+                }
+                if !implementations.is_empty() {
+                    writeln!(out, "implementations:").unwrap();
+                    for imp in implementations {
+                        writeln!(out, "  {}", imp.display).unwrap();
+                    }
                 }
             }
-            if !desc.static_methods.is_empty() {
-                writeln!(out, "static_methods:").unwrap();
-                for m in &desc.static_methods {
-                    if let Some(doc) = &m.docstring {
-                        writeln!(out, "  /// {doc}").unwrap();
+            if let super::SymbolKind::Class {
+                instance_methods,
+                static_methods,
+                ..
+            } = &desc.kind
+            {
+                if !instance_methods.is_empty() {
+                    writeln!(out, "methods:").unwrap();
+                    for m in instance_methods {
+                        if let Some(doc) = &m.docstring {
+                            writeln!(out, "  /// {doc}").unwrap();
+                        }
+                        writeln!(out, "  {}", m.signature).unwrap();
                     }
-                    writeln!(out, "  {}", m.signature).unwrap();
+                }
+                if !static_methods.is_empty() {
+                    writeln!(out, "static_methods:").unwrap();
+                    for m in static_methods {
+                        if let Some(doc) = &m.docstring {
+                            writeln!(out, "  /// {doc}").unwrap();
+                        }
+                        writeln!(out, "  {}", m.signature).unwrap();
+                    }
                 }
             }
-            if let Some(ref c) = desc.container {
+            if let Some(c) = desc.kind.container() {
                 writeln!(out, "container: {}", c.name).unwrap();
             }
             if !desc.dependencies.is_empty() {
@@ -1933,7 +2566,7 @@ class Config {
         let files = baml_compiler2_hir::compiler2_all_files(&project.db);
         let desc = super::describe_by_definition(&project.db, &files, def).unwrap();
         assert_eq!(desc.name, "Config");
-        assert_eq!(desc.kind, crate::DefinitionKind::Class);
+        assert_eq!(desc.kind.definition_kind(), crate::DefinitionKind::Class);
     }
 
     #[test]
@@ -1949,7 +2582,7 @@ class Config {
         let files = baml_compiler2_hir::compiler2_all_files(&project.db);
         let desc = super::describe_item_member(&project.db, &files, def, "x").unwrap();
         assert_eq!(desc.name, "x");
-        assert_eq!(desc.kind, crate::DefinitionKind::Field);
+        assert_eq!(desc.kind.definition_kind(), crate::DefinitionKind::Field);
     }
 
     #[test]
@@ -2063,6 +2696,195 @@ class Person {
         let descs = project.describe("Named");
         assert_eq!(descs.len(), 1);
         insta::assert_snapshot!(project.format_description(&descs[0]));
+    }
+
+    /// One fixture exercising the whole interface surface: an associated
+    /// type, a field, a required method, a defaulted method (docstring +
+    /// body), an in-body implements block, a free implement block, and an
+    /// unrelated interface whose impl must NOT be listed.
+    fn make_interface_surface_project() -> ProjectTest {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "interfaces.baml",
+            r#"
+/// A thing with a name.
+interface Named {
+    type Output
+
+    name: string,
+
+    /// The display label.
+    function label(self) -> string throws never
+
+    /// Greets by label.
+    ///
+    /// Meant for demos.
+    function greet(self) -> string throws never {
+        let base = self.label();
+        base
+    }
+}
+
+interface Other {
+    function other_thing(self) -> int throws never
+}
+
+class Person {
+    name: string,
+    implements Named {
+        type Output = int
+        function label(self) -> string {
+            self.name
+        }
+    }
+}
+
+class Robot {
+    name: string,
+}
+
+implement Named for Robot {
+    type Output = string
+    function label(self) -> string {
+        "robot"
+    }
+}
+
+implement Other for Robot {
+    function other_thing(self) -> int {
+        1
+    }
+}
+"#,
+        );
+        builder.build()
+    }
+
+    fn named_interface_def(
+        project: &ProjectTest,
+    ) -> baml_compiler2_hir::contributions::Definition<'_> {
+        let pkg_id = sole_workspace_package(&project.db);
+        let pkg = baml_compiler2_hir::package::package_items(&project.db, pkg_id);
+        pkg.lookup_type(&[], &baml_base::Name::new("Named"))
+            .unwrap()
+    }
+
+    #[test]
+    fn describe_interface_full_surface() {
+        let project = make_interface_surface_project();
+        let descs = project.describe("Named");
+        assert_eq!(descs.len(), 1);
+        insta::assert_snapshot!(project.format_description(&descs[0]));
+    }
+
+    #[test]
+    fn interface_members_come_in_category_order_with_facets() {
+        let project = make_interface_surface_project();
+        let desc = project.describe("Named").remove(0);
+
+        let super::SymbolKind::Interface { members, .. } = &desc.kind else {
+            panic!("an interface description carries the Interface kind");
+        };
+        let categories: Vec<_> = members.iter().map(|m| m.category).collect();
+        assert_eq!(
+            categories,
+            [
+                super::InterfaceMemberCategory::AssociatedType,
+                super::InterfaceMemberCategory::Field,
+                super::InterfaceMemberCategory::RequiredMethod,
+                super::InterfaceMemberCategory::DefaultMethod,
+            ]
+        );
+
+        let greet = &members[3];
+        assert!(greet.declaration.ends_with("{ ... }"));
+        let doc = greet.docstring.as_deref().unwrap();
+        assert!(doc.contains("Meant for demos."));
+        let body = greet.body.as_deref().unwrap();
+        assert!(body.contains("self.label()"));
+        assert!(!body.contains("///"), "docstring is its own facet: {body}");
+
+        let label = &members[2];
+        assert!(label.body.is_none(), "a required method has no body facet");
+    }
+
+    #[test]
+    fn interface_implementations_list_only_impls_naming_it() {
+        let project = make_interface_surface_project();
+        let desc = project.describe("Named").remove(0);
+
+        let super::SymbolKind::Interface {
+            implementations, ..
+        } = &desc.kind
+        else {
+            panic!("an interface description carries the Interface kind");
+        };
+        let rows: Vec<&str> = implementations
+            .iter()
+            .map(|imp| imp.display.as_str())
+            .collect();
+        assert_eq!(
+            rows,
+            ["implement Named for Person", "implement Named for Robot"]
+        );
+
+        // The interface's own body is a reconstruction: no default-method
+        // bodies leak into it.
+        assert!(!desc.full_body.contains("self.label()"));
+        assert!(desc.full_body.contains("/// A thing with a name."));
+    }
+
+    #[test]
+    fn describe_interface_member_required_method() {
+        let project = make_interface_surface_project();
+        let def = named_interface_def(&project);
+        let files = baml_compiler2_hir::compiler2_all_files(&project.db);
+
+        let desc = super::describe_item_member(&project.db, &files, def, "label").unwrap();
+        assert_eq!(desc.kind.definition_kind(), crate::DefinitionKind::Method);
+        assert_eq!(desc.kind.container().unwrap().name, "Named");
+        // A required method HAS no body: the description is docstring +
+        // signature, never someone else's lines.
+        assert!(desc.full_body.contains("/// The display label."));
+        assert!(
+            desc.full_body
+                .contains("function label(self) -> string throws never")
+        );
+        assert!(!desc.full_body.contains('{'));
+    }
+
+    #[test]
+    fn describe_interface_member_default_method() {
+        let project = make_interface_surface_project();
+        let def = named_interface_def(&project);
+        let files = baml_compiler2_hir::compiler2_all_files(&project.db);
+
+        let desc = super::describe_item_member(&project.db, &files, def, "greet").unwrap();
+        assert_eq!(desc.kind.definition_kind(), crate::DefinitionKind::Method);
+        assert!(desc.full_body.contains("self.label()"));
+        assert_eq!(
+            desc.docstring.as_deref(),
+            Some("Greets by label.\n\nMeant for demos.")
+        );
+    }
+
+    #[test]
+    fn describe_interface_member_field_and_associated_type() {
+        let project = make_interface_surface_project();
+        let def = named_interface_def(&project);
+        let files = baml_compiler2_hir::compiler2_all_files(&project.db);
+
+        let field = super::describe_item_member(&project.db, &files, def, "name").unwrap();
+        assert_eq!(field.kind.definition_kind(), crate::DefinitionKind::Field);
+        assert_eq!(field.kind.container().unwrap().name, "Named");
+
+        let assoc = super::describe_item_member(&project.db, &files, def, "Output").unwrap();
+        assert_eq!(
+            assoc.kind.definition_kind(),
+            crate::DefinitionKind::AssociatedType
+        );
+        assert_eq!(assoc.full_body, "type Output");
+        assert_eq!(assoc.shape, "Named.type Output");
     }
 
     #[test]

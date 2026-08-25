@@ -338,6 +338,125 @@ class Person {
     insta::assert_snapshot!(output);
 }
 
+/// A project whose interface exercises the whole facet surface: an
+/// associated type, a field, a required method, a defaulted method with a
+/// docstring and body, an in-body implements block, and a free implement
+/// block.
+fn interface_surface_project() -> ProjectDatabase {
+    make_db(&[(
+        "interfaces.baml",
+        r#"
+/// A thing with a name.
+interface Named {
+    type Output
+
+    name: string,
+
+    /// The display label.
+    function label(self) -> string throws never
+
+    /// Greets by label.
+    ///
+    /// Meant for demos.
+    function greet(self) -> string throws never {
+        let base = self.label();
+        base
+    }
+}
+
+class Person {
+    name: string,
+    implements Named {
+        type Output = int
+        function label(self) -> string {
+            self.name
+        }
+    }
+}
+
+class Robot {
+    name: string,
+}
+
+implement Named for Robot {
+    type Output = string
+    function label(self) -> string {
+        "robot"
+    }
+}
+"#,
+    )])
+}
+
+fn describe_named(db: &ProjectDatabase) -> baml_ide::SymbolDescription {
+    let files = baml_compiler2_hir::compiler2_all_files(db);
+    let mut descs = baml_ide::describe(db, &files, "Named");
+    assert_eq!(descs.len(), 1);
+    descs.remove(0)
+}
+
+/// At the default budget everything fits: enumeration, docstrings, the
+/// defaulted body, implementations.
+#[test]
+fn render_describe_interface_full_surface() {
+    let db = interface_surface_project();
+    let output = capture_description(&db, &describe_named(&db), 30);
+    insta::assert_snapshot!(output);
+}
+
+/// Facet layering under a tight budget: the member ENUMERATION renders
+/// complete (every declaration — the reader can always drill in), while
+/// docstrings and bodies give way, most-valuable-first.
+#[test]
+fn a_tight_budget_keeps_every_interface_declaration() {
+    let db = interface_surface_project();
+    let output = capture_description(&db, &describe_named(&db), 8);
+
+    // Every member's declaration is present…
+    for declaration in [
+        "type Output;",
+        "name: string,",
+        "function label(self) -> string throws never",
+        "function greet(self) -> string throws never { ... }",
+    ] {
+        assert!(
+            output.contains(declaration),
+            "expected the full enumeration at budget 8, missing `{declaration}`:\n{output}"
+        );
+    }
+    // …the item docstring (the highest-priority disclosure) made it…
+    assert!(output.contains("/// A thing with a name."));
+    // …but the lower layers gave way: member docstrings and the body.
+    assert!(!output.contains("Meant for demos."));
+    assert!(!output.contains("self.label()"));
+    assert!(output.contains("[INFO] showing"));
+}
+
+/// The docstring layer admits in member-priority order and never splits a
+/// docstring mid-sentence: with room for the item docstring and the first
+/// method docstring only (budget 9 exhausts the layer exactly there), the
+/// defaulted method's longer docstring is absent in full, not truncated.
+#[test]
+fn interface_docstrings_admit_in_priority_order_and_atomically() {
+    let db = interface_surface_project();
+    let output = capture_description(&db, &describe_named(&db), 9);
+
+    assert!(output.contains("/// A thing with a name."));
+    assert!(output.contains("/// The display label."));
+    assert!(
+        !output.contains("Greets by label."),
+        "the defaulted method's docstring must be absent in FULL, not cut:\n{output}"
+    );
+    assert!(!output.contains("self.label()"));
+}
+
+/// The full-output budget hint is exact for the facet-layered path too.
+#[test]
+fn interface_budget_hint_is_minimal() {
+    let db = interface_surface_project();
+    assert_reported_budget_is_minimum(&db, &describe_named(&db), 8);
+}
+
 #[test]
 fn render_describe_class_shows_associated_type_bindings() {
     let db = make_db(&[(

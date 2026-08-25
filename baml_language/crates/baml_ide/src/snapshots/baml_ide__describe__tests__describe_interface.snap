@@ -7,5 +7,8 @@ shape: interface Named {
     name: string,
     function label(self) -> string throws never
 }
-refs: 1
-  interfaces.baml:9  implements Named {
+members:
+  [field] name: string,
+  [required method] function label(self) -> string throws never
+implementations:
+  implement Named for Person

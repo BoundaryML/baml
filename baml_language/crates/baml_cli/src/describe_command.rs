@@ -612,17 +612,18 @@ pub fn write_description(
     // The canonical FQN appears in parentheses only when it differs from the
     // bare name (a builtin alias like `string`, or a namespaced/dependency type
     // like `root.ns.Foo`).
-    let kind_str = desc.kind.as_str();
+    let definition_kind = desc.kind.definition_kind();
+    let kind_str = definition_kind.as_str();
     let rel_path = relative_path(&file_path, project_root);
     let painter = crate::paint::Painter::stdout();
     let colors = painter.enabled();
     let hl = crate::paint::Highlighter::new(db);
     let fqn_part = desc
-        .canonical_fqn
-        .as_deref()
-        .map(|f| format!("  ({})", painter.fqn(f, desc.kind)))
+        .kind
+        .canonical_fqn()
+        .map(|f| format!("  ({})", painter.fqn(f, definition_kind)))
         .unwrap_or_default();
-    let name_display = painter.fqn(&desc.name, desc.kind);
+    let name_display = painter.fqn(&desc.name, definition_kind);
     let loc = painter.location(
         &file_path,
         &rel_path.display().to_string(),
@@ -644,19 +645,44 @@ pub fn write_description(
     // through `slice_text`). Rendering `desc.docstring` separately
     // would just duplicate the same lines, so leave the docstring
     // surfacing to JSON consumers and let the body show it once.
-    let is_local = matches!(
-        desc.kind,
-        baml_ide::DefinitionKind::Parameter | baml_ide::DefinitionKind::Binding
-    );
+    let is_local = matches!(desc.kind, baml_ide::SymbolKind::Local { .. });
+    // Interfaces render from the structured member surface (facet-layered),
+    // never from a raw source slice, so the highlighted-slice machinery is
+    // skipped for them.
+    let interface = match &desc.kind {
+        baml_ide::SymbolKind::Interface {
+            members,
+            implementations,
+            ..
+        } => Some((members.as_slice(), implementations.as_slice())),
+        _ => None,
+    };
     let body_lines: Vec<&str> = desc.full_body.lines().collect();
-    let highlighted_body = colors.then(|| hl.range(desc.file, desc.item_range));
+    let highlighted_body =
+        (colors && interface.is_none()).then(|| hl.range(desc.file, desc.item_range));
     let highlighted_body_lines = highlighted_body.as_deref().map(trim_blank_edge_lines);
-    let body_line_count = highlighted_body_lines
-        .as_ref()
-        .map_or(body_lines.len(), Vec::len);
+    let body_line_count = if let Some((members, _)) = interface {
+        interface_full_line_count(desc, members)
+    } else {
+        highlighted_body_lines
+            .as_ref()
+            .map_or(body_lines.len(), Vec::len)
+    };
     let full_output_budget = minimum_full_output_budget(desc, body_line_count, is_local);
 
-    if !is_local {
+    if let Some((members, implementations)) = interface {
+        writeln!(w)?;
+        let available_for_body = budget.saturating_sub(lines_used);
+        lines_used += write_interface_body(
+            w,
+            &painter,
+            desc,
+            members,
+            implementations,
+            available_for_body,
+            full_output_budget,
+        )?;
+    } else if !is_local {
         // The separator blank line is deliberately not counted against the
         // budget: the body's available-line computation predates the section
         // budgeting below and is a documented guarantee (a fields-only class
@@ -716,32 +742,37 @@ pub fn write_description(
     let mut render_budget =
         RenderBudget::new(budget.saturating_sub(lines_used), full_output_budget);
 
-    // ── Methods (instance) ───────────────────────────────────────────────────
-    write_method_section(
-        w,
-        db,
-        &painter,
-        project_root,
-        "methods",
-        &desc.instance_methods,
-        &mut render_budget,
-    )?;
-
-    // ── Static methods ───────────────────────────────────────────────────────
-    write_method_section(
-        w,
-        db,
-        &painter,
-        project_root,
-        "static_methods",
-        &desc.static_methods,
-        &mut render_budget,
-    )?;
+    // ── Methods (classes) ────────────────────────────────────────────────────
+    if let baml_ide::SymbolKind::Class {
+        instance_methods,
+        static_methods,
+        ..
+    } = &desc.kind
+    {
+        write_method_section(
+            w,
+            db,
+            &painter,
+            project_root,
+            "methods",
+            instance_methods,
+            &mut render_budget,
+        )?;
+        write_method_section(
+            w,
+            db,
+            &painter,
+            project_root,
+            "static_methods",
+            static_methods,
+            &mut render_budget,
+        )?;
+    }
 
     // ── Container ────────────────────────────────────────────────────────────
     // Always shown in full: it's a single entry and part of the symbol's
     // identity, like the header.
-    if let Some(ref c) = desc.container {
+    if let Some(c) = desc.kind.container() {
         writeln!(w)?;
         writeln!(w, "container:")?;
         let c_abs = c.file.path(db);
@@ -787,6 +818,34 @@ pub fn write_description(
         write_elision_marker(w, elided, render_budget.full_output)?;
     }
 
+    // ── Implementations ──────────────────────────────────────────────────────
+    // Interfaces: the impl blocks whose head names this interface — the "who
+    // implements it" list, separate from references (which no longer repeat
+    // the head mentions these rows own).
+    if let Some((_, implementations)) = interface.filter(|(_, imps)| !imps.is_empty()) {
+        writeln!(w)?;
+        writeln!(w, "implementations ({}):", implementations.len())?;
+        render_budget.consume(SECTION_HEADER_COST);
+        let mut elided = 0usize;
+        for imp in implementations {
+            if !render_budget.can_start_atomic() {
+                elided += 1;
+                continue;
+            }
+            let imp_abs = imp.file.path(db);
+            let imp_path = relative_path(&imp_abs, project_root);
+            let imp_line = line_number_at_offset(imp.file.text(db), imp.span.start().into());
+            let loc = painter.location(
+                &imp_abs,
+                &imp_path.display().to_string(),
+                &imp_line.to_string(),
+            );
+            writeln!(w, "  {}  {loc}", styled_declaration(&painter, &imp.display))?;
+            render_budget.consume(LIST_ENTRY_COST);
+        }
+        write_elision_marker(w, elided, render_budget.full_output)?;
+    }
+
     // ── References ───────────────────────────────────────────────────────────
     // Lowest priority: references are the first thing to give way under a
     // tight budget. The header always shows the total count.
@@ -822,6 +881,241 @@ pub fn write_description(
     write_elision_marker(w, elided, render_budget.full_output)?;
 
     Ok(())
+}
+
+/// Every line an interface body renders at full disclosure: the item
+/// docstring, the block skeleton (header + one declaration per member +
+/// closing brace), each member docstring, and each defaulted body's extra
+/// lines beyond the declaration it replaces. Shared by the renderer's
+/// truncation report and the full-output budget planner.
+fn interface_full_line_count(
+    desc: &SymbolDescription,
+    members: &[baml_ide::InterfaceMember],
+) -> usize {
+    let doc_lines = doc_line_count(desc.docstring.as_deref());
+    let facets: usize = members
+        .iter()
+        .map(|member| doc_line_count(member.docstring.as_deref()) + member_body_extra_lines(member))
+        .sum();
+    doc_lines + interface_skeleton_lines(desc, members) + facets
+}
+
+/// The always-rendered part of the interface body: header + one declaration
+/// line per member + closing brace. An interface with no structured members
+/// (empty, or a resolver-less fallback) falls back to its shape's line count.
+fn interface_skeleton_lines(
+    desc: &SymbolDescription,
+    members: &[baml_ide::InterfaceMember],
+) -> usize {
+    if members.is_empty() {
+        desc.shape.lines().count()
+    } else {
+        2 + members.len()
+    }
+}
+
+fn doc_line_count(docstring: Option<&str>) -> usize {
+    docstring.map_or(0, |doc| doc.lines().count())
+}
+
+/// A defaulted body's cost beyond the declaration line it replaces.
+fn member_body_extra_lines(member: &baml_ide::InterfaceMember) -> usize {
+    member
+        .body
+        .as_deref()
+        .map_or(0, |body| body.lines().count().saturating_sub(1))
+}
+
+/// Style a one-line declaration that is not parseable on its own — a bare
+/// method signature, an `implement … for …` head — by classifying it with an
+/// empty `{}` body appended and stripping the body back off the styled text.
+/// The fragment highlighter refuses text that does not parse, and these rows
+/// are body-less forms only interface bodies (or nothing) admit; `{}` is
+/// punctuation the classifier never styles, so it survives the round trip
+/// verbatim — including through the plain fallback for a declaration that
+/// still does not parse.
+fn styled_declaration(painter: &crate::paint::Painter, declaration: &str) -> String {
+    let styled = painter.fragment(&format!("{declaration} {{}}"));
+    match styled.strip_suffix(" {}") {
+        Some(bare) => bare.to_string(),
+        None => styled,
+    }
+}
+
+/// The full cost of the sections that OUTRANK a defaulted body's disclosure —
+/// dependencies and implementations; not references, which stay the lowest
+/// priority overall (an interface is a top-level item, so it structurally has
+/// no container section). A body is an interface's least important facet
+/// (the ruling: signature, then docstring, then body), so the body layer
+/// admits only from budget these sections will not consume.
+fn interface_higher_section_cost(
+    desc: &SymbolDescription,
+    implementations: &[baml_ide::ImplRow],
+) -> usize {
+    let mut cost = 0;
+    if !desc.dependencies.is_empty() {
+        cost += SECTION_HEADER_COST + desc.dependencies.len() * LIST_ENTRY_COST;
+    }
+    if !implementations.is_empty() {
+        cost += SECTION_HEADER_COST + implementations.len() * LIST_ENTRY_COST;
+    }
+    cost
+}
+
+/// Render an interface body with facet-layered budgeting.
+///
+/// The member ENUMERATION — header, one declaration per member, closing
+/// brace — always renders in full: it is the interface's identity, and a
+/// complete listing is what lets the reader drill into a specific member
+/// instead of paging the whole thing. Docstrings are then admitted while
+/// budget remains — the item's own first, then the members' in declaration
+/// priority order (associated types, fields, required methods, defaulted
+/// methods) — and defaulted bodies last, replacing their `{ ... }`-marked
+/// declaration line. A facet is atomic: it renders whole or not at all (it
+/// may start on the last remaining line and run over, the same rule the
+/// list sections use), so a docstring is never cut mid-sentence.
+///
+/// Colored output classifies the assembled block as ONE fragment — the
+/// reconstruction is a valid interface declaration, where any single line
+/// in isolation is not, and the fragment highlighter refuses text that
+/// does not parse.
+///
+/// Returns the number of lines written (excluding the caller's separator
+/// blank line).
+fn write_interface_body(
+    w: &mut impl std::io::Write,
+    painter: &crate::paint::Painter,
+    desc: &SymbolDescription,
+    members: &[baml_ide::InterfaceMember],
+    implementations: &[baml_ide::ImplRow],
+    available: usize,
+    full_output_budget: usize,
+) -> std::io::Result<usize> {
+    // Facet admission. `remaining` covers only the disclosure layers; the
+    // skeleton is unconditional.
+    let mut remaining = available.saturating_sub(interface_skeleton_lines(desc, members));
+    let admit = |cost: usize, remaining: &mut usize| -> bool {
+        // A zero-cost facet (an absent docstring; a one-line body that costs
+        // nothing over its declaration) is always disclosed.
+        if cost == 0 {
+            return true;
+        }
+        if *remaining == 0 {
+            return false;
+        }
+        *remaining = remaining.saturating_sub(cost);
+        true
+    };
+    let item_doc_admitted = admit(doc_line_count(desc.docstring.as_deref()), &mut remaining);
+    let docs_admitted: Vec<bool> = members
+        .iter()
+        .map(|member| admit(doc_line_count(member.docstring.as_deref()), &mut remaining))
+        .collect();
+    // Bodies are the lowest disclosure layer: they admit only from budget the
+    // higher-ranked sections below the block will not consume, and only when
+    // they fit WHOLE — the `{ ... }`-marked declaration already shows, so an
+    // atomic-start overshoot would buy nothing a drill-in doesn't.
+    let mut body_budget =
+        remaining.saturating_sub(interface_higher_section_cost(desc, implementations));
+    let bodies_admitted: Vec<bool> = members
+        .iter()
+        .map(|member| {
+            let cost = member_body_extra_lines(member);
+            if cost <= body_budget {
+                body_budget -= cost;
+                true
+            } else {
+                false
+            }
+        })
+        .collect();
+
+    // The fragment highlighter refuses text that does not parse, and every
+    // line here is un-parseable in isolation — so the block is assembled
+    // FIRST and classified ONCE: the reconstruction (docstring, header,
+    // member declarations, admitted bodies) is itself a valid interface
+    // declaration. The one non-syntax piece — a defaulted method's `{ ... }`
+    // marker — is held out of the classified text (its bodyless signature is
+    // valid interface syntax) and re-appended per line after styling, which
+    // is safe because no styling run ever crosses a newline.
+    let mut lines: Vec<(String, bool)> = Vec::new();
+    fn push_doc(lines: &mut Vec<(String, bool)>, doc: &str, indent: &str) {
+        for line in doc.lines() {
+            let text = if line.is_empty() {
+                format!("{indent}///")
+            } else {
+                format!("{indent}/// {line}")
+            };
+            lines.push((text, false));
+        }
+    }
+
+    if item_doc_admitted && let Some(doc) = desc.docstring.as_deref() {
+        push_doc(&mut lines, doc, "");
+    }
+
+    if members.is_empty() {
+        // No structured members: the shape (bare header, or a resolver-less
+        // fallback) is the whole block.
+        lines.extend(desc.shape.lines().map(|line| (line.to_string(), false)));
+    } else {
+        // The header line (`interface Foo<T> requires Bar {`) is the shape's
+        // first line; declarations and the close come from the structured
+        // surface, so the two renderings cannot disagree about a member.
+        let header = desc.shape.lines().next().unwrap_or_default();
+        lines.push((header.to_string(), false));
+        for (i, member) in members.iter().enumerate() {
+            if docs_admitted[i]
+                && let Some(doc) = member.docstring.as_deref()
+            {
+                push_doc(&mut lines, doc, "    ");
+            }
+            if bodies_admitted[i]
+                && let Some(body) = member.body.as_deref()
+            {
+                lines.extend(body.lines().map(|line| (line.to_string(), false)));
+            } else if let Some(bare) = member.declaration.strip_suffix(" { ... }") {
+                // Only a defaulted method's declaration carries the marker;
+                // stripping it here is what re-appends it below.
+                lines.push((format!("    {bare}"), true));
+            } else {
+                lines.push((format!("    {}", member.declaration), false));
+            }
+        }
+        lines.push(("}".to_string(), false));
+    }
+
+    let classified = painter.fragment(
+        &lines
+            .iter()
+            .map(|(text, _)| text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n"),
+    );
+    debug_assert_eq!(
+        classified.split('\n').count(),
+        lines.len().max(1),
+        "fragment styling preserves line structure"
+    );
+    for (styled, (_, marker)) in classified.split('\n').zip(&lines) {
+        if *marker {
+            writeln!(w, "{styled} {{ ... }}")?;
+        } else {
+            writeln!(w, "{styled}")?;
+        }
+    }
+    let mut printed = lines.len();
+
+    let total = interface_full_line_count(desc, members);
+    if printed < total {
+        writeln!(w)?;
+        writeln!(
+            w,
+            "[INFO] showing {printed} of {total} lines; use `--budget {full_output_budget}` for full output",
+        )?;
+        printed += 2;
+    }
+    Ok(printed)
 }
 
 /// Render the definition body with ANSI highlighting (colored-output path).
@@ -943,16 +1237,34 @@ fn minimum_full_output_budget(
         required.add_required(ITEM_HEADER_COST.saturating_add(body_line_count));
     }
 
-    add_method_budget(&mut required, &desc.instance_methods);
-    add_method_budget(&mut required, &desc.static_methods);
+    if let baml_ide::SymbolKind::Class {
+        instance_methods,
+        static_methods,
+        ..
+    } = &desc.kind
+    {
+        add_method_budget(&mut required, instance_methods);
+        add_method_budget(&mut required, static_methods);
+    }
 
-    if desc.container.is_some() {
+    if desc.kind.container().is_some() {
         required.add_soft_overhead(CONTAINER_SECTION_COST);
     }
 
     if !desc.dependencies.is_empty() {
         required.add_soft_overhead(SECTION_HEADER_COST);
         for _ in &desc.dependencies {
+            required.add_atomic(LIST_ENTRY_COST);
+        }
+    }
+
+    if let baml_ide::SymbolKind::Interface {
+        implementations, ..
+    } = &desc.kind
+        && !implementations.is_empty()
+    {
+        required.add_soft_overhead(SECTION_HEADER_COST);
+        for _ in implementations {
             required.add_atomic(LIST_ENTRY_COST);
         }
     }
@@ -1085,7 +1397,7 @@ fn write_method_section(
             &m_path.display().to_string(),
             &format!("{start}-{end}"),
         );
-        let sig = painter.fragment(&m.signature);
+        let sig = styled_declaration(painter, &m.signature);
         writeln!(w, "  {sig}  {loc}")?;
         budget.consume(unit_cost);
     }
@@ -1165,109 +1477,6 @@ fn listing_to_json(
             })
         })
         .collect()
-}
-
-/// Find the 0-based line index within a body where a span starts.
-/// `item_range` is the range of the whole body, `name_span` is the variable's span.
-fn find_line_in_body(
-    body: &str,
-    item_range: text_size::TextRange,
-    name_span: text_size::TextRange,
-) -> usize {
-    // Calculate offset of name_span within the body.
-    let body_start: usize = item_range.start().into();
-    let name_start: usize = name_span.start().into();
-    let relative_offset = name_start.saturating_sub(body_start);
-
-    // Count newlines before the relative offset.
-    body.chars()
-        .take(relative_offset)
-        .filter(|&c| c == '\n')
-        .count()
-}
-
-/// Render body lines with context around a target line, using truncation if needed.
-/// Always shows the function header (first line), then context around the target.
-/// Returns the number of lines printed.
-fn render_body_with_context(
-    body_lines: &[&str],
-    target_line: usize,
-    available_budget: usize,
-) -> usize {
-    let total_lines = body_lines.len();
-
-    if total_lines == 0 {
-        return 0;
-    }
-
-    // If everything fits, just print it all.
-    if total_lines <= available_budget {
-        for line in body_lines {
-            println!("{line}");
-        }
-        return total_lines;
-    }
-
-    // Otherwise, always show header + context around target_line with truncation.
-    // Reserve up to 2 lines for "... skipped N lines ..." markers.
-    let mut lines_printed = 0;
-
-    // Always print the function header (line 0).
-    println!("{}", body_lines[0]);
-    lines_printed += 1;
-
-    if total_lines == 1 {
-        return lines_printed;
-    }
-
-    // Calculate how much budget remains for context.
-    let remaining_budget = available_budget.saturating_sub(lines_printed + 2); // reserve for skip markers
-    if remaining_budget == 0 {
-        if total_lines > 1 {
-            println!("  [... skipped {} lines ...]", total_lines - 1);
-            lines_printed += 1;
-        }
-        return lines_printed;
-    }
-
-    // If target is on line 0 (the header), show lines after it.
-    if target_line == 0 {
-        let end = (1 + remaining_budget).min(total_lines);
-        for line in &body_lines[1..end] {
-            println!("{line}");
-            lines_printed += 1;
-        }
-        if end < total_lines {
-            println!("  [... skipped {} lines ...]", total_lines - end);
-            lines_printed += 1;
-        }
-        return lines_printed;
-    }
-
-    // Distribute context around target_line (excluding header which is already printed).
-    let half = remaining_budget / 2;
-    let context_start = target_line.saturating_sub(half).max(1); // don't re-print header
-    let context_end = (target_line + half + 1).min(total_lines);
-
-    // Print skip marker if there's a gap after the header.
-    if context_start > 1 {
-        println!("  [... skipped {} lines ...]", context_start - 1);
-        lines_printed += 1;
-    }
-
-    // Print the context lines.
-    for line in &body_lines[context_start..context_end] {
-        println!("{line}");
-        lines_printed += 1;
-    }
-
-    // Print skip marker if there's more after context.
-    if context_end < total_lines {
-        println!("  [... skipped {} lines ...]", total_lines - context_end);
-        lines_printed += 1;
-    }
-
-    lines_printed
 }
 
 /// Truncate a function body to fit within a line budget while preserving key content.
@@ -1426,9 +1635,29 @@ fn description_to_json(
 ) -> serde_json::Value {
     let file_path = relative_path(&desc.file.path(db), project_root);
     let body = budget_body(desc, budget);
+    // The wire shape keeps every section field present (empty for kinds that
+    // don't carry it), so consumers never branch on absence.
+    let (instance_methods, static_methods): (&[baml_ide::MethodRef], &[baml_ide::MethodRef]) =
+        match &desc.kind {
+            baml_ide::SymbolKind::Class {
+                instance_methods,
+                static_methods,
+                ..
+            } => (instance_methods, static_methods),
+            _ => (&[], &[]),
+        };
+    let (interface_members, implementations): (&[baml_ide::InterfaceMember], &[baml_ide::ImplRow]) =
+        match &desc.kind {
+            baml_ide::SymbolKind::Interface {
+                members,
+                implementations,
+                ..
+            } => (members, implementations),
+            _ => (&[], &[]),
+        };
     serde_json::json!({
         "name": desc.name,
-        "kind": desc.kind.as_str(),
+        "kind": desc.kind.definition_kind().as_str(),
         "file": file_path.to_string_lossy(),
         "line": line_number_at_offset(desc.file.text(db), desc.name_span.start().into()),
         "shape": desc.shape,
@@ -1452,9 +1681,31 @@ fn description_to_json(
                 "text": reference.line_text.trim(),
             })
         }).collect::<Vec<_>>(),
-        "instance_methods": method_json(db, project_root, &desc.instance_methods),
-        "static_methods": method_json(db, project_root, &desc.static_methods),
-        "container": desc.container.as_ref().map(|container| {
+        "instance_methods": method_json(db, project_root, instance_methods),
+        "static_methods": method_json(db, project_root, static_methods),
+        "interface_members": interface_members.iter().map(|member| {
+            let path = relative_path(&member.file.path(db), project_root);
+            let text = member.file.text(db);
+            serde_json::json!({
+                "category": member.category,
+                "name": member.name,
+                "declaration": member.declaration,
+                "docstring": member.docstring,
+                "body": member.body,
+                "file": path.to_string_lossy(),
+                "line_start": line_number_at_offset(text, member.item_range.start().into()),
+                "line_end": line_number_at_offset(text, member.item_range.end().into()),
+            })
+        }).collect::<Vec<_>>(),
+        "implementations": implementations.iter().map(|imp| {
+            let path = relative_path(&imp.file.path(db), project_root);
+            serde_json::json!({
+                "display": imp.display,
+                "file": path.to_string_lossy(),
+                "line": line_number_at_offset(imp.file.text(db), imp.span.start().into()),
+            })
+        }).collect::<Vec<_>>(),
+        "container": desc.kind.container().map(|container| {
             let path = relative_path(&container.file.path(db), project_root);
             serde_json::json!({
                 "name": container.name,
