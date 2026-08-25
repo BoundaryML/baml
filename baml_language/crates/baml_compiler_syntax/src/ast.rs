@@ -49,6 +49,10 @@ fn extract_dotted_name<'a>(tokens: impl Iterator<Item = &'a SyntaxToken>) -> Opt
 
 use baml_base::escape::{unescape_backtick_string_literal, unescape_string_literal};
 
+mod generated;
+
+pub use generated::*;
+
 /// Match an optional single leading `MINUS` followed by exactly one `target`
 /// literal token, skipping trivia. Returns `(negated, token)` on a clean
 /// match. Rejects `--42` (multiple signs), intervening non-trivia tokens, or
@@ -94,85 +98,6 @@ pub trait BamlAstNode: AstNode<Language = crate::BamlLanguage> {
         self.syntax().kind()
     }
 }
-
-/// Macro to define AST node types.
-macro_rules! ast_node {
-    ($name:ident, $kind:ident) => {
-        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-        pub struct $name {
-            syntax: SyntaxNode,
-        }
-
-        impl BamlAstNode for $name {}
-
-        impl AstNode for $name {
-            type Language = crate::BamlLanguage;
-
-            fn can_cast(kind: <Self::Language as rowan::Language>::Kind) -> bool {
-                kind == SyntaxKind::$kind.into()
-            }
-
-            fn cast(syntax: SyntaxNode) -> Option<Self> {
-                if Self::can_cast(syntax.kind()) {
-                    Some(Self { syntax })
-                } else {
-                    None
-                }
-            }
-
-            fn syntax(&self) -> &SyntaxNode {
-                &self.syntax
-            }
-        }
-    };
-}
-
-// Define all AST node types
-ast_node!(SourceFile, SOURCE_FILE);
-ast_node!(FunctionDef, FUNCTION_DEF);
-ast_node!(ClassDef, CLASS_DEF);
-ast_node!(EnumDef, ENUM_DEF);
-ast_node!(InterfaceDef, INTERFACE_DEF);
-ast_node!(ImplementsBlock, IMPLEMENTS_BLOCK);
-ast_node!(ImplementsTarget, IMPLEMENTS_TARGET);
-ast_node!(InterfaceFieldLink, INTERFACE_FIELD_LINK);
-ast_node!(ImplementsFor, IMPLEMENTS_FOR);
-ast_node!(ImplementsForTarget, IMPLEMENTS_FOR_TARGET);
-ast_node!(RequiresClause, REQUIRES_CLAUSE);
-ast_node!(MethodSig, METHOD_SIG);
-ast_node!(AssociatedTypeDecl, ASSOCIATED_TYPE_DECL);
-ast_node!(ClientDef, CLIENT_DEF);
-ast_node!(TestDef, TEST_DEF);
-ast_node!(RetryPolicyDef, RETRY_POLICY_DEF);
-ast_node!(TemplateStringDef, TEMPLATE_STRING_DEF);
-ast_node!(TypeAliasDef, TYPE_ALIAS_DEF);
-
-ast_node!(ParameterList, PARAMETER_LIST);
-ast_node!(Parameter, PARAMETER);
-ast_node!(CallArg, CALL_ARG);
-ast_node!(FunctionBody, FUNCTION_BODY);
-ast_node!(LlmFunctionBody, LLM_FUNCTION_BODY);
-ast_node!(ExprFunctionBody, EXPR_FUNCTION_BODY);
-ast_node!(Field, FIELD);
-ast_node!(EnumVariant, ENUM_VARIANT);
-ast_node!(ConfigBlock, CONFIG_BLOCK);
-ast_node!(ConfigItem, CONFIG_ITEM);
-ast_node!(ConfigValue, CONFIG_VALUE);
-ast_node!(ClientField, CLIENT_FIELD);
-ast_node!(PromptField, PROMPT_FIELD);
-ast_node!(ToolsField, TOOLS_FIELD);
-ast_node!(SpecExpr, SPEC_EXPR);
-ast_node!(ClientValueDef, CLIENT_VALUE_DEF);
-ast_node!(RawStringLiteral, RAW_STRING_LITERAL);
-ast_node!(StringLiteral, STRING_LITERAL);
-ast_node!(BacktickStringLiteral, BACKTICK_STRING_LITERAL);
-ast_node!(BacktickText, BACKTICK_TEXT);
-ast_node!(BacktickInterpolation, BACKTICK_INTERPOLATION);
-
-ast_node!(TypeExpr, TYPE_EXPR);
-ast_node!(Attribute, ATTRIBUTE);
-ast_node!(ObjectField, OBJECT_FIELD);
-ast_node!(GenericParam, GENERIC_PARAM);
 
 impl CallArg {
     /// The name of a named argument `name = value` — a leading `WORD` (or
@@ -772,33 +697,6 @@ impl TypeExpr {
 /// - Unnamed: `int`
 ///
 /// Parameter names are for documentation only and do not affect type equality.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FunctionTypeParam {
-    syntax: SyntaxNode,
-}
-
-impl BamlAstNode for FunctionTypeParam {}
-
-impl AstNode for FunctionTypeParam {
-    type Language = crate::BamlLanguage;
-
-    fn can_cast(kind: <Self::Language as rowan::Language>::Kind) -> bool {
-        kind == SyntaxKind::FUNCTION_TYPE_PARAM
-    }
-
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        if Self::can_cast(syntax.kind()) {
-            Some(Self { syntax })
-        } else {
-            None
-        }
-    }
-
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
 impl FunctionTypeParam {
     /// Get the parameter name if present.
     ///
@@ -851,63 +749,6 @@ impl FunctionTypeParam {
             .map(|n| TypeExpr { syntax: n })
     }
 }
-
-ast_node!(BlockAttribute, BLOCK_ATTRIBUTE);
-
-ast_node!(Expr, EXPR);
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct LetStmt {
-    syntax: SyntaxNode,
-}
-
-impl BamlAstNode for LetStmt {}
-
-impl AstNode for LetStmt {
-    type Language = crate::BamlLanguage;
-
-    fn can_cast(kind: <Self::Language as rowan::Language>::Kind) -> bool {
-        kind == SyntaxKind::LET_STMT
-    }
-
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        if Self::can_cast(syntax.kind()) {
-            Some(Self { syntax })
-        } else {
-            None
-        }
-    }
-
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-ast_node!(IfExpr, IF_EXPR);
-ast_node!(WhileStmt, WHILE_STMT);
-ast_node!(WhileLetStmt, WHILE_LET_STMT);
-ast_node!(BlockExpr, BLOCK_EXPR);
-ast_node!(ReturnStmt, RETURN_STMT);
-ast_node!(ThrowStmt, THROW_STMT);
-ast_node!(BreakStmt, BREAK_STMT);
-ast_node!(ContinueStmt, CONTINUE_STMT);
-ast_node!(DeferStmt, DEFER_STMT);
-ast_node!(PathExpr, PATH_EXPR);
-ast_node!(FieldAccessExpr, FIELD_ACCESS_EXPR);
-ast_node!(UpcastExpr, UPCAST_EXPR);
-ast_node!(QualifiedPathExpr, QUALIFIED_PATH_EXPR);
-ast_node!(EnvAccessExpr, ENV_ACCESS_EXPR);
-ast_node!(MatchExpr, MATCH_EXPR);
-ast_node!(MatchArm, MATCH_ARM);
-ast_node!(MatchPattern, MATCH_PATTERN);
-ast_node!(MatchGuard, MATCH_GUARD);
-ast_node!(CatchExpr, CATCH_EXPR);
-ast_node!(CatchClause, CATCH_CLAUSE);
-ast_node!(CatchArm, CATCH_ARM);
-ast_node!(CatchPattern, CATCH_PATTERN);
-ast_node!(ThrowExpr, THROW_EXPR);
-ast_node!(ReturnExpr, RETURN_EXPR);
-ast_node!(ThrowsClause, THROWS_CLAUSE);
 
 // Implement accessor methods
 impl SourceFile {

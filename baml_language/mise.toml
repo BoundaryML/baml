@@ -11,6 +11,16 @@ description = "Run cargo fmt"
 run = "cargo fmt --all -- --config imports_granularity=Crate --config group_imports=StdExternalCrate"
 sources = ["**/*.rs"]
 
+[tasks.syntax-codegen]
+description = "Generate typed BAML syntax AST code"
+run = "cargo run -p baml_compiler_codegen"
+sources = ["crates/baml_compiler_syntax/baml.ungram", "crates/baml_compiler_codegen/**/*.rs"]
+
+[tasks.syntax-codegen-check]
+description = "Check generated BAML syntax AST code"
+run = "cargo run -p baml_compiler_codegen -- --check"
+sources = ["crates/baml_compiler_syntax/baml.ungram", "crates/baml_compiler_syntax/src/ast/generated.rs", "crates/baml_compiler_syntax/src/validated/generated_tokens.rs", "crates/baml_compiler_codegen/**/*.rs"]
+
 # Note that clippy-fix and clippy are separate tasks because clippy-fix is substantially slower.
 [tasks.clippy-fix]
 description = "Auto-fix clippy warnings"

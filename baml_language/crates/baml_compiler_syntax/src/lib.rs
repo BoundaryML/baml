@@ -7,6 +7,7 @@ pub mod builder;
 pub mod syntax_kind;
 pub mod syntax_node;
 pub mod traversal;
+pub mod validated;
 
 #[cfg(test)]
 mod tests;
@@ -18,3 +19,6 @@ pub use rowan::{GreenNode, NodeOrToken, TextRange, TextSize, TokenAtOffset, Walk
 pub use syntax_kind::SyntaxKind;
 pub use syntax_node::{BamlLanguage, SyntaxElement, SyntaxNode, SyntaxToken};
 pub use traversal::*;
+pub use validated::{
+    FromCST, KnownKind, StrongAstError, SyntaxNodeIter, ValidatedToken, is_word_like,
+};

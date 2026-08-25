@@ -253,6 +253,7 @@ smallvec = { version = "1.15", features = [ "const_generics" ] }
 smol_str = { version = "0.3", features = [ "serde", "borsh" ] }
 strsim = { version = "0.11.1" }
 syn = { version = "2", features = [ "full" ] }
+ungrammar = "1.16.1"
 tar = "0.4"
 zip = { version = "2", default-features = false, features = [ "deflate" ] }
 taplo = { version = "0.13" }

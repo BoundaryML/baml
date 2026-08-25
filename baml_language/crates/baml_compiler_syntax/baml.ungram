@@ -1,0 +1,411 @@
+// BAML concrete syntax tree grammar.
+//
+// This describes the Rowan tree produced by the handwritten parser. It is
+// intentionally not a parser grammar: precedence and recovery stay in the
+// parser, while typed syntax APIs are generated from this file.
+
+SourceFile = TopLevelDeclaration*
+
+TopLevelDeclaration =
+  FunctionDef
+| ClassDef
+| EnumDef
+| InterfaceDef
+| ImplementsFor
+| ClientDef
+| ClientValueDef
+| TestDef
+| RetryPolicyDef
+| TemplateStringDef
+| TypeAliasDef
+
+FunctionDef =
+  BlockAttribute*
+  'function'
+  name_token:'#word'
+  GenericParamList?
+  ParameterList
+  ('->' | '=>')
+  TypeExpr
+  ThrowsClause?
+  FunctionBodyKind
+
+FunctionBodyKind = LlmFunctionBody | ExprFunctionBody
+
+ParameterList = '(' Parameter* ')'
+
+Parameter =
+  name_token:('#word' | 'client')
+  ':'?
+  TypeExpr?
+  ('=' default_value:Expr)?
+
+LlmFunctionBody =
+  '{'
+  (ClientField | PromptField | ToolsField)*
+  '}'
+
+ExprFunctionBody = BlockExpr
+
+ClientField = 'client' ':' value:Expr
+PromptField = name_token:'#word' ':' value:Expr
+ToolsField = name_token:'#word' ':' value:Expr
+
+ClassDef =
+  BlockAttribute*
+  'class'
+  name_token:'#word'
+  GenericParamList?
+  ('{' (Field | ImplementsBlock | BlockAttribute)* '}')
+
+Field =
+  BlockAttribute*
+  name_token:('#word' | 'client')
+  ':'?
+  TypeExpr?
+
+InterfaceDef =
+  BlockAttribute*
+  'interface'
+  name_token:'#word'
+  GenericParamList?
+  RequiresClause?
+  '{'
+  (MethodSig | AssociatedTypeDecl | Field | BlockAttribute)*
+  '}'
+
+RequiresClause = 'requires' TypeExpr (',' TypeExpr)* ','?
+
+MethodSig =
+  BlockAttribute*
+  'function'
+  name_token:'#word'
+  GenericParamList?
+  ParameterList
+  ('->' | '=>')
+  TypeExpr
+  ThrowsClause?
+  ExprFunctionBody?
+
+AssociatedTypeDecl =
+  'type'?
+  name_token:'#word'
+  ('extends' bound:TypeExpr)?
+  ('=' binding:TypeExpr)?
+
+ImplementsBlock =
+  'implements'
+  ImplementsTarget
+  RequiresClause?
+  '{'
+  (FunctionDef | AssociatedTypeDecl | InterfaceFieldLink | Field | BlockAttribute)*
+  '}'
+
+ImplementsTarget = TypeExpr
+
+InterfaceFieldLink =
+  interface_field:'#word'
+  'as'
+  class_field:'#word'
+
+ImplementsFor =
+  ('implements' | 'implement')
+  ImplementsTarget
+  'for'
+  ImplementsForTarget
+  RequiresClause?
+  '{'
+  (FunctionDef | AssociatedTypeDecl | InterfaceFieldLink | Field | BlockAttribute)*
+  '}'
+
+ImplementsForTarget = TypeExpr
+
+EnumDef =
+  BlockAttribute*
+  'enum'
+  name_token:'#word'
+  GenericParamList?
+  '{'
+  EnumVariant*
+  '}'
+
+EnumVariant = BlockAttribute* name_token:'#word'
+
+ClientDef =
+  BlockAttribute*
+  'client'
+  '<'
+  client_type:'#word'
+  '>'
+  name_token:'#word'
+  ConfigBlock
+
+ClientValueDef =
+  BlockAttribute*
+  'client'
+  name_token:'#word'
+  '='
+  value:Expr
+  ';'?
+
+ConfigBlock = '{' ConfigItem* '}'
+ConfigItem = key_token:('#word' | 'client') ':'? ConfigValue
+ConfigValue = Expr
+
+TestDef = BlockAttribute* 'test' name_token:'#word' ConfigBlock
+RetryPolicyDef = BlockAttribute* 'retry_policy' name_token:'#word' ConfigBlock
+TemplateStringDef =
+  BlockAttribute*
+  'template_string'
+  name_token:'#word'
+  ParameterList
+  RawStringLiteral
+
+TypeAliasDef =
+  BlockAttribute*
+  'type'
+  name_token:'#word'
+  GenericParamList?
+  '='
+  TypeExpr
+  ';'?
+
+GenericParamList = '<' GenericParam* '>'
+GenericParam = name_token:'#word' GenericParamBounds?
+GenericParamBounds = 'extends' TypeExpr ('&' TypeExpr)*
+
+ThrowsClause = 'throws' TypeExpr
+
+TypeExpr =
+  (
+    StringLiteral
+  | RawStringLiteral
+  | ('-'? ('#bigint' | '#integer' | '#float'))
+  | ('true' | 'false' | 'null')
+  | ('#word' ('.' '#word')* TypeArgs?)
+  | ('(' FunctionTypeParam* ')' ('->' TypeExpr ThrowsClause?)?)
+  )
+  (TypeArgs | '[' ']' | '?')*
+  ('|' (
+    StringLiteral
+  | RawStringLiteral
+  | ('-'? ('#bigint' | '#integer' | '#float'))
+  | ('true' | 'false' | 'null')
+  | ('#word' ('.' '#word')* TypeArgs?)
+  | ('(' FunctionTypeParam* ')' ('->' TypeExpr ThrowsClause?)?)
+  ) (TypeArgs | '[' ']' | '?')*)*
+
+FunctionTypeParam =
+  (name_token:('#word' | 'client') '?'? ':')?
+  TypeExpr
+
+TypeArgs = '<' (TypeExpr | AssociatedTypeDecl)* '>'
+
+Attribute = '@' name_token:'#word' AttributeArgs?
+BlockAttribute = '@@' name_token:'#word' AttributeArgs?
+AttributeArgs = '(' Expr* ')'
+
+Expr = ExprNode
+
+ExprNode =
+  BlockExpr
+| PathExpr
+| StringLiteral
+| RawStringLiteral
+| BacktickStringLiteral
+| BinaryExpr
+| IsExpr
+| UnaryExpr
+| CallExpr
+| IndexExpr
+| TaggedTemplateExpr
+| OptionalCallExpr
+| OptionalIndexExpr
+| FieldAccessExpr
+| UpcastExpr
+| QualifiedPathExpr
+| SpecExpr
+| OptionalFieldAccessExpr
+| EnvAccessExpr
+| ParenExpr
+| IfExpr
+| IfLetExpr
+| MatchExpr
+| CatchExpr
+| ThrowExpr
+| ReturnExpr
+| BreakExpr
+| ContinueExpr
+| SpawnExpr
+| AwaitExpr
+| LambdaExpr
+| ForExpr
+| ObjectLiteral
+| ArrayLiteral
+| MapLiteral
+
+BlockExpr = '{' Expr* '}'
+PathExpr = '#word' (('.' | '::') '#word')*
+
+StringLiteral = '"' '#word'* '"'
+RawStringLiteral = '#word'
+
+GeneratorDef = BlockAttribute* 'generator' name_token:'#word' ConfigBlock
+
+TestExprDef =
+  BlockAttribute*
+  'test'
+  name:StringLiteral
+  ('with' with_value:ExprNode)?
+  body:BlockExpr
+
+TestsetDef =
+  BlockAttribute*
+  'testset'
+  name:StringLiteral
+  ('with' with_value:ExprNode)?
+  body:BlockExpr
+
+ClientReference = ExprNode
+DefaultImpl = ExprFunctionBody
+
+BinaryExpr =
+  lhs:ExprNode
+  ('==' | '!=' | '<' | '>' | '<=' | '>=' | '&&' | '||' | '&' | '|'
+   | '^' | '<<' | '>>' | '+' | '-' | '*' | '/' | '%' | '??' | 'instanceof'
+   | '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^='
+   | '<<=' | '>>=')
+  rhs:ExprNode
+
+IsExpr = lhs:ExprNode 'is' Pattern
+UnaryExpr = ('!' | '-' | '~' | '++' | '--') operand:ExprNode
+CallExpr = callee:ExprNode CallArgs
+IndexExpr = base:ExprNode '[' index:ExprNode ']'
+TaggedTemplateExpr = tag:ExprNode BacktickStringLiteral
+OptionalCallExpr = callee:ExprNode '?.' CallArgs
+OptionalIndexExpr = base:ExprNode '?.' '[' index:ExprNode ']'
+FieldAccessExpr = base:ExprNode '.' name_token:'#word'
+UpcastExpr = base:ExprNode '.' 'as' '<' TypeExpr '>'
+QualifiedPathExpr = '(' TypeExpr 'as' TypeExpr ')' '.' name_token:'#word'
+SpecExpr = base:PathExpr '@' spec_token:'#word'
+OptionalFieldAccessExpr = base:ExprNode '?.' name_token:'#word'
+EnvAccessExpr = env_token:'#word' '.' name_token:'#word'
+ParenExpr = '(' ExprNode ')'
+
+IfExpr =
+  'if'
+  condition:ExprNode
+  then_branch:BlockExpr
+  ('else' else_branch:(BlockExpr | IfExpr | IfLetExpr))?
+
+IfLetExpr =
+  'if'
+  'let'
+  Pattern
+  '='
+  scrutinee:ExprNode
+  then_branch:BlockExpr
+  ('else' else_branch:(BlockExpr | IfExpr | IfLetExpr))?
+
+MatchExpr = 'match' scrutinee:ExprNode '{' MatchArm* '}'
+MatchArm = MatchPattern MatchGuard? '=>' value:ExprNode ','?
+MatchPattern = Pattern
+MatchGuard = 'if' condition:ExprNode
+
+CatchExpr = body:ExprNode CatchClause
+CatchClause =
+  ('catch' | 'catch_all' | 'catch_all_panics')
+  CatchBinding?
+  '{'
+  CatchArm*
+  '}'
+CatchArm = CatchPattern CatchStackTraceBinding? '=>' value:ExprNode ','?
+CatchPattern = Pattern
+CatchBinding = '(' name_token:'#word' ')'
+CatchStackTraceBinding = ',' name_token:'#word'
+
+ThrowExpr = 'throw' value:ExprNode
+ReturnExpr = 'return' value:ExprNode?
+BreakExpr = 'break'
+ContinueExpr = 'continue'
+SpawnExpr = 'spawn' name:ExprNode? body:BlockExpr
+AwaitExpr = 'await' value:ExprNode
+LambdaExpr = ParameterList '=>' body:ExprNode
+
+ForExpr =
+  'for'
+  '('?
+  ('let' Pattern)?
+  ('in' iterable:ExprNode | ';' ExprNode? ';' ExprNode?)
+  ')'?
+  body:BlockExpr
+
+WhileStmt = 'while' condition:ExprNode body:BlockExpr
+WhileLetStmt = 'while' 'let' Pattern '=' scrutinee:ExprNode body:BlockExpr
+LetStmt = ('let' | 'const') Pattern ('=' value:ExprNode)? ('else' BlockExpr)? ';'?
+TypeBindingStmt = 'type' name_token:'#word' '=' value:ExprNode ';'?
+BreakStmt = 'break' ';'?
+ContinueStmt = 'continue' ';'?
+ReturnStmt = 'return' value:ExprNode? ';'?
+ThrowStmt = 'throw' value:ExprNode ';'?
+DeferStmt = 'defer' body:BlockExpr
+
+Pattern = PatternKind
+PatternKind =
+  ChainPattern
+| UnionPattern
+| BindingPattern
+| DestructurePattern
+| ArrayPattern
+| TypePattern
+| UnreflectPattern
+| ParenPattern
+| WildcardPattern
+
+ChainPattern = Pattern (':' Pattern)*
+UnionPattern = Pattern ('|' Pattern)*
+BindingPattern = 'let' name_token:'#word'
+DestructurePattern = 'let'? PathExpr '{' FieldPattern* '}'
+FieldPattern = name_token:'#word' (':' Pattern)?
+ArrayPattern = '[' ArrayPatternElement* ']'
+ArrayPatternElement = '..'? Pattern?
+TypePattern = TypeExpr
+UnreflectPattern = name_token:'#word' '(' value:ExprNode ')'
+ParenPattern = '(' Pattern ')'
+WildcardPattern = 'let'? name_token:'#word'
+
+CallArgs = '(' CallArg* ')'
+CallArg = (name_token:('#word' | 'client') '=')? value:ExprNode
+GenericArgs = '<' (TypeExpr | UnreflectArg)* '>'
+UnreflectArg = name_token:'#word' '(' value:ExprNode ')'
+
+ObjectLiteral = '{' (ObjectField | SpreadElement)* '}'
+ObjectField = (key_token:('#word' | 'client') | StringLiteral) (':' value:ExprNode)?
+SpreadElement = '...' value:ExprNode
+ArrayLiteral = '[' (ExprNode | SpreadElement)* ']'
+MapLiteral = '{' ObjectField* '}'
+
+ByteStringLiteral = '#word'
+UnquotedString = '#word' '#word'*
+
+BacktickStringLiteral = '`' BacktickSegmentNode* '`'
+BacktickSegmentNode =
+  BacktickText
+| BacktickInterpolation
+| BacktickForOpen
+| BacktickEndfor
+| BacktickIfOpen
+| BacktickElseIf
+| BacktickElse
+| BacktickEndif
+
+BacktickText = '#word'*
+BacktickInterpolation = '$' '{' ExprNode '}'
+BacktickForOpen = '$' '{' 'for' '(' 'let' Pattern 'in' ExprNode ')' '}'
+BacktickEndfor = '$' '{' endfor_token:'#word' '}'
+BacktickIfOpen = '$' '{' 'if' '(' ExprNode ')' '}'
+BacktickElseIf = '$' '{' 'else' 'if' '(' ExprNode ')' '}'
+BacktickElse = '$' '{' 'else' '}'
+BacktickEndif = '$' '{' endif_token:'#word' '}'
+
+Error = '#error'*

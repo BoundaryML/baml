@@ -1,0 +1,18 @@
+[package]
+name = "baml_compiler_codegen"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+clap.workspace = true
+thiserror.workspace = true
+ungrammar.workspace = true
+
+[lints]
+workspace = true

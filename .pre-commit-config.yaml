@@ -50,6 +50,14 @@ repos:
         files: ^typescript2/(pkg-grammar/(.*\.tmLanguage\.json|language-configuration\.json)|app-vscode-ext/(syntaxes/.*\.tmLanguage\.json|language-configuration\.json))$
         priority: 0
 
+      - id: syntax-ast-codegen
+        name: BAML syntax AST codegen check
+        entry: bash -c 'cd baml_language && mise run syntax-codegen-check'
+        language: system
+        pass_filenames: false
+        files: ^baml_language/(crates/baml_compiler_syntax/(baml\.ungram|src/(ast/generated|validated/generated_tokens)\.rs)|crates/baml_compiler_codegen/|Cargo\.(toml|lock)$)
+        priority: 1
+
       - id: cargo-fmt
         name: cargo fmt
         entry: bash -c 'cd baml_language && mise run fmt'

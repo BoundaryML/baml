@@ -963,6 +963,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_compiler_codegen"
+version = "0.0.0-beta"
+dependencies = [
+ "clap",
+ "thiserror 2.0.18",
+ "ungrammar",
+]
+
+[[package]]
 name = "baml_compiler_diagnostics"
 version = "0.0.0-beta"
 dependencies = [
@@ -1003,6 +1012,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "rowan 0.16.1",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -8281,6 +8291,12 @@ dependencies = [
  "tempfile",
  "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "ungrammar"
+version = "1.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3e5df347f0bf3ec1d670aad6ca5c6a1859cd9ea61d2113125794654ccced68f"
 
 [[package]]
 name = "unic-char-property"
