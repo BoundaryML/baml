@@ -60,7 +60,7 @@ function main() -> null throws unknown {
         fields
             .get("message")
             .and_then(BexExternalValue::as_string)
-            .is_some_and(|message| message.contains("user.AppError") && message.contains("E42")),
+            .is_some_and(|message| message.contains("AppError") && message.contains("E42")),
         "EvaluationError message did not describe its cause: {fields:?}"
     );
     let Some(BexExternalValue::Instance {

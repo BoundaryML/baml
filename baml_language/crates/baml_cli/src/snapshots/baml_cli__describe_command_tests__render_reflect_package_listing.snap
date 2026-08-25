@@ -16,8 +16,9 @@ class            reflect.InvalidArgumentError     <builtin>/reflect/reflect.baml
 class            reflect.CompileArtifact          <builtin>/reflect/reflect.baml:191
 class            reflect.Package                  <builtin>/reflect/reflect.baml:196
 class            reflect.Session                  <builtin>/reflect/reflect.baml:286
-function         reflect.signature                <builtin>/reflect/reflect.baml:328
-function         reflect.call_any                 <builtin>/reflect/reflect.baml:344
+function         reflect._render_cause            <builtin>/reflect/reflect.baml:331
+function         reflect.signature                <builtin>/reflect/reflect.baml:342
+function         reflect.call_any                 <builtin>/reflect/reflect.baml:358
 class            reflect.Type                     <builtin>/reflect/type.baml:8
 class            reflect.array.Type               <builtin>/reflect/ns_array/array.baml:2
 class            reflect.class.Field              <builtin>/reflect/ns_class/class.baml:1
@@ -35,8 +36,8 @@ function         reflect.enum.get_value           <builtin>/reflect/ns_enum/enum
 class            reflect.enum.Type                <builtin>/reflect/ns_enum/enum.baml:30
 class            reflect.errors.CompilationError  <builtin>/reflect/ns_errors/errors.baml:2
 class            reflect.errors.EvaluationError   <builtin>/reflect/ns_errors/errors.baml:8
-class            reflect.errors.TypeMismatch      <builtin>/reflect/ns_errors/errors.baml:18
-class            reflect.errors.SessionBusy       <builtin>/reflect/ns_errors/errors.baml:23
+class            reflect.errors.TypeMismatch      <builtin>/reflect/ns_errors/errors.baml:19
+class            reflect.errors.SessionBusy       <builtin>/reflect/ns_errors/errors.baml:24
 class            reflect.function.Parameter       <builtin>/reflect/ns_function/function.baml:1
 class            reflect.function.Type            <builtin>/reflect/ns_function/function.baml:9
 class            reflect.interface.Type           <builtin>/reflect/ns_interface/interface.baml:2

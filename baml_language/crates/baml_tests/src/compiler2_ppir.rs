@@ -83,7 +83,7 @@ mod tests {
         let package_id = PackageId::new(&db, Name::new("user"));
         let interface =
             baml_compiler2_hir_ty::package_interface::package_interface(&db, package_id);
-        let artifact = baml_artifact::encode(ArtifactKind::PackageInterface, &*interface)
+        let artifact = baml_artifact::encode(ArtifactKind::PackageInterface, interface)
             .expect("package interface encodes");
         let decoded: PackageInterface =
             baml_artifact::decode(ArtifactKind::PackageInterface, &artifact)
@@ -98,7 +98,7 @@ mod tests {
         let legacy = baml_artifact::encode_with_format_for_test(
             1,
             ArtifactKind::PackageInterface,
-            &*interface,
+            interface,
         )
         .expect("legacy package interface envelope encodes");
         assert!(matches!(

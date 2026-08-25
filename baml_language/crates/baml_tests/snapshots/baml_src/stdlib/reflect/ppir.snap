@@ -320,6 +320,7 @@ function reflect._compile(self: ?, source: string) -> reflect.CompileArtifact  [
 function reflect._finish(artifact: reflect.CompileArtifact, packages: map<string, reflect.Package>) -> reflect.Package  [builtin]
 function reflect._finish(self: ?, artifact: reflect.CompileArtifact) -> T  [builtin]
 function reflect._new(packages: map<string, reflect.Package>) -> reflect.Session  [builtin]
+function reflect._render_cause(value: unknown) -> string  [builtin]
 function reflect.as_type(self: ?) -> reflect.Type  [missing]
 function reflect.attributes(self: ?) -> reflect.Meta  [expr] {
   { let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() } class_type.meta()
@@ -334,7 +335,7 @@ function reflect.diagnostics(self: ?) -> reflect.Diagnostic[]  [builtin]
 function reflect.diagnostics(self: ?) -> reflect.Diagnostic[]  [builtin]
 function reflect.enums(self: ?) -> map<string, reflect.enum.Type>  [builtin]
 function reflect.eval(self: ?, source: string) -> T  [expr] {
-  { let artifact = self._compile(source) } self._finish(artifact) catch (_) { _ => { let cause = context.root_cause(); throw reflect.errors.EvaluationError { message: cause.to_string(), cause: cause.error } } }
+  { let artifact = self._compile(source) } self._finish(artifact) catch (cause) { _ => { throw reflect.errors.EvaluationError { message: _render_cause(cause), cause: cause } } }
 }
 function reflect.functions(self: ?) -> map<string, reflect.function.Type>  [builtin]
 function reflect.get(self: ?, name: string) -> T?  [expr] {

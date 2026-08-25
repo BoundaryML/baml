@@ -159,9 +159,7 @@ pub fn new(
             &file_paths,
             &baml_compiler_diagnostics::render::RenderConfig::agent(),
         );
-        return Err(RuntimeError::Compilation {
-            message,
-        });
+        return Err(RuntimeError::Compilation { message });
     }
     let program = db
         .get_bytecode_unchecked()

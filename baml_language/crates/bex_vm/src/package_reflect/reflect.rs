@@ -73,6 +73,10 @@ pub(crate) fn current_package_value(vm: &mut BexVm, static_package: &str) -> Val
 }
 
 impl BamlPackageReflect for PackageReflectImpl {
+    fn _render_cause(vm: &mut BexVm, value: &Value) -> NativeCallResult {
+        crate::package_baml::root::render_to_string_honoring_overrides(vm, *value)
+    }
+
     fn signature(vm: &mut BexVm, f: &Value) -> Result<Value, VmRustFnError> {
         signature_impl(vm, *f)
     }

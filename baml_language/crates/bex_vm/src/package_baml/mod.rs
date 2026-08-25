@@ -41,7 +41,7 @@ mod prompt;
 mod random;
 pub(crate) mod resolve;
 pub(crate) use resolve::ImplResolver;
-mod root;
+pub(crate) mod root;
 mod spawn;
 mod stack_trace;
 mod string;
