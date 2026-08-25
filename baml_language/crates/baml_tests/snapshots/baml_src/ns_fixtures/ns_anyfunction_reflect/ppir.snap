@@ -14,8 +14,8 @@ class user.fixtures.anyfunction_reflect.ToolError {
 class user.fixtures.anyfunction_reflect.ToolError$stream {
   message: string | null
 }
-function user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.Client? = null) -> T  [llm] {
-  ai.Agent.new(client = client).run(RuntimeClassify$spec(input)).value
+function user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> T  [llm] {
+  ai.Agent.new(client = client, on_event = on_event).run(RuntimeClassify$spec(input)).value
 }
 function user.fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
   RuntimeClassify$spec(input).build_request(override_client = client)
@@ -29,8 +29,8 @@ function user.fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: 
 function user.fixtures.anyfunction_reflect.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<T>  [expr] {
   ai.FunctionSpec { spec_name: "RuntimeClassify", args: map { "input": input }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Choose a category...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } input);  __tt_cur =  __tt_cur Add ".\n";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } ctx.output_format);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(RuntimeEnumClient) }
 }
-function user.fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<T | null, T>  [expr] {
-  ai.stream.from_spec(RuntimeClassify$spec(input), client = client)
+function user.fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<T | null, T>  [expr] {
+  ai.stream.from_spec(RuntimeClassify$spec(input), client = client, on_event = on_event)
 }
 function user.fixtures.anyfunction_reflect.bare_and_pinned() -> int  [expr] {
   { let f: reflect.AnyFunction = web_search; let g: reflect.AnyFunction<Returns = user.fixtures.anyfunction_reflect.Doc[] | string, Throws = user.fixtures.anyfunction_reflect.ToolError> = web_search; let widened: reflect.AnyFunction<Returns = user.fixtures.anyfunction_reflect.Doc[] | string | int, Throws = user.fixtures.anyfunction_reflect.ToolError> = g; let bare: reflect.AnyFunction = g; return 0 }

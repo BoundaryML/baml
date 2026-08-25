@@ -2878,6 +2878,12 @@ impl io::IoNamespaceHttp for NativeSysOps {
             }
 
             let url = response.url().to_string();
+            let status_code = i64::from(response.status().as_u16());
+            let headers: indexmap::IndexMap<String, String> = response
+                .headers()
+                .iter()
+                .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
+                .collect();
             // Legacy TTFT semantics start after the SSE response opens and end
             // on the first parsed event; connection/headers are governed only
             // by the total request timeout.
@@ -2935,9 +2941,22 @@ impl io::IoNamespaceHttp for NativeSysOps {
 
                 loop {
                     let next_chunk = if let Some((deadline, duration)) = first_event_deadline {
-                        match tokio::time::timeout_at(deadline, byte_stream.next()).await {
+                        // `timeout_at` polls the inner future before checking
+                        // the clock, so a task whose first poll is delayed past
+                        // BOTH the deadline and the server's send would find
+                        // the data already buffered and never time out. Check
+                        // the deadline explicitly first: an expired budget is a
+                        // timeout even when bytes arrived late.
+                        let outcome = if tokio::time::Instant::now() >= deadline {
+                            Err(())
+                        } else {
+                            tokio::time::timeout_at(deadline, byte_stream.next())
+                                .await
+                                .map_err(|_elapsed| ())
+                        };
+                        match outcome {
                             Ok(chunk) => chunk,
-                            Err(_elapsed) => {
+                            Err(()) => {
                                 let mut buf = buf_clone.lock().await;
                                 buf.error = Some(VmBamlError::Timeout {
                                     message: format!(
@@ -2962,6 +2981,29 @@ impl io::IoNamespaceHttp for NativeSysOps {
                         Ok(bytes) => {
                             let events = parser.feed(&bytes);
                             if !events.is_empty() {
+                                // The budget runs to the first PARSED event.
+                                // `timeout_at` polls the stream before the
+                                // clock, so a wakeup delayed past the deadline
+                                // can hand over late-but-buffered data — and a
+                                // chunk taken in time can still parse late.
+                                // Enforcing here, where the first events are
+                                // about to be stored, covers every path.
+                                if let Some((deadline, duration)) = first_event_deadline
+                                    && tokio::time::Instant::now() >= deadline
+                                {
+                                    let mut buf = buf_clone.lock().await;
+                                    buf.error = Some(VmBamlError::Timeout {
+                                        message: format!(
+                                            "SSE first event timed out after {}ms",
+                                            duration.as_millis()
+                                        ),
+                                        duration_ms: i64::try_from(duration.as_millis()).ok(),
+                                    });
+                                    buf.done = true;
+                                    notify_clone.notify_waiters();
+                                    guard.completed = true;
+                                    return;
+                                }
                                 first_event_deadline = None;
                                 let mut buf = buf_clone.lock().await;
                                 buf.events.extend(events);
@@ -2981,7 +3023,27 @@ impl io::IoNamespaceHttp for NativeSysOps {
 
                 // Stream ended cleanly — flush any event buffered without a
                 // trailing blank line (some servers omit the final delimiter).
+                // The first-event budget applies here too: a flush-delivered
+                // first event that only materialized after the deadline is a
+                // timeout, not a completion.
                 let final_events = parser.finish();
+                if !final_events.is_empty()
+                    && let Some((deadline, duration)) = first_event_deadline
+                    && tokio::time::Instant::now() >= deadline
+                {
+                    let mut buf = buf_clone.lock().await;
+                    buf.error = Some(VmBamlError::Timeout {
+                        message: format!(
+                            "SSE first event timed out after {}ms",
+                            duration.as_millis()
+                        ),
+                        duration_ms: i64::try_from(duration.as_millis()).ok(),
+                    });
+                    buf.done = true;
+                    notify_clone.notify_waiters();
+                    guard.completed = true;
+                    return;
+                }
                 let mut buf = buf_clone.lock().await;
                 if !final_events.is_empty() {
                     buf.events.extend(final_events);
@@ -3001,6 +3063,8 @@ impl io::IoNamespaceHttp for NativeSysOps {
             let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(handle);
             Ok(owned::http::SseStream {
                 url,
+                status_code,
+                headers,
                 _handle: handle,
             })
         })

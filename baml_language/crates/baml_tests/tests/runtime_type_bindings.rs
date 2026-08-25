@@ -264,6 +264,7 @@ class ProbeClient {
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
             ai.ModelTurn {
+                calls: [],
                 content: [ai.content.Text { text: self.reply }],
                 stop_reason: ai.content.StopReason.Complete,
                 usage: null,
@@ -343,7 +344,7 @@ async fn agent_run_parses_a_reflected_output_type() {
             // Control: the direct SAP call has always worked.
             let direct = baml.sap.parse<Out>(`{{"name":"Pixel"}}`)
 
-            let run = ai.Agent<Out>.new(
+            let run = ai.Agent.new(
                 client = ProbeClient {{ reply: `{{"name":"Pixel"}}` }},
             ).run(DynamicOutput@spec<Out>())
 

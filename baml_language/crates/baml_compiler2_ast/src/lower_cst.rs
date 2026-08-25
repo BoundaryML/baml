@@ -416,11 +416,12 @@ fn lower_function(
         let client_value = llm.client_field().and_then(|cf| cf.value_element());
         let client_spec = resolve_llm_client(name.as_str(), client_value, llm_body_def.span, diags);
 
-        // The function's real parameters — the injected `client` override is
-        // added below and is never part of the spec's bound arguments.
+        // The function's real parameters — the injected `client` and
+        // `on_event` overrides are added below and are never part of the
+        // spec's bound arguments.
         let user_params: Vec<Param> = params
             .iter()
-            .filter(|p| p.name.as_str() != "client")
+            .filter(|p| p.name.as_str() != "client" && p.name.as_str() != "on_event")
             .cloned()
             .collect();
         let param_names: Vec<Name> = user_params.iter().map(|p| p.name.clone()).collect();
@@ -453,6 +454,7 @@ fn lower_function(
         // could not be synthesized (migration diagnostics fired), the body is
         // omitted so the missing `<Fn>$spec` reference never cascades.
         append_spec_client_param(&mut params, &mut defaults, llm_body_def.span);
+        append_spec_on_event_param(&mut params, &mut defaults, llm_body_def.span);
         let body = if llm_body_def
             .companion_bodies
             .iter()
@@ -465,7 +467,6 @@ fn lower_function(
                     .iter()
                     .map(|param| param.name.clone())
                     .collect::<Vec<_>>(),
-                return_type.clone(),
                 llm_body_def.span,
             );
             Some(FunctionBodyDef::Expr(expr_body, source_map))
@@ -726,25 +727,75 @@ pub(crate) fn append_spec_client_param(
     });
 }
 
+/// Append the spec-mode listener parameter:
+/// `on_event: ((ai.events.Event) -> void)? = null`.
+///
+/// Both synthesized companion bodies thread it through unchanged —
+/// `Agent.new(on_event = on_event)` for the direct call and
+/// `ai.stream.from_spec(..., on_event = on_event)` for the stream; a null
+/// listener means no events are delivered.
+pub(crate) fn append_spec_on_event_param(
+    params: &mut Vec<Param>,
+    defaults: &mut FunctionDefaults,
+    span: text_size::TextRange,
+) {
+    let null_default = {
+        let id = defaults.exprs.exprs.alloc(Expr::Null);
+        defaults.source_map.expr_spans.alloc(span);
+        id
+    };
+    let event_ty = TypeExprKind::Path {
+        segments: vec![Name::new("ai"), Name::new("events"), Name::new("Event")],
+        generic_args: vec![],
+        associated_type_bindings: vec![],
+        attrs: vec![],
+    }
+    .at(span);
+    let listener_ty = TypeExprKind::Function {
+        params: vec![crate::ast::FunctionTypeParam {
+            name: None,
+            optional: false,
+            ty: event_ty,
+        }],
+        ret: Box::new(TypeExprKind::Void { attrs: vec![] }.at(span)),
+        throws: None,
+        attrs: vec![],
+    }
+    .at(span);
+    params.push(Param {
+        name: Name::new("on_event"),
+        type_expr: Some(
+            TypeExprKind::Optional {
+                inner: Box::new(listener_ty),
+                attrs: vec![],
+            }
+            .at(span),
+        ),
+        default: Some(crate::ast::DefaultExprId::new(null_default)),
+        span,
+        name_span: span,
+    });
+}
+
 fn reject_reserved_llm_client_params(
     params: &mut Vec<Param>,
     function_name: &str,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    let mut reserved_spans = Vec::new();
+    let mut reserved = Vec::new();
     params.retain(|param| {
-        if param.name.as_str() == "client" {
-            reserved_spans.push(param.name_span);
+        if matches!(param.name.as_str(), "client" | "on_event") {
+            reserved.push((param.name.clone(), param.name_span));
             false
         } else {
             true
         }
     });
 
-    for span in reserved_spans {
+    for (name, span) in reserved {
         diags.push(LoweringDiagnostic::ReservedLlmClientParam {
             function_name: function_name.to_string(),
-            param_name: "client".to_string(),
+            param_name: name.to_string(),
             span,
         });
     }

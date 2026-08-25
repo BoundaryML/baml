@@ -102,6 +102,12 @@ class Response {
 /// A Server-Sent Events (SSE) stream. Created by `baml.http.fetch_sse`.
 class SseStream {
     url: string,
+    /// Status code of the opening response. `fetch_sse` throws on non-2xx,
+    /// so this is always a success status.
+    status_code: int,
+    /// Response headers at connection open — the provider request id
+    /// (`x-request-id`, `request-id`, ...) lives here.
+    headers: map<string, string>,
     _handle: $rust_type,
 
     /// Only returns `null` if the stream is done/closed.

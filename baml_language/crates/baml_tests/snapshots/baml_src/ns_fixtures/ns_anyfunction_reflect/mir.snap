@@ -346,21 +346,24 @@ fn user.fixtures.anyfunction_reflect.typed_dispatch(name: string, args: map<stri
     }
 }
 
-fn user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: null | ai.Client) -> T {
+fn user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> T {
     // Locals:
     let _0: T // _0 // return
     let _1: string // input // param
     let _2: null | ai.Client // client // param
-    let _3: bool
-    let _4: ai.RunResult<T>
-    let _5: ai.Agent<T>
-    let _6: reflect.Type
-    let _7: ai.FunctionSpec<T>
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.RunResult<T>
+    let _7: ai.Agent
     let _8: reflect.Type
+    let _9: ai.FunctionSpec<T>
+    let _10: reflect.Type
+    let _11: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -369,25 +372,36 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: null
     }
 
     bb2: {
-        _6 = load_type(#0);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _8 = load_type(#0);
-        _7 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _8>(copy _1) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<#0, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<#0>>(copy _5, copy _7) -> [bb5];
+        _8 = load_type(unknown);
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3) -> [bb5];
     }
 
     bb5: {
-        _0 = copy _4.0;
-        goto -> bb6;
+        _10 = load_type(#0);
+        _9 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _10>(copy _1) -> [bb6];
     }
 
     bb6: {
+        _11 = load_type(#0);
+        _6 = call const fn ai.Agent.run<copy _11>(copy _7, copy _9) -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _6.0;
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -606,20 +620,22 @@ fn .<lambda(RuntimeClassify$spec, 0)>( __spec_output_format: string) -> ai.Promp
     }
 }
 
-fn user.fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<null | T, T> {
+fn user.fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<null | T, T> {
     // Locals:
     let _0: ai.stream.Stream<null | T, T> // _0 // return
     let _1: string // input // param
     let _2: null | ai.stream.StreamingClient // client // param
-    let _3: bool
-    let _4: ai.FunctionSpec<T>
-    let _5: reflect.Type
-    let _6: reflect.Type
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.FunctionSpec<T>
     let _7: reflect.Type
+    let _8: reflect.Type
+    let _9: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -628,17 +644,27 @@ fn user.fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, clien
     }
 
     bb2: {
-        _5 = load_type(#0);
-        _4 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _5>(copy _1) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _6 = load_type(#0 | null);
-        _7 = load_type(#0);
-        _0 = call const fn ai.stream.from_spec<copy _6, copy _7>(copy _4, copy _2) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
+        _7 = load_type(#0);
+        _6 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _7>(copy _1) -> [bb5];
+    }
+
+    bb5: {
+        _8 = load_type(#0 | null);
+        _9 = load_type(#0);
+        _0 = call const fn ai.stream.from_spec<copy _8, copy _9>(copy _6, copy _2, copy _3) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }

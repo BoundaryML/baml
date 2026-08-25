@@ -4860,6 +4860,7 @@ mod tests {
         );
         let wire_name = BaseName::new("RoundTrip");
         let argument = |name: &str, ty: Ty| FunctionArgument {
+            injected: false,
             name: BaseName::new(name),
             docstring: None,
             ty,
@@ -5065,6 +5066,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: envelope_ty.clone(),
@@ -5191,6 +5193,7 @@ mod tests {
             BaseName::new("Echo$stream"),
         );
         let argument = || FunctionArgument {
+            injected: false,
             name: BaseName::new("prompt"),
             docstring: None,
             ty: primitive_string(),
@@ -5336,12 +5339,14 @@ mod tests {
             docstring: None,
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("scan"),
                     docstring: None,
                     ty: Ty::Class(scan_name.clone(), vec![], TyAttr::EMPTY),
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("error"),
                     docstring: None,
                     ty: Ty::Class(error_name.clone(), vec![], TyAttr::EMPTY),
@@ -5519,6 +5524,7 @@ mod tests {
                     arguments: arguments
                         .into_iter()
                         .map(|(name, ty)| FunctionArgument {
+                            injected: false,
                             name: BaseName::new(name),
                             docstring: None,
                             ty,
@@ -5599,6 +5605,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("callback"),
                 docstring: None,
                 ty: host_callable_type(2),
@@ -5667,12 +5674,14 @@ mod tests {
             docstring: None,
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("f"),
                     docstring: None,
                     ty: callback,
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("x"),
                     docstring: None,
                     ty: type_t,
@@ -5735,6 +5744,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: nullable_bytes.clone(),
@@ -5944,6 +5954,7 @@ mod tests {
                 generic_params: vec![],
                 docstring: None,
                 arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: union.clone(),
@@ -6428,6 +6439,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: primitive_int(),
@@ -6447,6 +6459,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: primitive_int(),
