@@ -144,6 +144,22 @@ impl FromCST for Expression {
             SyntaxKind::STRING_LITERAL => t::QuotedString::from_cst(elem)
                 .map(Literal::String)
                 .map(Expression::Literal)?,
+            SyntaxKind::LITERAL_EXPR => {
+                let node = StrongAstError::assert_is_node(elem)?;
+                let token = node
+                    .children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find(|token| !token.kind().is_trivia())
+                    .ok_or_else(|| StrongAstError::UnexpectedKindDesc {
+                        expected_desc: "a literal token".into(),
+                        found: SyntaxKind::LITERAL_EXPR,
+                        at: node.text_range(),
+                    })?;
+                Literal::from_cst(token.into()).map(Expression::Literal)?
+            }
+            SyntaxKind::BIGINT_LITERAL => Expression::Literal(Literal::Bigint(
+                t::BigintLiteral::new_from_span(elem.text_range()),
+            )),
             SyntaxKind::INTEGER_LITERAL => Expression::Literal(Literal::Integer(
                 t::IntegerLiteral::new_from_span(elem.text_range()),
             )),

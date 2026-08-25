@@ -55,7 +55,7 @@ repos:
         entry: bash -c 'cd baml_language && mise run syntax-codegen-check'
         language: system
         pass_filenames: false
-        files: ^baml_language/(crates/baml_compiler_syntax/(baml\.ungram|src/(ast/generated|validated/generated_tokens)\.rs)|crates/baml_compiler_codegen/|Cargo\.(toml|lock)$)
+        files: ^baml_language/(crates/baml_compiler_syntax/(baml\.ungram|src/(ast/generated|validated/generated_(schema|tokens))\.rs)|crates/baml_compiler_codegen/|Cargo\.(toml|lock)$)
         priority: 1
 
       - id: cargo-fmt

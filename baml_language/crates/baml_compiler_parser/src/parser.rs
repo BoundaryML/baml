@@ -1658,9 +1658,20 @@ impl<'a> Parser<'a> {
 
     /// Internal: Consume current token with optional comment pattern recognition
     fn bump_impl(&mut self, recognize_comments: bool) {
-        // Emit all trivia before the token
+        self.emit_leading_trivia(recognize_comments);
+
+        if let Some(token) = self.tokens.get(self.current) {
+            let kind = token_kind_to_syntax_kind(token.kind);
+            self.events.push(Event::Token {
+                kind,
+                text: token.text.clone(),
+            });
+            self.current += 1;
+        }
+    }
+
+    fn emit_leading_trivia(&mut self, recognize_comments: bool) {
         while self.current < self.tokens.len() {
-            // Recognize and assemble comment patterns if requested
             if recognize_comments {
                 if self.at_line_comment_start() {
                     self.consume_line_comment();
@@ -1674,7 +1685,6 @@ impl<'a> Parser<'a> {
 
             let token = &self.tokens[self.current];
 
-            // Emit basic trivia (whitespace, newlines)
             if self.is_basic_trivia(token.kind) {
                 let kind = token_kind_to_syntax_kind(token.kind);
                 self.events.push(Event::Token {
@@ -1684,14 +1694,6 @@ impl<'a> Parser<'a> {
                 self.current += 1;
                 continue;
             }
-
-            // Non-trivia token - emit it and stop
-            let kind = token_kind_to_syntax_kind(token.kind);
-            self.events.push(Event::Token {
-                kind,
-                text: token.text.clone(),
-            });
-            self.current += 1;
             break;
         }
     }
@@ -6369,6 +6371,9 @@ impl<'a> Parser<'a> {
                         return i;
                     }
                     depth -= 1;
+                    if depth == 0 {
+                        return i;
+                    }
                 }
                 Event::Token { .. } => {
                     if depth == 0 {
@@ -6633,8 +6638,8 @@ impl<'a> Parser<'a> {
             || self.at(TokenKind::IntegerLiteral)
             || self.at(TokenKind::FloatLiteral)
         {
-            // Numeric literal
-            self.bump();
+            self.emit_leading_trivia(true);
+            self.with_node(SyntaxKind::LITERAL_EXPR, Parser::bump);
         } else if self.parse_any_string() {
             // String literal
         } else if self.at(TokenKind::Throw) {
@@ -6667,11 +6672,20 @@ impl<'a> Parser<'a> {
                 // env.FIELD sugar (not followed by `(`) — desugar to baml.env.get_or_panic("FIELD")
                 self.parse_env_access();
             } else if text == "true" {
-                self.bump_contextual_kw_as("true", SyntaxKind::KW_TRUE);
+                self.emit_leading_trivia(true);
+                self.with_node(SyntaxKind::LITERAL_EXPR, |p| {
+                    p.bump_contextual_kw_as("true", SyntaxKind::KW_TRUE);
+                });
             } else if text == "false" {
-                self.bump_contextual_kw_as("false", SyntaxKind::KW_FALSE);
+                self.emit_leading_trivia(true);
+                self.with_node(SyntaxKind::LITERAL_EXPR, |p| {
+                    p.bump_contextual_kw_as("false", SyntaxKind::KW_FALSE);
+                });
             } else if text == "null" {
-                self.bump_contextual_kw_as("null", SyntaxKind::KW_NULL);
+                self.emit_leading_trivia(true);
+                self.with_node(SyntaxKind::LITERAL_EXPR, |p| {
+                    p.bump_contextual_kw_as("null", SyntaxKind::KW_NULL);
+                });
             } else {
                 // Identifier or path (could be multi-segment like baml.HttpMethod.Get)
                 self.parse_path_or_ident();
@@ -7423,12 +7437,11 @@ impl<'a> Parser<'a> {
 
     /// Parse a path or simple identifier.
     ///
-    /// This creates a `PATH_EXPR` for dot-separated identifier chains:
+    /// This creates a `PATH_EXPR` for identifier chains:
+    /// - `user` -> `PATH_EXPR` with segment `[user]`
     /// - `user.name.length` -> `PATH_EXPR` with segments `[user, name, length]`
     /// - `baml.HttpMethod.Get` -> `PATH_EXPR` with segments `[baml, HttpMethod, Get]`
     /// - `Status.Active` -> `PATH_EXPR` with segments `[Status, Active]`
-    ///
-    /// For a simple identifier without dots, no wrapper node is created.
     ///
     /// # `PATH_EXPR` vs `FIELD_ACCESS_EXPR`
     ///
@@ -7450,6 +7463,8 @@ impl<'a> Parser<'a> {
             return;
         }
 
+        self.emit_leading_trivia(true);
+
         // `spawn` / `await` are reserved keywords but are valid as path
         // segments after a `.` (e.g. the `baml.spawn` namespace). They are
         // unambiguous in segment position — a leading `spawn`/`await` is
@@ -7469,33 +7484,17 @@ impl<'a> Parser<'a> {
             )
         };
 
-        // Check if this looks like a path (ident.client followed by dot and another ident)
-        if self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
-            && self.peek(2).map(|t| segment(t.kind)).unwrap_or(false)
-            && !(self
-                .peek(2)
-                .is_some_and(|t| t.kind == TokenKind::Word && t.text == "as")
-                && self.peek(3).map(|t| t.kind) == Some(TokenKind::Less))
-        {
-            // It's a path - all segments are identifiers
-            self.with_node(SyntaxKind::PATH_EXPR, |p| {
-                p.bump(); // First segment
+        self.with_node(SyntaxKind::PATH_EXPR, |p| {
+            p.bump();
 
-                // Parse remaining segments
-                while p.at(TokenKind::Dot) && !p.looks_like_as_projection() {
-                    p.bump();
-                    if p.current().map(|t| segment(t.kind)).unwrap_or(false) {
-                        p.bump(); // Next segment
-                    } else {
-                        p.error_unexpected_token("path segment after '.'".to_string());
-                        break;
-                    }
+            while p.at(TokenKind::Dot) && !p.looks_like_as_projection() {
+                if !p.peek(1).map(|t| segment(t.kind)).unwrap_or(false) {
+                    break;
                 }
-            });
-        } else {
-            // Simple identifier (no dots)
-            self.bump();
-        }
+                p.bump();
+                p.bump();
+            }
+        });
     }
 
     /// Parse a single map entry in expression context: `key: value` or the
@@ -8011,7 +8010,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an array in config context - uses config-style parsing for nested objects
     fn parse_config_array(&mut self) {
-        self.with_node(SyntaxKind::ARRAY_LITERAL, |p| {
+        self.with_node(SyntaxKind::CONFIG_ARRAY, |p| {
             p.expect(TokenKind::LBracket);
 
             if !p.at(TokenKind::RBracket) {
@@ -12054,6 +12053,30 @@ function Demo() -> string {
             tagged
                 .descendants()
                 .any(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
+        );
+    }
+
+    #[test]
+    fn primitive_expressions_are_always_nodes() {
+        let source = "function f(a: int) -> int { a; 1; 2n; 1.0; true; false; null }";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let block = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::BLOCK_EXPR)
+            .expect("expected function block");
+        let kinds = block.children().map(|node| node.kind()).collect::<Vec<_>>();
+        assert_eq!(
+            kinds,
+            vec![
+                SyntaxKind::PATH_EXPR,
+                SyntaxKind::LITERAL_EXPR,
+                SyntaxKind::LITERAL_EXPR,
+                SyntaxKind::LITERAL_EXPR,
+                SyntaxKind::LITERAL_EXPR,
+                SyntaxKind::LITERAL_EXPR,
+                SyntaxKind::LITERAL_EXPR,
+            ]
         );
     }
 

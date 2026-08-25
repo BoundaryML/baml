@@ -1741,7 +1741,7 @@ fn lower_test_arg_config_value(value: &SyntaxNode) -> TestArgValue {
 
     if let Some(array) = value
         .children()
-        .find(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)
+        .find(|child| child.kind() == SyntaxKind::CONFIG_ARRAY)
     {
         return TestArgValue::Array(
             array

@@ -1,15 +1,13 @@
-use baml_db::baml_compiler_syntax::validated::nodes::{
-    AssociatedTypeDecl, ClassDecl, ClassField, ClassFieldDelimiter, ClassItem, ClientDecl,
-    ClientField, ClientName, ClientType, ConfigArray, ConfigBlock, ConfigBlockMember, ConfigItem,
-    ConfigItemKey, ConfigItemValue, EnumDecl, EnumItem, EnumVariant, FunctionDecl,
-    FunctionDeclBody, FunctionParam, FunctionParamList, GeneratorDecl, ImplementsBlock,
-    ImplementsItem, ImplementsTarget, InterfaceFieldLink, LlmFunctionBody, PromptField,
-    RetryPolicyDecl, StringLiteralValue, TemplateStringDecl, TestDecl, TestExprDecl, TestSetDecl,
-    ToolsField, TopLevelDeclaration, TypeAliasDecl,
+use baml_db::baml_compiler_syntax::{
+    FromCST, SyntaxElement, SyntaxKind, ast as syntax_ast,
+    validated::{
+        Validated, ValidatedSyntaxToken,
+        nodes::{FunctionParam, FunctionParamList, TestExprDecl, TestSetDecl},
+    },
 };
 use rowan::TextRange;
 
-use super::expressions::FunctionArrowLayout as _;
+use super::expressions::FunctionArrowLayout;
 use crate::{
     EmittableTrivia,
     ast::{BlockAttribute, Token, tokens as t},
@@ -33,185 +31,231 @@ trait ConfigArrayLayout {
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo>;
 }
 
-impl Printable for TopLevelDeclaration {
+impl Printable for Validated<'_, syntax_ast::TopLevelDeclaration> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        match self {
-            TopLevelDeclaration::Function(function_decl) => function_decl.print(shape, printer),
-            TopLevelDeclaration::Class(class_decl) => class_decl.print(shape, printer),
-            TopLevelDeclaration::Enum(enum_decl) => enum_decl.print(shape, printer),
-            TopLevelDeclaration::Client(client_decl) => client_decl.print(shape, printer),
-            TopLevelDeclaration::Test(test_decl) => test_decl.print(shape, printer),
-            TopLevelDeclaration::TestExpr(test_expr_decl) => test_expr_decl.print(shape, printer),
-            TopLevelDeclaration::TestSet(test_set_decl) => test_set_decl.print(shape, printer),
-            TopLevelDeclaration::RetryPolicy(retry_policy_decl) => {
-                retry_policy_decl.print(shape, printer)
-            }
-            TopLevelDeclaration::TemplateString(template_string) => {
-                template_string.print(shape, printer)
-            }
-            TopLevelDeclaration::TypeAlias(type_alias_decl) => {
-                type_alias_decl.print(shape, printer)
-            }
-            TopLevelDeclaration::Generator(generator_decl) => generator_decl.print(shape, printer),
-            TopLevelDeclaration::Unknown(range) => {
-                let text = &printer.input[*range];
+        match self.syntax().kind() {
+            SyntaxKind::FUNCTION_DEF => self
+                .cast::<syntax_ast::FunctionDef>()
+                .expect("validated function")
+                .print(shape, printer),
+            SyntaxKind::CLASS_DEF => self
+                .cast::<syntax_ast::ClassDef>()
+                .expect("validated class")
+                .print(shape, printer),
+            SyntaxKind::ENUM_DEF => self
+                .cast::<syntax_ast::EnumDef>()
+                .expect("validated enum")
+                .print(shape, printer),
+            SyntaxKind::CLIENT_DEF => self
+                .cast::<syntax_ast::ClientDef>()
+                .expect("validated client")
+                .print(shape, printer),
+            SyntaxKind::TEST_DEF => self
+                .cast::<syntax_ast::TestDef>()
+                .expect("validated test")
+                .print(shape, printer),
+            SyntaxKind::TEST_EXPR_DEF => self
+                .cast::<syntax_ast::TestExprDef>()
+                .expect("validated expression test")
+                .print(shape, printer),
+            SyntaxKind::TESTSET_DEF => self
+                .cast::<syntax_ast::TestsetDef>()
+                .expect("validated test set")
+                .print(shape, printer),
+            SyntaxKind::RETRY_POLICY_DEF => self
+                .cast::<syntax_ast::RetryPolicyDef>()
+                .expect("validated retry policy")
+                .print(shape, printer),
+            SyntaxKind::TEMPLATE_STRING_DEF => self
+                .cast::<syntax_ast::TemplateStringDef>()
+                .expect("validated template string")
+                .print(shape, printer),
+            SyntaxKind::TYPE_ALIAS_DEF => self
+                .cast::<syntax_ast::TypeAliasDef>()
+                .expect("validated type alias")
+                .print(shape, printer),
+            SyntaxKind::GENERATOR_DEF => self
+                .cast::<syntax_ast::GeneratorDef>()
+                .expect("validated generator")
+                .print(shape, printer),
+            _ => {
+                let text = &printer.input[self.text_range()];
                 printer.print_str(text.trim());
                 PrintInfo::default_multi_lined()
             }
         }
     }
     fn leftmost_token(&self) -> TextRange {
-        match self {
-            TopLevelDeclaration::Function(f) => f.leftmost_token(),
-            TopLevelDeclaration::Class(c) => c.leftmost_token(),
-            TopLevelDeclaration::Enum(e) => e.leftmost_token(),
-            TopLevelDeclaration::Client(c) => c.leftmost_token(),
-            TopLevelDeclaration::Test(t) => t.leftmost_token(),
-            TopLevelDeclaration::TestExpr(t) => t.leftmost_token(),
-            TopLevelDeclaration::TestSet(t) => t.leftmost_token(),
-            TopLevelDeclaration::RetryPolicy(r) => r.leftmost_token(),
-            TopLevelDeclaration::TemplateString(t) => t.leftmost_token(),
-            TopLevelDeclaration::TypeAlias(t) => t.leftmost_token(),
-            TopLevelDeclaration::Generator(g) => g.leftmost_token(),
-            TopLevelDeclaration::Unknown(range) => *range,
-        }
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        match self {
-            TopLevelDeclaration::Function(f) => f.rightmost_token(),
-            TopLevelDeclaration::Class(c) => c.rightmost_token(),
-            TopLevelDeclaration::Enum(e) => e.rightmost_token(),
-            TopLevelDeclaration::Client(c) => c.rightmost_token(),
-            TopLevelDeclaration::Test(t) => t.rightmost_token(),
-            TopLevelDeclaration::TestExpr(t) => t.rightmost_token(),
-            TopLevelDeclaration::TestSet(t) => t.rightmost_token(),
-            TopLevelDeclaration::RetryPolicy(r) => r.rightmost_token(),
-            TopLevelDeclaration::TemplateString(t) => t.rightmost_token(),
-            TopLevelDeclaration::TypeAlias(t) => t.rightmost_token(),
-            TopLevelDeclaration::Generator(g) => g.rightmost_token(),
-            TopLevelDeclaration::Unknown(range) => *range,
-        }
+        self.last_token_range()
     }
 }
 
-impl Printable for FunctionDecl {
+impl Printable for Validated<'_, syntax_ast::FunctionDef> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
-        printer.print_str(" ");
-        printer.print_raw_token(&self.name);
-        if let Some(ref gp) = self.generic_params {
-            printer.print(gp, shape.clone());
-        }
-
-        let mut param_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let param_info = param_printer.print(&self.params, Shape::unlimited_single_line());
-
-        let mut return_type_printer =
-            Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let return_type_info =
-            return_type_printer.print(&self.return_type, Shape::unlimited_single_line());
-        let (_, return_type_line_comment) =
-            return_type_printer.print_trivia_all_trailing_for(self.return_type.rightmost_token());
-        let mut throws_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let throws_info = self
-            .throws
-            .as_ref()
-            .map(|throws| throws_printer.print(throws, Shape::unlimited_single_line()))
-            .unwrap_or_else(PrintInfo::default_single_line);
-
-        let single_line_size = printer.current_line_len()
-            + param_printer.output.len()
-            + const { " -> ".len() + " {".len() }
-            + return_type_printer.output.len()
-            + if self.throws.is_some() {
-                (const { " ".len() }) + throws_printer.output.len()
-            } else {
-                0
-            };
-        if single_line_size <= printer.config.line_width
-            && !param_info.multi_lined
-            && !return_type_info.multi_lined
-            && !throws_info.multi_lined
-            && !return_type_line_comment
-        {
-            // It fits in single line!
-            printer.append_from_printer(param_printer);
-            printer.print_spaces(1);
-            // Normalize the permissively accepted `=>` spelling to `->`.
-            printer.print_str("->");
-            self.arrow.print_separator_before(
-                Some(self.return_type.leftmost_token()),
-                shape.indent + printer.config.indent_width,
-                printer,
-            );
-            printer.append_from_printer(return_type_printer);
-            if self.throws.is_some() {
-                printer.print_spaces(1);
-                printer.append_from_printer(throws_printer);
-            }
-            printer.print_spaces(1);
-            printer.print(&self.body, shape)
-        } else {
-            let params_shape = Shape {
-                width: 0, // never single-line
-                indent: shape.indent,
-                first_line_offset: 0, // not important in function args
-            };
-            let _ = self.params.print_multi_line(params_shape, printer);
-
-            printer.print_spaces(1);
-            // Normalize the permissively accepted `=>` spelling to `->`.
-            printer.print_str("->");
-            self.arrow.print_separator_before(
-                Some(self.return_type.leftmost_token()),
-                shape.indent + printer.config.indent_width,
-                printer,
-            );
-
-            let curr_line_len = printer.current_line_len();
-            let return_type_shape = Shape {
-                width: printer
-                    .config
-                    .line_width
-                    .saturating_sub(curr_line_len + const { " {".len() }),
-                indent: shape.indent,
-                first_line_offset: curr_line_len.saturating_sub(shape.indent),
-            };
-
-            let return_info = self.return_type.print(return_type_shape, printer);
-            let (_, return_type_line_comment) =
-                printer.print_trivia_all_trailing_for(self.return_type.rightmost_token());
-            let throws_info = if let Some(ref throws) = self.throws {
-                printer.print_str(" ");
-                printer.print(throws, shape.clone())
-            } else {
-                PrintInfo::default_single_line()
-            };
-
-            if (return_info.multi_lined && self.return_type.multi_line_is_indented())
-                || throws_info.multi_lined
-                || return_type_line_comment
-            {
-                // `{` goes on its own line after the type ends
-                printer.print_newline();
-            } else {
-                printer.print_str(" ");
-            }
-
-            printer.print(&self.body, shape);
-
-            PrintInfo::default_multi_lined()
-        }
+        let keyword = self.function_token();
+        let name = self.name_token();
+        let generic_params = self.generic_param_list().map(|params| {
+            super::GenericParamList::from_cst(SyntaxElement::Node(params.syntax().clone()))
+                .expect("validated generic parameters")
+        });
+        let params = self.parameter_list();
+        let arrow = self
+            .arrow_token()
+            .or_else(|| self.fat_arrow_token())
+            .expect("validated function arrow");
+        let return_type =
+            super::Type::from_cst(SyntaxElement::Node(self.type_expr().syntax().clone()))
+                .expect("validated return type");
+        let throws = self.throws_clause().map(|throws| {
+            super::ThrowsClause::from_cst(SyntaxElement::Node(throws.syntax().clone()))
+                .expect("validated throws clause")
+        });
+        let body = self.function_body_kind();
+        print_function_layout(
+            &keyword,
+            &name,
+            generic_params.as_ref(),
+            &params,
+            &arrow,
+            &return_type,
+            throws.as_ref(),
+            &body,
+            shape,
+            printer,
+        )
     }
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.body.rightmost_token()
+        self.last_token_range()
     }
 }
 
-impl PrintMultiLine for FunctionParamList {
+#[allow(clippy::too_many_arguments)]
+fn print_function_layout(
+    keyword: &impl Token,
+    name: &impl Token,
+    generic_params: Option<&super::GenericParamList>,
+    params: &Validated<'_, syntax_ast::ParameterList>,
+    arrow: &impl FunctionArrowLayout,
+    return_type: &super::Type,
+    throws: Option<&super::ThrowsClause>,
+    body: &Validated<'_, syntax_ast::FunctionBodyKind>,
+    shape: Shape,
+    printer: &mut Printer,
+) -> PrintInfo {
+    printer.print_raw_token(keyword);
+    printer.print_str(" ");
+    printer.print_raw_token(name);
+    if let Some(generic_params) = generic_params {
+        printer.print(generic_params, shape.clone());
+    }
+
+    let mut param_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
+    let param_info = param_printer.print(params, Shape::unlimited_single_line());
+    let mut return_type_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
+    let return_type_info = return_type_printer.print(return_type, Shape::unlimited_single_line());
+    let (_, return_type_line_comment) =
+        return_type_printer.print_trivia_all_trailing_for(return_type.rightmost_token());
+    let mut throws_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
+    let throws_info = throws
+        .map(|throws| throws_printer.print(throws, Shape::unlimited_single_line()))
+        .unwrap_or_else(PrintInfo::default_single_line);
+
+    let single_line_size = printer.current_line_len()
+        + param_printer.output.len()
+        + const { " -> ".len() + " {".len() }
+        + return_type_printer.output.len()
+        + throws.map_or(0, |_| const { " ".len() } + throws_printer.output.len());
+    if single_line_size <= printer.config.line_width
+        && !param_info.multi_lined
+        && !return_type_info.multi_lined
+        && !throws_info.multi_lined
+        && !return_type_line_comment
+    {
+        printer.append_from_printer(param_printer);
+        printer.print_spaces(1);
+        printer.print_str("->");
+        arrow.print_separator_before(
+            Some(return_type.leftmost_token()),
+            shape.indent + printer.config.indent_width,
+            printer,
+        );
+        printer.append_from_printer(return_type_printer);
+        if throws.is_some() {
+            printer.print_spaces(1);
+            printer.append_from_printer(throws_printer);
+        }
+        printer.print_spaces(1);
+        return printer.print(body, shape);
+    }
+
+    params.print_multi_line(
+        Shape {
+            width: 0,
+            indent: shape.indent,
+            first_line_offset: 0,
+        },
+        printer,
+    );
+    printer.print_spaces(1);
+    printer.print_str("->");
+    arrow.print_separator_before(
+        Some(return_type.leftmost_token()),
+        shape.indent + printer.config.indent_width,
+        printer,
+    );
+    let curr_line_len = printer.current_line_len();
+    let return_info = return_type.print(
+        Shape {
+            width: printer
+                .config
+                .line_width
+                .saturating_sub(curr_line_len + const { " {".len() }),
+            indent: shape.indent,
+            first_line_offset: curr_line_len.saturating_sub(shape.indent),
+        },
+        printer,
+    );
+    let (_, return_type_line_comment) =
+        printer.print_trivia_all_trailing_for(return_type.rightmost_token());
+    let throws_info = throws.map_or_else(PrintInfo::default_single_line, |throws| {
+        printer.print_str(" ");
+        printer.print(throws, shape.clone())
+    });
+    if (return_info.multi_lined && return_type.multi_line_is_indented())
+        || throws_info.multi_lined
+        || return_type_line_comment
+    {
+        printer.print_newline();
+    } else {
+        printer.print_str(" ");
+    }
+    printer.print(body, shape);
+    PrintInfo::default_multi_lined()
+}
+
+fn function_params<'tree>(
+    params: &Validated<'tree, syntax_ast::ParameterList>,
+) -> Vec<(
+    Validated<'tree, syntax_ast::Parameter>,
+    Option<ValidatedSyntaxToken>,
+)> {
+    let mut elements = params.direct_elements().peekable();
+    let mut result = Vec::new();
+    while let Some(element) = elements.next() {
+        if let Some(param) = element.node::<syntax_ast::Parameter>() {
+            result.push((param, take_delimiter(&mut elements)));
+        }
+    }
+    result
+}
+
+impl PrintMultiLine for Validated<'_, syntax_ast::ParameterList> {
     /// Multi-line layout: each parameter on its own indented line with trailing comma.
     /// Closing paren on its own line.
     ///
@@ -230,11 +274,14 @@ impl PrintMultiLine for FunctionParamList {
             first_line_offset: 0,
         };
 
-        printer.print_raw_token(&self.open_paren);
-        printer.print_trivia_all_trailing_for(self.open_paren.span());
+        let open_paren = self.l_paren_token();
+        let close_paren = self.r_paren_token();
+        let params = function_params(self);
+        printer.print_raw_token(&open_paren);
+        printer.print_trivia_all_trailing_for(open_paren.span());
         printer.print_newline();
 
-        for (param, comma) in &self.params {
+        for (param, comma) in &params {
             let (param_leading, param_trailing) = printer.trivia.get_for_element(param);
             printer.print_trivia_with_newline(param_leading.trim_blanks(), inner_shape.indent);
             printer.print_spaces(inner_shape.indent);
@@ -253,23 +300,26 @@ impl PrintMultiLine for FunctionParamList {
             printer.print_newline();
         }
 
-        let (close_paren_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        let (close_paren_leading, _) = printer.trivia.get_for_range_split(close_paren.span());
         printer.print_trivia_with_newline(close_paren_leading.trim_blanks(), inner_shape.indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_paren);
+        printer.print_raw_token(&close_paren);
         PrintInfo::default_multi_lined()
     }
 }
 
-impl FunctionParamListLayout for FunctionParamList {
+impl FunctionParamListLayout for Validated<'_, syntax_ast::ParameterList> {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the function param list on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.open_paren);
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        let open_paren = self.l_paren_token();
+        let close_paren = self.r_paren_token();
+        let params = function_params(self);
+        printer.print_raw_token(&open_paren);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(open_paren.span());
         printer.try_print_trivia_single_line_squished(open_trailing)?;
 
-        for (i, (param, comma)) in self.params.iter().enumerate() {
+        for (i, (param, comma)) in params.iter().enumerate() {
             if printer.output.len() > shape.width {
                 return None;
             }
@@ -287,7 +337,7 @@ impl FunctionParamListLayout for FunctionParamList {
             } else {
                 (&[][..], &[][..])
             };
-            if i + 1 < self.params.len() {
+            if i + 1 < params.len() {
                 printer.print_trivia_squished(p_trailing);
                 printer.print_trivia_squished(comma_leading);
                 printer.print_str(", ");
@@ -300,15 +350,174 @@ impl FunctionParamListLayout for FunctionParamList {
             }
         }
 
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        let (close_leading, _) = printer.trivia.get_for_range_split(close_paren.span());
         printer.try_print_trivia_single_line_squished(close_leading)?;
-        printer.print_raw_token(&self.close_paren);
+        printer.print_raw_token(&close_paren);
 
         if printer.output.len() > shape.width {
             None
         } else {
             Some(PrintInfo::default_single_line())
         }
+    }
+}
+
+impl Printable for Validated<'_, syntax_ast::ParameterList> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.first_token_range()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.last_token_range()
+    }
+}
+
+impl Printable for Validated<'_, syntax_ast::Parameter> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let name = self
+            .direct_elements()
+            .next()
+            .and_then(|element| element.token())
+            .expect("validated parameter name");
+        let ty = self.type_expr().map(|ty| {
+            super::Type::from_cst(SyntaxElement::Node(ty.syntax().clone()))
+                .expect("validated parameter type")
+        });
+        let default = self.default_value().map(|default| {
+            super::Expression::from_cst(SyntaxElement::Node(default.syntax().clone()))
+                .expect("validated parameter default")
+        });
+        printer.print_raw_token(&name);
+        let mut info = if let Some(ty) = &ty {
+            let mut trivia_len = 0;
+            // Colon is optional per BEP-019; synthesize if absent
+            if let Some(colon) = self.colon_token() {
+                let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
+                printer.print_str(": ");
+                trivia_len += printer.print_trivia_squished(colon_trailing);
+            } else {
+                printer.print_str(": ");
+            }
+            let ty_leading = printer.trivia.get_leading_for_element(ty);
+            trivia_len += printer.print_trivia_squished(ty_leading);
+
+            let new_offset = usize::from(name.span().len()) + 2 + trivia_len;
+            let ty_shape = Shape {
+                width: shape.width.saturating_sub(new_offset),
+                indent: shape.indent,
+                first_line_offset: shape.first_line_offset + new_offset,
+            };
+            ty.print(ty_shape, printer)
+        } else {
+            PrintInfo::default_single_line()
+        };
+
+        if let Some(default) = &default {
+            let equals = self
+                .equals_token()
+                .expect("validated parameter default equals");
+            let prev_token = ty
+                .as_ref()
+                .map_or_else(|| name.span(), Printable::rightmost_token);
+            let (_, prev_trailing) = printer.trivia.get_for_range_split(prev_token);
+            let (equals_leading, equals_trailing) =
+                printer.trivia.get_for_range_split(equals.span());
+            printer.print_trivia_squished(prev_trailing);
+            printer.print_trivia_squished(equals_leading);
+            printer.print_str(" = ");
+            printer.print_trivia_squished(equals_trailing);
+            let leading = printer.trivia.get_leading_for_element(default);
+            printer.print_trivia_squished(leading);
+            info = printer.print(default, shape);
+        }
+
+        info
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.first_token_range()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.last_token_range()
+    }
+}
+
+impl PrintMultiLine for FunctionParamList {
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_indent = shape.indent + printer.config.indent_width;
+        let inner_shape = Shape {
+            width: printer.config.line_width.saturating_sub(inner_indent),
+            indent: inner_indent,
+            first_line_offset: 0,
+        };
+        printer.print_raw_token(&self.open_paren);
+        printer.print_trivia_all_trailing_for(self.open_paren.span());
+        printer.print_newline();
+        for (param, comma) in &self.params {
+            let (param_leading, param_trailing) = printer.trivia.get_for_element(param);
+            printer.print_trivia_with_newline(param_leading.trim_blanks(), inner_shape.indent);
+            printer.print_spaces(inner_shape.indent);
+            printer.print(param, inner_shape.clone());
+            if let Some(comma) = comma {
+                printer.print_trivia_squished(param_trailing);
+                let (comma_leading, comma_trailing) =
+                    printer.trivia.get_for_range_split(comma.span());
+                printer.print_trivia_squished(comma_leading);
+                printer.print_raw_token(comma);
+                printer.print_trivia_trailing(comma_trailing);
+            } else {
+                printer.print_str(",");
+                printer.print_trivia_trailing(param_trailing);
+            }
+            printer.print_newline();
+        }
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.print_trivia_with_newline(close_leading.trim_blanks(), inner_shape.indent);
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl FunctionParamListLayout for FunctionParamList {
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        printer.print_raw_token(&self.open_paren);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
+        for (i, (param, comma)) in self.params.iter().enumerate() {
+            if printer.output.len() > shape.width {
+                return None;
+            }
+            let (leading, trailing) = printer.trivia.get_for_element(param);
+            printer.try_print_trivia_single_line_squished(leading)?;
+            if printer
+                .print(param, Shape::unlimited_single_line())
+                .multi_lined
+            {
+                return None;
+            }
+            let (comma_leading, comma_trailing) =
+                comma.as_ref().map_or((&[][..], &[][..]), |comma| {
+                    printer.trivia.get_for_range_split(comma.span())
+                });
+            if i + 1 < self.params.len() {
+                printer.print_trivia_squished(trailing);
+                printer.print_trivia_squished(comma_leading);
+                printer.print_str(", ");
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
+            } else {
+                printer.try_print_trivia_single_line_squished(trailing)?;
+                printer.try_print_trivia_single_line_squished(comma_leading)?;
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
+            }
+        }
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.try_print_trivia_single_line_squished(close_leading)?;
+        printer.print_raw_token(&self.close_paren);
+        (printer.output.len() <= shape.width).then(PrintInfo::default_single_line)
     }
 }
 
@@ -331,45 +540,39 @@ impl Printable for FunctionParam {
         printer.print_raw_token(&self.name);
         let mut info = if let Some((colon, ty)) = &self.ty {
             let mut trivia_len = 0;
-            // Colon is optional per BEP-019; synthesize if absent
             if let Some(colon) = colon {
-                let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
+                let (_, trailing) = printer.trivia.get_for_range_split(colon.span());
                 printer.print_str(": ");
-                trivia_len += printer.print_trivia_squished(colon_trailing);
+                trivia_len += printer.print_trivia_squished(trailing);
             } else {
                 printer.print_str(": ");
             }
-            let ty_leading = printer.trivia.get_leading_for_element(ty);
-            trivia_len += printer.print_trivia_squished(ty_leading);
-
+            trivia_len += printer.print_trivia_squished(printer.trivia.get_leading_for_element(ty));
             let new_offset = usize::from(self.name.span().len()) + 2 + trivia_len;
-            let ty_shape = Shape {
-                width: shape.width.saturating_sub(new_offset),
-                indent: shape.indent,
-                first_line_offset: shape.first_line_offset + new_offset,
-            };
-            ty.print(ty_shape, printer)
+            ty.print(
+                Shape {
+                    width: shape.width.saturating_sub(new_offset),
+                    indent: shape.indent,
+                    first_line_offset: shape.first_line_offset + new_offset,
+                },
+                printer,
+            )
         } else {
             PrintInfo::default_single_line()
         };
-
         if let Some((equals, default)) = &self.default {
-            let prev_token = self
+            let previous = self
                 .ty
                 .as_ref()
                 .map_or_else(|| self.name.span(), |(_, ty)| ty.rightmost_token());
-            let (_, prev_trailing) = printer.trivia.get_for_range_split(prev_token);
-            let (equals_leading, equals_trailing) =
-                printer.trivia.get_for_range_split(equals.span());
-            printer.print_trivia_squished(prev_trailing);
-            printer.print_trivia_squished(equals_leading);
-            printer.print_str(" = ");
-            printer.print_trivia_squished(equals_trailing);
-            let leading = printer.trivia.get_leading_for_element(default);
+            printer.print_trivia_squished(printer.trivia.get_for_range_split(previous).1);
+            let (leading, trailing) = printer.trivia.get_for_range_split(equals.span());
             printer.print_trivia_squished(leading);
+            printer.print_str(" = ");
+            printer.print_trivia_squished(trailing);
+            printer.print_trivia_squished(printer.trivia.get_leading_for_element(default));
             info = printer.print(default, shape);
         }
-
         info
     }
     fn leftmost_token(&self) -> TextRange {
@@ -387,193 +590,217 @@ impl Printable for FunctionParam {
     }
 }
 
-impl Printable for FunctionDeclBody {
+impl Printable for Validated<'_, syntax_ast::FunctionBodyKind> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        match self {
-            FunctionDeclBody::Llm(llm) => llm.print(shape, printer),
-            FunctionDeclBody::Block(block) => block.print(shape, printer),
+        match self.syntax().kind() {
+            SyntaxKind::LLM_FUNCTION_BODY => self
+                .cast::<syntax_ast::LlmFunctionBody>()
+                .expect("validated LLM function body")
+                .print(shape, printer),
+            SyntaxKind::EXPR_FUNCTION_BODY => {
+                let body = self
+                    .cast::<syntax_ast::ExprFunctionBody>()
+                    .expect("validated expression function body")
+                    .block_expr();
+                let body = super::BlockExpr::from_cst(SyntaxElement::Node(body.syntax().clone()))
+                    .expect("validated expression function body");
+                body.print(shape, printer)
+            }
+            _ => unreachable!("validated function body kind"),
         }
     }
     fn leftmost_token(&self) -> TextRange {
-        match self {
-            FunctionDeclBody::Llm(llm) => llm.leftmost_token(),
-            FunctionDeclBody::Block(block) => block.leftmost_token(),
-        }
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        match self {
-            FunctionDeclBody::Llm(llm) => llm.rightmost_token(),
-            FunctionDeclBody::Block(block) => block.rightmost_token(),
-        }
+        self.last_token_range()
     }
 }
 
-impl Printable for LlmFunctionBody {
+impl Printable for Validated<'_, syntax_ast::LlmFunctionBody> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let inner_indent = shape.indent + printer.config.indent_width;
+        let open_brace = self.l_brace_token();
+        let close_brace = self.r_brace_token();
+        let client = self.client_field().expect("validated LLM client field");
+        let prompt = self.prompt_field().expect("validated LLM prompt field");
 
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
+        printer.print_raw_token(&open_brace);
+        printer.print_trivia_all_trailing_for(open_brace.span());
         printer.print_newline();
 
-        let (client_leading, client_trailing) = printer.trivia.get_for_element(&self.client);
+        let (client_leading, client_trailing) = printer.trivia.get_for_element(&client);
         printer.print_trivia_with_newline(client_leading.trim_leading_blanks(), inner_indent);
         printer.print_spaces(inner_indent);
         let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
-        self.client.print(inner_shape, printer);
+        client.print(inner_shape, printer);
         printer.print_trivia_trailing(client_trailing);
         printer.print_newline();
 
-        if let Some(tools) = &self.tools {
-            printer.print_standalone_with_trivia(tools, inner_indent);
+        if let Some(tools) = self.tools_field() {
+            printer.print_standalone_with_trivia(&tools, inner_indent);
             printer.print_newline();
         }
 
-        printer.print_standalone_with_trivia(&self.prompt, inner_indent);
+        printer.print_standalone_with_trivia(&prompt, inner_indent);
         printer.print_newline();
 
-        let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
+        let (close_brace_leading, _) = printer.trivia.get_for_range_split(close_brace.span());
         printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
+        printer.print_raw_token(&close_brace);
 
         PrintInfo::default_multi_lined()
     }
     fn leftmost_token(&self) -> TextRange {
-        self.open_brace.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.close_brace.span()
+        self.last_token_range()
     }
 }
 
-impl Printable for ClientField {
+fn print_llm_field(
+    keyword: &impl Token,
+    colon: &impl Token,
+    value: &Validated<'_, syntax_ast::ExprNode>,
+    shape: Shape,
+    printer: &mut Printer,
+) -> PrintInfo {
+    let value = super::Expression::from_cst(SyntaxElement::Node(value.syntax().clone()))
+        .expect("validated LLM field value");
+    printer.print_raw_token(keyword);
+    let (_, keyword_trailing) = printer.trivia.get_for_range_split(keyword.span());
+    printer.print_trivia_squished(keyword_trailing);
+    let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
+    printer.print_trivia_squished(colon_leading);
+    printer.print_str(": ");
+    printer.print_trivia_squished(colon_trailing);
+    let value_leading = printer.trivia.get_leading_for_element(&value);
+    printer.print_trivia_squished(value_leading);
+    printer.print(&value, shape)
+}
+
+impl Printable for Validated<'_, syntax_ast::ClientField> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
-        let (_, keyword_trailing) = printer.trivia.get_for_range_split(self.keyword.span());
-        printer.print_trivia_squished(keyword_trailing);
-        let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(self.colon.span());
-        printer.print_trivia_squished(colon_leading);
-        printer.print_str(": ");
-        printer.print_trivia_squished(colon_trailing);
-        let name_leading = printer.trivia.get_leading_for_element(&self.name);
-        printer.print_trivia_squished(name_leading);
-        printer.print(&self.name, shape)
+        print_llm_field(
+            &self.client_token(),
+            &self.colon_token(),
+            &self.value(),
+            shape,
+            printer,
+        )
     }
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.name.rightmost_token()
+        self.last_token_range()
     }
 }
 
-impl Printable for ClientName {
+impl Printable for Validated<'_, syntax_ast::PromptField> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        match self {
-            ClientName::Path(path) => printer.print(path, shape),
-            ClientName::String(string) => printer.print(string, shape),
-            ClientName::Expr(expr) => printer.print(expr.as_ref(), shape),
-        }
+        print_llm_field(
+            &self.name_token(),
+            &self.colon_token(),
+            &self.value(),
+            shape,
+            printer,
+        )
     }
     fn leftmost_token(&self) -> TextRange {
-        match self {
-            ClientName::Path(path) => path.leftmost_token(),
-            ClientName::String(string) => string.leftmost_token(),
-            ClientName::Expr(expr) => expr.leftmost_token(),
-        }
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        match self {
-            ClientName::Path(path) => path.rightmost_token(),
-            ClientName::String(string) => string.rightmost_token(),
-            ClientName::Expr(expr) => expr.rightmost_token(),
-        }
+        self.last_token_range()
     }
 }
 
-impl Printable for PromptField {
+impl Printable for Validated<'_, syntax_ast::ToolsField> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.prompt);
-        let (_, prompt_trailing) = printer.trivia.get_for_range_split(self.prompt.span());
-        printer.print_trivia_squished(prompt_trailing);
-        let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(self.colon.span());
-        printer.print_trivia_squished(colon_leading);
-        printer.print_str(": ");
-        printer.print_trivia_squished(colon_trailing);
-        let string_leading = printer.trivia.get_leading_for_element(&self.string);
-        printer.print_trivia_squished(string_leading);
-        printer.print(&self.string, shape)
+        print_llm_field(
+            &self.name_token(),
+            &self.colon_token(),
+            &self.value(),
+            shape,
+            printer,
+        )
     }
     fn leftmost_token(&self) -> TextRange {
-        self.prompt.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.string.rightmost_token()
+        self.last_token_range()
     }
 }
 
-impl Printable for ToolsField {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
-        let (_, keyword_trailing) = printer.trivia.get_for_range_split(self.keyword.span());
-        printer.print_trivia_squished(keyword_trailing);
-        let (colon_leading, colon_trailing) = printer.trivia.get_for_range_split(self.colon.span());
-        printer.print_trivia_squished(colon_leading);
-        printer.print_str(": ");
-        printer.print_trivia_squished(colon_trailing);
-        let value_leading = printer.trivia.get_leading_for_element(&self.value);
-        printer.print_trivia_squished(value_leading);
-        printer.print(&self.value, shape)
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.value.rightmost_token()
-    }
+enum ClassLayoutItem<'tree> {
+    Field(
+        Validated<'tree, syntax_ast::Field>,
+        Option<ValidatedSyntaxToken>,
+    ),
+    Function(Validated<'tree, syntax_ast::FunctionDef>),
+    Implements(Validated<'tree, syntax_ast::ImplementsBlock>),
+    BlockAttribute(Validated<'tree, syntax_ast::BlockAttribute>),
 }
 
-impl Printable for StringLiteralValue {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        match self {
-            StringLiteralValue::RawString(raw_string) => printer.print(raw_string, shape),
-            StringLiteralValue::String(string) => printer.print(string, shape),
-            StringLiteralValue::Backtick(backtick) => printer.print(backtick, shape),
-        }
-    }
-    fn leftmost_token(&self) -> TextRange {
-        match self {
-            StringLiteralValue::RawString(raw_string) => raw_string.leftmost_token(),
-            StringLiteralValue::String(string) => string.leftmost_token(),
-            StringLiteralValue::Backtick(backtick) => backtick.leftmost_token(),
-        }
-    }
-    fn rightmost_token(&self) -> TextRange {
-        match self {
-            StringLiteralValue::RawString(raw_string) => raw_string.rightmost_token(),
-            StringLiteralValue::String(string) => string.rightmost_token(),
-            StringLiteralValue::Backtick(backtick) => backtick.rightmost_token(),
-        }
-    }
-}
-
-impl Printable for ClassDecl {
+impl Printable for Validated<'_, syntax_ast::ClassDef> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let inner_indent = shape.indent + printer.config.indent_width;
+        let generic_params = self.generic_param_list().map(|params| {
+            super::GenericParamList::from_cst(SyntaxElement::Node(params.syntax().clone()))
+                .expect("validated generic parameters")
+        });
+        let mut elements = self.direct_elements().peekable();
+        let mut items = Vec::new();
+        while let Some(element) = elements.next() {
+            let item = match element.kind() {
+                SyntaxKind::FIELD => {
+                    let field = element
+                        .node::<syntax_ast::Field>()
+                        .expect("validated class field");
+                    let delimiter = elements
+                        .next_if(|next| {
+                            matches!(next.kind(), SyntaxKind::COMMA | SyntaxKind::SEMICOLON)
+                        })
+                        .and_then(|element| element.token());
+                    ClassLayoutItem::Field(field, delimiter)
+                }
+                SyntaxKind::FUNCTION_DEF => ClassLayoutItem::Function(
+                    element
+                        .node::<syntax_ast::FunctionDef>()
+                        .expect("validated class function"),
+                ),
+                SyntaxKind::IMPLEMENTS_BLOCK => ClassLayoutItem::Implements(
+                    element
+                        .node::<syntax_ast::ImplementsBlock>()
+                        .expect("validated implements block"),
+                ),
+                SyntaxKind::BLOCK_ATTRIBUTE => ClassLayoutItem::BlockAttribute(
+                    element
+                        .node::<syntax_ast::BlockAttribute>()
+                        .expect("validated block attribute"),
+                ),
+                _ => continue,
+            };
+            items.push(item);
+        }
+        let open_brace = self.l_brace_token();
+        let close_brace = self.r_brace_token();
 
-        printer.print_raw_token(&self.keyword);
+        printer.print_raw_token(&self.class_token());
         printer.print_str(" ");
-        printer.print_raw_token(&self.name);
-        if let Some(ref gp) = self.generic_params {
+        printer.print_raw_token(&self.name_token());
+        if let Some(ref gp) = generic_params {
             printer.print(gp, shape.clone());
         }
         printer.print_str(" ");
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
+        printer.print_raw_token(&open_brace);
+        printer.print_trivia_all_trailing_for(open_brace.span());
         printer.print_newline();
 
-        if let Some((first, rest)) = self.items.split_first() {
+        if let Some((first, rest)) = items.split_first() {
             // first has leading empty lines trimmed
             let (first_leading, first_trailing) = printer.trivia.get_for_element(first);
             printer.print_trivia_with_newline(first_leading.trim_leading_blanks(), inner_indent);
@@ -590,22 +817,36 @@ impl Printable for ClassDecl {
             }
         }
 
-        let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
+        let (close_brace_leading, _) = printer.trivia.get_for_range_split(close_brace.span());
         printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
+        printer.print_raw_token(&close_brace);
 
         PrintInfo::default_multi_lined()
     }
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.close_brace.span()
+        self.last_token_range()
     }
 }
 
-impl PrintMultiLine for ClassField {
+fn class_field_parts(
+    field: &Validated<'_, syntax_ast::Field>,
+) -> (ValidatedSyntaxToken, super::Type) {
+    let name = field
+        .direct_elements()
+        .filter_map(|element| element.token())
+        .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
+        .expect("validated class field name");
+    let ty = field.type_expr().expect("validated class field type");
+    let ty = super::Type::from_cst(SyntaxElement::Node(ty.syntax().clone()))
+        .expect("validated class field type");
+    (name, ty)
+}
+
+impl PrintMultiLine for Validated<'_, syntax_ast::Field> {
     /// Multi-line layout: attributes wrap to their own indented lines
     /// below the field name and type. Trailing comments on the type are preserved.
     ///
@@ -615,13 +856,9 @@ impl PrintMultiLine for ClassField {
     ///     @description("some desc")
     /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let attr_shape = Shape::standalone(
-            printer.config.line_width,
-            shape.indent + printer.config.indent_width,
-        );
-
-        printer.print_raw_token(&self.name);
-        let colon_trailing = if let Some(colon) = &self.colon {
+        let (name, ty) = class_field_parts(self);
+        printer.print_raw_token(&name);
+        let colon_trailing = if let Some(colon) = self.colon_token() {
             let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
             colon_trailing
         } else {
@@ -630,37 +867,20 @@ impl PrintMultiLine for ClassField {
         printer.print_str(": ");
         printer.print_trivia_squished(colon_trailing);
 
-        let (type_leading, type_trailing) = printer.trivia.get_for_element(&self.ty);
+        let (type_leading, _) = printer.trivia.get_for_element(&ty);
         printer.print_trivia_squished(type_leading);
-        printer.print(&self.ty, shape);
-        if !self.attributes.is_empty() {
-            // we have attributes, they will be on their own lines so we can print the trailing trivia
-            printer.print_trivia_trailing(type_trailing);
-        }
-
-        for (i, attr) in self.attributes.iter().enumerate() {
-            let (attr_leading, attr_trailing) = printer.trivia.get_for_element(attr);
-            printer.print_newline();
-            printer.print_trivia_with_newline(attr_leading.trim_blanks(), attr_shape.indent);
-            printer.print_spaces(attr_shape.indent);
-            printer.print(attr, attr_shape.clone());
-            let is_last = i + 1 >= self.attributes.len();
-            if !is_last {
-                // we have more attributes, so we can print the trailing trivia
-                printer.print_trivia_trailing(attr_trailing);
-            }
-        }
-
+        printer.print(&ty, shape);
         PrintInfo::default_multi_lined()
     }
 }
 
-impl ClassFieldLayout for ClassField {
+impl ClassFieldLayout for Validated<'_, syntax_ast::Field> {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the class field on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.name);
-        let colon_trailing = if let Some(colon) = &self.colon {
+        let (name, ty) = class_field_parts(self);
+        printer.print_raw_token(&name);
+        let colon_trailing = if let Some(colon) = self.colon_token() {
             let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
             colon_trailing
         } else {
@@ -669,36 +889,14 @@ impl ClassFieldLayout for ClassField {
         printer.print_str(": ");
         printer.try_print_trivia_single_line_squished(colon_trailing)?;
 
-        let (type_leading, type_trailing) = printer.trivia.get_for_element(&self.ty);
+        let (type_leading, _) = printer.trivia.get_for_element(&ty);
         printer.print_trivia_squished(type_leading);
-        if self
-            .ty
+        if ty
             .print(Shape::unlimited_single_line(), printer)
             .multi_lined
             || printer.len() > shape.width
         {
             return None;
-        }
-        if !self.attributes.is_empty() {
-            // type is not the last element
-            printer.try_print_trivia_single_line_squished(type_trailing)?;
-        }
-
-        for (i, attr) in self.attributes.iter().enumerate() {
-            printer.print_str(" ");
-            let (attr_leading, attr_trailing) = printer.trivia.get_for_element(attr);
-            printer.try_print_trivia_single_line_squished(attr_leading)?;
-            if printer
-                .print(attr, Shape::unlimited_single_line())
-                .multi_lined
-            {
-                return None;
-            }
-            let is_last = i + 1 >= self.attributes.len();
-            if !is_last {
-                // not last, we could take up the rest of the line if multilined
-                printer.try_print_trivia_single_line_squished(attr_trailing)?;
-            }
         }
 
         if printer.len() > shape.width {
@@ -709,44 +907,53 @@ impl ClassFieldLayout for ClassField {
     }
 }
 
-impl Printable for ClassField {
+impl Printable for Validated<'_, syntax_ast::Field> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer
             .try_sub_printer(|p| self.try_print_single_line(&shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
-        self.name.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        if let Some(attr) = self.attributes.last() {
-            return attr.rightmost_token();
-        }
-        self.ty.rightmost_token()
+        self.last_token_range()
     }
 }
 
-impl Printable for ImplementsTarget {
+impl Printable for Validated<'_, syntax_ast::ImplementsTarget> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        self.ty.print(shape, printer)
+        let ty = self.type_expr();
+        let ty = super::Type::from_cst(SyntaxElement::Node(ty.syntax().clone()))
+            .expect("validated implements target");
+        ty.print(shape, printer)
     }
 
     fn leftmost_token(&self) -> TextRange {
-        self.ty.leftmost_token()
+        self.first_token_range()
     }
 
     fn rightmost_token(&self) -> TextRange {
-        self.ty.rightmost_token()
+        self.last_token_range()
     }
 }
 
-impl Printable for AssociatedTypeDecl {
+impl Printable for Validated<'_, syntax_ast::AssociatedTypeDecl> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let bound = self.bound().map(|ty| {
+            super::Type::from_cst(SyntaxElement::Node(ty.syntax().clone()))
+                .expect("validated associated type bound")
+        });
+        let binding = self.binding().map(|ty| {
+            super::Type::from_cst(SyntaxElement::Node(ty.syntax().clone()))
+                .expect("validated associated type binding")
+        });
         let mut multi_lined = false;
-        printer.print_raw_token(&self.keyword);
+        printer.print_raw_token(&self.type_token().expect("validated type keyword"));
         printer.print_str(" ");
-        printer.print_raw_token(&self.name);
-        if let Some((extends, ty)) = &self.bound {
+        printer.print_raw_token(&self.name_token());
+        if let Some(ty) = &bound {
+            let extends = self.extends_token().expect("validated extends token");
             let (_, extends_trailing) = printer.trivia.get_for_range_split(extends.span());
             printer.print_str(" extends ");
             printer.print_trivia_squished(extends_trailing);
@@ -754,7 +961,8 @@ impl Printable for AssociatedTypeDecl {
             printer.print_trivia_squished(leading);
             multi_lined |= ty.print(shape.clone(), printer).multi_lined;
         }
-        if let Some((equals, ty)) = &self.default {
+        if let Some(ty) = &binding {
+            let equals = self.equals_token().expect("validated equals token");
             let (_, equals_trailing) = printer.trivia.get_for_range_split(equals.span());
             printer.print_str(" = ");
             printer.print_trivia_squished(equals_trailing);
@@ -766,105 +974,176 @@ impl Printable for AssociatedTypeDecl {
     }
 
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.first_token_range()
     }
 
     fn rightmost_token(&self) -> TextRange {
-        self.default
-            .as_ref()
-            .map(|(_, ty)| ty.rightmost_token())
-            .or_else(|| self.bound.as_ref().map(|(_, ty)| ty.rightmost_token()))
-            .unwrap_or_else(|| self.name.span())
+        self.last_token_range()
     }
 }
 
-impl Printable for InterfaceFieldLink {
+impl Printable for Validated<'_, syntax_ast::InterfaceFieldLink> {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.interface_field);
+        printer.print_raw_token(&self.interface_field());
         printer.print_str(" ");
-        printer.print_raw_token(&self.as_token);
+        printer.print_raw_token(&self.as_token());
         printer.print_str(" ");
-        printer.print_raw_token(&self.class_field);
+        printer.print_raw_token(&self.class_field());
         PrintInfo::default_single_line()
     }
 
     fn leftmost_token(&self) -> TextRange {
-        self.interface_field.span()
+        self.first_token_range()
     }
 
     fn rightmost_token(&self) -> TextRange {
-        self.class_field.span()
+        self.last_token_range()
     }
 }
 
-impl Printable for ImplementsItem {
+enum ImplementsLayoutItem<'tree> {
+    AssociatedType(
+        Validated<'tree, syntax_ast::AssociatedTypeDecl>,
+        Option<ValidatedSyntaxToken>,
+    ),
+    FieldLink(
+        Validated<'tree, syntax_ast::InterfaceFieldLink>,
+        Option<ValidatedSyntaxToken>,
+    ),
+    Field(
+        Validated<'tree, syntax_ast::Field>,
+        Option<ValidatedSyntaxToken>,
+    ),
+    Function(Validated<'tree, syntax_ast::FunctionDef>),
+    BlockAttribute(Validated<'tree, syntax_ast::BlockAttribute>),
+}
+
+fn take_delimiter(
+    elements: &mut std::iter::Peekable<
+        baml_db::baml_compiler_syntax::validated::ValidatedDirectElements<'_>,
+    >,
+) -> Option<ValidatedSyntaxToken> {
+    elements
+        .next_if(|next| matches!(next.kind(), SyntaxKind::COMMA | SyntaxKind::SEMICOLON))
+        .and_then(|element| element.token())
+}
+
+impl Printable for ImplementsLayoutItem<'_> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            ImplementsItem::AssociatedType(decl, _) => decl.print(shape, printer),
-            ImplementsItem::FieldLink(link, _) => link.print(shape, printer),
-            ImplementsItem::Field(field, delimiter) => {
+            ImplementsLayoutItem::AssociatedType(decl, _) => decl.print(shape, printer),
+            ImplementsLayoutItem::FieldLink(link, _) => link.print(shape, printer),
+            ImplementsLayoutItem::Field(field, delimiter) => {
                 let info = field.print(shape, printer);
-                match delimiter {
-                    Some(ClassFieldDelimiter::Comma(comma)) => printer.print_raw_token(comma),
-                    Some(ClassFieldDelimiter::Semicolon(_)) | None => {}
+                if let Some(delimiter) = delimiter.filter(|token| token.kind() == SyntaxKind::COMMA)
+                {
+                    printer.print_raw_token(&delimiter);
                 }
                 info
             }
-            ImplementsItem::Function(function) => function.print(shape, printer),
+            ImplementsLayoutItem::Function(function) => function.print(shape, printer),
+            ImplementsLayoutItem::BlockAttribute(attribute) => {
+                let attribute =
+                    BlockAttribute::from_cst(SyntaxElement::Node(attribute.syntax().clone()))
+                        .expect("validated block attribute");
+                attribute.print(shape, printer)
+            }
         }
     }
 
     fn leftmost_token(&self) -> TextRange {
         match self {
-            ImplementsItem::AssociatedType(decl, _) => decl.leftmost_token(),
-            ImplementsItem::FieldLink(link, _) => link.leftmost_token(),
-            ImplementsItem::Field(field, _) => field.leftmost_token(),
-            ImplementsItem::Function(function) => function.leftmost_token(),
+            ImplementsLayoutItem::AssociatedType(decl, _) => decl.leftmost_token(),
+            ImplementsLayoutItem::FieldLink(link, _) => link.leftmost_token(),
+            ImplementsLayoutItem::Field(field, _) => field.leftmost_token(),
+            ImplementsLayoutItem::Function(function) => function.leftmost_token(),
+            ImplementsLayoutItem::BlockAttribute(attribute) => attribute.first_token_range(),
         }
     }
 
     fn rightmost_token(&self) -> TextRange {
         match self {
-            ImplementsItem::AssociatedType(decl, delimiter) => {
-                Self::delimiter_rightmost(delimiter.as_ref(), || decl.rightmost_token())
-            }
-            ImplementsItem::FieldLink(link, delimiter) => {
-                Self::delimiter_rightmost(delimiter.as_ref(), || link.rightmost_token())
-            }
-            ImplementsItem::Field(field, delimiter) => {
-                Self::delimiter_rightmost(delimiter.as_ref(), || field.rightmost_token())
-            }
-            ImplementsItem::Function(function) => function.rightmost_token(),
+            ImplementsLayoutItem::AssociatedType(decl, delimiter) => delimiter
+                .as_ref()
+                .map_or_else(|| decl.rightmost_token(), Token::span),
+            ImplementsLayoutItem::FieldLink(link, delimiter) => delimiter
+                .as_ref()
+                .map_or_else(|| link.rightmost_token(), Token::span),
+            ImplementsLayoutItem::Field(field, delimiter) => delimiter
+                .as_ref()
+                .map_or_else(|| field.rightmost_token(), Token::span),
+            ImplementsLayoutItem::Function(function) => function.rightmost_token(),
+            ImplementsLayoutItem::BlockAttribute(attribute) => attribute.last_token_range(),
         }
     }
 }
 
-impl Printable for ImplementsBlock {
+impl Printable for Validated<'_, syntax_ast::ImplementsBlock> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let target = self.implements_target();
+        let mut elements = self.direct_elements().peekable();
+        let mut items = Vec::new();
+        while let Some(element) = elements.next() {
+            let item = match element.kind() {
+                SyntaxKind::ASSOCIATED_TYPE_DECL => ImplementsLayoutItem::AssociatedType(
+                    element
+                        .node::<syntax_ast::AssociatedTypeDecl>()
+                        .expect("validated associated type"),
+                    take_delimiter(&mut elements),
+                ),
+                SyntaxKind::INTERFACE_FIELD_LINK => ImplementsLayoutItem::FieldLink(
+                    element
+                        .node::<syntax_ast::InterfaceFieldLink>()
+                        .expect("validated interface field link"),
+                    take_delimiter(&mut elements),
+                ),
+                SyntaxKind::FIELD => ImplementsLayoutItem::Field(
+                    element
+                        .node::<syntax_ast::Field>()
+                        .expect("validated implements field"),
+                    take_delimiter(&mut elements),
+                ),
+                SyntaxKind::FUNCTION_DEF => ImplementsLayoutItem::Function(
+                    element
+                        .node::<syntax_ast::FunctionDef>()
+                        .expect("validated implements function"),
+                ),
+                SyntaxKind::BLOCK_ATTRIBUTE => ImplementsLayoutItem::BlockAttribute(
+                    element
+                        .node::<syntax_ast::BlockAttribute>()
+                        .expect("validated block attribute"),
+                ),
+                _ => continue,
+            };
+            items.push(item);
+        }
+        let keyword = self.implements_token();
+        let open_brace = self.l_brace_token();
+        let close_brace = self.r_brace_token();
         printer.print_str("implements");
-        let (_, keyword_trailing) = printer.trivia.get_for_range_split(self.keyword_span);
+        let (_, keyword_trailing) = printer.trivia.get_for_range_split(keyword.span());
         let trivia_len = printer.print_trivia_squished(keyword_trailing);
         if trivia_len == 0 {
             printer.print_str(" ");
         }
-        let target_leading = printer.trivia.get_leading_for_element(&self.target);
+        let target_leading = printer.trivia.get_leading_for_element(&target);
         printer.print_trivia_squished(target_leading);
-        printer.print(&self.target, shape.clone());
+        printer.print(&target, shape.clone());
 
-        if self.items.is_empty() {
+        if items.is_empty() {
             printer.print_str(" ");
-            printer.print_raw_token(&self.open_brace);
-            printer.print_raw_token(&self.close_brace);
+            printer.print_raw_token(&open_brace);
+            printer.print_raw_token(&close_brace);
             return PrintInfo::default_single_line();
         }
 
         let inner_indent = shape.indent + printer.config.indent_width;
         printer.print_str(" ");
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
+        printer.print_raw_token(&open_brace);
+        printer.print_trivia_all_trailing_for(open_brace.span());
         printer.print_newline();
 
-        if let Some((first, rest)) = self.items.split_first() {
+        if let Some((first, rest)) = items.split_first() {
             let (first_leading, first_trailing) = printer.trivia.get_for_element(first);
             printer.print_trivia_with_newline(first_leading.trim_leading_blanks(), inner_indent);
             printer.print_spaces(inner_indent);
@@ -879,88 +1158,110 @@ impl Printable for ImplementsBlock {
             }
         }
 
-        let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
+        let (close_brace_leading, _) = printer.trivia.get_for_range_split(close_brace.span());
         printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
+        printer.print_raw_token(&close_brace);
         PrintInfo::default_multi_lined()
     }
 
     fn leftmost_token(&self) -> TextRange {
-        self.keyword_span
+        self.first_token_range()
     }
 
     fn rightmost_token(&self) -> TextRange {
-        self.close_brace.span()
+        self.last_token_range()
     }
 }
 
-impl Printable for ClassItem {
+impl Printable for ClassLayoutItem<'_> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            ClassItem::Field(field, delimiter) => {
+            ClassLayoutItem::Field(field, delimiter) => {
                 let info = field.print(shape, printer);
-                // Always print comma, but preserve trivia from original delimiter
                 match delimiter {
-                    Some(ClassFieldDelimiter::Comma(comma)) => {
-                        printer.print_raw_token(comma);
+                    Some(delimiter) if delimiter.kind() == SyntaxKind::COMMA => {
+                        printer.print_raw_token(delimiter);
                     }
-                    Some(ClassFieldDelimiter::Semicolon(_)) => {
-                        // Normalize to comma; parent handles trailing trivia via rightmost_token()
-                        printer.print_str(",");
-                    }
-                    None => {
-                        printer.print_str(",");
-                    }
+                    _ => printer.print_str(","),
                 }
                 info
             }
-            ClassItem::Function(function) => function.print(shape, printer),
-            ClassItem::Implements(block) => block.print(shape, printer),
-            ClassItem::BlockAttribute(attr) => attr.print(shape, printer),
-            ClassItem::Unknown(range) => {
-                printer.print_input_range(*range);
-                PrintInfo::default_multi_lined()
+            ClassLayoutItem::Function(function) => function.print(shape, printer),
+            ClassLayoutItem::Implements(block) => block.print(shape, printer),
+            ClassLayoutItem::BlockAttribute(attr) => {
+                let attr = BlockAttribute::from_cst(SyntaxElement::Node(attr.syntax().clone()))
+                    .expect("validated block attribute");
+                attr.print(shape, printer)
             }
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
-            ClassItem::Field(field, _) => field.leftmost_token(),
-            ClassItem::Function(function) => function.leftmost_token(),
-            ClassItem::Implements(block) => block.leftmost_token(),
-            ClassItem::BlockAttribute(attr) => attr.leftmost_token(),
-            ClassItem::Unknown(range) => *range,
+            ClassLayoutItem::Field(field, _) => field.leftmost_token(),
+            ClassLayoutItem::Function(function) => function.leftmost_token(),
+            ClassLayoutItem::Implements(block) => block.leftmost_token(),
+            ClassLayoutItem::BlockAttribute(attr) => attr.first_token_range(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
-            ClassItem::Field(field, delimiter) => match delimiter {
-                Some(ClassFieldDelimiter::Comma(comma)) => comma.span(),
-                Some(ClassFieldDelimiter::Semicolon(semi)) => semi.span(),
-                None => field.rightmost_token(),
-            },
-            ClassItem::Function(function) => function.rightmost_token(),
-            ClassItem::Implements(block) => block.rightmost_token(),
-            ClassItem::BlockAttribute(attr) => attr.rightmost_token(),
-            ClassItem::Unknown(range) => *range,
+            ClassLayoutItem::Field(field, delimiter) => delimiter
+                .as_ref()
+                .map_or_else(|| field.rightmost_token(), Token::span),
+            ClassLayoutItem::Function(function) => function.rightmost_token(),
+            ClassLayoutItem::Implements(block) => block.rightmost_token(),
+            ClassLayoutItem::BlockAttribute(attr) => attr.last_token_range(),
         }
     }
 }
 
-impl Printable for EnumDecl {
+enum EnumLayoutItem<'tree> {
+    Variant(
+        Validated<'tree, syntax_ast::EnumVariant>,
+        Option<ValidatedSyntaxToken>,
+    ),
+    BlockAttribute(Validated<'tree, syntax_ast::BlockAttribute>),
+}
+
+impl Printable for Validated<'_, syntax_ast::EnumDef> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let inner_indent = shape.indent + printer.config.indent_width;
+        let mut elements = self.direct_elements().peekable();
+        let mut items = Vec::new();
+        while let Some(element) = elements.next() {
+            match element.kind() {
+                SyntaxKind::ENUM_VARIANT => {
+                    let variant = element
+                        .node::<syntax_ast::EnumVariant>()
+                        .expect("validated enum variant");
+                    let delimiter = elements
+                        .next_if(|next| {
+                            matches!(next.kind(), SyntaxKind::COMMA | SyntaxKind::SEMICOLON)
+                        })
+                        .and_then(|element| element.token());
+                    items.push(EnumLayoutItem::Variant(variant, delimiter));
+                }
+                SyntaxKind::BLOCK_ATTRIBUTE => items.push(EnumLayoutItem::BlockAttribute(
+                    element
+                        .node::<syntax_ast::BlockAttribute>()
+                        .expect("validated enum block attribute"),
+                )),
+                _ => {}
+            }
+        }
+        let open_brace = self.l_brace_token();
+        let close_brace = self.r_brace_token();
 
-        printer.print_raw_token(&self.keyword);
+        printer.print_raw_token(&self.enum_token());
         printer.print_str(" ");
-        printer.print_raw_token(&self.name);
+        printer.print_raw_token(&self.name_token());
         printer.print_str(" ");
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
+        printer.print_raw_token(&open_brace);
+        printer.print_trivia_all_trailing_for(open_brace.span());
         printer.print_newline();
 
-        if let Some((first, rest)) = self.items.split_first() {
+        if let Some((first, rest)) = items.split_first() {
             // first has leading empty lines trimmed
             let (first_leading, first_trailing) = printer.trivia.get_for_element(first);
             printer.print_trivia_with_newline(first_leading.trim_leading_blanks(), inner_indent);
@@ -977,25 +1278,25 @@ impl Printable for EnumDecl {
             }
         }
 
-        let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
+        let (close_brace_leading, _) = printer.trivia.get_for_range_split(close_brace.span());
         printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
+        printer.print_raw_token(&close_brace);
 
         PrintInfo::default_multi_lined()
     }
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.close_brace.span()
+        self.last_token_range()
     }
 }
 
-impl Printable for EnumItem {
+impl Printable for EnumLayoutItem<'_> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            EnumItem::Variant(variant, delimiter) => {
+            EnumLayoutItem::Variant(variant, delimiter) => {
                 let info = variant.print(shape, printer);
                 if let Some(delimiter) = delimiter {
                     let (leading, _) = printer.trivia.get_for_range_split(delimiter.span());
@@ -1004,30 +1305,34 @@ impl Printable for EnumItem {
                 printer.print_str(",");
                 info
             }
-            EnumItem::BlockAttribute(attr) => attr.print(shape, printer),
+            EnumLayoutItem::BlockAttribute(attr) => {
+                let attr = BlockAttribute::from_cst(SyntaxElement::Node(attr.syntax().clone()))
+                    .expect("validated block attribute");
+                attr.print(shape, printer)
+            }
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
-            EnumItem::Variant(variant, _) => variant.leftmost_token(),
-            EnumItem::BlockAttribute(attr) => attr.leftmost_token(),
+            EnumLayoutItem::Variant(variant, _) => variant.leftmost_token(),
+            EnumLayoutItem::BlockAttribute(attr) => attr.first_token_range(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
-            EnumItem::Variant(variant, delimiter) => {
+            EnumLayoutItem::Variant(variant, delimiter) => {
                 if let Some(delimiter) = delimiter {
                     delimiter.span()
                 } else {
                     variant.rightmost_token()
                 }
             }
-            EnumItem::BlockAttribute(attr) => attr.rightmost_token(),
+            EnumLayoutItem::BlockAttribute(attr) => attr.last_token_range(),
         }
     }
 }
 
-impl PrintMultiLine for EnumVariant {
+impl PrintMultiLine for Validated<'_, syntax_ast::EnumVariant> {
     /// Multi-line layout: attributes wrap to their own indented lines
     /// below the variant name. Trailing comments on the name are preserved.
     ///
@@ -1037,25 +1342,33 @@ impl PrintMultiLine for EnumVariant {
     ///     @description("a long description")
     /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.name);
+        let name = self.name_token();
+        let attributes = self
+            .attribute()
+            .map(|attribute| {
+                super::Attribute::from_cst(SyntaxElement::Node(attribute.syntax().clone()))
+                    .expect("validated enum attribute")
+            })
+            .collect::<Vec<_>>();
+        printer.print_raw_token(&name);
 
-        if self.attributes.is_empty() {
+        if attributes.is_empty() {
             // you shouldn't call print_multi_line if this is the case.
             return PrintInfo::default_single_line();
         }
-        printer.print_trivia_all_trailing_for(self.name.span());
+        printer.print_trivia_all_trailing_for(name.span());
 
         let attr_shape = Shape::standalone(
             printer.config.line_width,
             shape.indent + printer.config.indent_width,
         );
-        for (i, attr) in self.attributes.iter().enumerate() {
+        for (i, attr) in attributes.iter().enumerate() {
             let (attr_leading, attr_trailing) = printer.trivia.get_for_element(attr);
             printer.print_newline();
             printer.print_trivia_with_newline(attr_leading.trim_blanks(), attr_shape.indent);
             printer.print_spaces(attr_shape.indent);
             printer.print(attr, attr_shape.clone());
-            if i + 1 < self.attributes.len() {
+            if i + 1 < attributes.len() {
                 printer.print_trivia_trailing(attr_trailing);
             }
         }
@@ -1064,15 +1377,23 @@ impl PrintMultiLine for EnumVariant {
     }
 }
 
-impl EnumVariantLayout for EnumVariant {
+impl EnumVariantLayout for Validated<'_, syntax_ast::EnumVariant> {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the enum variant on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.name);
-        let (_, name_trailing) = printer.trivia.get_for_range_split(self.name.span());
+        let name = self.name_token();
+        let attributes = self
+            .attribute()
+            .map(|attribute| {
+                super::Attribute::from_cst(SyntaxElement::Node(attribute.syntax().clone()))
+                    .expect("validated enum attribute")
+            })
+            .collect::<Vec<_>>();
+        printer.print_raw_token(&name);
+        let (_, name_trailing) = printer.trivia.get_for_range_split(name.span());
         printer.try_print_trivia_single_line_squished(name_trailing)?;
 
-        for (i, attr) in self.attributes.iter().enumerate() {
+        for (i, attr) in attributes.iter().enumerate() {
             printer.print_spaces(1);
             let (attr_leading, attr_trailing) = printer.trivia.get_for_element(attr);
             printer.try_print_trivia_single_line_squished(attr_leading)?;
@@ -1082,7 +1403,7 @@ impl EnumVariantLayout for EnumVariant {
             {
                 return None;
             }
-            if i + 1 < self.attributes.len() {
+            if i + 1 < attributes.len() {
                 printer.try_print_trivia_single_line_squished(attr_trailing)?;
             }
         }
@@ -1095,113 +1416,138 @@ impl EnumVariantLayout for EnumVariant {
     }
 }
 
-impl Printable for EnumVariant {
+impl Printable for Validated<'_, syntax_ast::EnumVariant> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer
             .try_sub_printer(|p| self.try_print_single_line(&shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
-        self.name.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.attributes
-            .last()
-            .map_or(self.name.span(), Printable::rightmost_token)
+        self.last_token_range()
     }
 }
 
-impl Printable for ClientDecl {
+impl Printable for Validated<'_, syntax_ast::ClientDef> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
-        if let Some(client_type) = &self.client_type {
-            printer.print(client_type, Shape::unlimited_single_line());
+        let config = self.config_block();
+        printer.print_raw_token(&self.client_token());
+        if let Some(client_type) = self.client_type() {
+            printer.print(&client_type, Shape::unlimited_single_line());
         }
         printer.print_str(" ");
-        printer.print_raw_token(&self.name);
+        printer.print_raw_token(&self.name_token());
         printer.print_str(" ");
-        printer.print(&self.config_block, shape)
+        printer.print(&config, shape)
     }
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.config_block.rightmost_token()
+        self.last_token_range()
     }
 }
 
-impl Printable for ClientType {
+impl Printable for Validated<'_, syntax_ast::ClientType> {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.langle);
-        printer.print_raw_token(&self.generic);
-        printer.print_raw_token(&self.rangle);
+        printer.print_raw_token(&self.less_token());
+        printer.print_raw_token(&self.name_token());
+        printer.print_raw_token(&self.greater_token());
         PrintInfo::default_single_line()
     }
     fn leftmost_token(&self) -> TextRange {
-        self.langle.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.rangle.span()
+        self.last_token_range()
     }
 }
 
-impl Printable for ConfigBlock {
+enum ConfigBlockLayoutMember<'tree> {
+    Item(Validated<'tree, syntax_ast::ConfigItem>),
+    BlockAttribute(BlockAttribute),
+}
+
+fn config_block_items<'tree>(
+    block: &Validated<'tree, syntax_ast::ConfigBlock>,
+) -> Vec<(ConfigBlockLayoutMember<'tree>, Option<ValidatedSyntaxToken>)> {
+    let mut elements = block.direct_elements().peekable();
+    let mut items = Vec::new();
+    while let Some(element) = elements.next() {
+        let member = match element.kind() {
+            SyntaxKind::CONFIG_ITEM => ConfigBlockLayoutMember::Item(
+                element
+                    .node::<syntax_ast::ConfigItem>()
+                    .expect("validated config item"),
+            ),
+            SyntaxKind::BLOCK_ATTRIBUTE => {
+                let attribute = element
+                    .node::<syntax_ast::BlockAttribute>()
+                    .expect("validated block attribute");
+                ConfigBlockLayoutMember::BlockAttribute(
+                    BlockAttribute::from_cst(SyntaxElement::Node(attribute.syntax().clone()))
+                        .expect("validated block attribute"),
+                )
+            }
+            _ => continue,
+        };
+        items.push((member, take_delimiter(&mut elements)));
+    }
+    items
+}
+
+impl Printable for Validated<'_, syntax_ast::ConfigBlock> {
     /// [`ConfigBlock`] prints multi-line unless empty.
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let inner_indent = shape.indent + printer.config.indent_width;
 
-        if self.items.is_empty() {
+        let mut items = config_block_items(self);
+        if items.is_empty() {
             // Check if there's trivia inside the empty block (e.g. comments between { and })
-            let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_brace.span());
-            let (close_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
+            let open_brace = self.l_brace_token();
+            let close_brace = self.r_brace_token();
+            let (_, open_trailing) = printer.trivia.get_for_range_split(open_brace.span());
+            let (close_leading, _) = printer.trivia.get_for_range_split(close_brace.span());
             let has_comments = open_trailing
                 .iter()
                 .chain(close_leading.iter())
                 .any(EmittableTrivia::is_comment);
 
             if has_comments {
-                printer.print_raw_token(&self.open_brace);
+                printer.print_raw_token(&open_brace);
                 printer.print_trivia_trailing(open_trailing);
                 printer.print_newline();
                 printer.print_trivia_with_newline(close_leading.trim_blanks(), inner_indent);
                 printer.print_spaces(shape.indent);
-                printer.print_raw_token(&self.close_brace);
+                printer.print_raw_token(&close_brace);
                 return PrintInfo::default_multi_lined();
             }
-            printer.print_raw_token(&self.open_brace);
-            printer.print_raw_token(&self.close_brace);
+            printer.print_raw_token(&open_brace);
+            printer.print_raw_token(&close_brace);
             return PrintInfo::default_single_line();
         }
 
         let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
 
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
+        let open_brace = self.l_brace_token();
+        let close_brace = self.r_brace_token();
+        printer.print_raw_token(&open_brace);
+        printer.print_trivia_all_trailing_for(open_brace.span());
         printer.print_newline();
 
-        let mut block_attrs: Vec<(&BlockAttribute, &ConfigBlockMember, Option<&t::Comma>)> = self
-            .items
-            .iter()
-            .filter_map(|(item, comma)| match item {
-                ConfigBlockMember::BlockAttribute(attr) => Some((attr, item, comma.as_ref())),
-                ConfigBlockMember::Item(_) => None,
-            })
-            .collect();
-        block_attrs.sort_by_cached_key(|(attr, _, _)| {
-            attr.name_parts_str(printer.input).collect::<Vec<&str>>()
+        items.sort_by_cached_key(|(member, _)| match member {
+            ConfigBlockLayoutMember::BlockAttribute(attribute) => (
+                0,
+                attribute
+                    .name_parts_str(printer.input)
+                    .collect::<Vec<_>>()
+                    .join("."),
+            ),
+            ConfigBlockLayoutMember::Item(_) => (1, String::new()),
         });
-        let other_items = self
-            .items
-            .iter()
-            .filter(|(item, _)| !matches!(item, ConfigBlockMember::BlockAttribute(_)))
-            .map(|(item, comma)| (item, comma.as_ref()));
-
-        let ordered_items = block_attrs
-            .into_iter()
-            .map(|(_, member, comma)| (member, comma))
-            .chain(other_items);
-
-        for (i, (item, comma)) in ordered_items.enumerate() {
+        for (i, (item, comma)) in items.iter().enumerate() {
             let (item_leading, item_trailing) = printer.trivia.get_for_element(item);
             let item_leading = if i == 0 {
                 item_leading.trim_leading_blanks() // this is first item
@@ -1214,7 +1560,7 @@ impl Printable for ConfigBlock {
             printer.print(item, inner_shape.clone());
 
             match (item, comma) {
-                (ConfigBlockMember::BlockAttribute(_), Some(comma)) => {
+                (ConfigBlockLayoutMember::BlockAttribute(_), Some(comma)) => {
                     // remove the trailing comma, keep the comments
                     let (comma_leading, comma_trailing) =
                         printer.trivia.get_for_range_split(comma.span());
@@ -1222,7 +1568,7 @@ impl Printable for ConfigBlock {
                     printer.print_trivia_trailing(comma_leading);
                     printer.print_trivia_trailing(comma_trailing);
                 }
-                (ConfigBlockMember::BlockAttribute(_), None) => {
+                (ConfigBlockLayoutMember::BlockAttribute(_), None) => {
                     // keep no comma, print trivia nicely
                     printer.print_trivia_trailing(item_trailing);
                 }
@@ -1244,47 +1590,125 @@ impl Printable for ConfigBlock {
             printer.print_newline();
         }
 
-        let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
+        let (close_brace_leading, _) = printer.trivia.get_for_range_split(close_brace.span());
         printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
+        printer.print_raw_token(&close_brace);
 
         PrintInfo::default_multi_lined()
     }
     fn leftmost_token(&self) -> TextRange {
-        self.open_brace.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.close_brace.span()
+        self.last_token_range()
     }
 }
 
-impl Printable for ConfigBlockMember {
+impl Printable for ConfigBlockLayoutMember<'_> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            ConfigBlockMember::Item(item) => item.print(shape, printer),
-            ConfigBlockMember::BlockAttribute(attr) => attr.print(shape, printer),
+            ConfigBlockLayoutMember::Item(item) => item.print(shape, printer),
+            ConfigBlockLayoutMember::BlockAttribute(attr) => attr.print(shape, printer),
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
-            ConfigBlockMember::Item(item) => item.leftmost_token(),
-            ConfigBlockMember::BlockAttribute(attr) => attr.leftmost_token(),
+            ConfigBlockLayoutMember::Item(item) => item.leftmost_token(),
+            ConfigBlockLayoutMember::BlockAttribute(attr) => attr.leftmost_token(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
-            ConfigBlockMember::Item(item) => item.rightmost_token(),
-            ConfigBlockMember::BlockAttribute(attr) => attr.rightmost_token(),
+            ConfigBlockLayoutMember::Item(item) => item.rightmost_token(),
+            ConfigBlockLayoutMember::BlockAttribute(attr) => attr.rightmost_token(),
         }
     }
 }
 
-impl Printable for ConfigItem {
+enum ConfigItemKeyLayout {
+    Token(ValidatedSyntaxToken),
+    String(t::QuotedString),
+}
+
+impl Printable for ConfigItemKeyLayout {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            Self::Token(token) => {
+                printer.print_raw_token(token);
+                PrintInfo::default_single_line()
+            }
+            Self::String(string) => printer.print(string, shape),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            Self::Token(token) => token.span(),
+            Self::String(string) => string.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            Self::Token(token) => token.span(),
+            Self::String(string) => string.rightmost_token(),
+        }
+    }
+}
+
+enum ConfigItemValueLayout<'tree> {
+    Value(Validated<'tree, syntax_ast::ConfigValue>),
+    Block(Validated<'tree, syntax_ast::ConfigBlock>),
+}
+
+impl Printable for ConfigItemValueLayout<'_> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            Self::Value(value) => value.print(shape, printer),
+            Self::Block(block) => block.print(shape, printer),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            Self::Value(value) => value.leftmost_token(),
+            Self::Block(block) => block.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            Self::Value(value) => value.rightmost_token(),
+            Self::Block(block) => block.rightmost_token(),
+        }
+    }
+}
+
+impl Printable for Validated<'_, syntax_ast::ConfigItem> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let first = self
+            .direct_elements()
+            .next()
+            .expect("validated config item key");
+        let key = if first.kind() == SyntaxKind::STRING_LITERAL {
+            ConfigItemKeyLayout::String(
+                t::QuotedString::from_cst(SyntaxElement::Node(
+                    first
+                        .node::<syntax_ast::StringLiteral>()
+                        .expect("validated string config key")
+                        .syntax()
+                        .clone(),
+                ))
+                .expect("validated string config key"),
+            )
+        } else {
+            ConfigItemKeyLayout::Token(first.token().expect("validated token config key"))
+        };
+        let value = self
+            .config_value()
+            .map(ConfigItemValueLayout::Value)
+            .or_else(|| self.config_block().map(ConfigItemValueLayout::Block))
+            .expect("validated config item value");
         let mut multi_lined = false;
-        multi_lined |= printer.print(&self.key, shape.clone()).multi_lined;
-        let colon_trailing = if let Some(colon) = &self.colon {
+        multi_lined |= printer.print(&key, shape.clone()).multi_lined;
+        let colon_trailing = if let Some(colon) = self.colon_token() {
             let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
             colon_trailing
         } else {
@@ -1292,7 +1716,7 @@ impl Printable for ConfigItem {
         };
         printer.print_str(": ");
         printer.print_trivia_squished(colon_trailing);
-        let value_leading = printer.trivia.get_leading_for_element(&self.value);
+        let value_leading = printer.trivia.get_leading_for_element(&value);
         printer.print_trivia_squished(value_leading);
         let remaining_width = printer.current_line_remaining_width();
         let value_shape = Shape {
@@ -1303,84 +1727,98 @@ impl Printable for ConfigItem {
                 .line_width
                 .saturating_sub(shape.indent + remaining_width),
         };
-        multi_lined |= printer.print(&self.value, value_shape).multi_lined;
+        multi_lined |= printer.print(&value, value_shape).multi_lined;
+        for attribute in self.attribute() {
+            let attribute =
+                super::Attribute::from_cst(SyntaxElement::Node(attribute.syntax().clone()))
+                    .expect("validated config item attribute");
+            let leading = printer.trivia.get_leading_for_element(&attribute);
+            printer.print_str(" ");
+            printer.print_trivia_squished(leading);
+            multi_lined |= printer.print(&attribute, shape.clone()).multi_lined;
+        }
         PrintInfo { multi_lined }
     }
     fn leftmost_token(&self) -> TextRange {
-        self.key.leftmost_token()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.value.rightmost_token()
+        self.last_token_range()
     }
 }
 
-impl Printable for ConfigItemKey {
+impl Printable for Validated<'_, syntax_ast::ConfigValue> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        if let Some(array) = self.config_array() {
+            return array.print(shape, printer);
+        }
+        if let Some(block) = self.config_block() {
+            return block.print(shape, printer);
+        }
+        let expr = self.expr().expect("validated config expression");
+        let expr = super::Expression::from_cst(SyntaxElement::Node(expr.syntax().clone()))
+            .expect("validated config expression");
+        expr.print(shape, printer)
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.first_token_range()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.last_token_range()
+    }
+}
+
+enum ConfigArrayElement<'tree> {
+    Value(Validated<'tree, syntax_ast::ConfigValue>),
+    Block(Validated<'tree, syntax_ast::ConfigBlock>),
+}
+
+impl Printable for ConfigArrayElement<'_> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            ConfigItemKey::Word(word) => {
-                printer.print_raw_token(word);
-                PrintInfo::default_single_line()
-            }
-            ConfigItemKey::String(string) => printer.print(string, shape),
-            ConfigItemKey::RetryPolicy(retry_policy) => {
-                printer.print_raw_token(retry_policy);
-                PrintInfo::default_single_line()
-            }
-            ConfigItemKey::Enum(enum_) => {
-                printer.print_raw_token(enum_);
-                PrintInfo::default_single_line()
-            }
-            ConfigItemKey::Class(class) => {
-                printer.print_raw_token(class);
-                PrintInfo::default_single_line()
-            }
+            Self::Value(value) => value.print(shape, printer),
+            Self::Block(block) => block.print(shape, printer),
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
-            ConfigItemKey::Word(word) => word.span(),
-            ConfigItemKey::String(string) => string.leftmost_token(),
-            ConfigItemKey::RetryPolicy(retry_policy) => retry_policy.span(),
-            ConfigItemKey::Enum(enum_) => enum_.span(),
-            ConfigItemKey::Class(class) => class.span(),
+            Self::Value(value) => value.leftmost_token(),
+            Self::Block(block) => block.leftmost_token(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
-            ConfigItemKey::Word(word) => word.span(),
-            ConfigItemKey::String(string) => string.rightmost_token(),
-            ConfigItemKey::RetryPolicy(retry_policy) => retry_policy.span(),
-            ConfigItemKey::Enum(enum_) => enum_.span(),
-            ConfigItemKey::Class(class) => class.span(),
+            Self::Value(value) => value.rightmost_token(),
+            Self::Block(block) => block.rightmost_token(),
         }
     }
 }
 
-impl Printable for ConfigItemValue {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        match self {
-            ConfigItemValue::Value(expr) => expr.print(shape, printer),
-            ConfigItemValue::ConfigBlock(block) => block.print(shape, printer),
-            ConfigItemValue::ConfigArray(array) => array.print(shape, printer),
-        }
+fn config_array_elements<'tree>(
+    array: &Validated<'tree, syntax_ast::ConfigArray>,
+) -> Vec<(ConfigArrayElement<'tree>, Option<ValidatedSyntaxToken>)> {
+    let mut direct = array.direct_elements().peekable();
+    let mut elements = Vec::new();
+    while let Some(element) = direct.next() {
+        let value = match element.kind() {
+            SyntaxKind::CONFIG_VALUE => ConfigArrayElement::Value(
+                element
+                    .node::<syntax_ast::ConfigValue>()
+                    .expect("validated config array value"),
+            ),
+            SyntaxKind::CONFIG_BLOCK => ConfigArrayElement::Block(
+                element
+                    .node::<syntax_ast::ConfigBlock>()
+                    .expect("validated config array block"),
+            ),
+            _ => continue,
+        };
+        elements.push((value, take_delimiter(&mut direct)));
     }
-    fn leftmost_token(&self) -> TextRange {
-        match self {
-            ConfigItemValue::Value(expr) => expr.leftmost_token(),
-            ConfigItemValue::ConfigBlock(block) => block.leftmost_token(),
-            ConfigItemValue::ConfigArray(array) => array.leftmost_token(),
-        }
-    }
-    fn rightmost_token(&self) -> TextRange {
-        match self {
-            ConfigItemValue::Value(expr) => expr.rightmost_token(),
-            ConfigItemValue::ConfigBlock(block) => block.rightmost_token(),
-            ConfigItemValue::ConfigArray(array) => array.rightmost_token(),
-        }
-    }
+    elements
 }
 
-impl PrintMultiLine for ConfigArray {
+impl PrintMultiLine for Validated<'_, syntax_ast::ConfigArray> {
     /// Multi-line layout: each element on its own indented line with trailing comma.
     /// Brackets wrap the entire construct.
     ///
@@ -1397,11 +1835,14 @@ impl PrintMultiLine for ConfigArray {
             first_line_offset: 0,
         };
 
-        printer.print_raw_token(&self.open_bracket);
-        printer.print_trivia_all_trailing_for(self.open_bracket.span());
+        let open_bracket = self.l_bracket_token();
+        let close_bracket = self.r_bracket_token();
+        let elements = config_array_elements(self);
+        printer.print_raw_token(&open_bracket);
+        printer.print_trivia_all_trailing_for(open_bracket.span());
         printer.print_newline();
 
-        for (elem, comma) in &self.elements {
+        for (elem, comma) in &elements {
             let (elem_leading, elem_trailing) = printer.trivia.get_for_element(elem);
             printer
                 .print_trivia_with_newline(elem_leading.trim_leading_blanks(), inner_shape.indent);
@@ -1421,25 +1862,25 @@ impl PrintMultiLine for ConfigArray {
             printer.print_newline();
         }
 
-        printer.print_trivia_all_leading_with_newline_for(
-            self.close_bracket.span(),
-            inner_shape.indent,
-        );
+        printer.print_trivia_all_leading_with_newline_for(close_bracket.span(), inner_shape.indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_bracket);
+        printer.print_raw_token(&close_bracket);
         PrintInfo::default_multi_lined()
     }
 }
 
-impl ConfigArrayLayout for ConfigArray {
+impl ConfigArrayLayout for Validated<'_, syntax_ast::ConfigArray> {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the config array on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.open_bracket);
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_bracket.span());
+        let open_bracket = self.l_bracket_token();
+        let close_bracket = self.r_bracket_token();
+        let elements = config_array_elements(self);
+        printer.print_raw_token(&open_bracket);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(open_bracket.span());
         printer.try_print_trivia_single_line_squished(open_trailing)?;
 
-        for (i, (elem, comma)) in self.elements.iter().enumerate() {
+        for (i, (elem, comma)) in elements.iter().enumerate() {
             if printer.output.len() > shape.width {
                 return None;
             }
@@ -1452,7 +1893,7 @@ impl ConfigArrayLayout for ConfigArray {
                 return None;
             }
             printer.try_print_trivia_single_line_squished(el_trailing)?;
-            if i + 1 < self.elements.len() {
+            if i + 1 < elements.len() {
                 // not the last element: will have comma
                 if let Some(comma) = comma {
                     let (comma_leading, comma_trailing) =
@@ -1473,11 +1914,9 @@ impl ConfigArrayLayout for ConfigArray {
             }
         }
 
-        let (close_leading, _) = printer
-            .trivia
-            .get_for_range_split(self.close_bracket.span());
+        let (close_leading, _) = printer.trivia.get_for_range_split(close_bracket.span());
         printer.try_print_trivia_single_line_squished(close_leading)?;
-        printer.print_raw_token(&self.close_bracket);
+        printer.print_raw_token(&close_bracket);
 
         if printer.output.len() > shape.width {
             None
@@ -1487,33 +1926,94 @@ impl ConfigArrayLayout for ConfigArray {
     }
 }
 
-impl Printable for ConfigArray {
+impl Printable for Validated<'_, syntax_ast::ConfigArray> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer
             .try_sub_printer(|p| self.try_print_single_line(&shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
-        self.open_bracket.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.close_bracket.span()
+        self.last_token_range()
     }
 }
 
-impl Printable for TestDecl {
+impl Printable for Validated<'_, syntax_ast::TestDef> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
+        let config = self.config_block();
+        printer.print_raw_token(&self.test_token());
         printer.print_str(" ");
-        printer.print_raw_token(&self.name);
+        printer.print_raw_token(&self.name_token());
         printer.print_str(" ");
-        printer.print(&self.config_block, shape)
+        printer.print(&config, shape)
     }
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.config_block.rightmost_token()
+        self.last_token_range()
+    }
+}
+
+impl Printable for Validated<'_, syntax_ast::TestExprDef> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let name = super::Expression::from_cst(SyntaxElement::Node(self.name().syntax().clone()))
+            .expect("validated test name");
+        let with_value = self.with_value().map(|value| {
+            super::Expression::from_cst(SyntaxElement::Node(value.syntax().clone()))
+                .expect("validated test runner")
+        });
+        let body = super::BlockExpr::from_cst(SyntaxElement::Node(self.body().syntax().clone()))
+            .expect("validated test body");
+        printer.print_raw_token(&self.test_token());
+        printer.print_str(" ");
+        printer.print(&name, shape.clone());
+        if let Some((keyword, value)) = self.with_token().zip(with_value.as_ref()) {
+            printer.print_str(" ");
+            printer.print_raw_token(&keyword);
+            printer.print_str(" ");
+            printer.print(value, shape.clone());
+        }
+        printer.print_str(" ");
+        printer.print(&body, shape)
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.first_token_range()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.last_token_range()
+    }
+}
+
+impl Printable for Validated<'_, syntax_ast::TestsetDef> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let name = super::Expression::from_cst(SyntaxElement::Node(self.name().syntax().clone()))
+            .expect("validated test set name");
+        let with_value = self.with_value().map(|value| {
+            super::Expression::from_cst(SyntaxElement::Node(value.syntax().clone()))
+                .expect("validated test set runner")
+        });
+        let body = super::BlockExpr::from_cst(SyntaxElement::Node(self.body().syntax().clone()))
+            .expect("validated test set body");
+        printer.print_raw_token(&self.testset_token());
+        printer.print_str(" ");
+        printer.print(&name, shape.clone());
+        if let Some((keyword, value)) = self.with_token().zip(with_value.as_ref()) {
+            printer.print_str(" ");
+            printer.print_raw_token(&keyword);
+            printer.print_str(" ");
+            printer.print(value, shape.clone());
+        }
+        printer.print_str(" ");
+        printer.print(&body, shape)
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.first_token_range()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.last_token_range()
     }
 }
 
@@ -1522,18 +2022,20 @@ impl Printable for TestExprDecl {
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
         printer.print(&self.name, shape.clone());
-        if let Some(wc) = &self.with_clause {
+        if let Some(with_clause) = &self.with_clause {
             printer.print_str(" ");
-            printer.print_raw_token(&wc.keyword);
+            printer.print_raw_token(&with_clause.keyword);
             printer.print_str(" ");
-            printer.print(&wc.expr, shape.clone());
+            printer.print(&with_clause.expr, shape.clone());
         }
         printer.print_str(" ");
         printer.print(&self.body, shape)
     }
+
     fn leftmost_token(&self) -> TextRange {
         self.keyword.span()
     }
+
     fn rightmost_token(&self) -> TextRange {
         self.body.rightmost_token()
     }
@@ -1544,79 +2046,97 @@ impl Printable for TestSetDecl {
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
         printer.print(&self.name, shape.clone());
-        if let Some(wc) = &self.with_clause {
+        if let Some(with_clause) = &self.with_clause {
             printer.print_str(" ");
-            printer.print_raw_token(&wc.keyword);
+            printer.print_raw_token(&with_clause.keyword);
             printer.print_str(" ");
-            printer.print(&wc.expr, shape.clone());
+            printer.print(&with_clause.expr, shape.clone());
         }
         printer.print_str(" ");
         printer.print(&self.body, shape)
     }
+
     fn leftmost_token(&self) -> TextRange {
         self.keyword.span()
     }
+
     fn rightmost_token(&self) -> TextRange {
         self.body.rightmost_token()
     }
 }
 
-impl Printable for RetryPolicyDecl {
+impl Printable for Validated<'_, syntax_ast::RetryPolicyDef> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
+        let config = self.config_block();
+        printer.print_raw_token(&self.retry_policy_token());
         printer.print_str(" ");
-        printer.print_raw_token(&self.name);
+        printer.print_raw_token(&self.name_token());
         printer.print_str(" ");
-        printer.print(&self.config_block, shape)
+        printer.print(&config, shape)
     }
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.config_block.rightmost_token()
+        self.last_token_range()
     }
 }
 
-impl Printable for TemplateStringDecl {
+impl Printable for Validated<'_, syntax_ast::TemplateStringDef> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let args = FunctionParamList::from_cst(SyntaxElement::Node(
+            self.parameter_list().syntax().clone(),
+        ))
+        .expect("validated parameter list");
+        let body = t::RawString::from_cst(SyntaxElement::Node(
+            self.raw_string_literal().syntax().clone(),
+        ))
+        .expect("validated template body");
         let mut multi_lined = false;
 
-        printer.print_raw_token(&self.keyword);
+        printer.print_raw_token(&self.template_string_token());
         printer.print_str(" ");
-        printer.print_raw_token(&self.name);
-        multi_lined |= printer.print(&self.args, shape).multi_lined;
+        printer.print_raw_token(&self.name_token());
+        multi_lined |= printer.print(&args, shape).multi_lined;
         printer.print_str(" ");
         multi_lined |= printer
-            .print(&self.body, Shape::unlimited_single_line())
+            .print(&body, Shape::unlimited_single_line())
             .multi_lined;
         PrintInfo { multi_lined }
     }
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.body.rightmost_token()
+        self.last_token_range()
     }
 }
 
-impl Printable for TypeAliasDecl {
+impl Printable for Validated<'_, syntax_ast::TypeAliasDef> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
+        let keyword = self.type_token();
+        let name = self.name_token();
+        let equals = self.equals_token();
+        let type_expr =
+            super::Type::from_cst(SyntaxElement::Node(self.type_expr().syntax().clone()))
+                .expect("validated type expression");
+        let semicolon = self.semicolon_token();
+        printer.print_raw_token(&keyword);
         printer.print_str(" ");
-        printer.print_raw_token(&self.name);
+        printer.print_raw_token(&name);
         printer.print_str(" ");
-        printer.print_raw_token(&self.equals);
+        printer.print_raw_token(&equals);
         printer.print_str(" ");
-        let (_, eq_trailing) = printer.trivia.get_for_range_split(self.equals.span());
-        let (ty_leading, ty_trailing) = printer.trivia.get_for_element(&self.type_expr);
+        let (_, eq_trailing) = printer.trivia.get_for_range_split(equals.span());
+        let (ty_leading, ty_trailing) = printer.trivia.get_for_element(&type_expr);
         let mut ty_leading_len = printer.print_trivia_squished(eq_trailing);
         ty_leading_len += printer.print_trivia_squished(ty_leading);
-        let new_offset = usize::from(self.keyword.span().len() + self.name.span().len())
+        let new_offset = usize::from(keyword.span().len() + name.span().len())
             + const { "  = ".len() }
             + ty_leading_len;
 
         let info;
-        if let Some(semicolon) = &self.semicolon {
+        if let Some(semicolon) = semicolon {
             let (semicolon_leading, _) = printer.trivia.get_for_range_split(semicolon.span());
             let mut ty_trailing_len = ty_trailing.squished_len(printer.input);
             ty_trailing_len += semicolon_leading.squished_len(printer.input);
@@ -1627,17 +2147,17 @@ impl Printable for TypeAliasDecl {
                 indent: shape.indent,
                 first_line_offset: shape.first_line_offset + new_offset,
             };
-            info = printer.print(&self.type_expr, ty_shape);
+            info = printer.print(&type_expr, ty_shape);
             printer.print_trivia_squished(ty_trailing);
             printer.print_trivia_squished(semicolon_leading);
-            printer.print_raw_token(semicolon);
+            printer.print_raw_token(&semicolon);
         } else {
             let ty_shape = Shape {
                 width: shape.width.saturating_sub(new_offset + const { ";".len() }),
                 indent: shape.indent,
                 first_line_offset: shape.first_line_offset + new_offset,
             };
-            info = printer.print(&self.type_expr, ty_shape);
+            info = printer.print(&type_expr, ty_shape);
             // this is the last child so trivia is handled by parent
             printer.print_str(";");
         }
@@ -1645,29 +2165,26 @@ impl Printable for TypeAliasDecl {
         info
     }
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        if let Some(semicolon) = &self.semicolon {
-            semicolon.span()
-        } else {
-            self.type_expr.rightmost_token()
-        }
+        self.last_token_range()
     }
 }
 
-impl Printable for GeneratorDecl {
+impl Printable for Validated<'_, syntax_ast::GeneratorDef> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
+        let config = self.config_block();
+        printer.print_raw_token(&self.generator_token());
         printer.print_str(" ");
-        printer.print_raw_token(&self.name);
+        printer.print_raw_token(&self.name_token());
         printer.print_str(" ");
-        printer.print(&self.config, shape)
+        printer.print(&config, shape)
     }
     fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+        self.first_token_range()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.config.rightmost_token()
+        self.last_token_range()
     }
 }

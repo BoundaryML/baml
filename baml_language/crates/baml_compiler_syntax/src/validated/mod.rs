@@ -2,8 +2,15 @@ use std::{borrow::Cow, path::Path};
 
 use crate::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxNodeExt as _, SyntaxToken, TextRange};
 
+mod arena;
+mod generated_schema;
 mod generated_tokens;
 pub mod nodes;
+
+pub use arena::{
+    NodeId, Validated, ValidatedChildren, ValidatedDirectElements, ValidatedElement,
+    ValidatedElements, ValidatedSyntaxToken, ValidatedTree,
+};
 
 pub mod tokens {
     pub use super::{
@@ -501,6 +508,8 @@ pub enum StrongAstError {
     },
     #[error("unexpected element at {at:?} in {parent:?}")]
     UnexpectedAdditionalElement { parent: TextRange, at: TextRange },
+    #[error("invalid {kind:?} structure at {at:?}")]
+    InvalidStructure { kind: SyntaxKind, at: TextRange },
     #[error("expected a token, found a node at {at:?}")]
     ShouldBeToken { at: TextRange },
     #[error("expected a node, found a token at {at:?}")]
@@ -617,6 +626,10 @@ impl StrongAstError {
             Self::UnexpectedAdditionalElement { at, .. } => location(*at).map_or_else(
                 || self.to_string(),
                 |location| format!("Unexpected additional element at {location}"),
+            ),
+            Self::InvalidStructure { kind, at } => location(*at).map_or_else(
+                || self.to_string(),
+                |location| format!("Invalid {kind:?} structure at {location}"),
             ),
             Self::ShouldBeNode { at } => location(*at).map_or_else(
                 || self.to_string(),

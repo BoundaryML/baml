@@ -1278,15 +1278,6 @@ fn lower_session_submission(
                 element.has_trailing_semicolon(),
                 expression_is_assignment(node),
             ),
-            BlockElement::ExprToken(token) => {
-                let range = token.text_range();
-                (
-                    None,
-                    usize::from(range.start())..usize::from(range.end()),
-                    element.has_trailing_semicolon(),
-                    false,
-                )
-            }
             BlockElement::HeaderComment(_) => continue,
         };
         let mut source_range = wrapped_range.start.saturating_sub(prefix.len())

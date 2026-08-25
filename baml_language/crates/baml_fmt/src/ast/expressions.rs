@@ -1,13 +1,16 @@
 //! Reference: [`baml_db::baml_compiler_syntax::ast::Expr`] and [`baml_db::baml_compiler_hir::body`]
 
-use baml_db::baml_compiler_syntax::validated::nodes::{
-    ArmListItem, ArrayInitializer, BinaryExpr, BlockExpr, CallArg, CallArgs, CallExpr, CatchArm,
-    CatchBinding, CatchClause, CatchExpr, ElseExpr, EnvAccessExpr, Expression, FieldAccessExpr,
-    FunctionArrow, GenericApplyExpr, GenericArg, GenericArgs, GenericParamBounds, GenericParamList,
-    IfExpr, IfLetExpr, IndexExpr, IsExpr, LambdaExpr, MapLiteral, MatchArm, MatchExpr, MatchGuard,
-    ObjectField, ObjectFieldKey, ObjectInitializer, ObjectMember, OptionalCallExpr,
-    OptionalFieldAccessExpr, OptionalIndexExpr, ParenExpr, PathExpr, SpawnExpr, SpreadElement,
-    UnaryExpr, UnreflectArg,
+use baml_db::baml_compiler_syntax::validated::{
+    ValidatedSyntaxToken,
+    nodes::{
+        ArmListItem, ArrayInitializer, BinaryExpr, BlockExpr, CallArg, CallArgs, CallExpr,
+        CatchArm, CatchBinding, CatchClause, CatchExpr, ElseExpr, EnvAccessExpr, Expression,
+        FieldAccessExpr, FunctionArrow, GenericApplyExpr, GenericArg, GenericArgs,
+        GenericParamBounds, GenericParamList, IfExpr, IfLetExpr, IndexExpr, IsExpr, LambdaExpr,
+        MapLiteral, MatchArm, MatchExpr, MatchGuard, ObjectField, ObjectFieldKey,
+        ObjectInitializer, ObjectMember, OptionalCallExpr, OptionalFieldAccessExpr,
+        OptionalIndexExpr, ParenExpr, PathExpr, SpawnExpr, SpreadElement, UnaryExpr, UnreflectArg,
+    },
 };
 use rowan::TextRange;
 
@@ -187,7 +190,7 @@ trait ObjectFieldKeyWidth {
 }
 
 pub(crate) trait FunctionArrowLayout {
-    fn span(&self) -> TextRange;
+    fn arrow_span(&self) -> TextRange;
     fn print_separator_before(
         &self,
         next_leftmost: Option<TextRange>,
@@ -407,6 +410,7 @@ impl LiteralFormatting for Literal {
                     Some(usize::from(s.span().len()))
                 }
             }
+            Literal::Bigint(i) => Some(usize::from(i.span().len())),
             Literal::Integer(i) => Some(usize::from(i.span().len())),
             Literal::Float(f) => Some(usize::from(f.span().len())),
             Literal::Keyword(k) => Some(usize::from(k.span().len())),
@@ -418,6 +422,7 @@ impl Printable for Literal {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
             Literal::String(s) => printer.print_raw_token(s),
+            Literal::Bigint(i) => printer.print_raw_token(i),
             Literal::Integer(i) => printer.print_raw_token(i),
             Literal::Float(f) => printer.print_raw_token(f),
             Literal::Keyword(k) => printer.print_raw_token(k),
@@ -427,6 +432,7 @@ impl Printable for Literal {
     fn leftmost_token(&self) -> TextRange {
         match self {
             Literal::String(s) => s.leftmost_token(),
+            Literal::Bigint(i) => i.span(),
             Literal::Integer(i) => i.span(),
             Literal::Float(f) => f.span(),
             Literal::Keyword(k) => k.span(),
@@ -435,6 +441,7 @@ impl Printable for Literal {
     fn rightmost_token(&self) -> TextRange {
         match self {
             Literal::String(s) => s.rightmost_token(),
+            Literal::Bigint(i) => i.span(),
             Literal::Integer(i) => i.span(),
             Literal::Float(f) => f.span(),
             Literal::Keyword(k) => k.span(),
@@ -3165,7 +3172,7 @@ impl Printable for ThrowsClause {
 }
 
 impl FunctionArrowLayout for FunctionArrow {
-    fn span(&self) -> TextRange {
+    fn arrow_span(&self) -> TextRange {
         match self {
             FunctionArrow::Arrow(t) => t.span(),
             FunctionArrow::FatArrow(t) => t.span(),
@@ -3181,7 +3188,47 @@ impl FunctionArrowLayout for FunctionArrow {
         continuation_indent: usize,
         printer: &mut Printer,
     ) {
-        let (_, arrow_trailing) = printer.trivia.get_for_range_split(self.span());
+        let (_, arrow_trailing) = printer.trivia.get_for_range_split(self.arrow_span());
+        let next_leading = next_leftmost
+            .map(|range| printer.trivia.get_for_range_split(range).0)
+            .unwrap_or(&[]);
+        let mut printed_comment = false;
+        let mut continued_on_newline = false;
+
+        for trivia in arrow_trailing.iter().chain(next_leading) {
+            if !trivia.is_comment() {
+                continue;
+            }
+            if !continued_on_newline {
+                printer.print_spaces(1);
+            }
+            printer.print_trivia(trivia);
+            printed_comment = true;
+            continued_on_newline = trivia.single_line_len(printer.input).is_none();
+            if continued_on_newline {
+                printer.print_newline();
+                printer.print_spaces(continuation_indent);
+            }
+        }
+
+        if !printed_comment || !continued_on_newline {
+            printer.print_spaces(1);
+        }
+    }
+}
+
+impl FunctionArrowLayout for ValidatedSyntaxToken {
+    fn arrow_span(&self) -> TextRange {
+        Token::span(self)
+    }
+
+    fn print_separator_before(
+        &self,
+        next_leftmost: Option<TextRange>,
+        continuation_indent: usize,
+        printer: &mut Printer,
+    ) {
+        let (_, arrow_trailing) = printer.trivia.get_for_range_split(self.arrow_span());
         let next_leading = next_leftmost
             .map(|range| printer.trivia.get_for_range_split(range).0)
             .unwrap_or(&[]);

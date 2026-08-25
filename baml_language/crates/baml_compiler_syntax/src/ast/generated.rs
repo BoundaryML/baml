@@ -3,7 +3,7 @@
 use rowan::ast::{AstChildren, AstNode, support};
 
 use super::BamlAstNode;
-use crate::{BamlLanguage, SyntaxKind, SyntaxNode, SyntaxToken};
+use crate::{BamlLanguage, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SourceFile {
@@ -117,11 +117,14 @@ impl ClassDef {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn field(&self) -> AstChildren<Field> {
-        support::children(&self.syntax)
+    pub fn field(&self) -> Option<Field> {
+        support::child(&self.syntax)
     }
-    pub fn implements_block(&self) -> AstChildren<ImplementsBlock> {
-        support::children(&self.syntax)
+    pub fn function_def(&self) -> Option<FunctionDef> {
+        support::child(&self.syntax)
+    }
+    pub fn implements_block(&self) -> Option<ImplementsBlock> {
+        support::child(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -164,8 +167,8 @@ impl EnumDef {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn enum_variant(&self) -> AstChildren<EnumVariant> {
-        support::children(&self.syntax)
+    pub fn enum_variant(&self) -> Option<EnumVariant> {
+        support::child(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -208,14 +211,14 @@ impl InterfaceDef {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn method_sig(&self) -> AstChildren<MethodSig> {
-        support::children(&self.syntax)
+    pub fn method_sig(&self) -> Option<MethodSig> {
+        support::child(&self.syntax)
     }
-    pub fn associated_type_decl(&self) -> AstChildren<AssociatedTypeDecl> {
-        support::children(&self.syntax)
+    pub fn associated_type_decl(&self) -> Option<AssociatedTypeDecl> {
+        support::child(&self.syntax)
     }
-    pub fn field(&self) -> AstChildren<Field> {
-        support::children(&self.syntax)
+    pub fn field(&self) -> Option<Field> {
+        support::child(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -249,6 +252,9 @@ impl ImplementsFor {
     pub fn implement_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::KW_IMPLEMENT)
     }
+    pub fn generic_param_list(&self) -> Option<GenericParamList> {
+        support::child(&self.syntax)
+    }
     pub fn implements_target(&self) -> Option<ImplementsTarget> {
         support::child(&self.syntax)
     }
@@ -264,20 +270,20 @@ impl ImplementsFor {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn function_def(&self) -> AstChildren<FunctionDef> {
-        support::children(&self.syntax)
+    pub fn function_def(&self) -> Option<FunctionDef> {
+        support::child(&self.syntax)
     }
-    pub fn associated_type_decl(&self) -> AstChildren<AssociatedTypeDecl> {
-        support::children(&self.syntax)
+    pub fn associated_type_decl(&self) -> Option<AssociatedTypeDecl> {
+        support::child(&self.syntax)
     }
-    pub fn interface_field_link(&self) -> AstChildren<InterfaceFieldLink> {
-        support::children(&self.syntax)
+    pub fn interface_field_link(&self) -> Option<InterfaceFieldLink> {
+        support::child(&self.syntax)
     }
-    pub fn field(&self) -> AstChildren<Field> {
-        support::children(&self.syntax)
+    pub fn field(&self) -> Option<Field> {
+        support::child(&self.syntax)
     }
-    pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
-        support::children(&self.syntax)
+    pub fn block_attribute(&self) -> Option<BlockAttribute> {
+        support::child(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -311,14 +317,8 @@ impl ClientDef {
     pub fn client_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::KW_CLIENT)
     }
-    pub fn less_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::LESS)
-    }
-    pub fn client_type(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
-    }
-    pub fn greater_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::GREATER)
+    pub fn client_type(&self) -> Option<ClientType> {
+        support::child(&self.syntax)
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::WORD)
@@ -358,7 +358,7 @@ impl ClientValueDef {
     pub fn equals_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::EQUALS)
     }
-    pub fn value(&self) -> Option<Expr> {
+    pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn semicolon_token(&self) -> Option<SyntaxToken> {
@@ -395,6 +395,151 @@ impl TestDef {
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::WORD)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TestExprDef {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for TestExprDef {}
+
+impl AstNode for TestExprDef {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::TEST_EXPR_DEF
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl TestExprDef {
+    pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
+        support::children(&self.syntax)
+    }
+    pub fn test_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_TEST)
+    }
+    pub fn name(&self) -> Option<ExprNode> {
+        support::child(&self.syntax)
+    }
+    pub fn with_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_WITH)
+    }
+    pub fn with_value(&self) -> Option<ExprNode> {
+        support::child(&self.syntax)
+    }
+    pub fn body(&self) -> Option<BlockExpr> {
+        support::child(&self.syntax)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TestsetDef {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for TestsetDef {}
+
+impl AstNode for TestsetDef {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::TESTSET_DEF
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl TestsetDef {
+    pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
+        support::children(&self.syntax)
+    }
+    pub fn testset_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_TESTSET)
+    }
+    pub fn name(&self) -> Option<ExprNode> {
+        support::child(&self.syntax)
+    }
+    pub fn with_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_WITH)
+    }
+    pub fn with_value(&self) -> Option<ExprNode> {
+        support::child(&self.syntax)
+    }
+    pub fn body(&self) -> Option<BlockExpr> {
+        support::child(&self.syntax)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct HeaderComment {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for HeaderComment {}
+
+impl AstNode for HeaderComment {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::HEADER_COMMENT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl HeaderComment {
+    pub fn any_element(&self) -> impl Iterator<Item = SyntaxElement> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter(|element| !element.kind().is_trivia())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GeneratorDef {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for GeneratorDef {}
+
+impl AstNode for GeneratorDef {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::GENERATOR_DEF
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl GeneratorDef {
+    pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
+        support::children(&self.syntax)
+    }
+    pub fn generator_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_GENERATOR)
+    }
+    pub fn name_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::WORD)
+    }
+    pub fn config_block(&self) -> Option<ConfigBlock> {
+        support::child(&self.syntax)
     }
 }
 
@@ -689,6 +834,9 @@ impl TypeExpr {
     pub fn pipe_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::PIPE)
     }
+    pub fn attribute(&self) -> AstChildren<Attribute> {
+        support::children(&self.syntax)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -805,33 +953,7 @@ impl Parameter {
     pub fn equals_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::EQUALS)
     }
-    pub fn default_value(&self) -> Option<Expr> {
-        support::child(&self.syntax)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Expr {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for Expr {}
-
-impl AstNode for Expr {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::EXPR
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl Expr {
-    pub fn expr_node(&self) -> Option<ExprNode> {
+    pub fn default_value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
 }
@@ -866,6 +988,38 @@ impl ClientField {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ToolsField {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for ToolsField {}
+
+impl AstNode for ToolsField {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::TOOLS_FIELD
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl ToolsField {
+    pub fn name_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::WORD)
+    }
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::COLON)
+    }
+    pub fn value(&self) -> Option<ExprNode> {
+        support::child(&self.syntax)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PromptField {
     pub(super) syntax: SyntaxNode,
 }
@@ -895,38 +1049,6 @@ impl PromptField {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ToolsField {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for ToolsField {}
-
-impl AstNode for ToolsField {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::TOOLS_FIELD
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl ToolsField {
-    pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
-    }
-    pub fn colon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COLON)
-    }
-    pub fn value(&self) -> Option<Expr> {
-        support::child(&self.syntax)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BlockExpr {
     pub(super) syntax: SyntaxNode,
 }
@@ -950,7 +1072,7 @@ impl BlockExpr {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn expr(&self) -> AstChildren<Expr> {
+    pub fn block_item(&self) -> AstChildren<BlockItem> {
         support::children(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
@@ -1026,20 +1148,20 @@ impl ImplementsBlock {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn function_def(&self) -> AstChildren<FunctionDef> {
-        support::children(&self.syntax)
+    pub fn function_def(&self) -> Option<FunctionDef> {
+        support::child(&self.syntax)
     }
-    pub fn associated_type_decl(&self) -> AstChildren<AssociatedTypeDecl> {
-        support::children(&self.syntax)
+    pub fn associated_type_decl(&self) -> Option<AssociatedTypeDecl> {
+        support::child(&self.syntax)
     }
-    pub fn interface_field_link(&self) -> AstChildren<InterfaceFieldLink> {
-        support::children(&self.syntax)
+    pub fn interface_field_link(&self) -> Option<InterfaceFieldLink> {
+        support::child(&self.syntax)
     }
-    pub fn field(&self) -> AstChildren<Field> {
-        support::children(&self.syntax)
+    pub fn field(&self) -> Option<Field> {
+        support::child(&self.syntax)
     }
-    pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
-        support::children(&self.syntax)
+    pub fn block_attribute(&self) -> Option<BlockAttribute> {
+        support::child(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -1257,11 +1379,75 @@ impl AstNode for EnumVariant {
 }
 
 impl EnumVariant {
-    pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
+    pub fn name_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::WORD)
+    }
+    pub fn attribute(&self) -> AstChildren<Attribute> {
         support::children(&self.syntax)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Attribute {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for Attribute {}
+
+impl AstNode for Attribute {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::ATTRIBUTE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl Attribute {
+    pub fn at_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::AT)
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::WORD)
+    }
+    pub fn attribute_args(&self) -> Option<AttributeArgs> {
+        support::child(&self.syntax)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ClientType {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for ClientType {}
+
+impl AstNode for ClientType {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::CLIENT_TYPE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl ClientType {
+    pub fn less_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::LESS)
+    }
+    pub fn name_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::WORD)
+    }
+    pub fn greater_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::GREATER)
     }
 }
 
@@ -1289,8 +1475,11 @@ impl ConfigBlock {
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn config_item(&self) -> AstChildren<ConfigItem> {
-        support::children(&self.syntax)
+    pub fn config_item(&self) -> Option<ConfigItem> {
+        support::child(&self.syntax)
+    }
+    pub fn block_attribute(&self) -> Option<BlockAttribute> {
+        support::child(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -1318,11 +1507,51 @@ impl AstNode for ConfigItem {
 }
 
 impl ConfigItem {
+    pub fn string_literal(&self) -> Option<StringLiteral> {
+        support::child(&self.syntax)
+    }
     pub fn key_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::WORD)
     }
     pub fn colon_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::COLON)
+    }
+    pub fn config_block(&self) -> Option<ConfigBlock> {
+        support::child(&self.syntax)
+    }
+    pub fn attribute(&self) -> AstChildren<Attribute> {
+        support::children(&self.syntax)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StringLiteral {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for StringLiteral {}
+
+impl AstNode for StringLiteral {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::STRING_LITERAL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl StringLiteral {
+    pub fn quote_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::QUOTE)
+    }
+    pub fn any_element(&self) -> impl Iterator<Item = SyntaxElement> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter(|element| !element.kind().is_trivia())
     }
 }
 
@@ -1347,8 +1576,49 @@ impl AstNode for ConfigValue {
 }
 
 impl ConfigValue {
-    pub fn expr(&self) -> Option<Expr> {
+    pub fn expr(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
+    }
+    pub fn config_array(&self) -> Option<ConfigArray> {
+        support::child(&self.syntax)
+    }
+    pub fn config_block(&self) -> Option<ConfigBlock> {
+        support::child(&self.syntax)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ConfigArray {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for ConfigArray {}
+
+impl AstNode for ConfigArray {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::CONFIG_ARRAY
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl ConfigArray {
+    pub fn l_bracket_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::L_BRACKET)
+    }
+    pub fn config_value(&self) -> Option<ConfigValue> {
+        support::child(&self.syntax)
+    }
+    pub fn config_block(&self) -> Option<ConfigBlock> {
+        support::child(&self.syntax)
+    }
+    pub fn r_bracket_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::R_BRACKET)
     }
 }
 
@@ -1373,8 +1643,10 @@ impl AstNode for RawStringLiteral {
 }
 
 impl RawStringLiteral {
-    pub fn word_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+    pub fn any_element(&self) -> impl Iterator<Item = SyntaxElement> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter(|element| !element.kind().is_trivia())
     }
 }
 
@@ -1440,35 +1712,6 @@ impl GenericParamBounds {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StringLiteral {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for StringLiteral {}
-
-impl AstNode for StringLiteral {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::STRING_LITERAL
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl StringLiteral {
-    pub fn quote_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::QUOTE)
-    }
-    pub fn word_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeArgs {
     pub(super) syntax: SyntaxNode,
 }
@@ -1492,11 +1735,11 @@ impl TypeArgs {
     pub fn less_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::LESS)
     }
-    pub fn type_expr(&self) -> AstChildren<TypeExpr> {
-        support::children(&self.syntax)
+    pub fn type_expr(&self) -> Option<TypeExpr> {
+        support::child(&self.syntax)
     }
-    pub fn associated_type_decl(&self) -> AstChildren<AssociatedTypeDecl> {
-        support::children(&self.syntax)
+    pub fn associated_type_decl(&self) -> Option<AssociatedTypeDecl> {
+        support::child(&self.syntax)
     }
     pub fn greater_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::GREATER)
@@ -1539,38 +1782,6 @@ impl FunctionTypeParam {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Attribute {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for Attribute {}
-
-impl AstNode for Attribute {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::ATTRIBUTE
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl Attribute {
-    pub fn at_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::AT)
-    }
-    pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
-    }
-    pub fn attribute_args(&self) -> Option<AttributeArgs> {
-        support::child(&self.syntax)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AttributeArgs {
     pub(super) syntax: SyntaxNode,
 }
@@ -1594,11 +1805,78 @@ impl AttributeArgs {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_PAREN)
     }
-    pub fn expr(&self) -> AstChildren<Expr> {
+    pub fn expr_node(&self) -> AstChildren<ExprNode> {
         support::children(&self.syntax)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_PAREN)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Error {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for Error {}
+
+impl AstNode for Error {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::ERROR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl Error {
+    pub fn error_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::ERROR_TOKEN)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LiteralExpr {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for LiteralExpr {}
+
+impl AstNode for LiteralExpr {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::LITERAL_EXPR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl LiteralExpr {
+    pub fn bigint_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::BIGINT_LITERAL)
+    }
+    pub fn integer_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::INTEGER_LITERAL)
+    }
+    pub fn float_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::FLOAT_LITERAL)
+    }
+    pub fn true_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_TRUE)
+    }
+    pub fn false_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_FALSE)
+    }
+    pub fn null_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_NULL)
     }
 }
 
@@ -1623,8 +1901,38 @@ impl AstNode for PathExpr {
 }
 
 impl PathExpr {
+    pub fn path_expr(&self) -> Option<PathExpr> {
+        support::child(&self.syntax)
+    }
+    pub fn generic_args(&self) -> Option<GenericArgs> {
+        support::child(&self.syntax)
+    }
     pub fn word_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::WORD)
+    }
+    pub fn client_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_CLIENT)
+    }
+    pub fn class_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_CLASS)
+    }
+    pub fn enum_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_ENUM)
+    }
+    pub fn interface_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_INTERFACE)
+    }
+    pub fn function_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_FUNCTION)
+    }
+    pub fn implements_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_IMPLEMENTS)
+    }
+    pub fn spawn_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_SPAWN)
+    }
+    pub fn await_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_AWAIT)
     }
     pub fn dot_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::DOT)
@@ -1655,11 +1963,38 @@ impl AstNode for BacktickStringLiteral {
 }
 
 impl BacktickStringLiteral {
-    pub fn backtick_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::BACKTICK)
+    pub fn any_element(&self) -> impl Iterator<Item = SyntaxElement> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter(|element| !element.kind().is_trivia())
     }
-    pub fn backtick_segment_node(&self) -> AstChildren<BacktickSegmentNode> {
-        support::children(&self.syntax)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ByteStringLiteral {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for ByteStringLiteral {}
+
+impl AstNode for ByteStringLiteral {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::BYTE_STRING_LITERAL
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl ByteStringLiteral {
+    pub fn any_element(&self) -> impl Iterator<Item = SyntaxElement> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter(|element| !element.kind().is_trivia())
     }
 }
 
@@ -1740,6 +2075,9 @@ impl BinaryExpr {
     }
     pub fn percent_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::PERCENT)
+    }
+    pub fn question_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::QUESTION)
     }
     pub fn question_question_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::QUESTION_QUESTION)
@@ -2083,14 +2421,8 @@ impl UpcastExpr {
     pub fn as_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::KW_AS)
     }
-    pub fn less_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::LESS)
-    }
-    pub fn type_expr(&self) -> Option<TypeExpr> {
+    pub fn generic_args(&self) -> Option<GenericArgs> {
         support::child(&self.syntax)
-    }
-    pub fn greater_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::GREATER)
     }
 }
 
@@ -2322,9 +2654,6 @@ impl IfLetExpr {
     pub fn if_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::KW_IF)
     }
-    pub fn let_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_LET)
-    }
     pub fn pattern(&self) -> Option<Pattern> {
         support::child(&self.syntax)
     }
@@ -2369,14 +2698,29 @@ impl MatchExpr {
     pub fn match_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::KW_MATCH)
     }
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::L_PAREN)
+    }
     pub fn scrutinee(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
+    }
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::COLON)
+    }
+    pub fn type_expr(&self) -> Option<TypeExpr> {
+        support::child(&self.syntax)
+    }
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::R_PAREN)
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn match_arm(&self) -> AstChildren<MatchArm> {
-        support::children(&self.syntax)
+    pub fn match_arm(&self) -> Option<MatchArm> {
+        support::child(&self.syntax)
+    }
+    pub fn header_comment(&self) -> Option<HeaderComment> {
+        support::child(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -2549,6 +2893,15 @@ impl SpawnExpr {
     pub fn name(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
+    pub fn with_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_WITH)
+    }
+    pub fn expr_node(&self) -> Option<ExprNode> {
+        support::child(&self.syntax)
+    }
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::COMMA)
+    }
     pub fn body(&self) -> Option<BlockExpr> {
         support::child(&self.syntax)
     }
@@ -2604,13 +2957,25 @@ impl AstNode for LambdaExpr {
 }
 
 impl LambdaExpr {
+    pub fn generic_param_list(&self) -> Option<GenericParamList> {
+        support::child(&self.syntax)
+    }
     pub fn parameter_list(&self) -> Option<ParameterList> {
         support::child(&self.syntax)
     }
     pub fn fat_arrow_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::FAT_ARROW)
     }
-    pub fn body(&self) -> Option<ExprNode> {
+    pub fn arrow_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::ARROW)
+    }
+    pub fn type_expr(&self) -> Option<TypeExpr> {
+        support::child(&self.syntax)
+    }
+    pub fn throws_clause(&self) -> Option<ThrowsClause> {
+        support::child(&self.syntax)
+    }
+    pub fn body(&self) -> Option<BlockExpr> {
         support::child(&self.syntax)
     }
 }
@@ -2642,23 +3007,14 @@ impl ForExpr {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_PAREN)
     }
-    pub fn let_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_LET)
+    pub fn let_stmt(&self) -> Option<LetStmt> {
+        support::child(&self.syntax)
     }
-    pub fn pattern(&self) -> Option<Pattern> {
+    pub fn expr_node(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn in_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::KW_IN)
-    }
-    pub fn iterable(&self) -> Option<ExprNode> {
-        support::child(&self.syntax)
-    }
-    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
-    }
-    pub fn expr_node(&self) -> Option<ExprNode> {
-        support::child(&self.syntax)
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_PAREN)
@@ -2689,14 +3045,17 @@ impl AstNode for ObjectLiteral {
 }
 
 impl ObjectLiteral {
+    pub fn constructor(&self) -> Option<PathExpr> {
+        support::child(&self.syntax)
+    }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn object_field(&self) -> AstChildren<ObjectField> {
-        support::children(&self.syntax)
+    pub fn object_field(&self) -> Option<ObjectField> {
+        support::child(&self.syntax)
     }
-    pub fn spread_element(&self) -> AstChildren<SpreadElement> {
-        support::children(&self.syntax)
+    pub fn spread_element(&self) -> Option<SpreadElement> {
+        support::child(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -2728,9 +3087,6 @@ impl ArrayLiteral {
         support::token(&self.syntax, SyntaxKind::L_BRACKET)
     }
     pub fn expr_node(&self) -> AstChildren<ExprNode> {
-        support::children(&self.syntax)
-    }
-    pub fn spread_element(&self) -> AstChildren<SpreadElement> {
         support::children(&self.syntax)
     }
     pub fn r_bracket_token(&self) -> Option<SyntaxToken> {
@@ -2771,16 +3127,16 @@ impl MapLiteral {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct GeneratorDef {
+pub struct WhileStmt {
     pub(super) syntax: SyntaxNode,
 }
 
-impl BamlAstNode for GeneratorDef {}
+impl BamlAstNode for WhileStmt {}
 
-impl AstNode for GeneratorDef {
+impl AstNode for WhileStmt {
     type Language = BamlLanguage;
     fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::GENERATOR_DEF
+        kind == SyntaxKind::WHILE_STMT
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
         Self::can_cast(syntax.kind()).then_some(Self { syntax })
@@ -2790,32 +3146,167 @@ impl AstNode for GeneratorDef {
     }
 }
 
-impl GeneratorDef {
-    pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
-        support::children(&self.syntax)
+impl WhileStmt {
+    pub fn while_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_WHILE)
     }
-    pub fn generator_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_GENERATOR)
+    pub fn condition(&self) -> Option<ExprNode> {
+        support::child(&self.syntax)
+    }
+    pub fn body(&self) -> Option<BlockExpr> {
+        support::child(&self.syntax)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct WhileLetStmt {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for WhileLetStmt {}
+
+impl AstNode for WhileLetStmt {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::WHILE_LET_STMT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl WhileLetStmt {
+    pub fn while_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_WHILE)
+    }
+    pub fn let_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_LET)
+    }
+    pub fn const_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_CONST)
+    }
+    pub fn pattern(&self) -> Option<Pattern> {
+        support::child(&self.syntax)
+    }
+    pub fn equals_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::EQUALS)
+    }
+    pub fn scrutinee(&self) -> Option<ExprNode> {
+        support::child(&self.syntax)
+    }
+    pub fn body(&self) -> Option<BlockExpr> {
+        support::child(&self.syntax)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LetStmt {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for LetStmt {}
+
+impl AstNode for LetStmt {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::LET_STMT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl LetStmt {
+    pub fn let_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_LET)
+    }
+    pub fn const_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_CONST)
+    }
+    pub fn pattern(&self) -> Option<Pattern> {
+        support::child(&self.syntax)
+    }
+    pub fn equals_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::EQUALS)
+    }
+    pub fn value(&self) -> Option<ExprNode> {
+        support::child(&self.syntax)
+    }
+    pub fn else_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_ELSE)
+    }
+    pub fn block_expr(&self) -> Option<BlockExpr> {
+        support::child(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::SEMICOLON)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TypeBindingStmt {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for TypeBindingStmt {}
+
+impl AstNode for TypeBindingStmt {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::TYPE_BINDING_STMT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl TypeBindingStmt {
+    pub fn type_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_TYPE)
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::WORD)
     }
-    pub fn config_block(&self) -> Option<ConfigBlock> {
+    pub fn equals_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::EQUALS)
+    }
+    pub fn unreflect_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::WORD)
+    }
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::L_PAREN)
+    }
+    pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
+    }
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::R_PAREN)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::SEMICOLON)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TestExprDef {
+pub struct BreakStmt {
     pub(super) syntax: SyntaxNode,
 }
 
-impl BamlAstNode for TestExprDef {}
+impl BamlAstNode for BreakStmt {}
 
-impl AstNode for TestExprDef {
+impl AstNode for BreakStmt {
     type Language = BamlLanguage;
     fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::TEST_EXPR_DEF
+        kind == SyntaxKind::BREAK_STMT
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
         Self::can_cast(syntax.kind()).then_some(Self { syntax })
@@ -2825,38 +3316,26 @@ impl AstNode for TestExprDef {
     }
 }
 
-impl TestExprDef {
-    pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
-        support::children(&self.syntax)
+impl BreakStmt {
+    pub fn break_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_BREAK)
     }
-    pub fn test_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_TEST)
-    }
-    pub fn name(&self) -> Option<StringLiteral> {
-        support::child(&self.syntax)
-    }
-    pub fn with_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_WITH)
-    }
-    pub fn with_value(&self) -> Option<ExprNode> {
-        support::child(&self.syntax)
-    }
-    pub fn body(&self) -> Option<BlockExpr> {
-        support::child(&self.syntax)
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::SEMICOLON)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TestsetDef {
+pub struct ContinueStmt {
     pub(super) syntax: SyntaxNode,
 }
 
-impl BamlAstNode for TestsetDef {}
+impl BamlAstNode for ContinueStmt {}
 
-impl AstNode for TestsetDef {
+impl AstNode for ContinueStmt {
     type Language = BamlLanguage;
     fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::TESTSET_DEF
+        kind == SyntaxKind::CONTINUE_STMT
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
         Self::can_cast(syntax.kind()).then_some(Self { syntax })
@@ -2866,24 +3345,137 @@ impl AstNode for TestsetDef {
     }
 }
 
-impl TestsetDef {
-    pub fn block_attribute(&self) -> AstChildren<BlockAttribute> {
-        support::children(&self.syntax)
+impl ContinueStmt {
+    pub fn continue_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_CONTINUE)
     }
-    pub fn testset_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_TESTSET)
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::SEMICOLON)
     }
-    pub fn name(&self) -> Option<StringLiteral> {
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReturnStmt {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for ReturnStmt {}
+
+impl AstNode for ReturnStmt {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::RETURN_STMT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl ReturnStmt {
+    pub fn return_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_RETURN)
+    }
+    pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
-    pub fn with_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_WITH)
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::SEMICOLON)
     }
-    pub fn with_value(&self) -> Option<ExprNode> {
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ThrowStmt {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for ThrowStmt {}
+
+impl AstNode for ThrowStmt {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::THROW_STMT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl ThrowStmt {
+    pub fn throw_expr(&self) -> Option<ThrowExpr> {
         support::child(&self.syntax)
+    }
+    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::SEMICOLON)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DeferStmt {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for DeferStmt {}
+
+impl AstNode for DeferStmt {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::DEFER_STMT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl DeferStmt {
+    pub fn defer_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_DEFER)
     }
     pub fn body(&self) -> Option<BlockExpr> {
         support::child(&self.syntax)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GenericArgs {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for GenericArgs {}
+
+impl AstNode for GenericArgs {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::GENERIC_ARGS
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl GenericArgs {
+    pub fn less_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::LESS)
+    }
+    pub fn type_expr(&self) -> Option<TypeExpr> {
+        support::child(&self.syntax)
+    }
+    pub fn unreflect_arg(&self) -> Option<UnreflectArg> {
+        support::child(&self.syntax)
+    }
+    pub fn greater_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::GREATER)
     }
 }
 
@@ -3018,7 +3610,7 @@ impl AstNode for MatchArm {
 }
 
 impl MatchArm {
-    pub fn match_pattern(&self) -> Option<MatchPattern> {
+    pub fn pattern(&self) -> Option<Pattern> {
         support::child(&self.syntax)
     }
     pub fn match_guard(&self) -> Option<MatchGuard> {
@@ -3032,32 +3624,6 @@ impl MatchArm {
     }
     pub fn comma_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::COMMA)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MatchPattern {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for MatchPattern {}
-
-impl AstNode for MatchPattern {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::MATCH_PATTERN
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl MatchPattern {
-    pub fn pattern(&self) -> Option<Pattern> {
-        support::child(&self.syntax)
     }
 }
 
@@ -3086,6 +3652,32 @@ impl MatchGuard {
         support::token(&self.syntax, SyntaxKind::KW_IF)
     }
     pub fn condition(&self) -> Option<ExprNode> {
+        support::child(&self.syntax)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MatchPattern {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for MatchPattern {}
+
+impl AstNode for MatchPattern {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::MATCH_PATTERN
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl MatchPattern {
+    pub fn pattern(&self) -> Option<Pattern> {
         support::child(&self.syntax)
     }
 }
@@ -3120,14 +3712,29 @@ impl CatchClause {
     pub fn catch_all_panics_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::KW_CATCH_ALL_PANICS)
     }
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::L_PAREN)
+    }
     pub fn catch_binding(&self) -> Option<CatchBinding> {
         support::child(&self.syntax)
+    }
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::COMMA)
+    }
+    pub fn catch_stack_trace_binding(&self) -> Option<CatchStackTraceBinding> {
+        support::child(&self.syntax)
+    }
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::R_PAREN)
     }
     pub fn l_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_BRACE)
     }
-    pub fn catch_arm(&self) -> AstChildren<CatchArm> {
-        support::children(&self.syntax)
+    pub fn catch_arm(&self) -> Option<CatchArm> {
+        support::child(&self.syntax)
+    }
+    pub fn header_comment(&self) -> Option<HeaderComment> {
+        support::child(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACE)
@@ -3155,14 +3762,37 @@ impl AstNode for CatchBinding {
 }
 
 impl CatchBinding {
-    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_PAREN)
-    }
     pub fn name_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::WORD)
     }
-    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_PAREN)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CatchStackTraceBinding {
+    pub(super) syntax: SyntaxNode,
+}
+
+impl BamlAstNode for CatchStackTraceBinding {}
+
+impl AstNode for CatchStackTraceBinding {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::CATCH_STACK_TRACE_BINDING
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl CatchStackTraceBinding {
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::COMMA)
+    }
+    pub fn name_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::WORD)
     }
 }
 
@@ -3187,7 +3817,7 @@ impl AstNode for CatchArm {
 }
 
 impl CatchArm {
-    pub fn catch_pattern(&self) -> Option<CatchPattern> {
+    pub fn pattern(&self) -> Option<Pattern> {
         support::child(&self.syntax)
     }
     pub fn catch_stack_trace_binding(&self) -> Option<CatchStackTraceBinding> {
@@ -3226,344 +3856,6 @@ impl AstNode for CatchPattern {
 
 impl CatchPattern {
     pub fn pattern(&self) -> Option<Pattern> {
-        support::child(&self.syntax)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CatchStackTraceBinding {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for CatchStackTraceBinding {}
-
-impl AstNode for CatchStackTraceBinding {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::CATCH_STACK_TRACE_BINDING
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl CatchStackTraceBinding {
-    pub fn comma_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::COMMA)
-    }
-    pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct WhileStmt {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for WhileStmt {}
-
-impl AstNode for WhileStmt {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::WHILE_STMT
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl WhileStmt {
-    pub fn while_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_WHILE)
-    }
-    pub fn condition(&self) -> Option<ExprNode> {
-        support::child(&self.syntax)
-    }
-    pub fn body(&self) -> Option<BlockExpr> {
-        support::child(&self.syntax)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct WhileLetStmt {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for WhileLetStmt {}
-
-impl AstNode for WhileLetStmt {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::WHILE_LET_STMT
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl WhileLetStmt {
-    pub fn while_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_WHILE)
-    }
-    pub fn let_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_LET)
-    }
-    pub fn pattern(&self) -> Option<Pattern> {
-        support::child(&self.syntax)
-    }
-    pub fn equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::EQUALS)
-    }
-    pub fn scrutinee(&self) -> Option<ExprNode> {
-        support::child(&self.syntax)
-    }
-    pub fn body(&self) -> Option<BlockExpr> {
-        support::child(&self.syntax)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct LetStmt {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for LetStmt {}
-
-impl AstNode for LetStmt {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::LET_STMT
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl LetStmt {
-    pub fn let_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_LET)
-    }
-    pub fn const_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CONST)
-    }
-    pub fn pattern(&self) -> Option<Pattern> {
-        support::child(&self.syntax)
-    }
-    pub fn equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::EQUALS)
-    }
-    pub fn value(&self) -> Option<ExprNode> {
-        support::child(&self.syntax)
-    }
-    pub fn else_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_ELSE)
-    }
-    pub fn block_expr(&self) -> Option<BlockExpr> {
-        support::child(&self.syntax)
-    }
-    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypeBindingStmt {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for TypeBindingStmt {}
-
-impl AstNode for TypeBindingStmt {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::TYPE_BINDING_STMT
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl TypeBindingStmt {
-    pub fn type_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_TYPE)
-    }
-    pub fn name_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
-    }
-    pub fn equals_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::EQUALS)
-    }
-    pub fn value(&self) -> Option<ExprNode> {
-        support::child(&self.syntax)
-    }
-    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct BreakStmt {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for BreakStmt {}
-
-impl AstNode for BreakStmt {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::BREAK_STMT
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl BreakStmt {
-    pub fn break_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_BREAK)
-    }
-    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ContinueStmt {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for ContinueStmt {}
-
-impl AstNode for ContinueStmt {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::CONTINUE_STMT
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl ContinueStmt {
-    pub fn continue_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_CONTINUE)
-    }
-    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ReturnStmt {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for ReturnStmt {}
-
-impl AstNode for ReturnStmt {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::RETURN_STMT
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl ReturnStmt {
-    pub fn return_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_RETURN)
-    }
-    pub fn value(&self) -> Option<ExprNode> {
-        support::child(&self.syntax)
-    }
-    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ThrowStmt {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for ThrowStmt {}
-
-impl AstNode for ThrowStmt {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::THROW_STMT
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl ThrowStmt {
-    pub fn throw_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_THROW)
-    }
-    pub fn value(&self) -> Option<ExprNode> {
-        support::child(&self.syntax)
-    }
-    pub fn semicolon_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::SEMICOLON)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DeferStmt {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for DeferStmt {}
-
-impl AstNode for DeferStmt {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::DEFER_STMT
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl DeferStmt {
-    pub fn defer_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_DEFER)
-    }
-    pub fn body(&self) -> Option<BlockExpr> {
         support::child(&self.syntax)
     }
 }
@@ -3618,8 +3910,10 @@ impl AstNode for UnionPattern {
 }
 
 impl UnionPattern {
-    pub fn pattern(&self) -> Option<Pattern> {
-        support::child(&self.syntax)
+    pub fn any_element(&self) -> Option<SyntaxElement> {
+        self.syntax
+            .children_with_tokens()
+            .find(|element| !element.kind().is_trivia())
     }
     pub fn pipe_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::PIPE)
@@ -3650,8 +3944,17 @@ impl BindingPattern {
     pub fn let_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::KW_LET)
     }
+    pub fn const_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_CONST)
+    }
     pub fn name_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::WORD)
+    }
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::COLON)
+    }
+    pub fn pattern(&self) -> Option<Pattern> {
+        support::child(&self.syntax)
     }
 }
 
@@ -3679,17 +3982,13 @@ impl DestructurePattern {
     pub fn let_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::KW_LET)
     }
-    pub fn path_expr(&self) -> Option<PathExpr> {
-        support::child(&self.syntax)
+    pub fn const_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_CONST)
     }
-    pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
-    }
-    pub fn field_pattern(&self) -> AstChildren<FieldPattern> {
-        support::children(&self.syntax)
-    }
-    pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+    pub fn any_element(&self) -> impl Iterator<Item = SyntaxElement> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter(|element| !element.kind().is_trivia())
     }
 }
 
@@ -3722,6 +4021,12 @@ impl ArrayPattern {
     }
     pub fn r_bracket_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_BRACKET)
+    }
+    pub fn colon_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::COLON)
+    }
+    pub fn type_expr(&self) -> Option<TypeExpr> {
+        support::child(&self.syntax)
     }
 }
 
@@ -3778,8 +4083,10 @@ impl UnreflectPattern {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_PAREN)
     }
-    pub fn value(&self) -> Option<ExprNode> {
-        support::child(&self.syntax)
+    pub fn value(&self) -> Option<SyntaxElement> {
+        self.syntax
+            .children_with_tokens()
+            .find(|element| !element.kind().is_trivia())
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::R_PAREN)
@@ -3841,6 +4148,9 @@ impl AstNode for WildcardPattern {
 impl WildcardPattern {
     pub fn let_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::KW_LET)
+    }
+    pub fn const_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, SyntaxKind::KW_CONST)
     }
     pub fn name_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::WORD)
@@ -3937,41 +4247,6 @@ impl CallArg {
     }
     pub fn value(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct GenericArgs {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for GenericArgs {}
-
-impl AstNode for GenericArgs {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::GENERIC_ARGS
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl GenericArgs {
-    pub fn less_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::LESS)
-    }
-    pub fn type_expr(&self) -> AstChildren<TypeExpr> {
-        support::children(&self.syntax)
-    }
-    pub fn unreflect_arg(&self) -> AstChildren<UnreflectArg> {
-        support::children(&self.syntax)
-    }
-    pub fn greater_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::GREATER)
     }
 }
 
@@ -4075,32 +4350,6 @@ impl SpreadElement {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ByteStringLiteral {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for ByteStringLiteral {}
-
-impl AstNode for ByteStringLiteral {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::BYTE_STRING_LITERAL
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl ByteStringLiteral {
-    pub fn word_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnquotedString {
     pub(super) syntax: SyntaxNode,
 }
@@ -4121,8 +4370,10 @@ impl AstNode for UnquotedString {
 }
 
 impl UnquotedString {
-    pub fn word_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+    pub fn any_element(&self) -> impl Iterator<Item = SyntaxElement> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter(|element| !element.kind().is_trivia())
     }
 }
 
@@ -4147,8 +4398,10 @@ impl AstNode for BacktickText {
 }
 
 impl BacktickText {
-    pub fn word_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::WORD)
+    pub fn any_element(&self) -> impl Iterator<Item = SyntaxElement> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter(|element| !element.kind().is_trivia())
     }
 }
 
@@ -4176,14 +4429,11 @@ impl BacktickInterpolation {
     pub fn dollar_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::DOLLAR)
     }
-    pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::L_BRACE)
-    }
     pub fn expr_node(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
-    pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::R_BRACE)
+    pub fn let_stmt(&self) -> Option<LetStmt> {
+        support::child(&self.syntax)
     }
 }
 
@@ -4220,10 +4470,7 @@ impl BacktickForOpen {
     pub fn l_paren_token(&self) -> Option<SyntaxToken> {
         support::token(&self.syntax, SyntaxKind::L_PAREN)
     }
-    pub fn let_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::KW_LET)
-    }
-    pub fn pattern(&self) -> Option<Pattern> {
+    pub fn let_stmt(&self) -> Option<LetStmt> {
         support::child(&self.syntax)
     }
     pub fn in_token(&self) -> Option<SyntaxToken> {
@@ -4437,32 +4684,6 @@ impl BacktickEndif {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Error {
-    pub(super) syntax: SyntaxNode,
-}
-
-impl BamlAstNode for Error {}
-
-impl AstNode for Error {
-    type Language = BamlLanguage;
-    fn can_cast(kind: SyntaxKind) -> bool {
-        kind == SyntaxKind::ERROR
-    }
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        Self::can_cast(syntax.kind()).then_some(Self { syntax })
-    }
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-}
-
-impl Error {
-    pub fn error_token(&self) -> Option<SyntaxToken> {
-        support::token(&self.syntax, SyntaxKind::ERROR_TOKEN)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TopLevelDeclaration {
     FunctionDef(FunctionDef),
     ClassDef(ClassDef),
@@ -4472,6 +4693,10 @@ pub enum TopLevelDeclaration {
     ClientDef(ClientDef),
     ClientValueDef(ClientValueDef),
     TestDef(TestDef),
+    TestExprDef(TestExprDef),
+    TestsetDef(TestsetDef),
+    HeaderComment(HeaderComment),
+    GeneratorDef(GeneratorDef),
     RetryPolicyDef(RetryPolicyDef),
     TemplateStringDef(TemplateStringDef),
     TypeAliasDef(TypeAliasDef),
@@ -4490,6 +4715,10 @@ impl AstNode for TopLevelDeclaration {
                 | SyntaxKind::CLIENT_DEF
                 | SyntaxKind::CLIENT_VALUE_DEF
                 | SyntaxKind::TEST_DEF
+                | SyntaxKind::TEST_EXPR_DEF
+                | SyntaxKind::TESTSET_DEF
+                | SyntaxKind::HEADER_COMMENT
+                | SyntaxKind::GENERATOR_DEF
                 | SyntaxKind::RETRY_POLICY_DEF
                 | SyntaxKind::TEMPLATE_STRING_DEF
                 | SyntaxKind::TYPE_ALIAS_DEF
@@ -4505,6 +4734,10 @@ impl AstNode for TopLevelDeclaration {
             SyntaxKind::CLIENT_DEF => Some(Self::ClientDef(ClientDef { syntax })),
             SyntaxKind::CLIENT_VALUE_DEF => Some(Self::ClientValueDef(ClientValueDef { syntax })),
             SyntaxKind::TEST_DEF => Some(Self::TestDef(TestDef { syntax })),
+            SyntaxKind::TEST_EXPR_DEF => Some(Self::TestExprDef(TestExprDef { syntax })),
+            SyntaxKind::TESTSET_DEF => Some(Self::TestsetDef(TestsetDef { syntax })),
+            SyntaxKind::HEADER_COMMENT => Some(Self::HeaderComment(HeaderComment { syntax })),
+            SyntaxKind::GENERATOR_DEF => Some(Self::GeneratorDef(GeneratorDef { syntax })),
             SyntaxKind::RETRY_POLICY_DEF => Some(Self::RetryPolicyDef(RetryPolicyDef { syntax })),
             SyntaxKind::TEMPLATE_STRING_DEF => {
                 Some(Self::TemplateStringDef(TemplateStringDef { syntax }))
@@ -4523,6 +4756,10 @@ impl AstNode for TopLevelDeclaration {
             Self::ClientDef(node) => node.syntax(),
             Self::ClientValueDef(node) => node.syntax(),
             Self::TestDef(node) => node.syntax(),
+            Self::TestExprDef(node) => node.syntax(),
+            Self::TestsetDef(node) => node.syntax(),
+            Self::HeaderComment(node) => node.syntax(),
+            Self::GeneratorDef(node) => node.syntax(),
             Self::RetryPolicyDef(node) => node.syntax(),
             Self::TemplateStringDef(node) => node.syntax(),
             Self::TypeAliasDef(node) => node.syntax(),
@@ -4575,6 +4812,30 @@ impl From<ClientValueDef> for TopLevelDeclaration {
 impl From<TestDef> for TopLevelDeclaration {
     fn from(node: TestDef) -> Self {
         Self::TestDef(node)
+    }
+}
+
+impl From<TestExprDef> for TopLevelDeclaration {
+    fn from(node: TestExprDef) -> Self {
+        Self::TestExprDef(node)
+    }
+}
+
+impl From<TestsetDef> for TopLevelDeclaration {
+    fn from(node: TestsetDef) -> Self {
+        Self::TestsetDef(node)
+    }
+}
+
+impl From<HeaderComment> for TopLevelDeclaration {
+    fn from(node: HeaderComment) -> Self {
+        Self::HeaderComment(node)
+    }
+}
+
+impl From<GeneratorDef> for TopLevelDeclaration {
+    fn from(node: GeneratorDef) -> Self {
+        Self::GeneratorDef(node)
     }
 }
 
@@ -4643,11 +4904,13 @@ impl From<ExprFunctionBody> for FunctionBodyKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ExprNode {
+    LiteralExpr(LiteralExpr),
     BlockExpr(BlockExpr),
     PathExpr(PathExpr),
     StringLiteral(StringLiteral),
     RawStringLiteral(RawStringLiteral),
     BacktickStringLiteral(BacktickStringLiteral),
+    ByteStringLiteral(ByteStringLiteral),
     BinaryExpr(BinaryExpr),
     IsExpr(IsExpr),
     UnaryExpr(UnaryExpr),
@@ -4685,11 +4948,13 @@ impl AstNode for ExprNode {
     fn can_cast(kind: SyntaxKind) -> bool {
         matches!(
             kind,
-            SyntaxKind::BLOCK_EXPR
+            SyntaxKind::LITERAL_EXPR
+                | SyntaxKind::BLOCK_EXPR
                 | SyntaxKind::PATH_EXPR
                 | SyntaxKind::STRING_LITERAL
                 | SyntaxKind::RAW_STRING_LITERAL
                 | SyntaxKind::BACKTICK_STRING_LITERAL
+                | SyntaxKind::BYTE_STRING_LITERAL
                 | SyntaxKind::BINARY_EXPR
                 | SyntaxKind::IS_EXPR
                 | SyntaxKind::UNARY_EXPR
@@ -4724,6 +4989,7 @@ impl AstNode for ExprNode {
     }
     fn cast(syntax: SyntaxNode) -> Option<Self> {
         match syntax.kind() {
+            SyntaxKind::LITERAL_EXPR => Some(Self::LiteralExpr(LiteralExpr { syntax })),
             SyntaxKind::BLOCK_EXPR => Some(Self::BlockExpr(BlockExpr { syntax })),
             SyntaxKind::PATH_EXPR => Some(Self::PathExpr(PathExpr { syntax })),
             SyntaxKind::STRING_LITERAL => Some(Self::StringLiteral(StringLiteral { syntax })),
@@ -4734,6 +5000,9 @@ impl AstNode for ExprNode {
                 Some(Self::BacktickStringLiteral(BacktickStringLiteral {
                     syntax,
                 }))
+            }
+            SyntaxKind::BYTE_STRING_LITERAL => {
+                Some(Self::ByteStringLiteral(ByteStringLiteral { syntax }))
             }
             SyntaxKind::BINARY_EXPR => Some(Self::BinaryExpr(BinaryExpr { syntax })),
             SyntaxKind::IS_EXPR => Some(Self::IsExpr(IsExpr { syntax })),
@@ -4784,11 +5053,13 @@ impl AstNode for ExprNode {
     }
     fn syntax(&self) -> &SyntaxNode {
         match self {
+            Self::LiteralExpr(node) => node.syntax(),
             Self::BlockExpr(node) => node.syntax(),
             Self::PathExpr(node) => node.syntax(),
             Self::StringLiteral(node) => node.syntax(),
             Self::RawStringLiteral(node) => node.syntax(),
             Self::BacktickStringLiteral(node) => node.syntax(),
+            Self::ByteStringLiteral(node) => node.syntax(),
             Self::BinaryExpr(node) => node.syntax(),
             Self::IsExpr(node) => node.syntax(),
             Self::UnaryExpr(node) => node.syntax(),
@@ -4823,6 +5094,12 @@ impl AstNode for ExprNode {
     }
 }
 
+impl From<LiteralExpr> for ExprNode {
+    fn from(node: LiteralExpr) -> Self {
+        Self::LiteralExpr(node)
+    }
+}
+
 impl From<BlockExpr> for ExprNode {
     fn from(node: BlockExpr) -> Self {
         Self::BlockExpr(node)
@@ -4850,6 +5127,12 @@ impl From<RawStringLiteral> for ExprNode {
 impl From<BacktickStringLiteral> for ExprNode {
     fn from(node: BacktickStringLiteral) -> Self {
         Self::BacktickStringLiteral(node)
+    }
+}
+
+impl From<ByteStringLiteral> for ExprNode {
+    fn from(node: ByteStringLiteral) -> Self {
+        Self::ByteStringLiteral(node)
     }
 }
 
@@ -5030,6 +5313,542 @@ impl From<ArrayLiteral> for ExprNode {
 impl From<MapLiteral> for ExprNode {
     fn from(node: MapLiteral) -> Self {
         Self::MapLiteral(node)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum BlockItem {
+    LiteralExpr(LiteralExpr),
+    BlockExpr(BlockExpr),
+    PathExpr(PathExpr),
+    StringLiteral(StringLiteral),
+    RawStringLiteral(RawStringLiteral),
+    BacktickStringLiteral(BacktickStringLiteral),
+    ByteStringLiteral(ByteStringLiteral),
+    BinaryExpr(BinaryExpr),
+    IsExpr(IsExpr),
+    UnaryExpr(UnaryExpr),
+    CallExpr(CallExpr),
+    IndexExpr(IndexExpr),
+    TaggedTemplateExpr(TaggedTemplateExpr),
+    OptionalCallExpr(OptionalCallExpr),
+    OptionalIndexExpr(OptionalIndexExpr),
+    FieldAccessExpr(FieldAccessExpr),
+    UpcastExpr(UpcastExpr),
+    QualifiedPathExpr(QualifiedPathExpr),
+    SpecExpr(SpecExpr),
+    OptionalFieldAccessExpr(OptionalFieldAccessExpr),
+    EnvAccessExpr(EnvAccessExpr),
+    ParenExpr(ParenExpr),
+    IfExpr(IfExpr),
+    IfLetExpr(IfLetExpr),
+    MatchExpr(MatchExpr),
+    CatchExpr(CatchExpr),
+    ThrowExpr(ThrowExpr),
+    ReturnExpr(ReturnExpr),
+    BreakExpr(BreakExpr),
+    ContinueExpr(ContinueExpr),
+    SpawnExpr(SpawnExpr),
+    AwaitExpr(AwaitExpr),
+    LambdaExpr(LambdaExpr),
+    ForExpr(ForExpr),
+    ObjectLiteral(ObjectLiteral),
+    ArrayLiteral(ArrayLiteral),
+    MapLiteral(MapLiteral),
+    HeaderComment(HeaderComment),
+    WhileStmt(WhileStmt),
+    WhileLetStmt(WhileLetStmt),
+    LetStmt(LetStmt),
+    TypeBindingStmt(TypeBindingStmt),
+    BreakStmt(BreakStmt),
+    ContinueStmt(ContinueStmt),
+    ReturnStmt(ReturnStmt),
+    ThrowStmt(ThrowStmt),
+    DeferStmt(DeferStmt),
+    TestExprDef(TestExprDef),
+    TestsetDef(TestsetDef),
+}
+
+impl AstNode for BlockItem {
+    type Language = BamlLanguage;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        matches!(
+            kind,
+            SyntaxKind::LITERAL_EXPR
+                | SyntaxKind::BLOCK_EXPR
+                | SyntaxKind::PATH_EXPR
+                | SyntaxKind::STRING_LITERAL
+                | SyntaxKind::RAW_STRING_LITERAL
+                | SyntaxKind::BACKTICK_STRING_LITERAL
+                | SyntaxKind::BYTE_STRING_LITERAL
+                | SyntaxKind::BINARY_EXPR
+                | SyntaxKind::IS_EXPR
+                | SyntaxKind::UNARY_EXPR
+                | SyntaxKind::CALL_EXPR
+                | SyntaxKind::INDEX_EXPR
+                | SyntaxKind::TAGGED_TEMPLATE_EXPR
+                | SyntaxKind::OPTIONAL_CALL_EXPR
+                | SyntaxKind::OPTIONAL_INDEX_EXPR
+                | SyntaxKind::FIELD_ACCESS_EXPR
+                | SyntaxKind::UPCAST_EXPR
+                | SyntaxKind::QUALIFIED_PATH_EXPR
+                | SyntaxKind::SPEC_EXPR
+                | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
+                | SyntaxKind::ENV_ACCESS_EXPR
+                | SyntaxKind::PAREN_EXPR
+                | SyntaxKind::IF_EXPR
+                | SyntaxKind::IF_LET_EXPR
+                | SyntaxKind::MATCH_EXPR
+                | SyntaxKind::CATCH_EXPR
+                | SyntaxKind::THROW_EXPR
+                | SyntaxKind::RETURN_EXPR
+                | SyntaxKind::BREAK_EXPR
+                | SyntaxKind::CONTINUE_EXPR
+                | SyntaxKind::SPAWN_EXPR
+                | SyntaxKind::AWAIT_EXPR
+                | SyntaxKind::LAMBDA_EXPR
+                | SyntaxKind::FOR_EXPR
+                | SyntaxKind::OBJECT_LITERAL
+                | SyntaxKind::ARRAY_LITERAL
+                | SyntaxKind::MAP_LITERAL
+                | SyntaxKind::HEADER_COMMENT
+                | SyntaxKind::WHILE_STMT
+                | SyntaxKind::WHILE_LET_STMT
+                | SyntaxKind::LET_STMT
+                | SyntaxKind::TYPE_BINDING_STMT
+                | SyntaxKind::BREAK_STMT
+                | SyntaxKind::CONTINUE_STMT
+                | SyntaxKind::RETURN_STMT
+                | SyntaxKind::THROW_STMT
+                | SyntaxKind::DEFER_STMT
+                | SyntaxKind::TEST_EXPR_DEF
+                | SyntaxKind::TESTSET_DEF
+        )
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        match syntax.kind() {
+            SyntaxKind::LITERAL_EXPR => Some(Self::LiteralExpr(LiteralExpr { syntax })),
+            SyntaxKind::BLOCK_EXPR => Some(Self::BlockExpr(BlockExpr { syntax })),
+            SyntaxKind::PATH_EXPR => Some(Self::PathExpr(PathExpr { syntax })),
+            SyntaxKind::STRING_LITERAL => Some(Self::StringLiteral(StringLiteral { syntax })),
+            SyntaxKind::RAW_STRING_LITERAL => {
+                Some(Self::RawStringLiteral(RawStringLiteral { syntax }))
+            }
+            SyntaxKind::BACKTICK_STRING_LITERAL => {
+                Some(Self::BacktickStringLiteral(BacktickStringLiteral {
+                    syntax,
+                }))
+            }
+            SyntaxKind::BYTE_STRING_LITERAL => {
+                Some(Self::ByteStringLiteral(ByteStringLiteral { syntax }))
+            }
+            SyntaxKind::BINARY_EXPR => Some(Self::BinaryExpr(BinaryExpr { syntax })),
+            SyntaxKind::IS_EXPR => Some(Self::IsExpr(IsExpr { syntax })),
+            SyntaxKind::UNARY_EXPR => Some(Self::UnaryExpr(UnaryExpr { syntax })),
+            SyntaxKind::CALL_EXPR => Some(Self::CallExpr(CallExpr { syntax })),
+            SyntaxKind::INDEX_EXPR => Some(Self::IndexExpr(IndexExpr { syntax })),
+            SyntaxKind::TAGGED_TEMPLATE_EXPR => {
+                Some(Self::TaggedTemplateExpr(TaggedTemplateExpr { syntax }))
+            }
+            SyntaxKind::OPTIONAL_CALL_EXPR => {
+                Some(Self::OptionalCallExpr(OptionalCallExpr { syntax }))
+            }
+            SyntaxKind::OPTIONAL_INDEX_EXPR => {
+                Some(Self::OptionalIndexExpr(OptionalIndexExpr { syntax }))
+            }
+            SyntaxKind::FIELD_ACCESS_EXPR => {
+                Some(Self::FieldAccessExpr(FieldAccessExpr { syntax }))
+            }
+            SyntaxKind::UPCAST_EXPR => Some(Self::UpcastExpr(UpcastExpr { syntax })),
+            SyntaxKind::QUALIFIED_PATH_EXPR => {
+                Some(Self::QualifiedPathExpr(QualifiedPathExpr { syntax }))
+            }
+            SyntaxKind::SPEC_EXPR => Some(Self::SpecExpr(SpecExpr { syntax })),
+            SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => {
+                Some(Self::OptionalFieldAccessExpr(OptionalFieldAccessExpr {
+                    syntax,
+                }))
+            }
+            SyntaxKind::ENV_ACCESS_EXPR => Some(Self::EnvAccessExpr(EnvAccessExpr { syntax })),
+            SyntaxKind::PAREN_EXPR => Some(Self::ParenExpr(ParenExpr { syntax })),
+            SyntaxKind::IF_EXPR => Some(Self::IfExpr(IfExpr { syntax })),
+            SyntaxKind::IF_LET_EXPR => Some(Self::IfLetExpr(IfLetExpr { syntax })),
+            SyntaxKind::MATCH_EXPR => Some(Self::MatchExpr(MatchExpr { syntax })),
+            SyntaxKind::CATCH_EXPR => Some(Self::CatchExpr(CatchExpr { syntax })),
+            SyntaxKind::THROW_EXPR => Some(Self::ThrowExpr(ThrowExpr { syntax })),
+            SyntaxKind::RETURN_EXPR => Some(Self::ReturnExpr(ReturnExpr { syntax })),
+            SyntaxKind::BREAK_EXPR => Some(Self::BreakExpr(BreakExpr { syntax })),
+            SyntaxKind::CONTINUE_EXPR => Some(Self::ContinueExpr(ContinueExpr { syntax })),
+            SyntaxKind::SPAWN_EXPR => Some(Self::SpawnExpr(SpawnExpr { syntax })),
+            SyntaxKind::AWAIT_EXPR => Some(Self::AwaitExpr(AwaitExpr { syntax })),
+            SyntaxKind::LAMBDA_EXPR => Some(Self::LambdaExpr(LambdaExpr { syntax })),
+            SyntaxKind::FOR_EXPR => Some(Self::ForExpr(ForExpr { syntax })),
+            SyntaxKind::OBJECT_LITERAL => Some(Self::ObjectLiteral(ObjectLiteral { syntax })),
+            SyntaxKind::ARRAY_LITERAL => Some(Self::ArrayLiteral(ArrayLiteral { syntax })),
+            SyntaxKind::MAP_LITERAL => Some(Self::MapLiteral(MapLiteral { syntax })),
+            SyntaxKind::HEADER_COMMENT => Some(Self::HeaderComment(HeaderComment { syntax })),
+            SyntaxKind::WHILE_STMT => Some(Self::WhileStmt(WhileStmt { syntax })),
+            SyntaxKind::WHILE_LET_STMT => Some(Self::WhileLetStmt(WhileLetStmt { syntax })),
+            SyntaxKind::LET_STMT => Some(Self::LetStmt(LetStmt { syntax })),
+            SyntaxKind::TYPE_BINDING_STMT => {
+                Some(Self::TypeBindingStmt(TypeBindingStmt { syntax }))
+            }
+            SyntaxKind::BREAK_STMT => Some(Self::BreakStmt(BreakStmt { syntax })),
+            SyntaxKind::CONTINUE_STMT => Some(Self::ContinueStmt(ContinueStmt { syntax })),
+            SyntaxKind::RETURN_STMT => Some(Self::ReturnStmt(ReturnStmt { syntax })),
+            SyntaxKind::THROW_STMT => Some(Self::ThrowStmt(ThrowStmt { syntax })),
+            SyntaxKind::DEFER_STMT => Some(Self::DeferStmt(DeferStmt { syntax })),
+            SyntaxKind::TEST_EXPR_DEF => Some(Self::TestExprDef(TestExprDef { syntax })),
+            SyntaxKind::TESTSET_DEF => Some(Self::TestsetDef(TestsetDef { syntax })),
+            _ => None,
+        }
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        match self {
+            Self::LiteralExpr(node) => node.syntax(),
+            Self::BlockExpr(node) => node.syntax(),
+            Self::PathExpr(node) => node.syntax(),
+            Self::StringLiteral(node) => node.syntax(),
+            Self::RawStringLiteral(node) => node.syntax(),
+            Self::BacktickStringLiteral(node) => node.syntax(),
+            Self::ByteStringLiteral(node) => node.syntax(),
+            Self::BinaryExpr(node) => node.syntax(),
+            Self::IsExpr(node) => node.syntax(),
+            Self::UnaryExpr(node) => node.syntax(),
+            Self::CallExpr(node) => node.syntax(),
+            Self::IndexExpr(node) => node.syntax(),
+            Self::TaggedTemplateExpr(node) => node.syntax(),
+            Self::OptionalCallExpr(node) => node.syntax(),
+            Self::OptionalIndexExpr(node) => node.syntax(),
+            Self::FieldAccessExpr(node) => node.syntax(),
+            Self::UpcastExpr(node) => node.syntax(),
+            Self::QualifiedPathExpr(node) => node.syntax(),
+            Self::SpecExpr(node) => node.syntax(),
+            Self::OptionalFieldAccessExpr(node) => node.syntax(),
+            Self::EnvAccessExpr(node) => node.syntax(),
+            Self::ParenExpr(node) => node.syntax(),
+            Self::IfExpr(node) => node.syntax(),
+            Self::IfLetExpr(node) => node.syntax(),
+            Self::MatchExpr(node) => node.syntax(),
+            Self::CatchExpr(node) => node.syntax(),
+            Self::ThrowExpr(node) => node.syntax(),
+            Self::ReturnExpr(node) => node.syntax(),
+            Self::BreakExpr(node) => node.syntax(),
+            Self::ContinueExpr(node) => node.syntax(),
+            Self::SpawnExpr(node) => node.syntax(),
+            Self::AwaitExpr(node) => node.syntax(),
+            Self::LambdaExpr(node) => node.syntax(),
+            Self::ForExpr(node) => node.syntax(),
+            Self::ObjectLiteral(node) => node.syntax(),
+            Self::ArrayLiteral(node) => node.syntax(),
+            Self::MapLiteral(node) => node.syntax(),
+            Self::HeaderComment(node) => node.syntax(),
+            Self::WhileStmt(node) => node.syntax(),
+            Self::WhileLetStmt(node) => node.syntax(),
+            Self::LetStmt(node) => node.syntax(),
+            Self::TypeBindingStmt(node) => node.syntax(),
+            Self::BreakStmt(node) => node.syntax(),
+            Self::ContinueStmt(node) => node.syntax(),
+            Self::ReturnStmt(node) => node.syntax(),
+            Self::ThrowStmt(node) => node.syntax(),
+            Self::DeferStmt(node) => node.syntax(),
+            Self::TestExprDef(node) => node.syntax(),
+            Self::TestsetDef(node) => node.syntax(),
+        }
+    }
+}
+
+impl From<LiteralExpr> for BlockItem {
+    fn from(node: LiteralExpr) -> Self {
+        Self::LiteralExpr(node)
+    }
+}
+
+impl From<BlockExpr> for BlockItem {
+    fn from(node: BlockExpr) -> Self {
+        Self::BlockExpr(node)
+    }
+}
+
+impl From<PathExpr> for BlockItem {
+    fn from(node: PathExpr) -> Self {
+        Self::PathExpr(node)
+    }
+}
+
+impl From<StringLiteral> for BlockItem {
+    fn from(node: StringLiteral) -> Self {
+        Self::StringLiteral(node)
+    }
+}
+
+impl From<RawStringLiteral> for BlockItem {
+    fn from(node: RawStringLiteral) -> Self {
+        Self::RawStringLiteral(node)
+    }
+}
+
+impl From<BacktickStringLiteral> for BlockItem {
+    fn from(node: BacktickStringLiteral) -> Self {
+        Self::BacktickStringLiteral(node)
+    }
+}
+
+impl From<ByteStringLiteral> for BlockItem {
+    fn from(node: ByteStringLiteral) -> Self {
+        Self::ByteStringLiteral(node)
+    }
+}
+
+impl From<BinaryExpr> for BlockItem {
+    fn from(node: BinaryExpr) -> Self {
+        Self::BinaryExpr(node)
+    }
+}
+
+impl From<IsExpr> for BlockItem {
+    fn from(node: IsExpr) -> Self {
+        Self::IsExpr(node)
+    }
+}
+
+impl From<UnaryExpr> for BlockItem {
+    fn from(node: UnaryExpr) -> Self {
+        Self::UnaryExpr(node)
+    }
+}
+
+impl From<CallExpr> for BlockItem {
+    fn from(node: CallExpr) -> Self {
+        Self::CallExpr(node)
+    }
+}
+
+impl From<IndexExpr> for BlockItem {
+    fn from(node: IndexExpr) -> Self {
+        Self::IndexExpr(node)
+    }
+}
+
+impl From<TaggedTemplateExpr> for BlockItem {
+    fn from(node: TaggedTemplateExpr) -> Self {
+        Self::TaggedTemplateExpr(node)
+    }
+}
+
+impl From<OptionalCallExpr> for BlockItem {
+    fn from(node: OptionalCallExpr) -> Self {
+        Self::OptionalCallExpr(node)
+    }
+}
+
+impl From<OptionalIndexExpr> for BlockItem {
+    fn from(node: OptionalIndexExpr) -> Self {
+        Self::OptionalIndexExpr(node)
+    }
+}
+
+impl From<FieldAccessExpr> for BlockItem {
+    fn from(node: FieldAccessExpr) -> Self {
+        Self::FieldAccessExpr(node)
+    }
+}
+
+impl From<UpcastExpr> for BlockItem {
+    fn from(node: UpcastExpr) -> Self {
+        Self::UpcastExpr(node)
+    }
+}
+
+impl From<QualifiedPathExpr> for BlockItem {
+    fn from(node: QualifiedPathExpr) -> Self {
+        Self::QualifiedPathExpr(node)
+    }
+}
+
+impl From<SpecExpr> for BlockItem {
+    fn from(node: SpecExpr) -> Self {
+        Self::SpecExpr(node)
+    }
+}
+
+impl From<OptionalFieldAccessExpr> for BlockItem {
+    fn from(node: OptionalFieldAccessExpr) -> Self {
+        Self::OptionalFieldAccessExpr(node)
+    }
+}
+
+impl From<EnvAccessExpr> for BlockItem {
+    fn from(node: EnvAccessExpr) -> Self {
+        Self::EnvAccessExpr(node)
+    }
+}
+
+impl From<ParenExpr> for BlockItem {
+    fn from(node: ParenExpr) -> Self {
+        Self::ParenExpr(node)
+    }
+}
+
+impl From<IfExpr> for BlockItem {
+    fn from(node: IfExpr) -> Self {
+        Self::IfExpr(node)
+    }
+}
+
+impl From<IfLetExpr> for BlockItem {
+    fn from(node: IfLetExpr) -> Self {
+        Self::IfLetExpr(node)
+    }
+}
+
+impl From<MatchExpr> for BlockItem {
+    fn from(node: MatchExpr) -> Self {
+        Self::MatchExpr(node)
+    }
+}
+
+impl From<CatchExpr> for BlockItem {
+    fn from(node: CatchExpr) -> Self {
+        Self::CatchExpr(node)
+    }
+}
+
+impl From<ThrowExpr> for BlockItem {
+    fn from(node: ThrowExpr) -> Self {
+        Self::ThrowExpr(node)
+    }
+}
+
+impl From<ReturnExpr> for BlockItem {
+    fn from(node: ReturnExpr) -> Self {
+        Self::ReturnExpr(node)
+    }
+}
+
+impl From<BreakExpr> for BlockItem {
+    fn from(node: BreakExpr) -> Self {
+        Self::BreakExpr(node)
+    }
+}
+
+impl From<ContinueExpr> for BlockItem {
+    fn from(node: ContinueExpr) -> Self {
+        Self::ContinueExpr(node)
+    }
+}
+
+impl From<SpawnExpr> for BlockItem {
+    fn from(node: SpawnExpr) -> Self {
+        Self::SpawnExpr(node)
+    }
+}
+
+impl From<AwaitExpr> for BlockItem {
+    fn from(node: AwaitExpr) -> Self {
+        Self::AwaitExpr(node)
+    }
+}
+
+impl From<LambdaExpr> for BlockItem {
+    fn from(node: LambdaExpr) -> Self {
+        Self::LambdaExpr(node)
+    }
+}
+
+impl From<ForExpr> for BlockItem {
+    fn from(node: ForExpr) -> Self {
+        Self::ForExpr(node)
+    }
+}
+
+impl From<ObjectLiteral> for BlockItem {
+    fn from(node: ObjectLiteral) -> Self {
+        Self::ObjectLiteral(node)
+    }
+}
+
+impl From<ArrayLiteral> for BlockItem {
+    fn from(node: ArrayLiteral) -> Self {
+        Self::ArrayLiteral(node)
+    }
+}
+
+impl From<MapLiteral> for BlockItem {
+    fn from(node: MapLiteral) -> Self {
+        Self::MapLiteral(node)
+    }
+}
+
+impl From<HeaderComment> for BlockItem {
+    fn from(node: HeaderComment) -> Self {
+        Self::HeaderComment(node)
+    }
+}
+
+impl From<WhileStmt> for BlockItem {
+    fn from(node: WhileStmt) -> Self {
+        Self::WhileStmt(node)
+    }
+}
+
+impl From<WhileLetStmt> for BlockItem {
+    fn from(node: WhileLetStmt) -> Self {
+        Self::WhileLetStmt(node)
+    }
+}
+
+impl From<LetStmt> for BlockItem {
+    fn from(node: LetStmt) -> Self {
+        Self::LetStmt(node)
+    }
+}
+
+impl From<TypeBindingStmt> for BlockItem {
+    fn from(node: TypeBindingStmt) -> Self {
+        Self::TypeBindingStmt(node)
+    }
+}
+
+impl From<BreakStmt> for BlockItem {
+    fn from(node: BreakStmt) -> Self {
+        Self::BreakStmt(node)
+    }
+}
+
+impl From<ContinueStmt> for BlockItem {
+    fn from(node: ContinueStmt) -> Self {
+        Self::ContinueStmt(node)
+    }
+}
+
+impl From<ReturnStmt> for BlockItem {
+    fn from(node: ReturnStmt) -> Self {
+        Self::ReturnStmt(node)
+    }
+}
+
+impl From<ThrowStmt> for BlockItem {
+    fn from(node: ThrowStmt) -> Self {
+        Self::ThrowStmt(node)
+    }
+}
+
+impl From<DeferStmt> for BlockItem {
+    fn from(node: DeferStmt) -> Self {
+        Self::DeferStmt(node)
+    }
+}
+
+impl From<TestExprDef> for BlockItem {
+    fn from(node: TestExprDef) -> Self {
+        Self::TestExprDef(node)
+    }
+}
+
+impl From<TestsetDef> for BlockItem {
+    fn from(node: TestsetDef) -> Self {
+        Self::TestsetDef(node)
     }
 }
 

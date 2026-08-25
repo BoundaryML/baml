@@ -208,6 +208,7 @@ pub enum SyntaxKind {
     CONFIG_BLOCK,
     CONFIG_ITEM,
     CONFIG_VALUE,
+    CONFIG_ARRAY,
     NESTED_CONFIG,
 
     // Type expressions
@@ -228,6 +229,7 @@ pub enum SyntaxKind {
 
     // Expressions (for attributes and function bodies)
     EXPR,
+    LITERAL_EXPR,
     BINARY_EXPR,
     /// `<expr> is <pattern>` — Rust `matches!`-style pattern test, returns bool.
     ///

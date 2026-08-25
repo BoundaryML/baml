@@ -2186,7 +2186,7 @@ impl ConfigItem {
 
         let array_literal = config_value
             .children()
-            .find(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)?;
+            .find(|child| child.kind() == SyntaxKind::CONFIG_ARRAY)?;
 
         Some(
             array_literal
@@ -2392,15 +2392,13 @@ impl Attribute {
     }
 }
 
-/// An element within a block expression - either a statement node or an expression token.
+/// An element within a block expression.
 #[derive(Debug, Clone)]
 pub enum BlockElement {
     /// A statement node (`LET_STMT`, `RETURN_STMT`, `WHILE_STMT`, `FOR_EXPR`)
     Stmt(SyntaxNode),
     /// An expression node (various expression kinds)
     ExprNode(SyntaxNode),
-    /// A literal or identifier token that forms an expression
-    ExprToken(SyntaxToken),
     /// A header comment (`//# name`)
     HeaderComment(SyntaxNode),
 }
@@ -2410,7 +2408,7 @@ impl BlockElement {
     ///
     /// For most statement nodes (`LET_STMT`, `BREAK_STMT`, etc.), the semicolon is a child of the node.
     /// For `WHILE_STMT` and `FOR_EXPR`, the semicolon is a sibling (parser doesn't consume it).
-    /// For expression nodes and tokens, the semicolon is a sibling after the node.
+    /// For expression nodes, the semicolon is a sibling after the node.
     pub fn has_trailing_semicolon(&self) -> bool {
         use rowan::Direction;
 
@@ -2442,14 +2440,6 @@ impl BlockElement {
                     .skip(1) // Skip the node itself
                     .filter_map(rowan::NodeOrToken::into_token)
                     .any(|token| token.kind() == SyntaxKind::SEMICOLON)
-            }
-            BlockElement::ExprToken(token) => {
-                // For tokens, check siblings
-                token
-                    .siblings_with_tokens(Direction::Next)
-                    .skip(1)
-                    .filter_map(rowan::NodeOrToken::into_token)
-                    .any(|t| t.kind() == SyntaxKind::SEMICOLON)
             }
             BlockElement::HeaderComment(_) => false, // Header comments don't have trailing semicolons
         }
@@ -2484,6 +2474,7 @@ impl BlockExpr {
                         SyntaxKind::HEADER_COMMENT => Some(BlockElement::HeaderComment(n)),
                         // Expression nodes
                         SyntaxKind::EXPR
+                        | SyntaxKind::LITERAL_EXPR
                         | SyntaxKind::BINARY_EXPR
                         | SyntaxKind::IS_EXPR
                         | SyntaxKind::UNARY_EXPR
@@ -2493,6 +2484,9 @@ impl BlockExpr {
                         | SyntaxKind::MATCH_EXPR
                         | SyntaxKind::CATCH_EXPR
                         | SyntaxKind::THROW_EXPR
+                        | SyntaxKind::RETURN_EXPR
+                        | SyntaxKind::BREAK_EXPR
+                        | SyntaxKind::CONTINUE_EXPR
                         | SyntaxKind::SPAWN_EXPR
                         | SyntaxKind::AWAIT_EXPR
                         | SyntaxKind::BLOCK_EXPR
@@ -2522,22 +2516,7 @@ impl BlockExpr {
                         _ => None,
                     }
                 }
-                rowan::NodeOrToken::Token(t) => {
-                    // Keep literals and identifiers (potential tail expressions)
-                    match t.kind() {
-                        SyntaxKind::WORD
-                        | SyntaxKind::BIGINT_LITERAL
-                        | SyntaxKind::INTEGER_LITERAL
-                        | SyntaxKind::FLOAT_LITERAL
-                        | SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL
-                        // Boolean / null literals are re-lexed contextual keywords.
-                        | SyntaxKind::KW_TRUE
-                        | SyntaxKind::KW_FALSE
-                        | SyntaxKind::KW_NULL => Some(BlockElement::ExprToken(t)),
-                        _ => None,
-                    }
-                }
+                rowan::NodeOrToken::Token(_) => None,
             }
         })
     }

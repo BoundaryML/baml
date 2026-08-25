@@ -1446,46 +1446,6 @@ impl LoweringContext {
                         stmts.push(self.alloc_stmt(Stmt::Expr(expr_id), node.span_range()));
                     }
                 }
-                BlockElement::ExprToken(token) => {
-                    let span = token.text_range();
-                    let expr_id = match token.kind() {
-                        k if is_ident_token(k) => {
-                            let text = token.text();
-                            let e = match text {
-                                "true" => Expr::Literal(Literal::Bool(true)),
-                                "false" => Expr::Literal(Literal::Bool(false)),
-                                "null" => Expr::Null,
-                                _ => Expr::Path(vec![Name::new(text)]),
-                            };
-                            self.alloc_expr(e, span)
-                        }
-                        SyntaxKind::BIGINT_LITERAL => {
-                            let value = self.bigint_literal_value(token);
-                            self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span)
-                        }
-                        SyntaxKind::INTEGER_LITERAL => {
-                            let value = self.int_literal_value(token);
-                            self.alloc_expr(Expr::Literal(Literal::Int(value)), span)
-                        }
-                        SyntaxKind::FLOAT_LITERAL => {
-                            let text = num_lit::normalize_float_literal(token.text());
-                            self.alloc_expr(Expr::Literal(Literal::Float(text)), span)
-                        }
-                        SyntaxKind::STRING_LITERAL => {
-                            let text = token.text().to_string();
-                            let content = strip_string_delimiters(&text);
-                            self.alloc_expr(Expr::Literal(Literal::String(content)), span)
-                        }
-                        _ => self.alloc_expr(Expr::Missing, span),
-                    };
-
-                    let has_semicolon = element.has_trailing_semicolon();
-                    if is_last && !has_semicolon {
-                        tail_expr = Some(expr_id);
-                    } else {
-                        stmts.push(self.alloc_stmt(Stmt::Expr(expr_id), span));
-                    }
-                }
                 BlockElement::HeaderComment(node) => {
                     let stmt_id = self.lower_header_comment(node);
                     stmts.push(stmt_id);
@@ -1519,6 +1479,9 @@ impl LoweringContext {
     fn lower_expr_inner(&mut self, node: &SyntaxNode) -> ExprId {
         match node.kind() {
             SyntaxKind::BINARY_EXPR => self.lower_binary_expr(node),
+            SyntaxKind::LITERAL_EXPR => self
+                .try_lower_literal_token(node)
+                .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range())),
             SyntaxKind::IS_EXPR => self.lower_is_expr(node),
             SyntaxKind::UNARY_EXPR => self.lower_unary_expr(node),
             SyntaxKind::CALL_EXPR => self.lower_call_expr(node),
@@ -2027,13 +1990,21 @@ impl LoweringContext {
         // `UnaryOp` variant, so it reuses the existing, correct `Neg`/`Sub`
         // type rules and VM opcodes without a new operator in the pipeline.
         let mut bit_not = false;
-        // Value of an `INTEGER_LITERAL` token seen *directly* in this
-        // `UNARY_EXPR` (not via a child node like a parenthesized expr).
+        // Value of an integer literal in the direct `LITERAL_EXPR` operand.
+        // A parenthesized literal is nested under `PAREN_EXPR` instead.
         let mut direct_int_lit: Option<i64> = None;
 
         for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Node(child_node) => {
+                    if child_node.kind() == SyntaxKind::LITERAL_EXPR
+                        && let Some(token) = child_node
+                            .children_with_tokens()
+                            .filter_map(rowan::NodeOrToken::into_token)
+                            .find(|token| token.kind() == SyntaxKind::INTEGER_LITERAL)
+                    {
+                        direct_int_lit = Some(self.int_literal_value(&token));
+                    }
                     operand = Some(self.lower_expr(&child_node));
                 }
                 rowan::NodeOrToken::Token(token) => {
@@ -2138,10 +2109,9 @@ impl LoweringContext {
         // ordinary `Neg(literal)` form and are folded by the MIR optimizer as
         // before, and a bare `+2^62` stays rejected.
         //
-        // Gated on the `INTEGER_LITERAL` token seen *directly* in this
-        // `UNARY_EXPR`: a parenthesized `-(2^62)` lowers its operand through a
-        // child node (not this token), so `direct_int_lit` is `None` and it is
-        // correctly NOT treated as a negative literal (the `+2^62` is rejected).
+        // Gated on a direct `LITERAL_EXPR` child of this `UNARY_EXPR`: a
+        // parenthesized `-(2^62)` has a `PAREN_EXPR` child, so `direct_int_lit`
+        // is `None` and it is correctly not treated as a negative literal.
         // `INT_MAX == bex_vm_types::Value::INT_MAX == i64::MAX >> 1`.
         if op == UnaryOp::Neg
             && !double_op

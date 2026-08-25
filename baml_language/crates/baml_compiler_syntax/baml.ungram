@@ -15,6 +15,10 @@ TopLevelDeclaration =
 | ClientDef
 | ClientValueDef
 | TestDef
+| TestExprDef
+| TestsetDef
+| HeaderComment
+| GeneratorDef
 | RetryPolicyDef
 | TemplateStringDef
 | TypeAliasDef
@@ -36,33 +40,38 @@ ParameterList = '(' Parameter* ')'
 
 Parameter =
   name_token:('#word' | 'client')
-  ':'?
-  TypeExpr?
-  ('=' default_value:Expr)?
+  (':'? TypeExpr)?
+  ('=' default_value:ExprNode)?
 
 LlmFunctionBody =
   '{'
-  (ClientField | PromptField | ToolsField)*
+  (
+    ClientField ToolsField? PromptField
+  | ClientField PromptField ToolsField?
+  | PromptField ToolsField? ClientField
+  | PromptField ClientField ToolsField?
+  | ToolsField ClientField PromptField
+  | ToolsField PromptField ClientField
+  )
   '}'
 
 ExprFunctionBody = BlockExpr
 
-ClientField = 'client' ':' value:Expr
-PromptField = name_token:'#word' ':' value:Expr
-ToolsField = name_token:'#word' ':' value:Expr
+ClientField = 'client' ':' value:ExprNode
+PromptField = name_token:'#word' ':' value:ExprNode
+ToolsField = name_token:'#word' ':' value:ExprNode
 
 ClassDef =
   BlockAttribute*
   'class'
   name_token:'#word'
   GenericParamList?
-  ('{' (Field | ImplementsBlock | BlockAttribute)* '}')
+  ('{' (Field | FunctionDef | ImplementsBlock | BlockAttribute)* '}')
 
 Field =
   BlockAttribute*
   name_token:('#word' | 'client')
-  ':'?
-  TypeExpr?
+  (':'? TypeExpr)?
 
 InterfaceDef =
   BlockAttribute*
@@ -110,6 +119,7 @@ InterfaceFieldLink =
 
 ImplementsFor =
   ('implements' | 'implement')
+  GenericParamList?
   ImplementsTarget
   'for'
   ImplementsForTarget
@@ -126,31 +136,36 @@ EnumDef =
   name_token:'#word'
   GenericParamList?
   '{'
-  EnumVariant*
+  (EnumVariant | BlockAttribute)*
   '}'
 
-EnumVariant = BlockAttribute* name_token:'#word'
+EnumVariant = name_token:'#word' Attribute*
 
 ClientDef =
   BlockAttribute*
   'client'
-  '<'
-  client_type:'#word'
-  '>'
+  ClientType?
   name_token:'#word'
   ConfigBlock
+
+ClientType = '<' name_token:'#word' '>'
 
 ClientValueDef =
   BlockAttribute*
   'client'
   name_token:'#word'
   '='
-  value:Expr
+  value:ExprNode
   ';'?
 
-ConfigBlock = '{' ConfigItem* '}'
-ConfigItem = key_token:('#word' | 'client') ':'? ConfigValue
-ConfigValue = Expr
+ConfigBlock = '{' (ConfigItem | BlockAttribute)* '}'
+ConfigItem =
+  (StringLiteral | key_token:('#word' | 'client' | 'retry_policy' | 'enum' | 'class'))
+  ':'?
+  (ConfigValue | ConfigBlock)
+  Attribute*
+ConfigValue = (expr:ExprNode | config_array:ConfigArray | config_block:ConfigBlock)
+ConfigArray = '[' (ConfigValue | ConfigBlock)* ']'
 
 TestDef = BlockAttribute* 'test' name_token:'#word' ConfigBlock
 RetryPolicyDef = BlockAttribute* 'retry_policy' name_token:'#word' ConfigBlock
@@ -194,6 +209,7 @@ TypeExpr =
   | ('#word' ('.' '#word')* TypeArgs?)
   | ('(' FunctionTypeParam* ')' ('->' TypeExpr ThrowsClause?)?)
   ) (TypeArgs | '[' ']' | '?')*)*
+  Attribute*
 
 FunctionTypeParam =
   (name_token:('#word' | 'client') '?'? ':')?
@@ -203,16 +219,18 @@ TypeArgs = '<' (TypeExpr | AssociatedTypeDecl)* '>'
 
 Attribute = '@' name_token:'#word' AttributeArgs?
 BlockAttribute = '@@' name_token:'#word' AttributeArgs?
-AttributeArgs = '(' Expr* ')'
+AttributeArgs = '(' ExprNode* ')'
 
-Expr = ExprNode
+AnyElement = Error
 
 ExprNode =
-  BlockExpr
+  LiteralExpr
+| BlockExpr
 | PathExpr
 | StringLiteral
 | RawStringLiteral
 | BacktickStringLiteral
+| ByteStringLiteral
 | BinaryExpr
 | IsExpr
 | UnaryExpr
@@ -244,25 +262,44 @@ ExprNode =
 | ArrayLiteral
 | MapLiteral
 
-BlockExpr = '{' Expr* '}'
-PathExpr = '#word' (('.' | '::') '#word')*
+LiteralExpr = '#bigint' | '#integer' | '#float' | 'true' | 'false' | 'null'
 
-StringLiteral = '"' '#word'* '"'
-RawStringLiteral = '#word'
+BlockExpr = '{' BlockItem* '}'
+BlockItem =
+  ExprNode
+| HeaderComment
+| WhileStmt
+| WhileLetStmt
+| LetStmt
+| TypeBindingStmt
+| BreakStmt
+| ContinueStmt
+| ReturnStmt
+| ThrowStmt
+| DeferStmt
+| TestExprDef
+| TestsetDef
+PathExpr =
+  PathExpr GenericArgs
+| ('#word' | 'client' | 'class' | 'enum' | 'interface' | 'function' | 'implements' | 'spawn' | 'await')
+  (('.' | '::') ('#word' | 'client' | 'class' | 'enum' | 'interface' | 'function' | 'implements' | 'spawn' | 'await'))*
+
+StringLiteral = '"' AnyElement* '"'
+RawStringLiteral = AnyElement*
 
 GeneratorDef = BlockAttribute* 'generator' name_token:'#word' ConfigBlock
 
 TestExprDef =
   BlockAttribute*
   'test'
-  name:StringLiteral
+  name:ExprNode
   ('with' with_value:ExprNode)?
   body:BlockExpr
 
 TestsetDef =
   BlockAttribute*
   'testset'
-  name:StringLiteral
+  name:ExprNode
   ('with' with_value:ExprNode)?
   body:BlockExpr
 
@@ -272,7 +309,7 @@ DefaultImpl = ExprFunctionBody
 BinaryExpr =
   lhs:ExprNode
   ('==' | '!=' | '<' | '>' | '<=' | '>=' | '&&' | '||' | '&' | '|'
-   | '^' | '<<' | '>>' | '+' | '-' | '*' | '/' | '%' | '??' | 'instanceof'
+   | '^' | '<<' | '>>' | '+' | '-' | '*' | '/' | '%' | ('?' '?') | '??' | 'instanceof'
    | '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^='
    | '<<=' | '>>=')
   rhs:ExprNode
@@ -284,11 +321,11 @@ IndexExpr = base:ExprNode '[' index:ExprNode ']'
 TaggedTemplateExpr = tag:ExprNode BacktickStringLiteral
 OptionalCallExpr = callee:ExprNode '?.' CallArgs
 OptionalIndexExpr = base:ExprNode '?.' '[' index:ExprNode ']'
-FieldAccessExpr = base:ExprNode '.' name_token:'#word'
-UpcastExpr = base:ExprNode '.' 'as' '<' TypeExpr '>'
+FieldAccessExpr = base:ExprNode '.' name_token:('#word' | 'client' | 'class' | 'enum' | 'interface' | 'function' | 'implements' | 'spawn' | 'await')
+UpcastExpr = base:ExprNode '.' 'as' GenericArgs
 QualifiedPathExpr = '(' TypeExpr 'as' TypeExpr ')' '.' name_token:'#word'
 SpecExpr = base:PathExpr '@' spec_token:'#word'
-OptionalFieldAccessExpr = base:ExprNode '?.' name_token:'#word'
+OptionalFieldAccessExpr = base:ExprNode '?.' name_token:('#word' | 'client' | 'class' | 'enum' | 'interface' | 'function' | 'implements' | 'spawn' | 'await')
 EnvAccessExpr = env_token:'#word' '.' name_token:'#word'
 ParenExpr = '(' ExprNode ')'
 
@@ -300,54 +337,55 @@ IfExpr =
 
 IfLetExpr =
   'if'
-  'let'
   Pattern
   '='
   scrutinee:ExprNode
   then_branch:BlockExpr
   ('else' else_branch:(BlockExpr | IfExpr | IfLetExpr))?
 
-MatchExpr = 'match' scrutinee:ExprNode '{' MatchArm* '}'
-MatchArm = MatchPattern MatchGuard? '=>' value:ExprNode ','?
+MatchExpr =
+  'match'
+  (('(' scrutinee:ExprNode (':' TypeExpr)? ')') | scrutinee:ExprNode)
+  '{'
+  (MatchArm | HeaderComment)*
+  '}'
+MatchArm = Pattern MatchGuard? '=>' value:ExprNode ','?
 MatchPattern = Pattern
 MatchGuard = 'if' condition:ExprNode
 
 CatchExpr = body:ExprNode CatchClause
 CatchClause =
   ('catch' | 'catch_all' | 'catch_all_panics')
-  CatchBinding?
+  '('
+  CatchBinding
+  (',' CatchStackTraceBinding)?
+  ')'
   '{'
-  CatchArm*
+  (CatchArm | HeaderComment)*
   '}'
-CatchArm = CatchPattern CatchStackTraceBinding? '=>' value:ExprNode ','?
+CatchArm = Pattern CatchStackTraceBinding? '=>' value:ExprNode ','?
 CatchPattern = Pattern
-CatchBinding = '(' name_token:'#word' ')'
+CatchBinding = name_token:'#word'
 CatchStackTraceBinding = ',' name_token:'#word'
 
 ThrowExpr = 'throw' value:ExprNode
 ReturnExpr = 'return' value:ExprNode?
 BreakExpr = 'break'
 ContinueExpr = 'continue'
-SpawnExpr = 'spawn' name:ExprNode? body:BlockExpr
+SpawnExpr = 'spawn' name:ExprNode? ('with' ExprNode (',' ExprNode)*)? body:BlockExpr
 AwaitExpr = 'await' value:ExprNode
-LambdaExpr = ParameterList '=>' body:ExprNode
+LambdaExpr = GenericParamList? ParameterList ('=>' | '->') TypeExpr? ThrowsClause? body:BlockExpr
 
-ForExpr =
-  'for'
-  '('?
-  ('let' Pattern)?
-  ('in' iterable:ExprNode | ';' ExprNode? ';' ExprNode?)
-  ')'?
-  body:BlockExpr
+ForExpr = 'for' '('? (LetStmt | ExprNode | 'in')* ')'? body:BlockExpr
 
 WhileStmt = 'while' condition:ExprNode body:BlockExpr
-WhileLetStmt = 'while' 'let' Pattern '=' scrutinee:ExprNode body:BlockExpr
-LetStmt = ('let' | 'const') Pattern ('=' value:ExprNode)? ('else' BlockExpr)? ';'?
-TypeBindingStmt = 'type' name_token:'#word' '=' value:ExprNode ';'?
+WhileLetStmt = 'while' ('let' | 'const')? Pattern '=' scrutinee:ExprNode body:BlockExpr
+LetStmt = ('let' | 'const')? Pattern ('=' value:ExprNode)? ('else' BlockExpr)? ';'?
+TypeBindingStmt = 'type' name_token:'#word' '=' unreflect_token:'#word' '(' value:ExprNode ')' ';'?
 BreakStmt = 'break' ';'?
 ContinueStmt = 'continue' ';'?
 ReturnStmt = 'return' value:ExprNode? ';'?
-ThrowStmt = 'throw' value:ExprNode ';'?
+ThrowStmt = ThrowExpr ';'?
 DeferStmt = 'defer' body:BlockExpr
 
 Pattern = PatternKind
@@ -363,32 +401,32 @@ PatternKind =
 | WildcardPattern
 
 ChainPattern = Pattern (':' Pattern)*
-UnionPattern = Pattern ('|' Pattern)*
-BindingPattern = 'let' name_token:'#word'
-DestructurePattern = 'let'? PathExpr '{' FieldPattern* '}'
+UnionPattern = AnyElement ('|' AnyElement)*
+BindingPattern = ('let' | 'const') name_token:'#word' (':' Pattern)?
+DestructurePattern = ('let' | 'const')? AnyElement*
 FieldPattern = name_token:'#word' (':' Pattern)?
-ArrayPattern = '[' ArrayPatternElement* ']'
+ArrayPattern = '[' ArrayPatternElement* ']' (':' TypeExpr)?
 ArrayPatternElement = '..'? Pattern?
 TypePattern = TypeExpr
-UnreflectPattern = name_token:'#word' '(' value:ExprNode ')'
+UnreflectPattern = name_token:'#word' '(' value:AnyElement ')'
 ParenPattern = '(' Pattern ')'
-WildcardPattern = 'let'? name_token:'#word'
+WildcardPattern = ('let' | 'const')? name_token:'#word'
 
 CallArgs = '(' CallArg* ')'
 CallArg = (name_token:('#word' | 'client') '=')? value:ExprNode
 GenericArgs = '<' (TypeExpr | UnreflectArg)* '>'
 UnreflectArg = name_token:'#word' '(' value:ExprNode ')'
 
-ObjectLiteral = '{' (ObjectField | SpreadElement)* '}'
+ObjectLiteral = constructor:PathExpr? '{' (ObjectField | SpreadElement)* '}'
 ObjectField = (key_token:('#word' | 'client') | StringLiteral) (':' value:ExprNode)?
 SpreadElement = '...' value:ExprNode
-ArrayLiteral = '[' (ExprNode | SpreadElement)* ']'
+ArrayLiteral = '[' ExprNode* ']'
 MapLiteral = '{' ObjectField* '}'
 
-ByteStringLiteral = '#word'
-UnquotedString = '#word' '#word'*
+ByteStringLiteral = AnyElement*
+UnquotedString = AnyElement*
 
-BacktickStringLiteral = '`' BacktickSegmentNode* '`'
+BacktickStringLiteral = AnyElement*
 BacktickSegmentNode =
   BacktickText
 | BacktickInterpolation
@@ -399,13 +437,15 @@ BacktickSegmentNode =
 | BacktickElse
 | BacktickEndif
 
-BacktickText = '#word'*
-BacktickInterpolation = '$' '{' ExprNode '}'
-BacktickForOpen = '$' '{' 'for' '(' 'let' Pattern 'in' ExprNode ')' '}'
+BacktickText = AnyElement*
+BacktickInterpolation = '$' (ExprNode | LetStmt)
+BacktickForOpen = '$' '{' 'for' '(' LetStmt 'in' ExprNode ')' '}'
 BacktickEndfor = '$' '{' endfor_token:'#word' '}'
 BacktickIfOpen = '$' '{' 'if' '(' ExprNode ')' '}'
 BacktickElseIf = '$' '{' 'else' 'if' '(' ExprNode ')' '}'
 BacktickElse = '$' '{' 'else' '}'
 BacktickEndif = '$' '{' endif_token:'#word' '}'
+
+HeaderComment = AnyElement*
 
 Error = '#error'*

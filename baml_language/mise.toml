@@ -19,7 +19,7 @@ sources = ["crates/baml_compiler_syntax/baml.ungram", "crates/baml_compiler_code
 [tasks.syntax-codegen-check]
 description = "Check generated BAML syntax AST code"
 run = "cargo run -p baml_compiler_codegen -- --check"
-sources = ["crates/baml_compiler_syntax/baml.ungram", "crates/baml_compiler_syntax/src/ast/generated.rs", "crates/baml_compiler_syntax/src/validated/generated_tokens.rs", "crates/baml_compiler_codegen/**/*.rs"]
+sources = ["crates/baml_compiler_syntax/baml.ungram", "crates/baml_compiler_syntax/src/ast/generated.rs", "crates/baml_compiler_syntax/src/validated/generated_schema.rs", "crates/baml_compiler_syntax/src/validated/generated_tokens.rs", "crates/baml_compiler_codegen/**/*.rs"]
 
 # Note that clippy-fix and clippy are separate tasks because clippy-fix is substantially slower.
 [tasks.clippy-fix]

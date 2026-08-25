@@ -2,11 +2,12 @@ pub mod ast;
 pub mod printer;
 mod trivia_classifier;
 
-use ast::FromCST as _;
 use baml_db::{
     baml_compiler_diagnostics::ParseError,
     baml_compiler_lexer, baml_compiler_parser,
-    baml_compiler_syntax::{SyntaxElement, SyntaxNode},
+    baml_compiler_syntax::{
+        SyntaxElement, SyntaxNode, ast as syntax_ast, validated::ValidatedTree,
+    },
 };
 use baml_project::ProjectDatabase;
 use printer::{Printer, Shape};
@@ -53,11 +54,14 @@ pub fn format_salsa(
     }
 
     let trivia = TriviaInfo::classify_trivia(&cst);
-    let strong_ast = ast::SourceFile::from_cst(SyntaxElement::Node(cst))?;
+    let validated = ValidatedTree::new(cst)?;
+    let root = validated
+        .root::<syntax_ast::SourceFile>()
+        .expect("validated formatter root must be a source file");
 
     let mut printer = Printer::new_empty(file.text(db), &options, &trivia);
     printer.print(
-        &strong_ast,
+        &root,
         Shape {
             width: options.line_width,
             indent: 0,
