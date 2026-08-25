@@ -5294,6 +5294,35 @@ impl<'a> Parser<'a> {
         let mut depth: i32 = 1;
         let mut i = self.skip_trivia_and_comments_from(start + 1);
         while i < self.tokens.len() {
+            // Runtime type operands are arbitrary expressions. Treat their
+            // balanced parentheses as opaque so comparisons inside the
+            // operand cannot perturb the surrounding generic-argument depth.
+            if self.tokens[i].kind == TokenKind::Word && self.tokens[i].text == "unreflect" {
+                let after_word = self.skip_trivia_and_comments_from(i + 1);
+                if self.tokens.get(after_word).map(|token| token.kind) == Some(TokenKind::LParen) {
+                    let mut paren_depth = 1_u32;
+                    let mut j = self.skip_trivia_and_comments_from(after_word + 1);
+                    while let Some(token) = self.tokens.get(j) {
+                        match token.kind {
+                            TokenKind::LParen => paren_depth += 1,
+                            TokenKind::RParen => {
+                                paren_depth -= 1;
+                                if paren_depth == 0 {
+                                    j += 1;
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                        j = self.skip_trivia_and_comments_from(j + 1);
+                    }
+                    if paren_depth != 0 {
+                        return None;
+                    }
+                    i = self.skip_trivia_and_comments_from(j);
+                    continue;
+                }
+            }
             match self.tokens[i].kind {
                 TokenKind::Less => depth += 1,
                 TokenKind::Greater => {
@@ -10880,6 +10909,31 @@ function Demo() -> int {
                 .descendants()
                 .all(|n| n.kind() != SyntaxKind::BINDING_PATTERN),
             "bare identifier should NOT produce a BINDING_PATTERN"
+        );
+    }
+
+    #[test]
+    fn destructure_generic_lookahead_ignores_unreflect_operand_comparisons() {
+        let source = r#"
+function Demo(x: unknown, a: int, b: int) -> bool {
+  match x {
+    Wrapper<unreflect(a < b && true)> { value } => true,
+    _ => false,
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let first_arm = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::MATCH_ARM)
+            .expect("first match arm");
+        assert!(
+            first_arm
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::DESTRUCTURE_PATTERN),
+            "generic class pattern should retain its trailing destructure"
         );
     }
 

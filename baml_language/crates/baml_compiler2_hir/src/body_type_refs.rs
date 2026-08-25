@@ -11,8 +11,8 @@
 //! Collected today: pattern type ascriptions (`let x: T`, type patterns in
 //! match arms), array-pattern ascriptions, explicit expression-position type
 //! args (`f<int>(..)`, `f<unreflect(t)>(..)`, `Box<int> { .. }` turbofish),
-//! `.as<T>` upcast targets, and lambda signature slots. Class-destructure
-//! generic args join when pattern inference needs them.
+//! `.as<T>` upcast targets, match scrutinee annotations, and lambda signature
+//! slots. Class-destructure generic args join when pattern inference needs them.
 
 use baml_base::Name;
 use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Pattern, Stmt, StmtId, TypeExprKind};
@@ -60,6 +60,8 @@ pub struct BodyTypeRefs {
     pub expr_type_args: FxHashMap<ExprId, Box<[BodyTypeArgRef]>>,
     /// RHS types of lexical `type T = ...` bindings.
     pub stmt_type_bindings: FxHashMap<StmtId, BodyTypeRefId>,
+    /// Written annotations on match scrutinees (`match (value: T)`).
+    pub match_scrutinee_types: FxHashMap<ExprId, BodyTypeRefId>,
     /// `.as<T>` upcast targets.
     pub upcast_targets: FxHashMap<ExprId, BodyTypeRefId>,
     /// The two written halves of a `(Base as Interface).item` reference.
@@ -239,6 +241,16 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, BodyTypeRefSour
                     },
                 );
             }
+            Expr::Match {
+                scrutinee_type: Some(type_id),
+                ..
+            } => {
+                refs.match_scrutinee_types
+                    .insert(
+                        expr_id,
+                        BodyTypeRefId(builder.lower(&body.type_annotations[*type_id])),
+                    );
+            }
             _ => {}
         }
     }
@@ -261,6 +273,7 @@ mod tests {
     use text_size::{TextRange, TextSize};
 
     use super::*;
+    use crate::type_ref::TypeRefKind;
 
     #[test]
     fn expression_type_arguments_preserve_static_runtime_order_and_identity() {
@@ -294,5 +307,41 @@ mod tests {
         assert_eq!(*runtime, operand);
         assert_eq!(source_map.span(*static_ref), static_span);
         assert_eq!(refs.store.iter().count(), 1, "runtime slots are not types");
+    }
+
+    #[test]
+    fn match_scrutinee_annotations_preserve_runtime_operands() {
+        let mut body = ExprBody::default();
+        let scrutinee = body.exprs.alloc(Expr::Path(vec![Name::new("value")]));
+        let operand = body
+            .exprs
+            .alloc(Expr::Path(vec![Name::new("runtime_type")]));
+        let annotation_span = TextRange::new(TextSize::from(10), TextSize::from(33));
+        let annotation = body.type_annotations.alloc(
+            TypeExprKind::Unreflect {
+                operand: Some(operand),
+                attrs: Vec::new(),
+            }
+            .at(annotation_span),
+        );
+        let match_expr = body.exprs.alloc(Expr::Match {
+            scrutinee,
+            scrutinee_type: Some(annotation),
+            arms: Vec::new(),
+        });
+
+        let (refs, source_map) = collect_body_type_refs(&body);
+        let type_ref = refs
+            .match_scrutinee_types
+            .get(&match_expr)
+            .copied()
+            .expect("match scrutinee type reference");
+        assert!(matches!(
+            refs.store.get(refs.raw_id(type_ref)).kind,
+            TypeRefKind::Unreflect {
+                operand: Some(found)
+            } if found == operand
+        ));
+        assert_eq!(source_map.span(type_ref), annotation_span);
     }
 }

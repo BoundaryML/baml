@@ -161,6 +161,45 @@ function main() -> bool {
 }
 
 #[tokio::test]
+async fn runtime_generic_apply_values_preserve_their_type_argument_slot() {
+    let output = baml_test!(
+        r#"
+function has_types<A, B>(first: A, second: B) -> bool {
+    reflect.Type.of<A>() == reflect.Type.of_value(first)
+        && reflect.Type.of<B>() == reflect.Type.of_value(second)
+}
+
+function main() -> bool {
+    let first = reflect.Type.of<string>()
+    let second = reflect.Type.of<int>()
+    let check = has_types<unreflect(first), unreflect(second)>
+    check("ok", 42)
+}
+"#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn match_scrutinee_runtime_annotation_binds_before_pattern_dispatch() {
+    let output = baml_test!(
+        r#"
+class Wrapper<T> { value T }
+
+function main() -> bool {
+    let t = reflect.Type.of<string>()
+    let wrapped = Wrapper<string> { value: "ok" }
+    match (wrapped : Wrapper<unreflect(t)>) {
+        Wrapper<string> { value } => value == "ok",
+        _ => false,
+    }
+}
+"#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
 async fn type_bindings_work_in_lambdas_and_nested_shadowing_uses_distinct_slots() {
     let output = baml_test!(
         r#"

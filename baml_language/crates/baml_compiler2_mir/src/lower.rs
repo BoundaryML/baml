@@ -6020,8 +6020,14 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Match {
-                scrutinee, arms, ..
+                scrutinee,
+                scrutinee_type,
+                arms,
             } => {
+                if let Some(type_id) = scrutinee_type {
+                    let annotation = self.body.type_annotations[type_id].clone();
+                    self.emit_type_expr_runtime_bindings(&annotation);
+                }
                 let arms_owned = arms;
                 self.lower_match(expr_id, scrutinee, &arms_owned, dest);
             }
@@ -10693,11 +10699,33 @@ impl LoweringContext<'_> {
         if let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned()
             && !plan.slots.is_empty()
         {
-            let generic_params = self.enclosing_generic_params();
-            return plan
+            let binding_scope_start = self.runtime_type_binding_params.len();
+            let runtime_params: Vec<Option<ParamTy>> = plan
                 .slots
                 .iter()
-                .filter_map(|slot| match slot {
+                .map(|slot| match slot {
+                    crate::inference_provider::CallTypeArgPlan::Runtime { .. } => {
+                        let count = self
+                            .synthetic_name_counts
+                            .entry("__generic_apply_runtime_type".to_string())
+                            .or_insert(0);
+                        let identity = u32::try_from(*count)
+                            .expect("runtime generic-apply slot count fits in u32");
+                        *count += 1;
+                        let name = Name::new(format!("$generic_apply${identity:08x}"));
+                        Some(ParamTy::new(0xb000_0000 | (identity & 0x0fff_ffff), name))
+                    }
+                    crate::inference_provider::CallTypeArgPlan::Static { .. } => None,
+                })
+                .collect();
+            self.runtime_type_binding_params
+                .extend(runtime_params.iter().flatten().cloned());
+            let generic_params = self.enclosing_generic_params();
+            let templates = plan
+                .slots
+                .iter()
+                .zip(&runtime_params)
+                .map(|(slot, runtime_param)| match slot {
                     crate::inference_provider::CallTypeArgPlan::Static {
                         emission_ty,
                         runtime_bindings,
@@ -10706,11 +10734,34 @@ impl LoweringContext<'_> {
                         for binding in runtime_bindings {
                             self.emit_scoped_type_binding(binding);
                         }
-                        Some(self.ty_to_template(emission_ty, &generic_params))
+                        self.ty_to_template(emission_ty, &generic_params)
                     }
-                    crate::inference_provider::CallTypeArgPlan::Runtime { .. } => None,
+                    crate::inference_provider::CallTypeArgPlan::Runtime {
+                        operand,
+                        occurrence_ty,
+                        ..
+                    } => {
+                        let parameter = runtime_param
+                            .as_ref()
+                            .expect("runtime slots have synthesized frame parameters");
+                        let binding = crate::inference_provider::ScopedTypeBinding {
+                            name: parameter.name().clone(),
+                            parameter: parameter.clone(),
+                            operand: Some(*operand),
+                            template_ty: None,
+                            occurrence_ty: occurrence_ty.clone(),
+                        };
+                        self.emit_scoped_type_binding(&binding);
+                        let slot = RuntimeGenericLayout::new(&generic_params)
+                            .slot(parameter)
+                            .expect("runtime generic-apply parameter has a frame slot");
+                        TyTemplate::TypeArgRef(slot)
+                    }
                 })
                 .collect();
+            self.runtime_type_binding_params
+                .truncate(binding_scope_start);
+            return templates;
         }
         self.generic_apply_type_arg_templates(type_args)
     }

@@ -68,7 +68,27 @@ impl<'db> InferenceContext<'db> {
         arms: &[MatchArmId],
         expected: &Expectation,
     ) -> Ty {
-        let scrut_ty = self.infer_expr(body, scrutinee, &Expectation::None);
+        let written_scrutinee = self
+            .type_refs
+            .match_scrutinee_types
+            .get(&match_expr)
+            .copied();
+        let scrut_ty = match written_scrutinee {
+            Some(type_ref) => {
+                let mut nested = Vec::new();
+                super::collect_unreflect_type_refs(&self.type_refs.store, type_ref, &mut nested);
+                for (_, operand) in nested {
+                    self.validate_runtime_type_operand(body, operand);
+                }
+                let annotation = self.lower_body_annotation(type_ref);
+                self.check_expr(body, scrutinee, &annotation);
+                // A match annotation declares the matrix's full input type.
+                // Keep it instead of narrowing back to the scrutinee's current
+                // concrete value so later arms remain reachable.
+                annotation
+            }
+            None => self.infer_expr(body, scrutinee, &Expectation::None),
+        };
         let scrut_resolved = self.scrutinee_demand(&scrut_ty);
         let scrut_binding = self.narrowable_binding(body, scrutinee);
         let branch_expectation = expected.adjust_for_branches(&mut self.table);
