@@ -25,6 +25,19 @@ fn name_from_qtn(qtn: &QualifiedTypeName) -> cg::Name {
     qtn.clone()
 }
 
+/// Is this lowered type function-shaped (directly or through union arms)?
+/// Used to keep the `injected` provenance mark off user parameters that merely
+/// reuse the `on_event` NAME on a `$`-suffixed function: the compiler-injected
+/// listener is always function-typed, so a `Foo$stream(on_event: string)`
+/// param stays a public user parameter.
+fn ty_is_function_shaped(ty: &cg::Ty) -> bool {
+    match ty {
+        cg::Ty::Function { .. } => true,
+        cg::Ty::Union(members, _) => members.iter().any(ty_is_function_shaped),
+        _ => false,
+    }
+}
+
 fn lower_codegen_default(
     default_ref: Option<&baml_compiler2_hir::item_tree::DefaultExprRef>,
     defaults: &ast::FunctionDefaults,
@@ -297,15 +310,20 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     .filter(|(_, param)| {
                         !(strips_injected_client && param.name.as_str() == "client")
                     })
-                    .map(|(index, param)| cg::FunctionArgument {
-                        injected: strips_injected_client && param.name.as_str() == "on_event",
-                        name: param.name.clone(),
-                        docstring: None,
-                        ty: lower(param.type_ref),
-                        default: lower_codegen_default(
-                            method_defaults.param_default(index),
-                            &method_defaults.defaults,
-                        ),
+                    .map(|(index, param)| {
+                        let ty = lower(param.type_ref);
+                        cg::FunctionArgument {
+                            injected: strips_injected_client
+                                && param.name.as_str() == "on_event"
+                                && ty_is_function_shaped(&ty),
+                            name: param.name.clone(),
+                            docstring: None,
+                            ty,
+                            default: lower_codegen_default(
+                                method_defaults.param_default(index),
+                                &method_defaults.defaults,
+                            ),
+                        }
                     })
                     .collect();
 
@@ -535,15 +553,20 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 .iter()
                 .enumerate()
                 .filter(|(_, param)| !(strips_injected_client && param.name.as_str() == "client"))
-                .map(|(index, param)| cg::FunctionArgument {
-                    injected: strips_injected_client && param.name.as_str() == "on_event",
-                    name: param.name.clone(),
-                    docstring: None,
-                    ty: lower(param.type_ref),
-                    default: lower_codegen_default(
-                        func_defaults.param_default(index),
-                        &func_defaults.defaults,
-                    ),
+                .map(|(index, param)| {
+                    let ty = lower(param.type_ref);
+                    cg::FunctionArgument {
+                        injected: strips_injected_client
+                            && param.name.as_str() == "on_event"
+                            && ty_is_function_shaped(&ty),
+                        name: param.name.clone(),
+                        docstring: None,
+                        ty,
+                        default: lower_codegen_default(
+                            func_defaults.param_default(index),
+                            &func_defaults.defaults,
+                        ),
+                    }
                 })
                 .collect();
 
@@ -1030,6 +1053,46 @@ class Extractor {
                 .map(|arg| arg.name.as_str())
                 .collect();
             assert_eq!(actual, expected_args, "arguments for {name}");
+        }
+    }
+
+    #[test]
+    fn test_user_on_event_params_are_never_marked_injected() {
+        // A user may declare into the `$` suffix namespace and may name a
+        // parameter `on_event`; only the compiler-injected listener (function
+        // typed, on an LLM function or real companion) carries provenance.
+        let root = Path::new("/tmp/user_on_event_params");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            r##"
+function Notify$stream(on_event: string) -> string {
+  on_event
+}
+
+function Watch(on_event: ((string) -> void throws never)? = null) -> string {
+  let _ = on_event;
+  "ok"
+}
+"##,
+        );
+
+        let pool = build_symbol_pool(&db);
+        for bare in ["Notify$stream", "Watch"] {
+            let key = cg::Name::new(Name::new("user"), vec![], Name::new(bare));
+            let Some(cg::Symbol::Function(func)) = pool.get(&key) else {
+                panic!("missing function {bare}");
+            };
+            let arg = func
+                .arguments
+                .iter()
+                .find(|a| a.name.as_str() == "on_event")
+                .unwrap_or_else(|| panic!("{bare} lost its user on_event parameter"));
+            assert!(
+                !arg.injected,
+                "user-declared on_event on {bare} must not carry injected provenance"
+            );
         }
     }
 
