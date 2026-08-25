@@ -298,6 +298,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                         !(strips_injected_client && param.name.as_str() == "client")
                     })
                     .map(|(index, param)| cg::FunctionArgument {
+                        injected: strips_injected_client && param.name.as_str() == "on_event",
                         name: param.name.clone(),
                         docstring: None,
                         ty: lower(param.type_ref),
@@ -535,6 +536,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 .enumerate()
                 .filter(|(_, param)| !(strips_injected_client && param.name.as_str() == "client"))
                 .map(|(index, param)| cg::FunctionArgument {
+                    injected: strips_injected_client && param.name.as_str() == "on_event",
                     name: param.name.clone(),
                     docstring: None,
                     ty: lower(param.type_ref),
