@@ -1122,19 +1122,6 @@ jobs:
         run: |
           "$(command -v python3 || command -v python)" .github/scripts/csharp-mtime-cache.py restore
 
-      # TEMPORARY diagnostic while validating the cache: build one fixture at
-      # detailed verbosity and surface MSBuild's incremental-build decisions,
-      # so a run that ignores the cache explains itself.
-      - name: "DEBUG: explain fixture up-to-date state"
-        if: matrix.sdk-label == 'csharp' && matrix.os-label == 'linux'
-        shell: bash
-        working-directory: baml_language/sdk_tests/crates/csharp
-        run: |
-          ls -la --time-style=full-iso basic_calls basic_calls/obj || true
-          dotnet build basic_calls/BasicCalls.csproj --configuration Release -v:d 2>&1 \
-            | grep -E "Building target .* completely|newer than output|input file|out-of-date|is missing|Skipping target \"(CoreCompile|CoreGenerateAssemblyInfo)\"" \
-            | head -60 || true
-
       - name: "Show sccache stats"
         if: always()
         run: sccache --show-stats
