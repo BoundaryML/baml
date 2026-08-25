@@ -2255,9 +2255,10 @@ pub enum DiagnosticLocation {
     /// A pattern's span (`hir_ty`'s emissions stay arena-anchored; TIR
     /// resolved pattern spans eagerly through its held source map).
     Pat(baml_compiler2_ast::PatId),
-    /// A written type reference (body annotation), resolved through the
-    /// body's `TypeRefSourceMap` at render time.
-    TypeRef(baml_compiler2_hir::type_ref::TypeRefId),
+    /// A written body type reference, resolved through the owning body's
+    /// source map at render time. Declaration type-reference ids have a
+    /// distinct type and cannot inhabit this location.
+    BodyTypeRef(baml_compiler2_hir::body_type_refs::BodyTypeRefId),
     /// The field-NAME portion of an object-literal entry:
     /// `(object_expr, field_value_expr)` resolves through
     /// `object_field_name_span` at render time.
@@ -2298,17 +2299,17 @@ impl<'db> TirDiagnostic<'db> {
         scope_file: SourceFile,
         source_map: Option<&AstSourceMap>,
     ) -> RenderedTirDiagnostic {
-        self.render_with_type_refs(db, scope_file, source_map, None)
+        self.render_with_body_type_refs(db, scope_file, source_map, None)
     }
 
     /// [`Self::render`] with the body's type-ref span map, for the
-    /// annotation-anchored diagnostics (`DiagnosticLocation::TypeRef`).
-    pub fn render_with_type_refs(
+    /// annotation-anchored diagnostics (`DiagnosticLocation::BodyTypeRef`).
+    pub fn render_with_body_type_refs(
         &self,
         db: &'db dyn baml_compiler2_ppir::Db,
         scope_file: SourceFile,
         source_map: Option<&AstSourceMap>,
-        type_ref_spans: Option<&baml_compiler2_hir::type_ref::TypeRefSourceMap>,
+        type_ref_spans: Option<&baml_compiler2_hir::body_type_refs::BodyTypeRefSourceMap>,
     ) -> RenderedTirDiagnostic {
         let primary_range = match &self.primary {
             DiagnosticLocation::Expr(id) => {
@@ -2332,7 +2333,7 @@ impl<'db> TirDiagnostic<'db> {
             DiagnosticLocation::Pat(id) => source_map
                 .map(|sm| sm.pattern_span(*id))
                 .unwrap_or_default(),
-            DiagnosticLocation::TypeRef(id) => type_ref_spans
+            DiagnosticLocation::BodyTypeRef(id) => type_ref_spans
                 .map(|spans| spans.span(*id))
                 .unwrap_or_default(),
             DiagnosticLocation::UnreflectArg { carrier, .. } => source_map

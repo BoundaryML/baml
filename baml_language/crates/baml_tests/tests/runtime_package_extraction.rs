@@ -9,11 +9,11 @@ async fn p7_omitted_throws_contract_infers_a_wildcard() {
     let output = baml_test!(
         r####"
 function main() -> string throws unknown {
-  let pkg = reflect.Package.compile({ "main.baml": #"
+  let pkg = reflect.Package.compile({ "main.baml": `
 function Risky(value: string) -> string throws string {
   value
 }
-"# })
+` })
   let risky = pkg.get_function<(string) -> string>("root.Risky")
     ?? throw "missing root.Risky"
   risky("accepted")
@@ -34,11 +34,11 @@ async fn extraction_uses_function_subtyping_and_throw_wildcard() {
 type NeverThrowContract = (string) -> (string | int) throws never
 
 function main() -> string throws unknown {
-  let pkg = reflect.Package.compile({ "main.baml": #"
+  let pkg = reflect.Package.compile({ "main.baml": `
 function Flexible(value: unknown) -> string throws string {
   "accepted"
 }
-"# })
+` })
 
   // The target accepts a wider input and returns a narrower output. Its
   // declared throw remains admissible because this contract omits `throws`.

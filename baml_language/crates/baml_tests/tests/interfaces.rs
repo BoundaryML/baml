@@ -40,8 +40,11 @@
 use std::collections::HashSet;
 
 use baml_compiler_diagnostics::Severity;
-use baml_project::{ProjectDatabase, collect_diagnostics, testing::setup_test_db};
-use baml_tests::baml_test;
+use baml_project::ProjectDatabase;
+use baml_tests::{
+    baml_test,
+    stdlib_prefix::{check_user_files, setup_multi_file_db, setup_test_db},
+};
 use baml_type::Ty;
 use bex_engine::BexExternalValue;
 
@@ -56,11 +59,7 @@ fn collect_compile_errors(source: &str) -> Vec<String> {
 }
 
 fn collect_compile_errors_multi(files: &[(&str, &str)]) -> Vec<String> {
-    let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("."));
-    for (path, source) in files {
-        db.add_file(*path, source);
-    }
+    let db = setup_multi_file_db(files);
     collect_compile_errors_from_db(&db)
 }
 
@@ -68,7 +67,7 @@ fn collect_compile_errors_from_db(db: &ProjectDatabase) -> Vec<String> {
     let all_files = db.get_source_files();
     let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(db)).collect();
 
-    collect_diagnostics(db)
+    check_user_files(db)
         .into_iter()
         .filter(|d| matches!(d.severity, Severity::Error))
         .filter(|d| {

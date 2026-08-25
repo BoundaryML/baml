@@ -8,10 +8,10 @@ class ValidClassDescription {
 // Test: Valid multiline class description
 class MultilineClassDescription {
   id int
-  @@description(#"
+  @@description("
     This class represents a complex entity
     with multiple responsibilities
-  "#)
+  ")
 }
 
 // Test: Class with both description and alias

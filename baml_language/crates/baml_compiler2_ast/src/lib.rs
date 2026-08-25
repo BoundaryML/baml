@@ -46,9 +46,7 @@ pub use traverse::BodyNode;
 /// `is_default_receiver_root` helpers over comparing the literal string.
 pub const DEFAULT_RECEIVER_KEYWORD: &str = "default";
 
-/// Parse a string attribute value into its runtime string, handling both
-/// regular strings (`"text"`, `'text'`) and raw strings (`#"text"#`,
-/// `##"text"##`, …).
+/// Parse a quoted string attribute value into its runtime string.
 ///
 /// The input is the raw, still-quoted token text as it appears in
 /// [`RawAttributeArg::value`]. Returns `None` if the value is not a recognized
@@ -66,22 +64,7 @@ pub fn parse_string_attr_value(raw: &str) -> Option<String> {
         return Some(unescape_string_literal(&raw[1..raw.len() - 1]));
     }
 
-    // Raw string: #"text"#, ##"text"##, etc.
-    let hash_count = raw.bytes().take_while(|&b| b == b'#').count();
-    if hash_count == 0 {
-        return None;
-    }
-
-    let rest = &raw[hash_count..];
-    let closing = format!("\"{}", &raw[..hash_count]);
-
-    // Need at least `"` + `"` + closing hashes
-    if rest.len() < hash_count + 2 || !rest.starts_with('"') || !rest.ends_with(&closing) {
-        return None;
-    }
-
-    // Raw strings: no escape processing
-    Some(rest[1..rest.len() - 1 - hash_count].to_string())
+    None
 }
 
 /// Push diagnostics for a failed numeric literal. `InvalidDigits` gets one
@@ -1107,6 +1090,75 @@ function Broken() -> int {
             )),
             "the recovery must remain visible as a lowering diagnostic"
         );
+    }
+
+    #[test]
+    fn removed_hash_string_does_not_lower_to_a_string_literal() {
+        let source = r##"
+function legacy() -> string {
+  #"value"#
+}
+"##;
+        let tokens = lex_lossless(source, FileId::new(0));
+        let (green, errors) = parse_file(&tokens);
+        assert!(!errors.is_empty(), "removed hash strings must fail parsing");
+
+        let root = SyntaxNode::new_root(green);
+        assert!(
+            root.descendants()
+                .any(|node| node.kind() == SyntaxKind::RAW_STRING_LITERAL),
+            "the parser must retain the hash string CST for error recovery"
+        );
+        let (items, _diags, _env_var_refs) = lower_file(&root);
+        let function = first_function(items);
+        let Some(FunctionBodyDef::Expr(body, _)) = function.body else {
+            panic!("expected expression body")
+        };
+
+        assert!(
+            body.exprs
+                .iter()
+                .any(|(_, expr)| matches!(expr, Expr::Missing)),
+            "removed hash strings must lower only to Expr::Missing"
+        );
+        assert!(
+            !body.exprs.iter().any(
+                |(_, expr)| matches!(expr, Expr::Literal(crate::ast::Literal::String(value)) if value == "value")
+            ),
+            "removed hash strings must never become semantic string literals"
+        );
+    }
+
+    #[test]
+    fn removed_hash_string_test_arg_lowers_to_null_recovery() {
+        let source = r##"
+function target(value: string) -> string { value }
+
+test Legacy {
+  functions [target]
+  args {
+    value #"legacy"#
+  }
+}
+"##;
+        let tokens = lex_lossless(source, FileId::new(0));
+        let (green, errors) = parse_file(&tokens);
+        assert!(!errors.is_empty(), "removed hash strings must fail parsing");
+
+        let root = SyntaxNode::new_root(green);
+        let (items, _diags, _env_var_refs) = lower_file(&root);
+        let test = items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Test(test) => Some(test),
+                _ => None,
+            })
+            .expect("expected recovered test");
+
+        assert!(matches!(
+            test.args.as_slice(),
+            [(name, crate::ast::TestArgValue::Null)] if name.as_str() == "value"
+        ));
     }
 
     #[test]

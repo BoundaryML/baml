@@ -14,9 +14,9 @@ test DictionaryTest {
     array_key_with_quoted_unquoted [ "abc", "abc", "ccc" ]
     // separate by commas
     key2 "some random value", hello "world", thing "hello"
-     block_string #"hello there my frien
-                d"#
-    inline_raw_string #"inline "raw" string,,"#
+     block_string "hello there my frien
+                d"
+    inline_raw_string "inline \"raw\" string,,"
     "string key" "value with spaces"
     booleanValue true
     stringKey "true"
@@ -95,27 +95,13 @@ test DictionaryTest {
 // config_dictionary.baml:16:46 (property) len=5 "thing"
 // config_dictionary.baml:16:52 (string) len=7 "\"hello\""
 // config_dictionary.baml:17:6 (property) len=12 "block_string"
-// config_dictionary.baml:17:19 (string) len=1 "#"
-// config_dictionary.baml:17:20 (string) len=1 "\""
-// config_dictionary.baml:17:21 (string) len=5 "hello"
-// config_dictionary.baml:17:27 (string) len=5 "there"
-// config_dictionary.baml:17:33 (string) len=2 "my"
-// config_dictionary.baml:17:36 (string) len=5 "frien"
-// config_dictionary.baml:18:17 (string) len=1 "d"
-// config_dictionary.baml:18:18 (string) len=1 "\""
-// config_dictionary.baml:18:19 (string) len=1 "#"
+// config_dictionary.baml:17:19 (string) len=40 "\"hello there my frien\n                d\""
 // config_dictionary.baml:19:5 (property) len=17 "inline_raw_string"
-// config_dictionary.baml:19:23 (string) len=1 "#"
-// config_dictionary.baml:19:24 (string) len=1 "\""
-// config_dictionary.baml:19:25 (string) len=6 "inline"
-// config_dictionary.baml:19:32 (string) len=1 "\""
+// config_dictionary.baml:19:23 (string) len=8 "\"inline "
+// config_dictionary.baml:19:31 (escapeSequence) len=2 "\\\""
 // config_dictionary.baml:19:33 (string) len=3 "raw"
-// config_dictionary.baml:19:36 (string) len=1 "\""
-// config_dictionary.baml:19:38 (string) len=6 "string"
-// config_dictionary.baml:19:44 (string) len=1 ","
-// config_dictionary.baml:19:45 (string) len=1 ","
-// config_dictionary.baml:19:46 (string) len=1 "\""
-// config_dictionary.baml:19:47 (string) len=1 "#"
+// config_dictionary.baml:19:36 (escapeSequence) len=2 "\\\""
+// config_dictionary.baml:19:38 (string) len=10 " string,,\""
 // config_dictionary.baml:20:5 (string) len=12 "\"string key\""
 // config_dictionary.baml:20:18 (string) len=19 "\"value with spaces\""
 // config_dictionary.baml:21:5 (property) len=12 "booleanValue"

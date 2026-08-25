@@ -137,7 +137,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             let source_map = baml_compiler2_ppir::body_source_map(db, owner);
             let type_ref_spans = baml_compiler2_ppir::body_type_ref_spans(db, owner);
             for diagnostic in &result.diagnostics {
-                let rendered = diagnostic.render_with_type_refs(
+                let rendered = diagnostic.render_with_body_type_refs(
                     db,
                     file,
                     source_map.as_ref(),
@@ -1217,7 +1217,7 @@ fn new_tir_diagnostic(
         // slot says why the inline spelling cannot reach past this call —
         // naming whichever published type the runtime parameter reached, the
         // value or the error. The rewrite rides along as related info, built
-        // from the file text in `render_with_type_refs`.
+        // from the file text in `render_with_body_type_refs`.
         return runtime_type::runtime_type_must_be_named()
             .with_primary(span, escape.note())
             .with_phase(DiagnosticPhase::Type);

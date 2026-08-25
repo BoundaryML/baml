@@ -20,12 +20,12 @@ function main() -> bool throws unknown {
     "display_name": reflect.Type.of<string>(),
   }, implementations = [witness])
   let source = original.as_type().to_baml()
-  let checked_source = source + #"
+  let checked_source = source + `
 
 function as_named(value: Person) -> Named<Value = string> {
   value
 }
-"#
+`
   let compiled_package = reflect.Package.compile({
     "contract.baml": "interface Named {\n  type Value\n  name Self.Value\n}",
     "person.baml": checked_source,

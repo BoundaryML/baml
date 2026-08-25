@@ -27,13 +27,6 @@ enum TripleCollision {
     Shared,
 }
 
-// Case 4: a double-quoted alias and a raw-string alias normalize to the same
-// value and collide.
-enum NormalizedCollision {
-    A @alias("q"),
-    B @alias(#"q"#),
-}
-
 // ─── Controls: these must NOT be flagged ─────────────────────────────────────
 
 // A variant whose alias equals its OWN name is fine (single occupant of key `A`).

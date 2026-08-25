@@ -270,7 +270,7 @@ if (CanCreateLoopbackSockets())
             Headers = new Dictionary<string, string>(),
             Body = "",
         },
-        networkTimeout.Token);
+        cancellationToken: networkTimeout.Token);
     string? firstEvent = await sse.NextAsync(networkTimeout.Token);
     Require(
         sse.Url == sseUrl

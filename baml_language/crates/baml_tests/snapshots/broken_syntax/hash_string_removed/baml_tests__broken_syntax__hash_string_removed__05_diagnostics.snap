@@ -1,0 +1,39 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0098
+
+  × removed language feature
+   ╭─[main.baml:2:32]
+ 2 │     value: string @description(#"legacy description"#)
+   ·                                ───────────┬──────────
+   ·                                           ╰── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+   ╰────
+
+  [parse] E0098
+
+  × removed language feature
+   ╭─[main.baml:6:18]
+ 6 │     let scalar = #"value"#;
+   ·                  ────┬────
+   ·                      ╰── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+   ╰────
+
+  [parse] E0098
+
+  × removed language feature
+   ╭─[main.baml:8:9]
+ 8 │         #"key"#: ##"nested \"# delimiter"##,
+   ·         ───┬───
+   ·            ╰── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+   ╰────
+
+  [parse] E0098
+
+  × removed language feature
+   ╭─[main.baml:8:18]
+ 8 │         #"key"#: ##"nested \"# delimiter"##,
+   ·                  ─────────────┬────────────
+   ·                               ╰── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+   ╰────

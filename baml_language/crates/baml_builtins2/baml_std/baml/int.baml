@@ -11,6 +11,11 @@
 /// Arithmetic (`+`, `-`, `*`, `/`, unary `-`) that would leave this range
 /// throws a catchable `baml.panics.IntegerOverflow` rather than wrapping or
 /// crashing; `/` and `%` by zero throw `baml.panics.DivisionByZero`.
+///
+/// `<<` is the exception: it discards the bits shifted past the 63-bit width
+/// rather than throwing, so `1 << 62` is `int.min_value()` (bit 62 is the sign
+/// bit) and `1 << 63` is `0`. A negative count on either shift throws
+/// `baml.panics.NegativeBitShift`.
 class Int {
     // ─── Comparisons / clamping ───────────────────────────────────────────────
 
@@ -238,14 +243,13 @@ class Int {
     }
 
     /// Returns a uniformly distributed random integer in the half-open range
-    /// `[lower, upper)`.
+    /// `[lower, upper)`, drawn from `rng`.
     ///
     /// Throws `InvalidArgument` if `lower >= upper` (the range would be empty).
-    /// Uses the host's cryptographic entropy source — no user-supplied RNG
-    /// handle. The largest representable half-open range is supported (e.g.
-    /// `random(int.min_value(), int.max_value())` returns a value in
-    /// `[int.min_value(), int.max_value())`; `int.max_value()` itself is never
-    /// returned).
+    /// `rng` defaults to `random.SystemRandom`, the host's cryptographic entropy
+    /// source; pass a seeded generator to make the draw reproducible. The largest
+    /// representable half-open range is supported. Rejection sampling avoids
+    /// modulo bias, so one result may consume multiple values from `rng`.
     ///
     /// # Examples
     /// ```
@@ -254,8 +258,32 @@ class Int {
     /// int.random(0, 1)          // always 0  (single-element range)
     /// int.random(5, 5)          // throws — empty range
     /// int.random(10, 0)         // throws — lower > upper
+    ///
+    /// // Reproducible: the same seed replays the same values.
+    /// let rng = baml.random.Xoshiro256PlusPlus.new(seed = my_seed);
+    /// int.random(0, 10, rng = rng)
     /// ```
-    function random(lower: int, upper: int) -> int throws root.errors.InvalidArgument {
+    function random(
+        lower: int,
+        upper: int,
+        rng: root.random.Rng = root.random.SystemRandom.get(),
+    ) -> int throws root.errors.InvalidArgument {
+        if (lower >= upper) {
+            throw root.errors.InvalidArgument {
+                message: "int.random: lower (" + string.from(lower) + ") must be less than upper (" + string.from(upper) + ")"
+            };
+        }
+        // Rust maps each draw; BAML owns retries because it can call `rng` again.
+        let r = int._random_in_range(rng.random_int(), lower, upper);
+        while (r == upper) {
+            r = int._random_in_range(rng.random_int(), lower, upper);
+        }
+        r
+    }
+
+    /// Internal: maps one full-range draw onto `[lower, upper)`, returning
+    /// `upper` when the draw must be rejected.
+    function _random_in_range(draw: int, lower: int, upper: int) -> int throws never {
         $rust_function
     }
 

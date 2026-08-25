@@ -8,12 +8,12 @@ async fn compiled_package_declarations_share_one_identity_across_all_access_path
     let output = baml_test!(
         r####"
 function main() -> bool throws unknown {
-  let pkg = reflect.Package.compile({ "pkg.baml": #"
+  let pkg = reflect.Package.compile({ "pkg.baml": `
 class Item { value int }
 enum State { Ready }
 function ReflectedItem() -> reflect.Type { reflect.Type.of<Item>() }
 function ReflectedState() -> reflect.Type { reflect.Type.of<State>() }
-"# })
+` })
 
   let item = pkg.get_class("root.Item") ?? throw "missing Item"
   let state = pkg.get_enum("root.State") ?? throw "missing State"

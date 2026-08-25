@@ -21,15 +21,15 @@ function Extract<T>(document: string) -> T {
 }
 
 function main() -> string throws unknown {
-  let source = #"
+  let source = `
 class ExtractedRecord {
   account string
   amount int
 }
-"#
+`
   let pkg = reflect.Package.compile({ "schema.baml": source })
   let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
-  let document_text = #"{"account":"AC-1","amount":42}"#
+  let document_text = `{"account":"AC-1","amount":42}`
   let record = Extract$parse<unreflect(record_t.as_type())>(document_text)
   json.encode(record)
 }
@@ -83,7 +83,7 @@ function mounted_runtime_interface_and_return_types_stay_hidden() -> bool throws
     "RuntimeMinted": runtime_minted,
   })
   let dependency = reflect.Package.compile({
-    "dependency.baml": #"
+    "dependency.baml": `
 interface CarriesRuntimeMint {
   item app.RuntimeMinted
 }
@@ -91,7 +91,7 @@ interface CarriesRuntimeMint {
 function make_runtime_minted() -> app.RuntimeMinted {
   app.RuntimeMinted { value: "ok" }
 }
-"#
+`
   }, packages = { "app": app })
   let consumer = reflect.Package.compile(
     { "consumer.baml": "function ready() -> bool { true }" },
@@ -103,7 +103,7 @@ function make_runtime_minted() -> app.RuntimeMinted {
 
 const SUCCESSFUL_INIT_SOURCE: &str = r####"
 function main() -> bool throws unknown {
-  let pkg = reflect.Package.compile({ "schema.baml": #"
+  let pkg = reflect.Package.compile({ "schema.baml": `
 client InitClient = openai.ResponsesClient.new(
     model = "unused-network-free-init-check",
     api_key = "unused",
@@ -112,7 +112,7 @@ function init_ready() -> bool {
   InitClient != null
 }
 class Ready { value string }
-"# })
+` })
   let init_ready = pkg.get_function<() -> bool>("root.init_ready")
     ?? throw "missing init_ready"
   pkg.get_class("root.Ready") != null && init_ready()
@@ -121,13 +121,13 @@ class Ready { value string }
 
 const REJECTED_INIT_SOURCE: &str = r####"
 function main() -> null throws unknown {
-  reflect.Package.compile({ "schema.baml": #"
+  reflect.Package.compile({ "schema.baml": `
 client InitClient = openai.ResponsesClient.new(
     model = "unused-network-free-init-check",
     api_key = "unused",
 );
 class Broken { value MissingType }
-"# })
+` })
   null
 }
 "####;
@@ -148,7 +148,7 @@ function Plan(state: AgentState) -> string {
 }
 
 function main() -> string throws unknown {
-  let skill_source = #"
+  let skill_source = `
 class PlanThenAct {
   summary string
   steps string[]
@@ -161,7 +161,7 @@ function Run(state: app.AgentState) -> PlanThenAct {
     steps: [],
   }
 }
-"#
+`
   let skill = reflect.Package.compile(
     { "skill.baml": skill_source },
     packages = { "app": reflect.Package.current() },
@@ -191,17 +191,15 @@ function mismatched_function_contract() -> null throws unknown {
 
 function unspecialized_generic_function_cannot_be_extracted() -> null throws unknown {
   let pkg = reflect.Package.compile({
-    "main.baml": #"
-client Dummy = openai.ResponsesClient.new(
+    "main.baml": `client Dummy = openai.ResponsesClient.new(
   model = "unused-reflection-only",
   api_key = "unused",
 )
 
 function Extract<T>(document: string) -> T {
   client: Dummy
-  prompt: `Extract ${document}`
-}
-"#
+  prompt: "Extract document"
+}`
   })
   let _ = pkg.get_function<(string) -> string>("root.Extract")
   null
@@ -209,10 +207,10 @@ function Extract<T>(document: string) -> T {
 
 function function_listing_omits_unspecialized_generics() -> bool throws unknown {
   let pkg = reflect.Package.compile({
-    "main.baml": #"
+    "main.baml": `
 function identity<T>(value: T) -> T { value }
 function Present(value: string) -> string { value }
-"#
+`
   })
   let functions = pkg.functions()
   functions.get("root.identity") == null && functions.get("root.Present") != null
@@ -220,17 +218,15 @@ function Present(value: string) -> string { value }
 
 function generic_function_companion_extraction_is_refused() -> string throws unknown {
   let pkg = reflect.Package.compile({
-    "main.baml": #"
-client Dummy = openai.ResponsesClient.new(
+    "main.baml": `client Dummy = openai.ResponsesClient.new(
   model = "unused-reflection-only",
   api_key = "unused",
 )
 
 function Extract<T>(document: string) -> T {
   client: Dummy
-  prompt: `Extract ${document}`
-}
-"#
+  prompt: "Extract document"
+}`
   })
   let extracted = pkg.get_function<(string) -> ai.Prompt>("root.Extract$render_prompt") catch (e) {
     reflect.errors.CompilationError => {
@@ -246,17 +242,15 @@ function Extract<T>(document: string) -> T {
 
 function generic_function_companion_is_listed() -> bool throws unknown {
   let pkg = reflect.Package.compile({
-    "main.baml": #"
-client Dummy = openai.ResponsesClient.new(
+    "main.baml": `client Dummy = openai.ResponsesClient.new(
   model = "unused-reflection-only",
   api_key = "unused",
 )
 
 function Extract<T>(document: string) -> T {
   client: Dummy
-  prompt: `Extract ${document}`
-}
-"#
+  prompt: "Extract document"
+}`
   })
   pkg.functions().get("root.Extract$render_prompt") != null
 }
@@ -264,11 +258,11 @@ function Extract<T>(document: string) -> T {
 function alias_order_and_reserved_names() -> bool throws unknown {
   let root_package = reflect.Package.current()
   let generated = reflect.Package.compile(
-    { "main.baml": #"
+    { "main.baml": `
 function Read(state: app.AgentState) -> string {
   app.Plan(state) + ":" + baml.Array.length(["o", "k"]).to_string()
 }
-"# },
+` },
     packages = { "z_last": root_package, "app": root_package },
   )
   let read = generated.get_function<(AgentState) -> string>("root.Read")
@@ -352,7 +346,7 @@ function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws
 }
 
 function main() -> bool throws unknown {
-  let package = reflect.Package.compile({ "dispatch.baml": #"
+  let package = reflect.Package.compile({ "dispatch.baml": `
 function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws never {
   let count = 0
   for (let i = 0; i < n; i += 1) {
@@ -361,7 +355,7 @@ function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws
   count
 }
 function run(n: int) -> int throws never { compare_hot<int>(7, n) }
-"# })
+` })
   let run = package.get_function<(int) -> int>("root.run") ?? throw "missing run"
   let before_gc = run(100)
   baml.sys.collect_garbage()

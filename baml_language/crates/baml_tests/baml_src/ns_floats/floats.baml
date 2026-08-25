@@ -722,8 +722,16 @@ function float_random_in_unit_interval_and_covers_both_halves() -> bool {
     let i = 0;
     while (i < 1000) {
         let r = float.random();
-        if (r < 0.0 || r >= 1.0) { ok = false } else { null }
-        if (r < 0.5) { below = below + 1 } else { above = above + 1 }
+        if (r < 0.0 || r >= 1.0) {
+            ok = false
+        } else {
+            null
+        }
+        if (r < 0.5) {
+            below = below + 1
+        } else {
+            above = above + 1
+        }
         i = i + 1
     }
     ok && below >= 350 && above >= 350
@@ -743,8 +751,16 @@ function float_random_distinct_values() -> bool {
     let i = 0;
     while (i < 100) {
         let r = float.random();
-        if (r < min_seen) { min_seen = r } else { null }
-        if (r > max_seen) { max_seen = r } else { null }
+        if (r < min_seen) {
+            min_seen = r
+        } else {
+            null
+        }
+        if (r > max_seen) {
+            max_seen = r
+        } else {
+            null
+        }
         i = i + 1
     }
     (max_seen - min_seen) > 0.5
@@ -752,6 +768,28 @@ function float_random_distinct_values() -> bool {
 
 test "float_random_distinct_values" {
     assert.is_true(float_random_distinct_values())
+}
+
+class FixedFloatRng {
+    draw: int,
+
+    implements baml.random.Rng {
+        function random(self, bytes: int) -> uint8array {
+            let empty = b"";
+            empty
+        }
+
+        function random_int(self) -> int {
+            self.draw
+        }
+    }
+}
+
+test "float_random_uses_rng" {
+    assert.equal(float.random(rng = FixedFloatRng { draw: 0 }), 0.0);
+    assert.equal(float.random(rng = FixedFloatRng { draw: int.min_value() }), 0.5);
+    let high = float.random(rng = FixedFloatRng { draw: -1 });
+    assert.is_true(high > 0.99 && high < 1.0)
 }
 
 // ─── Equality (== / !=) ───────────────────────────────────────────────────────
@@ -993,11 +1031,11 @@ test "float_eq_sum_equals_exact_rounded" {
 // (NaN is not even equal to itself). Regression guard for the float `Compare`
 // override (the boolean-derived defaults `gt = !le` would otherwise return `true`).
 test "nan_comparison" {
-    assert.is_true(!(float.nan() < 1.0))
-    assert.is_true(!(1.0 < float.nan()))
-    assert.is_true(!(float.nan() > 1.0))
-    assert.is_true(!(float.nan() < float.nan()))
-    assert.is_true(!(float.nan() <= float.nan()))
+    assert.is_true(!(float.nan() < 1.0));
+    assert.is_true(!(1.0 < float.nan()));
+    assert.is_true(!(float.nan() > 1.0));
+    assert.is_true(!(float.nan() < float.nan()));
+    assert.is_true(!(float.nan() <= float.nan()));
     assert.is_true(!(float.nan() >= float.nan()))
 }
 

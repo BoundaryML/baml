@@ -1,18 +1,18 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-// Raw string literals as test names should work.
+// Backtick string literals as test names should work.
 
-test #"raw string name"# {
+test `backtick string name` {
     assert.is_true(true)
 }
 
-test #"has "quotes" inside"# {
+test `has "quotes" inside` {
     assert.is_true(true)
 }
 
-testset #"raw testset name"# {
-    test #"nested raw name"# {
+testset `backtick testset name` {
+    test `nested backtick name` {
         assert.is_true(true)
     }
 }

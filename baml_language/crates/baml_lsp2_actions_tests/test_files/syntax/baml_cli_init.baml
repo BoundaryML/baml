@@ -77,7 +77,7 @@ function ExtractResume(resume: string) -> Resume {
 test vaibhav_resume {
   functions [ExtractResume]
   args {
-    resume #"
+    resume "
       Vaibhav Gupta
       vbv@boundaryml.com
 
@@ -89,7 +89,7 @@ test vaibhav_resume {
       Skills:
       - Rust
       - C++
-    "#
+    "
   }
 }
 

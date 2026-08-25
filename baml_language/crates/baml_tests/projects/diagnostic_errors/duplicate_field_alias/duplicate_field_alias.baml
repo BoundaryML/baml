@@ -22,13 +22,6 @@ class TripleCollision {
   shared string
 }
 
-// Case 4: a double-quoted alias and a raw-string alias normalize to the same
-// value and collide.
-class NormalizedCollision {
-  a string @alias("q")
-  b string @alias(#"q"#)
-}
-
 // ─── Controls: these must NOT be flagged ─────────────────────────────────────
 
 // A field whose alias equals its OWN name is fine (single occupant of key `a`).

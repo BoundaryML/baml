@@ -52,7 +52,7 @@ function Bar(a: string, b: int | bool) -> int {
 // error: Error validating: Missing `prompt` and `client` fields in function. Add to the block:
 // ```
 // client GPT4
-// prompt #"..."#
+// prompt `...`
 // ```
 //   -->  functions_v2/duplicate_names.baml:1
 //    |

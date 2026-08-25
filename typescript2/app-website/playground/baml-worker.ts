@@ -349,9 +349,6 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         type: 'commandError',
       });
       break;
-    case 'profileArtifactChunk':
-      postOut(notification as WorkerOutMessage);
-      break;
     default:
       postOut({
         notification: notification as unknown as WorkerPlaygroundNotification,
