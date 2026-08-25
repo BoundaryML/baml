@@ -872,7 +872,8 @@ mod tests {
             generic_params: Vec::new(),
             name: BaseName::new(bare),
             docstring: None,
-            arguments: vec![FunctionArgument { injected: false,
+            arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("x"),
                 docstring: None,
                 ty: Ty::Int {
@@ -1532,7 +1533,8 @@ mod tests {
         let n = cg_name("user", &["lorem"], "Resume");
         let mut method = bare_func("summarize", "x.baml", 100);
         method.docstring = Some("Summarize the resume.".to_string());
-        method.arguments = vec![FunctionArgument { injected: false,
+        method.arguments = vec![FunctionArgument {
+            injected: false,
             name: BaseName::new("self"),
             docstring: None,
             ty: class_ty(n.clone(), vec![]),
@@ -2481,7 +2483,8 @@ mod tests {
             docstring: None,
             arguments: args
                 .iter()
-                .map(|n| FunctionArgument { injected: false,
+                .map(|n| FunctionArgument {
+                    injected: false,
                     name: BaseName::new(*n),
                     docstring: None,
                     ty: Ty::String {
@@ -2583,7 +2586,8 @@ mod tests {
                 name: BaseName::new("search"),
                 docstring: None,
                 arguments: vec![
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("query"),
                         docstring: None,
                         ty: Ty::String {
@@ -2591,7 +2595,8 @@ mod tests {
                         },
                         default: None,
                     },
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("max_results"),
                         docstring: None,
                         ty: Ty::Int {
@@ -2601,7 +2606,8 @@ mod tests {
                             baml_base::Literal::Int(10),
                         ))),
                     },
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("filter"),
                         docstring: None,
                         ty: Ty::String {
@@ -2611,7 +2617,8 @@ mod tests {
                             source: Some("default_filter()".to_string()),
                         }),
                     },
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("tags"),
                         docstring: None,
                         ty: list(Box::new(Ty::String {
@@ -2619,7 +2626,8 @@ mod tests {
                         })),
                         default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyList)),
                     },
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("metadata"),
                         docstring: None,
                         ty: Ty::Map {
@@ -2633,7 +2641,8 @@ mod tests {
                         },
                         default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyMap)),
                     },
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("fallback"),
                         docstring: None,
                         ty: union(vec![
@@ -2689,7 +2698,8 @@ mod tests {
                 name: BaseName::new("defaults"),
                 docstring: None,
                 arguments: vec![
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("tags"),
                         docstring: None,
                         ty: list(Box::new(Ty::String {
@@ -2697,7 +2707,8 @@ mod tests {
                         })),
                         default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyList)),
                     },
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("metadata"),
                         docstring: None,
                         ty: Ty::Map {
@@ -2711,7 +2722,8 @@ mod tests {
                         },
                         default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::EmptyMap)),
                     },
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("fallback"),
                         docstring: None,
                         ty: union(vec![
@@ -2943,7 +2955,8 @@ mod tests {
             docstring: None,
             arguments: args
                 .iter()
-                .map(|n| FunctionArgument { injected: false,
+                .map(|n| FunctionArgument {
+                    injected: false,
                     name: BaseName::new(*n),
                     docstring: None,
                     ty: Ty::Int {
@@ -3237,7 +3250,8 @@ mod tests {
                 generic_params: Vec::new(),
                 name: BaseName::new("extract_resume"),
                 docstring: None,
-                arguments: vec![FunctionArgument { injected: false,
+                arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("text"),
                     docstring: None,
                     ty: Ty::String {
@@ -3287,7 +3301,8 @@ mod tests {
                 generic_params: Vec::new(),
                 name: BaseName::new("extract_resume$parse"),
                 docstring: None,
-                arguments: vec![FunctionArgument { injected: false,
+                arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("json"),
                     docstring: None,
                     ty: Ty::String {
@@ -3308,7 +3323,8 @@ mod tests {
                 generic_params: Vec::new(),
                 name: BaseName::new("extract_resume"),
                 docstring: None,
-                arguments: vec![FunctionArgument { injected: false,
+                arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("text"),
                     docstring: None,
                     ty: Ty::String {
@@ -3920,7 +3936,8 @@ mod tests {
                 generic_params: Vec::new(),
                 name: BaseName::new("classify"),
                 docstring: None,
-                arguments: vec![FunctionArgument { injected: false,
+                arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("text"),
                     docstring: None,
                     ty: Ty::String {
@@ -4110,7 +4127,8 @@ mod tests {
                 name: BaseName::new("echo"),
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
-                arguments: vec![FunctionArgument { injected: false,
+                arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: type_var(BaseName::new("T")),
@@ -4173,7 +4191,8 @@ mod tests {
     #[test]
     fn generic_function_types_kwarg_tracks_engine_inference_sources() {
         let mut pool: SymbolPool = HashMap::new();
-        let default_label = || FunctionArgument { injected: false,
+        let default_label = || FunctionArgument {
+            injected: false,
             name: BaseName::new("label"),
             docstring: None,
             ty: Ty::String {
@@ -4191,7 +4210,8 @@ mod tests {
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
                 arguments: vec![
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("value"),
                         docstring: None,
                         ty: type_var(BaseName::new("T")),
@@ -4211,7 +4231,8 @@ mod tests {
                 name: BaseName::new("optional_only"),
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
-                arguments: vec![FunctionArgument { injected: false,
+                arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: union(vec![
@@ -4235,7 +4256,8 @@ mod tests {
                 generic_params: vec![BaseName::new("T"), BaseName::new("R")],
                 docstring: None,
                 arguments: vec![
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("callback"),
                         docstring: None,
                         ty: Ty::Function {
@@ -4251,7 +4273,8 @@ mod tests {
                         },
                         default: None,
                     },
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("value"),
                         docstring: None,
                         ty: type_var(BaseName::new("T")),
@@ -4270,7 +4293,8 @@ mod tests {
                 name: BaseName::new("ambiguous"),
                 generic_params: vec![BaseName::new("T"), BaseName::new("U")],
                 docstring: None,
-                arguments: vec![FunctionArgument { injected: false,
+                arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: union(vec![
@@ -4297,7 +4321,8 @@ mod tests {
                 generic_params: vec![BaseName::new("T"), BaseName::new("U")],
                 docstring: None,
                 arguments: vec![
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("ambiguous"),
                         docstring: None,
                         ty: union(vec![
@@ -4309,13 +4334,15 @@ mod tests {
                         ]),
                         default: None,
                     },
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("left"),
                         docstring: None,
                         ty: type_var(BaseName::new("T")),
                         default: None,
                     },
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("right"),
                         docstring: None,
                         ty: type_var(BaseName::new("U")),
@@ -4393,7 +4420,8 @@ mod tests {
             name: BaseName::new("pair_with"),
             generic_params: vec![BaseName::new("U")],
             docstring: None,
-            arguments: vec![FunctionArgument { injected: false,
+            arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("other"),
                 docstring: None,
                 ty: type_var(BaseName::new("U")),
@@ -4409,13 +4437,15 @@ mod tests {
             generic_params: vec![BaseName::new("U")],
             docstring: None,
             arguments: vec![
-                FunctionArgument { injected: false,
+                FunctionArgument {
+                    injected: false,
                     name: BaseName::new("other"),
                     docstring: None,
                     ty: type_var(BaseName::new("U")),
                     default: None,
                 },
-                FunctionArgument { injected: false,
+                FunctionArgument {
+                    injected: false,
                     name: BaseName::new("label"),
                     docstring: None,
                     ty: Ty::String {
@@ -4448,13 +4478,15 @@ mod tests {
             generic_params: vec![BaseName::new("V")],
             docstring: None,
             arguments: vec![
-                FunctionArgument { injected: false,
+                FunctionArgument {
+                    injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: type_var(BaseName::new("V")),
                     default: None,
                 },
-                FunctionArgument { injected: false,
+                FunctionArgument {
+                    injected: false,
                     name: BaseName::new("label"),
                     docstring: None,
                     ty: Ty::String {

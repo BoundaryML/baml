@@ -266,7 +266,8 @@ mod tests {
             name: BaseName::new("apply"),
             generic_params: Vec::new(),
             docstring: None,
-            arguments: vec![FunctionArgument { injected: false,
+            arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new(arg_name),
                 docstring: None,
                 ty,

@@ -277,7 +277,8 @@ fn stage_package_edges(manifest_dir: &std::path::Path, diagnostics: &mut BuildDi
                 name: BaseName::new("round_trip_context_thing"),
                 generic_params: vec![],
                 docstring: None,
-                arguments: vec![FunctionArgument { injected: false,
+                arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: ty_class(context.clone(), vec![]),
@@ -299,13 +300,15 @@ fn stage_package_edges(manifest_dir: &std::path::Path, diagnostics: &mut BuildDi
                 generic_params: vec![],
                 docstring: None,
                 arguments: vec![
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("models"),
                         docstring: None,
                         ty: ty_string(),
                         default: None,
                     },
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("value"),
                         docstring: None,
                         ty: ty_class(models.clone(), vec![]),
@@ -327,7 +330,8 @@ fn stage_package_edges(manifest_dir: &std::path::Path, diagnostics: &mut BuildDi
                 name: BaseName::new("round_trip_envelope"),
                 generic_params: vec![],
                 docstring: None,
-                arguments: vec![FunctionArgument { injected: false,
+                arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: ty_class(envelope.clone(), vec![]),
@@ -348,7 +352,8 @@ fn stage_package_edges(manifest_dir: &std::path::Path, diagnostics: &mut BuildDi
                 name: BaseName::new("round_trip_enum_holder"),
                 generic_params: vec![],
                 docstring: None,
-                arguments: vec![FunctionArgument { injected: false,
+                arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: ty_class(enum_holder.clone(), vec![]),
@@ -372,7 +377,8 @@ fn stage_package_edges(manifest_dir: &std::path::Path, diagnostics: &mut BuildDi
                 generic_params: vec![],
                 docstring: None,
                 arguments: vec![
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("callback"),
                         docstring: None,
                         ty: ty_callable(
@@ -384,7 +390,8 @@ fn stage_package_edges(manifest_dir: &std::path::Path, diagnostics: &mut BuildDi
                         ),
                         default: None,
                     },
-                    FunctionArgument { injected: false,
+                    FunctionArgument {
+                        injected: false,
                         name: BaseName::new("value"),
                         docstring: None,
                         ty: ty_union(vec![ty_string(), ty_class(models.clone(), vec![])]),
@@ -450,7 +457,8 @@ fn synthetic_method(name: &str, arguments: Vec<(&str, Ty, bool)>, return_type: T
         docstring: None,
         arguments: arguments
             .into_iter()
-            .map(|(name, ty, defaulted)| FunctionArgument { injected: false,
+            .map(|(name, ty, defaulted)| FunctionArgument {
+                injected: false,
                 name: BaseName::new(name),
                 docstring: None,
                 ty,
@@ -507,7 +515,8 @@ fn round_trip_function(name: Name, ty: Ty) -> (Name, Symbol) {
         name: name.name().clone(),
         generic_params: vec![],
         docstring: None,
-        arguments: vec![FunctionArgument { injected: false,
+        arguments: vec![FunctionArgument {
+            injected: false,
             name: BaseName::new("value"),
             docstring: None,
             ty: ty.clone(),

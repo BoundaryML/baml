@@ -431,7 +431,8 @@ mod tests {
             name: BaseName::new("extract_resume"),
             generic_params: Vec::new(),
             docstring: None,
-            arguments: vec![FunctionArgument { injected: false,
+            arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("x"),
                 docstring: None,
                 ty: Ty::Int {

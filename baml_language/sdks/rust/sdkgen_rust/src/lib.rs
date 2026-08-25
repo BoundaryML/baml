@@ -582,7 +582,8 @@ mod tests {
         let mut function = nullary_string_fn(n);
         function
             .arguments
-            .push(baml_codegen_types::FunctionArgument { injected: false,
+            .push(baml_codegen_types::FunctionArgument {
+                injected: false,
                 name: baml_base::Name::new("u"),
                 docstring: None,
                 ty: arg_ty,
@@ -822,7 +823,8 @@ mod tests {
         let n = name("user", &[], "wide_function");
         let mut function = nullary_string_fn(&n);
         function.arguments = (0..8)
-            .map(|index| baml_codegen_types::FunctionArgument { injected: false,
+            .map(|index| baml_codegen_types::FunctionArgument {
+                injected: false,
                 name: baml_base::Name::new(format!("arg_{index}")),
                 docstring: None,
                 ty: Ty::String {
@@ -848,7 +850,8 @@ mod tests {
         let with_args = name("user", &[], "takes_one");
         let mut function = nullary_string_fn(&with_args);
         function.docstring = Some("Frobnicates the input.".to_string());
-        function.arguments = vec![baml_codegen_types::FunctionArgument { injected: false,
+        function.arguments = vec![baml_codegen_types::FunctionArgument {
+            injected: false,
             name: baml_base::Name::new("x"),
             docstring: None,
             ty: Ty::String {
@@ -919,7 +922,8 @@ mod tests {
     }
 
     fn arg(name: &str, ty: Ty) -> baml_codegen_types::FunctionArgument {
-        baml_codegen_types::FunctionArgument { injected: false,
+        baml_codegen_types::FunctionArgument {
+            injected: false,
             name: baml_base::Name::new(name),
             docstring: None,
             ty,
@@ -1415,7 +1419,8 @@ mod tests {
     fn methods_emit_static_and_instance_bindings() {
         let g = name("user", &[], "Greeter");
         let mut create = nullary_string_fn(&name("user", &[], "create"));
-        create.arguments.push(baml_codegen_types::FunctionArgument { injected: false,
+        create.arguments.push(baml_codegen_types::FunctionArgument {
+            injected: false,
             name: baml_base::Name::new("name"),
             docstring: None,
             ty: Ty::String {
@@ -1426,7 +1431,8 @@ mod tests {
         create.return_type = Ty::Class(g.clone(), Vec::new(), baml_base::TyAttr::EMPTY);
         let who = nullary_string_fn(&name("user", &[], "who"));
         let mut greet = nullary_string_fn(&name("user", &[], "greet"));
-        greet.arguments.push(baml_codegen_types::FunctionArgument { injected: false,
+        greet.arguments.push(baml_codegen_types::FunctionArgument {
+            injected: false,
             name: baml_base::Name::new("greeting"),
             docstring: None,
             ty: Ty::String {
@@ -1583,7 +1589,8 @@ mod tests {
             baml_base::TyAttr::EMPTY,
         );
         let mut pick = nullary_string_fn(&name("user", &[], "pick"));
-        pick.arguments.push(baml_codegen_types::FunctionArgument { injected: false,
+        pick.arguments.push(baml_codegen_types::FunctionArgument {
+            injected: false,
             name: baml_base::Name::new("u"),
             docstring: None,
             ty: union,
