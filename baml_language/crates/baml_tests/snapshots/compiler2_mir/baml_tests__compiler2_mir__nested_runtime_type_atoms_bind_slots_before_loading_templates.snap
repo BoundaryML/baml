@@ -1,0 +1,98 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn user.erase() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "ok";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.f(t: reflect.Type, value: unknown) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: reflect.Type // t // param
+    let _2: unknown // value // param
+    let _3: reflect.Type
+    let _4: null | Wrapper<$unreflect$d7b1576f> // annotated
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: string
+    let _9: reflect.Type
+    let _10: null | Wrapper<$unreflect$d7b1576f>
+    let _11: bool
+    let _12: bool
+
+    bb0: {
+        bind_type(0, [Copy(Local(Local(1)))]);
+        _3 = load_type(Wrapper<#0>);
+        bind_type(5, [Copy(Local(Local(3)))]);
+        bind_type(4, [Copy(Local(Local(1)))]);
+        _4 = const null;
+        bind_type(1, [Copy(Local(Local(1)))]);
+        _9 = load_type(Wrapper<#1>);
+        _8 = call const fn user.erase<copy _9>(; runtime_type_check) -> [bb1];
+    }
+
+    bb1: {
+        _7 = copy _8 == const "ok";
+        _6 = short_circuit(&&) copy _7 -> [eval: bb2, join: bb3];
+    }
+
+    bb2: {
+        _10 = copy _4;
+        _6 = call const fn baml.ops.equals_equals(copy _10, const null) -> [bb3];
+    }
+
+    bb3: {
+        _5 = short_circuit(&&) copy _6 -> [eval: bb4, join: bb7];
+    }
+
+    bb4: {
+        bind_type(3, [Copy(Local(Local(1)))]);
+        _11 = is_type(copy _2, Wrapper<#3>);
+        branch copy _11 -> [bb6, bb5];
+    }
+
+    bb5: {
+        _5 = const false;
+        goto -> bb7;
+    }
+
+    bb6: {
+        _5 = const true;
+        goto -> bb7;
+    }
+
+    bb7: {
+        _0 = short_circuit(&&) copy _5 -> [eval: bb8, join: bb11];
+    }
+
+    bb8: {
+        bind_type(2, [Copy(Local(Local(1)))]);
+        _12 = is_type(copy _2, Wrapper<#2>);
+        branch copy _12 -> [bb10, bb9];
+    }
+
+    bb9: {
+        _0 = const false;
+        goto -> bb11;
+    }
+
+    bb10: {
+        _0 = const true;
+        goto -> bb11;
+    }
+
+    bb11: {
+        return;
+    }
+}

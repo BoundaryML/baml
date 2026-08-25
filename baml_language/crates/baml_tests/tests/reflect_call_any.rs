@@ -646,6 +646,47 @@ async fn runtime_enum_renders_and_alias_round_trips_through_sap() {
 }
 
 #[tokio::test]
+async fn nested_unreflect_runtime_type_renders_through_a_generic_wrapper() {
+    let output = baml_test!(
+        r##"
+client TestClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+)
+
+class Wrapper<T> {
+    value T
+}
+
+function Extract<T>(input: string) -> T {
+    client: TestClient
+    prompt: `Extract ${input}.\n${ctx.output_format}`
+}
+
+function main() -> string {
+    let runtime_class = reflect.class.new("RuntimeTranscript", {
+        "speaker": reflect.Type.of<string>(),
+        "words": reflect.Type.of<string[]>(),
+    })
+    Extract$render_prompt<Wrapper<unreflect(runtime_class.as_type())>>("sample").text()
+}
+"##
+    );
+
+    let BexExternalValue::String(prompt) = output
+        .result
+        .expect("nested runtime type should render without executing a model call")
+    else {
+        panic!("expected rendered prompt text")
+    };
+    assert!(
+        prompt.contains("value:") && prompt.contains("speaker") && prompt.contains("words"),
+        "missing static wrapper or nested runtime class schema: {prompt}",
+    );
+}
+
+#[tokio::test]
 async fn runtime_enum_identity_and_metadata_are_preserved() {
     let output = baml_test!(
         r##"

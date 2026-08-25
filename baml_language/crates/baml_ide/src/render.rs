@@ -276,6 +276,7 @@ fn display_type_ref_as_function_result(store: &TypeRefStore, id: TypeRefId) -> S
 pub fn display_type_ref(store: &TypeRefStore, id: TypeRefId) -> String {
     use baml_compiler2_hir::type_ref::TypeRefKind as K;
     let rendered = match &store[id].kind {
+        K::Unreflect { .. } => store.display(id).to_string(),
         K::Path { segments, .. } => segments
             .last()
             .map(|n| n.as_str().to_string())

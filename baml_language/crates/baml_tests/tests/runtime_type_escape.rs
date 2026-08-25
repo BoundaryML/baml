@@ -59,6 +59,124 @@ fn assert_accepted(source: &str) {
     assert!(errors.is_empty(), "expected no errors, got: {errors:#?}");
 }
 
+#[test]
+fn nested_runtime_type_atoms_parse_and_typecheck_in_body_positions() {
+    assert_accepted(
+        r#"
+class Wrapper<T> { value T }
+
+function erase<T>(value: unknown) -> string { "ok" }
+
+function main(t: reflect.Type, value: unknown) -> bool throws unknown {
+    let call_ok = erase<Wrapper<unreflect(t)>>(value) == "ok"
+    let binding_ok = {
+        type T = Wrapper<unreflect(t)>
+        let values = baml.json.from_json<T[]>(baml.json.parse("[]"))
+        values.length() == 0
+    }
+    let annotated: Wrapper<unreflect(t)>? = null
+    call_ok
+        && binding_ok
+        && annotated == null
+        && value is Wrapper<unreflect(t)>
+        && match value {
+            Wrapper<unreflect(t)> => true,
+            _ => false,
+        }
+}
+"#,
+    );
+}
+
+#[test]
+fn nested_runtime_type_escape_uses_e0168_and_rewrites_only_the_hole() {
+    let source = r#"
+class Wrapper<T> { value T }
+
+function ident<T>() -> T throws string { throw "stop" }
+
+function main(t: reflect.Type) -> unknown throws unknown {
+    ident<Wrapper<unreflect(t)>>()
+}
+"#;
+    assert_single_escape(source);
+    let rendered = render_errors(source);
+    assert!(
+        rendered.contains("type Out = unreflect(t);") && rendered.contains("ident<Wrapper<Out>>()"),
+        "nested E0168 rewrite did not preserve the surrounding type:\n{rendered}",
+    );
+}
+
+#[test]
+fn nested_runtime_type_escape_through_throws_is_e0168() {
+    assert_single_escape(
+        r#"
+class Wrapper<T> { value T }
+class Boom<T> { payload T }
+
+function risky<T>() -> int throws Boom<T> { 0 }
+
+function main(t: reflect.Type) -> unknown throws unknown {
+    risky<Wrapper<unreflect(t)>>()
+}
+"#,
+    );
+}
+
+#[test]
+fn nested_runtime_type_escape_through_optional_chain_is_e0168() {
+    assert_single_escape(
+        r#"
+class Wrapper<T> { value T }
+
+class Source {
+    function pick<T>(self) -> T throws string { throw "stop" }
+}
+
+function main(t: reflect.Type, source: Source?) -> unknown throws unknown {
+    source?.pick<Wrapper<unreflect(t)>>()
+}
+"#,
+    );
+}
+
+#[test]
+fn item_signature_runtime_type_atoms_each_get_one_checker_diagnostic() {
+    let errors = compile_errors(
+        r#"
+class Wrapper<T> { value T }
+interface Marker<T> {}
+
+class FieldSite {
+    value Wrapper<unreflect(reflect.Type.of<string>())>
+}
+
+class ImplementsSite {
+    implements Marker<unreflect(reflect.Type.of<string>())> {}
+}
+
+function signature_site(
+    value: Wrapper<unreflect(reflect.Type.of<string>())>
+) -> Wrapper<unreflect(reflect.Type.of<string>())> {
+    value
+}
+
+function bound_site<T extends Wrapper<unreflect(reflect.Type.of<string>())>>() -> null { null }
+type AliasSite = Wrapper<unreflect(reflect.Type.of<string>())>
+"#,
+    );
+    assert_eq!(
+        errors.len(),
+        6,
+        "expected one diagnostic per item occurrence: {errors:#?}"
+    );
+    assert!(errors.iter().all(|(code, message)| {
+        code == "E0168"
+            && message
+                == "a runtime type has no scope here; bind it inside a function body: `type T = unreflect(…)`"
+    }));
+}
+
 /// The exact codes a source reports — for the audited shapes whose refusal is
 /// some other rule's to make, so a later change that hands them to E0168 (or
 /// to nothing at all) has to come through here.

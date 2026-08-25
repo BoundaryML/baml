@@ -785,6 +785,36 @@ function f(t: reflect.Type, value: unknown) -> bool {
     );
 }
 
+#[test]
+fn nested_runtime_type_atoms_bind_slots_before_loading_templates() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Wrapper<T> { value T }
+
+function erase<T>() -> string { "ok" }
+
+function f(t: reflect.Type, value: unknown) -> bool {
+    type Bound = Wrapper<unreflect(t)>
+    let annotated: Wrapper<unreflect(t)>? = null
+    erase<Wrapper<unreflect(t)>>() == "ok"
+        && annotated == null
+        && value is Wrapper<unreflect(t)>
+        && match value {
+            Wrapper<unreflect(t)> => true,
+            _ => false,
+        }
+}
+"#,
+    );
+    baml_project::testing::assert_no_diagnostic_errors(&db);
+    mir_snapshot!(
+        "nested_runtime_type_atoms_bind_slots_before_loading_templates",
+        render_mir(&db, file)
+    );
+}
+
 /// A source-less callable keeps its symbolic package target all the way into
 /// MIR while runtime generic operands still come exclusively from the solved
 /// call plan.

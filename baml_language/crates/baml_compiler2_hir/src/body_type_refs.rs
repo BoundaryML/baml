@@ -15,7 +15,7 @@
 //! generic args join when pattern inference needs them.
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Pattern, TypeArg};
+use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Pattern, Stmt, StmtId, TypeExprKind};
 use rustc_hash::FxHashMap;
 
 use crate::type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore};
@@ -58,6 +58,8 @@ pub struct BodyTypeRefs {
     /// and `Object` constructors), in written order. Never empty when
     /// present.
     pub expr_type_args: FxHashMap<ExprId, Box<[BodyTypeArgRef]>>,
+    /// RHS types of lexical `type T = ...` bindings.
+    pub stmt_type_bindings: FxHashMap<StmtId, BodyTypeRefId>,
     /// `.as<T>` upcast targets.
     pub upcast_targets: FxHashMap<ExprId, BodyTypeRefId>,
     /// The two written halves of a `(Base as Interface).item` reference.
@@ -170,13 +172,12 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, BodyTypeRefSour
                     expr_id,
                     type_args
                         .iter()
-                        .map(|arg| match arg {
-                            TypeArg::Static(ty) => {
-                                BodyTypeArgRef::Static(BodyTypeRefId(builder.lower(ty)))
-                            }
-                            TypeArg::Unreflect(operand) => {
-                                BodyTypeArgRef::Runtime { operand: *operand }
-                            }
+                        .map(|arg| match &arg.kind {
+                            TypeExprKind::Unreflect {
+                                operand: Some(operand),
+                                ..
+                            } => BodyTypeArgRef::Runtime { operand: *operand },
+                            _ => BodyTypeArgRef::Static(BodyTypeRefId(builder.lower(arg))),
                         })
                         .collect(),
                 );
@@ -236,6 +237,13 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, BodyTypeRefSour
         }
     }
 
+    for (stmt_id, stmt) in body.stmts.iter() {
+        if let Stmt::TypeBinding { value, .. } = stmt {
+            refs.stmt_type_bindings
+                .insert(stmt_id, BodyTypeRefId(builder.lower(value)));
+        }
+    }
+
     let (store, source_map) = builder.finish();
     refs.store = store;
     (refs, BodyTypeRefSourceMap(source_map))
@@ -243,7 +251,7 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, BodyTypeRefSour
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_ast::{Expr, ExprBody, TypeArg, TypeExprKind};
+    use baml_compiler2_ast::{Expr, ExprBody, TypeExprKind};
     use text_size::{TextRange, TextSize};
 
     use super::*;
@@ -257,9 +265,14 @@ mod tests {
             .alloc(Expr::Path(vec![Name::new("runtime_type")]));
         let static_span = TextRange::new(TextSize::from(10), TextSize::from(13));
         let static_ty = TypeExprKind::Int { attrs: Vec::new() }.at(static_span);
+        let runtime_ty = TypeExprKind::Unreflect {
+            operand: Some(operand),
+            attrs: Vec::new(),
+        }
+        .at(TextRange::new(TextSize::from(15), TextSize::from(38)));
         let call = body.exprs.alloc(Expr::Call {
             callee,
-            type_args: vec![TypeArg::Static(static_ty), TypeArg::Unreflect(operand)],
+            type_args: vec![static_ty, runtime_ty],
             args: Vec::new(),
         });
 

@@ -125,6 +125,27 @@ async fn scoped_type_binding_evaluates_once_types_contracts_and_widens_on_escape
 }
 
 #[tokio::test]
+async fn nested_unreflect_annotations_and_patterns_use_realized_templates() {
+    let output = baml_test!(
+        r#"
+class Wrapper<T> { value T }
+
+function main() -> bool {
+    let t = reflect.Type.of<string>()
+    let value = Wrapper<string> { value: "ok" }
+    let annotated: Wrapper<unreflect(t)> = value
+    annotated is Wrapper<unreflect(t)>
+        && match annotated {
+            Wrapper<unreflect(t)> => true,
+            _ => false,
+        }
+}
+"#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
 async fn type_bindings_work_in_lambdas_and_nested_shadowing_uses_distinct_slots() {
     let output = baml_test!(
         r#"
@@ -188,7 +209,7 @@ function main() -> bool {
 }
 
 #[tokio::test]
-#[should_panic(expected = "runtime type bindings are only allowed inside")]
+#[should_panic(expected = "a runtime type has no scope here")]
 async fn top_level_runtime_type_binding_is_rejected() {
     let _ = baml_test!(
         r#"

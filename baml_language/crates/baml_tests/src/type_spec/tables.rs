@@ -605,15 +605,18 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
         diagnostics.extend(result.diagnostics.iter().map(|diag| diag.error.clone()));
         runtime_checks += result.runtime_checks.len();
         for check in &result.runtime_checks {
-            assert!(matches!(
-                check,
-                baml_compiler2_hir_ty::infer::RuntimeCheck::Argument { expected, .. }
-                    if matches!(
-                        expected.kind(),
-                        baml_type::interned::TyKind::TypeVar(param, _)
-                            if param.index() & 0x8000_0000 != 0
-                    )
-            ));
+            assert!(
+                matches!(
+                    check,
+                    baml_compiler2_hir_ty::infer::RuntimeCheck::Argument { expected, .. }
+                        if matches!(
+                            expected.kind(),
+                            baml_type::interned::TyKind::TypeVar(param, _)
+                                if param.index() & 0x8000_0000 != 0
+                        )
+                ),
+                "unexpected runtime check: {check:?}"
+            );
         }
         saw_bad_operand |= result.diagnostics.iter().any(|diag| {
             matches!(

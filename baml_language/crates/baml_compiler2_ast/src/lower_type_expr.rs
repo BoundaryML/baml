@@ -172,6 +172,17 @@ fn lower_base(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>) -> T
 /// Parse the base type (no modifiers, not a union).
 fn lower_base_terminal(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>) -> TypeExpr {
     let span = type_expr.syntax().span_range();
+    if let Some(unreflect) = type_expr
+        .syntax()
+        .children()
+        .find(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
+    {
+        return TypeExprKind::Unreflect {
+            operand: None,
+            attrs: vec![],
+        }
+        .at(unreflect.span_range());
+    }
     // BUG: a qualified projection captures only a single member — `(base as I).A.B`
     // drops the trailing `.B` (`associated_type_projection` returns one member). A chained
     // explicit qualifier (`(T as Outer).Asdf.Assoc`) therefore silently loses `.Assoc`,
@@ -353,6 +364,17 @@ fn lower_union_member_base(
     diags: &mut Vec<LoweringDiagnostic>,
 ) -> TypeExpr {
     let span = parts.span().unwrap_or_default();
+    if let Some(unreflect) = parts
+        .child_nodes
+        .iter()
+        .find(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
+    {
+        return TypeExprKind::Unreflect {
+            operand: None,
+            attrs: vec![],
+        }
+        .at(unreflect.span_range());
+    }
     if let Some((base, interface, member)) = parts.associated_type_projection() {
         return TypeExprKind::AssociatedTypeProjection {
             base: Box::new(lower_type_expr_inner(&base, false, diags)),

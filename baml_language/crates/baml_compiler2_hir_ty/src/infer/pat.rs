@@ -393,6 +393,39 @@ impl<'db> InferenceContext<'db> {
     }
 
     fn lower_pattern_inner(&mut self, body: &ExprBody, pat: PatId, scrut: &Ty) -> PatternOutcome {
+        let mut written_refs = Vec::new();
+        written_refs.extend(self.type_refs.pattern_types.get(&pat).copied());
+        written_refs.extend(self.type_refs.array_ascriptions.get(&pat).copied());
+        written_refs.extend(
+            self.type_refs
+                .pattern_class_args
+                .get(&pat)
+                .into_iter()
+                .flatten()
+                .copied(),
+        );
+        written_refs.extend(
+            self.type_refs
+                .pattern_assoc_bindings
+                .get(&pat)
+                .into_iter()
+                .flatten()
+                .map(|(_, type_ref)| *type_ref),
+        );
+        let mut operands = Vec::new();
+        for type_ref in written_refs {
+            let mut nested = Vec::new();
+            super::collect_unreflect_type_refs(
+                &self.type_refs.store,
+                self.type_refs.raw_id(type_ref),
+                &mut nested,
+            );
+            operands.extend(nested.into_iter().map(|(_, operand)| operand));
+        }
+        for operand in operands {
+            self.validate_runtime_type_operand(body, operand);
+        }
+
         match &body.patterns[pat] {
             Pattern::Wildcard => PatternOutcome {
                 dpat: DPat::wildcard(scrut.to_plain()),
