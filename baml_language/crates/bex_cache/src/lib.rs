@@ -90,7 +90,12 @@ use sha2::{Digest, Sha256};
 /// sentinel (29). The slots are tombstoned rather than reused, so a 9 image
 /// carrying one in a persisted throw fact would now fail to decode instead of
 /// silently landing on whatever occupies the slot later.
-pub const FORMAT_VERSION: u32 = 10;
+///
+/// Version 11: interface bodies became anonymous-but-slotted. `Function`
+/// gained `is_interface_body` + `native_key` (wire fields), and `Program`
+/// gained `body_indices` while `function_indices` / `function_global_indices`
+/// stopped carrying impl-block methods and interface default bodies.
+pub const FORMAT_VERSION: u32 = 11;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

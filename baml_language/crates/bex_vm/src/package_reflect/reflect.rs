@@ -1007,6 +1007,12 @@ impl BamlClassPackage for PackageReflectImpl {
             .iter()
             .map(|(name, index)| (name.clone(), objects[index.raw()]))
             .collect::<IndexMap<_, _>>();
+        // `global_names` is the runtime package's *link* table: a consumer
+        // mounting this package resolves its imports here, and a statically
+        // resolved call to one of this package's impl methods imports the
+        // body by its link-boundary spelling — so bodies publish alongside
+        // the named items.
+        #[expect(deprecated, reason = "graft linking is a sanctioned boundary consumer")]
         let global_names = plan
             .program
             .function_global_indices
@@ -1014,6 +1020,13 @@ impl BamlClassPackage for PackageReflectImpl {
             .chain(&plan.program.let_global_indices)
             .filter(|(name, _)| name.starts_with("user."))
             .map(|(name, index)| (name.clone(), *index))
+            .chain(
+                plan.program
+                    .body_indices
+                    .iter()
+                    .filter(|(name, _)| name.starts_with("user."))
+                    .map(|(name, slots)| (name.clone(), slots.global_slot)),
+            )
             .collect::<IndexMap<_, _>>();
         let init = plan
             .program
@@ -2033,6 +2046,16 @@ fn graft_session_submission(
             object_name_updates.insert(name.clone(), objects[*index]);
         }
     }
+    // Interface bodies are runtime-anonymous, but `object_names` /
+    // `global_names` are the session's *link* tables: a later eval's direct
+    // call to this eval's impl method imports the body by its link-boundary
+    // spelling, so bodies publish here (and only here).
+    #[expect(deprecated, reason = "graft linking is a sanctioned boundary consumer")]
+    for (name, slots) in &plan.program.body_indices {
+        if name.starts_with("user.") {
+            object_name_updates.insert(name.clone(), objects[slots.object_index]);
+        }
+    }
     for (name, pointer) in new_classes.iter().chain(&new_enums).chain(&new_interfaces) {
         object_name_updates.insert(
             format!(
@@ -2042,6 +2065,7 @@ fn graft_session_submission(
             *pointer,
         );
     }
+    #[expect(deprecated, reason = "graft linking is a sanctioned boundary consumer")]
     let global_name_updates = plan
         .program
         .function_global_indices
@@ -2049,6 +2073,13 @@ fn graft_session_submission(
         .chain(&plan.program.let_global_indices)
         .filter(|(name, _)| name.starts_with("user."))
         .map(|(name, index)| (name.clone(), global_map[*index]))
+        .chain(
+            plan.program
+                .body_indices
+                .iter()
+                .filter(|(name, _)| name.starts_with("user."))
+                .map(|(name, slots)| (name.clone(), global_map[slots.global_slot])),
+        )
         .collect::<Vec<_>>();
 
     let named_slots = plan
@@ -2066,7 +2097,13 @@ fn graft_session_submission(
         .filter(|(index, _)| !named_slots.contains(index))
         .filter_map(|(_, value)| match value {
             bex_vm_types::ConstValue::Object(index) => match &plan.program.objects[*index] {
-                Object::Function(function) if function.source_file == metadata.submission_name => {
+                // An interface body owns an unnamed slot but is not an init
+                // helper — including it would shift every positional
+                // `helper_slot` ordinal the compile side assigned.
+                Object::Function(function)
+                    if function.source_file == metadata.submission_name
+                        && !function.is_interface_body =>
+                {
                     Some(objects[index.raw()])
                 }
                 _ => None,

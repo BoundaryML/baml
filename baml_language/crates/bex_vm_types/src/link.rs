@@ -1131,6 +1131,44 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     for unit in units {
         program.test_cases.extend(unit.test_cases.iter().cloned());
     }
+
+    // ---- Body partition ------------------------------------------------------
+    // Unit symbols address interface bodies by fq name exactly like named
+    // functions (link-internal strings), and every resolution pass above ran
+    // against the merged maps. The *output* image must not expose bodies as
+    // runtime-addressable items, so re-partition them into `body_indices` now
+    // that the pooled objects (which carry `Function::is_interface_body`) are
+    // placed. Slot assignment predates placement, which is why this cannot
+    // happen inline in step 1.
+    let body_names: Vec<String> = program
+        .function_indices
+        .iter()
+        .filter(|&(_, &abs)| {
+            matches!(
+                program.objects.get(abs),
+                Some(Object::Function(f)) if f.is_interface_body
+            )
+        })
+        .map(|(name, _)| name.clone())
+        .collect();
+    for name in body_names {
+        let object_index = program
+            .function_indices
+            .remove(&name)
+            .unwrap_or_else(|| unreachable!("partitioned name came from this map"));
+        let global_slot = program
+            .function_global_indices
+            .remove(&name)
+            .ok_or_else(|| LinkError::UnresolvedImport(name.clone()))?;
+        #[expect(deprecated, reason = "the linker is the table's producer on this path")]
+        program.body_indices.insert(
+            name,
+            crate::types::BodySlots {
+                object_index,
+                global_slot,
+            },
+        );
+    }
     Ok(program)
 }
 
@@ -1278,6 +1316,8 @@ mod tests {
                 attr: baml_type::TyAttr::default(),
             },
             origin: FunctionOrigin::UserDefined,
+            is_interface_body: false,
+            native_key: None,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
             function_id: 0,

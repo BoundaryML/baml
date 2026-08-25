@@ -1093,6 +1093,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 attr: baml_type::TyAttr::default(),
             },
             origin: FunctionOrigin::Internal,
+            is_interface_body: false, // set from the item tree by attach_function_metadata
+            native_key: None,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
             function_id: 0, // assigned at engine init (interim provider)

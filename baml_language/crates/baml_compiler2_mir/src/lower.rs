@@ -1109,6 +1109,34 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
     }
 }
 
+/// True if `func_loc` is an interface-machinery *body*: an impl-block method
+/// (in-class or free — the compiler sees no distinction) or an interface
+/// default-method body.
+///
+/// A body is not itself a logical item — it belongs to every `implements`
+/// relation that selects it — so it gets no runtime name: emit pools and slots
+/// it like any function, but excludes it from the runtime name maps
+/// (`Program::function_indices` / `function_global_indices`) and marks its
+/// `Function::is_interface_body`. The [`def_to_item_ref`] spelling for a body
+/// is display-only plus a compile/link-boundary key (`Program::body_indices`).
+///
+/// Required interface methods (signature-only, no body) never reach the
+/// emit paths that ask this; the interface-owner arm still classifies them
+/// consistently as bodies.
+pub fn function_is_interface_body<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> bool {
+    use baml_compiler2_ppir::item_data::{MethodOwner, method_interface_target, method_owner};
+    match method_owner(db, func_loc) {
+        Some(MethodOwner::Interface(_) | MethodOwner::FreeImpl(_)) => true,
+        // A class-owned method is a body iff it sits inside an in-class
+        // `implements` block; a plain class method is a real logical item.
+        Some(MethodOwner::Class(_)) => method_interface_target(db, func_loc).is_some(),
+        None => false,
+    }
+}
+
 fn scoped_implements_method_name<'db>(
     db: &'db dyn crate::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,

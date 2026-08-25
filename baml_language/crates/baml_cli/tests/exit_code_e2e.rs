@@ -1909,7 +1909,6 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
     let stdout = String::from_utf8_lossy(&output.stdout);
     for expected in [
         "get_public_key(account: AccountRecord) -> string",
-        "UserRepository.Repository.find(self: UserRepository) -> UserRecord",
         "GenericBox.get<T>(self: GenericBox<T>) -> T",
         // The projection renders fully determined — lowering resolves the
         // declaring interface, so `T.Item` prints as its canonical
@@ -1921,6 +1920,13 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
             "Expected `baml run --list` output to contain `{expected}`, got:\n{stdout}"
         );
     }
+    // Interface-machinery bodies (impl-block methods, interface defaults) are
+    // anonymous at runtime: they are not runnable entries, so the listing
+    // must not offer them.
+    assert!(
+        !stdout.contains("UserRepository.Repository.find"),
+        "Impl-block method bodies must not be listed as runnable entries:\n{stdout}"
+    );
     assert!(
         !stdout.contains("read_item(box: unknown) -> unknown"),
         "Generic associated projection signatures must not be erased in list output:\n{stdout}"

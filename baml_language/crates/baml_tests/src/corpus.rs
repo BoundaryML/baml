@@ -361,13 +361,13 @@ fn corpus_snapshots() {
     // Group user (non-stdlib, non-auto-derived) functions by their namespace
     // directory, so each namespace's bytecode lands beside its own sources.
     let mut by_dir: BTreeMap<String, Vec<(String, &Function)>> = BTreeMap::new();
-    for (name, idx) in &program.function_indices {
+    for (name, idx) in crate::engine::named_and_body_functions(&program) {
         // Stdlib functions are not the user namespaces' subject; they get the
         // dedicated per-package snapshots below.
         if is_stdlib_function(name) || name.starts_with("env.") {
             continue;
         }
-        let Some(func) = crate::engine::bound_function(&heap, *idx) else {
+        let Some(func) = crate::engine::bound_function(&heap, idx) else {
             continue;
         };
         if func.origin == FunctionOrigin::AutoDerive {
@@ -398,19 +398,16 @@ fn corpus_snapshots() {
     // Stdlib bytecode, one snapshot per package.
     for pkg in SNAPSHOT_STDLIB_PACKAGES {
         let prefix = format!("{pkg}.");
-        let mut func_names: Vec<_> = program
-            .function_indices
-            .keys()
-            .filter(|name| name.starts_with(&prefix))
+        let mut entries: Vec<(&String, usize)> = crate::engine::named_and_body_functions(&program)
+            .filter(|(name, _)| name.starts_with(&prefix))
             .collect();
-        func_names.sort();
+        entries.sort_by(|(a, _), (b, _)| a.cmp(b));
 
-        let functions: Vec<(String, &Function)> = func_names
+        let functions: Vec<(String, &Function)> = entries
             .iter()
-            .map(|name| {
-                let idx = *program.function_indices.get(*name).unwrap();
-                let func = crate::engine::bound_function(&heap, idx).unwrap_or_else(|| {
-                    panic!("function_indices entry '{name}' (idx={idx}) is not a Function")
+            .map(|(name, idx)| {
+                let func = crate::engine::bound_function(&heap, *idx).unwrap_or_else(|| {
+                    panic!("function entry '{name}' (idx={idx}) is not a Function")
                 });
                 ((*name).clone(), func)
             })

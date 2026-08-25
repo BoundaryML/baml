@@ -321,6 +321,12 @@ struct PackageBuildMetadata<'a> {
     class_field_indices: &'a HashMap<String, HashMap<String, usize>>,
     /// Typed source-less export artifacts captured before parallel codegen.
     package_exports: &'a indexmap::IndexMap<Name, PackageExportArtifact>,
+    /// Runtime-addressable functions (`Program::function_indices`) — the
+    /// other half of the emitted function space besides [`Self::body_indices`].
+    function_indices: &'a HashMap<String, usize>,
+    /// Interface bodies (`Program::body_indices`): impl-block methods and
+    /// interface defaults, which every impl-rule method reference names.
+    body_indices: &'a HashMap<String, bex_vm_types::types::BodySlots>,
 }
 
 fn external_call_target_name(
@@ -423,12 +429,12 @@ fn build_packages(
     db: &dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
     alias_caches: &HashMap<Name, ResolvedAliases>,
-    function_indices: &HashMap<String, usize>,
     interface_indices: &HashMap<baml_type::TypeName, usize>,
-    // Field-name → slot for every emitted class, keyed by rendered fully-qualified
-    // name. This is the *same* map the class pass built `Class::fields` from, threaded
-    // in rather than recomputed: a second derivation of the layout that drifted would
-    // make every virtual field access read the wrong slot, silently.
+    // Threaded emit state, including the field-name → slot map for every
+    // emitted class. That map is the *same* one the class pass built
+    // `Class::fields` from, threaded in rather than recomputed: a second
+    // derivation of the layout that drifted would make every virtual field
+    // access read the wrong slot, silently.
     metadata: &PackageBuildMetadata<'_>,
     program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
 ) -> Vec<InterfaceDefaultBackfill> {
@@ -482,6 +488,8 @@ fn build_packages(
 
     let class_field_indices = metadata.class_field_indices;
     let package_exports = metadata.package_exports;
+    let function_indices = metadata.function_indices;
+    let body_indices = metadata.body_indices;
 
     // Resolve a function FQN to its emitted object index. `function_indices` holds
     // every function except `$compiler_intrinsic` / `$await_any` bodies, which
@@ -495,7 +503,13 @@ fn build_packages(
     // bodies on interface impl and default methods upstream (a check-time
     // diagnostic), after which this can become a hard `expect`.
     let resolve_fqn = |fqn: &str| -> Option<ObjectIndex> {
-        let idx = function_indices.get(fqn).copied();
+        // Impl-block methods and interface defaults register under
+        // `body_indices`; `function_indices` remains only as a transitional
+        // fallback for method spellings not yet classified as bodies.
+        let idx = body_indices
+            .get(fqn)
+            .map(|slots| slots.object_index)
+            .or_else(|| function_indices.get(fqn).copied());
         debug_assert!(
             idx.is_some(),
             "impl method `{fqn}` has no emitted function object",
@@ -1995,10 +2009,20 @@ fn decompose_units_after_prefix(
         }
     }
 
-    // obj idx -> fq name for named functions (reverse of `function_indices`).
+    // obj idx -> fq name for named functions (reverse of `function_indices`)
+    // and interface bodies (reverse of `body_indices`). Decomposition treats a
+    // body like any slot-owning function — its key is a link-internal string;
+    // the linker's map rebuild re-partitions bodies out of the runtime maps.
     let mut fn_obj_name: HashMap<usize, String> = HashMap::new();
     for (name, &idx) in &program.function_indices {
         fn_obj_name.insert(idx, name.clone());
+    }
+    #[expect(
+        deprecated,
+        reason = "decompose reversal is a sanctioned boundary consumer"
+    )]
+    for (name, slots) in &program.body_indices {
+        fn_obj_name.insert(slots.object_index, name.clone());
     }
 
     let n_obj = program.objects.len();
@@ -2209,10 +2233,17 @@ fn decompose_units_after_prefix(
     }
 
     // ---- Global slot -> owner + local flat index ----------------------------
-    // slot -> fq name (functions and lets).
+    // slot -> fq name (functions, interface bodies, and lets).
     let mut slot_to_name: Vec<Option<String>> = vec![None; program.globals.len()];
     for (name, &slot) in &program.function_global_indices {
         slot_to_name[slot] = Some(name.clone());
+    }
+    #[expect(
+        deprecated,
+        reason = "decompose reversal is a sanctioned boundary consumer"
+    )]
+    for (name, slots) in &program.body_indices {
+        slot_to_name[slots.global_slot] = Some(name.clone());
     }
     for (name, &slot) in &program.let_global_indices {
         slot_to_name[slot] = Some(name.clone());
@@ -2225,7 +2256,13 @@ fn decompose_units_after_prefix(
     for idx in prefix_objects..tail_start {
         if let PoolObjKind::NamedFn(name) = &obj_kind[idx - prefix_objects] {
             // Only functions that own a global slot participate.
-            if program.function_global_indices.contains_key(name) {
+            #[expect(
+                deprecated,
+                reason = "decompose reversal is a sanctioned boundary consumer"
+            )]
+            if program.function_global_indices.contains_key(name)
+                || program.body_indices.contains_key(name)
+            {
                 let u = obj_owner[idx];
                 let flat = func_next[u];
                 func_next[u] += 1;
@@ -2914,6 +2951,13 @@ fn inject_clean_slots(
             if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
                 continue;
             }
+            // Interface bodies never enter the runtime name maps; their
+            // (slot, placeholder-object) pair is registered by
+            // `inject_clean_object_placeholders`, which runs for every clean
+            // file after the tail is emitted.
+            if baml_compiler2_mir::function_is_interface_body(db, func_loc) {
+                continue;
+            }
             let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
             // Intrinsic / await-any functions own no slot (Pass 1 skips them);
             // the `globals` guard drops them here too.
@@ -2956,7 +3000,24 @@ fn inject_clean_object_placeholders(
                 continue;
             }
             let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
-            if globals.get(&fq).is_some() {
+            let Some(&slot) = globals.get(&fq) else {
+                continue;
+            };
+            if baml_compiler2_mir::function_is_interface_body(db, func_loc) {
+                // A clean body gets its full boundary entry here (its Pass-1
+                // slot plus a placeholder object index), since bodies never
+                // enter the runtime maps `inject_clean_slots` maintains.
+                #[expect(deprecated, reason = "emit is the table's producer")]
+                if let std::collections::hash_map::Entry::Vacant(entry) =
+                    program.body_indices.entry(fq)
+                {
+                    entry.insert(bex_vm_types::types::BodySlots {
+                        object_index: placeholder,
+                        global_slot: slot,
+                    });
+                    placeholder += 1;
+                }
+            } else {
                 program.function_indices.entry(fq).or_insert_with(|| {
                     let idx = placeholder;
                     placeholder += 1;
@@ -3052,15 +3113,20 @@ fn generate_impl(
     // Client values (including sub-clients, retry policies) flow through the $init pipeline.
     // Pass 7 is intentionally empty.
 
+    #[expect(
+        deprecated,
+        reason = "impl-rule baking is a sanctioned boundary consumer"
+    )]
     let interface_default_backfill = build_packages(
         db,
         &all_files,
         &alias_caches,
-        &program.function_indices,
         &tables.interface_object_indices,
         &PackageBuildMetadata {
             class_field_indices: &tables.classes,
             package_exports: &package_exports,
+            function_indices: &program.function_indices,
+            body_indices: &program.body_indices,
         },
         &mut tables.program_packages,
     );
@@ -3169,6 +3235,17 @@ impl EmitTables {
 
         for (name, &slot) in &base.function_global_indices {
             tables.globals.insert(name.clone(), slot);
+        }
+        // Interface bodies are excluded from the runtime name maps but keep
+        // their compile-boundary spellings in `body_indices`; the user group
+        // still direct-calls stdlib bodies (statically resolved impl methods),
+        // so their slots must be resolvable during Pass 4.
+        #[expect(
+            deprecated,
+            reason = "the stdlib splice is a sanctioned boundary consumer"
+        )]
+        for (name, slots) in &base.body_indices {
+            tables.globals.insert(name.clone(), slots.global_slot);
         }
         for (name, &slot) in &base.let_global_indices {
             tables.globals.insert(name.clone(), slot);
@@ -3348,11 +3425,17 @@ fn emit_file_group(
                 continue;
             }
             let fq_name = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
-            globals.entry(fq_name).or_insert_with(|| {
-                let idx = global_idx;
-                global_idx += 1;
-                idx
-            });
+            // Insertion-unique: two definitions rendering to one key would
+            // silently share a slot (last-written body wins at Pass 4), so a
+            // collision is rejected here rather than shadowed. Upstream
+            // duplicate-definition/coherence checks make this unreachable for
+            // accepted projects.
+            if globals.insert(fq_name.clone(), global_idx).is_some() {
+                return Err(LoweringError::Internal(format!(
+                    "two functions render to the global key `{fq_name}`"
+                )));
+            }
+            global_idx += 1;
         }
     }
 
@@ -3361,11 +3444,12 @@ fn emit_file_group(
     for file in files {
         for &let_loc in file_lets(db, *file) {
             let fq_name = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
-            globals.entry(fq_name).or_insert_with(|| {
-                let idx = global_idx;
-                global_idx += 1;
-                idx
-            });
+            if globals.insert(fq_name.clone(), global_idx).is_some() {
+                return Err(LoweringError::Internal(format!(
+                    "two items render to the global key `{fq_name}`"
+                )));
+            }
+            global_idx += 1;
         }
     }
 
@@ -4007,6 +4091,8 @@ fn emit_file_group(
                     attr: baml_type::TyAttr::default(),
                 },
                 origin: FunctionOrigin::Internal,
+                is_interface_body: false,
+                native_key: None,
                 body_meta: None,
                 capture: FunctionCaptureProps::disabled(),
                 function_id: 0, // assigned at engine init (interim provider)
@@ -5599,6 +5685,10 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
         }
         BuiltinKind::Vm => FunctionKind::NativeUnresolved,
     };
+    // `$rust_function` bodies dispatch through the codegen-produced native
+    // tables; the key is minted here, once, alongside the display name it
+    // must (for now) coincide with. `Function.name` itself is display-only.
+    let native_key = matches!(kind, FunctionKind::NativeUnresolved).then(|| fq_name.into());
     Some(Function {
         name: fq_name.to_string(),
         source_file: String::new(), // builtins have no source file
@@ -5625,6 +5715,8 @@ fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Opti
             attr: baml_type::TyAttr::default(),
         },
         origin: FunctionOrigin::Builtin,
+        is_interface_body: false, // set from the item tree by attach_function_metadata
+        native_key,
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
         function_id: 0, // assigned at engine init (interim provider)
@@ -5651,6 +5743,7 @@ fn attach_function_metadata<'db>(
     let signature_metadata = compute_function_metadata(db, func_loc, &parameter_defaults, cache);
     apply_signature_metadata(compiled_fn, &signature_metadata);
     compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata.origin);
+    compiled_fn.is_interface_body = baml_compiler2_mir::function_is_interface_body(db, func_loc);
 
     // Set LLM-specific body_meta if this is an LLM function with a client.
     //
@@ -5675,6 +5768,10 @@ fn attach_function_metadata<'db>(
 
 /// Pool the compiled function object and register its global slot — the
 /// final Pass-4 tail shared by the serial and parallel passes.
+///
+/// Interface-machinery bodies (`compiled_fn.is_interface_body`) are pooled and
+/// slotted identically but registered in `Program::body_indices` instead of the
+/// runtime name maps: a body is not a runtime-addressable item.
 fn register_compiled_function(
     program: &mut Program,
     globals: &HashMap<String, usize>,
@@ -5682,16 +5779,16 @@ fn register_compiled_function(
     fq_name: String,
     compiled_fn: Function,
 ) {
+    let is_body = compiled_fn.is_interface_body;
     let fn_obj_idx = program.add_object(Object::Function(Box::new(compiled_fn)));
-    program.function_indices.insert(fq_name.clone(), fn_obj_idx);
     let val = ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx));
-    if dirty_only {
+    let slot = if dirty_only {
         // Dirty-only emit: write the function value at its whole-project
         // (Pass-1) slot rather than appending, so clean-file slot holes are
         // preserved and every operand slot reverses to the right name.
         let slot = globals[&fq_name];
-        program.function_global_indices.insert(fq_name, slot);
         program.globals[slot] = val;
+        slot
     } else {
         let slot = program.globals.len();
         debug_assert_eq!(
@@ -5699,8 +5796,27 @@ fn register_compiled_function(
             Some(slot),
             "Pass-4 append slot must match the Pass-1 assignment for {fq_name}",
         );
-        program.function_global_indices.insert(fq_name, slot);
         program.add_global(val);
+        slot
+    };
+    if is_body {
+        #[expect(deprecated, reason = "emit is the table's producer")]
+        let prev = program.body_indices.insert(
+            fq_name.clone(),
+            bex_vm_types::types::BodySlots {
+                object_index: fn_obj_idx,
+                global_slot: slot,
+            },
+        );
+        // Pass 1 already rejected key collisions, so a hit here means two
+        // bodies rendered to one spelling within a single Pass-4 run.
+        assert!(
+            prev.is_none(),
+            "two interface bodies share the spelling `{fq_name}`",
+        );
+    } else {
+        program.function_indices.insert(fq_name.clone(), fn_obj_idx);
+        program.function_global_indices.insert(fq_name, slot);
     }
 }
 
@@ -5926,6 +6042,8 @@ fn compile_init_function<'db>(
                         attr: baml_type::TyAttr::default(),
                     },
                     origin: FunctionOrigin::Internal,
+                    is_interface_body: false,
+                    native_key: None,
                     body_meta: None,
                     capture: FunctionCaptureProps::disabled(),
                     function_id: 0, // assigned at engine init (interim provider)
@@ -6005,6 +6123,8 @@ fn compile_init_function<'db>(
             attr: baml_type::TyAttr::default(),
         },
         origin: FunctionOrigin::Internal,
+        is_interface_body: false,
+        native_key: None,
         body_meta: None,
         capture: FunctionCaptureProps::disabled(),
         function_id: 0, // assigned at engine init (interim provider)

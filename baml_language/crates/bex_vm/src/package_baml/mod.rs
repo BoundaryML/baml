@@ -431,24 +431,32 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 bex_vm_types::FunctionKind::Bytecode => bex_vm_types::FunctionKind::Bytecode,
                 bex_vm_types::FunctionKind::SysOp(op) => bex_vm_types::FunctionKind::SysOp(op),
                 bex_vm_types::FunctionKind::NativeUnresolved => {
-                    // Only VM-owned packages resolve here; functions from other
-                    // stdlib packages (assert, testing, …) stay unresolved for a
-                    // future implementation to wire up.
-                    let owner = VM_NATIVE_PACKAGES
-                        .iter()
-                        .find(|(prefix, _)| function.name.starts_with(prefix));
-                    match owner.and_then(|(_, resolve)| resolve(function.name.as_str())) {
-                        Some(native_function) => {
-                            bex_vm_types::FunctionKind::Native(native_function as *const ())
-                        }
-                        // A VM-owned name with no native is a build error, not a
-                        // deferral: the package's generated trait requires an
-                        // implementation for every `$rust_function` it declares.
-                        None if owner.is_some() => {
-                            return Err(VmInternalError::MissingNativeFunction {
-                                name: function.name.clone(),
-                            });
-                        }
+                    // Dispatch through the dedicated `native_key` (minted by
+                    // emit for `$rust_function` bodies), never the display
+                    // name. Only VM-owned packages resolve here; functions
+                    // from other stdlib packages (assert, testing, …) stay
+                    // unresolved for a future implementation to wire up.
+                    let owner = function.native_key.as_deref().and_then(|key| {
+                        VM_NATIVE_PACKAGES
+                            .iter()
+                            .find(|(prefix, _)| key.starts_with(prefix))
+                            .map(|(_, resolve)| (key, resolve))
+                    });
+                    match owner {
+                        Some((key, resolve)) => match resolve(key) {
+                            Some(native_function) => {
+                                bex_vm_types::FunctionKind::Native(native_function as *const ())
+                            }
+                            // A VM-owned key with no native is a build error,
+                            // not a deferral: the package's generated trait
+                            // requires an implementation for every
+                            // `$rust_function` it declares.
+                            None => {
+                                return Err(VmInternalError::MissingNativeFunction {
+                                    name: function.name.clone(),
+                                });
+                            }
+                        },
                         None => bex_vm_types::FunctionKind::NativeUnresolved,
                     }
                 }
@@ -476,6 +484,8 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 display_return_type: function.display_return_type,
                 throws_type: function.throws_type,
                 origin: function.origin,
+                is_interface_body: function.is_interface_body,
+                native_key: function.native_key,
                 body_meta: function.body_meta,
                 capture: function.capture,
                 function_id: 0, // synthetic; not in the profiling function table

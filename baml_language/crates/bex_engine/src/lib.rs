@@ -2107,10 +2107,24 @@ impl BexEngine {
             compile_time_objects,
             &bytecode.packages,
         );
+        // Interface bodies join the image-symbol tables (the runtime linker's
+        // resolution surface — grafted packages direct-call static bodies by
+        // their link-boundary spellings) but are absent from every
+        // name-resolution map (`resolved_function_names` excludes them).
+        #[expect(
+            deprecated,
+            reason = "the runtime linker is a sanctioned boundary consumer"
+        )]
         let image_objects = bytecode
             .resolved_function_names
             .iter()
             .map(|(name, (idx, _))| (name.clone(), heap.compile_time_ptr(idx.into_raw())))
+            .chain(
+                bytecode
+                    .body_indices
+                    .iter()
+                    .map(|(name, slots)| (name.clone(), heap.compile_time_ptr(slots.object_index))),
+            )
             .chain(
                 class_indices
                     .iter()
@@ -2122,11 +2136,21 @@ impl BexEngine {
                     .map(|(name, idx)| (name.clone(), heap.compile_time_ptr(*idx))),
             )
             .collect();
+        #[expect(
+            deprecated,
+            reason = "the runtime linker is a sanctioned boundary consumer"
+        )]
         let image_globals = bytecode
             .function_global_indices
             .iter()
             .chain(&bytecode.let_global_indices)
             .map(|(name, idx)| (name.clone(), GlobalIndex::from_raw(*idx)))
+            .chain(
+                bytecode
+                    .body_indices
+                    .iter()
+                    .map(|(name, slots)| (name.clone(), GlobalIndex::from_raw(slots.global_slot))),
+            )
             .collect();
         package_index.install_image_symbols(image_objects, image_globals);
         // Shared with every VM so spawned workers see the same package index

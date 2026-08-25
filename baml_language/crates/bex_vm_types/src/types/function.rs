@@ -287,6 +287,27 @@ pub struct Function {
     /// Provenance of this function in the compiler/runtime pipeline.
     pub origin: FunctionOrigin,
 
+    /// True for interface-machinery bodies: impl-block methods (in-class or
+    /// free) and interface default-method bodies.
+    ///
+    /// A body is pooled and slotted like any function — statically resolved
+    /// calls stay direct `Call(GlobalIndex)` — but it is not itself a logical
+    /// item, so it has no runtime name: bodies are excluded from
+    /// `Program::function_indices` / `function_global_indices` (they live in
+    /// [`Program::body_indices`](crate::Program::body_indices), a
+    /// compile/link-boundary table) and every runtime name scan skips them.
+    /// [`Self::name`] on a body is display-only (traces, snapshots).
+    pub is_interface_body: bool,
+
+    /// Native-dispatch key for `$rust_function` bodies (stdlib-only): the key
+    /// `attach_builtins` resolves through each package's generated
+    /// `get_native_fn` table. `None` for every bytecode/sys-op function.
+    ///
+    /// This is deliberately separate from [`Self::name`]: the display string
+    /// is not an identity, while this key must match the codegen-produced
+    /// dispatch tables exactly.
+    pub native_key: Option<Box<str>>,
+
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
 

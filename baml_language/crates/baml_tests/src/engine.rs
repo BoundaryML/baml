@@ -75,13 +75,32 @@ pub fn display_user_functions(program: &Program) -> String {
     display_user_functions_with_options(program, false)
 }
 
+/// The program's named functions plus its interface bodies, as
+/// `(fq name, object index)` pairs. Bodies are runtime-anonymous (excluded
+/// from `function_indices`), but bytecode snapshots still display them like
+/// any compiled function under their display spelling.
+#[expect(
+    deprecated,
+    reason = "snapshot display is a sanctioned boundary consumer"
+)]
+pub fn named_and_body_functions(program: &Program) -> impl Iterator<Item = (&String, usize)> {
+    program
+        .function_indices
+        .iter()
+        .map(|(name, &idx)| (name, idx))
+        .chain(
+            program
+                .body_indices
+                .iter()
+                .map(|(name, slots)| (name, slots.object_index)),
+        )
+}
+
 /// Like [`display_user_functions`], but lets the caller include auto-derived
 /// methods in the bytecode output.
 pub fn display_user_functions_with_options(program: &Program, show_auto_derive: bool) -> String {
-    let mut functions: Vec<(String, &Function)> = program
-        .function_indices
-        .iter()
-        .filter_map(|(name, idx)| match program.objects.get(*idx) {
+    let mut functions: Vec<(String, &Function)> = named_and_body_functions(program)
+        .filter_map(|(name, idx)| match program.objects.get(idx) {
             Some(Object::Function(f)) => {
                 if !f.origin.is_user_callable() {
                     return None;
@@ -158,11 +177,9 @@ pub fn bound_function(heap: &bex_heap::BexHeap, idx: usize) -> Option<&Function>
 /// rendered bytecode show declaration names instead of raw head tags.
 pub fn display_user_functions_bound(program: &Program) -> String {
     let heap = bound_pool(program);
-    let mut functions: Vec<(String, &Function)> = program
-        .function_indices
-        .iter()
+    let mut functions: Vec<(String, &Function)> = named_and_body_functions(program)
         .filter_map(|(name, idx)| {
-            let f = bound_function(&heap, *idx)?;
+            let f = bound_function(&heap, idx)?;
             if !f.origin.is_user_callable() {
                 return None;
             }
@@ -328,6 +345,31 @@ pub async fn run_compiled(
         .await;
 
     TestOutput { bytecode, result }
+}
+
+/// Attempt an engine call by fq name WITHOUT the harness's entry-name
+/// resolution (which panics on a missing entry). For asserting that a
+/// spelling is — or is not — runtime-addressable.
+pub async fn try_call_by_name(
+    program: Program,
+    name: &str,
+) -> Result<BexExternalValue, bex_engine::EngineError> {
+    let engine = BexEngine::new_with_runtime_compiler(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        Vec::new(),
+        bex_project::runtime_compiler(),
+    )
+    .expect("Failed to create BexEngine");
+    let engine = Arc::new(engine);
+    engine
+        .call_function_bound_args(
+            name,
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
 }
 
 /// Test-database conveniences over [`ProjectDatabase`]'s source-root API.

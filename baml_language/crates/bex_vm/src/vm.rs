@@ -601,6 +601,8 @@ pub(crate) mod tests {
                 attr: baml_type::TyAttr::default(),
             },
             origin: FunctionOrigin::Internal,
+            is_interface_body: false,
+            native_key: None,
             body_meta: None,
             capture: FunctionCaptureProps::disabled(),
             function_id: 0,
@@ -1385,6 +1387,14 @@ pub struct BytecodeProgram {
     /// Maps function names to their global indices.
     /// Used for dynamic function lookup at runtime.
     pub function_global_indices: HashMap<String, usize>,
+    /// Interface-machinery bodies (see [`bex_vm_types::Program::body_indices`]).
+    /// Consumed only by the runtime linker's image-symbol tables so grafted
+    /// packages can resolve direct calls into static bodies — never by
+    /// name-resolution surfaces (entry points, suffix matching).
+    #[deprecated = "transitional (see `bex_vm_types::Program::body_indices`): \
+        dies with it once graft linking resolves bodies through the impl-rule \
+        tables instead of rendered spellings"]
+    pub body_indices: HashMap<String, bex_vm_types::types::BodySlots>,
     /// Maps top-level let names to their global indices.
     pub let_global_indices: HashMap<String, usize>,
     /// Client build metadata, passed through to `SysOpContext`.
@@ -1424,19 +1434,29 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
 
     // Build the function-name lookup by scanning objects. Classes and enums are
     // resolved through `packages` at runtime, so they need no separate index here.
+    // Interface bodies are anonymous at runtime — their `name` is display-only —
+    // so they never enter a name-resolution surface (entry points, suffix
+    // matching, engine lookups).
     let mut resolved_function_names = HashMap::new();
     for (idx, obj) in objects.iter().enumerate() {
-        if let Object::Function(func) = obj {
+        if let Object::Function(func) = obj
+            && !func.is_interface_body
+        {
             resolved_function_names
                 .insert(func.name.clone(), (ObjectIndex::from_raw(idx), func.kind));
         }
     }
 
+    #[expect(
+        deprecated,
+        reason = "threading the boundary table to the runtime linker"
+    )]
     Ok(BytecodeProgram {
         objects: ObjectPool::from_vec(objects),
         globals: program.globals,
         resolved_function_names,
         function_global_indices: program.function_global_indices,
+        body_indices: program.body_indices,
         let_global_indices: program.let_global_indices,
         client_metadata: program.client_metadata,
         test_cases: program.test_cases,
@@ -3931,6 +3951,8 @@ impl BexVm {
             display_return_type,
             throws_type,
             origin: FunctionOrigin::Internal,
+            is_interface_body: false,
+            native_key: None,
             body_meta: None,
             capture: bex_vm_types::FunctionCaptureProps::disabled(),
             function_id: 0, // synthetic; not in the profiling function table
@@ -4017,6 +4039,8 @@ impl BexVm {
             display_return_type,
             throws_type,
             origin: FunctionOrigin::Internal,
+            is_interface_body: false,
+            native_key: None,
             body_meta: None,
             capture: bex_vm_types::FunctionCaptureProps::disabled(),
             function_id: 0,
