@@ -9068,6 +9068,114 @@ fn .<lambda(options, 0)>(params: baml.spawn.SpawnParams<T, E>) -> baml.spawn.Spa
     }
 }
 
+fn baml.sys.Platform.unix(self: baml.sys.Platform) -> null | baml.sys.Unix {
+    // Locals:
+    let _0: null | baml.sys.Unix // _0 // return
+    let _1: baml.sys.Platform // self // param
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.sys.Platform.windows(self: baml.sys.Platform) -> null | baml.sys.Windows {
+    // Locals:
+    let _0: null | baml.sys.Windows // _0 // return
+    let _1: baml.sys.Platform // self // param
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.sys.Unix.terminate(_1: void, _2: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.sys.Unix.signal_group(_1: void, _2: void, _3: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+    let _2: void // param
+    let _3: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn baml.sys.Linux.Platform.unix(self: baml.sys.Linux) -> null | baml.sys.Unix {
+    // Locals:
+    let _0: null | baml.sys.Unix // _0 // return
+    let _1: baml.sys.Linux // self // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.sys.Linux.Unix.terminate = builtin(io)
+
+fn baml.sys.Linux.Unix.signal_group = builtin(io)
+
+fn baml.sys.MacOs.Platform.unix(self: baml.sys.MacOs) -> null | baml.sys.Unix {
+    // Locals:
+    let _0: null | baml.sys.Unix // _0 // return
+    let _1: baml.sys.MacOs // self // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.sys.MacOs.Unix.terminate = builtin(io)
+
+fn baml.sys.MacOs.Unix.signal_group = builtin(io)
+
+fn baml.sys.Windows.Platform.windows(self: baml.sys.Windows) -> null | baml.sys.Windows {
+    // Locals:
+    let _0: null | baml.sys.Windows // _0 // return
+    let _1: baml.sys.Windows // self // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.sys.platform = builtin(io)
+
 fn baml.sys.ShellOutput.ok(self: baml.sys.ShellOutput) -> bool {
     // Locals:
     let _0: bool // _0 // return
@@ -9374,6 +9482,8 @@ fn baml.sys.exit = builtin(vm)
 fn baml.sys.argv = builtin(vm)
 
 fn baml.sys.pid = builtin(io)
+
+fn baml.sys.is_alive = builtin(io)
 
 fn baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration {
     // Locals:
