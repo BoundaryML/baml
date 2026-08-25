@@ -1,9 +1,9 @@
 //! Reference: [`baml_db::baml_compiler_syntax::ast::Expr`] and [`baml_db::baml_compiler_hir::body`]
 
 use baml_db::baml_compiler_syntax::{
-    SyntaxElement, ast as raw_ast,
+    ast as raw_ast,
     validated::{
-        FromCST, Validated, ValidatedSyntaxToken,
+        Validated, ValidatedSyntaxToken,
         nodes::{
             ArmListItem, ArrayInitializer, BinaryExpr, BlockExpr, CallArg, CallArgs, CallExpr,
             CatchArm, CatchBinding, CatchClause, CatchExpr, ElseExpr, EnvAccessExpr, Expression,
@@ -11,12 +11,12 @@ use baml_db::baml_compiler_syntax::{
             GenericParamBounds, GenericParamList, IfExpr, IfLetExpr, IndexExpr, IsExpr, LambdaExpr,
             MapLiteral, MatchArm, MatchExpr, MatchGuard, ObjectField, ObjectFieldKey,
             ObjectInitializer, ObjectMember, OptionalCallExpr, OptionalFieldAccessExpr,
-            OptionalIndexExpr, ParenExpr, PathExpr, SpawnExpr, SpreadElement, ThrowsClause,
-            UnaryExpr, UnreflectArg,
+            OptionalIndexExpr, ParenExpr, PathExpr, SpawnExpr, SpreadElement, UnaryExpr,
+            UnreflectArg,
         },
     },
 };
-use rowan::{TextRange, ast::AstNode as _};
+use rowan::TextRange;
 
 use crate::{
     ast::{BinaryOp, Literal, Token, tokens as t},
@@ -3159,47 +3159,33 @@ impl Printable for GenericArgs {
     }
 }
 
-impl Printable for ThrowsClause {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let mut multi_lined = false;
-        printer.print_raw_token(&self.keyword);
-        printer.print_str(" ");
-        multi_lined |= printer.print(&self.ty, shape).multi_lined;
-        PrintInfo { multi_lined }
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.ty.rightmost_token()
-    }
-}
-
 impl Printable for raw_ast::ThrowsClause {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        ThrowsClause::from_cst(SyntaxElement::Node(self.syntax().clone()))
-            .expect("validated throws clause")
-            .print(shape, printer)
+        let keyword = self.throws_token().expect("validated throws token");
+        let ty = self.type_expr().expect("validated throws type");
+        printer.print_input_range(keyword.text_range());
+        printer.print_str(" ");
+        printer.print(&ty, shape)
     }
 
     fn leftmost_token(&self) -> TextRange {
-        ThrowsClause::from_cst(SyntaxElement::Node(self.syntax().clone()))
-            .expect("validated throws clause")
-            .leftmost_token()
+        self.throws_token()
+            .expect("validated throws token")
+            .text_range()
     }
 
     fn rightmost_token(&self) -> TextRange {
-        ThrowsClause::from_cst(SyntaxElement::Node(self.syntax().clone()))
-            .expect("validated throws clause")
+        self.type_expr()
+            .expect("validated throws type")
             .rightmost_token()
     }
 }
 
 impl Printable for Validated<'_, raw_ast::ThrowsClause> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        ThrowsClause::from_cst(SyntaxElement::Node(self.syntax().clone()))
-            .expect("validated throws clause")
-            .print(shape, printer)
+        printer.print_raw_token(&self.throws_token());
+        printer.print_str(" ");
+        printer.print(&self.type_expr(), shape)
     }
 
     fn leftmost_token(&self) -> TextRange {
