@@ -7,7 +7,7 @@ function Bot(convo: Message[]) -> string {
   client: "openai/gpt-4o"
   prompt: `
     You are a helpful assistant.
-    ${ctx.output_format}
+    ${ctx.output_format()}
 
     Conversation so far:
     ${convo}
@@ -44,7 +44,7 @@ function Bot(convo: Message[]) -> string {
 // jinja_control_prompt.baml:9:15 (string) len=7 "helpful"
 // jinja_control_prompt.baml:9:23 (string) len=9 "assistant"
 // jinja_control_prompt.baml:9:32 (string) len=1 "."
-// jinja_control_prompt.baml:10:11 (property) len=13 "output_format"
+// jinja_control_prompt.baml:10:11 (method) len=13 "output_format"
 // jinja_control_prompt.baml:12:5 (string) len=12 "Conversation"
 // jinja_control_prompt.baml:12:18 (string) len=2 "so"
 // jinja_control_prompt.baml:12:21 (string) len=3 "far"

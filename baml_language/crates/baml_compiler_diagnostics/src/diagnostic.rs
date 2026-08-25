@@ -315,7 +315,7 @@ pub enum DiagnosticId {
     /// Two or more fields of a class serialize to the same JSON key — either two
     /// fields share an `@alias`, or one field's name equals another field's
     /// `@alias`. Such a schema is unsatisfiable: an aliased field's real name is
-    /// never matched, so `ctx.output_format` renders duplicate keys and a
+    /// never matched, so `ctx.output_format()` renders duplicate keys and a
     /// required shadowed field can never be parsed (Linear B-615).
     DuplicateFieldAlias,
 

@@ -980,7 +980,7 @@ impl RenderOptions {
 // ============================================================================
 
 /// Render `return_type`'s schema with default options for
-/// `ctx.output_format`. Build the `OutputFormatContent`, then render with
+/// `ctx.output_format()`. Build the `OutputFormatContent`, then render with
 /// `RenderOptions::default()`. An empty or `None`
 /// render (e.g. a primitive return type with no schema) becomes the empty string.
 pub fn render_output_format(
@@ -994,50 +994,12 @@ pub fn render_output_format(
         .unwrap_or_default()
 }
 
-/// Render a prebuilt [`OutputFormatContent`] with caller-supplied options,
-/// preserving any deferred build or render error for the sys-op boundary.
-/// This backs the parameterized `ctx.output_format_with(...)` accessor. The content is
-/// carried as an opaque handle on `Context` (built once by
-/// [`build_output_format_content`]); this only re-renders. The option mapping
-/// (`RenderSetting`/`RenderOptions`) stays crate-internal: a value overrides
-/// that aspect (`Always`), `None` keeps the default (`Auto`).
-// Options arrive by value from the sys-op glue; most are moved into
-// `RenderOptions`, `map_style` is only read — taking it by ref too would just
-// shift the clone to the caller.
-#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
+/// Render a prebuilt [`OutputFormatContent`] with caller-supplied options.
 pub fn render_output_format_content(
     content: &self::OutputFormatContent,
-    prefix: Option<String>,
-    or_splitter: Option<String>,
-    enum_value_prefix: Option<String>,
-    hoisted_class_prefix: Option<String>,
-    always_hoist_enums: Option<bool>,
-    quote_class_fields: Option<bool>,
-    hoist_classes: Option<Vec<String>>,
-    map_style: Option<String>,
-    render_null_as: Option<String>,
+    options: &self::RenderOptions,
 ) -> Result<String, RenderError> {
-    use self::{HoistClasses, MapStyle, RenderOptions, RenderSetting};
-    fn setting<V>(o: Option<V>) -> RenderSetting<V> {
-        o.map_or(RenderSetting::Auto, RenderSetting::Always)
-    }
-    let options = RenderOptions {
-        prefix: setting(prefix),
-        or_splitter: setting(or_splitter),
-        enum_value_prefix: setting(enum_value_prefix),
-        hoisted_class_prefix: setting(hoisted_class_prefix),
-        always_hoist_enums: setting(always_hoist_enums),
-        quote_class_fields: setting(quote_class_fields),
-        hoist_classes: hoist_classes.map_or(HoistClasses::Auto, HoistClasses::Subset),
-        map_style: match map_style.as_deref() {
-            // `type_parameters` is the opt-in escape hatch (`map<K, V>`); every
-            // other value (including the default) renders the JSON object shape.
-            Some("type_parameters") => MapStyle::TypeParameters,
-            _ => MapStyle::ObjectLiteral,
-        },
-        render_null_as: setting(render_null_as),
-    };
-    content.render(&options).map(Option::unwrap_or_default)
+    content.render(options).map(Option::unwrap_or_default)
 }
 
 /// Build an `OutputFormatContent` by walking a `SapTy` and collecting all
@@ -3778,10 +3740,7 @@ Answer in JSON using this type: A"#
         ctx.class_definitions = Arc::new(classes);
 
         let content = build_output_format_content(&target, &ctx);
-        let error = render_output_format_content(
-            &content, None, None, None, None, None, None, None, None, None,
-        )
-        .unwrap_err();
+        let error = render_output_format_content(&content, &RenderOptions::default()).unwrap_err();
         assert!(matches!(
             error,
             RenderError::NonRegularRecursiveGeneric {

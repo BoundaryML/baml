@@ -109,7 +109,7 @@ async fn runtime_minted_class_narrows_and_exercises_the_complete_surface() {
 
         function Extract<T>(text: string) -> T {
             client: TestClient
-            prompt: `Extract ${text}.\n${ctx.output_format}`
+            prompt: `Extract ${text}.\n${ctx.output_format()}`
         }
 
         function mismatch_is_catchable(value: reflect.AnyClass) -> bool throws never {

@@ -98,7 +98,7 @@ function TakeGuess(user_guess: string, famous_person_name: string, history: stri
     ${user_guess}
     ${famous_person_name}
     ${history}
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 

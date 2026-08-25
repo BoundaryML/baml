@@ -4,7 +4,7 @@ function Foo() -> string {
     client: "openai/gpt-4o"
     prompt: `
         You are a helpful assistant.
-        ${ctx.output_format}
+        ${ctx.output_format()}
 
         ${role("assistant")}
         Hi

@@ -184,7 +184,7 @@ function TestFunc(input: string) -> {return_type} {{
     client: "openai/gpt-4o"
     prompt: `
         ${{input}}
-        ${{ctx.output_format}}
+        ${{ctx.output_format()}}
     `
 }}
 
@@ -198,9 +198,9 @@ function get_prompt() -> string {{
 
 /// Like `render_output_format` but with custom kwargs on the output format.
 ///
-/// `kwargs` is inserted into `ctx.output_format_with(...)` on the
+/// `kwargs` is inserted into `ctx.output_format(...)` on the
 /// standalone `prompt` tag path (the ai-world LLM-function prompt
-/// only binds plain `ctx.output_format`), e.g. `render_null_as = "omit"`.
+/// only binds plain `ctx.output_format()`), e.g. `render_null_as = "omit"`.
 pub(crate) async fn render_output_format_with_opts(
     baml_types: &str,
     return_type: &str,
@@ -216,11 +216,10 @@ function get_prompt() -> string {{
     let render_ctx = ai.Context {{
         client: cc,
         tags: {{}},
-        output_format: ai.internal.render_output_format(rt),
         _output_format: ai.internal.build_output_format(rt),
     }};
     let render = ai.prompt`test
-${{render_ctx.output_format_with({kwargs})}}`;
+${{render_ctx.output_format({kwargs})}}`;
     render(render_ctx).text()
 }}
 "##

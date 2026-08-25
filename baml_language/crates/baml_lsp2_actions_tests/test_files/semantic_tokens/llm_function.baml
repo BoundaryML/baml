@@ -17,7 +17,7 @@ function ClassifyEmail(email: Email) -> Category {
     Subject: ${email.subject}
     Body: ${email.body}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 
@@ -66,5 +66,5 @@ function ClassifyEmail(email: Email) -> Category {
 // llm_function.baml:18:9 (string) len=1 ":"
 // llm_function.baml:18:13 (parameter) len=5 "email"
 // llm_function.baml:18:19 (property) len=4 "body"
-// llm_function.baml:20:11 (property) len=13 "output_format"
+// llm_function.baml:20:11 (method) len=13 "output_format"
 // llm_function.baml:21:3 (string) len=1 "`"

@@ -457,7 +457,7 @@ function classify(text: string) -> Verdict {
     Classify the sentiment of the text. Sarcasm counts
     as the sentiment actually expressed.
     Text: \${text}
-    \${ctx.output_format}
+    \${ctx.output_format()}
   \`
 }`;
 
@@ -473,7 +473,7 @@ function generate_image(thing: string) -> image {
   client: AiGatewayImagen
   prompt: \`
     Create an image from this prompt: \${thing}
-    \${ctx.output_format}
+    \${ctx.output_format()}
   \`
 }
 
@@ -482,7 +482,7 @@ function describe(img: image) -> string {
   prompt: \`
     Describe this image in one vivid sentence.
     \${img}
-    \${ctx.output_format}
+    \${ctx.output_format()}
   \`
 }
 
@@ -778,7 +778,7 @@ function take_guess(
 
         Encourage players to make a guess when they seem to have enough information.
 
-        \${ctx.output_format}
+        \${ctx.output_format()}
 
         Conversation history:
 

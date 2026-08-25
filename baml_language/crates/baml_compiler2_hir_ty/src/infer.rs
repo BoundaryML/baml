@@ -965,6 +965,9 @@ enum PendingDiag<'db> {
         expr: ExprId,
         ty: Ty,
     },
+    BareOutputFormatReference {
+        expr: ExprId,
+    },
     /// B-1563 truthiness: a NON-literal condition whose static type
     /// decides the branch (`if (some_fn)`, `if (instance)`) - a likely
     /// bug, warned like TS 5.6's 2872/2873.
@@ -8465,6 +8468,32 @@ impl<'db> InferenceContext<'db> {
         ty
     }
 
+    fn report_bare_output_format_reference(
+        &mut self,
+        expr: ExprId,
+        class: baml_compiler2_hir::loc::ClassLoc<'db>,
+        function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    ) {
+        let class_data = baml_compiler2_ppir::item_data::class_data(self.db, class);
+        let function_data = baml_compiler2_ppir::item_data::function_data(self.db, function);
+        let package = baml_compiler2_hir::file_package::file_package(self.db, class.file(self.db));
+        let is_output_format = function_data.name.as_str() == "output_format"
+            && package.package.as_str() == "ai"
+            && match class_data.name.as_str() {
+                "Context" => package.namespace_path.is_empty(),
+                "SpecCtx" => package
+                    .namespace_path
+                    .iter()
+                    .map(baml_type::Name::as_str)
+                    .eq(["internal"]),
+                _ => false,
+            };
+        if is_output_format {
+            self.pending_diags
+                .push(PendingDiag::BareOutputFormatReference { expr });
+        }
+    }
+
     /// The resolution core behind [`InferenceContext::field_access`]:
     /// hands the resolution BACK instead of recording, so the union arm
     /// can drop its per-member recursion's resolutions (one expression,
@@ -8546,6 +8575,9 @@ impl<'db> InferenceContext<'db> {
                 crate::method_resolution::MethodCandidateSource::Source { method, class } => {
                     if self.reject_selfless_inherent_method(method, member, at) {
                         return (Ty::error(), None);
+                    }
+                    if self.member_probe_depth == 0 {
+                        self.report_bare_output_format_reference(at, class, method);
                     }
                     let signature = function_signature(self.db, method);
                     let mut instantiation = candidate.class_args;
@@ -9847,10 +9879,6 @@ impl<'db> InferenceContext<'db> {
         (ty, steps)
     }
 
-    /// Writes a completed path ladder: the per-segment table entry (only
-    /// multi-segment paths - a bare local is just `type_of_expr`) and the
-    /// FINAL member's resolution at the path expression, where value
-    /// consumers key.
     fn write_resolved_path(&mut self, expr: ExprId, steps: Vec<ResolvedPathSegment<'db>>) {
         if steps.len() < 2 {
             return;
@@ -10523,6 +10551,9 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::BareOutputFormatReference { expr } => {
+                        (TirTypeError::OutputFormatNotCalled, expr)
+                    }
                     PendingDiag::ConditionAlwaysConst {
                         expr,
                         ty,

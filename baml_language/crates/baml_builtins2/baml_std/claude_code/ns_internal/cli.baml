@@ -234,7 +234,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     // The CLI accepts one string rather than a chat-message array. Keep the
     // structural prompt until this transport boundary, then use its readable
     // role-headed projection.
-    let instructions = input.prompt("").text();
+    let instructions = input.prompt(ai.internal.build_output_format(input.output_type)).text();
     let has_tools = !input.toolbox.is_empty();
     let schema = if (has_tools) {
         baml.json.to_json(envelope_schema(input.output_type))

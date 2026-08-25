@@ -389,7 +389,7 @@ async fn claude_code_client_preserves_process_wait_timeout() {
         baml: r#"
             function TimeoutProviderSpec() -> string {
                 client: "openai/gpt-4o-mini"
-                prompt: `Return one string. ${ctx.output_format}`
+                prompt: `Return one string. ${ctx.output_format()}`
             }
 
             function timeout_provider_input() -> ai.ModelTurnInput {

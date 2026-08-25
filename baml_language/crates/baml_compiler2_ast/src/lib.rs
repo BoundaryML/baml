@@ -489,7 +489,7 @@ mod tests {
         let source = r##"
 function Extract(client: string, text: string) -> string {
   client: "openai/gpt-4o"
-  prompt: `${text} ${ctx.output_format}`
+  prompt: `${text} ${ctx.output_format()}`
 }
 "##;
 
@@ -497,7 +497,7 @@ function Extract(client: string, text: string) -> string {
         assert!(
             diags.iter().any(|diag| matches!(
                 diag,
-                crate::LoweringDiagnostic::ReservedLlmClientParam {
+                crate::LoweringDiagnostic::ReservedLlmParam {
                     function_name,
                     param_name,
                     ..

@@ -69,10 +69,7 @@ function fixtures.optional_function_parameters.AskDocs$render_prompt(query: stri
     call user.fixtures.optional_function_parameters.AskDocs$spec
     store_var _4
     load_type string
-    call ai.wire.render_output_format
-    store_var _5
-    load_type string
-    load_var2 4 5
+    load_var _4
     call ai.FunctionSpec.prompt
     return
 }

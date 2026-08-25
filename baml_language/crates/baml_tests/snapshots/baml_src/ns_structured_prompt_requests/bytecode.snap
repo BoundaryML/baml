@@ -218,10 +218,7 @@ function structured_prompt_requests.AudioShape$render_prompt(sound: audio) -> ai
     call user.structured_prompt_requests.AudioShape$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -357,10 +354,7 @@ function structured_prompt_requests.ChatMediaShape$render_prompt(photo: image) -
     call user.structured_prompt_requests.ChatMediaShape$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -480,10 +474,7 @@ function structured_prompt_requests.ExplicitRolesShape$render_prompt() -> ai.Pro
     call user.structured_prompt_requests.ExplicitRolesShape$spec
     store_var _1
     load_type string
-    call ai.wire.render_output_format
-    store_var _2
-    load_type string
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }
@@ -596,10 +587,7 @@ function structured_prompt_requests.FirstShape$render_prompt() -> ai.Prompt {
     call user.structured_prompt_requests.FirstShape$spec
     store_var _1
     load_type string
-    call ai.wire.render_output_format
-    store_var _2
-    load_type string
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }
@@ -715,10 +703,7 @@ function structured_prompt_requests.GenericShape$render_prompt() -> ai.Prompt {
     call user.structured_prompt_requests.GenericShape$spec
     store_var _1
     load_type structured_prompt_requests.Outer<#0>
-    call ai.wire.render_output_format
-    store_var _3
-    load_type structured_prompt_requests.Outer<#0>
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }
@@ -860,10 +845,7 @@ function structured_prompt_requests.Greet$render_prompt(name: string, suffix: st
     call user.structured_prompt_requests.Greet$spec
     store_var _4
     load_type string
-    call ai.wire.render_output_format
-    store_var _5
-    load_type string
-    load_var2 3 4
+    load_var _4
     call ai.FunctionSpec.prompt
     return
 }
@@ -1013,10 +995,7 @@ function structured_prompt_requests.MediaAll$render_prompt(photo: image, sound: 
     call user.structured_prompt_requests.MediaAll$spec
     store_var _5
     load_type string
-    call ai.wire.render_output_format
-    store_var _6
-    load_type string
-    load_var2 5 6
+    load_var _5
     call ai.FunctionSpec.prompt
     return
 }
@@ -1172,10 +1151,7 @@ function structured_prompt_requests.MediaImageAudioPdf$render_prompt(photo: imag
     call user.structured_prompt_requests.MediaImageAudioPdf$spec
     store_var _4
     load_type string
-    call ai.wire.render_output_format
-    store_var _5
-    load_type string
-    load_var2 4 5
+    load_var _4
     call ai.FunctionSpec.prompt
     return
 }
@@ -1323,10 +1299,7 @@ function structured_prompt_requests.MediaImagePdf$render_prompt(photo: image, do
     call user.structured_prompt_requests.MediaImagePdf$spec
     store_var _3
     load_type string
-    call ai.wire.render_output_format
-    store_var _4
-    load_type string
-    load_var2 3 4
+    load_var _3
     call ai.FunctionSpec.prompt
     return
 }
@@ -1467,10 +1440,7 @@ function structured_prompt_requests.MediaShape$render_prompt(photo: image) -> ai
     call user.structured_prompt_requests.MediaShape$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -1590,10 +1560,7 @@ function structured_prompt_requests.PreludeShape$render_prompt() -> ai.Prompt {
     call user.structured_prompt_requests.PreludeShape$spec
     store_var _1
     load_type string
-    call ai.wire.render_output_format
-    store_var _2
-    load_type string
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }
@@ -1709,10 +1676,7 @@ function structured_prompt_requests.RequestShape$render_prompt(input: string) ->
     call user.structured_prompt_requests.RequestShape$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -1848,10 +1812,7 @@ function structured_prompt_requests.RoledShape$render_prompt() -> ai.Prompt {
     call user.structured_prompt_requests.RoledShape$spec
     store_var _1
     load_type string
-    call ai.wire.render_output_format
-    store_var _2
-    load_type string
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }
@@ -1983,10 +1944,7 @@ function structured_prompt_requests.RolelessImageShape$render_prompt(photo: imag
     call user.structured_prompt_requests.RolelessImageShape$spec
     store_var _2
     load_type string
-    call ai.wire.render_output_format
-    store_var _3
-    load_type string
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -2106,10 +2064,7 @@ function structured_prompt_requests.RolelessShape$render_prompt() -> ai.Prompt {
     call user.structured_prompt_requests.RolelessShape$spec
     store_var _1
     load_type string
-    call ai.wire.render_output_format
-    store_var _2
-    load_type string
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }
@@ -2222,10 +2177,7 @@ function structured_prompt_requests.WhitespaceShape$render_prompt() -> ai.Prompt
     call user.structured_prompt_requests.WhitespaceShape$spec
     store_var _1
     load_type string
-    call ai.wire.render_output_format
-    store_var _2
-    load_type string
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }

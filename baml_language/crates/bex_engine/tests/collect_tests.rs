@@ -906,7 +906,7 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
             client: GPT4o
             prompt: `
                 Classify the sentiment of the following text.
-                ${ctx.output_format}
+                ${ctx.output_format()}
                 Text: ${text}
             `
         }

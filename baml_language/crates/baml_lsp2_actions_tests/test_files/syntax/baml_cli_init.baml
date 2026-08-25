@@ -67,7 +67,7 @@ function ExtractResume(resume: string) -> Resume {
     Extract from this content:
     ${resume}
 
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 

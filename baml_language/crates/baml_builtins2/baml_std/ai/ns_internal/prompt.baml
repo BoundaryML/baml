@@ -35,9 +35,15 @@ function render_output_format(return_type: reflect.Type) -> string throws never 
 /// resolving the return type to `root.OutputFormat`'s generated struct.
 type OutputFormat = root.OutputFormat;
 
-/// Build the output-format handle used by `root.Context.output_format_with`.
+/// Build the output-format handle used by render contexts.
 function build_output_format(return_type: reflect.Type) -> OutputFormat throws never {
     $rust_io_function
+}
+
+/// Marker used to distinguish an omitted output-format option from an
+/// explicit `null`.
+enum OutputFormatDefault {
+    Auto,
 }
 
 /// Construct a typed role marker for structural prompt assembly.

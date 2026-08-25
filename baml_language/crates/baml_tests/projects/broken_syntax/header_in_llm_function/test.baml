@@ -15,6 +15,6 @@ function FetchDatax(user_id: string) -> Hi {
 
     prompt: `
         give short story ${user_id}
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }

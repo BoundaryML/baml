@@ -132,7 +132,7 @@ async fn backtick_prompt_streams_through_orchestrator() {
     );
 }
 
-/// Streaming render of `ctx.output_format` over a CLASS return: the class
+/// Streaming render of `ctx.output_format()` over a CLASS return: the class
 /// schema must reach the wire on the streaming path.
 #[tokio::test]
 async fn backtick_streaming_renders_output_format() {
@@ -155,7 +155,7 @@ async fn backtick_streaming_renders_output_format() {
 
         function GetPerson() -> Person {{
             client: TestClient
-            prompt: `Make a person.${{ctx.output_format}}`
+            prompt: `Make a person.${{ctx.output_format()}}`
         }}
 
         function main() -> Person {{

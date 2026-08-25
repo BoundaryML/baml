@@ -179,7 +179,7 @@ function Extract(raw: string) -> C {
     client: Fast
     prompt: `
         Extract from ${raw}.
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 
@@ -279,7 +279,7 @@ function ExtractAny() -> json {
     prompt: `
         Return whatever JSON you like.
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 

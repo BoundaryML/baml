@@ -501,7 +501,7 @@ mod llm_tools_field_tests {
             "    tools: [search_flights, search_hotels]\n",
             "    prompt: `\n",
             "        ${q}\n",
-            "        ${ctx.output_format}\n",
+            "        ${ctx.output_format()}\n",
             "    `\n",
             "}\n",
         );

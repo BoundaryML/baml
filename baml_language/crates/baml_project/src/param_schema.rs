@@ -41,7 +41,7 @@ const MAX_DEPTH: usize = 64;
 /// The compiler appends synthetic trailing `client: ai.Client? = null` and
 /// `on_event: ((ai.events.Event) -> void)? = null` parameters to every LLM
 /// function. Both names are reserved on LLM functions
-/// (`reject_reserved_llm_client_params`), so trailing params with these names
+/// (`reject_reserved_llm_params`), so trailing params with these names
 /// can only be the injected ones. The form must render neither.
 const INJECTED_PARAM_NAMES: [&str; 2] = ["client", "on_event"];
 
@@ -819,7 +819,7 @@ client GPT4 = openai.ResponsesClient.new(model = "gpt-4o");
 
 function Extract(text: string) -> string {
   client: GPT4
-  prompt: `${text} ${ctx.output_format}`
+  prompt: `${text} ${ctx.output_format()}`
 }
 
 function Plain(x: int) -> int { x }

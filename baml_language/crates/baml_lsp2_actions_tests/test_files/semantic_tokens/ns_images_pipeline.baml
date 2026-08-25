@@ -10,7 +10,7 @@ function generate_image_prompt(thing: string) -> string {
 
         ${thing}
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 
@@ -49,5 +49,5 @@ function generate_image_prompt(thing: string) -> string {
 // ns_images_pipeline.baml:9:59 (string) len=7 "subject"
 // ns_images_pipeline.baml:9:66 (string) len=1 ":"
 // ns_images_pipeline.baml:11:11 (parameter) len=5 "thing"
-// ns_images_pipeline.baml:13:15 (property) len=13 "output_format"
+// ns_images_pipeline.baml:13:15 (method) len=13 "output_format"
 // ns_images_pipeline.baml:14:5 (string) len=1 "`"

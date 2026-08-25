@@ -2113,7 +2113,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     /// one, otherwise its declared name. When an `@alias` is present the real
     /// member name is never used for matching (see `bex_sap`'s
     /// `AnnotatedField::key_matches`), so two members with the same effective key
-    /// are indistinguishable in the serialized schema: `ctx.output_format`
+    /// are indistinguishable in the serialized schema: `ctx.output_format()`
     /// renders duplicate keys and only the first can ever be satisfied. This
     /// catches both `a @alias("x")` + `b @alias("x")` and a plain member `x`
     /// colliding with another member's `@alias("x")`.

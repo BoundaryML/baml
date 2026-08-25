@@ -233,18 +233,17 @@ test "prompt_parent_tostring_override_owns_media_subtree" {
     assert.equal(pt_parent_tostring_owns_media_fn(), "REDACTED")
 }
 
-// ─── ${ctx.output_format} (M5b) ───────────────────────────────────────────────
+// ${ctx.output_format()} (M5b)
 
-// BEP-049 M5b: `${ctx.output_format}` renders the return type's schema.
-// `render_output_format(reflect.Type.of<Person>())` produces the schema string
-// the orchestrator will later populate `Context.output_format` with; here we
-// wire it by hand and assert the assembled prompt embeds the schema.
+// BEP-049 M5b: `${ctx.output_format()}` renders the return type's schema.
+// Build the same schema handle the orchestrator supplies and assert the
+// assembled prompt embeds its rendered schema.
 function pt_ctx_output_format_fn() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let of = ai.internal.render_output_format(reflect.Type.of<Person>())
-    let ctx = ai.Context { client: cc, tags: {}, output_format: of }
+    let of = ai.internal.build_output_format(reflect.Type.of<Person>())
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: of }
     let render = ai.prompt`Answer using this schema:
-${ctx.output_format}`
+${ctx.output_format()}`
     render(ctx).text()
 }
 
@@ -257,7 +256,7 @@ test "prompt_interpolates_ctx_output_format" {
 
 function PtRenderPerson() -> Person {
     client: "openai/gpt-4o-mini"
-    prompt: `Make a person.${ctx.output_format}`
+    prompt: `Make a person.${ctx.output_format()}`
 }
 
 function pt_render_prompt_companion_output_format_fn() -> string {
@@ -325,25 +324,25 @@ test "spec_prompt_render_keeps_media_in_promptast" {
     )
 }
 
-// BEP-049 M5b.2: `${ctx.output_format_with(prefix=..., ...)}` re-renders the
+// BEP-049 M5b.2: `${ctx.output_format(prefix=..., ...)}` re-renders the
 // return type's schema with caller options. `Context._output_format` carries
 // the prebuilt schema handle; a non-default `prefix` must appear in the
 // assembled prompt, proving the option took effect. Exercises two infra paths:
 // a method call on a body-param inside a template, and an io-function with
 // optional params called with most omitted.
-function pt_output_format_with_prefix_fn() -> string {
+function pt_output_format_prefix_fn() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
     let rt = reflect.Type.of<Person>()
-    let ctx = ai.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
-    let render = ai.prompt`${ctx.output_format_with(prefix = "Use this exact schema:")}`
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(rt) }
+    let render = ai.prompt`${ctx.output_format(prefix = "Use this exact schema:")}`
     render(ctx).text()
 }
 
-test "prompt_interpolates_ctx_output_format_with" {
+test "prompt_interpolates_ctx_output_format_options" {
     // The custom `prefix` option is applied and the schema lists Person fields.
-    assert.contains(pt_output_format_with_prefix_fn(), "Use this exact schema:")
-    assert.contains(pt_output_format_with_prefix_fn(), "name")
-    assert.contains(pt_output_format_with_prefix_fn(), "age")
+    assert.contains(pt_output_format_prefix_fn(), "Use this exact schema:")
+    assert.contains(pt_output_format_prefix_fn(), "name")
+    assert.contains(pt_output_format_prefix_fn(), "age")
 }
 
 // Regression: a method io-sysop (`$rust_io_function` instance method) called
@@ -353,33 +352,33 @@ test "prompt_interpolates_ctx_output_format_with" {
 // `self`'s (absent) default → `OmittedArg` → engine panic. Here
 // `quote_class_fields = true` is provided while `prefix` (and everything
 // before it) is omitted. Must render the schema, not panic.
-function pt_output_format_with_omitted_leading_fn() -> string {
+function pt_output_format_omitted_leading_fn() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
     let rt = reflect.Type.of<Person>()
-    let ctx = ai.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
-    let render = ai.prompt`${ctx.output_format_with(quote_class_fields = true)}`
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(rt) }
+    let render = ai.prompt`${ctx.output_format(quote_class_fields = true)}`
     render(ctx).text()
 }
 
-test "prompt_output_format_with_omits_leading_optional_arg" {
+test "prompt_output_format_omits_leading_optional_arg" {
     // The rendered schema lists the Person fields (and rendering did not panic).
-    assert.contains(pt_output_format_with_omitted_leading_fn(), "name")
-    assert.contains(pt_output_format_with_omitted_leading_fn(), "age")
+    assert.contains(pt_output_format_omitted_leading_fn(), "name")
+    assert.contains(pt_output_format_omitted_leading_fn(), "age")
 }
 
 // `render_null_as = "omit"` replaces the default `string or null` rendering of
 // the optional `nickname` field with `string or omit`.
-function pt_output_format_with_null_as_omit_fn() -> string {
+function pt_output_format_null_as_omit_fn() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
     let rt = reflect.Type.of<PersonNick>()
-    let ctx = ai.Context { client: cc, tags: {}, output_format: ai.internal.render_output_format(rt), _output_format: ai.internal.build_output_format(rt) }
-    let render = ai.prompt`${ctx.output_format_with(render_null_as = "omit")}`
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(rt) }
+    let render = ai.prompt`${ctx.output_format(render_null_as = "omit")}`
     render(ctx).text()
 }
 
-test "prompt_output_format_with_can_render_null_as_omit" {
-    // Custom null rendering applies to output_format_with…
-    assert.contains(pt_output_format_with_null_as_omit_fn(), "nickname: string or omit,")
+test "prompt_output_format_can_render_null_as_omit" {
+    // Custom null rendering applies to output_format().
+    assert.contains(pt_output_format_null_as_omit_fn(), "nickname: string or omit,")
     // …and the default null rendering is replaced.
-    assert.is_true(pt_output_format_with_null_as_omit_fn().includes("string or null") == false)
+    assert.is_true(pt_output_format_null_as_omit_fn().includes("string or null") == false)
 }

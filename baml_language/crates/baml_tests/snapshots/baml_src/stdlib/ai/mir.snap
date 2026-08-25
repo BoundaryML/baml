@@ -2,7 +2,131 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 === MIR2 (package ai) ===
-fn ai.Context.output_format_with = builtin(io)
+fn ai.OutputFormat._render = builtin(io)
+
+fn ai.Context.output_format(self: ai.Context, prefix: string | null | ai.internal.OutputFormatDefault, or_splitter: string | ai.internal.OutputFormatDefault, enum_value_prefix: string | null | ai.internal.OutputFormatDefault, hoisted_class_prefix: string | null | ai.internal.OutputFormatDefault, always_hoist_enums: bool | ai.internal.OutputFormatDefault, quote_class_fields: bool | ai.internal.OutputFormatDefault, hoist_classes: bool | "auto" | ai.internal.OutputFormatDefault | string[], map_style: "angle" | "object" | ai.internal.OutputFormatDefault, render_null_as: string | null | ai.internal.OutputFormatDefault) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: ai.Context // self // param
+    let _2: string | null | ai.internal.OutputFormatDefault // prefix // param
+    let _3: string | ai.internal.OutputFormatDefault // or_splitter // param
+    let _4: string | null | ai.internal.OutputFormatDefault // enum_value_prefix // param
+    let _5: string | null | ai.internal.OutputFormatDefault // hoisted_class_prefix // param
+    let _6: bool | ai.internal.OutputFormatDefault // always_hoist_enums // param
+    let _7: bool | ai.internal.OutputFormatDefault // quote_class_fields // param
+    let _8: bool | "auto" | ai.internal.OutputFormatDefault | string[] // hoist_classes // param
+    let _9: "angle" | "object" | ai.internal.OutputFormatDefault // map_style // param
+    let _10: string | null | ai.internal.OutputFormatDefault // render_null_as // param
+    let _11: bool
+    let _12: bool
+    let _13: bool
+    let _14: bool
+    let _15: bool
+    let _16: bool
+    let _17: bool
+    let _18: bool
+    let _19: bool
+    let _20: (ai.OutputFormat, bool | ai.internal.OutputFormatDefault, string | null | ai.internal.OutputFormatDefault, bool | "auto" | ai.internal.OutputFormatDefault | string[], string | null | ai.internal.OutputFormatDefault, "angle" | "object" | ai.internal.OutputFormatDefault, string | ai.internal.OutputFormatDefault, string | null | ai.internal.OutputFormatDefault, bool | ai.internal.OutputFormatDefault, string | null | ai.internal.OutputFormatDefault) -> string throws never
+
+    bb0: {
+        _11 = copy _2 == const <omitted>;
+        branch copy _11 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _12 = copy _3 == const <omitted>;
+        branch copy _12 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _3 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _13 = copy _4 == const <omitted>;
+        branch copy _13 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _4 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _14 = copy _5 == const <omitted>;
+        branch copy _14 -> [bb7, bb8];
+    }
+
+    bb7: {
+        _5 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb8;
+    }
+
+    bb8: {
+        _15 = copy _6 == const <omitted>;
+        branch copy _15 -> [bb9, bb10];
+    }
+
+    bb9: {
+        _6 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb10;
+    }
+
+    bb10: {
+        _16 = copy _7 == const <omitted>;
+        branch copy _16 -> [bb11, bb12];
+    }
+
+    bb11: {
+        _7 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb12;
+    }
+
+    bb12: {
+        _17 = copy _8 == const <omitted>;
+        branch copy _17 -> [bb13, bb14];
+    }
+
+    bb13: {
+        _8 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb14;
+    }
+
+    bb14: {
+        _18 = copy _9 == const <omitted>;
+        branch copy _18 -> [bb15, bb16];
+    }
+
+    bb15: {
+        _9 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb16;
+    }
+
+    bb16: {
+        _19 = copy _10 == const <omitted>;
+        branch copy _19 -> [bb17, bb18];
+    }
+
+    bb17: {
+        _10 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb18;
+    }
+
+    bb18: {
+        _20 = copy _1.2;
+        _0 = sys_op const fn ai.OutputFormat._render(copy _20, copy _2, copy _3, copy _4, copy _5, copy _6, copy _7, copy _8, copy _9, copy _10) -> bb19;
+    }
+
+    bb19: {
+        return;
+    }
+}
 
 fn ai.Journal.entries(self: ai.Journal) -> (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[] {
     // Locals:
@@ -3554,6 +3678,130 @@ fn ai.internal._schema_for_signature(handler: reflect.AnyFunction<Returns = unkn
     }
 
     bb8: {
+        return;
+    }
+}
+
+fn ai.internal.SpecCtx.output_format(self: ai.internal.SpecCtx, prefix: string | null | ai.internal.OutputFormatDefault, or_splitter: string | ai.internal.OutputFormatDefault, enum_value_prefix: string | null | ai.internal.OutputFormatDefault, hoisted_class_prefix: string | null | ai.internal.OutputFormatDefault, always_hoist_enums: bool | ai.internal.OutputFormatDefault, quote_class_fields: bool | ai.internal.OutputFormatDefault, hoist_classes: bool | "auto" | ai.internal.OutputFormatDefault | string[], map_style: "angle" | "object" | ai.internal.OutputFormatDefault, render_null_as: string | null | ai.internal.OutputFormatDefault) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: ai.internal.SpecCtx // self // param
+    let _2: string | null | ai.internal.OutputFormatDefault // prefix // param
+    let _3: string | ai.internal.OutputFormatDefault // or_splitter // param
+    let _4: string | null | ai.internal.OutputFormatDefault // enum_value_prefix // param
+    let _5: string | null | ai.internal.OutputFormatDefault // hoisted_class_prefix // param
+    let _6: bool | ai.internal.OutputFormatDefault // always_hoist_enums // param
+    let _7: bool | ai.internal.OutputFormatDefault // quote_class_fields // param
+    let _8: bool | "auto" | ai.internal.OutputFormatDefault | string[] // hoist_classes // param
+    let _9: "angle" | "object" | ai.internal.OutputFormatDefault // map_style // param
+    let _10: string | null | ai.internal.OutputFormatDefault // render_null_as // param
+    let _11: bool
+    let _12: bool
+    let _13: bool
+    let _14: bool
+    let _15: bool
+    let _16: bool
+    let _17: bool
+    let _18: bool
+    let _19: bool
+    let _20: (ai.OutputFormat, bool | ai.internal.OutputFormatDefault, string | null | ai.internal.OutputFormatDefault, bool | "auto" | ai.internal.OutputFormatDefault | string[], string | null | ai.internal.OutputFormatDefault, "angle" | "object" | ai.internal.OutputFormatDefault, string | ai.internal.OutputFormatDefault, string | null | ai.internal.OutputFormatDefault, bool | ai.internal.OutputFormatDefault, string | null | ai.internal.OutputFormatDefault) -> string throws never
+
+    bb0: {
+        _11 = copy _2 == const <omitted>;
+        branch copy _11 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _12 = copy _3 == const <omitted>;
+        branch copy _12 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _3 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _13 = copy _4 == const <omitted>;
+        branch copy _13 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _4 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _14 = copy _5 == const <omitted>;
+        branch copy _14 -> [bb7, bb8];
+    }
+
+    bb7: {
+        _5 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb8;
+    }
+
+    bb8: {
+        _15 = copy _6 == const <omitted>;
+        branch copy _15 -> [bb9, bb10];
+    }
+
+    bb9: {
+        _6 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb10;
+    }
+
+    bb10: {
+        _16 = copy _7 == const <omitted>;
+        branch copy _16 -> [bb11, bb12];
+    }
+
+    bb11: {
+        _7 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb12;
+    }
+
+    bb12: {
+        _17 = copy _8 == const <omitted>;
+        branch copy _17 -> [bb13, bb14];
+    }
+
+    bb13: {
+        _8 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb14;
+    }
+
+    bb14: {
+        _18 = copy _9 == const <omitted>;
+        branch copy _18 -> [bb15, bb16];
+    }
+
+    bb15: {
+        _9 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb16;
+    }
+
+    bb16: {
+        _19 = copy _10 == const <omitted>;
+        branch copy _19 -> [bb17, bb18];
+    }
+
+    bb17: {
+        _10 = const ai.internal.OutputFormatDefault.Auto;
+        goto -> bb18;
+    }
+
+    bb18: {
+        _20 = copy _1.0;
+        _0 = sys_op const fn ai.OutputFormat._render(copy _20, copy _2, copy _3, copy _4, copy _5, copy _6, copy _7, copy _8, copy _9, copy _10) -> bb19;
+    }
+
+    bb19: {
         return;
     }
 }
@@ -8340,7 +8588,7 @@ fn ai.stream.from_spec(spec: ai.FunctionSpec<TFinal>, client: null | ai.stream.S
     let _39: reflect.Type
     let _40: ai.stream.TurnStream // turns [captured]
     let _41: ai.ModelTurnInput
-    let _42: (string) -> ai.Prompt throws never
+    let _42: (ai.OutputFormat) -> ai.Prompt throws never
     let _43: ai.Journal
     let _44: reflect.Type
     let _45: ai.tools.Toolbox
@@ -11811,7 +12059,7 @@ fn ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionSpec<Ou
     let _6: int // attempts_left // param
     let _7: ai.ModelTurn // turn
     let _8: ai.ModelTurnInput
-    let _9: (string) -> ai.Prompt throws never
+    let _9: (ai.OutputFormat) -> ai.Prompt throws never
     let _10: ai.tools.Toolbox
     let _11: reflect.Type
     let _12: reflect.Type
@@ -12944,7 +13192,7 @@ fn ai.FunctionSpec.build_request(self: ai.FunctionSpec, override_client: null | 
     let _5: ai.Client
     let _6: bool
     let _7: ai.ModelTurnInput
-    let _8: (string) -> ai.Prompt throws never
+    let _8: (ai.OutputFormat) -> ai.Prompt throws never
     let _9: ai.Journal
     let _10: reflect.Type
     let _11: ai.tools.Toolbox
@@ -13058,27 +13306,27 @@ fn ai.FunctionSpec.output_type(self: ai.FunctionSpec) -> reflect.Type {
     }
 }
 
-fn ai.FunctionSpec.prompt(self: ai.FunctionSpec, output_format: string) -> ai.Prompt {
+fn ai.FunctionSpec.prompt(self: ai.FunctionSpec) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
     let _1: ai.FunctionSpec // self // param
-    let _2: string // output_format // param
-    let _3: bool
-    let _4: (string) -> ai.Prompt throws never
+    let _2: (ai.OutputFormat) -> ai.Prompt throws never
+    let _3: ai.OutputFormat
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _2 = copy _1.2;
+        _5 = load_type(#0);
+        _4 = call const fn ai.FunctionSpec.output_type<copy _5>(copy _1) -> [bb1];
     }
 
     bb1: {
-        _2 = const "";
-        goto -> bb2;
+        _3 = sys_op const fn ai.internal.build_output_format(copy _4) -> bb2;
     }
 
     bb2: {
-        _4 = copy _1.2;
-        _0 = call copy _4(copy _2) -> [bb3];
+        _0 = call copy _2(copy _3) -> [bb3];
     }
 
     bb3: {

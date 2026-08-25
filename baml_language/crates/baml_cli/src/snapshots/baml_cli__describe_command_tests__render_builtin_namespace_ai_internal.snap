@@ -11,8 +11,8 @@ function         ai.internal._shorthand_prefixes  <builtin>/ai/ns_internal/clien
 function         ai.internal._from_shorthand      <builtin>/ai/ns_internal/clients.baml:33
 function         ai.internal._schema_for_signature <builtin>/ai/ns_internal/helpers.baml:5
 class            ai.internal.SpecCtx              <builtin>/ai/ns_internal/helpers.baml:18
-function         ai.internal.assemble_prompt      <builtin>/ai/ns_internal/helpers.baml:27
-function         ai.internal.assemble_llm_prompt  <builtin>/ai/ns_internal/helpers.baml:36
+function         ai.internal.assemble_prompt      <builtin>/ai/ns_internal/helpers.baml:52
+function         ai.internal.assemble_llm_prompt  <builtin>/ai/ns_internal/helpers.baml:61
 function         ai.internal._header              <builtin>/ai/ns_internal/http_errors.baml:7
 function         ai.internal._int_header          <builtin>/ai/ns_internal/http_errors.baml:13
 function         ai.internal._retry_after_ms      <builtin>/ai/ns_internal/http_errors.baml:32
@@ -31,8 +31,9 @@ function         ai.internal.validate_output_type <builtin>/ai/ns_internal/promp
 function         ai.internal.render_output_format <builtin>/ai/ns_internal/prompt.baml:30
 type             ai.internal.OutputFormat         <builtin>/ai/ns_internal/prompt.baml:36
 function         ai.internal.build_output_format  <builtin>/ai/ns_internal/prompt.baml:39
-function         ai.internal.make_role            <builtin>/ai/ns_internal/prompt.baml:45
-function         ai.internal.get_return_type      <builtin>/ai/ns_internal/prompt.baml:51
+enum             ai.internal.OutputFormatDefault  <builtin>/ai/ns_internal/prompt.baml:45
+function         ai.internal.make_role            <builtin>/ai/ns_internal/prompt.baml:51
+function         ai.internal.get_return_type      <builtin>/ai/ns_internal/prompt.baml:57
 function         ai.internal._configured          <builtin>/ai/ns_internal/wire.baml:6
 function         ai.internal._redact_after        <builtin>/ai/ns_internal/wire.baml:16
 function         ai.internal._redact_value_end    <builtin>/ai/ns_internal/wire.baml:34

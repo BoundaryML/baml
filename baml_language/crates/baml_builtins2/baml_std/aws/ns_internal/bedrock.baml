@@ -976,7 +976,7 @@ function converse_request(
     preview: bool = false,
 ) -> ConverseRequest {
     let prompt = _lower_prompt(
-        input.prompt(ai.wire.render_output_format(input.output_type)),
+        input.prompt(ai.internal.build_output_format(input.output_type)),
         preview = preview,
     );
     let system = prompt.system;
