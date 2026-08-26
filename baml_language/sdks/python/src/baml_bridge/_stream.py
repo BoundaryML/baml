@@ -27,6 +27,10 @@ from .baml_py import BamlPyHandle
 TStream = TypeVar("TStream")
 TFinal = TypeVar("TFinal")
 
+# Terminal marker FQN for async iteration; resolved lazily through the
+# installed typemap so the bridge never imports the generated package.
+_DONE_FQN = "ai.stream.Done"
+
 
 class BamlStream(Generic[TStream, TFinal]):
     """Opaque wrapper around a streaming-call handle.
@@ -59,6 +63,24 @@ class BamlStream(Generic[TStream, TFinal]):
     def _to_pyhandle(self) -> BamlPyHandle:
         """Internal: expose the inner `BamlPyHandle` for inbound encode."""
         return self._handle
+
+    def __aiter__(self) -> "BamlStream[TStream, TFinal]":
+        return self
+
+    async def __anext__(self) -> TStream:
+        """Async-iteration sugar over the sentinel protocol: yields each
+        non-null partial, translating the `ai.stream.Done` terminal marker
+        into `StopAsyncIteration`. `final()` / `final_async()` remain the
+        way to obtain the settled value after the loop."""
+        from .typemap import get_type_map
+
+        done_cls = get_type_map().get_class(_DONE_FQN)
+        while True:
+            item = await self.next_async()
+            if isinstance(item, done_cls):
+                raise StopAsyncIteration
+            if item is not None:
+                return item
 
     def next(self) -> TStream:
         return self._call_sync(f"{self._class_fqn}.next")
