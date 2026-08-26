@@ -390,7 +390,7 @@ impl ExportedType {
             ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone(), TyAttr::default()),
             ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone(), TyAttr::default()),
             ExportedType::Interface { qtn, .. } => {
-                Ty::Interface(qtn.clone(), vec![], vec![], TyAttr::default())
+                Ty::Interface(qtn.clone(), Box::new([]), Box::new([]), TyAttr::default())
             }
         }
     }
@@ -1598,8 +1598,8 @@ fn def_to_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, def: Definition<'db>) ->
         }
         Definition::Interface(_) => Some(Ty::Interface(
             qualify_def(db, def, &name),
-            vec![],
-            vec![],
+            Box::new([]),
+            Box::new([]),
             TyAttr::default(),
         )),
         Definition::Enum(_) => Some(Ty::Enum(qualify_def(db, def, &name), TyAttr::default())),

@@ -46,7 +46,7 @@ impl BamlClassType for PackageReflectImpl {
     fn optional(vm: &mut BexVm, self_value: &Value) -> Value {
         let type_value = cloned_type_value(vm, *self_value);
         let mut members = match &type_value.ty {
-            bex_vm_types::RealizedTy::Union(members, _) => members.clone(),
+            bex_vm_types::RealizedTy::Union(members, _) => members.to_vec(),
             other => vec![other.clone()],
         };
         if !members.iter().any(bex_vm_types::RealizedTy::is_null) {
@@ -54,7 +54,7 @@ impl BamlClassType for PackageReflectImpl {
         }
         let union_ty = alloc_runtime_type(
             vm,
-            bex_vm_types::RealizedTy::Union(members, baml_type::TyAttr::default()),
+            bex_vm_types::RealizedTy::Union(members.into(), baml_type::TyAttr::default()),
         );
         super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Union, union_ty)
     }
@@ -237,7 +237,7 @@ enum RenderDefinition {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct RealizedClassIdentity {
     head: bex_vm_types::TypeHead,
-    args: Vec<bex_vm_types::RealizedTy>,
+    args: Box<[bex_vm_types::RealizedTy]>,
 }
 
 struct RealizedClassFrame {
@@ -1437,8 +1437,8 @@ fn as_kind(
 /// interface, its realized generic arguments, and its associated bindings.
 type RealizedInterfaceInstantiation = (
     bex_vm_types::TypeHead,
-    Vec<bex_vm_types::RealizedTy>,
-    Vec<(baml_type::Name, bex_vm_types::RealizedTy)>,
+    Box<[bex_vm_types::RealizedTy]>,
+    Box<[(baml_type::Name, bex_vm_types::RealizedTy)]>,
 );
 
 /// The interface a `type` value denotes, or `None` when it denotes anything
@@ -1544,18 +1544,18 @@ mod renderability_tests {
             .insert(package_member_name("Shared"), second_shared);
 
         let type_value = TypeValue::new(bex_vm_types::RealizedTy::Union(
-            vec![
+            Box::new([
                 bex_vm_types::RealizedTy::Class(
                     bex_vm_types::TypeHead::new(first_root, first_root_tag),
-                    Vec::new(),
+                    Box::new([]),
                     attr(),
                 ),
                 bex_vm_types::RealizedTy::Class(
                     bex_vm_types::TypeHead::new(second_root, second_root_tag),
-                    Vec::new(),
+                    Box::new([]),
                     attr(),
                 ),
-            ],
+            ]),
             attr(),
         ));
 
@@ -1576,7 +1576,7 @@ mod renderability_tests {
             bex_vm_types::RealizedTy::Uint8Array { attr: attr() },
             bex_vm_types::RealizedTy::EnumVariant(name, baml_type::Name::new("VALUE"), attr()),
             bex_vm_types::RealizedTy::Function {
-                params: vec![],
+                params: Box::new([]),
                 ret: Box::new(bex_vm_types::RealizedTy::int()),
                 throws: Box::new(bex_vm_types::RealizedTy::never()),
                 attr: attr(),
@@ -1614,8 +1614,8 @@ mod renderability_tests {
                 baml_type::Freshness::Regular,
                 attr(),
             ),
-            bex_vm_types::RealizedTy::Class(name, vec![], attr()),
-            bex_vm_types::RealizedTy::Interface(name, vec![], vec![], attr()),
+            bex_vm_types::RealizedTy::Class(name, Box::new([]), attr()),
+            bex_vm_types::RealizedTy::Interface(name, Box::new([]), Box::new([]), attr()),
             bex_vm_types::RealizedTy::Enum(name, attr()),
             bex_vm_types::RealizedTy::list(bex_vm_types::RealizedTy::string()),
             bex_vm_types::RealizedTy::Map {
@@ -1624,10 +1624,10 @@ mod renderability_tests {
                 attr: attr(),
             },
             bex_vm_types::RealizedTy::Union(
-                vec![
+                Box::new([
                     bex_vm_types::RealizedTy::string(),
                     bex_vm_types::RealizedTy::null(),
-                ],
+                ]),
                 attr(),
             ),
             bex_vm_types::RealizedTy::TypeAlias(name, attr()),

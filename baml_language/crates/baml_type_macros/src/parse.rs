@@ -10,7 +10,7 @@
 //! every generated member, so the family is parameterized as a whole — `Ty<N>`,
 //! `RuntimeTy<N>`, `RealizedTy<N>`, … A satellite declares its own generics so
 //! it can opt out. Nested positions are written out in full in the DSL
-//! (`Box<Ty<N>>`, `Vec<FunctionParamTy<N>>`): the per-member rewrite is
+//! (`Box<Ty<N>>`, `Box<[FunctionParamTy<N>]>`): the per-member rewrite is
 //! ident-for-ident, so the argument list rides along untouched and the master
 //! `enum` stays readable as ordinary Rust.
 //!

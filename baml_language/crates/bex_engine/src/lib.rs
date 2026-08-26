@@ -7170,8 +7170,8 @@ impl BexEngine {
                         Ok((
                             baml_type::Interface::new(
                                 interface_name,
-                                interface_args,
-                                associated_types,
+                                interface_args.into(),
+                                associated_types.into(),
                             ),
                             field_links,
                         ))
@@ -7706,7 +7706,7 @@ mod type_identity_tests {
         let definition = bex_vm_types::types::PortableTypeDef {
             root: baml_type::RuntimeTy::Class(
                 baml_type::QualifiedTypeName::from_dotted_path("user.Foo"),
-                Vec::new(),
+                Box::new([]),
                 baml_type::TyAttr::default(),
             ),
             classes: vec![bex_vm_types::types::PortableClassDef {

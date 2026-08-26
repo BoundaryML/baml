@@ -103,14 +103,17 @@ impl<N: Clone> RuntimeTy<N> {
     /// result is flattened and idempotent.
     pub fn optional(inner: RuntimeTy<N>) -> Self {
         match inner {
-            RuntimeTy::Union(mut members, attr) => {
-                if !members.iter().any(RuntimeTy::is_null) {
+            RuntimeTy::Union(members, attr) => {
+                if members.iter().any(RuntimeTy::is_null) {
+                    RuntimeTy::Union(members, attr)
+                } else {
+                    let mut members = members.into_vec();
                     members.push(RuntimeTy::null());
+                    RuntimeTy::Union(members.into(), attr)
                 }
-                RuntimeTy::Union(members, attr)
             }
             n @ RuntimeTy::Null { .. } => n,
-            other => RuntimeTy::Union(vec![other, RuntimeTy::null()], TyAttr::default()),
+            other => RuntimeTy::Union(Box::new([other, RuntimeTy::null()]), TyAttr::default()),
         }
     }
 
@@ -161,7 +164,7 @@ impl<N: Clone> RuntimeTy<N> {
     pub fn strip_null(&self) -> RuntimeTy<N> {
         match self {
             RuntimeTy::Union(members, attr) => {
-                let non_null: Vec<RuntimeTy<N>> =
+                let non_null: Box<[RuntimeTy<N>]> =
                     members.iter().filter(|m| !m.is_null()).cloned().collect();
                 match non_null.len() {
                     0 => self.clone(),
@@ -192,11 +195,15 @@ impl<N: Clone> RuntimeTy<N> {
 impl RuntimeTy {
     /// `Class(name)` with default attributes (local module path), no type args.
     pub fn class(name: &str) -> Self {
-        RuntimeTy::Class(TypeName::local(name.into()), Vec::new(), TyAttr::default())
+        RuntimeTy::Class(
+            TypeName::local(name.into()),
+            Box::new([]),
+            TyAttr::default(),
+        )
     }
 
     /// `Class(name, args)` — a parametric class instantiation.
-    pub fn class_with_args(name: TypeName, args: Vec<RuntimeTy>) -> Self {
+    pub fn class_with_args(name: TypeName, args: Box<[RuntimeTy]>) -> Self {
         RuntimeTy::Class(name, args, TyAttr::default())
     }
 
@@ -204,7 +211,7 @@ impl RuntimeTy {
     pub fn user_class(name: &str) -> Self {
         RuntimeTy::Class(
             TypeName::local(Name::new(name)),
-            Vec::new(),
+            Box::new([]),
             TyAttr::default(),
         )
     }
@@ -296,7 +303,7 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
             let resolved_bindings = associated_bindings
                 .iter()
                 .map(|(name, ty)| Ok((name.clone(), lower_to_runtime(ty, resolved)?)))
-                .collect::<Result<Vec<_>, NotRuntimeTy>>()?;
+                .collect::<Result<Box<[_]>, NotRuntimeTy>>()?;
             RuntimeTy::Interface(qtn.clone(), resolved_args, resolved_bindings, attr.clone())
         }
         Ty::Enum(qtn, attr) => RuntimeTy::Enum(qtn.clone(), attr.clone()),
@@ -364,7 +371,7 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
                         mode: param.mode,
                     })
                 })
-                .collect::<Result<Vec<_>, NotRuntimeTy>>()?,
+                .collect::<Result<Box<[_]>, NotRuntimeTy>>()?,
             ret: Box::new(lower_to_runtime(ret, resolved)?),
             throws: Box::new(lower_to_runtime(throws, resolved)?),
             attr: attr.clone(),
@@ -407,7 +414,7 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
 
 /// Lower each [`Ty`] in `tys`, short-circuiting on the first error-recovery
 /// sentinel encountered (at any nesting depth).
-fn lower_vec(tys: &[Ty], resolved: &ResolvedAliases) -> Result<Vec<RuntimeTy>, NotRuntimeTy> {
+fn lower_vec(tys: &[Ty], resolved: &ResolvedAliases) -> Result<Box<[RuntimeTy]>, NotRuntimeTy> {
     tys.iter().map(|t| lower_to_runtime(t, resolved)).collect()
 }
 
@@ -426,7 +433,7 @@ fn lower_interface_to_runtime(
             .associated_types
             .iter()
             .map(|(name, ty)| Ok((name.clone(), lower_to_runtime(ty, resolved)?)))
-            .collect::<Result<Vec<_>, NotRuntimeTy>>()?,
+            .collect::<Result<Box<[_]>, NotRuntimeTy>>()?,
     })
 }
 
@@ -531,7 +538,7 @@ mod tests {
         // Nominal construction stays name-only: a head built from a `&str` is a
         // name, so it has no meaning at an interned head.
         assert_eq!(
-            RuntimeTy::class_with_args(TypeName::local(Name::new("P")), vec![]),
+            RuntimeTy::class_with_args(TypeName::local(Name::new("P")), Box::new([])),
             RuntimeTy::class("P"),
         );
     }
@@ -552,7 +559,11 @@ mod tests {
     fn round_trip_nested_list_of_class() {
         // list<Class<int>>
         let ty: Ty = Ty::List(
-            Box::new(Ty::Class(qtn("Box"), vec![Ty::Int { attr: def() }], def())),
+            Box::new(Ty::Class(
+                qtn("Box"),
+                Box::new([Ty::Int { attr: def() }]),
+                def(),
+            )),
             def(),
         );
         assert_round_trips(ty);
@@ -571,11 +582,11 @@ mod tests {
     #[test]
     fn round_trip_union() {
         let ty: Ty = Ty::Union(
-            vec![
+            Box::new([
                 Ty::Int { attr: def() },
                 Ty::String { attr: def() },
                 Ty::Null { attr: def() },
-            ],
+            ]),
             def(),
         );
         assert_round_trips(ty);
@@ -584,13 +595,13 @@ mod tests {
     #[test]
     fn round_trip_function() {
         let ty: Ty = Ty::Function {
-            params: vec![
+            params: Box::new([
                 crate::FunctionParamTy::required(Some(Name::new("a")), Ty::Int { attr: def() }),
                 crate::FunctionParamTy::optional(
                     Some(Name::new("b")),
                     Ty::List(Box::new(Ty::Float { attr: def() }), def()),
                 ),
-            ],
+            ]),
             ret: Box::new(Ty::Bool { attr: def() }),
             throws: Box::new(Ty::Void { attr: def() }),
             attr: def(),
@@ -602,8 +613,8 @@ mod tests {
     fn round_trip_interface_with_associated_bindings() {
         let ty: Ty = Ty::Interface(
             qtn("Iterator"),
-            vec![Ty::Int { attr: def() }],
-            vec![(Name::new("Item"), Ty::String { attr: def() })],
+            Box::new([Ty::Int { attr: def() }]),
+            Box::new([(Name::new("Item"), Ty::String { attr: def() })]),
             def(),
         );
         assert_round_trips(ty);
@@ -615,8 +626,8 @@ mod tests {
             base: Box::new(Ty::type_var("T")),
             interface: Box::new(Interface {
                 name: qtn("Iterator"),
-                generics: vec![],
-                associated_types: vec![],
+                generics: Box::new([]),
+                associated_types: Box::new([]),
             }),
             member: Name::new("Item"),
             attr: def(),
@@ -649,7 +660,7 @@ mod tests {
     #[test]
     fn nested_error_in_union_blocks_conversion() {
         let ty: Ty = Ty::Union(
-            vec![Ty::Int { attr: def() }, Ty::Error { attr: def() }],
+            Box::new([Ty::Int { attr: def() }, Ty::Error { attr: def() }]),
             def(),
         );
         assert_eq!(
@@ -661,7 +672,7 @@ mod tests {
     #[test]
     fn nested_infer_in_function_ret_blocks_conversion() {
         let ty: Ty = Ty::Function {
-            params: vec![],
+            params: Box::new([]),
             ret: Box::new(Ty::Infer { attr: def() }),
             throws: Box::new(Ty::Void { attr: def() }),
             attr: def(),

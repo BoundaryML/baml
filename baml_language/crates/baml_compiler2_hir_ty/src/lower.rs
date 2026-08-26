@@ -1258,7 +1258,7 @@ impl<'db> LowerCtx<'db> {
         for (name, _) in bindings {
             self.record_type_errors(vec![crate::diagnostics::TirTypeError::UnresolvedType {
                 name,
-                suggestions: Vec::new().into(),
+                suggestions: Box::new([]),
             }]);
         }
     }
@@ -2590,8 +2590,8 @@ pub fn interface_lowering_diagnostics<'db>(
             .collect();
         let head = baml_type::Interface::new(
             interface_qualified_name(db, interface),
-            own_params,
-            Vec::new(),
+            own_params.into(),
+            Box::new([]),
         );
         for assoc in &data.associated_types {
             let (Some(default_ref), Some(_)) = (assoc.default, assoc.bound) else {

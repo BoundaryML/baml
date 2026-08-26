@@ -788,7 +788,7 @@ mod tests {
     }
 
     fn codegen_union(members: Vec<cg::Ty>) -> cg::Ty {
-        cg::Ty::Union(members, codegen_attr())
+        cg::Ty::Union(members.into(), codegen_attr())
     }
 
     #[test]
@@ -1471,7 +1471,7 @@ class GenericMirror<T> {
                 ty,
                 cg::Ty::Class(name, args, _)
                     if name == generic_owner
-                        && matches!(args.as_slice(), [cg::Ty::TypeVar(name, _)] if name.as_str() == "T")
+                        && matches!(&**args, [cg::Ty::TypeVar(name, _)] if name.as_str() == "T")
             )
         };
         assert!(matches!(

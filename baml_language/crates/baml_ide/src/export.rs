@@ -1119,7 +1119,7 @@ fn required_method_export(db: &Db, iface: InterfaceLoc<'_>, index: usize) -> Req
             ret,
             throws,
             ..
-        } => (params.as_slice(), ret.as_ref(), throws.as_ref()),
+        } => (&**params, ret.as_ref(), throws.as_ref()),
         // A malformed required signature still exports, as unresolved.
         other => (&[][..], other, other),
     };

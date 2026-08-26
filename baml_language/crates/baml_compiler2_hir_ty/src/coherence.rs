@@ -272,7 +272,7 @@ fn normalize_union(members: Vec<Ty>, attr: TyAttr, enum_variants: EnumVariants) 
         1 => flat
             .pop()
             .unwrap_or_else(|| unreachable!("a length-1 vec has an element")),
-        _ => Ty::Union(flat, attr),
+        _ => Ty::Union(flat.into(), attr),
     }
 }
 
@@ -1495,8 +1495,8 @@ mod tests {
     fn interface(name: &str, args: Vec<Ty>) -> Ty {
         Ty::Interface(
             TypeName::local(Name::new(name)),
-            args,
-            vec![],
+            args.into(),
+            Box::new([]),
             TyAttr::default(),
         )
     }
@@ -1504,7 +1504,7 @@ mod tests {
     fn interface_with_assoc(name: &str, assoc: Vec<(&str, Ty)>) -> Ty {
         Ty::Interface(
             TypeName::local(Name::new(name)),
-            vec![],
+            Box::new([]),
             assoc
                 .into_iter()
                 .map(|(name, ty)| (Name::new(name), ty))
@@ -1549,11 +1549,11 @@ mod tests {
     fn contains_bound_typevar_checks_interface_associated_bindings() {
         let ty = Ty::Interface(
             TypeName::local(Name::new("Source")),
-            vec![],
-            vec![(
+            Box::new([]),
+            Box::new([(
                 Name::new("Item"),
                 Ty::List(Box::new(Ty::type_var("T")), TyAttr::default()),
-            )],
+            )]),
             TyAttr::default(),
         );
 
@@ -1826,7 +1826,7 @@ mod tests {
     fn var_bearing_function_arg_unifies_not_disjoint() {
         fn func(param: Ty) -> Ty {
             Ty::Function {
-                params: vec![FunctionParamTy::required(None, param)],
+                params: Box::new([FunctionParamTy::required(None, param)]),
                 ret: Box::new(Ty::int()),
                 throws: Box::new(never()),
                 attr: TyAttr::default(),
@@ -2122,7 +2122,7 @@ mod tests {
     fn local_class(package: &str, name: &str) -> Ty {
         Ty::Class(
             TypeName::new(Name::new(package), Vec::new(), Name::new(name)),
-            Vec::new(),
+            Box::new([]),
             TyAttr::default(),
         )
     }

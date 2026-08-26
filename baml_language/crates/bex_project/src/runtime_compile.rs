@@ -823,7 +823,7 @@ fn enrich_runtime_mount(
                 for_ty_pattern: root_ty.clone(),
                 generic_params: Vec::new(),
                 param_bounds: Vec::new(),
-                associated_types: witness.associated_types.clone(),
+                associated_types: witness.associated_types.to_vec(),
                 field_links,
                 origin: ExportedImplOrigin::OutOfBody,
                 methods: Vec::new(),
@@ -2179,7 +2179,7 @@ mod tests {
             baml_type::Ty::List(
                 Box::new(baml_type::Ty::Class(
                     qtn,
-                    Vec::new(),
+                    Box::new([]),
                     baml_type::TyAttr::default(),
                 )),
                 baml_type::TyAttr::default(),
@@ -2312,7 +2312,7 @@ mod tests {
                     export_name: Name::new("ClassAlias"),
                     ty: baml_type::RealizedTy::Class(
                         class_qtn,
-                        Vec::new(),
+                        Box::new([]),
                         baml_type::TyAttr::default(),
                     ),
                     classes: vec![bex_vm_types::RuntimeMountedClass {

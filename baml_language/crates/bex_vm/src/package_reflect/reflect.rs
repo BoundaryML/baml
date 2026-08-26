@@ -285,7 +285,7 @@ fn package_class_type(vm: &mut BexVm, runtime_type: Option<HeapPtr>, class_ptr: 
     };
     let ty = RealizedTy::Class(
         bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
-        Vec::new(),
+        Box::new([]),
         class.ty_attr.clone(),
     );
     let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
@@ -330,8 +330,8 @@ fn package_interface_type(
     };
     let ty = RealizedTy::Interface(
         bex_vm_types::TypeHead::new(interface_ptr, interface.type_tag),
-        Vec::new(),
-        Vec::new(),
+        Box::new([]),
+        Box::new([]),
         TyAttr::default(),
     );
     let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
@@ -352,7 +352,7 @@ fn allocate_runtime_declaration_types(
                 class_ptr,
                 RealizedTy::Class(
                     bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
-                    Vec::new(),
+                    Box::new([]),
                     class.ty_attr.clone(),
                 ),
             )),
@@ -379,8 +379,8 @@ fn allocate_runtime_declaration_types(
                 interface_ptr,
                 RealizedTy::Interface(
                     bex_vm_types::TypeHead::new(interface_ptr, interface.type_tag),
-                    Vec::new(),
-                    Vec::new(),
+                    Box::new([]),
+                    Box::new([]),
                     TyAttr::default(),
                 ),
             )),
@@ -615,7 +615,7 @@ impl Continuation for FinishPackage {
 
 fn test_function_ty() -> RealizedTy {
     RealizedTy::Function {
-        params: Vec::new(),
+        params: Box::new([]),
         ret: Box::new(RealizedTy::null()),
         throws: Box::new(RealizedTy::unknown()),
         attr: TyAttr::default(),
@@ -2312,7 +2312,7 @@ fn ty_arg(vm: &BexVm) -> RealizedTy {
     let head = vm
         .declaration_head(&qtn)
         .unwrap_or_else(|| unreachable!("`{ARG_FQN}` is declared by the stdlib"));
-    RealizedTy::Class(head, vec![], TyAttr::default())
+    RealizedTy::Class(head, Box::new([]), TyAttr::default())
 }
 
 /// Build one `reflect.Arg`. A nameless positional (a host callable from a

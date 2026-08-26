@@ -550,13 +550,13 @@ implements ToJson for Dog {
     let ctx = baml_compiler2_hir_ty::facts::Facts::new(&db);
     let dog = Ty::Class(
         QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Dog")),
-        vec![],
+        Box::new([]),
         TyAttr::default(),
     );
     let to_json = baml_type::Interface::new(
         QualifiedTypeName::new(Name::new("user"), vec![], Name::new("ToJson")),
-        vec![],
-        vec![],
+        Box::new([]),
+        Box::new([]),
     );
     assert!(
         ctx.implements_interface(&dog, &to_json),
@@ -583,8 +583,8 @@ fn builtin_equals_compare_visible_from_user_package() {
             vec![Name::new("ops")],
             Name::new("Equals"),
         ),
-        vec![],
-        vec![],
+        Box::new([]),
+        Box::new([]),
     );
     let compare = baml_type::Interface::new(
         QualifiedTypeName::new(
@@ -592,14 +592,14 @@ fn builtin_equals_compare_visible_from_user_package() {
             vec![Name::new("ops")],
             Name::new("Compare"),
         ),
-        vec![],
-        vec![],
+        Box::new([]),
+        Box::new([]),
     );
     let int_ty = Ty::int();
     let u8_ty = Ty::uint8array();
     let bare = Ty::Class(
         QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Bare")),
-        vec![],
+        Box::new([]),
         TyAttr::default(),
     );
 

@@ -461,7 +461,7 @@ fn resolve_path_to_ty<'db>(
     match def {
         Definition::Class(_) => Some(Ty::Class(
             qualify_def(db, def, name),
-            vec![],
+            Box::new([]),
             TyAttr::default(),
         )),
         Definition::Enum(_) => Some(Ty::Enum(qualify_def(db, def, name), TyAttr::default())),

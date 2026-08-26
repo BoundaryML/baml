@@ -688,7 +688,7 @@ mod tests {
         Ty::TypeVar(baml_codegen_types::ParamTy::new(0, BaseName::new(n)), a())
     }
     fn t_union(items: Vec<Ty>) -> Ty {
-        Ty::Union(items, a())
+        Ty::Union(items.into(), a())
     }
     fn t_list(inner: Ty) -> Ty {
         Ty::List(Box::new(inner), a())
@@ -697,14 +697,14 @@ mod tests {
         Ty::TypeAlias(n, a())
     }
     fn t_class(n: Name) -> Ty {
-        Ty::Class(n, Vec::new(), a())
+        Ty::Class(n, Box::new([]), a())
     }
     fn t_null() -> Ty {
         Ty::Null { attr: a() }
     }
     /// `T?` — a nullable BAML type (`T | null`).
     fn t_opt(inner: Ty) -> Ty {
-        Ty::Union(vec![inner, t_null()], a())
+        Ty::Union(Box::new([inner, t_null()]), a())
     }
 
     fn class_sym_with_props(
@@ -1328,7 +1328,7 @@ mod tests {
         // interface, and the interface file is emitted beside `Fns`.
         let mut pool = SymbolPool::new();
         let callback_ty = Ty::Function {
-            params: vec![
+            params: Box::new([
                 CallableParam {
                     name: Some(BaseName::new("x")),
                     ty: t_int(),
@@ -1344,7 +1344,7 @@ mod tests {
                     ty: t_int(),
                     mode: CodegenFunctionParamMode::Optional,
                 },
-            ],
+            ]),
             ret: Box::new(t_int()),
             throws: Box::new(Ty::Never { attr: a() }),
             attr: a(),
@@ -1430,11 +1430,11 @@ mod tests {
         use baml_codegen_types::{CallableParam, CodegenFunctionParamMode};
 
         let returned = Ty::Function {
-            params: vec![CallableParam {
+            params: Box::new([CallableParam {
                 name: Some(BaseName::new("value")),
                 ty: t_int(),
                 mode: CodegenFunctionParamMode::Optional,
-            }],
+            }]),
             ret: Box::new(t_int()),
             throws: Box::new(Ty::Never { attr: a() }),
             attr: a(),
@@ -1461,11 +1461,11 @@ mod tests {
         use baml_codegen_types::{CallableParam, CodegenFunctionParamMode};
 
         let returned = Ty::Function {
-            params: vec![CallableParam {
+            params: Box::new([CallableParam {
                 name: None,
                 ty: t_int(),
                 mode: CodegenFunctionParamMode::Required,
-            }],
+            }]),
             ret: Box::new(t_int()),
             throws: Box::new(Ty::Never { attr: a() }),
             attr: a(),

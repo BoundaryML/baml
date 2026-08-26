@@ -2409,7 +2409,7 @@ mod declaration_safety_tests {
     #[test]
     fn required_and_return_types_can_name_later_classes() {
         let later = qualified("Later");
-        let later_ty = Ty::Class(later, vec![], TyAttr::default());
+        let later_ty = Ty::Class(later, Box::new([]), TyAttr::default());
         let pool = SymbolPool::new();
         let complete = BTreeSet::new();
 
@@ -2422,7 +2422,7 @@ mod declaration_safety_tests {
     #[test]
     fn optional_arg_storage_rejects_later_classes_in_every_container() {
         let later = qualified("Later");
-        let class = Ty::Class(later.clone(), vec![], TyAttr::default());
+        let class = Ty::Class(later.clone(), Box::new([]), TyAttr::default());
         let types = [
             class.clone(),
             Ty::List(Box::new(class.clone()), attr()),
@@ -2431,8 +2431,11 @@ mod declaration_safety_tests {
                 value: Box::new(class.clone()),
                 attr: attr(),
             },
-            Ty::Union(vec![class.clone(), Ty::String { attr: attr() }], attr()),
-            Ty::Union(vec![class, Ty::Null { attr: attr() }], attr()),
+            Ty::Union(
+                Box::new([class.clone(), Ty::String { attr: attr() }]),
+                attr(),
+            ),
+            Ty::Union(Box::new([class, Ty::Null { attr: attr() }]), attr()),
         ];
         let pool = SymbolPool::new();
         let mut complete = BTreeSet::new();

@@ -92,7 +92,7 @@ fn merge_attr(inner: &TyAttr, outer: &TyAttr) -> TyAttr {
     }
 }
 
-fn canonical_union(members: Vec<CodegenTy>, attr: TyAttr) -> CodegenTy {
+fn canonical_union(members: Box<[CodegenTy]>, attr: TyAttr) -> CodegenTy {
     let mut canonical = Vec::new();
     for member in members {
         match member.canonicalize() {
@@ -116,7 +116,7 @@ fn canonical_union(members: Vec<CodegenTy>, attr: TyAttr) -> CodegenTy {
     match canonical.len() {
         0 => CodegenTy::Never { attr },
         1 => canonical.pop().expect("singleton union has one member"),
-        _ => CodegenTy::Union(canonical, attr),
+        _ => CodegenTy::Union(canonical.into(), attr),
     }
 }
 
@@ -157,17 +157,17 @@ mod tests {
 
     fn nullable_string_with_repeated_nulls() -> CodegenTy {
         CodegenTy::Union(
-            vec![
+            Box::new([
                 CodegenTy::Null { attr: a() },
                 CodegenTy::Union(
-                    vec![
+                    Box::new([
                         CodegenTy::String { attr: a() },
                         CodegenTy::Null { attr: a() },
-                    ],
+                    ]),
                     a(),
                 ),
                 CodegenTy::Null { attr: a() },
-            ],
+            ]),
             a(),
         )
     }
@@ -175,17 +175,17 @@ mod tests {
     #[test]
     fn canonicalization_is_recursive_in_every_container() {
         let ty = CodegenTy::Function {
-            params: vec![CodegenFunctionParamTy::required(
+            params: Box::new([CodegenFunctionParamTy::required(
                 Some(Name::new("value")),
                 CodegenTy::Class(
                     TypeName::local(Name::new("Box")),
-                    vec![CodegenTy::List(
+                    Box::new([CodegenTy::List(
                         Box::new(nullable_string_with_repeated_nulls()),
                         a(),
-                    )],
+                    )]),
                     a(),
                 ),
-            )],
+            )]),
             ret: Box::new(CodegenTy::Map {
                 key: Box::new(CodegenTy::String { attr: a() }),
                 value: Box::new(nullable_string_with_repeated_nulls()),
@@ -195,25 +195,25 @@ mod tests {
             attr: a(),
         };
         let nullable = CodegenTy::Union(
-            vec![
+            Box::new([
                 CodegenTy::String { attr: a() },
                 CodegenTy::Null { attr: a() },
-            ],
+            ]),
             a(),
         );
 
         assert_eq!(
             ty.canonicalize(),
             CodegenTy::Function {
-                params: vec![CodegenFunctionParamTy {
+                params: Box::new([CodegenFunctionParamTy {
                     name: Some(Name::new("value")),
                     ty: CodegenTy::Class(
                         TypeName::local(Name::new("Box")),
-                        vec![CodegenTy::List(Box::new(nullable.clone()), a())],
+                        Box::new([CodegenTy::List(Box::new(nullable.clone()), a())]),
                         a(),
                     ),
                     mode: FunctionParamMode::Required,
-                }],
+                }]),
                 ret: Box::new(CodegenTy::Map {
                     key: Box::new(CodegenTy::String { attr: a() }),
                     value: Box::new(nullable.clone()),
@@ -253,16 +253,16 @@ mod tests {
             ..a()
         };
         let ty = CodegenTy::Union(
-            vec![
+            Box::new([
                 CodegenTy::Union(
-                    vec![
+                    Box::new([
                         CodegenTy::String { attr: string },
                         CodegenTy::Null { attr: a() },
-                    ],
+                    ]),
                     nested,
                 ),
                 CodegenTy::Null { attr: a() },
-            ],
+            ]),
             outer.clone(),
         );
 

@@ -121,13 +121,13 @@ fn qtn(s: &str) -> QualifiedTypeName {
     QualifiedTypeName::local(Name::new(s))
 }
 fn class(s: &str) -> Ty {
-    Ty::Class(qtn(s), vec![], TyAttr::default())
+    Ty::Class(qtn(s), Box::new([]), TyAttr::default())
 }
 fn class1(s: &str, arg: Ty) -> Ty {
-    Ty::Class(qtn(s), vec![arg], TyAttr::default())
+    Ty::Class(qtn(s), Box::new([arg]), TyAttr::default())
 }
 fn iface(s: &str) -> Ty {
-    Ty::Interface(qtn(s), vec![], vec![], TyAttr::default())
+    Ty::Interface(qtn(s), Box::new([]), Box::new([]), TyAttr::default())
 }
 fn enum_ty(s: &str) -> Ty {
     Ty::Enum(qtn(s), TyAttr::default())
@@ -139,7 +139,7 @@ fn lit_int(n: i64) -> Ty {
     Ty::Literal(Literal::Int(n), Freshness::Regular, TyAttr::default())
 }
 fn union(v: Vec<Ty>) -> Ty {
-    Ty::Union(v, TyAttr::default())
+    Ty::Union(v.into(), TyAttr::default())
 }
 fn list(t: Ty) -> Ty {
     Ty::List(Box::new(t), TyAttr::default())
@@ -156,7 +156,7 @@ fn typevar(index: u32, name: &str) -> Ty {
 fn projection(base: Ty, iface_name: &str, member: &str) -> Ty {
     Ty::AssociatedTypeProjection {
         base: Box::new(base),
-        interface: Box::new(Interface::new(qtn(iface_name), vec![], vec![])),
+        interface: Box::new(Interface::new(qtn(iface_name), Box::new([]), Box::new([]))),
         member: Name::new(member),
         attr: TyAttr::default(),
     }
@@ -192,7 +192,7 @@ fn reflection_kind_classes_are_ordinary_classes_disjoint_from_the_carrier() {
     };
 
     for kind in crate::type_kind::TypeKind::ALL {
-        let view = Ty::Class(kind.class_name(), Vec::new(), TyAttr::default());
+        let view = Ty::Class(kind.class_name(), Box::new([]), TyAttr::default());
         assert!(
             !is_subtype(&view, &carrier, &ctx),
             "plain subtype entry admitted {kind:?} beneath the carrier"
@@ -634,16 +634,16 @@ fn function_subtyping_is_contravariant_in_params_covariant_in_return() {
         attr: TyAttr::default(),
     };
     let foo = Ty::Function {
-        params: vec![FunctionParamTy::required(
+        params: Box::new([FunctionParamTy::required(
             None,
             union(vec![Ty::int(), Ty::string()]),
-        )],
+        )]),
         ret: Box::new(Ty::bool()),
         throws: Box::new(never.clone()),
         attr: TyAttr::default(),
     };
     let expected = Ty::Function {
-        params: vec![FunctionParamTy::required(None, Ty::int())],
+        params: Box::new([FunctionParamTy::required(None, Ty::int())]),
         ret: Box::new(union(vec![Ty::bool(), float])),
         throws: Box::new(never),
         attr: TyAttr::default(),
@@ -661,7 +661,7 @@ fn function_throws_is_covariant() {
     // the reverse.
     let ctx = Ctx::default();
     let mk = |throws: Ty| Ty::Function {
-        params: vec![],
+        params: Box::new([]),
         ret: Box::new(Ty::string()),
         throws: Box::new(throws),
         attr: TyAttr::default(),
@@ -680,7 +680,7 @@ fn function_required_param_names_are_insignificant() {
     // required param's name are equivalent (a named vs unnamed one too).
     let ctx = Ctx::default();
     let mk = |name: Option<&str>| Ty::Function {
-        params: vec![FunctionParamTy::required(name.map(Name::new), Ty::int())],
+        params: Box::new([FunctionParamTy::required(name.map(Name::new), Ty::int())]),
         ret: Box::new(Ty::string()),
         throws: Box::new(Ty::Never {
             attr: TyAttr::default(),
@@ -698,7 +698,7 @@ fn function_optional_params_follow_the_superset_rule() {
     // (TYPE_SYSTEM.md, Subtyping Rules). Their order is insignificant.
     let ctx = Ctx::default();
     let func = |params: Vec<FunctionParamTy>| Ty::Function {
-        params,
+        params: params.into(),
         ret: Box::new(Ty::string()),
         throws: Box::new(Ty::Never {
             attr: TyAttr::default(),
@@ -728,11 +728,11 @@ fn function_optional_and_required_params_are_incomparable() {
     // unrelated: the required-arity check (equal counts) already fails both ways.
     let ctx = Ctx::default();
     let mk = |optional: bool| Ty::Function {
-        params: vec![if optional {
+        params: Box::new([if optional {
             FunctionParamTy::optional(Some(Name::new("value")), Ty::int())
         } else {
             FunctionParamTy::required(Some(Name::new("value")), Ty::int())
-        }],
+        }]),
         ret: Box::new(Ty::string()),
         throws: Box::new(Ty::Never {
             attr: TyAttr::default(),
@@ -1382,8 +1382,8 @@ fn equal_requires_singleton_with_unoverridable_eq() {
 fn any_class() -> Ty {
     Ty::Interface(
         QualifiedTypeName::new(Name::new("reflect"), vec![], Name::new("AnyClass")),
-        vec![],
-        vec![],
+        Box::new([]),
+        Box::new([]),
         TyAttr::default(),
     )
 }
@@ -1418,7 +1418,7 @@ fn any_class_admits_every_reflection_kind_view() {
     let ctx = Ctx::default();
     let target = any_class();
     for kind in crate::type_kind::TypeKind::ALL {
-        let view = Ty::Class(kind.class_name(), vec![], TyAttr::default());
+        let view = Ty::Class(kind.class_name(), Box::new([]), TyAttr::default());
         assert!(
             is_subtype(&view, &target, &ctx),
             "AnyClass rejected {kind:?}"
@@ -1434,7 +1434,7 @@ fn any_class_admits_every_reflection_kind_view() {
 fn any_function(pins: Vec<(&str, Ty)>) -> Ty {
     Ty::Interface(
         QualifiedTypeName::new(Name::new("reflect"), vec![], Name::new("AnyFunction")),
-        vec![],
+        Box::new([]),
         pins.into_iter().map(|(n, t)| (Name::new(n), t)).collect(),
         TyAttr::default(),
     )
@@ -1442,7 +1442,7 @@ fn any_function(pins: Vec<(&str, Ty)>) -> Ty {
 
 fn simple_fn(ret: Ty, throws: Ty) -> Ty {
     Ty::Function {
-        params: vec![FunctionParamTy::required(None, Ty::int())],
+        params: Box::new([FunctionParamTy::required(None, Ty::int())]),
         ret: Box::new(ret),
         throws: Box::new(throws),
         attr: TyAttr::default(),
@@ -1551,8 +1551,8 @@ fn any_function_existentials_are_covariant_in_their_pins() {
     // context does not claim.
     let other = Ty::Interface(
         qtn("Callable"),
-        vec![],
-        vec![(Name::new("Returns"), Ty::int())],
+        Box::new([]),
+        Box::new([(Name::new("Returns"), Ty::int())]),
         TyAttr::default(),
     );
     assert!(!is_subtype(&other, &any_function(vec![]), &ctx));
@@ -1754,8 +1754,8 @@ fn self_referential_bound_subtyping_terminates() {
     let foo = QualifiedTypeName::local(Name::new("Foo"));
     let bound = Ty::Interface(
         foo,
-        vec![Ty::union(vec![Ty::type_var("T"), Ty::int()])],
-        vec![],
+        Box::new([Ty::union(vec![Ty::type_var("T"), Ty::int()])]),
+        Box::new([]),
         TyAttr::default(),
     );
     ctx.var_bounds
@@ -1807,14 +1807,23 @@ fn projection_qualifier_on_cycle_terminates() {
     // are bisimilar, so minimization merges them; materializing the interface
     // member then places the recursion cut at the qualifier position.
     let mut ctx = Ctx::default();
-    let i_of_a = Ty::Interface(qtn("I"), vec![alias("A")], vec![], TyAttr::default());
+    let i_of_a = Ty::Interface(
+        qtn("I"),
+        Box::new([alias("A")]),
+        Box::new([]),
+        TyAttr::default(),
+    );
     ctx.aliases.insert(
         qtn("A"),
         union(vec![
             i_of_a,
             Ty::AssociatedTypeProjection {
                 base: Box::new(Ty::int()),
-                interface: Box::new(Interface::new(qtn("I"), vec![alias("A")], vec![])),
+                interface: Box::new(Interface::new(
+                    qtn("I"),
+                    Box::new([alias("A")]),
+                    Box::new([]),
+                )),
                 member: Name::new("M"),
                 attr: TyAttr::default(),
             },

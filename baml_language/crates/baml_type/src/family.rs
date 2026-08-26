@@ -98,12 +98,12 @@ ty_family! {
         /// The interface's generic *input* arguments, in declaration order.
         /// Resolved from context; never defaulted away — they are part of the
         /// interface's identity (`Converter<int>` ≠ `Converter<float>`).
-        pub generics: Vec<Ty<N>>,
+        pub generics: Box<[Ty<N>]>,
         /// Associated-type bindings that further constrain the implementor (the
         /// `Item = int` in `Iterator<Item = int>`). Real constraints carried as
         /// part of the interface, never stripped; sorted by name for a
         /// deterministic order.
-        pub associated_types: Vec<(Name, Ty<N>)>,
+        pub associated_types: Box<[(Name, Ty<N>)]>,
     } methods {
         /// Build an interface constraint, sorting `associated_types` by name so the
         /// invariant the field documents holds and the derived `Eq`/`Hash`/`Ord`
@@ -112,7 +112,11 @@ ty_family! {
         /// for every family member (`Interface`, `RuntimeInterface`, …), so every
         /// construction site — including the untrusted ctypes decode boundary —
         /// can route through it instead of sorting by hand.
-        pub fn new(name: N, generics: Vec<Ty<N>>, mut associated_types: Vec<(Name, Ty<N>)>) -> Self {
+        pub fn new(
+            name: N,
+            generics: Box<[Ty<N>]>,
+            mut associated_types: Box<[(Name, Ty<N>)]>,
+        ) -> Self {
             associated_types.sort_by(|(a, _), (b, _)| a.cmp(b));
             Self {
                 name,
@@ -171,11 +175,11 @@ ty_family! {
         #[axis(literal)]
         Literal(Literal, Freshness, TyAttr) = 8,
         #[axis(concrete)]
-        Class(N, Vec<Ty<N>>, TyAttr) = 9,
+        Class(N, Box<[Ty<N>]>, TyAttr) = 9,
         /// An interface existential type, equivalent to Rust `dyn Trait`.
         /// Must specify all generic type args and all associated types.
         #[axis(abstract)]
-        Interface(N, Vec<Ty<N>>, Vec<(Name, Ty<N>)>, TyAttr) = 10,
+        Interface(N, Box<[Ty<N>]>, Box<[(Name, Ty<N>)]>, TyAttr) = 10,
         #[axis(concrete)]
         Enum(N, TyAttr) = 11,
         /// A specific enum variant — `Status.HttpError`.
@@ -190,12 +194,12 @@ ty_family! {
             attr: TyAttr,
         } = 14,
         #[axis(abstract)]
-        Union(Vec<Ty<N>>, TyAttr) = 15,
+        Union(Box<[Ty<N>]>, TyAttr) = 15,
 
         /// Function/arrow type: `(T1, T2, ...) -> R throws E`.
         #[axis(concrete)]
         Function {
-            params: Vec<FunctionParamTy<N>>,
+            params: Box<[FunctionParamTy<N>]>,
             ret: Box<Ty<N>>,
             throws: Box<Ty<N>>,
             attr: TyAttr,
@@ -359,20 +363,20 @@ mod tests {
         Ty::Map {
             key: Box::new(Ty::String { attr: a() }),
             value: Box::new(Ty::Function {
-                params: vec![
+                params: Box::new([
                     FunctionParamTy::required(Some(Name::new("x")), Ty::Int { attr: a() }),
                     FunctionParamTy::optional(
                         Some(Name::new("y")),
                         Ty::List(Box::new(Ty::Bool { attr: a() }), a()),
                     ),
-                ],
+                ]),
                 ret: Box::new(Ty::Interface(
                     qtn("Iterator"),
-                    vec![Ty::Union(
-                        vec![Ty::Int { attr: a() }, Ty::Null { attr: a() }],
+                    Box::new([Ty::Union(
+                        Box::new([Ty::Int { attr: a() }, Ty::Null { attr: a() }]),
                         a(),
-                    )],
-                    vec![(Name::new("Item"), Ty::String { attr: a() })],
+                    )]),
+                    Box::new([(Name::new("Item"), Ty::String { attr: a() })]),
                     a(),
                 )),
                 throws: Box::new(Ty::Void { attr: a() }),
@@ -397,16 +401,16 @@ mod tests {
     #[test]
     fn conversions_hold_at_a_non_default_head() {
         let t: Interned = Ty::Map {
-            key: Box::new(Ty::Class(7, vec![Ty::Int { attr: a() }], a())),
+            key: Box::new(Ty::Class(7, Box::new([Ty::Int { attr: a() }]), a())),
             value: Box::new(Ty::Function {
-                params: vec![FunctionParamTy::required(
+                params: Box::new([FunctionParamTy::required(
                     Some(Name::new("x")),
                     Ty::Enum(9, a()),
-                )],
+                )]),
                 ret: Box::new(Ty::Interface(
                     11,
-                    vec![Ty::Bool { attr: a() }],
-                    vec![(Name::new("Item"), Ty::String { attr: a() })],
+                    Box::new([Ty::Bool { attr: a() }]),
+                    Box::new([(Name::new("Item"), Ty::String { attr: a() })]),
                     a(),
                 )),
                 throws: Box::new(Ty::Void { attr: a() }),
@@ -458,19 +462,19 @@ mod tests {
     fn visit_heads_reaches_every_head() {
         let t: Interned = Ty::Map {
             // Behind a `Box`, with a head nested inside its generic arguments.
-            key: Box::new(Ty::Class(1, vec![Ty::Enum(2, a())], a())),
+            key: Box::new(Ty::Class(1, Box::new([Ty::Enum(2, a())]), a())),
             value: Box::new(Ty::Function {
                 // Through a satellite's recursive field.
-                params: vec![FunctionParamTy::required(
+                params: Box::new([FunctionParamTy::required(
                     Some(Name::new("x")),
                     Ty::EnumVariant(3, Name::new("V"), a()),
-                )],
+                )]),
                 ret: Box::new(Ty::Interface(
                     4,
                     // Through a `Vec` of nested types...
-                    vec![Ty::TypeAlias(5, a())],
+                    Box::new([Ty::TypeAlias(5, a())]),
                     // ...and through the tuple element of a binding list.
-                    vec![(Name::new("Item"), Ty::Class(6, vec![], a()))],
+                    Box::new([(Name::new("Item"), Ty::Class(6, Box::new([]), a()))]),
                     a(),
                 )),
                 throws: Box::new(Ty::Void { attr: a() }),
@@ -513,18 +517,18 @@ mod tests {
         // nested types, and one in a `Vec<(Name, _)>` tuple element.
         let t: Interned = Ty::AssociatedTypeProjection {
             base: Box::new(Ty::Function {
-                params: vec![FunctionParamTy::required(
+                params: Box::new([FunctionParamTy::required(
                     Some(Name::new("x")),
-                    Ty::Class(1, vec![Ty::Enum(2, a())], a()),
-                )],
+                    Ty::Class(1, Box::new([Ty::Enum(2, a())]), a()),
+                )]),
                 ret: Box::new(Ty::Void { attr: a() }),
                 throws: Box::new(Ty::Never { attr: a() }),
                 attr: a(),
             }),
             interface: Box::new(crate::Interface::new(
                 3,
-                vec![Ty::TypeAlias(4, a())],
-                vec![(Name::new("Item"), Ty::EnumVariant(5, Name::new("V"), a()))],
+                Box::new([Ty::TypeAlias(4, a())]),
+                Box::new([(Name::new("Item"), Ty::EnumVariant(5, Name::new("V"), a()))]),
             )),
             member: Name::new("Out"),
             attr: a(),
@@ -620,8 +624,8 @@ mod tests {
             base: Box::new(Ty::type_var("T")),
             interface: Box::new(crate::Interface::new(
                 qtn("Iterator"),
-                Vec::new(),
-                Vec::new(),
+                Box::new([]),
+                Box::new([]),
             )),
             member: Name::new("Item"),
             attr: a(),

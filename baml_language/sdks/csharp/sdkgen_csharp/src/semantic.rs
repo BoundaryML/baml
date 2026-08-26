@@ -434,7 +434,7 @@ fn generate_program_inner(
                 classes
                     .iter()
                     .filter(|class| class.generic_params.is_empty())
-                    .map(|class| Ty::Class(class.name.clone(), vec![], TyAttr::EMPTY)),
+                    .map(|class| Ty::Class(class.name.clone(), Box::new([]), TyAttr::EMPTY)),
             )
             .chain(
                 enums
@@ -2014,7 +2014,7 @@ fn project_resource_method_result(owner: &Name, class: &Class, method: &Function
     }
 
     match (owner.to_string().as_str(), method.name.as_str()) {
-        ("baml.csv.CsvReader", "iter") => Ty::Class(owner.clone(), Vec::new(), attr.clone()),
+        ("baml.csv.CsvReader", "iter") => Ty::Class(owner.clone(), Box::new([]), attr.clone()),
         ("baml.csv.CsvReader", "rows") => Ty::Class(
             Name::new(
                 owner.package().clone(),
@@ -2782,12 +2782,12 @@ fn property_codec_type_for_name(class_name: &Name, ty: &Ty) -> Ty {
     }
 
     normalize_ty(&Ty::Union(
-        vec![
+        Box::new([
             projected,
             Ty::Null {
                 attr: TyAttr::EMPTY,
             },
-        ],
+        ]),
         TyAttr::EMPTY,
     ))
 }
@@ -4086,7 +4086,7 @@ fn render_class_codec(
     }
 
     let class_source =
-        render.type_source(&Ty::Class(name.clone(), arguments.to_vec(), TyAttr::EMPTY));
+        render.type_source(&Ty::Class(name.clone(), arguments.into(), TyAttr::EMPTY));
     let read_class = if let Some(type_arguments) = &type_arguments {
         format!("context.ReadClass(value, {identity}, {type_arguments})")
     } else {
@@ -4929,7 +4929,7 @@ mod tests {
         let namespace = vec![BaseName::new("returned_callable_codec")];
         let make_function = |name: &str, ret: Ty| {
             let callable = Ty::Function {
-                params: vec![
+                params: Box::new([
                     CallableParam {
                         name: Some(BaseName::new("value")),
                         ty: primitive_int(),
@@ -4940,7 +4940,7 @@ mod tests {
                         ty: primitive_string(),
                         mode: CodegenFunctionParamMode::Optional,
                     },
-                ],
+                ]),
                 ret: Box::new(ret),
                 throws: Box::new(Ty::Never {
                     attr: TyAttr::EMPTY,
@@ -5060,7 +5060,7 @@ mod tests {
             })
         };
         let type_parameter = BaseName::new("T");
-        let envelope_ty = Ty::Class(envelope_name.clone(), vec![], TyAttr::EMPTY);
+        let envelope_ty = Ty::Class(envelope_name.clone(), Box::new([]), TyAttr::EMPTY);
         let function = baml_codegen_types::Function {
             name: BaseName::new("Echo"),
             generic_params: vec![],
@@ -5131,23 +5131,26 @@ mod tests {
                 vec![],
                 vec![
                     property("color", Ty::Enum(color_name, TyAttr::EMPTY)),
-                    property("record", Ty::Class(record_name, vec![], TyAttr::EMPTY)),
+                    property(
+                        "record",
+                        Ty::Class(record_name, Box::new([]), TyAttr::EMPTY),
+                    ),
                     property(
                         "boxed",
-                        Ty::Class(box_name, vec![primitive_int()], TyAttr::EMPTY),
+                        Ty::Class(box_name, Box::new([primitive_int()]), TyAttr::EMPTY),
                     ),
                     property("label", Ty::TypeAlias(label_name, TyAttr::EMPTY)),
                     property(
                         "choice",
                         Ty::Union(
-                            vec![
+                            Box::new([
                                 primitive_int(),
                                 Ty::Literal(
                                     Literal::String("fixed".to_string()),
                                     baml_codegen_types::Freshness::Regular,
                                     TyAttr::EMPTY,
                                 ),
-                            ],
+                            ]),
                             TyAttr::EMPTY,
                         )
                         .canonicalize(),
@@ -5227,7 +5230,7 @@ mod tests {
                         vec![BaseName::new("stream")],
                         BaseName::new("Stream"),
                     ),
-                    vec![primitive_string(), primitive_string()],
+                    Box::new([primitive_string(), primitive_string()]),
                     TyAttr::EMPTY,
                 ),
             )),
@@ -5291,12 +5294,12 @@ mod tests {
 
     fn nullable(ty: Ty) -> Ty {
         Ty::Union(
-            vec![
+            Box::new([
                 ty,
                 Ty::Null {
                     attr: TyAttr::EMPTY,
                 },
-            ],
+            ]),
             TyAttr::EMPTY,
         )
         .canonicalize()
@@ -5342,18 +5345,18 @@ mod tests {
                     injected: false,
                     name: BaseName::new("scan"),
                     docstring: None,
-                    ty: Ty::Class(scan_name.clone(), vec![], TyAttr::EMPTY),
+                    ty: Ty::Class(scan_name.clone(), Box::new([]), TyAttr::EMPTY),
                     default: None,
                 },
                 FunctionArgument {
                     injected: false,
                     name: BaseName::new("error"),
                     docstring: None,
-                    ty: Ty::Class(error_name.clone(), vec![], TyAttr::EMPTY),
+                    ty: Ty::Class(error_name.clone(), Box::new([]), TyAttr::EMPTY),
                     default: None,
                 },
             ],
-            return_type: Ty::Class(datagram_name.clone(), vec![], TyAttr::EMPTY),
+            return_type: Ty::Class(datagram_name.clone(), Box::new([]), TyAttr::EMPTY),
             throws: None,
             watchers: vec![],
             origin: baml_codegen_types::Origin {
@@ -5407,7 +5410,7 @@ mod tests {
                 vec![property(
                     "trim",
                     Ty::Union(
-                        vec![
+                        Box::new([
                             Ty::Literal(
                                 Literal::String("none".to_string()),
                                 baml_codegen_types::Freshness::Regular,
@@ -5421,7 +5424,7 @@ mod tests {
                             Ty::Null {
                                 attr: TyAttr::EMPTY,
                             },
-                        ],
+                        ]),
                         TyAttr::EMPTY,
                     )
                     .canonicalize(),
@@ -5490,7 +5493,7 @@ mod tests {
                 "$render_prompt",
                 CallableVariant::RenderPrompt,
                 vec![("input", primitive_string())],
-                Ty::Class(prompt_name.clone(), vec![], TyAttr::EMPTY),
+                Ty::Class(prompt_name.clone(), Box::new([]), TyAttr::EMPTY),
             ),
             (
                 "$parse",
@@ -5501,10 +5504,13 @@ mod tests {
             (
                 "$parse_stream",
                 CallableVariant::ParseStream,
-                vec![("sse", Ty::Class(sse_name.clone(), vec![], TyAttr::EMPTY))],
+                vec![(
+                    "sse",
+                    Ty::Class(sse_name.clone(), Box::new([]), TyAttr::EMPTY),
+                )],
                 Ty::Class(
                     stream_name,
-                    vec![primitive_string(), primitive_string()],
+                    Box::new([primitive_string(), primitive_string()]),
                     TyAttr::EMPTY,
                 ),
             ),
@@ -5657,11 +5663,11 @@ mod tests {
         let type_t = Ty::TypeVar(ParamTy::new(0, parameter_t.clone()), TyAttr::EMPTY);
         let type_r = Ty::TypeVar(ParamTy::new(1, parameter_r.clone()), TyAttr::EMPTY);
         let callback = Ty::Function {
-            params: vec![CallableParam {
+            params: Box::new([CallableParam {
                 name: Some(BaseName::new("value")),
                 ty: type_t.clone(),
                 mode: CodegenFunctionParamMode::Required,
-            }],
+            }]),
             ret: Box::new(type_r.clone()),
             throws: Box::new(Ty::Never {
                 attr: TyAttr::EMPTY,
@@ -5730,12 +5736,12 @@ mod tests {
             BaseName::new("Echo"),
         );
         let nullable_bytes = Ty::Union(
-            vec![
+            Box::new([
                 primitive_bytes(),
                 Ty::Null {
                     attr: TyAttr::EMPTY,
                 },
-            ],
+            ]),
             TyAttr::EMPTY,
         )
         .canonicalize();
@@ -5794,14 +5800,14 @@ mod tests {
         );
         let nullable_int = |attr: TyAttr| {
             Ty::Union(
-                vec![
+                Box::new([
                     Ty::Int {
                         attr: TyAttr::EMPTY,
                     },
                     Ty::Null {
                         attr: TyAttr::EMPTY,
                     },
-                ],
+                ]),
                 attr,
             )
             .canonicalize()
@@ -5849,7 +5855,7 @@ mod tests {
                 span_start: 0,
             },
         };
-        let partial_type = Ty::Class(partial_name.clone(), vec![], TyAttr::EMPTY);
+        let partial_type = Ty::Class(partial_name.clone(), Box::new([]), TyAttr::EMPTY);
         let function_name = Name::new(BaseName::new("user"), namespace, BaseName::new("Ping"));
         let function = baml_codegen_types::Function {
             name: BaseName::new("Ping"),
@@ -5908,7 +5914,7 @@ mod tests {
             vec![0x0a, 0x02, 0x08, 0x02],
         );
         let union = normalize_ty(&Ty::Union(
-            vec![primitive_string(), primitive_int()],
+            Box::new([primitive_string(), primitive_int()]),
             Default::default(),
         ));
         assert_eq!(
@@ -6185,7 +6191,7 @@ mod tests {
         for marker in ["CsvNeedData", "CsvSkip", "CsvHeaders"] {
             let name = stdlib_name("csv", marker);
             let error = require_supported_type(
-                &Ty::Class(name, vec![], TyAttr::EMPTY),
+                &Ty::Class(name, Box::new([]), TyAttr::EMPTY),
                 &model,
                 "test.location",
             )
@@ -6197,7 +6203,7 @@ mod tests {
             );
         }
         let error = require_supported_type(
-            &Ty::Class(future_name, vec![], TyAttr::EMPTY),
+            &Ty::Class(future_name, Box::new([]), TyAttr::EMPTY),
             &model,
             "test.location",
         )
@@ -6369,7 +6375,7 @@ mod tests {
 
     #[test]
     fn union_above_runtime_family_limit_fails_with_arity() {
-        let union = Ty::Union(vec![primitive_int(); 33], Default::default());
+        let union = Ty::Union(vec![primitive_int(); 33].into(), Default::default());
         let model = CodegenModel {
             symbols: HashMap::new(),
             callables: HashMap::new(),
@@ -6407,14 +6413,14 @@ mod tests {
             callables: HashMap::new(),
         };
         let union = Ty::Union(
-            vec![
+            Box::new([
                 Ty::TypeAlias(alias_name, TyAttr::EMPTY),
                 Ty::Literal(
                     Literal::String("fixed".to_string()),
                     baml_codegen_types::Freshness::Regular,
                     TyAttr::EMPTY,
                 ),
-            ],
+            ]),
             TyAttr::EMPTY,
         );
         let error = require_unambiguous_csharp_unions(&union, &model, "test.location")
@@ -6445,7 +6451,7 @@ mod tests {
                 ty: primitive_int(),
                 default: None,
             }],
-            return_type: Ty::Class(owner.clone(), vec![], TyAttr::EMPTY),
+            return_type: Ty::Class(owner.clone(), Box::new([]), TyAttr::EMPTY),
             throws: None,
             watchers: vec![],
             origin: baml_codegen_types::Origin {
@@ -6471,10 +6477,10 @@ mod tests {
                     vec![BaseName::new("stream")],
                     BaseName::new("Stream"),
                 ),
-                vec![
+                Box::new([
                     primitive_int(),
-                    Ty::Class(owner.clone(), vec![], TyAttr::EMPTY),
-                ],
+                    Ty::Class(owner.clone(), Box::new([]), TyAttr::EMPTY),
+                ]),
                 TyAttr::EMPTY,
             ),
             throws: None,

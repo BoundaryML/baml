@@ -1780,7 +1780,7 @@ fn try_yield_interface_from_json(
     Some(NativeCallResult::YieldToCall {
         callee,
         args: vec![j],
-        type_args: type_args.clone(),
+        type_args: type_args.to_vec(),
         continuation: Box::new(IdentityFromJsonCont),
     })
 }

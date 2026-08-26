@@ -2157,7 +2157,7 @@ impl<H: Head> NormalTy<H> {
 }
 
 impl<H: Head> NormalTy<H> {
-    fn into_tys(tys: Vec<NormalTy<H>>) -> Vec<Ty<H>> {
+    fn into_tys(tys: Vec<NormalTy<H>>) -> Box<[Ty<H>]> {
         tys.into_iter().map(NormalTy::into_ty).collect()
     }
 

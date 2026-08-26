@@ -207,7 +207,7 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
     let root = baml_type::interned::InterfaceRef::new(
         qtn,
         if args.is_empty() {
-            vec![baml_type::interned::Ty::int()].into_boxed_slice()
+            Box::new([baml_type::interned::Ty::int()])
         } else {
             args.iter()
                 .map(baml_type::interned::Ty::from_plain)
@@ -231,7 +231,7 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
         vec![baml_type::Interface {
             name: root.name.clone(),
             generics: root.generics.iter().map(|ty| ty.to_plain()).collect(),
-            associated_types: Vec::new(),
+            associated_types: Box::new([]),
         }],
     )]
     .into_iter()

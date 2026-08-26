@@ -420,8 +420,8 @@ impl InterfaceRef {
     pub fn existential(&self) -> Ty {
         Ty::intern(TyKind::Interface(
             self.name.clone(),
-            self.generics.to_vec().into(),
-            self.associated_types.to_vec().into(),
+            self.generics.clone(),
+            self.associated_types.clone(),
             TyAttr::default(),
         ))
     }
@@ -708,7 +708,7 @@ impl Ty {
     /// hole (callers materializing results must run resolve-all first; the
     /// `has_infer` flag makes that cheap to assert).
     pub fn to_plain(&self) -> crate::Ty {
-        let plain_all = |tys: &[Ty]| -> Vec<crate::Ty> { tys.iter().map(Ty::to_plain).collect() };
+        let plain_all = |tys: &[Ty]| -> Box<[crate::Ty]> { tys.iter().map(Ty::to_plain).collect() };
         match self.kind() {
             TyKind::Int { attr } => crate::Ty::Int { attr: attr.clone() },
             TyKind::Bigint { attr } => crate::Ty::Bigint { attr: attr.clone() },
@@ -911,8 +911,13 @@ mod tests {
             P::Null { attr: a() },
             P::Uint8Array { attr: a() },
             P::Literal(Literal::Int(1), Freshness::Fresh, a()),
-            P::Class(name(), vec![int()], a()),
-            P::Interface(name(), vec![int()], vec![(Name::new("Item"), int())], a()),
+            P::Class(name(), Box::new([int()]), a()),
+            P::Interface(
+                name(),
+                Box::new([int()]),
+                Box::new([(Name::new("Item"), int())]),
+                a(),
+            ),
             P::Enum(name(), a()),
             P::EnumVariant(name(), Name::new("A"), a()),
             P::List(Box::new(int()), a()),
@@ -921,12 +926,12 @@ mod tests {
                 value: Box::new(int()),
                 attr: a(),
             },
-            P::Union(vec![int(), P::Null { attr: a() }], a()),
+            P::Union(Box::new([int(), P::Null { attr: a() }]), a()),
             P::Function {
-                params: vec![crate::FunctionParamTy::required(
+                params: Box::new([crate::FunctionParamTy::required(
                     Some(Name::new("x")),
                     int(),
-                )],
+                )]),
                 ret: Box::new(int()),
                 throws: Box::new(P::Never { attr: a() }),
                 attr: a(),
@@ -941,7 +946,7 @@ mod tests {
             P::TypeVar(ParamTy::new(0, Name::new("T")), a()),
             P::AssociatedTypeProjection {
                 base: Box::new(int()),
-                interface: Box::new(crate::Interface::new(name(), vec![], vec![])),
+                interface: Box::new(crate::Interface::new(name(), Box::new([]), Box::new([]))),
                 member: Name::new("Item"),
                 attr: a(),
             },

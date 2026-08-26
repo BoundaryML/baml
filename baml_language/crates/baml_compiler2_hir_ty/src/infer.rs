@@ -4179,8 +4179,8 @@ impl<'db> InferenceContext<'db> {
                                 vec![baml_base::Name::new("ops")],
                                 baml_base::Name::new("Compare"),
                             ),
-                            Vec::new(),
-                            Vec::new(),
+                            Box::new([]),
+                            Box::new([]),
                             baml_type::TyAttr::default(),
                         );
                         let comparable = !matches!(
@@ -4998,7 +4998,7 @@ impl<'db> InferenceContext<'db> {
         // VM's type-operand boundary — the same explicit-computation-point
         // model as `int + float`, never a subtyping edge.
         let expected = Ty::intern(TyKind::Union(
-            vec![
+            Box::new([
                 Ty::intern(TyKind::Type {
                     attr: TyAttr::default(),
                 }),
@@ -5008,8 +5008,7 @@ impl<'db> InferenceContext<'db> {
                     Box::new([]),
                     TyAttr::default(),
                 )),
-            ]
-            .into(),
+            ]),
             TyAttr::default(),
         ));
         let saved_anchor = self.obligation_anchor.replace(operand);
@@ -5392,7 +5391,7 @@ impl<'db> InferenceContext<'db> {
                             vec![],
                             baml_type::Name::new("LocalId"),
                         ),
-                        Vec::new().into(),
+                        Box::new([]),
                         TyAttr::default(),
                     ));
                     if !self.sub(&got, &local_id) {

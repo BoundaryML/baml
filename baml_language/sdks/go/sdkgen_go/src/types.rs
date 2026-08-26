@@ -696,7 +696,7 @@ mod tests {
     }
 
     fn union(members: Vec<Ty>) -> Ty {
-        Ty::Union(members, a()).canonicalize()
+        Ty::Union(members.into(), a()).canonicalize()
     }
 
     fn alias_name(value: &str) -> Name {
@@ -705,7 +705,7 @@ mod tests {
 
     fn callable(params: Vec<CallableParam>, ret: Ty, throws: Ty) -> Ty {
         Ty::Function {
-            params,
+            params: params.into(),
             ret: Box::new(ret),
             throws: Box::new(throws),
             attr: a(),
@@ -735,7 +735,7 @@ mod tests {
                 vec![BaseName::new("errors")],
                 BaseName::new("HostCallable"),
             ),
-            vec![],
+            Box::new([]),
             a(),
         )
     }
@@ -1121,7 +1121,7 @@ mod tests {
 
     #[test]
     fn callback_projection_rejects_incompatible_declared_throws() {
-        let validation_error = Ty::Class(alias_name("ValidationError"), vec![], a());
+        let validation_error = Ty::Class(alias_name("ValidationError"), Box::new([]), a());
         let pool = SymbolPool::default();
         let projection = GoTypeProjection::new(&pool, 3);
         assert_eq!(

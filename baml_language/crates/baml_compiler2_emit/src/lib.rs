@@ -1024,7 +1024,7 @@ fn build_packages(
             let for_ty_pattern = if generics.is_empty() {
                 bex_vm_types::TyTemplate::from(bex_vm_types::RealizedTy::Class(
                     bex_vm_types::TypeHead::of_name(&class_tn),
-                    Vec::new(),
+                    Box::new([]),
                     TyAttr::default(),
                 ))
             } else {
@@ -4123,7 +4123,7 @@ fn compute_throws_type(
     if converted.len() == 1 {
         converted.into_iter().next().unwrap()
     } else {
-        baml_type::TyTemplate::Union(converted, baml_type::TyAttr::default())
+        baml_type::TyTemplate::Union(converted.into(), baml_type::TyAttr::default())
     }
 }
 
@@ -4352,7 +4352,7 @@ fn compute_function_metadata<'db>(
                     Ty::TypeVar(param.clone(), baml_type::TyAttr::default())
                 })
                 .collect();
-            baml_type::Interface::new(qtn, args, Vec::new())
+            baml_type::Interface::new(qtn, args, Box::new([]))
         });
     let interface_signature_bindings: rustc_hash::FxHashMap<ParamTy, Ty> = match enclosing_interface
     {

@@ -94,7 +94,7 @@ pub enum Ctor {
     Slice(SliceShape),
     /// Class destructure. Sub-patterns' types come from the class's fields,
     /// with generic substitution applied.
-    Class(QualifiedTypeName, Vec<Ty>),
+    Class(QualifiedTypeName, Box<[Ty]>),
     /// Interface destructure. Sub-patterns' types come from the interface's
     /// field view, with generic substitution applied.
     Interface(Ty),
@@ -278,7 +278,7 @@ fn class_args_have_recovery(args: &[Ty]) -> bool {
 fn class_ty_for_ctor(qtn: &QualifiedTypeName, args: &[Ty], fallback: &Ty) -> Ty {
     match fallback {
         Ty::Class(fallback_qtn, _, _) if fallback_qtn == qtn => fallback.clone(),
-        _ => Ty::Class(qtn.clone(), args.to_vec(), TyAttr::default()),
+        _ => Ty::Class(qtn.clone(), args.into(), TyAttr::default()),
     }
 }
 
@@ -513,13 +513,13 @@ impl DPat {
     }
     pub fn class(qtn: QualifiedTypeName, fields: Vec<DPat>, ty: Ty) -> Self {
         Self {
-            ctor: Ctor::Class(qtn, Vec::new()),
+            ctor: Ctor::Class(qtn, Box::new([])),
             arity: fields.len(),
             fields,
             ty,
         }
     }
-    pub fn class_inst(qtn: QualifiedTypeName, args: Vec<Ty>, fields: Vec<DPat>, ty: Ty) -> Self {
+    pub fn class_inst(qtn: QualifiedTypeName, args: Box<[Ty]>, fields: Vec<DPat>, ty: Ty) -> Self {
         Self {
             ctor: Ctor::Class(qtn, args),
             arity: fields.len(),
@@ -2080,7 +2080,7 @@ mod tests {
         QualifiedTypeName::new(Name::new("user"), vec![], Name::new(name))
     }
     fn class_ty(q: &QualifiedTypeName) -> Ty {
-        Ty::Class(q.clone(), vec![], Default::default())
+        Ty::Class(q.clone(), Box::new([]), Default::default())
     }
     fn list_of(elem: Ty) -> Ty {
         Ty::List(Box::new(elem), Default::default())
@@ -2089,7 +2089,7 @@ mod tests {
         Ty::optional(t)
     }
     fn union_of(ts: Vec<Ty>) -> Ty {
-        Ty::Union(ts, Default::default())
+        Ty::Union(ts.into(), Default::default())
     }
     fn null_ty() -> Ty {
         Ty::Null {
@@ -4668,7 +4668,7 @@ mod tests {
     #[test]
     fn class_pair_missing_one_combo() {
         let qtn = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Pair"));
-        let pair_ty = Ty::Class(qtn.clone(), vec![], Default::default());
+        let pair_ty = Ty::Class(qtn.clone(), Box::new([]), Default::default());
 
         let arm1 = DPat::class(
             qtn.clone(),
@@ -4750,8 +4750,8 @@ mod tests {
             base: Box::new(base),
             interface: Box::new(baml_type::Interface::new(
                 baml_type::TypeName::local(Name::new(iface)),
-                vec![],
-                vec![],
+                Box::new([]),
+                Box::new([]),
             )),
             member: Name::new(member),
             attr: Default::default(),
@@ -4859,12 +4859,16 @@ mod tests {
         let mut cx = TestingCtx::new();
         let box_q = qtn("Box");
         cx.register(box_q.clone(), vec![int_ty()]);
-        let box_int = Ty::Class(box_q.clone(), vec![int_ty()], Default::default());
-        let box_t = Ty::Class(box_q.clone(), vec![type_var_ty("T")], Default::default());
+        let box_int = Ty::Class(box_q.clone(), Box::new([int_ty()]), Default::default());
+        let box_t = Ty::Class(
+            box_q.clone(),
+            Box::new([type_var_ty("T")]),
+            Default::default(),
+        );
 
         let rigid_row = DPat::class_inst(
             box_q.clone(),
-            vec![type_var_ty("T")],
+            Box::new([type_var_ty("T")]),
             vec![DPat::wildcard(int_ty())],
             box_int.clone(),
         );
@@ -4890,7 +4894,7 @@ mod tests {
         // Reflexive: same rigid args on both sides — a definite cover.
         let reflexive_row = DPat::class_inst(
             box_q.clone(),
-            vec![type_var_ty("T")],
+            Box::new([type_var_ty("T")]),
             vec![DPat::wildcard(int_ty())],
             box_t.clone(),
         );
@@ -4917,17 +4921,17 @@ mod tests {
         let mut cx = TestingCtx::new();
         let box_q = qtn("Box");
         cx.register(box_q.clone(), vec![int_ty()]);
-        let box_int = Ty::Class(box_q.clone(), vec![int_ty()], Default::default());
+        let box_int = Ty::Class(box_q.clone(), Box::new([int_ty()]), Default::default());
 
         let rigid_refutable = DPat::class_inst(
             box_q.clone(),
-            vec![type_var_ty("T")],
+            Box::new([type_var_ty("T")]),
             vec![DPat::single(int_lit(1), int_ty())],
             box_int.clone(),
         );
         let concrete_cover = DPat::class_inst(
             box_q.clone(),
-            vec![int_ty()],
+            Box::new([int_ty()]),
             vec![DPat::wildcard(int_ty())],
             box_int.clone(),
         );
@@ -4974,7 +4978,7 @@ mod tests {
             attr: Default::default(),
         });
         cx.register(holder_q.clone(), vec![strings.clone(), int_ty()]);
-        let holder = Ty::Class(holder_q.clone(), vec![], Default::default());
+        let holder = Ty::Class(holder_q.clone(), Box::new([]), Default::default());
 
         let rigid_row = DPat::class(
             holder_q.clone(),

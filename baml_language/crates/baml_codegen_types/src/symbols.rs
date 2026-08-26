@@ -474,23 +474,23 @@ mod tests {
     #[test]
     fn union_walker_is_total_for_noncanonical_pools() {
         let nested = Ty::Union(
-            vec![
+            Box::new([
                 Ty::String {
                     attr: TyAttr::EMPTY,
                 },
                 Ty::Null {
                     attr: TyAttr::EMPTY,
                 },
-            ],
+            ]),
             TyAttr::EMPTY,
         );
         let outer = Ty::Union(
-            vec![
+            Box::new([
                 Ty::Int {
                     attr: TyAttr::EMPTY,
                 },
                 nested.clone(),
-            ],
+            ]),
             TyAttr::EMPTY,
         );
         let symbol = alias(name("Nested"), outer.clone());

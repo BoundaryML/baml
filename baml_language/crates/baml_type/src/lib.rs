@@ -151,7 +151,7 @@ fn dedup_and_collapse(types: Vec<Ty>, attr: TyAttr) -> Ty {
     match members.len() {
         0 => Ty::Never { attr },
         1 => members.into_iter().next().unwrap(),
-        _ => Ty::Union(members, attr),
+        _ => Ty::Union(members.into(), attr),
     }
 }
 
@@ -355,14 +355,17 @@ impl Ty {
     /// `A | B | null`, `T??` stays `T?`, and `null?` is just `null`.
     pub fn optional(inner: Ty) -> Self {
         match inner {
-            Ty::Union(mut members, attr) => {
-                if !members.iter().any(Ty::is_null) {
+            Ty::Union(members, attr) => {
+                if members.iter().any(Ty::is_null) {
+                    Ty::Union(members, attr)
+                } else {
+                    let mut members = members.into_vec();
                     members.push(Ty::null());
+                    Ty::Union(members.into(), attr)
                 }
-                Ty::Union(members, attr)
             }
             n @ Ty::Null { .. } => n,
-            other => Ty::Union(vec![other, Ty::null()], TyAttr::default()),
+            other => Ty::Union(Box::new([other, Ty::null()]), TyAttr::default()),
         }
     }
 
@@ -385,7 +388,8 @@ impl Ty {
     pub fn strip_null(&self) -> Ty {
         match self {
             Ty::Union(members, attr) => {
-                let non_null: Vec<Ty> = members.iter().filter(|m| !m.is_null()).cloned().collect();
+                let non_null: Box<[Ty]> =
+                    members.iter().filter(|m| !m.is_null()).cloned().collect();
                 match non_null.len() {
                     0 => self.clone(),
                     1 => non_null.into_iter().next().expect("len checked"),
@@ -410,7 +414,7 @@ impl Ty {
     pub fn remove_null(&self) -> Ty {
         match self {
             Ty::Union(members, _) => {
-                let filtered: Vec<Ty> = members
+                let filtered: Box<[Ty]> = members
                     .iter()
                     .filter(|member| !matches!(member, Ty::Null { .. }))
                     .cloned()
@@ -450,7 +454,7 @@ impl Ty {
                 attr,
             },
             Ty::Class(name, type_args, attr) => {
-                let widened: Vec<Ty> = type_args.into_iter().map(Ty::widen_fresh).collect();
+                let widened: Box<[Ty]> = type_args.into_iter().map(Ty::widen_fresh).collect();
                 Ty::Class(name, widened, attr)
             }
             other => other,
@@ -469,14 +473,18 @@ impl Ty {
 
     /// `Class(name)` with default attributes (local module path), no type args.
     pub fn class(name: &str) -> Self {
-        Ty::Class(TypeName::local(name.into()), Vec::new(), TyAttr::default())
+        Ty::Class(
+            TypeName::local(name.into()),
+            Box::new([]),
+            TyAttr::default(),
+        )
     }
 
     /// `Class(name, args)` under the `"user"` package (matches compiler2 output for user-defined classes).
     pub fn user_class_with_args(name: &str, args: Vec<Ty>) -> Self {
         Ty::Class(
             QualifiedTypeName::local(Name::new(name)),
-            args,
+            args.into(),
             TyAttr::default(),
         )
     }
@@ -1157,7 +1165,7 @@ mod tests {
             Ty::type_var("T"),
             Ty::AssociatedTypeProjection {
                 base: boxed(Ty::type_var("T")),
-                interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
+                interface: Box::new(Interface::new(qtn("Iterator"), Box::new([]), Box::new([]))),
                 member: Name::new("Item"),
                 attr: TyAttr::default(),
             },
@@ -1170,14 +1178,14 @@ mod tests {
         let invalid = [
             Ty::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default()),
             Ty::EnumVariant(qtn("Color"), Name::new("Red"), TyAttr::default()),
-            Ty::Interface(qtn("I"), vec![], vec![], TyAttr::default()),
+            Ty::Interface(qtn("I"), Box::new([]), Box::new([]), TyAttr::default()),
             Ty::union([ty_int(), ty_string()]),
             // `Future` is dispatchable at runtime (a heap future carries its `<T, E>`);
             // written impls on it are simply not implemented yet — see
             // `is_valid_impl_subject`.
             Ty::Future(boxed(ty_int()), boxed(Ty::null()), TyAttr::default()),
             Ty::Function {
-                params: vec![],
+                params: Box::new([]),
                 ret: boxed(Ty::null()),
                 throws: boxed(Ty::null()),
                 attr: TyAttr::default(),
@@ -1232,7 +1240,7 @@ mod tests {
                 attr: TyAttr::default(),
             },
             Ty::Function {
-                params: vec![],
+                params: Box::new([]),
                 ret: boxed(Ty::null()),
                 throws: boxed(Ty::null()),
                 attr: TyAttr::default(),
@@ -1257,7 +1265,7 @@ mod tests {
         // projection), and the alias/sentinel non-types — all not concrete.
         let not_concrete = [
             Ty::union([ty_int(), ty_string()]),
-            Ty::Interface(qtn("I"), vec![], vec![], TyAttr::default()),
+            Ty::Interface(qtn("I"), Box::new([]), Box::new([]), TyAttr::default()),
             Ty::Unknown {
                 attr: TyAttr::default(),
             },
@@ -1272,7 +1280,7 @@ mod tests {
             Ty::type_var("T"),
             Ty::AssociatedTypeProjection {
                 base: boxed(Ty::type_var("T")),
-                interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
+                interface: Box::new(Interface::new(qtn("Iterator"), Box::new([]), Box::new([]))),
                 member: Name::new("Item"),
                 attr: TyAttr::default(),
             },
@@ -1360,7 +1368,7 @@ mod tests {
     #[test]
     fn test_function_display_uses_never_for_void_throws_sentinel() {
         let ty = Ty::Function {
-            params: vec![FunctionParamTy::required(None, ty_int())],
+            params: Box::new([FunctionParamTy::required(None, ty_int())]),
             ret: Box::new(ty_string()),
             throws: Box::new(Ty::Void {
                 attr: TyAttr::default(),
@@ -1375,9 +1383,9 @@ mod tests {
     #[test]
     fn test_function_display_parenthesizes_nested_function_returns() {
         let ty = Ty::Function {
-            params: vec![],
+            params: Box::new([]),
             ret: Box::new(Ty::Function {
-                params: vec![FunctionParamTy::required(None, ty_int())],
+                params: Box::new([FunctionParamTy::required(None, ty_int())]),
                 ret: Box::new(ty_string()),
                 throws: Box::new(Ty::Void {
                     attr: TyAttr::default(),
@@ -1399,7 +1407,7 @@ mod tests {
     #[test]
     fn test_function_display_parenthesizes_function_postfix_types() {
         let callback = Ty::Function {
-            params: vec![FunctionParamTy::required(None, ty_int())],
+            params: Box::new([FunctionParamTy::required(None, ty_int())]),
             ret: Box::new(ty_string()),
             throws: Box::new(Ty::Void {
                 attr: TyAttr::default(),

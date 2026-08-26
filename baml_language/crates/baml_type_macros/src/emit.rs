@@ -3,8 +3,8 @@
 //! Every member enum and satellite struct is produced from the master
 //! definition by **token-level ident replacement**: the master enum's ident
 //! (the self-reference placeholder) and any satellite idents are rewritten to
-//! the target member's equivalents, descending through `Box`/`Vec`/`Option`/
-//! tuples and method bodies alike. Because the placeholder is the master ident
+//! the target member's equivalents, descending through `Box`/`Box<[..]>`/`Vec`/
+//! `Option`/tuples and method bodies alike. Because the placeholder is the master ident
 //! itself, the master `enum` in the DSL is the ordinary `Ty` definition plus
 //! `#[axis(..)]` tags — no separate rewriting syntax is needed.
 //!
@@ -434,6 +434,11 @@ fn visit_expr(
         let method = m.method();
         return Some(quote! { #place.#method(f); });
     }
+    if let Some(inner) = crate::convert::boxed_slice_arg(ty) {
+        let iter = m.iter();
+        let body = visit_expr(family, param, inner, quote!(__head_item), m)?;
+        return Some(quote! { for __head_item in #place.#iter() { #body } });
+    }
     if let Some(inner) = crate::convert::wrapper_arg(ty, "Box") {
         let inner_place = m.deref_box(&place);
         return visit_expr(family, param, inner, inner_place, m);
@@ -679,6 +684,16 @@ fn map_expr(family: &Family, param: &Ident, ty: &syn::Type, place: TokenStream) 
         && (*id == family.master_ident || family.satellites.iter().any(|s| s.name == *id))
     {
         return quote! { #place.try_map_heads(f)? };
+    }
+    if let Some(inner) = crate::convert::boxed_slice_arg(ty) {
+        let inner_expr = map_expr(family, param, inner, quote!(__head_item));
+        return quote! {{
+            let mut __head_out = ::std::vec::Vec::with_capacity(#place.len());
+            for __head_item in #place.iter() {
+                __head_out.push(#inner_expr);
+            }
+            __head_out.into_boxed_slice()
+        }};
     }
     if let Some(inner) = crate::convert::wrapper_arg(ty, "Box") {
         let inner_expr = map_expr(family, param, inner, quote!((&**#place)));

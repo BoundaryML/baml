@@ -29,7 +29,7 @@ pub struct ImplData<'db> {
     /// The implemented interface's resolved head identity.
     pub interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     /// The interface's generic input args (`<int>` in `Container<int>`).
-    pub interface_args: Vec<Ty>,
+    pub interface_args: Box<[Ty]>,
     /// The resolved implementor pattern (may carry `Ty::TypeVar`s).
     pub for_ty_pattern: Ty,
     /// Generic params with their interface bounds (BEP-044).
@@ -362,7 +362,7 @@ pub fn impl_data<'db>(
     let interface_args = if let Ty::Interface(_, args, _, _) = &lowered_interface {
         args.clone()
     } else {
-        Vec::new()
+        Box::new([])
     };
 
     // Resolve the interface head to its loc *after* lowering, so a bad interface
@@ -1146,7 +1146,7 @@ pub fn validate_impl_signatures<'db>(
         // A field type may name `Self.Item`; realize it symbolically and
         // substitute `Self -> for-type` last.
         let self_bound =
-            baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), vec![]);
+            baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), Box::new([]));
         for iface_field in &iface_data.fields {
             // The satisfying class field: explicit link, else same name. Absent → E0124.
             let class_field_name = block
@@ -1259,7 +1259,7 @@ pub fn validate_impl_signatures<'db>(
         baml_type::unify::bind_type_vars(&iface_generic_params, &data.interface_args);
     let iface_bounds = interface_declared_param_bounds(db, data.interface);
     let self_bound =
-        baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), vec![]);
+        baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), Box::new([]));
     let no_bindings = TypeBindings::default();
 
     for &method_loc in &data.methods {
@@ -1486,7 +1486,7 @@ pub fn validate_impl_signatures<'db>(
         let target_iface = baml_type::Interface {
             name: iface_qtn.clone(),
             generics: data.interface_args.clone(),
-            associated_types: data.associated_types.clone(),
+            associated_types: data.associated_types.clone().into(),
         };
         for binding in &block.associated_type_bindings {
             let Some((_, binding_ty)) = data
@@ -2177,7 +2177,7 @@ mod tests {
     fn collect_ty_packages_covers_head_and_nested_covered_args() {
         let ty = Ty::Class(
             qtn("user", "Box"),
-            vec![Ty::Enum(qtn("dep", "Meters"), TyAttr::default())],
+            Box::new([Ty::Enum(qtn("dep", "Meters"), TyAttr::default())]),
             TyAttr::default(),
         );
         let mut out = Vec::new();
@@ -2196,15 +2196,15 @@ mod tests {
     fn collect_interface_packages_covers_head_args_and_pins() {
         let iface = baml_type::Interface::new(
             qtn("ifacepkg", "Conv"),
-            vec![Ty::Class(
+            Box::new([Ty::Class(
                 qtn("argpkg", "Meters"),
-                Vec::new(),
+                Box::new([]),
                 TyAttr::default(),
-            )],
-            vec![(
+            )]),
+            Box::new([(
                 Name::new("Out"),
                 Ty::Enum(qtn("pinpkg", "Unit"), TyAttr::default()),
-            )],
+            )]),
         );
         let mut out = Vec::new();
         collect_interface_packages(&iface, &mut out);

@@ -59,7 +59,7 @@ fn ty_enum(name: Name) -> Ty {
 }
 
 fn ty_class(name: Name, arguments: Vec<Ty>) -> Ty {
-    Ty::Class(name, arguments, TyAttr::default())
+    Ty::Class(name, arguments.into(), TyAttr::default())
 }
 
 fn ty_alias(name: Name) -> Ty {
@@ -67,7 +67,7 @@ fn ty_alias(name: Name) -> Ty {
 }
 
 fn ty_union(members: Vec<Ty>) -> Ty {
-    Ty::Union(members, TyAttr::default())
+    Ty::Union(members.into(), TyAttr::default())
 }
 
 fn ty_callable(params: Vec<Ty>, ret: Ty) -> Ty {

@@ -109,14 +109,14 @@ pub fn inbound_to_external(
 fn default_scalar_union_ty() -> RuntimeTy {
     let d = baml_type::TyAttr::default();
     RuntimeTy::Union(
-        vec![
+        Box::new([
             RuntimeTy::Int { attr: d.clone() },
             RuntimeTy::Float { attr: d.clone() },
             RuntimeTy::String { attr: d.clone() },
             RuntimeTy::Bool { attr: d.clone() },
             RuntimeTy::Uint8Array { attr: d.clone() },
             RuntimeTy::Null { attr: d.clone() },
-        ],
+        ]),
         d,
     )
 }
@@ -575,7 +575,7 @@ mod tests {
         use crate::baml_bridge::cffi::InboundClassValue;
         let class_type = RuntimeTy::Class(
             baml_type::TypeName::local(baml_type::Name::new("GenericBox")),
-            vec![RuntimeTy::int()],
+            Box::new([RuntimeTy::int()]),
             baml_type::TyAttr::default(),
         );
         let decoded = inbound_to_external(

@@ -478,7 +478,8 @@ fn lower_tir_template(
                         .generics
                         .iter()
                         .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
-                        .collect::<Option<Vec<_>>>()?,
+                        .collect::<Option<Vec<_>>>()?
+                        .into(),
                     associated_types: interface
                         .associated_types
                         .iter()
@@ -488,7 +489,8 @@ fn lower_tir_template(
                                 lower_tir_template(ty, resolved, generic_layout, mode)?,
                             ))
                         })
-                        .collect::<Option<Vec<_>>>()?,
+                        .collect::<Option<Vec<_>>>()?
+                        .into(),
                 }),
                 member: member.clone(),
                 attr: TyAttr::default(),
@@ -528,14 +530,15 @@ fn lower_tir_template(
                     type_args
                         .iter()
                         .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
-                        .collect::<Option<Vec<_>>>()?,
+                        .collect::<Option<Vec<_>>>()?
+                        .into(),
                 ))
             } else {
                 let resolved_args: Vec<RuntimeTy> =
                     type_args.iter().map(|ty| resolved.convert(ty)).collect();
                 Some(realized_leaf_template(&RuntimeTy::Class(
                     qtn.clone(),
-                    resolved_args,
+                    resolved_args.into(),
                     attr.clone(),
                 )))
             }
@@ -552,7 +555,8 @@ fn lower_tir_template(
                     type_args
                         .iter()
                         .map(|ty| lower_tir_template(ty, resolved, generic_layout, mode))
-                        .collect::<Option<Vec<_>>>()?,
+                        .collect::<Option<Vec<_>>>()?
+                        .into(),
                     associated_bindings
                         .iter()
                         .map(|(name, ty)| {
@@ -561,7 +565,8 @@ fn lower_tir_template(
                                 lower_tir_template(ty, resolved, generic_layout, mode)?,
                             ))
                         })
-                        .collect::<Option<Vec<_>>>()?,
+                        .collect::<Option<Vec<_>>>()?
+                        .into(),
                 ))
             } else {
                 let resolved_args: Vec<RuntimeTy> =
@@ -572,7 +577,7 @@ fn lower_tir_template(
                     .collect();
                 Some(realized_leaf_template(&RuntimeTy::Interface(
                     qtn.clone(),
-                    resolved_args,
+                    resolved_args.into(),
                     resolved_bindings,
                     attr.clone(),
                 )))
@@ -595,7 +600,8 @@ fn lower_tir_template(
                             mode: param.mode,
                         })
                     })
-                    .collect::<Option<Vec<_>>>()?,
+                    .collect::<Option<Vec<_>>>()?
+                    .into(),
                 ret: Box::new(lower_tir_template(ret, resolved, generic_layout, mode)?),
                 throws: Box::new(lower_tir_template(throws, resolved, generic_layout, mode)?),
                 attr: TyAttr::default(),
@@ -774,7 +780,8 @@ pub(crate) fn ty_to_pattern_template_from_resolved_ty(ty: &RuntimeTy) -> Option<
             tn.clone(),
             args.iter()
                 .map(ty_to_pattern_template_from_resolved_ty)
-                .collect::<Option<Vec<_>>>()?,
+                .collect::<Option<Vec<_>>>()?
+                .into(),
         )),
         // Interfaces decompose so the membership test keeps its instantiation
         // (args + associated bindings).
@@ -782,13 +789,15 @@ pub(crate) fn ty_to_pattern_template_from_resolved_ty(ty: &RuntimeTy) -> Option<
             tn.clone(),
             args.iter()
                 .map(ty_to_pattern_template_from_resolved_ty)
-                .collect::<Option<Vec<_>>>()?,
+                .collect::<Option<Vec<_>>>()?
+                .into(),
             assoc
                 .iter()
                 .map(|(name, ty)| {
                     Some((name.clone(), ty_to_pattern_template_from_resolved_ty(ty)?))
                 })
-                .collect::<Option<Vec<_>>>()?,
+                .collect::<Option<Vec<_>>>()?
+                .into(),
         )),
         RuntimeTy::Function {
             params,
@@ -805,7 +814,8 @@ pub(crate) fn ty_to_pattern_template_from_resolved_ty(ty: &RuntimeTy) -> Option<
                         mode: p.mode,
                     })
                 })
-                .collect::<Option<Vec<_>>>()?,
+                .collect::<Option<Vec<_>>>()?
+                .into(),
             ret: Box::new(ty_to_pattern_template_from_resolved_ty(ret)?),
             throws: Box::new(ty_to_pattern_template_from_resolved_ty(throws)?),
             attr: TyAttr::default(),
@@ -1336,7 +1346,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
 type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, RuntimeTy>>;
 type EnumVariantIndices = IndexMap<QualifiedTypeName, IndexMap<String, usize>>;
-type InterfaceTypeView = (TypeName, Vec<Tir2Ty>, Vec<(Name, Tir2Ty)>);
+type InterfaceTypeView = (TypeName, Box<[Tir2Ty]>, Box<[(Name, Tir2Ty)]>);
 
 /// How a source interface method's frame divides — see
 /// [`MirLower::interface_method_shape`].
@@ -1891,7 +1901,11 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn baml_iter_done_ty() -> RuntimeTy {
-        RuntimeTy::Class(Self::baml_iter_type_name("Done"), vec![], TyAttr::default())
+        RuntimeTy::Class(
+            Self::baml_iter_type_name("Done"),
+            Box::new([]),
+            TyAttr::default(),
+        )
     }
 
     fn associated_binding_ty(bindings: &[(Name, Tir2Ty)], name: &str) -> Option<Tir2Ty> {
@@ -2073,7 +2087,7 @@ impl<'db> LoweringContext<'db> {
             .builder
             .temp(self.convert_tir_ty_for_runtime(&Tir2Ty::Interface(
                 Self::baml_iter_qtn("Iterator"),
-                vec![],
+                Box::new([]),
                 iterable_assoc.clone(),
                 TyAttr::default(),
             )));
@@ -4415,7 +4429,7 @@ impl<'db> LoweringContext<'db> {
                                 .map(|def| {
                                     let tir_ty = Tir2Ty::Class(
                                         qualify_def(self.db, def, cn),
-                                        vec![],
+                                        Box::new([]),
                                         baml_type::TyAttr::default(),
                                     );
                                     self.resolved_aliases.convert(&tir_ty)
@@ -8824,7 +8838,7 @@ impl<'db> LoweringContext<'db> {
                         None,
                         baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
                     ) {
-                        Tir2Ty::Interface(_, args, assoc, _) => (args, assoc),
+                        Tir2Ty::Interface(_, args, assoc, _) => (args.into_vec(), assoc.into_vec()),
                         // A non-interface resolution was already diagnosed
                         // upstream; seed the dimensions it cannot supply
                         // as absent.
@@ -9486,7 +9500,7 @@ impl<'db> LoweringContext<'db> {
             };
         let receiver_class_type_args: Vec<Tir2Ty> =
             match (&callee_operand, receiver_tir_ty.as_ref()) {
-                (_, Some(Tir2Ty::Class(_, class_type_args, _))) => class_type_args.clone(),
+                (_, Some(Tir2Ty::Class(_, class_type_args, _))) => class_type_args.to_vec(),
                 (
                     Operand::Constant(Constant::Function(ItemRef::Method {
                         package,
@@ -11427,10 +11441,10 @@ impl<'db> LoweringContext<'db> {
 
         match unwrapped_ty {
             RuntimeTy::Class(tn, _, _) if self.is_interface_type_name(tn) => {
-                Some((tn.clone(), Vec::new(), Vec::new()))
+                Some((tn.clone(), Box::new([]), Box::new([])))
             }
             RuntimeTy::Interface(tn, _, _, _) if self.is_interface_type_name(tn) => {
-                Some((tn.clone(), Vec::new(), Vec::new()))
+                Some((tn.clone(), Box::new([]), Box::new([])))
             }
             _ => None,
         }
@@ -11459,10 +11473,10 @@ impl<'db> LoweringContext<'db> {
 
         match current_ty {
             RuntimeTy::Class(tn, _, _) if self.is_interface_type_name(tn) => {
-                Some((tn.clone(), Vec::new(), Vec::new()))
+                Some((tn.clone(), Box::new([]), Box::new([])))
             }
             RuntimeTy::Interface(tn, _, _, _) if self.is_interface_type_name(tn) => {
-                Some((tn.clone(), Vec::new(), Vec::new()))
+                Some((tn.clone(), Box::new([]), Box::new([])))
             }
             _ => None,
         }
@@ -11485,7 +11499,7 @@ impl<'db> LoweringContext<'db> {
         }
 
         match current_ty {
-            RuntimeTy::Class(tn, type_args, _) => Some((tn.clone(), type_args.clone())),
+            RuntimeTy::Class(tn, type_args, _) => Some((tn.clone(), type_args.to_vec())),
             _ => None,
         }
     }
@@ -12141,7 +12155,7 @@ impl<'db> LoweringContext<'db> {
             self.builder.set_current_block(next_check);
             self.emit_is_type_branch(
                 recv_local,
-                RuntimeTy::Class(class_tn.clone(), Vec::new(), TyAttr::default()),
+                RuntimeTy::Class(class_tn.clone(), Box::new([]), TyAttr::default()),
                 bb_body,
                 bb_next,
             );
@@ -12266,11 +12280,7 @@ impl<'db> LoweringContext<'db> {
         field: &Name,
         dest: &Place,
     ) -> bool {
-        let view = (
-            iface_tn.clone(),
-            iface_type_args.to_vec(),
-            iface_assoc.to_vec(),
-        );
+        let view = (iface_tn.clone(), iface_type_args.into(), iface_assoc.into());
         let Some((iface, field_index)) = self.virtual_field_wire_target(&view, field) else {
             return false;
         };
@@ -12542,11 +12552,8 @@ impl<'db> LoweringContext<'db> {
                 .collect(),
         );
         let subject = root.existential();
-        let mut views: Vec<InterfaceTypeView> = vec![(
-            iface_tn.clone(),
-            iface_type_args.to_vec(),
-            iface_assoc.to_vec(),
-        )];
+        let mut views: Vec<InterfaceTypeView> =
+            vec![(iface_tn.clone(), iface_type_args.into(), iface_assoc.into())];
         views.extend(
             baml_compiler2_hir_ty::impls::direct_requires_closure(self.db, &root, &subject, 8)
                 .into_iter()
@@ -12680,7 +12687,7 @@ impl<'db> LoweringContext<'db> {
                 })
             })
             .collect();
-        Some((target_qtn, target_args, associated_bindings))
+        Some((target_qtn, target_args.into(), associated_bindings))
     }
 
     /// BEP-044: when the enclosing function is the override declared
@@ -14395,7 +14402,7 @@ impl LoweringContext<'_> {
     /// (optionally-wrapped) union.
     fn tir_union_members(ty: &Tir2Ty) -> Option<Vec<Tir2Ty>> {
         match ty {
-            Tir2Ty::Union(members, _) => Some(members.clone()),
+            Tir2Ty::Union(members, _) => Some(members.to_vec()),
             _ => None,
         }
     }

@@ -39,14 +39,15 @@
 //! are laid out identically wherever they differ. `#[repr(C, u8)]` (enums) and
 //! `#[repr(C)]` (satellites) pin the tag and field order, and the per-site
 //! `const` assert pins total size + align. Beyond that, reinterpreting a nested
-//! position — `Vec<Ty> -> Vec<RuntimeTy>`, `(Name, Ty) -> (Name, RuntimeTy)` —
-//! rests on a *de-facto*, not language-guaranteed, property: `Vec<T>` is a
-//! `(ptr, cap, len)` triple whose layout is independent of `T`, and a
-//! `#[repr(Rust)]` tuple's layout is a deterministic function of its fields'
-//! sizes + aligns (equal here, since `Ty` and its members are equal size +
-//! align). This holds on current `rustc` but is not a stability guarantee; the
-//! unit tests plus a `cargo +nightly miri test -p baml_type` run in CI are what
-//! guard it against a future layout change.
+//! position — `Box<[Ty]> -> Box<[RuntimeTy]>`, `(Name, Ty) -> (Name, RuntimeTy)`
+//! — rests on a *de-facto*, not language-guaranteed, property: `Box<[T]>` is a
+//! `(ptr, len)` fat pointer (and `Vec<T>` a `(ptr, cap, len)` triple) whose
+//! layout is independent of `T`, and a `#[repr(Rust)]` tuple's layout is a
+//! deterministic function of its fields' sizes + aligns (equal here, since `Ty`
+//! and its members are equal size + align). This holds on current `rustc` but
+//! is not a stability guarantee; the unit tests plus a
+//! `cargo +nightly miri test -p baml_type` run in CI are what guard it against
+//! a future layout change.
 
 use std::collections::HashSet;
 
@@ -474,6 +475,10 @@ fn validate_expr(
             return quote! { #f(#binding) };
         }
     }
+    if let Some(inner) = boxed_slice_arg(ty) {
+        let e = validate_expr(family, sub, sup, inner, quote!(__v));
+        return quote! { #binding.iter().try_for_each(|__v| #e) };
+    }
     if let Some(inner) = wrapper_arg(ty, "Box") {
         return validate_expr(family, sub, sup, inner, quote!(&**#binding));
     }
@@ -832,6 +837,11 @@ fn widen_expr(cx: &Cx, ty: &Type, binding: TokenStream) -> TokenStream {
     if let Some(target) = terminal_target(cx, ty, cx.sup_child) {
         return quote! { #target::from(#binding) };
     }
+    if let Some(inner) = boxed_slice_arg(ty) {
+        let iter = iter(cx.own);
+        let e = widen_expr(cx, inner, quote!(__v));
+        return quote! { #binding.#iter().map(|__v| #e).collect() };
+    }
     if let Some(inner) = wrapper_arg(ty, "Box") {
         let e = widen_expr(cx, inner, deref(cx.own, &binding));
         return quote! { ::std::boxed::Box::new(#e) };
@@ -864,6 +874,13 @@ fn narrow_expr(cx: &Cx, ty: &Type, binding: TokenStream) -> TokenStream {
     }
     if let Some(target) = terminal_target(cx, ty, cx.sub_child) {
         return quote! { #target::try_from(#binding) };
+    }
+    if let Some(inner) = boxed_slice_arg(ty) {
+        let iter = iter(cx.own);
+        let e = narrow_expr(cx, inner, quote!(__v));
+        return quote! {
+            #binding.#iter().map(|__v| #e).collect::<::core::result::Result<::std::boxed::Box<[_]>, _>>()
+        };
     }
     if let Some(inner) = wrapper_arg(ty, "Box") {
         let e = narrow_expr(cx, inner, deref(cx.own, &binding));
@@ -1092,6 +1109,17 @@ pub(crate) fn path_head(ty: &Type) -> Option<&Ident> {
         return None;
     }
     Some(&p.path.segments[0].ident)
+}
+
+/// If `ty` is `Box<[Inner]>` (a boxed slice — the family's frozen-sequence
+/// shape), the `Inner` type. Checked before the plain `Box` wrapper wherever
+/// both could match: `wrapper_arg(_, "Box")` would surface the bare slice
+/// type, which no walker can traverse.
+pub(crate) fn boxed_slice_arg(ty: &Type) -> Option<&Type> {
+    match wrapper_arg(ty, "Box")? {
+        Type::Slice(slice) => Some(&slice.elem),
+        _ => None,
+    }
 }
 
 /// If `ty` is `Wrapper<Inner>` (one type arg), the `Inner` type.

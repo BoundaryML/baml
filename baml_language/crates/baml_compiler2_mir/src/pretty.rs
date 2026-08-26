@@ -763,8 +763,8 @@ mod tests {
         let terminator = Terminator::VirtualCall {
             iface: baml_type::TyTemplateInterface::new(
                 baml_type::TypeName::from_dotted_path("baml.ops.Equals"),
-                Vec::new(),
-                Vec::new(),
+                Box::new([]),
+                Box::new([]),
             ),
             method: "eq".to_string(),
             args: Vec::new(),

@@ -180,8 +180,8 @@ pub(crate) enum ParamBinding {
 /// adapter MIR emits (source shape from the value, target from the slot).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct FunctionCoercion {
-    pub(crate) source_params: Vec<baml_type::FunctionParamTy>,
-    pub(crate) target_params: Vec<baml_type::FunctionParamTy>,
+    pub(crate) source_params: Box<[baml_type::FunctionParamTy]>,
+    pub(crate) target_params: Box<[baml_type::FunctionParamTy]>,
     pub(crate) target_return: Tir2Ty,
 }
 

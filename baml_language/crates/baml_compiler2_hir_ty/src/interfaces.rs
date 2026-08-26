@@ -415,8 +415,8 @@ fn lower_interface_associated_bindings<'db>(
                         self_param.clone(),
                         vec![baml_type::Interface::new(
                             qtn.clone(),
-                            interface_args.to_vec(),
-                            resolved_pins.clone(),
+                            interface_args.into(),
+                            resolved_pins.clone().into(),
                         )],
                     );
                 }
@@ -519,8 +519,8 @@ pub(crate) fn complete_interface_associated_bindings_from_tys<'db>(
                 .collect();
             let self_ty = Ty::Interface(
                 interface_loc_qtn(db, iface_loc)?,
-                interface_args.to_vec(),
-                self_pins,
+                interface_args.into(),
+                self_pins.into(),
                 TyAttr::default(),
             );
             let realized = realize_associated_default(
@@ -585,7 +585,7 @@ impl<'db> InterfaceDeclScope<'db> {
                 .iter()
                 .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
                 .collect(),
-            Vec::new(),
+            Box::new([]),
         );
         let mut bounds = interface_declared_param_bounds(db, iface_loc);
         bounds.insert(self_param.clone(), vec![self_constraint]);
@@ -945,8 +945,8 @@ fn lower_interface_type_associated_bindings(
                 .collect();
             let self_ty = Ty::Interface(
                 interface_loc_qtn(ctx.db, ctx.iface_loc)?,
-                ctx.interface_args.to_vec(),
-                self_pins,
+                ctx.interface_args.into(),
+                self_pins.into(),
                 TyAttr::default(),
             );
             let realized = realize_associated_default(
@@ -1426,8 +1426,9 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
 
         // This interface as a constraint (its associated types pinned to the realized
         // bindings) — so a required interface's `Item = Self.Item` resolves `Self.Item` here.
-        let self_bound = interface_loc_qtn(db, loc)
-            .map(|qtn| baml_type::Interface::new(qtn, args.clone(), associated_bindings.clone()));
+        let self_bound = interface_loc_qtn(db, loc).map(|qtn| {
+            baml_type::Interface::new(qtn, args.clone().into(), associated_bindings.clone().into())
+        });
         // The requiring interface's declared parameter bounds, so a `T.member`
         // projection in a parent's generic arguments resolves `T`'s declaring
         // interface.
@@ -2125,7 +2126,7 @@ fn realize_qualifier_through_roots<'db>(
             if let Some(qtn) = interface_loc_qtn(db, loc)
                 && qtn == qualifier.name
             {
-                let candidate = baml_type::Interface::new(qtn, args, assoc);
+                let candidate = baml_type::Interface::new(qtn, args.into(), assoc.into());
                 if written_qualifier_proven_by(facts, qualifier, &candidate) {
                     // The WRITTEN generics ride (they are equivalent to the
                     // candidate's, rigid vars included); the candidate
@@ -2238,7 +2239,10 @@ fn resolve_through_roots(
             let Some(qtn) = interface_loc_qtn(db, loc) else {
                 continue;
             };
-            push(&mut declarers, baml_type::Interface::new(qtn, args, assoc));
+            push(
+                &mut declarers,
+                baml_type::Interface::new(qtn, args.into(), assoc.into()),
+            );
         }
     }
     match declarers.len() {
@@ -2561,11 +2565,11 @@ mod tests {
     }
 
     fn class(namespace: &[&str], name: &str, args: Vec<Ty>) -> Ty {
-        Ty::Class(qtn(namespace, name), args, TyAttr::default())
+        Ty::Class(qtn(namespace, name), args.into(), TyAttr::default())
     }
 
     fn interface(name: &str, args: Vec<Ty>) -> Ty {
-        Ty::Interface(qtn(&[], name), args, vec![], TyAttr::default())
+        Ty::Interface(qtn(&[], name), args.into(), Box::new([]), TyAttr::default())
     }
 
     fn int() -> Ty {
@@ -2655,11 +2659,11 @@ mod tests {
     fn contains_bound_typevar_checks_interface_associated_bindings() {
         let ty = Ty::Interface(
             qtn(&[], "Source"),
-            vec![],
-            vec![(
+            Box::new([]),
+            Box::new([(
                 Name::new("Item"),
                 Ty::List(Box::new(type_var("T")), TyAttr::default()),
-            )],
+            )]),
             TyAttr::default(),
         );
 
@@ -2685,8 +2689,8 @@ mod tests {
 
     #[test]
     fn match_ty_pattern_unions_are_order_insensitive_with_bindings() {
-        let pattern = Ty::Union(vec![type_var("T"), string()], TyAttr::default());
-        let actual = Ty::Union(vec![string(), int()], TyAttr::default());
+        let pattern = Ty::Union(Box::new([type_var("T"), string()]), TyAttr::default());
+        let actual = Ty::Union(Box::new([string(), int()]), TyAttr::default());
         let params = vec![param("T")];
 
         let bindings = match_ty_patterns(

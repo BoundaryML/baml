@@ -669,7 +669,7 @@ fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
             match vm.get_object(class_ptr) {
                 Object::Class(class) => Some(RealizedTy::Class(
                     bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
-                    type_args,
+                    type_args.into(),
                     TyAttr::default(),
                 )),
                 _ => None,

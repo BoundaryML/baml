@@ -243,7 +243,7 @@ async fn partial_explicit_seed_then_infer() {
         vec![BEV::Int(1), b, c],
         indexmap! {
             "A" => RuntimeTy::Union(
-                vec![RuntimeTy::int(), RuntimeTy::float()],
+                Box::new([RuntimeTy::int(), RuntimeTy::float()]),
                 baml_type::TyAttr::default(),
             )
         },
@@ -274,7 +274,7 @@ async fn explicit_binding_widens_inferred_type() {
         vec![BEV::Int(5)],
         indexmap! {
             "T" => RuntimeTy::Union(
-                vec![RuntimeTy::int(), RuntimeTy::string()],
+                Box::new([RuntimeTy::int(), RuntimeTy::string()]),
                 baml_type::TyAttr::default(),
             )
         },
@@ -1060,7 +1060,7 @@ async fn infer_identity_known_class_instance() {
 fn pair_rt(first: RuntimeTy, second: RuntimeTy) -> RuntimeTy {
     RuntimeTy::Class(
         baml_type::TypeName::local(baml_type::Name::new("GenericPair")),
-        vec![first, second],
+        Box::new([first, second]),
         baml_type::TyAttr::default(),
     )
 }
@@ -1247,7 +1247,7 @@ async fn infer_identity_enum_binds_enum_type() {
 fn box_rt(inner: RuntimeTy) -> RuntimeTy {
     RuntimeTy::Class(
         baml_type::TypeName::local(baml_type::Name::new("GenericBox")),
-        vec![inner],
+        Box::new([inner]),
         baml_type::TyAttr::default(),
     )
 }

@@ -75,7 +75,7 @@ impl<N: Clone> RealizedTy<N> {
     pub fn strip_null(&self) -> RealizedTy<N> {
         match self {
             RealizedTy::Union(members, attr) => {
-                let non_null: Vec<RealizedTy<N>> =
+                let non_null: Box<[RealizedTy<N>]> =
                     members.iter().filter(|m| !m.is_null()).cloned().collect();
                 match non_null.len() {
                     0 => self.clone(),
@@ -122,7 +122,11 @@ mod tests {
     fn round_trip_nested_list_of_class() {
         // list<Class<int>>
         let ty: Ty = Ty::List(
-            Box::new(Ty::Class(qtn("Box"), vec![Ty::Int { attr: def() }], def())),
+            Box::new(Ty::Class(
+                qtn("Box"),
+                Box::new([Ty::Int { attr: def() }]),
+                def(),
+            )),
             def(),
         );
         assert_round_trips(ty);
@@ -141,11 +145,11 @@ mod tests {
     #[test]
     fn round_trip_union() {
         let ty: Ty = Ty::Union(
-            vec![
+            Box::new([
                 Ty::Int { attr: def() },
                 Ty::String { attr: def() },
                 Ty::Null { attr: def() },
-            ],
+            ]),
             def(),
         );
         assert_round_trips(ty);
@@ -154,13 +158,13 @@ mod tests {
     #[test]
     fn round_trip_function() {
         let ty: Ty = Ty::Function {
-            params: vec![
+            params: Box::new([
                 crate::FunctionParamTy::required(Some(Name::new("a")), Ty::Int { attr: def() }),
                 crate::FunctionParamTy::optional(
                     Some(Name::new("b")),
                     Ty::List(Box::new(Ty::Float { attr: def() }), def()),
                 ),
-            ],
+            ]),
             ret: Box::new(Ty::Bool { attr: def() }),
             throws: Box::new(Ty::Void { attr: def() }),
             attr: def(),
@@ -172,8 +176,8 @@ mod tests {
     fn round_trip_interface_with_associated_bindings() {
         let ty: Ty = Ty::Interface(
             qtn("Iterator"),
-            vec![Ty::Int { attr: def() }],
-            vec![(Name::new("Item"), Ty::String { attr: def() })],
+            Box::new([Ty::Int { attr: def() }]),
+            Box::new([(Name::new("Item"), Ty::String { attr: def() })]),
             def(),
         );
         assert_round_trips(ty);
@@ -187,8 +191,8 @@ mod tests {
             base: Box::new(Ty::type_var("T")),
             interface: Box::new(Interface {
                 name: qtn("Iterator"),
-                generics: vec![],
-                associated_types: vec![],
+                generics: Box::new([]),
+                associated_types: Box::new([]),
             }),
             member: Name::new("Item"),
             attr: def(),
@@ -226,7 +230,7 @@ mod tests {
     #[test]
     fn nested_error_in_union_blocks_conversion() {
         let ty: Ty = Ty::Union(
-            vec![Ty::Int { attr: def() }, Ty::Error { attr: def() }],
+            Box::new([Ty::Int { attr: def() }, Ty::Error { attr: def() }]),
             def(),
         );
         assert_eq!(
@@ -238,7 +242,7 @@ mod tests {
     #[test]
     fn nested_infer_in_function_ret_blocks_conversion() {
         let ty: Ty = Ty::Function {
-            params: vec![],
+            params: Box::new([]),
             ret: Box::new(Ty::Infer { attr: def() }),
             throws: Box::new(Ty::Void { attr: def() }),
             attr: def(),
