@@ -11,8 +11,15 @@ function runtime_type_binding_generic_calls.$init_test_ns_runtime_type_binding_g
     pop 1
     load_var registry
     load_const "root.runtime_type_binding_generic_calls"
-    load_const "method calls on a generic class receiver with a runtime-bound argument"
+    load_const "closure generic list ops over a runtime-bound element type"
     make_closure .<lambda($init_test_ns_runtime_type_binding_generic_calls_runtime_type_binding_generic_calls, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.runtime_type_binding_generic_calls"
+    load_const "method calls on a generic class receiver with a runtime-bound argument"
+    make_closure .<lambda($init_test_ns_runtime_type_binding_generic_calls_runtime_type_binding_generic_calls, 2)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
@@ -39,7 +46,7 @@ function runtime_type_binding_generic_calls.ClosureOverRuntimeBoundElement() -> 
     call user.runtime_type_binding_generic_calls.EmptyOf
     store_var items
     load_type #0
-    load_type unknown
+    load_type never
     load_var items
     load_type #0
     make_closure .<lambda(ClosureOverRuntimeBoundElement, 0)>, captures=0, ntypeargs=1

@@ -1,0 +1,37 @@
+---
+source: crates/baml_tests/src/type_spec/fixtures.rs
+expression: outcome.dump
+---
+9..30 'from_l...tation': throws never
+40..202 '{\n   ...(0)\n}': int
+46..51 'let a': (b: int) -> int throws never
+54..78 '(b) ->...n    }': (b: int) -> int throws never
+61..78 '{\n   ...n    }': 1
+71..72 '1': 1
+84..116 'let c:... never': (int) -> int throws never
+91..116 '(int) ... never': (int) -> int throws never
+119..120 'a': (b: int) -> int throws never
+196..197 'c': (int) -> int throws never
+196..200 'c(0)': int
+198..199 '0': 0
+213..228 'from_later_call': throws never
+238..323 '{\n   ...ver\n}': int
+244..249 'let a': (b: int) -> int throws never
+252..276 '(b) ->...n    }': (b: int) -> int throws never
+259..276 '{\n   ...n    }': 1
+269..270 '1': 1
+282..283 'a': (b: int) -> int throws never
+282..286 'a(0)': int
+284..285 '0': 0
+334..359 'parame...return': throws never
+369..597 '{\n   ...(1)\n}': int
+375..387 'let identity': (value: int) -> int throws never
+390..422 '(value...n    }': (value: int) -> int throws never
+401..422 '{\n   ...n    }': int
+411..416 'value': int
+428..471 'let us... never': (int) -> int throws never
+446..471 '(int) ... never': (int) -> int throws never
+474..482 'identity': (value: int) -> int throws never
+580..592 'use_identity': (int) -> int throws never
+580..595 'use_identity(1)': int
+593..594 '1': 1

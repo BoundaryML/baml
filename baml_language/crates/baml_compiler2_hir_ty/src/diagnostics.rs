@@ -2266,6 +2266,8 @@ pub enum DiagnosticLocation {
     /// A specific segment of a multi-segment `Path` expression.
     /// `ExprSegment(path_id, segment_idx)` resolves to `path_segment_span(path_id, segment_idx)`.
     ExprSegment(ExprId, usize),
+    /// A lambda parameter name, keyed by its lambda expression and declaration index.
+    LambdaParameter(ExprId, usize),
     Stmt(StmtId),
     TypeAnnot(TypeAnnotId),
     /// A pattern's span (`hir_ty`'s emissions stay arena-anchored; TIR
@@ -2339,6 +2341,9 @@ impl<'db> TirDiagnostic<'db> {
                 .unwrap_or_default(),
             DiagnosticLocation::ExprSegment(id, seg_idx) => source_map
                 .map(|sm| sm.path_segment_span(*id, *seg_idx))
+                .unwrap_or_default(),
+            DiagnosticLocation::LambdaParameter(id, parameter_index) => source_map
+                .map(|sm| sm.lambda_parameter_span(*id, *parameter_index))
                 .unwrap_or_default(),
             DiagnosticLocation::Stmt(id) => {
                 source_map.map(|sm| sm.stmt_span(*id)).unwrap_or_default()
