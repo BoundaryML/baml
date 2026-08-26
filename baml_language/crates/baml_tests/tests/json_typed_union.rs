@@ -62,8 +62,9 @@ function main() -> string {
     name: "Ada",
     detail: Detail { label: "nested" },
   }
+  let payload: Payload = record
   baml.json.to_string(record)
-    + "|" + baml.json.to_string(record)
+    + "|" + baml.json.to_string(payload)
 }
 "#
     );
