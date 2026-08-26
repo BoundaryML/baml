@@ -577,7 +577,12 @@ pub(crate) fn synthesize_llm_spec_body(
         },
         prompt_start,
     );
-    let throw_wrapped = ctx.alloc_expr(Expr::Throw { value: render_error }, prompt_start);
+    let throw_wrapped = ctx.alloc_expr(
+        Expr::Throw {
+            value: render_error,
+        },
+        prompt_start,
+    );
     let wrap_arm = ctx.alloc_catch_arm(
         CatchArm {
             pattern: wildcard,

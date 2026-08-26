@@ -84,7 +84,6 @@ impl StructuralRenderSink for PromptContentSink {
     }
 }
 
-
 struct PromptRole {
     name: String,
     metadata: serde_json::Value,
@@ -94,7 +93,6 @@ struct PromptRole {
     // its rendered bytes.
     synthetic: bool,
 }
-
 
 // Legacy renderer parity: each chat message's content is trimmed of leading
 // and trailing whitespace (whitespace-only edge text parts removed, edge text
