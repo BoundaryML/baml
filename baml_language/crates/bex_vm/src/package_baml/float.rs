@@ -1,5 +1,5 @@
 use super::{BamlClassFloat, PackageBamlImpl};
-use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
+use crate::errors::{VmBamlError, VmRustFnError};
 
 // BAML int is i63 (the runtime reserves one bit for the tagged-pointer
 // Value tag). Range: `[-2^62, 2^62 - 1]`. `-2^62` and `2^62` are both
@@ -190,19 +190,14 @@ impl BamlClassFloat for PackageBamlImpl {
         })
     }
 
-    #[allow(clippy::cast_precision_loss)]
-    fn random() -> Result<f64, VmRustFnError> {
-        // Uniform draw on [0, 1) using 53 mantissa bits. Standard construction:
-        // take a u64, drop the top 11 bits, multiply by 2^-53.
-        let mut buf = [0u8; 8];
-        getrandom::getrandom(&mut buf).map_err(|e| VmPanic::HostUnavailable {
-            resource: "entropy".to_string(),
-            message: format!("getrandom failed in float.random: {e}"),
-        })?;
-        let bits = u64::from_le_bytes(buf) >> 11; // 53-bit value, ≤ 2^53 - 1
-        // 2^-53 = 1.0 / (1u64 << 53). The cast `bits as f64` is lossless
-        // because bits ≤ 2^53 - 1 fits in f64's 53-bit mantissa.
-        Ok(bits as f64 * (1.0 / (1u64 << 53) as f64))
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "bits <= 2^53 - 1 fits f64's mantissa exactly"
+    )]
+    fn _unit_from_draw(draw: i64) -> f64 {
+        // Bit 63 only repeats the i63 sign bit, so use bits 10..=62.
+        let bits = (draw.cast_unsigned() >> 10) & ((1u64 << 53) - 1); // <= 2^53 - 1
+        bits as f64 * (1.0 / (1u64 << 53) as f64)
     }
 
     // ── Constants ─────────────────────────────────────────────────────────────

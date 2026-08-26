@@ -2,20 +2,23 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 === MIR2 ===
-fn user.fixtures.stream_llm_inferred_typeargs.TestFunc(input: string, client: null | ai.Client) -> string {
+fn user.fixtures.stream_llm_inferred_typeargs.TestFunc(input: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
     let _2: null | ai.Client // client // param
-    let _3: bool
-    let _4: ai.RunResult<string>
-    let _5: ai.Agent<string>
-    let _6: type
-    let _7: ai.FunctionSpec<string>
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.RunResult<string>
+    let _7: ai.Agent
+    let _8: reflect.Type
+    let _9: ai.FunctionSpec<string>
+    let _10: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -24,24 +27,35 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc(input: string, client: nu
     }
 
     bb2: {
-        _6 = load_type(string);
-        _5 = call const fn ai.Agent.new<copy _6>(const <omitted>, const <omitted>, copy _2, const <omitted>, const <omitted>) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(copy _1) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
-        _4 = virtual_call run as ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>(copy _5, copy _7) -> [bb5];
+        _8 = load_type(unknown);
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3) -> [bb5];
     }
 
     bb5: {
-        _0 = copy _4.0;
-        goto -> bb6;
+        _9 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(copy _1) -> [bb6];
     }
 
     bb6: {
+        _10 = load_type(string);
+        _6 = call const fn ai.Agent.run<copy _10>(copy _7, copy _9) -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _6.0;
+        goto -> bb8;
+    }
+
+    bb8: {
         return;
     }
 }
@@ -53,7 +67,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$build_request(input: stri
     let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.FunctionSpec<string>
-    let _5: type
+    let _5: reflect.Type
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -83,7 +97,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$parse(json: string) -> st
     // Locals:
     let _0: string // _0 // return
     let _1: string // json // param
-    let _2: type
+    let _2: reflect.Type
 
     bb0: {
         _2 = load_type(string);
@@ -100,29 +114,18 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$render_prompt(input: stri
     let _0: ai.Prompt // _0 // return
     let _1: string // input // param
     let _2: ai.FunctionSpec<string>
-    let _3: string
-    let _4: type
-    let _5: type
+    let _3: reflect.Type
 
     bb0: {
         _2 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(copy _1) -> [bb1];
     }
 
     bb1: {
-        _4 = load_type(string);
-        goto -> bb2;
+        _3 = load_type(string);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _3>(copy _2) -> [bb2];
     }
 
     bb2: {
-        _3 = call const fn ai.wire.render_output_format(copy _4) -> [bb3];
-    }
-
-    bb3: {
-        _5 = load_type(string);
-        _0 = call const fn ai.FunctionSpec.prompt<copy _5>(copy _2, copy _3) -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }
@@ -132,7 +135,7 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(input: string) -> ai
     let _0: ai.FunctionSpec<string> // _0 // return
     let _1: string // input // param [captured]
     let _2: map<string, unknown>
-    let _3: (string) -> ai.Prompt throws never
+    let _3: (ai.OutputFormat) -> ai.Prompt throws never
     let _4: ai.tools.Toolbox
     let _5: ai.tools.Tool[]
     let _6: ai.Client
@@ -159,10 +162,10 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(input: string) -> ai
 }
 
 // lambda[0]
-fn .<lambda(TestFunc$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
+fn .<lambda(TestFunc$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
     // Locals:
     let _0: ai.Prompt // _0 // return
-    let _1: string //  __spec_output_format // param
+    let _1: ai.OutputFormat //  __spec_output_format // param
     let _2: baml.TaggedString //  __spec_tagged_prompt
     let _3: string[] //  __tt_parts
     let _4: unknown[] //  __tt_values
@@ -171,15 +174,15 @@ fn .<lambda(TestFunc$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     let _7: int
     let _8: string[]
     let _9: string
-    let _10: type
+    let _10: reflect.Type
     let _11: int
     let _12: unknown[]
     let _13: string
-    let _14: type
+    let _14: reflect.Type
     let _15: int
     let _16: string[]
     let _17: ""
-    let _18: type
+    let _18: reflect.Type
     let _19: string[]
     let _20: unknown[]
     let _21: string[]
@@ -230,19 +233,21 @@ fn .<lambda(TestFunc$spec, 0)>( __spec_output_format: string) -> ai.Prompt {
     }
 }
 
-fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$stream(input: string, client: null | ai.stream.StreamingClient) -> ai.stream.Stream<string | null, string> {
+fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$stream(input: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<string | null, string> {
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: string // input // param
     let _2: null | ai.stream.StreamingClient // client // param
-    let _3: bool
-    let _4: ai.FunctionSpec<string>
-    let _5: type
-    let _6: type
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.FunctionSpec<string>
+    let _7: reflect.Type
+    let _8: reflect.Type
 
     bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
     }
 
     bb1: {
@@ -251,16 +256,26 @@ fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$stream(input: string, cli
     }
 
     bb2: {
-        _4 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(copy _1) -> [bb3];
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
     }
 
     bb3: {
-        _5 = load_type(string | null);
-        _6 = load_type(string);
-        _0 = call const fn ai.stream.from_spec<copy _5, copy _6>(copy _4, copy _2) -> [bb4];
+        _3 = const null;
+        goto -> bb4;
     }
 
     bb4: {
+        _6 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(copy _1) -> [bb5];
+    }
+
+    bb5: {
+        _7 = load_type(string | null);
+        _8 = load_type(string);
+        _0 = call const fn ai.stream.from_spec<copy _7, copy _8>(copy _6, copy _2, copy _3) -> [bb6];
+    }
+
+    bb6: {
         return;
     }
 }
@@ -269,8 +284,9 @@ fn user.fixtures.stream_llm_inferred_typeargs.call_stream_inferred() -> ai.strea
     // Locals:
     let _0: ai.stream.Stream<string | null, string> // _0 // return
     let _1: ai.FunctionSpec<string>
-    let _2: type
-    let _3: type
+    let _2: reflect.Type
+    let _3: reflect.Type
+    let _4: reflect.Type
 
     bb0: {
         _1 = call const fn user.fixtures.stream_llm_inferred_typeargs.TestFunc$spec(const "world") -> [bb1];
@@ -279,7 +295,8 @@ fn user.fixtures.stream_llm_inferred_typeargs.call_stream_inferred() -> ai.strea
     bb1: {
         _2 = load_type(string | null);
         _3 = load_type(string);
-        _0 = call const fn ai.stream.from_spec<copy _2, copy _3>(copy _1, const <omitted>) -> [bb2];
+        _4 = load_type(never);
+        _0 = call const fn ai.stream.from_spec<copy _2, copy _3, copy _4>(copy _1, const <omitted>, const <omitted>) -> [bb2];
     }
 
     bb2: {

@@ -1,9 +1,9 @@
 //! On-demand name resolution.
 //!
 //! `resolve_name_at_in_scope` walks the scope chain upward from a given
-//! offset, checking `ScopeBindings` at each level, then falls through to
-//! `package_items` for top-level names (own package, `root.*` absolute,
-//! then dependency packages).
+//! offset, checking `ScopeBindings` at each level, then reads `package_items`
+//! for top-level names in the file's OWN namespace. Anything else is written
+//! qualified and resolves through `resolve_path_at`.
 //!
 //! No pre-built resolution map: each call re-derives the answer from the
 //! scope tree (Salsa-cached via `file_semantic_index`) - the resolver
@@ -25,7 +25,9 @@ use text_size::TextSize;
 /// 2. Parameters of the enclosing Function/Lambda scope (`ScopeBindings::params`)
 /// 3. Walk ancestor scopes repeating 1-2
 /// 4. Package-level names in the file's own namespace via `package_items`
-/// 5. Dependency package names (`baml`)
+///
+/// There is no step 5: a name outside the file's own namespace is written
+/// qualified ([`resolve_path_at`]), in any package including this one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResolvedName<'db> {
     /// Local variable (let binding or parameter).
@@ -97,37 +99,217 @@ pub fn resolve_name_at_in_scope<'db>(
             }
         }
 
-        // At File/Package scope, resolve through the package items:
-        // own package (Item), then dependency packages (Builtin) - the
-        // same own-then-deps order the package resolution context walked.
+        // At File/Package scope, resolve through the package items — the
+        // file's OWN namespace only.
+        //
+        // A bare name reaches what the file's namespace declares, and
+        // nothing else: everything outside it is written qualified. That is
+        // the language's rule, and the same one the TYPE resolver states
+        // ("namespace-relative in the current package (no outward walk);
+        // `root.`-absolute or package-prefixed" - `lower::resolve_type`).
+        // There is no outward walk to a parent namespace and no fall
+        // through into a dependency; `resolve_path_at` is where a qualified
+        // name is resolved.
         if matches!(scope.kind, ScopeKind::File | ScopeKind::Package) {
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
             let pkg_id = PackageId::new(db, pkg_info.package.clone());
             let own_items: &PackageItems<'db> = crate::package_items(db, pkg_id);
 
-            // Values resolve in the OWN package only for bare names
-            // (cross-package values require explicit qualification);
-            // types fall back through dependencies, dep builtins at the
-            // root namespace.
             if let Some(def) = own_items.lookup_value(&pkg_info.namespace_path, name) {
                 return ResolvedName::Item(def);
             }
             if let Some(def) = own_items.lookup_type(&pkg_info.namespace_path, name) {
                 return ResolvedName::Item(def);
             }
-            for &dep_id in package_dependencies(db, pkg_id) {
-                let dep_items = crate::package_items(db, dep_id);
-                if let Some(def) = dep_items
-                    .lookup_type(&pkg_info.namespace_path, name)
-                    .or_else(|| dep_items.lookup_type(&[], name))
-                {
-                    return ResolvedName::Builtin(def);
-                }
-            }
         }
     }
 
     ResolvedName::Unknown
+}
+
+/// One name that resolves at a position, with what it resolves to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScopeName<'db> {
+    pub name: Name,
+    pub kind: ScopeNameKind<'db>,
+}
+
+/// What an enumerated name is. The first two mirror [`ResolvedName`]
+/// exactly — an enumerated name resolves to what [`resolve_name_at`] would
+/// return for it. `Package` has no `ResolvedName` counterpart because a bare
+/// package name is not a value: it can only ROOT a qualified path, which
+/// [`resolve_path_at`] handles.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScopeNameKind<'db> {
+    Local {
+        definition_site: Option<DefinitionSite>,
+    },
+    Item(Definition<'db>),
+    Package,
+}
+
+/// Every bare name that resolves at `at_offset`, innermost first.
+///
+/// The enumeration counterpart of [`resolve_name_at`], walking the scope
+/// chain in the same order with the same rules — local shadowing, the
+/// class-scope skip, `visible_from`, then package items — so a name that
+/// appears here resolves, and to the kind reported here. The first spelling
+/// of a name wins, which is what shadowing means: an inner `let x` hides the
+/// parameter `x`, and only one `x` is offered.
+pub fn names_in_scope_at<'db>(
+    db: &'db dyn crate::Db,
+    file: SourceFile,
+    at_offset: TextSize,
+) -> Vec<ScopeName<'db>> {
+    let index = crate::file_semantic_index(db, file);
+    let scope_id = index.scope_at_offset(at_offset, None);
+    let mut out: Vec<ScopeName<'db>> = Vec::new();
+    let push = |name: Name, kind: ScopeNameKind<'db>, out: &mut Vec<ScopeName<'db>>| {
+        if out.iter().any(|entry| entry.name == name) {
+            return;
+        }
+        out.push(ScopeName { name, kind });
+    };
+
+    for ancestor_id in index.ancestor_scopes(scope_id) {
+        let scope = &index.scopes[ancestor_id.index() as usize];
+        if matches!(scope.kind, ScopeKind::Class) && ancestor_id != scope_id {
+            continue;
+        }
+        let bindings = &index.scope_bindings[ancestor_id.index() as usize];
+
+        for binding in bindings.bindings.iter().rev() {
+            if index.binding_visible_at(binding, at_offset) {
+                push(
+                    binding.name.clone(),
+                    ScopeNameKind::Local {
+                        definition_site: Some(binding.site),
+                    },
+                    &mut out,
+                );
+            }
+        }
+        for (param_name, param_idx) in &bindings.params {
+            push(
+                param_name.clone(),
+                ScopeNameKind::Local {
+                    definition_site: Some(DefinitionSite::Parameter(*param_idx)),
+                },
+                &mut out,
+            );
+        }
+
+        if matches!(scope.kind, ScopeKind::File | ScopeKind::Package) {
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+            let pkg_id = PackageId::new(db, pkg_info.package.clone());
+            let own_items: &PackageItems<'db> = crate::package_items(db, pkg_id);
+            if let Some(namespace) = own_items.namespaces.get(&pkg_info.namespace_path) {
+                for (name, def) in &namespace.values {
+                    push(name.clone(), ScopeNameKind::Item(*def), &mut out);
+                }
+                for (name, def) in &namespace.types {
+                    push(name.clone(), ScopeNameKind::Item(*def), &mut out);
+                }
+            }
+            // A dependency contributes its NAME and nothing else: its items
+            // are written qualified, so `baml` is what a bare position can
+            // offer and `baml.…` is where the rest lives.
+            for &dep_id in package_dependencies(db, pkg_id) {
+                push(dep_id.name(db).clone(), ScopeNameKind::Package, &mut out);
+            }
+        }
+    }
+    out
+}
+
+/// One TYPE name that resolves at a position.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypeScopeName<'db> {
+    pub name: Name,
+    pub kind: TypeScopeNameKind<'db>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeScopeNameKind<'db> {
+    /// A type declaration in the file's own namespace.
+    Item(Definition<'db>),
+    /// A generic parameter declared by an enclosing item (`T`).
+    GenericParam,
+    /// A dependency package name, rooting a qualified type path.
+    Package,
+}
+
+/// Every bare name that resolves AS A TYPE at `at_offset`.
+///
+/// The enumeration counterpart of the type resolver (`lower::resolve_type`):
+/// generic parameters of the enclosing items, the file's own namespace's
+/// types, and dependency package names. Builtin aliases (`int`, `string`,
+/// `json`) are the language's own table, not database state, so the
+/// completion layer enumerates them from `baml_type` directly.
+pub fn type_names_in_scope_at<'db>(
+    db: &'db dyn crate::Db,
+    file: SourceFile,
+    at_offset: TextSize,
+) -> Vec<TypeScopeName<'db>> {
+    let index = crate::file_semantic_index(db, file);
+    let scope_id = index.scope_at_offset(at_offset, None);
+    let mut out: Vec<TypeScopeName<'db>> = Vec::new();
+    let push = |name: Name, kind: TypeScopeNameKind<'db>, out: &mut Vec<TypeScopeName<'db>>| {
+        if out.iter().any(|entry| entry.name == name) {
+            return;
+        }
+        out.push(TypeScopeName { name, kind });
+    };
+
+    for ancestor_id in index.ancestor_scopes(scope_id) {
+        let scope = &index.scopes[ancestor_id.index() as usize];
+        // Generic parameters come from the DECLARING items, exactly the
+        // frames the resolver's lexical overlay reads.
+        if matches!(scope.kind, ScopeKind::Function | ScopeKind::Class) {
+            let owner_scope_id = index.scope_ids[ancestor_id.index() as usize];
+            match crate::item_data::scope_owner(db, owner_scope_id) {
+                Some(crate::item_data::ScopeOwner::Function(function)) => {
+                    let data = crate::item_data::function_data(db, function);
+                    for param in &data.generic_params {
+                        push(
+                            param.name.clone(),
+                            TypeScopeNameKind::GenericParam,
+                            &mut out,
+                        );
+                    }
+                }
+                Some(crate::item_data::ScopeOwner::Class(class)) => {
+                    let data = crate::item_data::class_data(db, class);
+                    for param in &data.generic_params {
+                        push(
+                            param.name.clone(),
+                            TypeScopeNameKind::GenericParam,
+                            &mut out,
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        if matches!(scope.kind, ScopeKind::File | ScopeKind::Package) {
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+            let pkg_id = PackageId::new(db, pkg_info.package.clone());
+            let own_items: &PackageItems<'db> = crate::package_items(db, pkg_id);
+            if let Some(namespace) = own_items.namespaces.get(&pkg_info.namespace_path) {
+                for (name, def) in &namespace.types {
+                    push(name.clone(), TypeScopeNameKind::Item(*def), &mut out);
+                }
+            }
+            for &dep_id in package_dependencies(db, pkg_id) {
+                push(
+                    dep_id.name(db).clone(),
+                    TypeScopeNameKind::Package,
+                    &mut out,
+                );
+            }
+        }
+    }
+    out
 }
 
 /// `PackageItems` for a package accessible from `file`'s own package: the
@@ -155,9 +337,8 @@ fn accessible_package_items<'db>(
 
 /// Resolve the package and namespace split for a qualified path.
 ///
-/// A real accessible package wins. If there is none, BEP-066's `reflect`,
-/// `type`, and `json` roots are interpreted as namespaces of the accessible
-/// builtin `baml` package, matching compiler name resolution and completions.
+/// A real accessible package wins. If there is none, `json` is interpreted as
+/// a namespace of the accessible builtin `baml` package.
 fn accessible_path_package<'db>(
     db: &'db dyn crate::Db,
     file: SourceFile,
@@ -172,7 +353,7 @@ fn accessible_path_package<'db>(
     if let Some(items) = accessible_package_items(db, file, first) {
         return Some((first.clone(), items, 1));
     }
-    if matches!(first.as_str(), "reflect" | "type" | "json") {
+    if first.as_str() == "json" {
         let baml = Name::new("baml");
         let items = accessible_package_items(db, file, &baml)?;
         return Some((baml, items, 0));
@@ -184,7 +365,7 @@ fn accessible_path_package<'db>(
 ///
 /// Single-segment paths are resolved via `resolve_name_at`. Multi-segment
 /// paths treat the first segment as either `root` (the current file's
-/// package), a literal package name, or a BEP-066 builtin namespace shorthand;
+/// package), a literal package name, or the builtin `json` namespace shorthand;
 /// the remaining segments look up inside that package.
 pub fn resolve_path_at<'db>(
     db: &'db dyn crate::Db,
@@ -239,6 +420,90 @@ pub fn resolve_namespace_prefix(
         return None;
     }
     Some(pkg_name.as_str() != own.as_str())
+}
+
+/// The type a qualified path names: `baml.iter.Range`, `root.Point`.
+///
+/// Shares `accessible_path_package` with [`resolve_path_at`] and
+/// [`namespace_members_at`], so a qualifier reaches the same packages a
+/// written path does — and only a package a file actually depends on.
+pub fn qualified_type_at<'db>(
+    db: &'db dyn crate::Db,
+    file: SourceFile,
+    segments: &[Name],
+) -> Option<Definition<'db>> {
+    let (item, prefix) = segments.split_last()?;
+    if prefix.is_empty() {
+        // A bare name: the file's own namespace, the same rule
+        // `resolve_name_at` applies.
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+        let pkg_id = PackageId::new(db, pkg_info.package.clone());
+        return crate::package_items(db, pkg_id).lookup_type(&pkg_info.namespace_path, item);
+    }
+    let (_, pkg_items, namespace_start) = accessible_path_package(db, file, segments)?;
+    let namespace = &prefix[namespace_start.min(prefix.len())..];
+    pkg_items.lookup_type(namespace, item)
+}
+
+/// One thing that can follow a package/namespace qualifier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NamespaceMember<'db> {
+    pub name: Name,
+    pub kind: NamespaceMemberKind<'db>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NamespaceMemberKind<'db> {
+    Item(Definition<'db>),
+    /// A child namespace: `baml.` offers `http`, which qualifies further.
+    Namespace,
+}
+
+/// Everything that can follow `<segments>.` when `segments` names a package
+/// or a namespace inside one.
+///
+/// The enumeration counterpart of [`resolve_path_at`]'s qualifier half,
+/// sharing `accessible_path_package` with it — so the packages a qualifier
+/// can name are the same ones a written path can reach, including the `root`
+/// spelling for the file's own package and the `json` namespace shorthand
+/// (`reflect` and `type` are real root packages, not shorthands).
+///
+/// `None` when the prefix names no reachable package or namespace, which is
+/// what distinguishes `baml.` (a qualifier) from `some_local.` (a value).
+pub fn namespace_members_at<'db>(
+    db: &'db dyn crate::Db,
+    file: SourceFile,
+    segments: &[Name],
+) -> Option<Vec<NamespaceMember<'db>>> {
+    let (_, pkg_items, namespace_start) = accessible_path_package(db, file, segments)?;
+    let prefix = &segments[namespace_start..];
+    let mut out: Vec<NamespaceMember<'db>> = Vec::new();
+
+    // Items declared in exactly this namespace.
+    if let Some(namespace) = pkg_items.namespaces.get(prefix) {
+        for (name, def) in namespace.values.iter().chain(namespace.types.iter()) {
+            out.push(NamespaceMember {
+                name: name.clone(),
+                kind: NamespaceMemberKind::Item(*def),
+            });
+        }
+    }
+
+    // The next segment of every namespace that extends this prefix.
+    for path in pkg_items.namespaces.keys() {
+        if path.len() > prefix.len()
+            && path.starts_with(prefix)
+            && let Some(child) = path.get(prefix.len())
+            && !out.iter().any(|member| member.name == *child)
+        {
+            out.push(NamespaceMember {
+                name: child.clone(),
+                kind: NamespaceMemberKind::Namespace,
+            });
+        }
+    }
+
+    (!out.is_empty()).then_some(out)
 }
 
 /// Resolve `Enum.Variant` - the leaf of an enum-rooted type path. `true`

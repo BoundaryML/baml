@@ -2,12 +2,12 @@
 
 use std::borrow::Cow;
 
-use ::baml_type::{TyAttrValue, TypeName};
+use ::baml_type::TyAttrValue;
 use ::std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
-use ::sys_types::{ClassDefinition, EnumDefinition};
+use ::sys_types::{ClassDefinition, DefKey, EnumDefinition, SapTy};
 use indexmap::IndexMap;
 
 use crate::sap_model::{
@@ -17,14 +17,7 @@ use crate::sap_model::{
     TypeRefDb, UnionTy,
 };
 
-impl crate::sap_model::TypeIdent for TypeName {
-    /// A runtime-minted declaration reads as the name its source wrote: the
-    /// mint is an identity token the parser keys on, not a spelling anyone
-    /// asked for.
-    fn render(&self) -> Cow<'static, str> {
-        Cow::Owned(self.render_source_dotted())
-    }
-}
+impl crate::sap_model::TypeIdent for DefKey {}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertError {
@@ -35,24 +28,24 @@ pub enum ConvertError {
     #[error("Float literals cannot be parsed")]
     FloatLiteral,
     #[error("Non-parsable type: {0:?}")]
-    NonParsableType(Box<baml_type::RuntimeTy>),
+    NonParsableType(Box<SapTy>),
     #[error("Unknown class: {0}")]
-    UnknownClass(baml_type::TypeName),
+    UnknownClass(DefKey),
     #[error("Unknown enum: {0}")]
-    UnknownEnum(baml_type::TypeName),
+    UnknownEnum(DefKey),
     #[error("Unknown type alias: {0}")]
-    UnknownTypeAlias(baml_type::TypeName),
+    UnknownTypeAlias(DefKey),
     #[error("Unknown name (could not determine if it was a class, enum, or type alias): {0}")]
-    UnknownName(baml_type::TypeName),
+    UnknownName(DefKey),
     #[error("Could not add a type to the database as the name `{0}` is already present")]
-    AlreadyPresent(baml_type::TypeName),
+    AlreadyPresent(DefKey),
     #[error("Recursion depth exceeded for {0}")]
     RecursionDepthExceeded(&'static str),
     #[error("Unions must be flattened")]
     UnflattenedUnion,
     /// Something like `type A = B; type B = A;` is invalid.
     #[error("Recursive type alias without indirection: {0}")]
-    DirectRecursiveTypeAlias(baml_type::TypeName),
+    DirectRecursiveTypeAlias(DefKey),
     #[error("Internal error (please report): {0}")]
     InternalError(&'static str),
 }
@@ -75,19 +68,19 @@ const MAX_RECURSION_DEPTH: usize = 16;
 /// A the `new` method calls [`baml_type::simplify_sap::simplify`] which should do all this
 #[allow(clippy::struct_field_names)]
 pub struct TypeCtx {
-    class_definitions: IndexMap<baml_type::TypeName, ClassDefinition>,
-    enum_definitions: Arc<IndexMap<baml_type::TypeName, EnumDefinition>>,
-    type_alias_definitions: HashMap<baml_type::TypeName, baml_type::RuntimeTy>,
-    sap_parseable: HashMap<TypeName, bool>,
+    class_definitions: IndexMap<DefKey, ClassDefinition>,
+    enum_definitions: Arc<IndexMap<DefKey, EnumDefinition>>,
+    type_alias_definitions: HashMap<DefKey, SapTy>,
+    sap_parseable: HashMap<DefKey, bool>,
 }
 impl TypeCtx {
     /// The reason `enum_definitions` is an `Arc` while the others aren't is that
     /// we do transformations on the others (so we don't need arc) but we don't
     /// need to transform `enum_definitions` so we can just share it.
     pub fn new(
-        class_definitions: &IndexMap<baml_type::TypeName, ClassDefinition>,
-        enum_definitions: Arc<IndexMap<baml_type::TypeName, EnumDefinition>>,
-        type_alias_definitions: &HashMap<baml_type::TypeName, baml_type::RuntimeTy>,
+        class_definitions: &IndexMap<DefKey, ClassDefinition>,
+        enum_definitions: Arc<IndexMap<DefKey, EnumDefinition>>,
+        type_alias_definitions: &HashMap<DefKey, SapTy>,
     ) -> Self {
         // todo: we can hold more of this by reference probably
         let recursive_aliases = type_alias_definitions.keys().cloned().collect();
@@ -102,7 +95,7 @@ impl TypeCtx {
                 (k.clone(), v)
             })
             .collect();
-        let class_definitions: IndexMap<baml_type::TypeName, ClassDefinition> = class_definitions
+        let class_definitions: IndexMap<DefKey, ClassDefinition> = class_definitions
             .iter()
             .map(|(k, v)| {
                 let fields = v.fields.iter().map(|field| {
@@ -117,6 +110,7 @@ impl TypeCtx {
                 let class = ClassDefinition {
                     name: v.name.clone(),
                     description: v.description.clone(),
+                    docstring: v.docstring.clone(),
                     alias: v.alias.clone(),
                     fields: fields.collect(),
                 };
@@ -129,8 +123,8 @@ impl TypeCtx {
         // already on the stack, we optimistically treat it as parsable — the
         // recursion itself is fine, only structurally unparsable leaves cause a
         // type to be non-parsable.
-        let mut sap_parseable: HashMap<TypeName, bool> = HashMap::new();
-        let all_names: Vec<TypeName> = class_definitions
+        let mut sap_parseable: HashMap<DefKey, bool> = HashMap::new();
+        let all_names: Vec<DefKey> = class_definitions
             .keys()
             .chain(enum_definitions.keys())
             .chain(type_alias_definitions.keys())
@@ -177,7 +171,7 @@ impl TypeCtx {
     /// the SAP model. Generic substitution happens after [`TypeCtx::new`] has
     /// simplified the declared class and alias definitions, so it can create a
     /// fresh nested union such as `(string | int) | ToolCalls` at runtime.
-    pub(crate) fn normalize_parse_target(&self, ty: baml_type::RuntimeTy) -> baml_type::RuntimeTy {
+    pub(crate) fn normalize_parse_target(&self, ty: SapTy) -> SapTy {
         let recursive_aliases = self.type_alias_definitions.keys().cloned().collect();
         ::baml_type::simplify_sap::simplify_parse_target(
             ty,
@@ -187,7 +181,7 @@ impl TypeCtx {
     }
 
     /// Constructs a full [`TypeRefDb`] from the given context with all types converted.
-    pub fn build_db(&self) -> Result<TypeRefDb<'_, TypeName>, ConvertError> {
+    pub fn build_db(&self) -> Result<TypeRefDb<'_, DefKey>, ConvertError> {
         let mut db = TypeRefDb::new();
         for (name, cls) in &self.class_definitions {
             if self.sap_parseable.get(name).is_some_and(|v| !v) {
@@ -215,9 +209,9 @@ impl TypeCtx {
 
     fn convert_class<'a>(
         &'a self,
-        name: &baml_type::TypeName,
+        name: &DefKey,
         class_def: &'a ::sys_types::ClassDefinition,
-    ) -> Result<ClassTy<'a, TypeName>, ConvertError> {
+    ) -> Result<ClassTy<'a, DefKey>, ConvertError> {
         let fields = class_def
             .fields
             .iter()
@@ -260,9 +254,9 @@ impl TypeCtx {
     }
 
     fn convert_enum<'a>(
-        name: &baml_type::TypeName,
+        name: &DefKey,
         enum_def: &'a ::sys_types::EnumDefinition,
-    ) -> EnumTy<'a, TypeName> {
+    ) -> EnumTy<'a, DefKey> {
         let variants = enum_def
             .variants
             .iter()
@@ -286,10 +280,10 @@ impl TypeCtx {
     /// - `recursion_depth`: The current recursion depth. Used to prevent infinite recursion.
     fn convert_type_alias<'a>(
         &'a self,
-        name: &baml_type::TypeName,
-        alias_ty: &'a baml_type::RuntimeTy,
+        name: &DefKey,
+        alias_ty: &'a SapTy,
         recursion_depth: usize,
-    ) -> Result<TyResolved<'a, TypeName>, ConvertError> {
+    ) -> Result<TyResolved<'a, DefKey>, ConvertError> {
         if recursion_depth > MAX_RECURSION_DEPTH {
             return Err(ConvertError::RecursionDepthExceeded("type alias"));
         }
@@ -332,34 +326,34 @@ impl TypeCtx {
     /// Converts a BAML type into a sap model type.
     pub fn convert_ty<'a>(
         &'a self,
-        ty: &'a baml_type::RuntimeTy,
-    ) -> Result<AnnotatedTy<'a, TypeName>, ConvertError> {
+        ty: &'a SapTy,
+    ) -> Result<AnnotatedTy<'a, DefKey>, ConvertError> {
         let ty = match ty {
-            baml_type::RuntimeTy::Int { attr } => TyWithMeta::new(
+            SapTy::Int { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Int(IntTy)),
                 convert_ty_attrs(attr),
             ),
-            baml_type::RuntimeTy::Bigint { attr } => TyWithMeta::new(
+            SapTy::Bigint { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Bigint(BigintTy)),
                 convert_ty_attrs(attr),
             ),
-            baml_type::RuntimeTy::Float { attr } => TyWithMeta::new(
+            SapTy::Float { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Float(FloatTy)),
                 convert_ty_attrs(attr),
             ),
-            baml_type::RuntimeTy::String { attr } => TyWithMeta::new(
+            SapTy::String { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::String(StringTy)),
                 convert_ty_attrs(attr),
             ),
-            baml_type::RuntimeTy::Bool { attr } => TyWithMeta::new(
+            SapTy::Bool { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Bool(BoolTy)),
                 convert_ty_attrs(attr),
             ),
-            baml_type::RuntimeTy::Null { attr } => TyWithMeta::new(
+            SapTy::Null { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Null(NullTy)),
                 convert_ty_attrs(attr),
             ),
-            baml_type::RuntimeTy::Media(media_kind, ty_attr) => {
+            SapTy::Media(media_kind, ty_attr) => {
                 let media_kind = match media_kind {
                     baml_type::MediaKind::Image => MediaTy::Image,
                     baml_type::MediaKind::Video => MediaTy::Video,
@@ -374,33 +368,28 @@ impl TypeCtx {
                     convert_ty_attrs(ty_attr),
                 )
             }
-            baml_type::RuntimeTy::Literal(baml_type::Literal::Int(i), _, attr) => TyWithMeta::new(
+            SapTy::Literal(baml_type::Literal::Int(i), _, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralInt(IntLiteralTy(*i))),
                 convert_ty_attrs(attr),
             ),
-            baml_type::RuntimeTy::Literal(baml_type::Literal::Bigint(bi), _, attr) => {
-                TyWithMeta::new(
-                    sap_model::Ty::Resolved(TyResolved::LiteralBigint(BigintLiteralTy(bi.clone()))),
-                    convert_ty_attrs(attr),
-                )
-            }
-            baml_type::RuntimeTy::Literal(baml_type::Literal::Float(..), ..) => {
+            SapTy::Literal(baml_type::Literal::Bigint(bi), _, attr) => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::LiteralBigint(BigintLiteralTy(bi.clone()))),
+                convert_ty_attrs(attr),
+            ),
+            SapTy::Literal(baml_type::Literal::Float(..), ..) => {
                 return Err(ConvertError::FloatLiteral);
             }
-            baml_type::RuntimeTy::Literal(baml_type::Literal::String(s), _, attr) => {
-                TyWithMeta::new(
-                    sap_model::Ty::Resolved(TyResolved::LiteralString(StringLiteralTy(
-                        Cow::Borrowed(s),
-                    ))),
-                    convert_ty_attrs(attr),
-                )
-            }
-            baml_type::RuntimeTy::Literal(baml_type::Literal::Bool(b), _, attr) => TyWithMeta::new(
+            SapTy::Literal(baml_type::Literal::String(s), _, attr) => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::LiteralString(StringLiteralTy(Cow::Borrowed(
+                    s,
+                )))),
+                convert_ty_attrs(attr),
+            ),
+            SapTy::Literal(baml_type::Literal::Bool(b), _, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::LiteralBool(BoolLiteralTy(*b))),
                 convert_ty_attrs(attr),
             ),
-            baml_type::RuntimeTy::Class(type_name, _, attr)
-            | baml_type::RuntimeTy::Interface(type_name, _, _, attr) => {
+            SapTy::Class(type_name, _, attr) | SapTy::Interface(type_name, _, _, attr) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
                     return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
                 }
@@ -411,11 +400,11 @@ impl TypeCtx {
                     convert_ty_attrs(attr),
                 )
             }
-            baml_type::RuntimeTy::Enum(type_name, attr) => TyWithMeta::new(
+            SapTy::Enum(type_name, attr) => TyWithMeta::new(
                 sap_model::Ty::Unresolved(type_name.clone()),
                 convert_ty_attrs(attr),
             ),
-            baml_type::RuntimeTy::EnumVariant(type_name, variant, attr) => {
+            SapTy::EnumVariant(type_name, variant, attr) => {
                 let enum_def = self
                     .enum_definitions
                     .get(type_name)
@@ -443,13 +432,13 @@ impl TypeCtx {
                     convert_ty_attrs(attr),
                 )
             }
-            baml_type::RuntimeTy::List(ty, attr) => TyWithMeta::new(
+            SapTy::List(ty, attr) => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Array(ArrayTy {
                     ty: Box::new(self.convert_ty(ty)?),
                 })),
                 convert_ty_attrs(attr),
             ),
-            baml_type::RuntimeTy::Map { key, value, attr } => {
+            SapTy::Map { key, value, attr } => {
                 let key = self.convert_ty(key)?;
                 let value = self.convert_ty(value)?;
                 TyWithMeta::new(
@@ -460,7 +449,7 @@ impl TypeCtx {
                     convert_ty_attrs(attr),
                 )
             }
-            baml_type::RuntimeTy::Union(items, ty_attr) => {
+            SapTy::Union(items, ty_attr) => {
                 if items.iter().any(|ty| self.is_union_like(ty)) {
                     return Err(ConvertError::UnflattenedUnion);
                 }
@@ -473,7 +462,7 @@ impl TypeCtx {
                     convert_ty_attrs(ty_attr),
                 )
             }
-            baml_type::RuntimeTy::TypeAlias(type_name, attr) => {
+            SapTy::TypeAlias(type_name, attr) => {
                 if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
                     return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
                 }
@@ -487,7 +476,7 @@ impl TypeCtx {
                         return Err(ConvertError::UnknownTypeAlias(innermost_name.clone()));
                     };
                     match inner_ty {
-                        baml_type::RuntimeTy::TypeAlias(name, inner_attr) => {
+                        SapTy::TypeAlias(name, inner_attr) => {
                             if innermost_name == type_name {
                                 return Err(ConvertError::DirectRecursiveTypeAlias(
                                     type_name.clone(),
@@ -496,9 +485,9 @@ impl TypeCtx {
                             attr = merge_ty_attrs(&attr, inner_attr);
                             innermost_name = name;
                         }
-                        baml_type::RuntimeTy::Class(name, _, inner_attr)
-                        | baml_type::RuntimeTy::Interface(name, _, _, inner_attr)
-                        | baml_type::RuntimeTy::Enum(name, inner_attr) => {
+                        SapTy::Class(name, _, inner_attr)
+                        | SapTy::Interface(name, _, _, inner_attr)
+                        | SapTy::Enum(name, inner_attr) => {
                             attr = merge_ty_attrs(&attr, inner_attr);
                             innermost_name = name;
                             break;
@@ -515,28 +504,28 @@ impl TypeCtx {
                     convert_ty_attrs(&attr),
                 )
             }
-            unparsable @ (baml_type::RuntimeTy::Uint8Array { .. }
-            | baml_type::RuntimeTy::Resource { .. }
-            | baml_type::RuntimeTy::PromptAst { .. }
-            | baml_type::RuntimeTy::Function { .. }
-            | baml_type::RuntimeTy::Void { .. }
-            | baml_type::RuntimeTy::BuiltinUnknown { .. }
-            | baml_type::RuntimeTy::Future(_, _, _)
-            | baml_type::RuntimeTy::TypeVar(_, _)
-            | baml_type::RuntimeTy::AssociatedTypeProjection { .. }
-            | baml_type::RuntimeTy::Never { .. }
-            | baml_type::RuntimeTy::RustType { .. }
-            | baml_type::RuntimeTy::Type { .. }) => {
+            unparsable @ (SapTy::Uint8Array { .. }
+            | SapTy::Resource { .. }
+            | SapTy::PromptAst { .. }
+            | SapTy::Function { .. }
+            | SapTy::Void { .. }
+            | SapTy::BuiltinUnknown { .. }
+            | SapTy::Future(_, _, _)
+            | SapTy::TypeVar(_, _)
+            | SapTy::AssociatedTypeProjection { .. }
+            | SapTy::Never { .. }
+            | SapTy::RustType { .. }
+            | SapTy::Type { .. }) => {
                 return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
         Ok(ty)
     }
 
-    fn is_union_like(&self, ty: &baml_type::RuntimeTy) -> bool {
+    fn is_union_like(&self, ty: &SapTy) -> bool {
         match ty {
-            baml_type::RuntimeTy::Union(..) => true,
-            baml_type::RuntimeTy::TypeAlias(name, ..) => self
+            SapTy::Union(..) => true,
+            SapTy::TypeAlias(name, ..) => self
                 .type_alias_definitions
                 .get(name)
                 .is_some_and(|ty| self.is_union_like(ty)),
@@ -552,9 +541,9 @@ impl TypeCtx {
     /// `(class_in_progress_field_missing, class_completed_field_missing)`
     fn get_field_attrs<'a>(
         &'a self,
-        field_type: &'a ::baml_type::RuntimeTy,
+        field_type: &'a SapTy,
         recursion_depth: usize,
-    ) -> Result<(AttrLiteral<'a, TypeName>, AttrLiteral<'a, TypeName>), ConvertError> {
+    ) -> Result<(AttrLiteral<'a, DefKey>, AttrLiteral<'a, DefKey>), ConvertError> {
         if recursion_depth > MAX_RECURSION_DEPTH {
             return Err(ConvertError::RecursionDepthExceeded(
                 "class field attribute derivation",
@@ -571,68 +560,65 @@ impl TypeCtx {
         }
 
         let field_attrs = match field_type {
-            ::baml_type::RuntimeTy::Int { .. }
-            | ::baml_type::RuntimeTy::Bigint { .. }
-            | ::baml_type::RuntimeTy::Float { .. }
-            | ::baml_type::RuntimeTy::String { .. }
-            | ::baml_type::RuntimeTy::Bool { .. }
-            | ::baml_type::RuntimeTy::Uint8Array { .. }
-            | ::baml_type::RuntimeTy::Media(..)
-            | ::baml_type::RuntimeTy::Literal(..)
-            | ::baml_type::RuntimeTy::Class(..)
-            | ::baml_type::RuntimeTy::Interface(..)
-            | ::baml_type::RuntimeTy::Enum(..)
-            | ::baml_type::RuntimeTy::EnumVariant(..) => (AttrLiteral::Never, AttrLiteral::Never),
-            ::baml_type::RuntimeTy::Null { .. } => {
+            SapTy::Int { .. }
+            | SapTy::Bigint { .. }
+            | SapTy::Float { .. }
+            | SapTy::String { .. }
+            | SapTy::Bool { .. }
+            | SapTy::Uint8Array { .. }
+            | SapTy::Media(..)
+            | SapTy::Literal(..)
+            | SapTy::Class(..)
+            | SapTy::Interface(..)
+            | SapTy::Enum(..)
+            | SapTy::EnumVariant(..) => (AttrLiteral::Never, AttrLiteral::Never),
+            SapTy::Null { .. } => {
                 unreachable!("nullable fields should be returned before field attr derivation")
             }
-            ::baml_type::RuntimeTy::List(..) => (
+            SapTy::List(..) => (
                 AttrLiteral::Array(Vec::new()),
                 AttrLiteral::Array(Vec::new()),
             ),
-            ::baml_type::RuntimeTy::Map { .. } => (
+            SapTy::Map { .. } => (
                 AttrLiteral::Map(IndexMap::new()),
                 AttrLiteral::Map(IndexMap::new()),
             ),
-            ::baml_type::RuntimeTy::Union(members, ..) => members
+            SapTy::Union(members, ..) => members
                 .first()
                 .map(|first| self.get_field_attrs(first, recursion_depth + 1))
                 .transpose()?
                 .unwrap_or((AttrLiteral::Never, AttrLiteral::Never)),
-            ::baml_type::RuntimeTy::TypeAlias(name, ..) => {
+            SapTy::TypeAlias(name, ..) => {
                 let Some(alias_ty) = self.type_alias_definitions.get(name) else {
                     return Err(ConvertError::UnknownTypeAlias(name.clone()));
                 };
                 self.get_field_attrs(alias_ty, recursion_depth + 1)?
             }
-            unparsable @ (::baml_type::RuntimeTy::Resource { .. }
-            | ::baml_type::RuntimeTy::PromptAst { .. }
-            | ::baml_type::RuntimeTy::Function { .. }
-            | ::baml_type::RuntimeTy::Void { .. }
-            | ::baml_type::RuntimeTy::BuiltinUnknown { .. }
-            | ::baml_type::RuntimeTy::Future(_, _, _)
-            | ::baml_type::RuntimeTy::TypeVar(_, _)
-            | ::baml_type::RuntimeTy::AssociatedTypeProjection { .. }
-            | ::baml_type::RuntimeTy::Never { .. }
-            | ::baml_type::RuntimeTy::RustType { .. }
-            | ::baml_type::RuntimeTy::Type { .. }) => {
+            unparsable @ (SapTy::Resource { .. }
+            | SapTy::PromptAst { .. }
+            | SapTy::Function { .. }
+            | SapTy::Void { .. }
+            | SapTy::BuiltinUnknown { .. }
+            | SapTy::Future(_, _, _)
+            | SapTy::TypeVar(_, _)
+            | SapTy::AssociatedTypeProjection { .. }
+            | SapTy::Never { .. }
+            | SapTy::RustType { .. }
+            | SapTy::Type { .. }) => {
                 return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
             }
         };
         Ok(field_attrs)
     }
 
-    fn field_type_is_nullable(
-        &self,
-        field_type: &::baml_type::RuntimeTy,
-    ) -> Result<bool, ConvertError> {
+    fn field_type_is_nullable(&self, field_type: &SapTy) -> Result<bool, ConvertError> {
         self.field_type_is_nullable_inner(field_type, &mut HashSet::new(), 0)
     }
 
     fn field_type_is_nullable_inner(
         &self,
-        field_type: &::baml_type::RuntimeTy,
-        aliases_in_progress: &mut HashSet<TypeName>,
+        field_type: &SapTy,
+        aliases_in_progress: &mut HashSet<DefKey>,
         recursion_depth: usize,
     ) -> Result<bool, ConvertError> {
         if recursion_depth > MAX_RECURSION_DEPTH {
@@ -642,8 +628,8 @@ impl TypeCtx {
         }
 
         Ok(match field_type {
-            ::baml_type::RuntimeTy::Null { .. } => true,
-            ::baml_type::RuntimeTy::Union(members, ..) => {
+            SapTy::Null { .. } => true,
+            SapTy::Union(members, ..) => {
                 let mut is_nullable = false;
                 for member in members {
                     if self.field_type_is_nullable_inner(
@@ -657,7 +643,7 @@ impl TypeCtx {
                 }
                 is_nullable
             }
-            ::baml_type::RuntimeTy::TypeAlias(name, ..) => {
+            SapTy::TypeAlias(name, ..) => {
                 if !aliases_in_progress.insert(name.clone()) {
                     // A cycle by itself does not prove nullability for this branch.
                     false
@@ -680,7 +666,7 @@ impl TypeCtx {
     }
 }
 
-fn convert_ty_attrs(attrs: &baml_type::TyAttr) -> TypeAnnotations<'static, TypeName> {
+fn convert_ty_attrs(attrs: &baml_type::TyAttr) -> TypeAnnotations<'static, DefKey> {
     let in_progress = match attrs.sap_pending_never {
         TyAttrValue::Set => Some(AttrLiteral::Never),
         TyAttrValue::Unset => None,
@@ -705,12 +691,12 @@ fn merge_ty_attrs(outer: &baml_type::TyAttr, inner: &baml_type::TyAttr) -> baml_
 }
 
 fn check_parseable(
-    name: &TypeName,
-    class_definitions: &IndexMap<TypeName, ClassDefinition>,
-    type_alias_definitions: &HashMap<TypeName, baml_type::RuntimeTy>,
-    enum_definitions: &IndexMap<TypeName, EnumDefinition>,
-    cache: &mut HashMap<TypeName, bool>,
-    checking: &mut HashSet<TypeName>,
+    name: &DefKey,
+    class_definitions: &IndexMap<DefKey, ClassDefinition>,
+    type_alias_definitions: &HashMap<DefKey, SapTy>,
+    enum_definitions: &IndexMap<DefKey, EnumDefinition>,
+    cache: &mut HashMap<DefKey, bool>,
+    checking: &mut HashSet<DefKey>,
 ) -> bool {
     if let Some(&result) = cache.get(name) {
         return result;
@@ -764,44 +750,43 @@ fn check_parseable(
     result
 }
 
-fn is_sap_parseable(ty: &baml_type::RuntimeTy) -> Result<Vec<TypeName>, ()> {
+fn is_sap_parseable(ty: &SapTy) -> Result<Vec<DefKey>, ()> {
     match ty {
-        baml_type::RuntimeTy::Int { .. }
-        | baml_type::RuntimeTy::Bigint { .. }
-        | baml_type::RuntimeTy::Float { .. }
-        | baml_type::RuntimeTy::String { .. }
-        | baml_type::RuntimeTy::Bool { .. }
-        | baml_type::RuntimeTy::Null { .. }
-        | baml_type::RuntimeTy::Literal(..) => Ok(Vec::new()),
-        baml_type::RuntimeTy::Uint8Array { .. } | baml_type::RuntimeTy::Media(..) => Err(()),
-        baml_type::RuntimeTy::Class(name, _, _)
-        | baml_type::RuntimeTy::Interface(name, _, _, _) => Ok(vec![name.clone()]),
-        baml_type::RuntimeTy::Enum(..) | baml_type::RuntimeTy::EnumVariant(..) => Ok(Vec::new()),
-        baml_type::RuntimeTy::List(inner, _) => is_sap_parseable(inner),
-        baml_type::RuntimeTy::Map { key, value, .. } => {
+        SapTy::Int { .. }
+        | SapTy::Bigint { .. }
+        | SapTy::Float { .. }
+        | SapTy::String { .. }
+        | SapTy::Bool { .. }
+        | SapTy::Null { .. }
+        | SapTy::Literal(..) => Ok(Vec::new()),
+        SapTy::Uint8Array { .. } | SapTy::Media(..) => Err(()),
+        SapTy::Class(name, _, _) | SapTy::Interface(name, _, _, _) => Ok(vec![name.clone()]),
+        SapTy::Enum(..) | SapTy::EnumVariant(..) => Ok(Vec::new()),
+        SapTy::List(inner, _) => is_sap_parseable(inner),
+        SapTy::Map { key, value, .. } => {
             let keys = is_sap_parseable(key)?;
             let values = is_sap_parseable(value)?;
             Ok(keys.into_iter().chain(values).collect())
         }
-        baml_type::RuntimeTy::Union(members, _) => {
+        SapTy::Union(members, _) => {
             let mut names = Vec::new();
             for member in members {
                 names.extend(is_sap_parseable(member)?);
             }
             Ok(names)
         }
-        baml_type::RuntimeTy::TypeAlias(name, _) => Ok(vec![name.clone()]),
-        baml_type::RuntimeTy::Resource { .. }
-        | baml_type::RuntimeTy::PromptAst { .. }
-        | baml_type::RuntimeTy::Function { .. }
-        | baml_type::RuntimeTy::Void { .. }
-        | baml_type::RuntimeTy::BuiltinUnknown { .. }
-        | baml_type::RuntimeTy::Future(..)
-        | baml_type::RuntimeTy::TypeVar(..)
-        | baml_type::RuntimeTy::AssociatedTypeProjection { .. }
-        | baml_type::RuntimeTy::Never { .. }
-        | baml_type::RuntimeTy::RustType { .. }
-        | baml_type::RuntimeTy::Type { .. } => Err(()),
+        SapTy::TypeAlias(name, _) => Ok(vec![name.clone()]),
+        SapTy::Resource { .. }
+        | SapTy::PromptAst { .. }
+        | SapTy::Function { .. }
+        | SapTy::Void { .. }
+        | SapTy::BuiltinUnknown { .. }
+        | SapTy::Future(..)
+        | SapTy::TypeVar(..)
+        | SapTy::AssociatedTypeProjection { .. }
+        | SapTy::Never { .. }
+        | SapTy::RustType { .. }
+        | SapTy::Type { .. } => Err(()),
     }
 }
 
@@ -811,8 +796,11 @@ mod tests {
 
     use super::*;
 
-    fn local_type(name: &str) -> TypeName {
-        TypeName::local(name.into())
+    fn local_type(name: &str) -> DefKey {
+        DefKey::new(
+            ::baml_type::typetag::TypeTag::of_head(name),
+            ::baml_type::DeclarationName::Declared(::baml_type::TypeName::local(name.into())),
+        )
     }
 
     #[test]

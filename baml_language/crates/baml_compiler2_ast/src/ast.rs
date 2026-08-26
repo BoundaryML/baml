@@ -38,6 +38,13 @@ pub struct RawAttributeArg {
 /// happens once during `lower_file` and is never repeated.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeExprKind {
+    /// A runtime type atom. Body-owned occurrences carry the carrier expression
+    /// in the enclosing body's arena. Declaration-owned occurrences have no
+    /// body arena and keep `None`; the declaration checker diagnoses them.
+    Unreflect {
+        operand: Option<ExprId>,
+        attrs: Vec<RawAttribute>,
+    },
     /// Named type path: `User`, `baml.http.Request`, `Stream<T>`
     Path {
         segments: Vec<Name>,
@@ -189,23 +196,6 @@ impl std::ops::Deref for TypeExpr {
     }
 }
 
-/// One explicit generic argument at an expression call site.
-///
-/// Static arguments retain the existing type grammar. `Unreflect` is a
-/// contextual whole-argument marker whose operand is an ordinary expression
-/// in the enclosing body arena; it is never a type-expression atom.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypeArg {
-    Static(TypeExpr),
-    Unreflect(ExprId),
-}
-
-impl From<TypeExpr> for TypeArg {
-    fn from(value: TypeExpr) -> Self {
-        Self::Static(value)
-    }
-}
-
 impl std::ops::DerefMut for TypeExpr {
     fn deref_mut(&mut self) -> &mut TypeExprKind {
         &mut self.kind
@@ -227,13 +217,72 @@ impl TypeExpr {
         self.span = span;
         self
     }
+
+    /// Append every runtime carrier nested in this type, in source order.
+    pub fn unreflect_operands(&self, out: &mut Vec<ExprId>) {
+        match &self.kind {
+            TypeExprKind::Unreflect {
+                operand: Some(operand),
+                ..
+            } => out.push(*operand),
+            TypeExprKind::Unreflect { operand: None, .. } => {}
+            TypeExprKind::Path {
+                generic_args,
+                associated_type_bindings,
+                ..
+            } => {
+                for arg in generic_args {
+                    arg.unreflect_operands(out);
+                }
+                for binding in associated_type_bindings {
+                    binding.ty.unreflect_operands(out);
+                }
+            }
+            TypeExprKind::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                base.unreflect_operands(out);
+                if let Some(interface) = interface {
+                    interface.unreflect_operands(out);
+                }
+            }
+            TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
+                inner.unreflect_operands(out);
+            }
+            TypeExprKind::Map { key, value, .. } => {
+                key.unreflect_operands(out);
+                value.unreflect_operands(out);
+            }
+            TypeExprKind::Union { variants, .. } => {
+                for variant in variants {
+                    variant.unreflect_operands(out);
+                }
+            }
+            TypeExprKind::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                for param in params {
+                    param.ty.unreflect_operands(out);
+                }
+                ret.unreflect_operands(out);
+                if let Some(throws) = throws {
+                    throws.unreflect_operands(out);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 impl TypeExprKind {
     /// Access the type-level attributes on this type expression.
     pub fn attrs(&self) -> &[RawAttribute] {
         match self {
-            Self::Path { attrs, .. }
+            Self::Unreflect { attrs, .. }
+            | Self::Path { attrs, .. }
             | Self::AssociatedTypeProjection { attrs, .. }
             | Self::Int { attrs }
             | Self::Bigint { attrs }
@@ -263,7 +312,8 @@ impl TypeExprKind {
     /// Mutable access to the type-level attributes on this type expression.
     pub fn attrs_mut(&mut self) -> &mut Vec<RawAttribute> {
         match self {
-            Self::Path { attrs, .. }
+            Self::Unreflect { attrs, .. }
+            | Self::Path { attrs, .. }
             | Self::AssociatedTypeProjection { attrs, .. }
             | Self::Int { attrs }
             | Self::Bigint { attrs }
@@ -315,6 +365,7 @@ impl std::fmt::Display for TypeExprKind {
         }
 
         match self {
+            TypeExprKind::Unreflect { .. } => write!(f, "unreflect(…)"),
             TypeExprKind::Path {
                 segments,
                 generic_args,
@@ -424,7 +475,7 @@ impl std::fmt::Display for TypeExprKind {
                 Ok(())
             }
             TypeExprKind::BuiltinUnknown { .. } => write!(f, "unknown"),
-            TypeExprKind::Type { .. } => write!(f, "type"),
+            TypeExprKind::Type { .. } => write!(f, "reflect.Type"),
             TypeExprKind::Rust { .. } => write!(f, "$rust_type"),
             TypeExprKind::Error { .. } => write!(f, "error"),
             TypeExprKind::Unknown { .. } => write!(f, "?"),
@@ -567,15 +618,7 @@ impl ExprBody {
                 let ty_args_str = if type_args.is_empty() {
                     String::new()
                 } else {
-                    let tys: Vec<_> = type_args
-                        .iter()
-                        .map(|arg| match arg {
-                            TypeArg::Static(ty) => ty.to_string(),
-                            TypeArg::Unreflect(expr) => {
-                                format!("unreflect({})", self.display_expr_inner(*expr, depth + 1))
-                            }
-                        })
-                        .collect();
+                    let tys: Vec<_> = type_args.iter().map(ToString::to_string).collect();
                     format!("<{}>", tys.join(", "))
                 };
                 let args_str: Vec<_> = args
@@ -965,7 +1008,7 @@ pub enum Expr {
         callee: ExprId,
         /// Explicit type arguments at the call site, e.g. `foo<int, string>(x)`.
         /// Empty vec when no `<...>` was written.
-        type_args: Vec<TypeArg>,
+        type_args: Vec<TypeExpr>,
         args: Vec<CallArg>,
     },
     Object {
@@ -1174,7 +1217,7 @@ pub enum Stmt {
     /// lexical type parameter for the remainder of the enclosing block.
     TypeBinding {
         name: Name,
-        value: ExprId,
+        value: TypeExpr,
     },
     Let {
         /// The binding pattern. A `: T` annotation lives inside the pattern
@@ -1737,6 +1780,17 @@ pub enum BuiltinKind {
     AwaitAny,
 }
 
+/// Source geometry of an LLM function's prompt literal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LlmPromptSpans {
+    /// The whole literal (backtick or quoted), delimiters included.
+    pub literal: TextRange,
+    /// Every `${…}` construct inside it — interpolations and
+    /// `${for}`/`${if}`/`${end…}` block tags. Offsets outside these (and
+    /// inside `literal`) are prompt prose.
+    pub code: Vec<TextRange>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmBodyDef {
     pub client: Option<Name>,
@@ -1747,6 +1801,12 @@ pub struct LlmBodyDef {
     /// `companions::llm_spec`. Absent when the prompt or client is unusable
     /// (a migration diagnostic was emitted instead).
     pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
+    /// The prompt literal's source geometry, recorded while the CST is in
+    /// hand: hover/navigation classify prompt PROSE (addressed to the
+    /// `ai.prompt` driver) versus `${…}` code without re-deriving the
+    /// desugared spec body's aliased spans. `None` when the prompt was
+    /// unusable.
+    pub prompt_spans: Option<LlmPromptSpans>,
     /// True when the function's `tools` field can hold tools at runtime:
     /// any value other than an absent field or a literal empty list (`tools
     /// []`). A non-literal expression (`tools: shared()`) counts as `true`
@@ -1755,12 +1815,6 @@ pub struct LlmBodyDef {
     /// tool loop); `ai.stream.from_spec`'s runtime empty-toolbox check covers the
     /// dynamic cases.
     pub has_tools: bool,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RawPrompt {
-    pub text: std::string::String,
     pub span: TextRange,
 }
 
@@ -2006,7 +2060,6 @@ impl TestArgValue {
 pub struct TemplateStringDef {
     pub name: Name,
     pub params: Vec<Param>,
-    pub body: Option<RawPrompt>,
     pub span: TextRange,
     pub name_span: TextRange,
 }

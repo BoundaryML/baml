@@ -1,5 +1,5 @@
 // Legacy TypeBuilder syntax was removed by BEP-066 (runtime type
-// construction is `baml.reflect` now). Every legacy form must surface a
+// construction is `reflect` now). Every legacy form must surface a
 // targeted E0098 "removed language feature" parse error instead of silently
 // parsing (converted from the old compiles/type_builder_test project).
 

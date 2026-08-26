@@ -25,11 +25,11 @@ function runtime_type_binding_generic_calls.ClosureOverRuntimeBoundElement() -> 
     load_type string
     load_const "value"
     load_type string
-    load_type type | baml.reflect.WithMeta<type>
+    load_type reflect.Type | reflect.WithMeta<reflect.Type>
     alloc_map 1
     load_const <omitted>
-    call baml.reflect.class.new
-    load_type baml.reflect.TypeView
+    call reflect.class.new
+    load_type reflect.TypeView
     load_const "as_type"
     virtual_call nargs=1 ntypeargs=0
     store_var item_t
@@ -70,7 +70,7 @@ function runtime_type_binding_generic_calls.Holder.first_or_null(self: runtime_t
     return
 }
 
-function runtime_type_binding_generic_calls.Holder.matches_type(self: runtime_type_binding_generic_calls.Holder<#0>, expected: type) -> bool {
+function runtime_type_binding_generic_calls.Holder.matches_type(self: runtime_type_binding_generic_calls.Holder<#0>, expected: reflect.Type) -> bool {
     load_type #0
     load_var expected
     call baml.ops.equals_equals

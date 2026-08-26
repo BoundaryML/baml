@@ -1,12 +1,14 @@
 //! BEP-066 M-1/M-6/E-1/E-5 diagnostic consistency oracles.
 
 use baml_compiler_diagnostics::Severity;
-use baml_project::{collect_diagnostics, testing::setup_test_db};
-use baml_tests::baml_test;
+use baml_tests::{
+    baml_test,
+    stdlib_prefix::{check_user_files, setup_test_db},
+};
 use bex_engine::BexExternalValue;
 
 fn diagnostics(source: &str) -> Vec<(String, String)> {
-    collect_diagnostics(&setup_test_db(source))
+    check_user_files(&setup_test_db(source))
         .into_iter()
         .filter(|diagnostic| diagnostic.severity == Severity::Error)
         .map(|diagnostic| (diagnostic.code().to_string(), diagnostic.message))
@@ -19,7 +21,7 @@ fn m1_bare_computed_generic_argument_diagnostic_names_unreflect() {
         r#"
 function id<T>(value: T) -> T { value }
 function main() -> unknown {
-  let runtime_t = type.of<string>()
+  let runtime_t = reflect.Type.of<string>()
   id<runtime_t>("x")
 }
 "#,
@@ -39,7 +41,7 @@ fn indirect_runtime_checked_call_is_rejected_before_emission() {
     let rows = diagnostics(
         r#"
 function main() -> int {
-  type T = unreflect(type.of<string>());
+  type T = unreflect(reflect.Type.of<string>());
   let indirect = (value: T) => { 1 }
   indirect("checked at runtime")
 }
@@ -59,7 +61,7 @@ fn optional_indirect_runtime_checked_call_is_rejected_before_emission() {
     let rows = diagnostics(
         r#"
 function main() -> int? {
-  type T = unreflect(type.of<string>());
+  type T = unreflect(reflect.Type.of<string>());
   let indirect: ((value: T) -> int throws never)? = (value: T) => { 1 }
   indirect?.("checked at runtime")
 }
@@ -96,7 +98,7 @@ function bounded<T extends Named>() -> int {
   baml.sys.panic("callee body entered")
 }
 function main() -> string {
-  let result = bounded<unreflect(type.of<string>())>() catch (e) {
+  let result = bounded<unreflect(reflect.Type.of<string>())>() catch (e) {
     reflect.errors.CompilationError => {
       e.diagnostics[0].code + "|" + e.diagnostics[0].message
     }
@@ -136,8 +138,8 @@ class Collision {
         r#"
 function main() -> string {
   let result = reflect.class.new("Collision", {
-    "wire": type.of<string>(),
-    "internal": type.of<int>().meta(alias = "wire"),
+    "wire": reflect.Type.of<string>(),
+    "internal": reflect.Type.of<int>().meta(alias = "wire"),
   }) catch (e) {
     reflect.errors.CompilationError => {
       e.diagnostics[0].code + "|" + e.diagnostics[0].message
@@ -171,8 +173,8 @@ function main() -> string throws unknown {
   let zero = if zero_result is string { zero_result } else { "zero did not throw" }
 
   let builder = reflect.class.builder("Duplicate")
-  builder.field("x", type.of<string>())
-  let duplicate_result = builder.field("x", type.of<int>()) catch (e) {
+  builder.field("x", reflect.Type.of<string>())
+  let duplicate_result = builder.field("x", reflect.Type.of<int>()) catch (e) {
     reflect.errors.CompilationError { diagnostics } => {
       diagnostics[0].code + ":" + (diagnostics[0].span == null).to_string()
     },

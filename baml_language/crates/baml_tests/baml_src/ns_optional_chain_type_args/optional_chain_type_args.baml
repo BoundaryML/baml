@@ -14,12 +14,12 @@ class Holder {
     raw string
 
     function value<T>(self) -> string {
-        type.of<T>().to_string()
+        reflect.Type.of<T>().to_string()
     }
 
     /// Type arg inferred from the argument, never written at the call site.
     function ident<T>(self, v: T) -> string {
-        type.of<T>().to_string()
+        reflect.Type.of<T>().to_string()
     }
 
     function inner(self) -> Holder? {
@@ -42,18 +42,18 @@ class Boxed<T> {
     /// Reads only the class-level arg — the bound-method path already curried
     /// these, so this is the "was already working" control.
     function describe(self) -> string {
-        type.of<T>().to_string()
+        reflect.Type.of<T>().to_string()
     }
 
     /// Reads class arg then method arg: fails unless the frame is seeded
     /// `[class T, method U]` in that order.
     function both<U>(self) -> string {
-        type.of<T>().to_string() + "/" + type.of<U>().to_string()
+        reflect.Type.of<T>().to_string() + "/" + reflect.Type.of<U>().to_string()
     }
 }
 
 interface Speaker {
-    function speak<T>(self) -> string
+    function speak<T>(self) -> string throws never
 }
 
 class Dog {
@@ -61,7 +61,7 @@ class Dog {
 
     implements Speaker {
         function speak<T>(self) -> string {
-            type.of<T>().to_string()
+            reflect.Type.of<T>().to_string()
         }
     }
 }
@@ -71,7 +71,7 @@ class Cat {
 
     implements Speaker {
         function speak<T>(self) -> string {
-            "cat:" + type.of<T>().to_string()
+            "cat:" + reflect.Type.of<T>().to_string()
         }
     }
 }
@@ -79,7 +79,7 @@ class Cat {
 /// Same class, two specializations: a union receiver whose arms differ only in
 /// their class type args, reached through `?.`.
 interface Tagged {
-    function tag<U>(self) -> string
+    function tag<U>(self) -> string throws never
 }
 
 class Pair<T> {
@@ -87,7 +87,7 @@ class Pair<T> {
 
     implements Tagged {
         function tag<U>(self) -> string {
-            type.of<T>().to_string() + "/" + type.of<U>().to_string()
+            reflect.Type.of<T>().to_string() + "/" + reflect.Type.of<U>().to_string()
         }
     }
 }
@@ -395,13 +395,13 @@ test "non_generic_optional_calls_unchanged" {
 
 // ─── The reflection shape the bug was found on ────────────────────────────────
 
-function reflected_field_read_fn() -> int? throws baml.errors.TypeMismatch {
-    let value: baml.AnyClass = Point { x: 7, label: "a" } else { return null }
+function reflected_field_read_fn() -> int? throws reflect.errors.TypeMismatch {
+    let value: reflect.AnyClass = Point { x: 7, label: "a" } else { return null }
     value.get_field("x")?.value<int>()
 }
 
-function reflected_missing_field_fn() -> int? throws baml.errors.TypeMismatch {
-    let value: baml.AnyClass = Point { x: 7, label: "a" } else { return null }
+function reflected_missing_field_fn() -> int? throws reflect.errors.TypeMismatch {
+    let value: reflect.AnyClass = Point { x: 7, label: "a" } else { return null }
     value.get_field("absent")?.value<int>()
 }
 
@@ -411,11 +411,11 @@ test "reflected_field_read_through_optional_chain" {
 }
 
 /// A type arg the value does not fit is still a domain error
-/// (`baml.errors.TypeMismatch`), not a frame-layout failure.
+/// (`reflect.errors.TypeMismatch`), not a frame-layout failure.
 function reflected_field_wrong_type_arg_fn() -> string {
-    let value: baml.AnyClass = Point { x: 7, label: "a" } else { return "no-class" }
+    let value: reflect.AnyClass = Point { x: 7, label: "a" } else { return "no-class" }
     let read = value.get_field("x")?.value<string>() catch (e) {
-        baml.errors.TypeMismatch { message } => { return "type-mismatch" }
+        reflect.errors.TypeMismatch { message } => { return "type-mismatch" }
     }
     read ?? "null"
 }

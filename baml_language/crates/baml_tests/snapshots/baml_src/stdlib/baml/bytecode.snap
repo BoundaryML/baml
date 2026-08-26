@@ -1,254 +1,6 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function baml.AnyClass.attributes(self: baml.AnyClass) -> baml.reflect.Meta {
-    load_var self
-    call baml.type.of_value
-    call baml.TypeValue.as_class
-    store_var _4
-    load_var _4
-    narrow_bind baml.reflect.class.Type, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const null
-    load_const null
-    load_const null
-    load_type string
-    load_type string
-    alloc_map 0
-    init_instance baml.reflect.Meta .alias, .description, .docstring, .other
-    jump L2
-
-  L1:
-    load_var _4
-    call baml.reflect.class.Type.meta
-
-  L2:
-    return
-}
-
-function baml.AnyClass.get(self: baml.AnyClass, name: string) -> #1 | null {
-    load_var2 1 2
-    load_type baml.AnyClass
-    load_const "has_field"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
-    unary_op !
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
-    load_var2 1 2
-    load_type baml.AnyClass
-    load_const "get_field"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _5
-    load_var _5
-    store_var _6
-    load_var _6
-    narrow_bind baml.reflect.class.Field, slot=5
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const null
-    jump L4
-
-  L2:
-    load_type #1
-    load_var _6
-    call baml.reflect.class.Field.value
-    jump L4
-
-  L3:
-    load_const null
-
-  L4:
-    return
-}
-
-function baml.AnyClass.get_field(self: baml.AnyClass, name: string) -> baml.reflect.class.Field | null {
-    load_var self
-    call baml.type.of_value
-    call baml.TypeValue.as_class
-    store_var _5
-    load_var _5
-    narrow_bind baml.reflect.class.Type, slot=3
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const null
-    jump L5
-
-  L1:
-    load_var _5
-    call baml.reflect.class.Type.fields
-    load_type baml.iter.Iterable<Error = never, Item = baml.reflect.class.Field>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _8
-
-  L2:
-    load_var _8
-    load_type baml.iter.Iterator<Error = never, Item = baml.reflect.class.Field>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _9
-    load_var _9
-    is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_var _9
-    store_var_load_var field
-    load_field .name
-    load_var name
-    cmp_op ==
-    pop_jump_if_false L2
-    load_var field
-    load_field .name
-    load_var field
-    load_field .type
-    load_var field
-    load_field .meta
-    load_var self
-    init_instance baml.reflect.class.Field .name, .type, .meta, ._owner
-    jump L5
-
-  L4:
-    load_const null
-
-  L5:
-    return
-}
-
-function baml.AnyClass.has_field(self: baml.AnyClass, name: string) -> bool {
-    load_var self
-    call baml.type.of_value
-    call baml.TypeValue.as_class
-    store_var _5
-    load_var _5
-    narrow_bind baml.reflect.class.Type, slot=3
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const false
-    jump L5
-
-  L1:
-    load_var _5
-    call baml.reflect.class.Type.fields
-    load_type baml.iter.Iterable<Error = never, Item = baml.reflect.class.Field>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _8
-
-  L2:
-    load_var _8
-    load_type baml.iter.Iterator<Error = never, Item = baml.reflect.class.Field>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _9
-    load_var _9
-    is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_var _9
-    load_field .name
-    load_var name
-    cmp_op ==
-    pop_jump_if_false L2
-    load_const true
-    jump L5
-
-  L4:
-    load_const false
-
-  L5:
-    return
-}
-
-function baml.AnyClass.list_fields(self: baml.AnyClass) -> baml.reflect.class.Field[] {
-    load_var self
-    call baml.type.of_value
-    call baml.TypeValue.as_class
-    store_var _4
-    load_var _4
-    narrow_bind baml.reflect.class.Type, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_type baml.reflect.class.Field
-    alloc_array 0
-    jump L5
-
-  L1:
-    load_type baml.reflect.class.Field
-    alloc_array 0
-    store_var fields
-    load_var _4
-    call baml.reflect.class.Type.fields
-    load_type baml.iter.Iterable<Error = never, Item = baml.reflect.class.Field>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _8
-
-  L2:
-    load_var _8
-    load_type baml.iter.Iterator<Error = never, Item = baml.reflect.class.Field>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _9
-    load_var _9
-    is_type baml.iter.Done
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_var _9
-    store_var field
-    load_type baml.reflect.class.Field
-    load_var2 3 6
-    load_field .name
-    load_var field
-    load_field .type
-    load_var field
-    load_field .meta
-    load_var self
-    init_instance baml.reflect.class.Field .name, .type, .meta, ._owner
-    call baml.Array.push
-    pop 1
-    jump L2
-
-  L4:
-    load_var fields
-
-  L5:
-    return
-}
-
-function baml.AnyClass.name(self: baml.AnyClass) -> string {
-    load_var self
-    call baml.type.of_value
-    call baml.TypeValue.baml.ToString.to_string
-    return
-}
-
-function baml.AnyClass.type(self: baml.AnyClass) -> type {
-    load_var self
-    call baml.type.of_value
-    return
-}
-
 function baml.Array.at(self: #0[], index: int) -> #0 | null {
 }
 
@@ -695,6 +447,12 @@ function baml.Array.splice(self: #0[], start: int, count: int, replace: #0[]) ->
 function baml.Array.unshift(self: #0[], item: #0) -> int {
 }
 
+function baml.Bigint._random_byte_count(lower: bigint, upper: bigint) -> int {
+}
+
+function baml.Bigint._random_in_range(draw: uint8array, lower: bigint, upper: bigint) -> bigint {
+}
+
 function baml.Bigint.abs(self: baml.Bigint) -> bigint {
 }
 
@@ -719,10 +477,104 @@ function baml.Bigint.parse(text: string) -> bigint {
 function baml.Bigint.pow(self: baml.Bigint, exp: bigint) -> bigint {
 }
 
-function baml.Bigint.random(lower: bigint, upper: bigint) -> bigint {
+function baml.Bigint.random(lower: bigint, upper: bigint, rng: baml.random.Rng) -> bigint {
+    load_var rng
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    store_var rng
+
+  L0:
+    load_var2 1 2
+    cmp_bigint_op >=
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    load_var2 1 2
+    call baml.Bigint._random_byte_count
+    store_var width
+    load_var2 3 6
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _17
+    load_var2 8 1
+    load_var upper
+    call baml.Bigint._random_in_range
+    store_var r
+
+  L2:
+    load_var2 7 2
+    cmp_bigint_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var r
+    return
+
+  L4:
+    load_var2 3 6
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _21
+    load_var2 9 1
+    load_var upper
+    call baml.Bigint._random_in_range
+    store_var r
+    jump L2
+
+  L5:
+    load_type bigint
+    load_var lower
+    call baml.String.from
+    store_var _11
+    load_type bigint
+    load_var upper
+    call baml.String.from
+    store_var _13
+    load_const "bigint.random: lower ("
+    load_var _11
+    bin_op +
+    load_const ") must be less than upper ("
+    bin_op +
+    load_var _13
+    bin_op +
+    load_const ")"
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
 }
 
 function baml.Bigint.to_int(self: baml.Bigint) -> int {
+}
+
+function baml.Bool.random(rng: baml.random.Rng) -> bool {
+    load_var rng
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    store_var rng
+
+  L0:
+    load_var rng
+    load_const 1
+    load_type baml.random.Rng
+    load_const "random"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _5
+    load_var _5
+    load_const 0
+    load_array_element
+    load_const 128
+    bin_op &
+    load_const 128
+    cmp_int_op ==
+    return
 }
 
 function baml.Comparable$for$bigint.compare(self: bigint, other: bigint) -> int {
@@ -810,6 +662,9 @@ function baml.Comparable$for$string.compare(self: string, other: string) -> int 
 
   L4:
     return
+}
+
+function baml.Float._unit_from_draw(draw: int) -> float {
 }
 
 function baml.Float.abs(self: baml.Float) -> float {
@@ -919,7 +774,23 @@ function baml.Float.pi() -> float {
 function baml.Float.pow(self: baml.Float, exp: float) -> float {
 }
 
-function baml.Float.random() -> float {
+function baml.Float.random(rng: baml.random.Rng) -> float {
+    load_var rng
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    store_var rng
+
+  L0:
+    load_var rng
+    load_type baml.random.Rng
+    load_const "random_int"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var _3
+    call baml.Float._unit_from_draw
+    return
 }
 
 function baml.Float.round(self: baml.Float) -> float {
@@ -976,6 +847,9 @@ function baml.FloatStats$for$float[].median(self: float[]) -> float {
     return
 }
 
+function baml.Int._random_in_range(draw: int, lower: int, upper: int) -> int {
+}
+
 function baml.Int.abs(self: baml.Int) -> int {
 }
 
@@ -1022,7 +896,73 @@ function baml.Int.parse(text: string) -> int {
 function baml.Int.pow(self: baml.Int, exp: int) -> int {
 }
 
-function baml.Int.random(lower: int, upper: int) -> int {
+function baml.Int.random(lower: int, upper: int, rng: baml.random.Rng) -> int {
+    load_var rng
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    call baml.random.SystemRandom.get
+    store_var rng
+
+  L0:
+    load_var2 1 2
+    cmp_int_op >=
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    load_var rng
+    load_type baml.random.Rng
+    load_const "random_int"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _16
+    load_var2 7 1
+    load_var upper
+    call baml.Int._random_in_range
+    store_var r
+
+  L2:
+    load_var2 6 2
+    cmp_int_op ==
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var r
+    return
+
+  L4:
+    load_var rng
+    load_type baml.random.Rng
+    load_const "random_int"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _19
+    load_var2 8 1
+    load_var upper
+    call baml.Int._random_in_range
+    store_var r
+    jump L2
+
+  L5:
+    load_type int
+    load_var lower
+    call baml.String.from
+    store_var _11
+    load_type int
+    load_var upper
+    call baml.String.from
+    store_var _13
+    load_const "int.random: lower ("
+    load_var _11
+    bin_op +
+    load_const ") must be less than upper ("
+    bin_op +
+    load_var _13
+    bin_op +
+    load_const ")"
+    bin_op +
+    init_instance baml.errors.InvalidArgument .message
+    throw
 }
 
 function baml.Int.trailing_ones(self: baml.Int) -> int {
@@ -1254,66 +1194,6 @@ function baml.ToString.to_string(self: baml.ToString) -> string {
     load_var self
     call baml._to_string_default
     return
-}
-
-function baml.TypeValue._to_string_impl(self: baml.TypeValue) -> string {
-}
-
-function baml.TypeValue._validate_renderable(self: baml.TypeValue) -> void {
-}
-
-function baml.TypeValue.array(self: baml.TypeValue) -> baml.reflect.array.Type {
-}
-
-function baml.TypeValue.as_array(self: baml.TypeValue) -> baml.reflect.array.Type | null {
-}
-
-function baml.TypeValue.as_class(self: baml.TypeValue) -> baml.reflect.class.Type | null {
-}
-
-function baml.TypeValue.as_enum(self: baml.TypeValue) -> baml.reflect.enum.Type | null {
-}
-
-function baml.TypeValue.as_function(self: baml.TypeValue) -> baml.reflect.function.Type | null {
-}
-
-function baml.TypeValue.as_interface(self: baml.TypeValue) -> baml.reflect.interface.Type | null {
-}
-
-function baml.TypeValue.as_literal(self: baml.TypeValue) -> baml.reflect.literal.Type | null {
-}
-
-function baml.TypeValue.as_map(self: baml.TypeValue) -> baml.reflect.map.Type | null {
-}
-
-function baml.TypeValue.as_primitive(self: baml.TypeValue) -> baml.reflect.primitive.Type | null {
-}
-
-function baml.TypeValue.as_union(self: baml.TypeValue) -> baml.reflect.union.Type | null {
-}
-
-function baml.TypeValue.baml.ToString.to_string(self: baml.TypeValue) -> string {
-    load_var self
-    call baml.TypeValue._to_string_impl
-    return
-}
-
-function baml.TypeValue.implemented_by(self: baml.TypeValue, other: type) -> bool {
-}
-
-function baml.TypeValue.implements(self: baml.TypeValue, other: type) -> bool {
-}
-
-function baml.TypeValue.kind(self: baml.TypeValue) -> baml.reflect.class.Type | baml.reflect.enum.Type | baml.reflect.union.Type | baml.reflect.literal.Type | baml.reflect.array.Type | baml.reflect.map.Type | baml.reflect.interface.Type | baml.reflect.primitive.Type | baml.reflect.function.Type {
-}
-
-function baml.TypeValue.meta(self: baml.TypeValue, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> baml.reflect.WithMeta<type> {
-}
-
-function baml.TypeValue.optional(self: baml.TypeValue) -> baml.reflect.union.Type {
-}
-
-function baml.TypeValue.to_baml(self: baml.TypeValue) -> string {
 }
 
 function baml.Uint8Array._to_string_impl(self: baml.Uint8Array) -> string {
@@ -3005,25 +2885,25 @@ function baml.fs.write(path: string, content: string) -> int {
 function baml.fs.write_bytes(path: string, content: uint8array) -> int {
 }
 
-function baml.future.Future.cancel(self: future<#0, #1>) -> bool {
+function baml.future.Future.cancel(self: baml.future.Future<#0, #1>) -> bool {
 }
 
-function baml.future.Future.is_cancelled(self: future<#0, #1>) -> bool {
+function baml.future.Future.is_cancelled(self: baml.future.Future<#0, #1>) -> bool {
 }
 
-function baml.future.Future.is_error(self: future<#0, #1>) -> bool {
+function baml.future.Future.is_error(self: baml.future.Future<#0, #1>) -> bool {
 }
 
-function baml.future.Future.is_result(self: future<#0, #1>) -> bool {
+function baml.future.Future.is_result(self: baml.future.Future<#0, #1>) -> bool {
 }
 
-function baml.future.Future.is_settled(self: future<#0, #1>) -> bool {
+function baml.future.Future.is_settled(self: baml.future.Future<#0, #1>) -> bool {
 }
 
-function baml.future.Future.state(self: future<#0, #1>) -> baml.future.FutureState {
+function baml.future.Future.state(self: baml.future.Future<#0, #1>) -> baml.future.FutureState {
 }
 
-function baml.future.all(futures: future<#0, #1>[]) -> future<#0[], #1> {
+function baml.future.all(futures: baml.future.Future<#0, #1>[]) -> baml.future.Future<#0[], #1> {
     load_var ?1
     make_cell
     store_var ?1
@@ -3041,7 +2921,7 @@ function baml.future.all(futures: future<#0, #1>[]) -> future<#0[], #1> {
     return
 }
 
-function baml.future.all_complete(futures: future<#0, #1>[]) -> future<#0[], #1> {
+function baml.future.all_complete(futures: baml.future.Future<#0, #1>[]) -> baml.future.Future<#0[], #1> {
     load_var ?1
     make_cell
     store_var ?1
@@ -3059,7 +2939,7 @@ function baml.future.all_complete(futures: future<#0, #1>[]) -> future<#0[], #1>
     return
 }
 
-function baml.future.any(futures: future<#0, #1>[]) -> future<#0, baml.future.AllFailed<#1>> {
+function baml.future.any(futures: baml.future.Future<#0, #1>[]) -> baml.future.Future<#0, baml.future.AllFailed<#1>> {
     load_var ?1
     make_cell
     store_var ?1
@@ -3077,7 +2957,7 @@ function baml.future.any(futures: future<#0, #1>[]) -> future<#0, baml.future.Al
     return
 }
 
-function baml.future.race(futures: future<#0, #1>[]) -> future<#0, #1> {
+function baml.future.race(futures: baml.future.Future<#0, #1>[]) -> baml.future.Future<#0, #1> {
     load_var ?1
     make_cell
     store_var ?1
@@ -5154,7 +5034,7 @@ function baml.json.path_or(j: baml.json.json, selector: string, default: #0) -> 
     return
 }
 
-function baml.json.schema(t: type) -> baml.json.json {
+function baml.json.schema(t: reflect.Type) -> baml.json.json {
 }
 
 function baml.json.serialize(v: #0) -> string {
@@ -5803,8 +5683,6 @@ function baml.random.Rng.random_int(self: baml.random.Rng) -> int {
     load_var bytes
     load_const 0
     load_array_element
-    load_const 63
-    bin_op &
     load_const 56
     bin_op <<
     load_var bytes
@@ -5847,29 +5725,6 @@ function baml.random.Rng.random_int(self: baml.random.Rng) -> int {
     load_const 7
     load_array_element
     bin_op |
-    store_var magnitude
-    load_var bytes
-    load_const 0
-    load_array_element
-    load_const 64
-    bin_op &
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const 0
-    load_var magnitude
-    sub_int
-    load_const 1
-    sub_int
-    jump L2
-
-  L1:
-    load_var magnitude
-
-  L2:
     return
 }
 
@@ -5911,318 +5766,10 @@ function baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xos
     return
 }
 
-function baml.reflect.Package._compile(files: map<string, string>, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package {
-}
-
-function baml.reflect.Package._finish(artifact: baml.reflect.Package, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package {
-}
-
-function baml.reflect.Package.classes(self: baml.reflect.Package) -> map<string, baml.reflect.class.Type> {
-}
-
-function baml.reflect.Package.compile(files: map<string, string>, packages: map<string, baml.reflect.Package>) -> baml.reflect.Package {
-    load_var packages
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_type string
-    load_type baml.reflect.Package
-    alloc_map 0
-    store_var packages
-
-  L0:
-    load_var2 1 2
-    sys_op baml.reflect.Package._compile
-    load_var packages
-    call baml.reflect.Package._finish
-    return
-}
-
-function baml.reflect.Package.diagnostics(self: baml.reflect.Package) -> baml.reflect.Diagnostic[] {
-}
-
-function baml.reflect.Package.enums(self: baml.reflect.Package) -> map<string, baml.reflect.enum.Type> {
-}
-
-function baml.reflect.Package.functions(self: baml.reflect.Package) -> map<string, baml.reflect.function.Type> {
-}
-
-function baml.reflect.Package.get_class(self: baml.reflect.Package, name: string) -> baml.reflect.class.Type | null {
-}
-
-function baml.reflect.Package.get_enum(self: baml.reflect.Package, name: string) -> baml.reflect.enum.Type | null {
-}
-
-function baml.reflect.Package.get_function(self: baml.reflect.Package, name: string) -> #0 | null {
-}
-
-function baml.reflect.Package.get_interface(self: baml.reflect.Package, name: string) -> baml.reflect.interface.Type | null {
-}
-
-function baml.reflect.Package.interfaces(self: baml.reflect.Package) -> map<string, baml.reflect.interface.Type> {
-}
-
-function baml.reflect.Package.tests(self: baml.reflect.Package) -> map<string, () -> null throws unknown> {
-}
-
-function baml.reflect.Package.with_types(self: baml.reflect.Package, types: map<string, type | baml.reflect.TypeView>) -> baml.reflect.Package {
-}
-
-function baml.reflect.Session._compile(self: baml.reflect.Session, source: string) -> baml.reflect.Package {
-}
-
-function baml.reflect.Session._finish(self: baml.reflect.Session, artifact: baml.reflect.Package) -> #0 {
-}
-
-function baml.reflect.Session._new(packages: map<string, baml.reflect.Package>) -> baml.reflect.Session {
-}
-
-function baml.reflect.Session.diagnostics(self: baml.reflect.Session) -> baml.reflect.Diagnostic[] {
-}
-
-function baml.reflect.Session.eval(self: baml.reflect.Session, source: string) -> #0 {
-    load_var2 1 2
-    load_type #0
-    sys_op baml.reflect.Session._compile
-    store_var artifact
-    load_type #0
-    load_var2 1 3
-    call baml.reflect.Session._finish
-    jump L0
-    load_var _
-    throw_if_panic
-    load_const "session evaluation failed"
-    init_instance baml.reflect.errors.EvaluationError .message
-    throw
-
-  L0:
-    return
-}
-
-function baml.reflect.Session.new(packages: map<string, baml.reflect.Package>) -> baml.reflect.Session {
-    load_var packages
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_type string
-    load_type baml.reflect.Package
-    alloc_map 0
-    store_var packages
-
-  L0:
-    load_var packages
-    call baml.reflect.Session._new
-    return
-}
-
-function baml.reflect.array.Type.baml.reflect.TypeView.as_type(self: baml.reflect.array.Type) -> type {
-}
-
-function baml.reflect.array.Type.element_type(self: baml.reflect.array.Type) -> type {
-}
-
-function baml.reflect.call_any(f: baml.AnyFunction<Returns = #0, Throws = #1>, args: map<string, unknown>) -> #0 {
-}
-
-function baml.reflect.class.Builder._build(self: baml.reflect.class.Builder, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type {
-}
-
-function baml.reflect.class.Builder.build(self: baml.reflect.class.Builder, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type {
-    load_var implementations
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_type baml.reflect.interface.Implementation
-    alloc_array 0
-    store_var implementations
-
-  L0:
-    load_var2 1 2
-    call baml.reflect.class.Builder._build
-    return
-}
-
-function baml.reflect.class.Builder.field(self: baml.reflect.class.Builder, name: string, ty: type | baml.reflect.WithMeta<type> | baml.reflect.class.PendingType | baml.reflect.WithMeta<baml.reflect.class.PendingType>) -> baml.reflect.class.Builder {
-}
-
-function baml.reflect.class.Builder.type(self: baml.reflect.class.Builder) -> baml.reflect.class.PendingType {
-}
-
-function baml.reflect.class.Field.metadata(self: baml.reflect.class.Field) -> baml.reflect.Meta {
+function baml.root.ToString$for$reflect.Type.to_string(self: reflect.Type) -> string {
     load_var self
-    load_field .meta
+    call reflect.Type._to_string_impl
     return
-}
-
-function baml.reflect.class.Field.value(self: baml.reflect.class.Field) -> #0 | null {
-    load_var self
-    load_field ._owner
-    store_var _3
-    load_var _3
-    narrow_bind baml.AnyClass, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const null
-    jump L4
-
-  L1:
-    load_type #0
-    load_var2 2 1
-    load_field .name
-    call baml.reflect.class.get_field
-    jump L4
-    load_var e
-    is_type baml.reflect.errors.CompilationError
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var e
-    rethrow
-
-  L3:
-    load_var e
-    load_field .0
-    init_instance baml.errors.TypeMismatch .message
-    throw
-
-  L4:
-    return
-}
-
-function baml.reflect.class.PendingType.array(self: baml.reflect.class.PendingType) -> baml.reflect.class.PendingType {
-}
-
-function baml.reflect.class.PendingType.meta(self: baml.reflect.class.PendingType, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> baml.reflect.WithMeta<baml.reflect.class.PendingType> {
-}
-
-function baml.reflect.class.PendingType.optional(self: baml.reflect.class.PendingType) -> baml.reflect.class.PendingType {
-}
-
-function baml.reflect.class.PendingType.resolved(self: baml.reflect.class.PendingType) -> type | null {
-}
-
-function baml.reflect.class.PendingType.union(self: baml.reflect.class.PendingType, others: (type | baml.reflect.class.PendingType)[]) -> baml.reflect.class.PendingType {
-}
-
-function baml.reflect.class.Type.baml.reflect.TypeView.as_type(self: baml.reflect.class.Type) -> type {
-}
-
-function baml.reflect.class.Type.fields(self: baml.reflect.class.Type) -> baml.reflect.class.Field[] {
-}
-
-function baml.reflect.class.Type.meta(self: baml.reflect.class.Type) -> baml.reflect.Meta {
-}
-
-function baml.reflect.class._new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type {
-}
-
-function baml.reflect.class.builder(name: string) -> baml.reflect.class.Builder {
-}
-
-function baml.reflect.class.get_field(value: unknown, name: string) -> #0 {
-}
-
-function baml.reflect.class.new(name: string, fields: map<string, type | baml.reflect.WithMeta<type>>, implementations: baml.reflect.interface.Implementation[]) -> baml.reflect.class.Type {
-    load_var implementations
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_type baml.reflect.interface.Implementation
-    alloc_array 0
-    store_var implementations
-
-  L0:
-    load_var2 1 2
-    load_var implementations
-    call baml.reflect.class._new
-    return
-}
-
-function baml.reflect.enum.Type.baml.reflect.TypeView.as_type(self: baml.reflect.enum.Type) -> type {
-}
-
-function baml.reflect.enum.Type.meta(self: baml.reflect.enum.Type) -> baml.reflect.Meta {
-}
-
-function baml.reflect.enum.Type.values(self: baml.reflect.enum.Type) -> baml.reflect.enum.Value[] {
-}
-
-function baml.reflect.enum.get_value(value: unknown) -> string {
-}
-
-function baml.reflect.enum.new(name: string, values: (string | baml.reflect.enum.Value)[]) -> baml.reflect.enum.Type {
-}
-
-function baml.reflect.enum.value(name: string, alias: string | null, description: string | null, docstring: string | null, other: map<string, string> | null) -> baml.reflect.enum.Value {
-}
-
-function baml.reflect.function.Type.baml.reflect.TypeView.as_type(self: baml.reflect.function.Type) -> type {
-}
-
-function baml.reflect.function.Type.generic_params(self: baml.reflect.function.Type) -> baml.reflect.function.GenericParam[] {
-}
-
-function baml.reflect.function.Type.get(self: baml.reflect.function.Type) -> #0 | null {
-}
-
-function baml.reflect.function.Type.is_generic(self: baml.reflect.function.Type) -> bool {
-}
-
-function baml.reflect.function.Type.params(self: baml.reflect.function.Type) -> baml.reflect.function.Parameter[] {
-}
-
-function baml.reflect.function.Type.return_type(self: baml.reflect.function.Type) -> type {
-}
-
-function baml.reflect.function.Type.specialize(self: baml.reflect.function.Type, args: type[]) -> baml.reflect.function.Type {
-}
-
-function baml.reflect.interface.Implementation.field(self: baml.reflect.interface.Implementation, interface_field: string, class_field: string | null) -> baml.reflect.interface.Implementation {
-}
-
-function baml.reflect.interface.Type.baml.reflect.TypeView.as_type(self: baml.reflect.interface.Type) -> type {
-}
-
-function baml.reflect.interface.Type.implemented_by(self: baml.reflect.interface.Type, other: type) -> bool {
-}
-
-function baml.reflect.interface.implementation() -> baml.reflect.interface.Implementation {
-}
-
-function baml.reflect.literal.Type.baml.reflect.TypeView.as_type(self: baml.reflect.literal.Type) -> type {
-}
-
-function baml.reflect.literal.new(value: string | int | bool) -> baml.reflect.literal.Type {
-}
-
-function baml.reflect.map.Type.baml.reflect.TypeView.as_type(self: baml.reflect.map.Type) -> type {
-}
-
-function baml.reflect.map.Type.key_type(self: baml.reflect.map.Type) -> type {
-}
-
-function baml.reflect.map.Type.value_type(self: baml.reflect.map.Type) -> type {
-}
-
-function baml.reflect.map.new(key: type, value: type) -> baml.reflect.map.Type {
-}
-
-function baml.reflect.primitive.Type.baml.reflect.TypeView.as_type(self: baml.reflect.primitive.Type) -> type {
-}
-
-function baml.reflect.signature(f: baml.AnyFunction<Returns = unknown, Throws = unknown>) -> baml.reflect.Signature {
-}
-
-function baml.reflect.union.Type.baml.reflect.TypeView.as_type(self: baml.reflect.union.Type) -> type {
-}
-
-function baml.reflect.union.Type.member_types(self: baml.reflect.union.Type) -> type[] {
-}
-
-function baml.reflect.union.new(types: type[]) -> baml.reflect.union.Type {
 }
 
 function baml.root.ops.Add<string>$for$string.add(self: string, rhs: string) -> string {
@@ -6239,7 +5786,7 @@ function baml.root.ops.Add<string>$for$string.add(self: string, rhs: string) -> 
     return
 }
 
-function baml.sap.ParseCache.new(t_stream: type, t_final: type) -> baml.sap.ParseCache<#0, #1> {
+function baml.sap.ParseCache.new(t_stream: reflect.Type, t_final: reflect.Type) -> baml.sap.ParseCache<#0, #1> {
 }
 
 function baml.sap.__new_parse_cache() -> baml.sap.ParseCache<#0, #1> {
@@ -6267,7 +5814,7 @@ function baml.sap.parse(text: string) -> #0 {
     return
 }
 
-function baml.sap.parse_type(t: type, text: string) -> unknown {
+function baml.sap.parse_type(t: reflect.Type, text: string) -> unknown {
     load_var2 1 1
     sys_op baml.sap.ParseCache.new
     store_var cache
@@ -8535,9 +8082,6 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table {
     load_var items
     init_instance baml.toml.Table .items
     return
-}
-
-function baml.type.of_value(v: unknown) -> type {
 }
 
 function baml.ws.WsStream.close(self: baml.ws.WsStream) -> null {

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
-function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Client | null) -> image {
+function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> image {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -10,23 +10,28 @@ function fixtures.llm_image_outputs.GenerateImage(prompt: string, client: ai.Cli
     store_var client
 
   L0:
-    load_type image
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _5
+    store_var _7
     load_var prompt
     call user.fixtures.llm_image_outputs.GenerateImage$spec
-    store_var _7
+    store_var _9
+    load_type image
     load_var2 4 5
-    load_type ai.Runner<image, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -61,10 +66,7 @@ function fixtures.llm_image_outputs.GenerateImage$render_prompt(prompt: string) 
     call user.fixtures.llm_image_outputs.GenerateImage$spec
     store_var _2
     load_type image
-    call ai.wire.render_output_format
-    store_var _3
-    load_type image
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -78,6 +80,7 @@ function fixtures.llm_image_outputs.GenerateImage$spec(prompt: string) -> ai.Fun
     call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-image-1"
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -109,7 +112,7 @@ function fixtures.llm_image_outputs.GenerateImage$spec(prompt: string) -> ai.Fun
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImage$stream(prompt: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<image, image> {
+function fixtures.llm_image_outputs.GenerateImage$stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<image, image> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -118,17 +121,26 @@ function fixtures.llm_image_outputs.GenerateImage$stream(prompt: string, client:
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     load_var prompt
     call user.fixtures.llm_image_outputs.GenerateImage$spec
-    store_var _4
+    store_var _6
     load_type image
     load_type image
-    load_var2 3 2
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.Client | null) -> image[] {
+function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> image[] {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -137,23 +149,28 @@ function fixtures.llm_image_outputs.GenerateImageSet(prompt: string, client: ai.
     store_var client
 
   L0:
-    load_type image[]
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _5
+    store_var _7
     load_var prompt
     call user.fixtures.llm_image_outputs.GenerateImageSet$spec
-    store_var _7
+    store_var _9
+    load_type image[]
     load_var2 4 5
-    load_type ai.Runner<image[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<image[]>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -188,10 +205,7 @@ function fixtures.llm_image_outputs.GenerateImageSet$render_prompt(prompt: strin
     call user.fixtures.llm_image_outputs.GenerateImageSet$spec
     store_var _2
     load_type image[]
-    call ai.wire.render_output_format
-    store_var _3
-    load_type image[]
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -205,6 +219,7 @@ function fixtures.llm_image_outputs.GenerateImageSet$spec(prompt: string) -> ai.
     call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-image-1"
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -236,7 +251,7 @@ function fixtures.llm_image_outputs.GenerateImageSet$spec(prompt: string) -> ai.
     return
 }
 
-function fixtures.llm_image_outputs.GenerateImageSet$stream(prompt: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<image[], image[]> {
+function fixtures.llm_image_outputs.GenerateImageSet$stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<image[], image[]> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -245,17 +260,26 @@ function fixtures.llm_image_outputs.GenerateImageSet$stream(prompt: string, clie
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     load_var prompt
     call user.fixtures.llm_image_outputs.GenerateImageSet$spec
-    store_var _4
+    store_var _6
     load_type image[]
     load_type image[]
-    load_var2 3 2
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, client: ai.Client | null) -> (image | string)[] {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> (image | string)[] {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -264,23 +288,28 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative(prompt: string, 
     store_var client
 
   L0:
-    load_type (image | string)[]
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _5
+    store_var _7
     load_var prompt
     call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec
-    store_var _7
+    store_var _9
+    load_type (string | image)[]
     load_var2 4 5
-    load_type ai.Runner<(string | image)[], Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<(string | image)[]>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _4
-    load_var _4
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -314,11 +343,8 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative$render_prompt(pr
     load_var prompt
     call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec
     store_var _2
-    load_type (image | string)[]
-    call ai.wire.render_output_format
-    store_var _3
     load_type (string | image)[]
-    load_var2 2 3
+    load_var _2
     call ai.FunctionSpec.prompt
     return
 }
@@ -332,6 +358,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(prompt: str
     call ai.tools.Toolbox.new
     store_var _4
     load_const "gpt-4.1"
+    load_const <omitted>
     load_const <omitted>
     load_const <omitted>
     load_const <omitted>
@@ -363,7 +390,7 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec(prompt: str
     return
 }
 
-function fixtures.llm_image_outputs.GenerateMixedImageNarrative$stream(prompt: string, client: ai.stream.StreamingClient | null) -> ai.stream.Stream<(image | string)[], (image | string)[]> {
+function fixtures.llm_image_outputs.GenerateMixedImageNarrative$stream(prompt: string, client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<(image | string)[], (image | string)[]> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -372,12 +399,21 @@ function fixtures.llm_image_outputs.GenerateMixedImageNarrative$stream(prompt: s
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     load_var prompt
     call user.fixtures.llm_image_outputs.GenerateMixedImageNarrative$spec
-    store_var _4
+    store_var _6
     load_type (image | string)[]
     load_type (image | string)[]
-    load_var2 3 2
+    load_var2 4 2
+    load_var on_event
     call ai.stream.from_spec
     return
 }

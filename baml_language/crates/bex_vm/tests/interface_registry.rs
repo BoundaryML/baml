@@ -6,19 +6,28 @@
 //! default methods, not just the methods the impl overrides, with an override
 //! winning over the default.
 
-use baml_project::testing::compile_source;
-use baml_type::TyTemplate;
-use bex_vm_types::{Object, types::Program};
+use baml_db::testing::compile_source;
+use bex_vm_types::{Object, TyTemplate, types::Program};
 
 /// The head type name of a for-type pattern (`Dog` for `Dog`, `Wrap` for
 /// `Wrap<T>`). Matching on this — rather than a substring of the rendered
 /// pattern — keeps distinct names like `Dog` and `HotDog` (and `$stream`
 /// companions, which have a distinct head name) from colliding.
-fn for_ty_head_name(pat: &TyTemplate) -> Option<&str> {
-    match pat {
-        TyTemplate::Class(qtn, ..) | TyTemplate::Enum(qtn, ..) => Some(qtn.name().as_str()),
+///
+/// A head in a not-yet-loaded `Program` is a tag with no pointer, so the name
+/// comes from the pooled declaration carrying that tag — the same association
+/// the loader's bind pass makes.
+fn for_ty_head_name<'a>(program: &'a Program, pat: &TyTemplate) -> Option<&'a str> {
+    let (TyTemplate::Class(head, ..) | TyTemplate::Enum(head, ..)) = pat else {
+        return None;
+    };
+    program.objects.iter().find_map(|object| match object {
+        Object::Class(class) if class.type_tag == head.tag() => {
+            Some(class.name.item_name().as_str())
+        }
+        Object::Enum(enm) if enm.type_tag == head.tag() => Some(enm.name.item_name().as_str()),
         _ => None,
-    }
+    })
 }
 
 /// The `(method name, fn FQN)` pairs recorded for `<for_type> implements <iface>`.
@@ -37,7 +46,7 @@ fn impl_methods(program: &Program, iface: &str, for_type: &str) -> Vec<(String, 
                 .as_interface()
                 .is_some_and(|def| def.name.name().as_str() == iface)
         })
-        .find(|rule| for_ty_head_name(&rule.for_ty_pattern) == Some(for_type))
+        .find(|rule| for_ty_head_name(program, &rule.for_ty_pattern) == Some(for_type))
         .unwrap_or_else(|| panic!("no `{for_type} implements {iface}` rule baked"));
     rule.methods
         .iter()

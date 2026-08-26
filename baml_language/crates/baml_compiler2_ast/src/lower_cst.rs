@@ -18,8 +18,8 @@ use crate::{
         AssociatedTypeBindingDef, AssociatedTypeDef, BuiltinKind, CallArg, EnumDef, Expr, ExprId,
         FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults, ImplementsBlockDef,
         ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Item, LambdaDef, LambdaKind,
-        LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, RawPrompt,
-        TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
+        LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg, TemplateStringDef,
+        TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind, VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -388,7 +388,7 @@ fn lower_function(
 
     let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
         let mut llm_body_def = lower_llm_body(&llm);
-        reject_reserved_llm_client_params(&mut params, name.as_str(), diags);
+        reject_reserved_llm_params(&mut params, name.as_str(), diags);
         // A prompt is a string literal: backtick (interpolating) or quoted
         // (inert). Both become the same tagged template below; the parser
         // rejects every other value shape.
@@ -410,17 +410,37 @@ fn lower_function(
             warn_quoted_prompt_interpolation(quoted, diags);
         }
 
+        llm_body_def.prompt_spans = prompt_literal.as_ref().map(|literal| match literal {
+            LlmPromptLiteral::Backtick(lit) => crate::ast::LlmPromptSpans {
+                literal: lit.syntax().span_range(),
+                code: lit
+                    .syntax()
+                    .descendants()
+                    .filter(|node| {
+                        node.kind() == baml_compiler_syntax::SyntaxKind::BACKTICK_INTERPOLATION
+                    })
+                    .map(|node| node.span_range())
+                    .collect(),
+            },
+            // A quoted prompt is inert: the whole literal is prose.
+            LlmPromptLiteral::Quoted(lit) => crate::ast::LlmPromptSpans {
+                literal: lit.syntax().span_range(),
+                code: Vec::new(),
+            },
+        });
+
         // Resolve the client: a quoted "provider/model" string maps at
         // compile time to a provider constructor; anything else is an
         // expression evaluating to ai.Client.
         let client_value = llm.client_field().and_then(|cf| cf.value_element());
         let client_spec = resolve_llm_client(name.as_str(), client_value, llm_body_def.span, diags);
 
-        // The function's real parameters — the injected `client` override is
-        // added below and is never part of the spec's bound arguments.
+        // The function's real parameters — the injected `client` and
+        // `on_event` overrides are added below and are never part of the
+        // spec's bound arguments.
         let user_params: Vec<Param> = params
             .iter()
-            .filter(|p| p.name.as_str() != "client")
+            .filter(|p| p.name.as_str() != "client" && p.name.as_str() != "on_event")
             .cloned()
             .collect();
         let param_names: Vec<Name> = user_params.iter().map(|p| p.name.clone()).collect();
@@ -453,6 +473,7 @@ fn lower_function(
         // could not be synthesized (migration diagnostics fired), the body is
         // omitted so the missing `<Fn>$spec` reference never cascades.
         append_spec_client_param(&mut params, &mut defaults, llm_body_def.span);
+        append_spec_on_event_param(&mut params, &mut defaults, llm_body_def.span);
         let body = if llm_body_def
             .companion_bodies
             .iter()
@@ -465,7 +486,6 @@ fn lower_function(
                     .iter()
                     .map(|param| param.name.clone())
                     .collect::<Vec<_>>(),
-                return_type.clone(),
                 llm_body_def.span,
             );
             Some(FunctionBodyDef::Expr(expr_body, source_map))
@@ -726,28 +746,85 @@ pub(crate) fn append_spec_client_param(
     });
 }
 
-fn reject_reserved_llm_client_params(
+/// Append the spec-mode listener parameter:
+/// `on_event: ((ai.events.Event) -> void)? = null`.
+///
+/// Both synthesized companion bodies thread it through unchanged —
+/// `Agent.new(on_event = on_event)` for the direct call and
+/// `ai.stream.from_spec(..., on_event = on_event)` for the stream; a null
+/// listener means no events are delivered.
+pub(crate) fn append_spec_on_event_param(
+    params: &mut Vec<Param>,
+    defaults: &mut FunctionDefaults,
+    span: text_size::TextRange,
+) {
+    let null_default = {
+        let id = defaults.exprs.exprs.alloc(Expr::Null);
+        defaults.source_map.expr_spans.alloc(span);
+        id
+    };
+    let event_ty = TypeExprKind::Path {
+        segments: vec![Name::new("ai"), Name::new("events"), Name::new("Event")],
+        generic_args: vec![],
+        associated_type_bindings: vec![],
+        attrs: vec![],
+    }
+    .at(span);
+    let listener_ty = TypeExprKind::Function {
+        params: vec![crate::ast::FunctionTypeParam {
+            name: None,
+            optional: false,
+            ty: event_ty,
+        }],
+        ret: Box::new(TypeExprKind::Void { attrs: vec![] }.at(span)),
+        throws: None,
+        attrs: vec![],
+    }
+    .at(span);
+    params.push(Param {
+        name: Name::new("on_event"),
+        type_expr: Some(
+            TypeExprKind::Optional {
+                inner: Box::new(listener_ty),
+                attrs: vec![],
+            }
+            .at(span),
+        ),
+        default: Some(crate::ast::DefaultExprId::new(null_default)),
+        span,
+        name_span: span,
+    });
+}
+
+fn reject_reserved_llm_params(
     params: &mut Vec<Param>,
     function_name: &str,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    let mut reserved_spans = Vec::new();
-    params.retain(|param| {
-        if param.name.as_str() == "client" {
-            reserved_spans.push(param.name_span);
-            false
-        } else {
-            true
-        }
-    });
+    const RESERVED: &[(&str, &str)] = &[
+        ("client", "the compiler-injected LLM client override"),
+        (
+            "on_event",
+            "the compiler-injected LLM event listener override",
+        ),
+        ("ctx", "the compiler-provided prompt context"),
+    ];
 
-    for span in reserved_spans {
-        diags.push(LoweringDiagnostic::ReservedLlmClientParam {
+    params.retain(|param| {
+        let Some((param_name, reserved_for)) = RESERVED
+            .iter()
+            .find(|(name, _)| *name == param.name.as_str())
+        else {
+            return true;
+        };
+        diags.push(LoweringDiagnostic::ReservedLlmParam {
             function_name: function_name.to_string(),
-            param_name: "client".to_string(),
-            span,
+            param_name: (*param_name).to_string(),
+            reserved_for,
+            span: param.name_span,
         });
-    }
+        false
+    });
 }
 
 fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
@@ -762,6 +839,8 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         client,
         // Filled in by the LLM-function branch once param names are known.
         companion_bodies: Vec::new(),
+        // Filled in by the LLM-function branch from the prompt literal.
+        prompt_spans: None,
         has_tools: llm_tools_present(llm_body),
         span,
     }
@@ -947,15 +1026,6 @@ fn tools_value_element(
     llm.tools_field()
         .as_ref()
         .and_then(ast::ToolsField::value_element)
-}
-
-fn lower_raw_prompt(raw_string: &ast::RawStringLiteral) -> RawPrompt {
-    let prompt_span = raw_string.syntax().span_range();
-    RawPrompt {
-        text: crate::parse_string_attr_value(&raw_string.syntax().text().to_string())
-            .unwrap_or_default(),
-        span: prompt_span,
-    }
 }
 
 fn lower_class(
@@ -1741,6 +1811,13 @@ fn lower_test_arg_item(item: &ast::ConfigItem) -> TestArgValue {
 }
 
 fn lower_test_arg_config_value(value: &SyntaxNode) -> TestArgValue {
+    if value
+        .descendants()
+        .any(|node| node.kind() == SyntaxKind::RAW_STRING_LITERAL)
+    {
+        return TestArgValue::Null;
+    }
+
     if let Some(array) = value
         .children()
         .find(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)
@@ -2271,12 +2348,9 @@ fn lower_template_string(
         .map(|pl| lower_params(&pl, &ts_name, &context, diags))
         .unwrap_or_default();
 
-    let body = ts.raw_string().map(|rs| lower_raw_prompt(&rs));
-
     Some(TemplateStringDef {
         name: Name::new(name_token.text()),
         params,
-        body,
         span: node.span_range(),
         name_span: name_token.text_range(),
     })

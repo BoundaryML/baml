@@ -106,10 +106,10 @@ function optional_chain_type_args.$init_test_ns_optional_chain_type_args_optiona
 
 function optional_chain_type_args.Boxed.both(self: optional_chain_type_args.Boxed<#0>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _3
     load_type #1
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _5
     load_var _3
     load_const "/"
@@ -121,7 +121,7 @@ function optional_chain_type_args.Boxed.both(self: optional_chain_type_args.Boxe
 
 function optional_chain_type_args.Boxed.describe(self: optional_chain_type_args.Boxed<#0>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
@@ -138,7 +138,7 @@ function optional_chain_type_args.Callables.method(self: optional_chain_type_arg
 
 function optional_chain_type_args.Cat.Speaker.speak(self: optional_chain_type_args.Cat) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _2
     load_const "cat:"
     load_var _2
@@ -148,13 +148,13 @@ function optional_chain_type_args.Cat.Speaker.speak(self: optional_chain_type_ar
 
 function optional_chain_type_args.Dog.Speaker.speak(self: optional_chain_type_args.Dog) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
 function optional_chain_type_args.Holder.ident(self: optional_chain_type_args.Holder, v: #0) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
@@ -178,16 +178,16 @@ function optional_chain_type_args.Holder.plain(self: optional_chain_type_args.Ho
 
 function optional_chain_type_args.Holder.value(self: optional_chain_type_args.Holder) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
 function optional_chain_type_args.Pair.Tagged.tag(self: optional_chain_type_args.Pair<#0>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _3
     load_type #1
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _5
     load_var _3
     load_const "/"
@@ -834,6 +834,7 @@ function optional_chain_type_args.optional_chain_tmp_path(name: string) -> strin
     store_var _6
     load_const 0
     load_const 1000000000
+    load_const <omitted>
     call baml.Int.random
     store_var _11
     load_type int
@@ -900,7 +901,7 @@ function optional_chain_type_args.reflected_field_read_fn() -> int | null {
     init_instance user.optional_chain_type_args.Point .x, .label
     store_var _2
     load_var _2
-    narrow_bind baml.AnyClass, slot=1
+    narrow_bind reflect.AnyClass, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -913,7 +914,7 @@ function optional_chain_type_args.reflected_field_read_fn() -> int | null {
     store_var value
     load_var value
     load_const "x"
-    load_type baml.AnyClass
+    load_type reflect.AnyClass
     load_const "get_field"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -926,13 +927,13 @@ function optional_chain_type_args.reflected_field_read_fn() -> int | null {
   L2:
     load_var value
     load_const "x"
-    load_type baml.AnyClass
+    load_type reflect.AnyClass
     load_const "get_field"
     virtual_call nargs=2 ntypeargs=0
     store_var _6
     load_type int
     load_var _6
-    call baml.reflect.class.Field.value
+    call reflect.class.Field.value
     jump L4
 
   L3:
@@ -948,7 +949,7 @@ function optional_chain_type_args.reflected_field_wrong_type_arg_fn() -> string 
     init_instance user.optional_chain_type_args.Point .x, .label
     store_var _2
     load_var _2
-    narrow_bind baml.AnyClass, slot=1
+    narrow_bind reflect.AnyClass, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -961,7 +962,7 @@ function optional_chain_type_args.reflected_field_wrong_type_arg_fn() -> string 
     store_var value
     load_var value
     load_const "x"
-    load_type baml.AnyClass
+    load_type reflect.AnyClass
     load_const "get_field"
     virtual_call nargs=2 ntypeargs=0
     store_var _6
@@ -974,16 +975,16 @@ function optional_chain_type_args.reflected_field_wrong_type_arg_fn() -> string 
   L2:
     load_var value
     load_const "x"
-    load_type baml.AnyClass
+    load_type reflect.AnyClass
     load_const "get_field"
     virtual_call nargs=2 ntypeargs=0
     store_var _8
     load_type string
     load_var _8
-    call baml.reflect.class.Field.value
+    call reflect.class.Field.value
     jump L6
     load_var e
-    is_type baml.errors.TypeMismatch
+    is_type reflect.errors.TypeMismatch
     pop_jump_if_false L3
     jump L4
 
@@ -1019,7 +1020,7 @@ function optional_chain_type_args.reflected_missing_field_fn() -> int | null {
     init_instance user.optional_chain_type_args.Point .x, .label
     store_var _2
     load_var _2
-    narrow_bind baml.AnyClass, slot=1
+    narrow_bind reflect.AnyClass, slot=1
     pop_jump_if_false L0
     jump L1
 
@@ -1032,7 +1033,7 @@ function optional_chain_type_args.reflected_missing_field_fn() -> int | null {
     store_var value
     load_var value
     load_const "absent"
-    load_type baml.AnyClass
+    load_type reflect.AnyClass
     load_const "get_field"
     virtual_call nargs=2 ntypeargs=0
     store_var _4
@@ -1045,13 +1046,13 @@ function optional_chain_type_args.reflected_missing_field_fn() -> int | null {
   L2:
     load_var value
     load_const "absent"
-    load_type baml.AnyClass
+    load_type reflect.AnyClass
     load_const "get_field"
     virtual_call nargs=2 ntypeargs=0
     store_var _6
     load_type int
     load_var _6
-    call baml.reflect.class.Field.value
+    call reflect.class.Field.value
     jump L4
 
   L3:

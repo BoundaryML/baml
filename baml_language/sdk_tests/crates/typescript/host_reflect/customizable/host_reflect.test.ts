@@ -25,9 +25,9 @@ describe("BEP-066 TypeScript host boundary", () => {
       reflect.enum.value("RED", { alias: "k7" }),
     ]);
     const record = reflect.class.new("RuntimeRecord", {
-      label: reflect.type.of(String).meta({ alias: "display_label" }),
+      label: reflect.Type.of(String).meta({ alias: "display_label" }),
       category,
-      scores: reflect.type.of("int").array(),
+      scores: reflect.Type.of("int").array(),
     });
 
     const parsed = HostParse<Record<string, unknown>>(
@@ -55,7 +55,7 @@ describe("BEP-066 TypeScript host boundary", () => {
 
   it("wire_occurrences_are_fresh_and_handles_reject_serialization", () => {
     const runtimeType = reflect.class.new("Fresh", {
-      value: reflect.type.of("int"),
+      value: reflect.Type.of("int"),
     });
     expect(HostTypeEqual({ $types: { A: runtimeType, B: runtimeType } })).toBe(false);
     expect(() => JSON.stringify(runtimeType)).toThrow(/cannot be serialized/);
@@ -68,9 +68,9 @@ describe("BEP-066 TypeScript host boundary", () => {
     );
     expect(HostTypeName({ $types: { T: StaticChoice } })).toBe("StaticChoice");
     expect(HostTypeName({ $types: { T: StaticNamed } })).toBe("StaticNamed");
-    expect(reflect.type.of("int").optional().array()).toBeInstanceOf(BamlType);
+    expect(reflect.Type.of("int").optional().array()).toBeInstanceOf(BamlType);
     expect(reflect).toHaveProperty("class");
-    expect(reflect).toHaveProperty("type");
+    expect(reflect).toHaveProperty("Type");
 
     class NotGenerated {}
     expect(() => HostTypeName({ $types: { T: NotGenerated } })).toThrow(
@@ -85,7 +85,7 @@ describe("BEP-066 TypeScript host boundary", () => {
   });
 
   it("host_handles_expose_composition_only", () => {
-    const runtimeType = reflect.type.of("int");
+    const runtimeType = reflect.Type.of("int");
     expect("kind" in runtimeType).toBe(false);
     expect("fields" in runtimeType).toBe(false);
     expect("as_type" in runtimeType).toBe(false);
@@ -99,6 +99,6 @@ describe("BEP-066 TypeScript host boundary", () => {
       thrown = error;
     }
     expect(thrown).toBeInstanceOf(BamlError);
-    expect((thrown as BamlError).className).toBe("baml.reflect.errors.CompilationError");
+    expect((thrown as BamlError).className).toBe("reflect.errors.CompilationError");
   });
 });

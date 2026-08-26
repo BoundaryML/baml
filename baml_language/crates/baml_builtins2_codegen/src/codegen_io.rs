@@ -87,7 +87,7 @@ fn io_package_name(builtin: &NativeBuiltin) -> &str {
 /// - "baml.fs.open" → "fs"
 /// - "baml.fs.File.read" → "fs"
 /// - `"ai.internal._gcp_access_token"` → `"internal"`
-/// - `"ai.Context.output_format_with"` → `""` (top-level class method)
+/// - `"ai.OutputFormat._render"` -> `""` (top-level class method)
 fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
     let after_package = builtin
         .path
@@ -277,7 +277,7 @@ fn owned_rust_type(
             } else {
                 match name.as_str() {
                     "unknown" => quote! { BexExternalValue },
-                    "type" => quote! { baml_type::RuntimeTy },
+                    "type" => quote! { baml_type::RuntimeTy<baml_type::TaggedTypeName> },
                     "function" => quote! { BexExternalValue },
                     _ => quote! { BexExternalValue },
                 }
@@ -319,7 +319,7 @@ fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
         // generic `BexExternalValue` fallback, which would not type-check.
         BamlType::Named(name) if name == "type" => {
             *needs_heap = true;
-            quote! { Result<baml_type::RuntimeTy, AccessError> }
+            quote! { Result<baml_type::RuntimeTy<baml_type::TaggedTypeName>, AccessError> }
         }
         _ => {
             *needs_heap = true;
@@ -472,7 +472,12 @@ fn external_to_typed_expr(
         BamlType::Named(name) if name == "type" => quote! {
             match #val_expr {
                 BexExternalValue::Adt(bex_external_types::BexExternalAdt::Type(v)) => Ok(v),
-                BexExternalValue::Adt(bex_external_types::BexExternalAdt::TypeDef(v)) => Ok(v.root),
+                BexExternalValue::Adt(bex_external_types::BexExternalAdt::TypeDef(_)) => {
+                    Err(AccessError::TypeMismatch {
+                        expected: "a type value",
+                        actual: "a portable type definition".to_string(),
+                    })
+                }
                 other => Err(AccessError::TypeMismatch {
                     expected: "type",
                     actual: other.type_name().to_string(),
@@ -659,7 +664,7 @@ fn clean_rust_type(
                 quote! { #owned::#ns_ident::#name_ident }
             } else {
                 match name.as_str() {
-                    "type" => quote! { baml_type::RuntimeTy },
+                    "type" => quote! { baml_type::RuntimeTy<baml_type::TaggedTypeName> },
                     "unknown" => quote! { BexExternalValue },
                     "function" => quote! { BexExternalValue },
                     _ => quote! { BexExternalValue },
@@ -1172,7 +1177,7 @@ fn compute_non_defaultable_classes(
 
     // Seed: classes with a direct non-`Default` field — insert both name forms.
     // `$rust_type` (`Arc<dyn Any>`) and the `type` metatype (`RuntimeTy`) are
-    // both non-`Default`. (Container forms like `list<type>`/`type?` stay
+    // both non-`Default`. (Container forms like `list<reflect.Type>`/`reflect.Type?` stay
     // defaultable — `Vec`/`Option` are `Default` — so only direct fields seed.)
     let mut non_defaultable: std::collections::HashSet<String> = std::collections::HashSet::new();
     for (cd, full_name) in &all_classes {
@@ -1453,7 +1458,7 @@ fn emit_one_class_trait(
             let type_arg_params: Vec<TokenStream> = (0..fn_type_arg_count)
                 .map(|i| {
                     let p_ident = format_ident!("type_arg_{}", i);
-                    quote! { #p_ident: baml_type::RuntimeTy }
+                    quote! { #p_ident: baml_type::RuntimeTy<baml_type::TaggedTypeName> }
                 })
                 .collect();
 
@@ -1747,7 +1752,7 @@ fn emit_one_namespace_trait(
                 .enumerate()
                 .map(|(i, _)| {
                     let p_ident = format_ident!("type_arg_{}", i);
-                    quote! { #p_ident: baml_type::RuntimeTy }
+                    quote! { #p_ident: baml_type::RuntimeTy<baml_type::TaggedTypeName> }
                 })
                 .collect();
 
@@ -2077,7 +2082,7 @@ fn emit_root_trait(tree: &BTreeMap<String, IoNamespaceNode>) -> TokenStream {
                 })
                 .collect();
             // A package's top-level classes (empty namespace, e.g.
-            // `ai.Context.output_format_with`) have no namespace segment to
+            // `ai.OutputFormat._render`) have no namespace segment to
             // consume: route the full `{Class}.{method}` rest to the
             // package-root dispatcher instead of `None`.
             let fallback = namespaces

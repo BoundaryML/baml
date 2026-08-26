@@ -14,7 +14,7 @@ use baml_type::{
     Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, RuntimeFunctionParamTy,
     RuntimeInterface, RuntimeTy, TyAttr, TypeName,
 };
-use bex_project::{BexExternalAdt, BexExternalValue};
+use bex_project::{BexExternalAdt, BexExternalValue, TypeDefRef};
 use indexmap::IndexMap;
 
 use crate::{
@@ -309,15 +309,32 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
 
 /// Decode a wire `BamlTy` into a `type`-valued external value (for
 /// `InboundValue.ty_value`).
+///
+/// The wire carries names, and the engine's lane carries identities — but for
+/// a *compiled* declaration the identity is content-addressed from exactly
+/// that name, so this recovers the tag emit assigned rather than inventing
+/// one. A name no declaration bears yields a tag nothing matches, which fails
+/// at the lookup instead of binding to the wrong declaration.
+///
+/// A runtime-created declaration cannot arrive this way at all: its identity
+/// is a counter mint that no name reproduces. It has to cross as a handle, and
+/// that is the gap `BamlTypeHead` closes.
 pub fn proto_ty_to_external(ty: &BamlTy) -> Result<BexExternalValue, CtypesError> {
-    Ok(BexExternalValue::Adt(BexExternalAdt::Type(
-        proto_ty_to_runtime_ty(ty)?,
-    )))
+    let named = proto_ty_to_runtime_ty(ty)?;
+    let lane = named
+        .try_map_heads(&mut |name: &baml_type::TypeName| {
+            Ok::<_, std::convert::Infallible>(baml_type::TaggedTypeName::new(
+                baml_type::typetag::TypeTag::of_head(&name.render_dotted(false)),
+                baml_type::DeclarationName::Declared(name.clone()),
+            ))
+        })
+        .unwrap_or_else(|never| match never {});
+    Ok(BexExternalValue::Adt(BexExternalAdt::Type(lane)))
 }
 
 pub fn proto_ty_def_to_external(ty: &BamlTyDef) -> Result<BexExternalValue, CtypesError> {
     Ok(BexExternalValue::Adt(BexExternalAdt::TypeDef(
-        proto_ty_def_to_portable(ty)?,
+        TypeDefRef::Portable(proto_ty_def_to_portable(ty)?),
     )))
 }
 
@@ -445,7 +462,7 @@ mod tests {
         use bex_project::{
             PortableClassDef, PortableClassFieldDef, PortableMetadata, PortableTypeDef,
         };
-        let name = TypeName::runtime_local(Name::new("Row"), 41);
+        let name = TypeName::local(Name::new("Row"));
         let metadata = PortableMetadata {
             description: Some("row description".into()),
             alias: None,

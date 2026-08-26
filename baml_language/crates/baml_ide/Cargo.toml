@@ -1,0 +1,34 @@
+[package]
+name = "baml_ide"
+version.workspace = true
+edition.workspace = true
+description = "IDE/analysis layer over the BAML compiler (rust-analyzer's `ide` shape)"
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_base = { workspace = true }
+baml_builtins2 = { workspace = true }
+baml_codegen_types = { workspace = true }
+baml_compiler2_ast = { workspace = true }
+baml_compiler2_hir = { workspace = true }
+baml_compiler2_hir_ty = { workspace = true }
+baml_compiler2_ppir = { workspace = true }
+baml_compiler2_visualization = { workspace = true }
+baml_compiler_diagnostics = { workspace = true }
+baml_compiler_lexer = { workspace = true }
+baml_compiler_parser = { workspace = true }
+baml_compiler_syntax = { workspace = true }
+baml_db = { workspace = true }
+baml_type = { workspace = true }
+bitflags = { workspace = true }
+la-arena = { workspace = true }
+rowan = { workspace = true }
+salsa = { workspace = true }
+serde = { workspace = true, features = [ "derive" ] }
+serde_json = { workspace = true }
+text-size = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

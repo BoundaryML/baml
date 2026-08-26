@@ -480,15 +480,15 @@ function lambdas.lambdas_inferred_return_type_lambda() -> int {
 
 function lambdas.lambdas_inferred_signature() -> string {
     make_closure .<lambda(lambdas_inferred_signature, 0)>, 0
-    call baml.reflect.signature
+    call reflect.signature
     store_var sig
     load_var sig
     load_field .returns
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _5
     load_var sig
     load_field .errors
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _7
     load_var _5
     load_const "/"
@@ -500,15 +500,15 @@ function lambdas.lambdas_inferred_signature() -> string {
 
 function lambdas.lambdas_inferred_throwing_signature() -> string {
     make_closure .<lambda(lambdas_inferred_throwing_signature, 0)>, 0
-    call baml.reflect.signature
+    call reflect.signature
     store_var sig
     load_var sig
     load_field .returns
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _5
     load_var sig
     load_field .errors
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _7
     load_var _5
     load_const "/"

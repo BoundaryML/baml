@@ -7,8 +7,10 @@
 //! agreement is never vacuous.
 
 use baml_compiler2_hir::package::PackageId;
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
 use text_size::TextRange;
+
+use crate::engine::TestDbExt;
 
 fn user_package<'db>(db: &'db ProjectDatabase, file: baml_base::SourceFile) -> PackageId<'db> {
     let package = baml_compiler2_hir::file_package::file_package(db, file).package;
@@ -17,7 +19,7 @@ fn user_package<'db>(db: &'db ProjectDatabase, file: baml_base::SourceFile) -> P
 
 fn hir_ty_pairs(source: &str) -> Vec<(TextRange, TextRange, bool)> {
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let pkg = user_package(&db, file);
     let mut pairs: Vec<(TextRange, TextRange, bool)> =
         baml_compiler2_hir_ty::coherence::package_coherence_violations(&db, pkg)
@@ -40,7 +42,7 @@ fn hir_ty_pairs(source: &str) -> Vec<(TextRange, TextRange, bool)> {
 
 fn tir_pairs(source: &str) -> Vec<(TextRange, TextRange, bool)> {
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let pkg = user_package(&db, file);
     let mut pairs: Vec<(TextRange, TextRange, bool)> =
         baml_compiler2_hir_ty::interfaces::package_coherence_diagnostics(&db, pkg)
@@ -93,7 +95,7 @@ fn check_coherence(source: &str, definite: usize, indeterminate: usize) {
 #[track_caller]
 fn check_orphans(source: &str, expected: &[Option<&str>]) {
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let pkg = user_package(&db, file);
     let got: Vec<Option<String>> =
         baml_compiler2_hir_ty::coherence::package_orphan_violations(&db, pkg)

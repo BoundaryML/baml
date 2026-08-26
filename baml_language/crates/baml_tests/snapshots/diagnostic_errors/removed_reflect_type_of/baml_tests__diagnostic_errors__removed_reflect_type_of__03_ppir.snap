@@ -2,9 +2,12 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === PPIR ===
-function user.old_bare_spelling() -> type  [expr] {
+function user.method_form_is_gone() -> reflect.Type  [expr] {
+  {  } reflect.Type.of_value(1).type_of()
+}
+function user.package_level_reader_is_gone() -> reflect.Type  [expr] {
   {  } reflect.type_of()
 }
-function user.old_qualified_spelling() -> type  [expr] {
-  {  } baml.reflect.type_of()
+function user.type_level_reader_is_gone() -> reflect.Type  [expr] {
+  {  } reflect.Type.type_of()
 }

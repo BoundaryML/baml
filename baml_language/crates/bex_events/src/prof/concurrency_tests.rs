@@ -725,6 +725,62 @@ mod stress {
         assert_eq!(ctx.live_bytes(), 0, "Registry::drop leaked segments");
     }
 
+    /// The drain's per-call segment bound: a backlog spanning many segments
+    /// drains across several sweeps instead of one unbounded chase (a flood
+    /// otherwise starves control messages and session maintenance for as
+    /// long as it lasts), an orphaned ring stays `Orphaned` until a drain
+    /// reaches its open segment, and every record still arrives exactly
+    /// once, in order.
+    #[test]
+    fn bounded_drain_spreads_backlog_and_defers_orphan_pooling() {
+        use super::collect_seqs;
+        use crate::prof::ring::Ring;
+
+        let ctx = leak_ctx(BIG_CAP);
+        let reg_ptr = Box::into_raw(Box::new(Registry::new()));
+        let reg: &'static Registry = unsafe { &*reg_ptr };
+        let total: u64 = 100; // 50 two-record segments — several drain bounds
+
+        let ring: &'static Ring = std::thread::spawn(move || {
+            let h = reg
+                .acquire(ctx, 16, 8, 1) // two 8-byte records per segment
+                .expect("test ring capacity");
+            for seq in 0..total {
+                // SAFETY: the claiming thread is alive for the whole call.
+                unsafe { h.push(&rec(seq)) };
+            }
+            let ring = h.ring();
+            ring.orphan(); // what the TLS destructor does on thread death
+            ring
+        })
+        .join()
+        .unwrap();
+
+        let mut seen = Vec::new();
+        // SAFETY: this thread is the single consumer.
+        assert!(unsafe { reg.sweep(&mut |_: &'static Ring, b: &[u8]| collect_seqs(b, &mut seen)) });
+        assert!(
+            seen.len() < usize::try_from(total).unwrap(),
+            "one sweep must not chase the whole backlog"
+        );
+        assert_eq!(
+            ring.state(),
+            RingState::Orphaned,
+            "a bound-stopped orphan drain must not pool the ring"
+        );
+        let mut sweeps = 1;
+        while ring.state() != RingState::Pooled {
+            // SAFETY: same single consumer.
+            unsafe { reg.sweep(&mut |_: &'static Ring, b: &[u8]| collect_seqs(b, &mut seen)) };
+            sweeps += 1;
+            assert!(sweeps < 100, "orphan backlog must pool in bounded sweeps");
+        }
+        assert_eq!(seen, (0..total).collect::<Vec<u64>>());
+
+        drop(unsafe { Box::from_raw(reg_ptr) });
+        assert_eq!(ctx.live_bytes(), 0, "Registry::drop leaked segments");
+    }
+
     /// Wake delivery, not just wake survival: a parked consumer must be
     /// unparked by a producer's segment-fill wake. The producer keeps filling
     /// segments, so the benign D4 lost-wakeup window cannot swallow every

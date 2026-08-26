@@ -40,8 +40,11 @@
 use std::collections::HashSet;
 
 use baml_compiler_diagnostics::Severity;
-use baml_project::{ProjectDatabase, collect_diagnostics, testing::setup_test_db};
-use baml_tests::baml_test;
+use baml_db::ProjectDatabase;
+use baml_tests::{
+    baml_test,
+    stdlib_prefix::{check_user_files, setup_multi_file_db, setup_test_db},
+};
 use baml_type::Ty;
 use bex_engine::BexExternalValue;
 
@@ -56,19 +59,15 @@ fn collect_compile_errors(source: &str) -> Vec<String> {
 }
 
 fn collect_compile_errors_multi(files: &[(&str, &str)]) -> Vec<String> {
-    let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("."));
-    for (path, source) in files {
-        db.add_file(*path, source);
-    }
+    let db = setup_multi_file_db(files);
     collect_compile_errors_from_db(&db)
 }
 
 fn collect_compile_errors_from_db(db: &ProjectDatabase) -> Vec<String> {
-    let all_files = db.get_source_files();
+    let all_files = db.workspace_files();
     let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(db)).collect();
 
-    collect_diagnostics(db)
+    check_user_files(db)
         .into_iter()
         .filter(|d| matches!(d.severity, Severity::Error))
         .filter(|d| {
@@ -1267,8 +1266,8 @@ fn reflect_class_implements_interface() {
         }
 
         function main() -> bool {
-            let dog_t = type.of<Dog>()
-            let animal_t = type.of<Animal>()
+            let dog_t = reflect.Type.of<Dog>()
+            let animal_t = reflect.Type.of<Animal>()
             return dog_t.implements(animal_t)
         }
         "#,
@@ -1289,8 +1288,8 @@ fn reflect_implemented_by_is_reverse() {
         }
 
         function main() -> bool {
-            let dog_t = type.of<Dog>()
-            let animal_t = type.of<Animal>()
+            let dog_t = reflect.Type.of<Dog>()
+            let animal_t = reflect.Type.of<Animal>()
             return animal_t.implemented_by(dog_t)
         }
         "#,
@@ -2450,7 +2449,7 @@ fn llm_function_can_return_interface_type() {
             client: GPT4o
             prompt: `
                 Identify the animal from the description: ${description}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
         "##,
@@ -2486,7 +2485,7 @@ fn llm_function_returning_interface_enumerates_implementors_in_schema() {
             client: GPT4o
             prompt: `
                 Identify the animal: ${description}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
         "##,
@@ -2805,7 +2804,7 @@ fn llm_function_with_interface_array_return_compiles() {
             client: GPT4o
             prompt: `
                 Identify every animal mentioned in ${description}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
         "##,
@@ -2831,7 +2830,7 @@ fn llm_function_with_interface_in_union_return_compiles() {
             prompt: `
                 If ${description} clearly identifies an animal, return one.
                 Otherwise, paraphrase the description.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
         "##,
@@ -2860,7 +2859,7 @@ fn llm_function_takes_interface_typed_parameter_compiles() {
             client: GPT4o
             prompt: `
                 Describe the animal named ${a.name}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
         "##,
@@ -6781,7 +6780,7 @@ fn wf3_out_of_body_primitive_field_bearing_is_e0126_pins() {
 }
 
 /// wf3: a bare generic interface in a type-argument position
-/// (`type.of<Box>()`, no type args) is an arity error like any other
+/// (`reflect.Type.of<Box>()`, no type args) is an arity error like any other
 /// type position — a generic head is written fully explicit or inferred
 /// wholesale, never a partial wildcard. (This replaces the old undocumented
 /// wildcard-matching behavior; a deliberate every-instantiation reflection
@@ -6800,8 +6799,8 @@ async fn wf3_bare_generic_interface_reflection_is_arity_error() {
             }
         }
         function main() -> bool {
-            let bare = type.of<Box>()
-            return bare.implemented_by(type.of<IntBox>())
+            let bare = reflect.Type.of<Box>()
+            return bare.implemented_by(reflect.Type.of<IntBox>())
         }
         "#,
         "type `Box` expects 1 type argument(s), got 0",

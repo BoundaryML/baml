@@ -8,6 +8,11 @@
 
 use std::sync::Arc;
 
+/// Known type-level attribute names (not field attrs, which are
+/// `disambiguate::FIELD_ATTR_NAMES`'s business). Public so completion can
+/// enumerate exactly what this validation accepts.
+pub const KNOWN_TYPE_ATTRS: &[&str] = &["stream.done", "stream.must_exist", "stream.with_state"];
+
 use baml_base::{Name, SourceFile};
 use baml_compiler_diagnostics::{diagnostic::DiagnosticId, runtime_type::SerializedKeyContainer};
 use baml_compiler2_ast::{self as ast, LoweringDiagnostic};
@@ -343,6 +348,19 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
+    fn walk_type_operands(
+        &mut self,
+        ty: &ast::TypeExpr,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) {
+        let mut operands = Vec::new();
+        ty.unreflect_operands(&mut operands);
+        for operand in operands {
+            self.walk_expr(operand, body, source_map, true);
+        }
+    }
+
     /// Walk an `ExprBody` arena in source order, recording expression ownership
     /// and local bindings in the lexical scope that owns each expression.
     fn walk_expr_body(&mut self, body: &ast::ExprBody, source_map: &ast::AstSourceMap) {
@@ -429,7 +447,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         match &body.stmts[stmt_id] {
             ast::Stmt::Expr(expr) => self.walk_expr(*expr, body, source_map, true),
             ast::Stmt::TypeBinding { value, .. } => {
-                self.walk_expr(*value, body, source_map, true);
+                self.walk_type_operands(value, body, source_map);
             }
             ast::Stmt::Let {
                 pattern,
@@ -605,9 +623,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::Expr::Match {
-                scrutinee, arms, ..
+                scrutinee,
+                scrutinee_type,
+                arms,
             } => {
                 self.walk_expr(*scrutinee, body, source_map, true);
+                if let Some(type_id) = scrutinee_type {
+                    self.walk_type_operands(&body.type_annotations[*type_id], body, source_map);
+                }
                 for &arm_id in arms {
                     self.walk_match_arm(arm_id, body, source_map);
                 }
@@ -692,9 +715,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             } => {
                 self.walk_expr(*callee, body, source_map, true);
                 for type_arg in type_args {
-                    if let ast::TypeArg::Unreflect(operand) = type_arg {
-                        self.walk_expr(*operand, body, source_map, true);
-                    }
+                    self.walk_type_operands(type_arg, body, source_map);
                 }
                 for arg in args {
                     self.walk_expr(arg.expr, body, source_map, true);
@@ -707,8 +728,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::Expr::Object {
-                fields, spreads, ..
+                type_args,
+                fields,
+                spreads,
+                ..
             } => {
+                for type_arg in type_args {
+                    self.walk_type_operands(type_arg, body, source_map);
+                }
                 for field in fields {
                     self.walk_expr(field.value, body, source_map, true);
                 }
@@ -727,10 +754,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_expr(entry.value, body, source_map, true);
                 }
             }
-            ast::Expr::MemberAccess { base, .. }
-            | ast::Expr::Upcast { base, .. }
-            | ast::Expr::OptionalMemberAccess { base, .. } => {
+            ast::Expr::MemberAccess { base, .. } | ast::Expr::OptionalMemberAccess { base, .. } => {
                 self.walk_expr(*base, body, source_map, true);
+            }
+            ast::Expr::Upcast { base, target } => {
+                self.walk_expr(*base, body, source_map, true);
+                self.walk_type_operands(target, body, source_map);
             }
             ast::Expr::Index { base, index } | ast::Expr::OptionalIndex { base, index } => {
                 self.walk_expr(*base, body, source_map, true);
@@ -744,21 +773,27 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.resolve_path_expr(expr_id, root, use_scope, use_offset);
                 }
             }
-            ast::Expr::GenericApply { base, .. } => {
+            ast::Expr::GenericApply { base, type_args } => {
                 // `foo<int>` references the base callable; walk it so the path
                 // root is recorded for name resolution. Type args are types,
                 // not value references, so they need no walking here.
                 self.walk_expr(*base, body, source_map, true);
+                for type_arg in type_args {
+                    self.walk_type_operands(type_arg, body, source_map);
+                }
             }
             ast::Expr::Literal(_)
             | ast::Expr::ByteStringLiteral(_)
             | ast::Expr::Null
             | ast::Expr::Block { .. }
-            // Both halves are TYPES, so a qualified item reference opens no
-            // scope and names no local: nothing here to walk or resolve.
-            | ast::Expr::QualifiedPath { .. }
             | ast::Expr::Lambda(_)
             | ast::Expr::Missing => {}
+            ast::Expr::QualifiedPath {
+                qself, interface, ..
+            } => {
+                self.walk_type_operands(qself, body, source_map);
+                self.walk_type_operands(interface, body, source_map);
+            }
         }
     }
 
@@ -893,6 +928,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         source_map: &ast::AstSourceMap,
     ) {
         match &body.patterns[pat_id] {
+            ast::Pattern::Type(ty) => self.walk_type_operands(ty, body, source_map),
             ast::Pattern::Unreflect(operand) => {
                 self.walk_expr(*operand, body, source_map, true);
             }
@@ -901,7 +937,18 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_pattern_expressions(*subpat, body, source_map);
                 }
             }
-            ast::Pattern::Class { fields, .. } => {
+            ast::Pattern::Class {
+                generic_args,
+                associated_type_bindings,
+                fields,
+                ..
+            } => {
+                for ty in generic_args {
+                    self.walk_type_operands(ty, body, source_map);
+                }
+                for binding in associated_type_bindings {
+                    self.walk_type_operands(&binding.ty, body, source_map);
+                }
                 for field in fields {
                     self.walk_pattern_expressions(field.pat, body, source_map);
                 }
@@ -910,8 +957,11 @@ impl<'db> SemanticIndexBuilder<'db> {
                 prefix,
                 rest,
                 suffix,
-                ..
+                ascription,
             } => {
+                if let Some(ty) = ascription {
+                    self.walk_type_operands(ty, body, source_map);
+                }
                 for pattern in prefix {
                     self.walk_pattern_expressions(*pattern, body, source_map);
                 }
@@ -927,7 +977,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_pattern_expressions(*pattern, body, source_map);
                 }
             }
-            ast::Pattern::Wildcard | ast::Pattern::Type(_) => {}
+            ast::Pattern::Wildcard => {}
         }
     }
 
@@ -1216,6 +1266,20 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.emit_duplicate_param_diagnostics(&lambda.params);
         self.lambda_stack.push(scope_id);
         self.walk_parameter_defaults(&lambda.params, &lambda.defaults);
+
+        let metadata_scope = ExprMetadataScope::Body(scope_id);
+        self.expr_metadata_scope_stack.push(metadata_scope);
+        for param in &lambda.params {
+            if let Some(ty) = &param.type_expr {
+                self.walk_type_operands(ty, body, source_map);
+            }
+        }
+        if let Some(ty) = &lambda.return_type {
+            self.walk_type_operands(ty, body, source_map);
+        }
+        if let Some(ty) = &lambda.throws {
+            self.walk_type_operands(ty, body, source_map);
+        }
         if let Some(lambda_body) = lambda.body {
             // The body shares this arena, but it still gets its own metadata
             // namespace keyed by the lambda's scope. That keeps HIR agreeing
@@ -1224,13 +1288,11 @@ impl<'db> SemanticIndexBuilder<'db> {
             // mismatch here does not fail loudly: `path_resolution` simply
             // misses, flow narrowing silently stops inside every lambda, and
             // reconstructed closure signatures silently degrade to `unknown`.
-            let metadata_scope = ExprMetadataScope::Body(scope_id);
-            self.expr_metadata_scope_stack.push(metadata_scope);
             self.walk_expr(lambda_body, body, source_map, false);
-            let popped = self.expr_metadata_scope_stack.pop();
-            debug_assert_eq!(popped, Some(metadata_scope));
             self.analyze_lambda_captures(scope_id, body, source_map);
         }
+        let popped = self.expr_metadata_scope_stack.pop();
+        debug_assert_eq!(popped, Some(metadata_scope));
         self.lambda_stack.pop();
         self.pop_scope();
     }
@@ -2084,7 +2146,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                         continue;
                     }
                     let value = attr.args[0].value.as_str();
-                    if !is_string_literal(value) {
+                    if !is_string_literal(value) && !is_removed_hash_string(value) {
                         self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
                             diagnostic_id: DiagnosticId::InvalidAttributeArg,
                             message: format!(
@@ -2113,7 +2175,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     /// one, otherwise its declared name. When an `@alias` is present the real
     /// member name is never used for matching (see `bex_sap`'s
     /// `AnnotatedField::key_matches`), so two members with the same effective key
-    /// are indistinguishable in the serialized schema: `ctx.output_format`
+    /// are indistinguishable in the serialized schema: `ctx.output_format()`
     /// renders duplicate keys and only the first can ever be satisfied. This
     /// catches both `a @alias("x")` + `b @alias("x")` and a plain member `x`
     /// colliding with another member's `@alias("x")`.
@@ -2205,18 +2267,13 @@ impl<'db> SemanticIndexBuilder<'db> {
         Self::collect_unknown_type_attrs(type_expr, &mut self.diagnostics);
     }
 
-    /// Known type-level attribute names (not field attrs, which are handled by
-    /// `disambiguate::validate_field_attrs`).
-    const KNOWN_TYPE_ATTRS: &'static [&'static str] =
-        &["stream.done", "stream.must_exist", "stream.with_state"];
-
     fn collect_unknown_type_attrs(
         type_expr: &ast::TypeExpr,
         diagnostics: &mut Vec<Hir2Diagnostic>,
     ) {
         for attr in type_expr.attrs() {
             let name = attr.name.as_str();
-            if !ast::is_field_attr(name) && !Self::KNOWN_TYPE_ATTRS.contains(&name) {
+            if !ast::is_field_attr(name) && !KNOWN_TYPE_ATTRS.contains(&name) {
                 diagnostics.push(Hir2Diagnostic::UnknownTypeAttribute {
                     attr_name: attr.name.clone(),
                     span: attr.span,
@@ -2335,17 +2392,16 @@ impl<'db> SemanticIndexBuilder<'db> {
                 ..
             } => {
                 // Allow `baml.errors.*`, `root.errors.*`, `baml.json.*`, and
-                // BEP-066's `baml.reflect.errors.*` (fully qualified).
+                // BEP-066's `reflect.errors.*` (fully qualified).
                 // `baml.json.JsonParseError` / `baml.json.JsonDecodeError` /
                 // `baml.json.JsonSerializationError` are stdlib error types just like
                 // `baml.errors.*` ones; they need the same exemption.
                 let is_core_builtin_error = segments.len() >= 3
                     && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
                     && (segments[1].as_str() == "errors" || segments[1].as_str() == "json");
-                let is_reflection_error = segments.len() >= 4
-                    && segments[0].as_str() == "baml"
-                    && segments[1].as_str() == "reflect"
-                    && segments[2].as_str() == "errors";
+                let is_reflection_error = segments.len() >= 3
+                    && segments[0].as_str() == "reflect"
+                    && segments[1].as_str() == "errors";
                 let is_builtin_error = is_core_builtin_error || is_reflection_error;
                 // Allow single-segment class names (e.g. `JsonParseError`) in
                 // builtin files — the class is resolvable in the current namespace
@@ -2416,6 +2472,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn render_type_expr(type_expr: &ast::TypeExpr) -> String {
         match &type_expr.kind {
+            ast::TypeExprKind::Unreflect { .. } => "unreflect(…)".to_string(),
             ast::TypeExprKind::Path { segments, .. } => segments
                 .iter()
                 .map(Name::as_str)
@@ -2475,7 +2532,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 )
             }
             ast::TypeExprKind::BuiltinUnknown { .. } => "unknown".to_string(),
-            ast::TypeExprKind::Type { .. } => "type".to_string(),
+            ast::TypeExprKind::Type { .. } => "reflect.Type".to_string(),
             ast::TypeExprKind::Rust { .. } => "$rust_type".to_string(),
             ast::TypeExprKind::Error { .. } => "<error>".to_string(),
             ast::TypeExprKind::Unknown { .. } => "<unknown>".to_string(),
@@ -2484,10 +2541,9 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 }
 
-/// Check if a raw attribute argument value is a valid string literal.
+/// Check if an attribute argument value is a valid quoted string literal.
 ///
-/// Accepts double-quoted (`"text"`), single-quoted (`'text'`), and raw strings
-/// (`#"text"#`, `##"text"##`, etc.).
+/// Accepts double-quoted (`"text"`) and single-quoted (`'text'`) strings.
 fn is_string_literal(value: &str) -> bool {
     // Double-quoted
     if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
@@ -2497,12 +2553,15 @@ fn is_string_literal(value: &str) -> bool {
     if value.starts_with('\'') && value.ends_with('\'') && value.len() >= 2 {
         return true;
     }
-    // Raw string: #"text"#, ##"text"##, etc.
-    let hashes = value.bytes().take_while(|&b| b == b'#').count();
-    if hashes > 0 && value.len() >= hashes * 2 + 2 {
-        let rest = &value[hashes..];
-        let closing = format!("\"{}", &value[..hashes]);
-        return rest.starts_with('"') && rest.ends_with(&closing);
-    }
     false
+}
+
+fn is_removed_hash_string(value: &str) -> bool {
+    let hashes = value.bytes().take_while(|&b| b == b'#').count();
+    if hashes == 0 || value.len() < hashes * 2 + 2 {
+        return false;
+    }
+    let rest = &value[hashes..];
+    let closing = format!("\"{}", &value[..hashes]);
+    rest.starts_with('"') && rest.ends_with(&closing)
 }

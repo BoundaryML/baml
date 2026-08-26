@@ -5,18 +5,18 @@ expression: "render_tir(&db, file)"
 class user.Box {
   value: T
 }
-function user.GetBoxedInt(client: ai.Client | null = null) -> user.Box<int> throws never {
-  ai.Agent.new<Box<int>>(client = client).run(GetBoxedInt$spec()).value : user.Box<int>
+function user.GetBoxedInt(client: ai.Client | null = null, on_event: ((ai.events.Event) -> void throws __effect_param_0) | null = null) -> user.Box<int> throws never {
+  ai.Agent.new(client = client, on_event = on_event).run(GetBoxedInt$spec()).value : user.Box<int>
 }
 function user.GetBoxedInt$spec() -> ai.FunctionSpec<user.Box<int>> throws never {
-  ai.FunctionSpec { spec_name: "GetBoxedInt", args: map {  }, prompt_template: ( __spec_output_format: string) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Dummy) } : ai.FunctionSpec<user.Box<int>>
+  ai.FunctionSpec { spec_name: "GetBoxedInt", args: map {  }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { ... }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(Dummy) } : ai.FunctionSpec<user.Box<int>>
 }
 lambda user.GetBoxedInt$spec {
 }
 block user.GetBoxedInt$spec {
 }
 function user.GetBoxedInt$render_prompt() -> ai.Prompt throws never {
-  GetBoxedInt$spec().prompt(output_format = ai.wire.render_output_format(type.of<Box<int>>())) : ai.Prompt
+  GetBoxedInt$spec().prompt() : ai.Prompt
 }
 function user.GetBoxedInt$build_request(client: ai.Client | null = null) -> baml.http.Request throws never {
   GetBoxedInt$spec().build_request(override_client = client) : baml.http.Request
@@ -27,6 +27,6 @@ function user.GetBoxedInt$parse(json: string) -> user.Box<int> throws never {
 class user.Box$stream {
   value: T | null
 }
-function user.GetBoxedInt$stream(client: ai.stream.StreamingClient | null = null) -> ai.stream.Stream<user.Box$stream<int> | null, user.Box<int>> throws never {
-  ai.stream.from_spec(GetBoxedInt$spec(), client = client) : ai.stream.Stream<user.Box$stream<int> | null, user.Box<int>>
+function user.GetBoxedInt$stream(client: ai.stream.StreamingClient | null = null, on_event: ((ai.events.Event) -> void throws __effect_param_0) | null = null) -> ai.stream.Stream<user.Box$stream<int> | null, user.Box<int>> throws never {
+  ai.stream.from_spec<__effect_param_0>(GetBoxedInt$spec(), client = client, on_event = on_event) : ai.stream.Stream<user.Box$stream<int> | null, user.Box<int>>
 }

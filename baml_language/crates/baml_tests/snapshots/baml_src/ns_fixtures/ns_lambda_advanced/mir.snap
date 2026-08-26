@@ -8,13 +8,13 @@ fn user.fixtures.lambda_advanced.test_chained_map() -> int[] {
     let _1: int[] // items
     let _2: int[] // step1
     let _3: (int) -> int throws never
-    let _4: type
-    let _5: type
-    let _6: type
+    let _4: reflect.Type
+    let _5: reflect.Type
+    let _6: reflect.Type
     let _7: (int) -> int throws never
-    let _8: type
-    let _9: type
-    let _10: type
+    let _8: reflect.Type
+    let _9: reflect.Type
+    let _10: reflect.Type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
@@ -75,9 +75,9 @@ fn user.fixtures.lambda_advanced.test_map_string_to_int() -> int[] {
     let _0: int[] // _0 // return
     let _1: string[] // words
     let _2: (string) -> int throws never
-    let _3: type
-    let _4: type
-    let _5: type
+    let _3: reflect.Type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _1 = [const "hello", const "world"]: string[];
@@ -394,9 +394,9 @@ fn user.fixtures.lambda_advanced.test_map_with_capture() -> int[] {
     let _1: int[] // items
     let _2: int // factor [captured]
     let _3: (int) -> int throws never
-    let _4: type
-    let _5: type
-    let _6: type
+    let _4: reflect.Type
+    let _5: reflect.Type
+    let _6: reflect.Type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
@@ -438,9 +438,9 @@ fn user.fixtures.lambda_advanced.test_nested_map() -> int[][] {
     let _2: int[]
     let _3: int[]
     let _4: (int[]) -> int[] throws never
-    let _5: type
-    let _6: type
-    let _7: type
+    let _5: reflect.Type
+    let _6: reflect.Type
+    let _7: reflect.Type
 
     bb0: {
         _2 = [const 1_i64, const 2_i64]: int[];
@@ -464,9 +464,9 @@ fn .<lambda(test_nested_map, 0)>(row: int[]) -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // row // param
     let _2: (int) -> int throws never
-    let _3: type
-    let _4: type
-    let _5: type
+    let _3: reflect.Type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _2 = make_closure lambda[0]();
@@ -502,9 +502,9 @@ fn user.fixtures.lambda_advanced.test_map_multi_statement() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: (int) -> int throws never
-    let _3: type
-    let _4: type
-    let _5: type
+    let _3: reflect.Type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
@@ -550,9 +550,9 @@ fn user.fixtures.lambda_advanced.test_lambda_variable_then_pass() -> int[] {
     let _1: int[] // items
     let _2: (int) -> int throws never // halve
     let _3: (int) -> int throws never
-    let _4: type
-    let _5: type
-    let _6: type
+    let _4: reflect.Type
+    let _5: reflect.Type
+    let _6: reflect.Type
 
     bb0: {
         _1 = [const 10_i64, const 20_i64, const 30_i64]: int[];
@@ -592,9 +592,9 @@ fn user.fixtures.lambda_advanced.test_shadowing() -> string {
     let _2: int[] // items
     let _3: int[] // mapped
     let _4: (int) -> int throws never
-    let _5: type
-    let _6: type
-    let _7: type
+    let _5: reflect.Type
+    let _6: reflect.Type
+    let _7: reflect.Type
     let _8: int[]
     let _9: baml.iter.Iterator<Error = never, Item = int>
     let _10: unknown
@@ -763,9 +763,9 @@ fn user.fixtures.lambda_advanced.test_fully_inferred_map() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: (int) -> int throws never
-    let _3: type
-    let _4: type
-    let _5: type
+    let _3: reflect.Type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
@@ -802,9 +802,9 @@ fn user.fixtures.lambda_advanced.test_map_type_change_inferred() -> string[] {
     let _0: string[] // _0 // return
     let _1: int[] // nums
     let _2: (int) -> string throws never
-    let _3: type
-    let _4: type
-    let _5: type
+    let _3: reflect.Type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
@@ -855,9 +855,9 @@ fn user.fixtures.lambda_advanced.test_literal_return_inference() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: (int) -> int throws never
-    let _3: type
-    let _4: type
-    let _5: type
+    let _3: reflect.Type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
@@ -895,13 +895,13 @@ fn user.fixtures.lambda_advanced.test_compose_inferred() -> int[] {
     let _1: int[] // items
     let _2: int[] // step1
     let _3: (int) -> int throws never
-    let _4: type
-    let _5: type
-    let _6: type
+    let _4: reflect.Type
+    let _5: reflect.Type
+    let _6: reflect.Type
     let _7: (int) -> int throws never
-    let _8: type
-    let _9: type
-    let _10: type
+    let _8: reflect.Type
+    let _9: reflect.Type
+    let _10: reflect.Type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
@@ -1309,9 +1309,9 @@ fn user.fixtures.lambda_advanced.test_capture_in_map_inferred() -> int[] {
     let _1: int[] // items
     let _2: int // factor [captured]
     let _3: (int) -> int throws never
-    let _4: type
-    let _5: type
-    let _6: type
+    let _4: reflect.Type
+    let _5: reflect.Type
+    let _6: reflect.Type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
@@ -1523,9 +1523,9 @@ fn user.fixtures.lambda_advanced.test_map_optional_inferred() -> int[] {
     let _0: int[] // _0 // return
     let _1: (int | null)[] // items
     let _2: (int | null) -> int throws never
-    let _3: type
-    let _4: type
-    let _5: type
+    let _3: reflect.Type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _1 = [const 1_i64, const null, const 3_i64]: int | null[];
@@ -1573,9 +1573,9 @@ fn user.fixtures.lambda_advanced.test_shadowing_inferred() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: (int) -> int throws never
-    let _3: type
-    let _4: type
-    let _5: type
+    let _3: reflect.Type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];

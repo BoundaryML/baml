@@ -1,6 +1,6 @@
 //! BEP-066 R-3 executable oracles now live in
 //! `baml_src/ns_runtime_render_identity/` as native BAML tests. This file
-//! keeps only the host-boundary case: `ctx.output_format_with()` declares
+//! keeps only the host-boundary case: `ctx.output_format()` declares
 //! `throws never`, so its deferred RenderPrompt error is uncatchable in BAML
 //! and must be observed as an escaping host error.
 
@@ -8,7 +8,7 @@ use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 
 #[tokio::test]
-async fn output_format_with_surfaces_deferred_recursive_generic_error() {
+async fn output_format_surfaces_deferred_recursive_generic_error() {
     let output = baml_test!(
         r##"
         class Chain<T> {
@@ -16,7 +16,7 @@ async fn output_format_with_surfaces_deferred_recursive_generic_error() {
         }
 
         function main() -> string {
-            let rt = type.of<Chain<int>>()
+            let rt = reflect.Type.of<Chain<int>>()
             let render_ctx = ai.Context {
                 client: ai.ContextClient {
                     name: "test",
@@ -25,10 +25,9 @@ async fn output_format_with_surfaces_deferred_recursive_generic_error() {
                     allowed_roles: ["user"],
                 },
                 tags: {},
-                output_format: "",
                 _output_format: ai.internal.build_output_format(rt),
             }
-            render_ctx.output_format_with()
+            render_ctx.output_format()
         }
         "##
     );

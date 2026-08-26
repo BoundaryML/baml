@@ -67,6 +67,18 @@ impl RingState {
     }
 }
 
+/// What one bounded [`Ring::drain`] call accomplished.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DrainOutcome {
+    /// Whether any bytes were consumed.
+    pub(crate) progress: bool,
+    /// Whether the drain reached the producer's open segment. `false` means
+    /// the per-call segment bound stopped the chase with published bytes
+    /// still queued — the ring must be drained again before it can be
+    /// considered empty.
+    pub(crate) caught_up: bool,
+}
+
 /// Process-wide context shared by all rings: the live-memory budget and the
 /// consumer wake state.
 pub(crate) struct RingCtx {
@@ -433,15 +445,23 @@ impl Ring {
 
     /// Consumer-side drain (§3.3, with D1 baked in). Hands `sink` each newly
     /// published byte range — always a whole number of records, because the
-    /// producer commits whole records. Returns whether any bytes were
-    /// consumed.
+    /// producer commits whole records.
+    ///
+    /// The segment chase is bounded: a producer outpacing this consumer
+    /// keeps linking fresh segments, and an unbounded loop here starves the
+    /// consumer's control messages and session maintenance for as long as
+    /// the flood lasts. A drain that stops at the bound reports
+    /// `caught_up: false`; rollover wakes and the park timeout re-arm the
+    /// next pass.
     ///
     /// # Safety
     /// Caller is the process's single consumer thread.
-    pub(crate) unsafe fn drain(&self, sink: &mut impl FnMut(&[u8])) -> bool {
+    pub(crate) unsafe fn drain(&self, sink: &mut impl FnMut(&[u8])) -> DrainOutcome {
+        const MAX_SEGMENTS_PER_DRAIN: usize = 16;
         self.c.with_mut(|c| {
             let c = unsafe { &mut *c };
             let mut progress = false;
+            let mut retired = 0;
             loop {
                 let seg = c.tail;
                 let seg_ref = unsafe { &*seg };
@@ -450,7 +470,11 @@ impl Ring {
                     unsafe { consume_range(seg_ref, &mut c.tail_pos, committed as usize, sink) };
                 let next = seg_ref.sync.next.load(Ordering::Acquire);
                 if next.is_null() {
-                    return progress; // still the open segment; caught up for now
+                    // Still the open segment; caught up for now.
+                    return DrainOutcome {
+                        progress,
+                        caught_up: true,
+                    };
                 }
                 // D1: a non-null `next` means the producer is done with `seg`
                 // forever, and the Acquire above (pairing with the link
@@ -462,6 +486,13 @@ impl Ring {
                 unsafe { self.retire(seg) };
                 c.tail = next;
                 c.tail_pos = 0;
+                retired += 1;
+                if retired >= MAX_SEGMENTS_PER_DRAIN {
+                    return DrainOutcome {
+                        progress,
+                        caught_up: false,
+                    };
+                }
             }
         })
     }

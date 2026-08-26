@@ -4,28 +4,28 @@ source: crates/baml_tests/src/corpus.rs
 function fixtures.reflect_shadowing.$init_test_ns_fixtures_ns_reflect_shadowing_main(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "root.fixtures.reflect_shadowing"
-    load_const "user class shadows shorthand"
+    load_const "user class shadows the package"
     make_closure .<lambda($init_test_ns_fixtures_ns_reflect_shadowing_main, 0)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.fixtures.reflect_shadowing"
-    load_const "unbound user method over shorthand"
+    load_const "unbound user method over the package"
     make_closure .<lambda($init_test_ns_fixtures_ns_reflect_shadowing_main, 1)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.fixtures.reflect_shadowing"
-    load_const "local shadows shorthand"
+    load_const "local shadows the package"
     make_closure .<lambda($init_test_ns_fixtures_ns_reflect_shadowing_main, 2)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.fixtures.reflect_shadowing"
-    load_const "qualified baml.reflect still works"
+    load_const "package name still reachable"
     make_closure .<lambda($init_test_ns_fixtures_ns_reflect_shadowing_main, 3)>, 0
     load_const null
     call testing.TestCollector.register_test_at
@@ -41,18 +41,18 @@ function fixtures.reflect_shadowing.helper(q: string) -> string {
     return
 }
 
-function fixtures.reflect_shadowing.local_shadows_shorthand() -> int {
+function fixtures.reflect_shadowing.local_shadows_package() -> int {
     load_const 1
     load_const 1
     add_int
     return
 }
 
-function fixtures.reflect_shadowing.qualified_still_works() -> string {
+function fixtures.reflect_shadowing.package_still_reachable() -> string {
     load_const user.fixtures.reflect_shadowing.helper
-    call baml.reflect.signature
+    call reflect.signature
     load_field .returns
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
@@ -71,7 +71,7 @@ function fixtures.reflect_shadowing.unbound_user_method() -> string {
     return
 }
 
-function fixtures.reflect_shadowing.user_class_shadows_shorthand() -> string {
+function fixtures.reflect_shadowing.user_class_shadows_package() -> string {
     load_const "shadow"
     init_instance user.fixtures.reflect_shadowing.reflect .label
     call user.fixtures.reflect_shadowing.reflect.describe

@@ -11,7 +11,7 @@
 
 use std::sync::Arc;
 
-use baml_project::testing::compile_multi_file;
+use baml_db::testing::compile_multi_file;
 use bex_engine::{BexEngine, CallId, EngineError, FunctionCallContextBuilder};
 use bex_heap::BexExternalValue;
 use sys_native::SysOpsExt;

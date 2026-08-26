@@ -1,10 +1,10 @@
 ---
 source: crates/baml_tests/src/compiler2_mir/mod.rs
 ---
-fn user.f(t: type, value: unknown) -> unknown {
+fn user.f(t: reflect.Type, value: unknown) -> unknown {
     // Locals:
     let _0: unknown // _0 // return
-    let _1: type // t // param
+    let _1: reflect.Type // t // param
     let _2: unknown // value // param
 
     bb0: {

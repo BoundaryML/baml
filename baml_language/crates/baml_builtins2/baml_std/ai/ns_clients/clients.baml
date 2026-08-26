@@ -93,6 +93,54 @@ class Backoff {
 
 // Streaming retries use the same safety judgment and backoff as invoke, but a
 // new stream may be opened only before the first text delta is returned.
+/// Map a classified failure to a failed-leg wire record (`selected: false`).
+/// Timing is best-effort: a failed leg's start was never measured, so it is
+/// null — never fabricated. `client_name` falls back to the failure's own
+/// provider when the wrapper does not know the member's id.
+function _failed_leg_call(client_name: string?, f: root.errors.Failure) -> root.events.LLMCall {
+    let provider = match (f) {
+        let e: root.errors.RateLimited => e.provider,
+        let e: root.errors.NetworkFailure => e.provider,
+        let e: root.errors.InvalidRequest => e.provider,
+        let e: root.errors.PreviewUnsupported => e.provider,
+        let e: root.errors.Refused => e.provider,
+        let e: root.errors.ParseFailed => e.provider,
+        let e: root.errors.FinishReasonError => e.provider,
+        let e: root.errors.StreamingUnsupported => e.client_id,
+        _ => "unknown",
+    };
+    let status: int? = match (f) {
+        let e: root.errors.RateLimited => e.status_code,
+        let e: root.errors.NetworkFailure => e.status_code,
+        let e: root.errors.InvalidRequest => e.status_code,
+        _ => null,
+    };
+    let raw: string? = match (f) {
+        let e: root.errors.RateLimited => e.raw_body,
+        let e: root.errors.NetworkFailure => e.raw_body,
+        let e: root.errors.InvalidRequest => e.raw_body,
+        let e: root.errors.Refused => e.raw_body,
+        _ => null,
+    };
+    root.events.LLMCall {
+        client_name: client_name ?? provider,
+        provider: provider,
+        timing: root.events.Timing {
+            start_time_utc_ms: null,
+            duration_ms: null,
+            ttft_ms: null,
+        },
+        http_request: null,
+        http_response: match (status) {
+            let s: int => root.events.HttpResponse { status: s, headers: {}, body: raw },
+            null => null,
+        },
+        usage: null,
+        selected: false,
+        sse_responses: null,
+    }
+}
+
 class Retry {
     inner: root.Client,
     max_attempts: int,
@@ -113,7 +161,12 @@ class Retry {
         }
     }
 
-    function _attempt(self, input: root.ModelTurnInput, remaining: int) -> root.ModelTurn {
+    function _attempt(
+        self,
+        input: root.ModelTurnInput,
+        remaining: int,
+        failed: root.events.LLMCall[],
+    ) -> root.ModelTurn {
         self.inner.invoke(input) catch_all (e) {
             let f: root.errors.Failure => {
                 // the safety gate is not overridable; the judgment is
@@ -122,13 +175,14 @@ class Retry {
                         && f.retry_safety() == root.errors.RetrySafety.Safe
                         && self.retry_if(f)
                 ) {
+                    failed.push(_failed_leg_call(self.inner.id(), f));
                     let attempt = self.max_attempts - remaining + 1;
                     let _ = baml.sys.sleep(
                         baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, f)),
                     ) catch_all (se) {
                         _ => null,
                     };
-                    self._attempt(input, remaining - 1)
+                    self._attempt(input, remaining - 1, failed)
                 } else {
                     throw e
                 }
@@ -151,8 +205,14 @@ class Retry {
         }
 
         function invoke(self, input: root.ModelTurnInput) -> root.ModelTurn {
-            self._attempt(input, self.max_attempts) catch_all (e) {
+            let failed: root.events.LLMCall[] = [];
+            let turn = self._attempt(input, self.max_attempts, failed) catch_all (e) {
                 _ => throw root.errors.normalize_invoke(e),
+            };
+            if (failed.length() == 0) {
+                turn
+            } else {
+                root.ModelTurn { ...turn, calls: failed.concat(turn.calls) }
             }
         }
     }
@@ -199,8 +259,12 @@ class Retry {
                 terminal: [],
                 terminal_cursor: 0,
                 finished: false,
+                calls: [],
             };
-            root.stream.TurnStream.from_event_source(relay.next_event)
+            let stream = root.stream.TurnStream.from_event_source(relay.next_event);
+            // one list, two holders: the relay appends, final_turn() reads
+            stream._calls = relay.calls;
+            stream
         }
     }
 }
@@ -324,7 +388,12 @@ class RoundRobin {
 class Fallback {
     members: root.Client[],
 
-    function _try(self, input: root.ModelTurnInput, index: int) -> root.ModelTurn {
+    function _try(
+        self,
+        input: root.ModelTurnInput,
+        index: int,
+        failed: root.events.LLMCall[],
+    ) -> root.ModelTurn {
         match (self.members.at(index)) {
             let c: root.Client => {
                 c.invoke(input) catch_all (e) {
@@ -333,7 +402,8 @@ class Fallback {
                             index + 1 < self.members.length()
                                 && f.retry_safety() == root.errors.RetrySafety.Safe
                         ) {
-                            self._try(input, index + 1)
+                            failed.push(_failed_leg_call(c.id(), f));
+                            self._try(input, index + 1, failed)
                         } else {
                             throw e
                         }
@@ -382,8 +452,14 @@ class Fallback {
         }
 
         function invoke(self, input: root.ModelTurnInput) -> root.ModelTurn {
-            self._try(input, 0) catch_all (e) {
+            let failed: root.events.LLMCall[] = [];
+            let turn = self._try(input, 0, failed) catch_all (e) {
                 _ => throw root.errors.normalize_invoke(e),
+            };
+            if (failed.length() == 0) {
+                turn
+            } else {
+                root.ModelTurn { ...turn, calls: failed.concat(turn.calls) }
             }
         }
     }
@@ -426,8 +502,11 @@ class Fallback {
                 terminal: [],
                 terminal_cursor: 0,
                 finished: false,
+                calls: [],
             };
-            root.stream.TurnStream.from_event_source(relay.next_event)
+            let stream = root.stream.TurnStream.from_event_source(relay.next_event);
+            stream._calls = relay.calls;
+            stream
         }
     }
 }
@@ -445,6 +524,10 @@ class StreamRelay {
     terminal: root.stream.StreamEvent[],
     terminal_cursor: int,
     finished: bool,
+    // Wire records, oldest first: failed legs pushed on retry, the selected
+    // member's own calls appended at terminal time. Shared by reference with
+    // the outer TurnStream's _calls so final_turn() surfaces them.
+    calls: root.events.LLMCall[],
 
     function close_current(self) -> void {
         if let stream: root.stream.TurnStream = self.current {
@@ -464,6 +547,7 @@ class StreamRelay {
             },
             let failure: root.errors.Failure => {
                 if (!self.emitted && self.retry(failure)) {
+                    self.calls.push(_failed_leg_call(null, failure));
                     self.close_current();
                     self.current = null;
                 } else {
@@ -475,7 +559,7 @@ class StreamRelay {
                 self.close_current();
                 throw unknown_error
             },
-            let compilation: baml.reflect.errors.CompilationError => {
+            let compilation: reflect.errors.CompilationError => {
                 self.close_current();
                 throw compilation
             },
@@ -521,6 +605,9 @@ class StreamRelay {
                         return self.next_event();
                     } else if let turn: root.ModelTurn = final {
                         self.finished = true;
+                        for (let call in turn.calls) {
+                            self.calls.push(call);
+                        }
                         self.terminal
                             = [
                                 root.stream.TurnMeta {

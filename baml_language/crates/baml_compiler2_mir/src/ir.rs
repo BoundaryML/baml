@@ -978,7 +978,7 @@ pub enum Rvalue {
     /// For templates containing `TypeArgRef(N)`, the VM substitutes
     /// `frame.type_args[N]` at execution time.
     ///
-    /// Emitted by the `type.of<T>()` intrinsic.
+    /// Emitted by the `reflect.Type.of<T>()` intrinsic.
     /// Lowers to `Instruction::LoadType(const_idx)` in bytecode.
     LoadType(TyTemplate),
 

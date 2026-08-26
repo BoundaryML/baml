@@ -268,8 +268,8 @@ impl GenerateArgs {
         // line here: the meaningful "Resolving" and "Compiling" phases below
         // carry the progress, and a "Checking N file(s)" would just duplicate
         // the "Compiling N file(s)" count.
-        let source_files = db.get_source_files();
-        let diagnostics = baml_project::collect_diagnostics(&db);
+        let source_files = db.workspace_files();
+        let diagnostics = baml_db::collect_diagnostics(&db);
         let errors: Vec<_> = diagnostics
             .iter()
             .filter(|d| d.severity == Severity::Error)
@@ -337,13 +337,13 @@ impl GenerateArgs {
         let embedded_baml_toml = build_embedded_baml_toml(&from)?;
 
         // Build the codegen SymbolPool from the compiler database.
-        let pool = baml_project::build_symbol_pool(&db);
+        let pool = baml_ide::build_symbol_pool(&db);
 
         reporter.spin("Compiling", format!("{} file(s)", source_files.len()));
         let program = db
             .get_bytecode()
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
-        let baml_bytecode = borsh::to_vec(&program)
+        let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)
             .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
         let source_root = from.join("baml_src");
         let user_baml_files = source_files

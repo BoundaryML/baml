@@ -64,7 +64,7 @@ function google_request_shape() -> string {
                     google.SafetySetting.new("HARM_CATEGORY_HARASSMENT", "BLOCK_ONLY_HIGH"),
                 ],
             );
-            let result = ai.Agent<string>.new(client = cl).run(GoogleEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(GoogleEcho@spec("Say pong."));
             let sent = mock.last_request();
             let body = sent.json();
             [
@@ -111,7 +111,7 @@ function google_request_omits_unset_fields() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let _ = ai.Agent<string>.new(client = cl).run(GoogleEcho@spec("Say pong."));
+            let _ = ai.Agent.new(client = cl).run(GoogleEcho@spec("Say pong."));
             mock.last_request().body
         },
     )
@@ -144,7 +144,7 @@ function google_request_body_passthrough() -> string {
                 temperature = 0.5,
                 top_k = 40,
             );
-            let _ = ai.Agent<string>.new(client = cl).run(GoogleEcho@spec("Say pong."));
+            let _ = ai.Agent.new(client = cl).run(GoogleEcho@spec("Say pong."));
             let body = mock.last_request().json();
             [
                 baml.json.path<float>(body, ".generationConfig.temperature").to_string(),
@@ -175,7 +175,7 @@ function google_tool_declarations() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let _ = ai.Agent<string>.new(client = cl).run(GoogleToolEcho@spec("Weather in NYC?"));
+            let _ = ai.Agent.new(client = cl).run(GoogleToolEcho@spec("Weather in NYC?"));
             let body = mock.last_request().json();
             [
                 baml.json.path<string>(body, ".tools[0].functionDeclarations[0].name"),
@@ -338,7 +338,7 @@ function google_empty_response_e2e() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            ai.Agent<string>.new(client = cl).run(GoogleEcho@spec("Say pong.")).value
+            ai.Agent.new(client = cl).run(GoogleEcho@spec("Say pong.")).value
                 catch_all (e) {
                 _ => {
                     match (e) {
@@ -394,7 +394,7 @@ function google_tool_loop_replays_signature(signature_json: string) -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(
+            let result = ai.Agent.new(client = cl).run(
                 GoogleToolEcho@spec("Weather in NYC?"),
             );
             let replay = mock.last_request().json();
@@ -448,7 +448,7 @@ function vertex_media_url_passthrough() -> string {
         prompt: GoogleVision$spec(img).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: type.of<string>(),
+        output_type: reflect.Type.of<string>(),
     };
     let cl = google.VertexClient.new(
         model = "gemini-2.5-flash",
@@ -483,7 +483,7 @@ function google_media_url_inlined() -> string {
         prompt: GoogleVision$spec(img).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: type.of<string>(),
+        output_type: reflect.Type.of<string>(),
     };
             let cl = google.GoogleClient.new(
                 model = "gemini-2.5-flash",
@@ -513,7 +513,7 @@ function google_media_youtube_passthrough() -> string {
         prompt: GoogleWatch$spec(clip).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: type.of<string>(),
+        output_type: reflect.Type.of<string>(),
     };
     let cl = google.GoogleClient.new(
         model = "gemini-2.5-flash",
@@ -723,7 +723,7 @@ function vertex_request_shape() -> string {
                 base_url = mock.base_url(),
                 temperature = 0.25,
             );
-            let result = ai.Agent<string>.new(client = cl).run(GoogleEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(GoogleEcho@spec("Say pong."));
             let sent = mock.last_request();
             let body = sent.json();
             [
@@ -790,7 +790,7 @@ function vertex_claude_raw_predict() -> string {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: type.of<string>(),
+        output_type: reflect.Type.of<string>(),
     };
     let cl = google.VertexClient.new(
         model = "claude-sonnet-4-5",
@@ -826,7 +826,7 @@ function vertex_claude_model_override() -> string {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: type.of<string>(),
+        output_type: reflect.Type.of<string>(),
     };
     let cl = google.VertexClient.new(
         model = "claude-sonnet-4-5",
@@ -972,7 +972,7 @@ function google_error_taxonomy() -> string {
                     api_key = "test-key",
                     base_url = mock.base_url(),
                 );
-                ai.Agent<string>.new(client = cl).run(GoogleEcho@spec("Say pong.")).value
+                ai.Agent.new(client = cl).run(GoogleEcho@spec("Say pong.")).value
                     catch_all (e) {
                     _ => {
                         match (e) {
@@ -1050,7 +1050,7 @@ function google_missing_key_invoke() -> string {
         prompt: GoogleEcho$spec("Say pong.").prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: type.of<string>(),
+        output_type: reflect.Type.of<string>(),
     };
     // The concrete classes, not the `ai.errors.Failure` interface: a
     // configuration error and a transport error are both typed, and matching
@@ -1104,7 +1104,7 @@ function live_vertex_answers() -> bool {
         credentials_json = baml.env.get("INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT"),
         location = baml.env.get("GOOGLE_CLOUD_LOCATION") ?? "us-central1",
     );
-    let result = ai.Agent<string>.new(client = cl).run(LiveGeminiEcho@spec("Say pong."));
+    let result = ai.Agent.new(client = cl).run(LiveGeminiEcho@spec("Say pong."));
     result.value.trim().length() > 0
 }
 

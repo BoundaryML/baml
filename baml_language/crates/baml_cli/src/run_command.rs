@@ -7,8 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
-use baml_project::ProjectDatabase;
+use baml_db::{ProjectDatabase, baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use bex_engine::{
     BexEngine, FunctionCallContext, FunctionCallContextBuilder, UserFunctionInfo,
     logger::TraceLogger,
@@ -21,8 +20,8 @@ use sys_native::{CallId, SysOpsExt};
 use crate::{
     log_output::{LogLevel as RunLogLevel, LogOutput},
     project_load::{
-        find_project_root_from, load_project_or_default, resolve_standalone_file,
-        validate_file_project_flags,
+        add_workspace_file, find_project_root_from, load_project_or_default,
+        resolve_standalone_file, validate_file_project_flags, workspace_db,
     },
     reporter::Reporter,
 };
@@ -307,7 +306,7 @@ impl RunArgs {
         // no-cache path and for standalone/expression modes. The cached warm
         // path narrows this through `collect_diagnostics_incremental`, whose
         // merged set is byte-identical here.
-        let diagnostics = baml_project::collect_diagnostics(db);
+        let diagnostics = baml_db::collect_diagnostics(db);
         self.render_and_bail_on_errors(&diagnostics, db, bail_context, reporter)
     }
 
@@ -356,9 +355,24 @@ impl RunArgs {
 
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
-        self.run_with_reporter(&reporter)
+        let outcome = self.run_with_reporter(&reporter);
+        emit_profiling_status();
+        outcome
     }
+}
 
+/// A profiling failure never breaks the run, so by default it is invisible;
+/// verbose is the window into why a store is absent — or where an active one
+/// actually wrote. Must run on EVERY exit path, including the
+/// `std::process::exit` branches for program-controlled exit codes.
+fn emit_profiling_status() {
+    if crate::reporter::verbose() {
+        let status = bex_events::prof::backend::ProfilerSession::global().status_line();
+        crate::reporter::print_verbose(format_args!("profiling: {status}"));
+    }
+}
+
+impl RunArgs {
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         // Dispatch modes are mutually exclusive. Positional target /
         // `-f` (one or many) / `-e` all replace each other.
@@ -708,6 +722,15 @@ impl RunArgs {
             Ok(baml_exec::DispatchResult::Ok) => Ok(crate::ExitCode::TargetError),
             Ok(baml_exec::DispatchResult::TargetError) => Ok(crate::ExitCode::TargetError),
             Ok(baml_exec::DispatchResult::Exit(code)) => {
+                // Streams spec §7.5: the profiler's durability window ends
+                // here — flush before the process exits.
+                let flushed = bex_events::prof::flush_and_join(std::time::Duration::from_secs(5));
+                if !flushed {
+                    crate::reporter::print_verbose(format_args!(
+                        "profiling: final flush did not complete; this run's profile may be incomplete"
+                    ));
+                }
+                emit_profiling_status();
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
             Err(e) => {
@@ -925,9 +948,8 @@ impl RunArgs {
         // Project root is the file's parent so relative imports resolve.
         let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
 
-        let mut db = ProjectDatabase::new();
-        db.set_project_root(parent);
-        db.add_or_update_file(&canonical, &content);
+        let (mut db, workspace) = workspace_db(parent);
+        db.add_or_update_file_in(workspace, &canonical, &content);
 
         // Keep standalone compilation quiet for `baml run`; diagnostics still
         // render through the reporter when needed.
@@ -980,10 +1002,13 @@ impl RunArgs {
         // library. Compiling them in an isolated database means neither loading
         // nor diagnosing every project file, and therefore unrelated project
         // errors cannot prevent evaluation.
-        let mut isolated_db = ProjectDatabase::new();
-        isolated_db.set_project_root(&isolated_root);
-        isolated_db.add_or_update_file(&isolated_root.join("__expr__.baml"), &synthetic);
-        let isolated_diagnostics = baml_project::collect_diagnostics(&isolated_db);
+        let (mut isolated_db, isolated_workspace) = workspace_db(&isolated_root);
+        isolated_db.add_or_update_file_in(
+            isolated_workspace,
+            &isolated_root.join("__expr__.baml"),
+            &synthetic,
+        );
+        let isolated_diagnostics = baml_db::collect_diagnostics(&isolated_db);
         let isolated_has_errors = isolated_diagnostics
             .iter()
             .any(|diagnostic| diagnostic.severity == Severity::Error);
@@ -1008,7 +1033,11 @@ impl RunArgs {
                 "Expression requires project context: loaded {} file(s)",
                 baml_files.len()
             ));
-            project_db.add_or_update_file(&project_root.join("__expr__.baml"), &synthetic);
+            add_workspace_file(
+                &mut project_db,
+                &project_root.join("__expr__.baml"),
+                &synthetic,
+            );
             self.check_project_diagnostics(
                 &project_db,
                 "cannot evaluate expression: compilation errors",
@@ -1078,6 +1107,15 @@ impl RunArgs {
             Ok(true) if !unhandled_spawn_failed => Ok(crate::ExitCode::Success),
             Ok(_) => Ok(crate::ExitCode::TargetError),
             Err(bex_engine::EngineError::Exit { code }) => {
+                // Streams spec §7.5: the profiler's durability window ends
+                // here — flush before the process exits.
+                let flushed = bex_events::prof::flush_and_join(std::time::Duration::from_secs(5));
+                if !flushed {
+                    crate::reporter::print_verbose(format_args!(
+                        "profiling: final flush did not complete; this run's profile may be incomplete"
+                    ));
+                }
+                emit_profiling_status();
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
             Err(e) => {
@@ -1140,8 +1178,8 @@ impl RunArgs {
     }
 
     fn project_root(db: &ProjectDatabase) -> Result<PathBuf> {
-        db.get_project()
-            .map(|project| project.root(db).clone())
+        db.workspace_root()
+            .map(|root| root.path(db).clone())
             .ok_or_else(|| anyhow!("no project context"))
     }
 
@@ -1956,7 +1994,7 @@ mod tests {
     /// supports folder-based namespaces (`ns_<name>/foo.baml`) which the
     /// single-source `compile_source` helper can't express.
     fn engine_from_files(files: &[(&str, &str)]) -> BexEngine {
-        let snapshot = baml_project::testing::compile_multi_file(files);
+        let snapshot = baml_db::testing::compile_multi_file(files);
         BexEngine::new(
             snapshot,
             std::sync::Arc::new(sys_native::SysOps::native()),

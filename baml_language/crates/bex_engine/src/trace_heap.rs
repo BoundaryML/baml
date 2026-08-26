@@ -446,13 +446,19 @@ impl<'a> TraceSnapshotBuilder<'a> {
                     }
                     let mut type_args = self.vec_with_capacity(instance.class_type_args.len())?;
                     for type_arg in &instance.class_type_args {
-                        self.charge(realized_ty_allocation_bound(type_arg))?;
-                        type_args.push(baml_type::RuntimeTy::from(type_arg));
+                        // Convert first: the bound is measured over the wire
+                        // form the trace actually stores.
+                        let Ok(wire) = crate::conversion::overlay_wire_ty(
+                            &bex_vm_types::RuntimeTy::from(type_arg),
+                        ) else {
+                            continue;
+                        };
+                        self.charge(wire_ty_allocation_bound(&wire))?;
+                        type_args.push(wire);
                     }
-                    // A trace is read by a person: a runtime-minted
-                    // declaration appears under the name its source wrote,
-                    // not the discriminator that keys it in the VM.
-                    let type_name = self.copy_str(&class.name.render_source_dotted())?;
+                    // A trace is read by a person: the display name, never an
+                    // internal identity.
+                    let type_name = self.copy_str(&class.name.to_string())?;
                     self.alloc(TraceValue::Instance {
                         type_name,
                         type_args,
@@ -479,11 +485,12 @@ impl<'a> TraceSnapshotBuilder<'a> {
                         "variant index was outside the enum definition",
                     );
                 };
-                let type_name = self.copy_str(&enum_.name.render_source_dotted())?;
+                let type_name = self.copy_str(&enum_.name.to_string())?;
                 let variant = self.copy_str(&variant_def.name)?;
                 self.alloc(TraceValue::Enum { type_name, variant })
             }
             Object::Function(_)
+            | Object::TypeAlias(_)
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Interface(_)
@@ -583,8 +590,10 @@ impl<'a> TraceSnapshotBuilder<'a> {
     }
 }
 
-fn realized_ty_allocation_bound(ty: &baml_type::RealizedTy) -> usize {
-    use baml_type::{Literal, RealizedTy};
+// Measured over the wire form the trace stores, so the charge matches the
+// allocation it guards.
+fn wire_ty_allocation_bound(ty: &baml_type::RuntimeTy) -> usize {
+    use baml_type::{Literal, RuntimeTy};
 
     fn add(left: usize, right: usize) -> usize {
         left.saturating_add(right)
@@ -620,36 +629,39 @@ fn realized_ty_allocation_bound(ty: &baml_type::RealizedTy) -> usize {
 
     let node = std::mem::size_of::<baml_type::RuntimeTy>();
     let nested = match ty {
-        RealizedTy::Literal(value, _, _) => literal_bound(value),
-        RealizedTy::Class(name, args, _) => {
-            args.iter().fold(type_name_bound(name), |total, arg| {
-                add(total, realized_ty_allocation_bound(arg))
-            })
-        }
-        RealizedTy::Interface(name, args, bindings, _) => {
+        RuntimeTy::Literal(value, _, _) => literal_bound(value),
+        RuntimeTy::Class(name, args, _) => args.iter().fold(type_name_bound(name), |total, arg| {
+            add(total, wire_ty_allocation_bound(arg))
+        }),
+        RuntimeTy::Interface(name, args, bindings, _) => {
             let args = args.iter().fold(type_name_bound(name), |total, arg| {
-                add(total, realized_ty_allocation_bound(arg))
+                add(total, wire_ty_allocation_bound(arg))
             });
             bindings.iter().fold(args, |total, (name, ty)| {
-                add(
-                    add(total, name_bound(name)),
-                    realized_ty_allocation_bound(ty),
-                )
+                add(add(total, name_bound(name)), wire_ty_allocation_bound(ty))
             })
         }
-        RealizedTy::Enum(name, _) | RealizedTy::TypeAlias(name, _) => type_name_bound(name),
-        RealizedTy::EnumVariant(name, variant, _) => {
-            add(type_name_bound(name), name_bound(variant))
-        }
-        RealizedTy::List(inner, _) => realized_ty_allocation_bound(inner),
-        RealizedTy::Map { key, value, .. } | RealizedTy::Future(key, value, _) => add(
-            realized_ty_allocation_bound(key),
-            realized_ty_allocation_bound(value),
+        RuntimeTy::Enum(name, _) | RuntimeTy::TypeAlias(name, _) => type_name_bound(name),
+        RuntimeTy::TypeVar(param, _) => name_bound(param.name()),
+        RuntimeTy::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } => add(
+            add(wire_ty_allocation_bound(base), name_bound(member)),
+            type_name_bound(&interface.name),
         ),
-        RealizedTy::Union(members, _) => members.iter().fold(0usize, |total, member| {
-            add(total, realized_ty_allocation_bound(member))
+        RuntimeTy::EnumVariant(name, variant, _) => add(type_name_bound(name), name_bound(variant)),
+        RuntimeTy::List(inner, _) => wire_ty_allocation_bound(inner),
+        RuntimeTy::Map { key, value, .. } | RuntimeTy::Future(key, value, _) => add(
+            wire_ty_allocation_bound(key),
+            wire_ty_allocation_bound(value),
+        ),
+        RuntimeTy::Union(members, _) => members.iter().fold(0usize, |total, member| {
+            add(total, wire_ty_allocation_bound(member))
         }),
-        RealizedTy::Function {
+        RuntimeTy::Function {
             params,
             ret,
             throws,
@@ -662,29 +674,29 @@ fn realized_ty_allocation_bound(ty: &baml_type::RealizedTy) -> usize {
                         total,
                         std::mem::size_of::<baml_type::RuntimeFunctionParamTy>(),
                     ),
-                    add(name, realized_ty_allocation_bound(&param.ty)),
+                    add(name, wire_ty_allocation_bound(&param.ty)),
                 )
             });
             add(
-                add(params, realized_ty_allocation_bound(ret)),
-                realized_ty_allocation_bound(throws),
+                add(params, wire_ty_allocation_bound(ret)),
+                wire_ty_allocation_bound(throws),
             )
         }
-        RealizedTy::Int { .. }
-        | RealizedTy::Bigint { .. }
-        | RealizedTy::Float { .. }
-        | RealizedTy::String { .. }
-        | RealizedTy::Bool { .. }
-        | RealizedTy::Null { .. }
-        | RealizedTy::Uint8Array { .. }
-        | RealizedTy::Media(_, _)
-        | RealizedTy::RustType { .. }
-        | RealizedTy::Type { .. }
-        | RealizedTy::Resource { .. }
-        | RealizedTy::PromptAst { .. }
-        | RealizedTy::Void { .. }
-        | RealizedTy::BuiltinUnknown { .. }
-        | RealizedTy::Never { .. } => 0,
+        RuntimeTy::Int { .. }
+        | RuntimeTy::Bigint { .. }
+        | RuntimeTy::Float { .. }
+        | RuntimeTy::String { .. }
+        | RuntimeTy::Bool { .. }
+        | RuntimeTy::Null { .. }
+        | RuntimeTy::Uint8Array { .. }
+        | RuntimeTy::Media(_, _)
+        | RuntimeTy::RustType { .. }
+        | RuntimeTy::Type { .. }
+        | RuntimeTy::Resource { .. }
+        | RuntimeTy::PromptAst { .. }
+        | RuntimeTy::Void { .. }
+        | RuntimeTy::BuiltinUnknown { .. }
+        | RuntimeTy::Never { .. } => 0,
     };
     add(node, nested)
 }
@@ -694,6 +706,7 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         Object::Function(_) => "function",
         Object::Class(_) => "class",
         Object::Enum(_) => "enum",
+        Object::TypeAlias(_) => "type alias",
         Object::Interface(_) => "interface",
         Object::Package(_) => "package",
         Object::ImplRule(_) => "impl rule",
@@ -870,10 +883,10 @@ mod tests {
             .await;
         let array_ptr = permit
             .tlab_mut()
-            .alloc_array(baml_type::RealizedTy::unknown(), vec![]);
+            .alloc_array(bex_vm_types::RealizedTy::unknown(), vec![]);
         unsafe {
             *array_ptr.get_mut() = Object::Array(bex_vm_types::types::Array::new(
-                baml_type::RealizedTy::unknown(),
+                bex_vm_types::RealizedTy::unknown(),
                 vec![Value::int(1), Value::object(array_ptr)],
             ));
         }
@@ -911,11 +924,11 @@ mod tests {
             .acquire()
             .await;
         let shared = permit.tlab_mut().alloc_array(
-            baml_type::RealizedTy::unknown(),
+            bex_vm_types::RealizedTy::unknown(),
             vec![Value::int(7), Value::int(8)],
         );
         let outer = permit.tlab_mut().alloc_array(
-            baml_type::RealizedTy::unknown(),
+            bex_vm_types::RealizedTy::unknown(),
             vec![Value::object(shared), Value::object(shared)],
         );
         let sizing = ProfilerSizingPolicy::derive(32 * 1024 * 1024, MeasuredLayouts::V1).unwrap();

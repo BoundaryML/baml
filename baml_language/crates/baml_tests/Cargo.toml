@@ -10,6 +10,7 @@ build = "build.rs"
 doctest = false
 
 [dependencies]
+baml_artifact = { workspace = true, features = [ "test-support" ] }
 baml_base = { workspace = true }
 baml_compiler2_ast = { workspace = true }
 baml_compiler2_emit = { workspace = true }
@@ -19,9 +20,10 @@ baml_compiler2_mir = { workspace = true }
 baml_compiler2_ppir = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_db = { workspace = true }
-baml_project = { workspace = true, features = [ "testing" ] }
-baml_workspace = { workspace = true }
+baml_type = { workspace = true }
+baml_version = { workspace = true }
 bex_engine = { workspace = true }
+bex_heap = { workspace = true }
 bex_project = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
@@ -35,6 +37,8 @@ similar = { workspace = true }
 text-size = { workspace = true }
 
 [build-dependencies]
+baml_db = { workspace = true }
+baml_version = { workspace = true }
 prettyplease = { workspace = true }
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
@@ -44,17 +48,17 @@ walkdir = { workspace = true }
 
 [dev-dependencies]
 baml_builtins2 = { workspace = true }
+baml_cli = { workspace = true }
 baml_compiler2_emit = { workspace = true }
 baml_fmt = { workspace = true }
-baml_type = { workspace = true }
 bex_events = { workspace = true }
 bex_external_types = { workspace = true }
-bex_heap = { workspace = true }
 borsh = { workspace = true }
 darwin-kperf = { workspace = true }
 darwin-kperf-events = { workspace = true }
 divan = { workspace = true }
 libc = { workspace = true }
+mimalloc = { workspace = true }
 num-bigint = { workspace = true }
 rayon = { workspace = true }
 serde_json = { workspace = true }

@@ -1,0 +1,39 @@
+[package]
+name = "baml_lsp"
+version.workspace = true
+edition.workspace = true
+description = "BAML language-server protocol layer: owner-thread state, Salsa snapshots, request handlers (wasm-clean)"
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_base = { workspace = true }
+baml_db = { workspace = true }
+baml_fmt = { workspace = true }
+baml_ide = { workspace = true }
+baml_type = { workspace = true }
+baml_version = { workspace = true }
+crossbeam-channel = { workspace = true }
+lsp-server = { workspace = true }
+lsp-types = { workspace = true }
+salsa = { workspace = true }
+serde = { workspace = true, features = [ "derive" ] }
+serde_json = { workspace = true }
+text-size = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+web-time = { workspace = true }
+
+# The native filesystem (`discovery::NativeFs`) is the only place this crate
+# touches the disk; wasm hosts supply their own `ProjectFs`.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ignore = { workspace = true }
+
+# `url` gates `Url::{from,to}_file_path` on unix/windows; the browser build
+# spells the conversion by hand.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+percent-encoding = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

@@ -36,16 +36,18 @@ use std::{
 use baml_base::SourceFile;
 use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
 use baml_compiler2_ppir::item_data::{file_functions, function_source_map};
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
 use bex_vm::debug::{BytecodeFormat, display_program};
-use bex_vm_types::{Function, FunctionOrigin, Object};
+use bex_vm_types::{Function, FunctionOrigin};
+
+use crate::engine::TestDbExt;
 
 const SNAPSHOT_BASE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/baml_src");
 
 /// The stdlib packages with dedicated phase snapshots. The remaining builtin
 /// packages (provider clients etc.) are covered indirectly through the corpus
 /// namespaces that exercise them.
-const SNAPSHOT_STDLIB_PACKAGES: &[&str] = &["baml", "testing", "assert", "ai"];
+const SNAPSHOT_STDLIB_PACKAGES: &[&str] = &["baml", "testing", "assert", "ai", "reflect"];
 
 fn baml_src_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src")
@@ -191,15 +193,15 @@ fn corpus_snapshots() {
     assert!(!files.is_empty(), "no .baml files found in baml_src/");
 
     let mut db = ProjectDatabase::new();
-    db.set_project_root(Path::new("."));
+    db.workspace(Path::new("."));
     let mut source_files: Vec<(String, SourceFile)> = Vec::with_capacity(files.len());
     for (rel, content) in &files {
-        let sf = db.add_file(rel, content);
+        let sf = db.file(rel, content);
         source_files.push((rel.clone(), sf));
     }
 
     // ---- Diagnostics: distributed per namespace + the zero-error invariant ----
-    let diagnostics = baml_project::collect_compiler2_diagnostics(&db);
+    let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
 
     let all_files = baml_compiler2_hir::compiler2_all_files(&db);
     let mut sources: HashMap<baml_db::FileId, String> = HashMap::new();
@@ -350,6 +352,12 @@ fn corpus_snapshots() {
     let program = baml_compiler2_emit::generate_project_bytecode(&db, &options)
         .expect("bytecode emit should succeed for an error-free corpus");
 
+    // Emit mints tag-only type heads (the pointer half exists only once a heap
+    // does), so a signature rendered off the raw program would show
+    // `<unresolved type #tag>`. Display heap-resident functions instead: the
+    // bound pool resolves every head, matching what the runtime shows.
+    let heap = crate::engine::bound_pool(&program);
+
     // Group user (non-stdlib, non-auto-derived) functions by their namespace
     // directory, so each namespace's bytecode lands beside its own sources.
     let mut by_dir: BTreeMap<String, Vec<(String, &Function)>> = BTreeMap::new();
@@ -359,7 +367,7 @@ fn corpus_snapshots() {
         if is_stdlib_function(name) || name.starts_with("env.") {
             continue;
         }
-        let Some(Object::Function(func)) = program.objects.get(*idx) else {
+        let Some(func) = crate::engine::bound_function(&heap, *idx) else {
             continue;
         };
         if func.origin == FunctionOrigin::AutoDerive {
@@ -378,7 +386,7 @@ fn corpus_snapshots() {
         by_dir
             .entry(source_dir(&func.source_file))
             .or_default()
-            .push((display_name, &**func));
+            .push((display_name, func));
     }
 
     for (dir, mut funcs) in by_dir {
@@ -401,17 +409,10 @@ fn corpus_snapshots() {
             .iter()
             .map(|name| {
                 let idx = *program.function_indices.get(*name).unwrap();
-                match program.objects.get(idx) {
-                    Some(Object::Function(func)) => ((*name).clone(), func.as_ref()),
-                    other => {
-                        panic!(
-                            "function_indices entry '{}' (idx={}) is not a Function: {:?}",
-                            name,
-                            idx,
-                            other.map(std::mem::discriminant)
-                        );
-                    }
-                }
+                let func = crate::engine::bound_function(&heap, idx).unwrap_or_else(|| {
+                    panic!("function_indices entry '{name}' (idx={idx}) is not a Function")
+                });
+                ((*name).clone(), func)
             })
             .collect();
 

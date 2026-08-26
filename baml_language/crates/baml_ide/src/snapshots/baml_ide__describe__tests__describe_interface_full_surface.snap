@@ -1,0 +1,25 @@
+---
+source: crates/baml_ide/src/describe.rs
+expression: "project.format_description(&descs[0])"
+---
+interface Named  interfaces.baml:3
+/// A thing with a name.
+shape: interface Named {
+    type Output;
+    name: string,
+    function label(self) -> string throws never
+    function greet(self) -> string throws never { ... }
+}
+members:
+  [associated type] type Output;
+  [field] name: string,
+  [required method] function label(self) -> string throws never
+    /// The display label.
+  [default method] function greet(self) -> string throws never { ... }
+    /// Greets by label.
+    ///
+    /// Meant for demos.
+    (body: 4 lines)
+implementations:
+  implement Named for Person
+  implement Named for Robot

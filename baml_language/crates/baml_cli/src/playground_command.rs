@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use baml_workspace::{find_baml_project_root, resolve_project_search_start};
+use baml_db::{find_baml_project_root, resolve_project_search_start};
 use clap::Args;
 
 use crate::project_load::{SourceLocation, load_project_from, resolve_source_location};
@@ -46,18 +46,41 @@ pub struct PlaygroundArgs {
 }
 
 impl PlaygroundArgs {
+    #[expect(
+        clippy::print_stdout,
+        reason = "the banner is this command's primary output"
+    )]
     pub fn run(&self) -> Result<crate::ExitCode> {
         let playground_dir = resolve_playground_assets()?;
 
         let roots = workspace_roots(self.from.as_deref(), self.file.as_deref())?;
+        // The server owns no terminal output (in editor mode its stdout is
+        // the LSP channel), so the banner is printed from here once the port
+        // is bound.
+        let banner_roots = roots.clone();
         let options = baml_lsp_server::PlaygroundServerOptions {
             port: self.port,
             open_browser: !self.no_open
                 && !is_headless_session(|key| std::env::var_os(key).is_some()),
+            on_listening: Some(Box::new(move |port| {
+                println!("{}", playground_banner(port, &banner_roots));
+            })),
         };
         baml_lsp_server::run_playground_server(roots, playground_dir, options)?;
         Ok(crate::ExitCode::Success)
     }
+}
+
+fn playground_banner(port: u16, roots: &[PathBuf]) -> String {
+    let root = roots
+        .first()
+        .map(|root| root.display().to_string())
+        .unwrap_or_else(|| "(no workspace roots)".to_string());
+    format!(
+        "\n  Playground:  http://localhost:{port}/\n  Project:     {root}\n\n  \
+         Remote machine? Forward the port, then open the URL locally:\n    \
+         ssh -L {port}:localhost:{port} <user@host>\n\n  Press Ctrl-C to stop.\n"
+    )
 }
 
 /// A browser can't usefully open here: an SSH session, or a Linux/BSD session

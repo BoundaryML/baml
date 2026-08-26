@@ -15,7 +15,7 @@ fn user.fixtures.test_raw_string_name.$init_test_ns_fixtures_ns_test_raw_string_
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn testing.TestCollector.register_test_at(copy _1, const "root.fixtures.test_raw_string_name", const "raw string name", copy _3, const null) -> [bb1];
+        _2 = call const fn testing.TestCollector.register_test_at(copy _1, const "root.fixtures.test_raw_string_name", const "backtick string name", copy _3, const null) -> [bb1];
     }
 
     bb1: {
@@ -25,7 +25,7 @@ fn user.fixtures.test_raw_string_name.$init_test_ns_fixtures_ns_test_raw_string_
 
     bb2: {
         _7 = make_closure lambda[2]();
-        _6 = call const fn testing.TestCollector.register_test_set_at(copy _1, const "root.fixtures.test_raw_string_name", const "raw testset name", copy _7, const null) -> [bb3];
+        _6 = call const fn testing.TestCollector.register_test_set_at(copy _1, const "root.fixtures.test_raw_string_name", const "backtick testset name", copy _7, const null) -> [bb3];
     }
 
     bb3: {
@@ -76,7 +76,7 @@ fn .<lambda($init_test_ns_fixtures_ns_test_raw_string_name_main, 2)>(testset: te
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn testing.TestCollector.register_test(copy _1, const "nested raw name", copy _3, const null) -> [bb1];
+        _2 = call const fn testing.TestCollector.register_test(copy _1, const "nested backtick name", copy _3, const null) -> [bb1];
     }
 
     bb1: {

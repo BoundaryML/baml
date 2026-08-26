@@ -129,14 +129,18 @@ impl Registry {
         let mut progress = false;
         self.for_each(|ring| match ring.state() {
             RingState::Active => {
-                progress |= unsafe { ring.drain(&mut |bytes| sink(ring, bytes)) };
+                progress |= unsafe { ring.drain(&mut |bytes| sink(ring, bytes)) }.progress;
             }
             RingState::Orphaned => {
                 // The state Acquire (orphan edge) made every pre-death push
-                // visible, and the producer is gone — one drain reaches
-                // empty.
-                progress |= unsafe { ring.drain(&mut |bytes| sink(ring, bytes)) };
-                unsafe { ring.mark_pooled() };
+                // visible, and the producer is gone — a caught-up drain has
+                // reached empty. A drain stopped by its segment bound leaves
+                // the ring Orphaned for the next sweep.
+                let outcome = unsafe { ring.drain(&mut |bytes| sink(ring, bytes)) };
+                progress |= outcome.progress;
+                if outcome.caught_up {
+                    unsafe { ring.mark_pooled() };
+                }
             }
             RingState::Pooled => {}
         });

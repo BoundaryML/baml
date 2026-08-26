@@ -1,13 +1,15 @@
-//! End-to-end coverage for the read-only `baml.AnyClass` reflection surface.
+//! End-to-end coverage for the read-only `reflect.AnyClass` reflection surface.
 
 use baml_compiler_diagnostics::Severity;
-use baml_project::{collect_diagnostics, testing::setup_test_db};
-use baml_tests::baml_test;
+use baml_tests::{
+    baml_test,
+    stdlib_prefix::{check_user_files, setup_test_db},
+};
 use bex_engine::BexExternalValue;
 
 fn compile_error_codes(source: &str) -> Vec<String> {
     let db = setup_test_db(source);
-    collect_diagnostics(&db)
+    check_user_files(&db)
         .into_iter()
         .filter(|diagnostic| diagnostic.severity == Severity::Error)
         .map(|diagnostic| diagnostic.code().to_string())
@@ -18,7 +20,7 @@ fn compile_error_codes(source: &str) -> Vec<String> {
 fn requires_any_class_rejects_a_primitive_implementor() {
     let errors = compile_error_codes(
         r#"
-        interface Tagged requires baml.AnyClass {
+        interface Tagged requires reflect.AnyClass {
             function tag(self) -> string throws never
         }
 
@@ -43,7 +45,7 @@ fn any_class_blanket_bound_does_not_expose_members_on_nonclasses() {
 
         class Box<T> { value T }
 
-        implements<T extends baml.AnyClass> Wrapped for Box<T> {
+        implements<T extends reflect.AnyClass> Wrapped for Box<T> {
             function tag(self) -> string { "wrapped:" + self.value.type().to_string() }
         }
 
@@ -65,7 +67,7 @@ async fn requires_and_bounded_impl_membership_agree_for_real_classes() {
         class Record { label string }
         class Box<T> { value T }
 
-        interface Tagged requires baml.AnyClass {
+        interface Tagged requires reflect.AnyClass {
             function tag(self) -> string throws never
         }
 
@@ -77,7 +79,7 @@ async fn requires_and_bounded_impl_membership_agree_for_real_classes() {
             function wrapped(self) -> string throws never
         }
 
-        implements<T extends baml.AnyClass> Wrapped for Box<T> {
+        implements<T extends reflect.AnyClass> Wrapped for Box<T> {
             function wrapped(self) -> string { "wrapped:" + self.value.name() }
         }
 
@@ -86,9 +88,9 @@ async fn requires_and_bounded_impl_membership_agree_for_real_classes() {
             let boxed = Box<Record> { value: record }
             record.tag() == "record:ok"
                 && boxed.wrapped() == "wrapped:Record"
-                && type.of<Record>().implements(type.of<Tagged>())
-                && type.of<Box<Record>>().implements(type.of<Wrapped>())
-                && !type.of<Box<int>>().implements(type.of<Wrapped>())
+                && reflect.Type.of<Record>().implements(reflect.Type.of<Tagged>())
+                && reflect.Type.of<Box<Record>>().implements(reflect.Type.of<Wrapped>())
+                && !reflect.Type.of<Box<int>>().implements(reflect.Type.of<Wrapped>())
         }
         "#
     );
@@ -107,12 +109,12 @@ async fn runtime_minted_class_narrows_and_exercises_the_complete_surface() {
 
         function Extract<T>(text: string) -> T {
             client: TestClient
-            prompt: `Extract ${text}.\n${ctx.output_format}`
+            prompt: `Extract ${text}.\n${ctx.output_format()}`
         }
 
-        function mismatch_is_catchable(value: baml.AnyClass) -> bool throws never {
+        function mismatch_is_catchable(value: reflect.AnyClass) -> bool throws never {
             let ignored = value.get<int>("first") catch (e) {
-                baml.errors.TypeMismatch { message } => {
+                reflect.errors.TypeMismatch { message } => {
                     return message.includes("field `VetrecLike.first`")
                 }
             }
@@ -120,7 +122,7 @@ async fn runtime_minted_class_narrows_and_exercises_the_complete_surface() {
         }
 
         function main() -> bool {
-            let optional_string = type.of<string>().optional().as_type()
+            let optional_string = reflect.Type.of<string>().optional().as_type()
             let runtime_t = reflect.class.new("VetrecLike", {
                 "first": optional_string.meta(description = "first field"),
                 "second": optional_string,
@@ -131,11 +133,11 @@ async fn runtime_minted_class_narrows_and_exercises_the_complete_surface() {
             let opaque = Extract$parse<unreflect(runtime_t.as_type())>(
                 `{"first":"one","second":"two","third":null,"fourth":"four","fifth":"five"}`,
             )
-            let record: baml.AnyClass = opaque else {
+            let record: reflect.AnyClass = opaque else {
                 throw "Expected class"
             }
 
-            let first_field: baml.reflect.class.Field = record.get_field("first") else {
+            let first_field: reflect.class.Field = record.get_field("first") else {
                 throw "Expected first field"
             }
             let fields = record.list_fields()
@@ -164,7 +166,7 @@ async fn runtime_minted_class_narrows_and_exercises_the_complete_surface() {
 }
 
 #[tokio::test]
-async fn membership_is_class_only_with_the_ratified_kind_view_exception() {
+async fn membership_is_class_only_and_kind_views_are_ordinary_classes() {
     let output = baml_test!(
         r#"
         class Point { x int }
@@ -173,34 +175,36 @@ async fn membership_is_class_only_with_the_ratified_kind_view_exception() {
         type Callback = (value: int) -> string throws never
 
         function narrows(value: unknown) -> bool throws never {
-            let class_value: baml.AnyClass = value else {
+            let class_value: reflect.AnyClass = value else {
                 return false
             }
-            class_value.type() == type.of_value(value)
+            class_value.type() == reflect.Type.of_value(value)
         }
 
         function main() -> bool throws unknown {
             let numbers = { "one": 1 }
-            let class_kind = type.of<Point>().as_class() ?? throw "class kind"
-            let enum_kind = type.of<Color>().as_enum() ?? throw "enum kind"
-            let union_kind = type.of<int | string>().as_union() ?? throw "union kind"
-            let literal_kind = type.of<"fixed">().as_literal() ?? throw "literal kind"
-            let array_kind = type.of<int[]>().as_array() ?? throw "array kind"
-            let map_kind = type.of<map<string, int>>().as_map() ?? throw "map kind"
-            let interface_kind = type.of<Marker>().as_interface() ?? throw "interface kind"
-            let primitive_kind = type.of<int>().as_primitive() ?? throw "primitive kind"
-            let function_kind = type.of<Callback>().as_function() ?? throw "function kind"
+            let class_kind = reflect.Type.of<Point>().as_class() ?? throw "class kind"
+            let enum_kind = reflect.Type.of<Color>().as_enum() ?? throw "enum kind"
+            let union_kind = reflect.Type.of<int | string>().as_union() ?? throw "union kind"
+            let literal_kind = reflect.Type.of<"fixed">().as_literal() ?? throw "literal kind"
+            let array_kind = reflect.Type.of<int[]>().as_array() ?? throw "array kind"
+            let map_kind = reflect.Type.of<map<string, int>>().as_map() ?? throw "map kind"
+            let interface_kind = reflect.Type.of<Marker>().as_interface() ?? throw "interface kind"
+            let primitive_kind = reflect.Type.of<int>().as_primitive() ?? throw "primitive kind"
+            let function_kind = reflect.Type.of<Callback>().as_function() ?? throw "function kind"
 
+            // The nine kind views are ordinary wrapper classes, so every one
+            // of them narrows to `AnyClass` like any other class instance.
             narrows(Point { x: 1 })
                 && narrows(class_kind)
-                && !narrows(enum_kind)
-                && !narrows(union_kind)
-                && !narrows(literal_kind)
-                && !narrows(array_kind)
-                && !narrows(map_kind)
-                && !narrows(interface_kind)
-                && !narrows(primitive_kind)
-                && !narrows(function_kind)
+                && narrows(enum_kind)
+                && narrows(union_kind)
+                && narrows(literal_kind)
+                && narrows(array_kind)
+                && narrows(map_kind)
+                && narrows(interface_kind)
+                && narrows(primitive_kind)
+                && narrows(function_kind)
                 && !narrows(1)
                 && !narrows("text")
                 && !narrows(Color.Red)
@@ -224,28 +228,28 @@ async fn reflected_membership_and_static_field_handles_agree_with_narrowing() {
         }
 
         function main() -> bool throws unknown {
-            let any_class_t = type.of<baml.AnyClass>()
+            let any_class_t = reflect.Type.of<reflect.AnyClass>()
             let any_class_view = any_class_t.as_interface() ?? throw "AnyClass interface"
             let point = Point { x: 7 }
-            let narrowed: baml.AnyClass = point else {
+            let narrowed: reflect.AnyClass = point else {
                 throw "Expected class"
             }
-            let field: baml.reflect.class.Field = narrowed.get_field("x") else {
+            let field: reflect.class.Field = narrowed.get_field("x") else {
                 throw "Expected x"
             }
-            let point_type: baml.reflect.class.Type = type.of<Point>().as_class() else {
+            let point_type: reflect.class.Type = reflect.Type.of<Point>().as_class() else {
                 throw "Point type"
             }
             let type_side_field = point_type.fields()[0]
 
-            type.of<Point>().implements(any_class_t)
-                && any_class_view.implemented_by(type.of<Point>())
-                && type.of<baml.reflect.class.Type>().implements(any_class_t)
-                && !type.of<baml.reflect.enum.Type>().implements(any_class_t)
-                && !type.of<int>().implements(any_class_t)
+            reflect.Type.of<Point>().implements(any_class_t)
+                && any_class_view.implemented_by(reflect.Type.of<Point>())
+                && reflect.Type.of<reflect.class.Type>().implements(any_class_t)
+                && reflect.Type.of<reflect.enum.Type>().implements(any_class_t)
+                && !reflect.Type.of<int>().implements(any_class_t)
                 && narrowed.name() == "Point"
                 && narrowed.attributes().alias == "point"
-                && field.type == type.of<int>()
+                && field.type == reflect.Type.of<int>()
                 && field.meta.description == "x coordinate"
                 && field.metadata().description == "x coordinate"
                 && field.value<int>() == 7
@@ -303,7 +307,7 @@ async fn concrete_members_keep_precedence_until_explicitly_narrowed() {
             let methods = ExistingMethods {}
             let boxed = OutOfBodyBox.new("out-of-body")
             let boxed_value = boxed.get()
-            let reflected: baml.AnyClass = fields else {
+            let reflected: reflect.AnyClass = fields else {
                 throw "Expected class"
             }
 
@@ -317,7 +321,7 @@ async fn concrete_members_keep_precedence_until_explicitly_narrowed() {
                 && methods.name() == "name"
                 && methods.type() == "type"
                 && methods.attributes() == "attributes"
-                && type.of_value(boxed_value) == type.of<string>()
+                && reflect.Type.of_value(boxed_value) == reflect.Type.of<string>()
                 && reflected.name() == "ExistingFields"
                 && reflected.get<string>("name") == "field-name"
         }

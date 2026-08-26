@@ -16,10 +16,10 @@ fn user.accept(value: T) -> T {
     }
 }
 
-fn user.f(t: type, value: unknown) -> bool {
+fn user.f(t: reflect.Type, value: unknown) -> bool {
     // Locals:
     let _0: bool // _0 // return
-    let _1: type // t // param
+    let _1: reflect.Type // t // param
     let _2: unknown // value // param
     let _3: unknown // result
     let _4: bool

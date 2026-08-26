@@ -1,6 +1,6 @@
 //! Closed BEP-066 reflection-kind classification.
 
-use crate::{ConcreteRealizedTy, Name, QualifiedTypeName, RealizedTy, TyAttr};
+use crate::{Name, QualifiedTypeName, RealizedTy};
 
 /// The nine sealed runtime views of a reflected `type` value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -46,19 +46,17 @@ impl TypeKind {
     /// The builtin class that is the sealed view for this kind.
     pub fn class_name(self) -> QualifiedTypeName {
         QualifiedTypeName::new(
-            Name::new("baml"),
-            vec![Name::new("reflect"), Name::new(self.namespace())],
+            Name::new("reflect"),
+            vec![Name::new(self.namespace())],
             Name::new("Type"),
         )
-    }
-
-    pub fn concrete_class_ty(self) -> ConcreteRealizedTy {
-        ConcreteRealizedTy::Class(self.class_name(), Vec::new(), TyAttr::default())
     }
 }
 
 /// Classify every realized runtime type into exactly one reflection kind.
-pub fn classify_type(ty: &RealizedTy) -> TypeKind {
+///
+/// Shape only — no head is inspected — so this answers the same at either head.
+pub fn classify_type<N: Clone>(ty: &RealizedTy<N>) -> TypeKind {
     match ty {
         RealizedTy::Class(..) => TypeKind::Class,
         RealizedTy::Enum(..) => TypeKind::Enum,
@@ -74,12 +72,11 @@ pub fn classify_type(ty: &RealizedTy) -> TypeKind {
 
 /// Whether a nominal class is one of the nine sealed reflection-kind classes.
 pub fn is_type_kind_class(name: &QualifiedTypeName) -> bool {
-    name.package().as_str() == "baml"
-        && name.namespace().len() == 2
-        && name.namespace()[0].as_str() == "reflect"
+    name.package().as_str() == "reflect"
+        && name.namespace().len() == 1
         && TypeKind::ALL
             .iter()
-            .any(|kind| name.namespace()[1].as_str() == kind.namespace())
+            .any(|kind| name.namespace()[0].as_str() == kind.namespace())
         && name.name().as_str() == "Type"
 }
 
@@ -108,8 +105,18 @@ pub struct BuiltinCompanion {
 ///
 /// Same discipline as [`QualifiedTypeName::is_builtin_root_type`]: the
 /// `baml` package plus an EMPTY namespace, so a user's own `Int` class and
-/// the field-carrying `baml.reflect.class.Field` are both untouched.
+/// the field-carrying `reflect.class.Field` are both untouched.
 pub fn builtin_companion_of(name: &QualifiedTypeName) -> Option<BuiltinCompanion> {
+    if name.package().as_str() == "reflect"
+        && name.namespace().is_empty()
+        && name.name().as_str() == "Type"
+    {
+        return Some(BuiltinCompanion {
+            builtin: "reflect.Type",
+            origin: "`reflect.Type.of<T>()` and reflection",
+            carries_methods: true,
+        });
+    }
     if name.package().as_str() != "baml" || !name.namespace().is_empty() {
         return None;
     }
@@ -123,7 +130,6 @@ pub fn builtin_companion_of(name: &QualifiedTypeName) -> Option<BuiltinCompanion
         "Uint8Array" => ("uint8array", "byte-string literals", true),
         "Array" => ("array", "array literals", true),
         "Map" => ("map", "map literals", true),
-        "TypeValue" => ("type", "`type.of<T>()` and reflection", true),
         _ => return None,
     };
     Some(BuiltinCompanion {
@@ -131,13 +137,6 @@ pub fn builtin_companion_of(name: &QualifiedTypeName) -> Option<BuiltinCompanion
         origin,
         carries_methods,
     })
-}
-
-/// Whether a nominal class inhabits the compiler-derived `baml.AnyClass`
-/// interface. Ordinary classes do. Within the sealed reflection-kind family,
-/// only the class-kind value view is intentionally admitted.
-pub fn class_inhabits_any_class(name: &QualifiedTypeName) -> bool {
-    !is_type_kind_class(name) || name == &TypeKind::Class.class_name()
 }
 
 #[cfg(test)]
@@ -150,7 +149,7 @@ mod tests {
             assert!(is_type_kind_class(&kind.class_name()));
         }
         assert!(!is_type_kind_class(&QualifiedTypeName::from_dotted_path(
-            "baml.reflect.Type"
+            "reflect.Type"
         )));
     }
 
@@ -166,7 +165,7 @@ mod tests {
             ("baml.Uint8Array", "uint8array"),
             ("baml.Array", "array"),
             ("baml.Map", "map"),
-            ("baml.TypeValue", "type"),
+            ("reflect.Type", "reflect.Type"),
         ] {
             assert_eq!(
                 builtin_companion_of(&QualifiedTypeName::from_dotted_path(path))
@@ -181,8 +180,8 @@ mod tests {
             "user.Map",
             // Namespaced `baml` classes are out of scope, including the
             // field-carrying reflect classes the stdlib itself constructs.
-            "baml.reflect.class.Field",
-            "baml.reflect.class.Type",
+            "reflect.class.Field",
+            "reflect.class.Type",
             "baml.media.Image",
             "baml.iter.Done",
             // A root-namespace `baml` class that really does hold fields.
@@ -192,20 +191,6 @@ mod tests {
                 builtin_companion_of(&QualifiedTypeName::from_dotted_path(path)),
                 None,
                 "{path} should not be a companion carrier"
-            );
-        }
-    }
-
-    #[test]
-    fn any_class_admits_ordinary_classes_and_only_the_class_kind_view() {
-        assert!(class_inhabits_any_class(
-            &QualifiedTypeName::from_dotted_path("user.Record")
-        ));
-        for kind in TypeKind::ALL {
-            assert_eq!(
-                class_inhabits_any_class(&kind.class_name()),
-                kind == TypeKind::Class,
-                "unexpected AnyClass membership for {kind:?}"
             );
         }
     }

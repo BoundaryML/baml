@@ -76,7 +76,7 @@ function env_ref_desugar.$init_test_ns_env_ref_desugar_env_ref_desugar(registry:
     return
 }
 
-function env_ref_desugar.EnvRefBadClientFn(client: ai.Client | null) -> string {
+function env_ref_desugar.EnvRefBadClientFn(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -85,22 +85,27 @@ function env_ref_desugar.EnvRefBadClientFn(client: ai.Client | null) -> string {
     store_var client
 
   L0:
-    load_type string
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _4
-    call user.env_ref_desugar.EnvRefBadClientFn$spec
     store_var _6
+    call user.env_ref_desugar.EnvRefBadClientFn$spec
+    store_var _8
+    load_type string
     load_var2 3 4
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -133,10 +138,7 @@ function env_ref_desugar.EnvRefBadClientFn$render_prompt() -> ai.Prompt {
     call user.env_ref_desugar.EnvRefBadClientFn$spec
     store_var _1
     load_type string
-    call ai.wire.render_output_format
-    store_var _2
-    load_type string
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }
@@ -160,7 +162,7 @@ function env_ref_desugar.EnvRefBadClientFn$spec() -> ai.FunctionSpec<string> {
     return
 }
 
-function env_ref_desugar.EnvRefBadClientFn$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_desugar.EnvRefBadClientFn$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -169,11 +171,20 @@ function env_ref_desugar.EnvRefBadClientFn$stream(client: ai.stream.StreamingCli
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     call user.env_ref_desugar.EnvRefBadClientFn$spec
-    store_var _3
+    store_var _5
     load_type string | null
     load_type string
-    load_var2 2 1
+    load_var2 3 1
+    load_var on_event
     call ai.stream.from_spec
     return
 }
@@ -217,7 +228,7 @@ function env_ref_desugar.EnvRefClientId() -> string {
     return
 }
 
-function env_ref_desugar.EnvRefDesugarFn(client: ai.Client | null) -> string {
+function env_ref_desugar.EnvRefDesugarFn(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -226,22 +237,27 @@ function env_ref_desugar.EnvRefDesugarFn(client: ai.Client | null) -> string {
     store_var client
 
   L0:
-    load_type string
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _4
-    call user.env_ref_desugar.EnvRefDesugarFn$spec
     store_var _6
+    call user.env_ref_desugar.EnvRefDesugarFn$spec
+    store_var _8
+    load_type string
     load_var2 3 4
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -274,10 +290,7 @@ function env_ref_desugar.EnvRefDesugarFn$render_prompt() -> ai.Prompt {
     call user.env_ref_desugar.EnvRefDesugarFn$spec
     store_var _1
     load_type string
-    call ai.wire.render_output_format
-    store_var _2
-    load_type string
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }
@@ -301,7 +314,7 @@ function env_ref_desugar.EnvRefDesugarFn$spec() -> ai.FunctionSpec<string> {
     return
 }
 
-function env_ref_desugar.EnvRefDesugarFn$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_desugar.EnvRefDesugarFn$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -310,11 +323,20 @@ function env_ref_desugar.EnvRefDesugarFn$stream(client: ai.stream.StreamingClien
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     call user.env_ref_desugar.EnvRefDesugarFn$spec
-    store_var _3
+    store_var _5
     load_type string | null
     load_type string
-    load_var2 2 1
+    load_var2 3 1
+    load_var on_event
     call ai.stream.from_spec
     return
 }
@@ -330,7 +352,7 @@ function env_ref_desugar.EnvRefDesugarFnClientId() -> string {
     return
 }
 
-function env_ref_desugar.EnvRefDynClientFn(client: ai.Client | null) -> string {
+function env_ref_desugar.EnvRefDynClientFn(client: ai.Client | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -339,22 +361,27 @@ function env_ref_desugar.EnvRefDynClientFn(client: ai.Client | null) -> string {
     store_var client
 
   L0:
-    load_type string
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
+    load_type unknown
     load_const <omitted>
     load_const <omitted>
     load_var client
     load_const <omitted>
-    load_const <omitted>
+    load_var on_event
     call ai.Agent.new
-    store_var _4
-    call user.env_ref_desugar.EnvRefDynClientFn$spec
     store_var _6
+    call user.env_ref_desugar.EnvRefDynClientFn$spec
+    store_var _8
+    load_type string
     load_var2 3 4
-    load_type ai.Runner<string, Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | baml.reflect.errors.CompilationError | ai.errors.Failure, Output = ai.RunResult<string>>
-    load_const "run"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _3
-    load_var _3
+    call ai.Agent.run
     load_field .value
     return
 }
@@ -387,10 +414,7 @@ function env_ref_desugar.EnvRefDynClientFn$render_prompt() -> ai.Prompt {
     call user.env_ref_desugar.EnvRefDynClientFn$spec
     store_var _1
     load_type string
-    call ai.wire.render_output_format
-    store_var _2
-    load_type string
-    load_var2 1 2
+    load_var _1
     call ai.FunctionSpec.prompt
     return
 }
@@ -414,7 +438,7 @@ function env_ref_desugar.EnvRefDynClientFn$spec() -> ai.FunctionSpec<string> {
     return
 }
 
-function env_ref_desugar.EnvRefDynClientFn$stream(client: ai.stream.StreamingClient | null) -> ai.stream.Stream<string | null, string> {
+function env_ref_desugar.EnvRefDynClientFn$stream(client: ai.stream.StreamingClient | null, on_event: ((ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced) -> void throws never) | null) -> ai.stream.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -423,11 +447,20 @@ function env_ref_desugar.EnvRefDynClientFn$stream(client: ai.stream.StreamingCli
     store_var client
 
   L0:
+    load_var on_event
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L1
+    load_const null
+    store_var on_event
+
+  L1:
     call user.env_ref_desugar.EnvRefDynClientFn$spec
-    store_var _3
+    store_var _5
     load_type string | null
     load_type string
-    load_var2 2 1
+    load_var2 3 1
+    load_var on_event
     call ai.stream.from_spec
     return
 }

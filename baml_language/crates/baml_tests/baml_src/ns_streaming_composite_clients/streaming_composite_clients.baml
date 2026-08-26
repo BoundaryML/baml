@@ -4,7 +4,7 @@
 
 function CompositeStreamSpec() -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `Return a short value. ${ctx.output_format}`
+    prompt: `Return a short value. ${ctx.output_format()}`
 }
 
 class StreamProbe {
@@ -39,7 +39,7 @@ class ScriptedStreamClient {
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
-            ai.ModelTurn {
+            ai.ModelTurn { calls: [],
                 content: [ai.content.Text { text: self.chunks.join("") }],
                 stop_reason: ai.content.StopReason.Complete,
                 usage: null,
@@ -54,7 +54,7 @@ class ScriptedStreamClient {
             let attempt = self.attempts;
             self.probe.events.push(`open:${self.client_id}:${attempt}`);
             if (attempt <= self.fail_open_attempts) {
-                throw ai.errors.NetworkFailure {
+                throw ai.errors.NetworkFailure { status_code: null,
                     provider: self.client_id,
                     detail: "failed while opening",
                     raw_body: null,
@@ -65,7 +65,7 @@ class ScriptedStreamClient {
                 let client_id = self.client_id;
                 return ai.stream.TurnStream.from_event_source(() -> {
                     probe.events.push(`pull-fail:${client_id}:${attempt}`);
-                    throw ai.errors.NetworkFailure {
+                    throw ai.errors.NetworkFailure { status_code: null,
                         provider: client_id,
                         detail: "failed before first delta",
                         raw_body: null,
@@ -93,7 +93,7 @@ class ScriptedStreamClient {
                         ai.stream.TextDelta { text: prefix }
                     } else {
                         probe.events.push(`partial-fail:${client_id}:${attempt}`);
-                        throw ai.errors.NetworkFailure {
+                        throw ai.errors.NetworkFailure { status_code: null,
                             provider: client_id,
                             detail: "failed after first delta",
                             raw_body: prefix,
@@ -128,7 +128,7 @@ class NonStreamingClient {
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
-            ai.ModelTurn {
+            ai.ModelTurn { calls: [],
                 content: [ai.content.Text { text: "not streamed" }],
                 stop_reason: ai.content.StopReason.Complete,
                 usage: null,
@@ -162,7 +162,7 @@ class SyntheticInvokeClient {
             if (self.cancel_immediately) {
                 throw baml.panics.Cancelled { message: "scripted non-stream cancellation" }
             }
-            throw ai.errors.NetworkFailure {
+            throw ai.errors.NetworkFailure { status_code: null,
                 provider: "synthetic-invoke",
                 detail: "retryable failure",
                 raw_body: null,

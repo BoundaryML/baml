@@ -390,7 +390,7 @@ func NewEnumValue(name string, options ...MetadataOption) EnumValue {
 func TypeOf[T any]() Type { return baml_go.DefinitionOf[T]() }
 
 func metadataInput(metadata Metadata) baml_go.Input {
-	return baml_go.Class("baml.reflect.Meta", map[string]baml_go.Input{
+	return baml_go.Class("reflect.Meta", map[string]baml_go.Input{
 		"alias": baml_go.OptionalEncoder(baml_go.String)(metadata.Alias),
 		"description": baml_go.OptionalEncoder(baml_go.String)(metadata.Description),
 		"docstring": baml_go.OptionalEncoder(baml_go.String)(metadata.Docstring),
@@ -400,7 +400,7 @@ func metadataInput(metadata Metadata) baml_go.Input {
 
 func withMetadataInput(metadata Metadata) baml_go.Input {
 	return baml_go.ClassWithTypeArgs(
-		"baml.reflect.WithMeta",
+		"reflect.WithMeta",
 		[]baml_go.BAMLType{baml_go.MetaTypeBAMLType()},
 		map[string]baml_go.Input{
 			"ty": baml_go.Type(metadata.Type),
@@ -426,7 +426,7 @@ func Class(ctx context.Context, name string, fields []Field) (Type, error) {
 		if hasMetadata(field.Metadata) { value = withMetadataInput(field.Metadata) }
 		rows[index] = baml_go.NamedInput{Name: field.Name, Value: value}
 	}
-	result, err := baml_go.Call(ctx, "baml.reflect.class.new", map[string]baml_go.Input{
+	result, err := baml_go.Call(ctx, "reflect.class.new", map[string]baml_go.Input{
 		"name": baml_go.String(name),
 		"fields": baml_go.OrderedMap(rows),
 	})
@@ -439,12 +439,12 @@ func Enum(ctx context.Context, name string, values []EnumValue) (Type, error) {
 	if err := bootstrap.Ensure(); err != nil { return Type{}, err }
 	rows := make([]baml_go.Input, len(values))
 	for index, value := range values {
-		rows[index] = baml_go.Class("baml.reflect.enum.Value", map[string]baml_go.Input{
+		rows[index] = baml_go.Class("reflect.enum.Value", map[string]baml_go.Input{
 			"name": baml_go.String(value.Name),
 			"meta": metadataInput(value.Metadata),
 		})
 	}
-	result, err := baml_go.Call(ctx, "baml.reflect.enum.new", map[string]baml_go.Input{
+	result, err := baml_go.Call(ctx, "reflect.enum.new", map[string]baml_go.Input{
 		"name": baml_go.String(name),
 		"values": baml_go.List(rows, func(value baml_go.Input) baml_go.Input { return value }),
 	})
@@ -461,11 +461,11 @@ type Package struct {
 
 func CompilePackage(ctx context.Context, files map[string]string) (*Package, error) {
 	if err := bootstrap.Ensure(); err != nil { return nil, err }
-	result, err := baml_go.Call(ctx, "baml.reflect.Package.compile", map[string]baml_go.Input{
+	result, err := baml_go.Call(ctx, "reflect.Package.compile", map[string]baml_go.Input{
 		"files": baml_go.Map(files, baml_go.String),
 	})
 	if err != nil { return nil, err }
-	classValue, err := result.Class("baml.reflect.Package")
+	classValue, err := result.Class("reflect.Package")
 	if err != nil { return nil, err }
 	innerValue, err := classValue.Field("_inner")
 	if err != nil { return nil, err }
@@ -475,14 +475,14 @@ func CompilePackage(ctx context.Context, files map[string]string) (*Package, err
 }
 
 func (pkg *Package) input() baml_go.Input {
-	return baml_go.Class("baml.reflect.Package", map[string]baml_go.Input{
+	return baml_go.Class("reflect.Package", map[string]baml_go.Input{
 		"_inner": baml_go.OpaqueHandleInput(pkg.inner),
 	})
 }
 
 func (pkg *Package) GetClass(name string) (*Type, error) {
 	if pkg == nil { return nil, nil }
-	result, err := baml_go.Call(pkg.ctx, "baml.reflect.Package.get_class", map[string]baml_go.Input{
+	result, err := baml_go.Call(pkg.ctx, "reflect.Package.get_class", map[string]baml_go.Input{
 		"self": pkg.input(),
 		"name": baml_go.String(name),
 	})
@@ -5125,6 +5125,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new(argument),
                 docstring: None,
                 ty: ty.clone(),
@@ -5146,6 +5147,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_string(),
@@ -5201,6 +5203,7 @@ mod tests {
             generic_params: vec![type_parameter.clone()],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_type_var(type_parameter.clone()),
@@ -5268,12 +5271,14 @@ mod tests {
             docstring: Some("Constructs a value without a receiver.".to_string()),
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: ty_string(),
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("suffix"),
                     docstring: None,
                     ty: ty_string(),
@@ -5290,6 +5295,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_media(baml_base::MediaKind::Generic),
@@ -5305,6 +5311,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_type_var(BaseName::new("T")),
@@ -5320,6 +5327,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_type_var(BaseName::new("T")),
@@ -5367,6 +5375,7 @@ mod tests {
                 generic_params: vec![],
                 docstring: None,
                 arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: ty_string(),
@@ -5429,6 +5438,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("fallback"),
                 docstring: None,
                 ty: ty_type_var(type_parameter.clone()),
@@ -5712,6 +5722,7 @@ mod tests {
             generic_params: vec![type_parameter.clone()],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_union(vec![
@@ -5749,12 +5760,14 @@ mod tests {
             docstring: None,
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("options"),
                     docstring: None,
                     ty: ty_string(),
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("opt1"),
                     docstring: None,
                     ty: ty_union(vec![ty_int(), ty_null()]),
@@ -5763,6 +5776,7 @@ mod tests {
                     ))),
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("opt2"),
                     docstring: None,
                     ty: ty_string(),
@@ -6013,6 +6027,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("ctx"),
                 docstring: None,
                 ty: ty_class(person.clone(), vec![]),
@@ -6099,6 +6114,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("callback"),
                 docstring: None,
                 ty: callback(),
@@ -6166,6 +6182,7 @@ mod tests {
                 generic_params: vec![],
                 docstring: None,
                 arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("callback"),
                     docstring: None,
                     ty: callback,
@@ -6255,6 +6272,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("outer"),
                 docstring: None,
                 ty: ty_class(outer.clone(), vec![]),
@@ -6492,6 +6510,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: Ty::Resource {
@@ -6532,6 +6551,7 @@ mod tests {
             arguments: ["ctx", "result", "err"]
                 .into_iter()
                 .map(|name| FunctionArgument {
+                    injected: false,
                     name: BaseName::new(name),
                     docstring: None,
                     ty: ty_string(),
@@ -6645,6 +6665,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: ty_bigint(),

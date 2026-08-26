@@ -325,7 +325,10 @@ pub(super) fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Ve
 /// order (pass 2, one `YieldToCall` per override via [`ToStringWalkContinuation`]),
 /// then renders structurally splicing in the override results (pass 3). When the
 /// value tree contains no overrides at all, renders fully structurally inline.
-fn render_to_string_honoring_overrides(vm: &mut BexVm, value: Value) -> NativeCallResult {
+pub(crate) fn render_to_string_honoring_overrides(
+    vm: &mut BexVm,
+    value: Value,
+) -> NativeCallResult {
     let mut pending: Vec<HeapPtr> = Vec::new();
     collect_to_string_overrides(vm, value, &mut pending);
 
@@ -641,11 +644,9 @@ pub(super) fn render_to_sink(
             let (class_name, paired) = match vm.get_object(inst.class) {
                 Object::Class(class) => {
                     let name = if state.qualified_class_names {
-                        // The qualified form a person reads, which is the
-                        // source spelling — never the runtime mint.
-                        class.name.render_source_dotted()
+                        class.name.to_string()
                     } else {
-                        class.name.name().to_string()
+                        class.name.item_name().to_string()
                     };
                     let fields = inst
                         .fields
@@ -895,6 +896,7 @@ fn deep_copy_value_recursive(
                 Object::ImplRule(r) => vm.tlab.alloc(Object::ImplRule(r)),
                 Object::Class(c) => vm.tlab.alloc(Object::Class(c)),
                 Object::Enum(e) => vm.tlab.alloc(Object::Enum(e)),
+                Object::TypeAlias(a) => vm.tlab.alloc(Object::TypeAlias(a)),
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
                 Object::RustData(arc) => vm.tlab.alloc(Object::RustData(Arc::clone(&arc))),
                 // `Object::Future(_)` is short-circuited above; it can't
@@ -902,8 +904,8 @@ fn deep_copy_value_recursive(
                 Object::Future(_) => unreachable!("Future short-circuited above"),
                 Object::UnscheduledFuture(f) => vm.tlab.alloc(Object::UnscheduledFuture(f)),
                 Object::Collector(c) => vm.tlab.alloc(Object::Collector(c)),
-                // A deep copy denotes the same type value: clone the complete
-                // `TypeValue`, including its mint (BEP-066 I-1/I-4).
+                // A deep copy denotes the same type: clone the `TypeValue`
+                // whole, definition overlay and owner edge included.
                 Object::Type(ty) => vm.tlab.alloc(Object::Type(ty)),
                 // Closures, bound methods, and cells are shallow-copied: the captured
                 // state is shared by design (mutation semantics).

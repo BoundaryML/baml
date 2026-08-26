@@ -104,7 +104,7 @@ test "string_or_image_holding_string_is" {
 }
 
 // The `string` arm must not swallow the image — this is the exact shape an
-// `ai.Agent<string | image>` answer takes.
+// `ai.Agent` answer takes.
 function string_or_image_match(v: string | image) -> string {
     match (v) {
         let s: string => `text:${s}`,

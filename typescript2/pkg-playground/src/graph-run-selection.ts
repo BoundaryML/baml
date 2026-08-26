@@ -55,7 +55,10 @@ function isGraphRunCandidate(
     return true;
   }
 
-  return run.calls.some((call) => call.functionName === selectedFn);
+  // A run used to also match by any function in its call tree. The run store
+  // no longer carries one, so a run is a candidate only when its target says
+  // so -- which is what this already resolved to in practice.
+  return false;
 }
 
 function compareRunRecency(left: Run, right: Run): number {

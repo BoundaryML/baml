@@ -22,6 +22,7 @@ use baml_compiler2_hir::{
     package::{PackageId, PackageItems, is_external_package, package_dependencies},
 };
 use baml_type::{FunctionParamMode, FunctionParamTy, ParamTy, QualifiedTypeName, Ty, TyAttr};
+use indexmap::IndexMap;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
@@ -53,14 +54,14 @@ pub fn stdlib_honest_derivations() -> usize {
 /// once per compiler build (B-694 "export data") and seeded back into a fresh
 /// database, skipping the cold re-derivation. Every leaf (`Ty`,
 /// `QualifiedTypeName`, `Name`, `FunctionParamTy`, `BuiltinKind`,
-/// `FunctionThrowSets`) is Borsh-ready; the `FxHashMap` members serialize
-/// deterministically because Borsh sorts map entries by key.
+/// `FunctionThrowSets`) is Borsh-ready. Export maps preserve deterministic
+/// source declaration order through serialization.
 #[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct PackageInterface {
     /// All exported types: namespace path -> name -> `ExportedType`
-    pub types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>>,
+    pub types: IndexMap<Vec<Name>, IndexMap<Name, ExportedType>>,
     /// All exported free functions: namespace path -> name -> `ExportedFunction`
-    pub functions: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedFunction>>,
+    pub functions: IndexMap<Vec<Name>, IndexMap<Name, ExportedFunction>>,
     /// Throw sets for all functions in this package (transitive, fully inferred).
     pub throw_sets: FunctionThrowSets,
     /// Complete namespace set, including namespaces whose only declaration is
@@ -109,6 +110,7 @@ pub enum ExportedType {
 pub struct ExportedFieldAttrs {
     pub alias: Option<String>,
     pub description: Option<String>,
+    pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
@@ -169,9 +171,9 @@ pub struct FileInterfaceFragment {
     /// The file's namespace path (`file_package(file).namespace_path`).
     pub ns_path: Vec<Name>,
     /// Types this file exports: name -> `ExportedType` (first contribution wins).
-    pub types: FxHashMap<Name, ExportedType>,
+    pub types: IndexMap<Name, ExportedType>,
     /// Free functions this file exports: name -> `ExportedFunction` (first wins).
-    pub functions: FxHashMap<Name, ExportedFunction>,
+    pub functions: IndexMap<Name, ExportedFunction>,
 }
 
 /// The only per-file interface data consumed across CLI process boundaries.
@@ -221,16 +223,27 @@ pub struct ResolvedMethod {
     pub class_generic_params: Vec<ParamTy>,
 }
 
+/// Whether an exported function declares a `self` receiver, and is therefore
+/// an instance method rather than a static one.
+///
+/// The receiver is an ordinary first parameter named `self` (there is no
+/// separate receiver slot), so this is the whole test — for the dispatch
+/// shape `resolved_exported_function` records and for the member
+/// enumeration alike.
+pub(crate) fn exported_takes_self(function: &ExportedFunction) -> bool {
+    function
+        .params
+        .first()
+        .and_then(|param| param.name.as_ref())
+        .is_some_and(|name| name.as_str() == "self")
+}
+
 pub(crate) fn resolved_exported_function(
     function: &ExportedFunction,
     owner_generic_params: Vec<ParamTy>,
     owner_generic_param_bounds: Vec<Vec<baml_type::Interface>>,
 ) -> ResolvedFunction {
-    let takes_self = function
-        .params
-        .first()
-        .and_then(|param| param.name.as_ref())
-        .is_some_and(|name| name.as_str() == "self");
+    let takes_self = exported_takes_self(function);
     ResolvedFunction {
         name: function.name.clone(),
         params: function.params.clone(),
@@ -467,8 +480,14 @@ fn external_target<'db>(
     }
 }
 
-fn exported_field_attrs(attrs: &[baml_compiler2_hir::item_tree::Attribute]) -> ExportedFieldAttrs {
-    let mut result = ExportedFieldAttrs::default();
+fn exported_field_attrs(
+    attrs: &[baml_compiler2_hir::item_tree::Attribute],
+    docstring: Option<&str>,
+) -> ExportedFieldAttrs {
+    let mut result = ExportedFieldAttrs {
+        docstring: docstring.map(str::to_owned),
+        ..Default::default()
+    };
     for attr in attrs {
         if attr.args.len() != 1 {
             continue;
@@ -671,7 +690,7 @@ fn lower_class_export<'db>(
         fields.push((
             field.name.clone(),
             field_ty,
-            exported_field_attrs(&field.attributes),
+            exported_field_attrs(&field.attributes, field.docstring.as_deref()),
         ));
     }
 
@@ -798,8 +817,8 @@ fn lower_interface_export<'db>(
         .iter()
         .zip(&data.fields)
         .map(|((field, ty, attrs), field_data)| {
-            let mut exported = exported_field_attrs(attrs);
-            let type_attrs = exported_field_attrs(&data.type_refs[field_data.type_ref].attrs);
+            let mut exported = exported_field_attrs(attrs, field_data.docstring.as_deref());
+            let type_attrs = exported_field_attrs(&data.type_refs[field_data.type_ref].attrs, None);
             exported.alias = exported.alias.or(type_attrs.alias);
             exported.description = exported.description.or(type_attrs.description);
             (field.clone(), ty.clone(), exported)
@@ -888,7 +907,7 @@ pub fn file_interface_fragment(
     // resolver's within-file choice exactly. A first contribution that is not a
     // Class/Enum/TypeAlias (e.g. an interface) still *claims* the name — leaving
     // no structural export — matching the reference derivation's `_ => continue`.
-    let mut types: FxHashMap<Name, ExportedType> = FxHashMap::default();
+    let mut types: IndexMap<Name, ExportedType> = IndexMap::new();
     let mut claimed_types: FxHashSet<Name> = FxHashSet::default();
     for (name, contrib) in &contributions.types {
         if !claimed_types.insert(name.clone()) {
@@ -904,7 +923,7 @@ pub fn file_interface_fragment(
         types.insert(name.clone(), exported);
     }
 
-    let mut functions: FxHashMap<Name, ExportedFunction> = FxHashMap::default();
+    let mut functions: IndexMap<Name, ExportedFunction> = IndexMap::new();
     let mut claimed_values: FxHashSet<Name> = FxHashSet::default();
     for (name, contrib) in &contributions.values {
         if !claimed_values.insert(name.clone()) {
@@ -950,13 +969,27 @@ pub fn package_interface<'db>(
     }
 
     // A mounted package has no source rows. Its serialized interface is the
-    // authoritative compiler surface; stale/corrupt blobs fail closed by
-    // falling through to the empty honest derivation.
+    // authoritative compiler surface, so a stale/corrupt blob must never fall
+    // through to an empty interface. ProjectDatabase validates ordinary mounts
+    // before installation; the panic is a last-resort invariant failure for
+    // custom Db implementations that bypass that boundary.
     if is_external_package(db, &pkg_name)
         && let Some(mounted) = db.mounted_packages()
         && let Some(bytes) = mounted.by_package(db).get(pkg_name.as_str())
-        && let Ok(mut interface) = borsh::from_slice::<PackageInterface>(bytes)
     {
+        let mut interface = if baml_compiler2_hir::package::is_precompiled_package(db, &pkg_name) {
+            borsh::from_slice::<PackageInterface>(bytes).unwrap_or_else(|error| {
+                panic!("compiler-built package `{pkg_name}` has an invalid interface: {error}")
+            })
+        } else {
+            baml_artifact::decode::<PackageInterface>(
+                baml_artifact::ArtifactKind::PackageInterface,
+                bytes,
+            )
+            .unwrap_or_else(|error| {
+                panic!("mounted package `{pkg_name}` has an invalid interface artifact: {error}")
+            })
+        };
         if baml_compiler2_hir::package::is_precompiled_package(db, &pkg_name) {
             mark_precompiled_callables_linkable(&mut interface);
         }
@@ -1106,9 +1139,8 @@ fn fold_package_interface<'db>(
 ) -> PackageInterface {
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
-    let mut types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>> = FxHashMap::default();
-    let mut functions: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedFunction>> =
-        FxHashMap::default();
+    let mut types: IndexMap<Vec<Name>, IndexMap<Name, ExportedType>> = IndexMap::new();
+    let mut functions: IndexMap<Vec<Name>, IndexMap<Name, ExportedFunction>> = IndexMap::new();
 
     for (ns_path, ns_items) in &pkg_items.namespaces {
         for (name, def) in &ns_items.types {

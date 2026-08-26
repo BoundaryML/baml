@@ -25,7 +25,7 @@ pub struct PlaygroundHttpState {
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     run_store: Arc<InMemoryRunStore>,
     next_fetch_id: AtomicU64,
-    /// Maps response body pointer → (host_call_id, fetch_id) for response body tracking.
+    /// Maps response body pointer → (`host_call_id`, `fetch_id`) for response body tracking.
     response_to_fetch: Mutex<HashMap<usize, (CallId, u64)>>,
 }
 
@@ -46,7 +46,7 @@ impl PlaygroundHttpState {
 pub struct PlaygroundHttp(pub Arc<PlaygroundHttpState>);
 
 fn response_body_key(resp: &owned::http::Response) -> usize {
-    Arc::as_ptr(&resp._body) as *const () as usize
+    Arc::as_ptr(&resp._body).cast::<()>() as usize
 }
 
 fn extract_headers_as_hashmap(
@@ -113,7 +113,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
                     });
                     Ok(text)
                 }),
-                other => other,
+                other @ SysOpOutput::Ready(_) => other,
             },
             None => native_result,
         }
@@ -164,7 +164,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
                     });
                     Ok(bytes)
                 }),
-                other => other,
+                other @ SysOpOutput::Ready(_) => other,
             },
             None => native_result,
         }
@@ -361,7 +361,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
         match native_result {
             SysOpOutput::Async(fut) => SysOpOutput::async_op_with_throw(async move {
                 let result = fut.await;
-                let elapsed = start.elapsed().as_millis() as u64;
+                let elapsed = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
                 match &result {
                     Ok(resp) => {
                         state
@@ -420,7 +420,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                 result
             }),
             SysOpOutput::Ready(result) => {
-                let elapsed = start.elapsed().as_millis() as u64;
+                let elapsed = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
                 match &result {
                     Ok(resp) => {
                         state

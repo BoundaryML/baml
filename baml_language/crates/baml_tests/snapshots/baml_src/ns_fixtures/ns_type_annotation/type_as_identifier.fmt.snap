@@ -11,7 +11,7 @@ class RiskFactor {
 
 // Class with field named `type` whose type is the meta-type `type`
 class MetaField {
-    type: type,
+    type: reflect.Type,
 }
 
 // Enum with a variant named `type`

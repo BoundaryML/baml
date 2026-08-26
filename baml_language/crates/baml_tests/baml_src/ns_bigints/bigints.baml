@@ -486,6 +486,35 @@ test "bigint_random_lower_greater_throws" {
     }
 }
 
+class BigintRejectionThenAcceptedRng {
+    calls: int,
+
+    implements baml.random.Rng {
+        function random(self, bytes: int) -> uint8array {
+            if (bytes != 2) {
+                baml.sys.panic("expected a two-byte draw")
+            } else {
+                null
+            }
+            self.calls += 1;
+            let draw = b"";
+            if (self.calls == 1) {
+                // 257 is the first rejected value for [0n, 257n).
+                draw = b"\x01\x01"
+            } else {
+                draw = b"\x00\x04"
+            }
+            draw
+        }
+    }
+}
+
+test "bigint_random_rejection_boundary" {
+    let rng = BigintRejectionThenAcceptedRng { calls: 0 };
+    assert.equal(bigint.random(0n, 257n, rng = rng), 4n);
+    assert.equal(rng.calls, 2)
+}
+
 // ─── equality and ordering ────────────────────────────────────────────────────
 
 test "test_bigint_eq_same_alloc" {

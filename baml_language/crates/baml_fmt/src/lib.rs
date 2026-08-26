@@ -4,11 +4,11 @@ mod trivia_classifier;
 
 use ast::FromCST as _;
 use baml_db::{
+    ProjectDatabase, SourceRootSpec,
     baml_compiler_diagnostics::ParseError,
     baml_compiler_lexer, baml_compiler_parser,
     baml_compiler_syntax::{SyntaxElement, SyntaxNode},
 };
-use baml_project::ProjectDatabase;
 use printer::{Printer, Shape};
 pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 
@@ -22,9 +22,27 @@ mod formatter_scenario_tests;
 /// # Errors
 /// Errors can occur if the source code is invalid: the parser or AST errors will be returned.
 pub fn format(source: &str, options: &FormatOptions) -> Result<String, FormatterError> {
-    let mut db = ProjectDatabase::new();
-    let source_file = db.add_file("file.baml", source);
+    let (db, source_file) = single_file_db("file.baml", source);
     format_salsa(&db, source_file, *options)
+}
+
+/// A throwaway database holding exactly one workspace file.
+///
+/// Formatting is purely syntactic (lexer + parser over one file), so the
+/// database carries no stdlib — only the workspace root the file must belong
+/// to. The root's virtual path never touches the filesystem.
+pub(crate) fn single_file_db(name: &str, source: &str) -> (ProjectDatabase, baml_db::SourceFile) {
+    let mut db = ProjectDatabase::new();
+    let root = db
+        .add_source_root(SourceRootSpec {
+            path: std::path::PathBuf::from("<fmt>"),
+            package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: baml_db::SourceRootKind::Workspace,
+        })
+        .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
+    let file =
+        db.add_or_update_file_in(root, &std::path::PathBuf::from("<fmt>").join(name), source);
+    (db, file)
 }
 
 #[salsa::tracked]
@@ -501,7 +519,7 @@ mod llm_tools_field_tests {
             "    tools: [search_flights, search_hotels]\n",
             "    prompt: `\n",
             "        ${q}\n",
-            "        ${ctx.output_format}\n",
+            "        ${ctx.output_format()}\n",
             "    `\n",
             "}\n",
         );
@@ -920,20 +938,22 @@ implements<T extends Named> Printable for Box<T> {
 
     #[test]
     fn test_runtime_type_syntax_formatting_is_idempotent() {
-        let source = r#"function f(t: type, value: int) -> int {
-    type T = unreflect(t)
-    let result = identity<unreflect(t), string>(value)
+        let source = r#"function f(t: reflect.Type, value: int) -> int {
+    type T = Wrapper<unreflect(t)>
+    let annotated: Wrapper<unreflect(t)>? = null
+    let result = identity<Wrapper<unreflect(t)>, string>(value)
     match (value) {
-        unreflect(t) => result,
+        Wrapper<unreflect(t)> => result,
         _ => 0
     }
 }
 "#;
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("runtime type syntax should format");
-        assert!(formatted.contains("type T = unreflect(t)"));
-        assert!(formatted.contains("identity<unreflect(t), string>"));
-        assert!(formatted.contains("unreflect(t) => result"));
+        assert!(formatted.contains("type T = Wrapper<unreflect(t)>"));
+        assert!(formatted.contains("let annotated: Wrapper<unreflect(t)>? = null"));
+        assert!(formatted.contains("identity<Wrapper<unreflect(t)>, string>"));
+        assert!(formatted.contains("Wrapper<unreflect(t)> => result"));
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second);
     }
@@ -1215,7 +1235,7 @@ mod contextual_keyword_name_tests {
         // while the
         // reflection API uses `implements` as a method name.
         assert_round_trips(
-            "function f(dog_t: type, animal_t: type) -> bool {\n    let views = dog_t.class.enum.function.interface;\n    dog_t.implements(animal_t)\n}\n",
+            "function f(dog_t: reflect.Type, animal_t: reflect.Type) -> bool {\n    let views = dog_t.class.enum.function.interface;\n    dog_t.implements(animal_t)\n}\n",
         );
     }
 }

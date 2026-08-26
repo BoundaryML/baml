@@ -6,6 +6,21 @@
 /// standalone `prompt` tag's parameterized output-format rendering.
 class OutputFormat {
     _data: $rust_type,
+
+    function _render(
+        self,
+        prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        or_splitter: string | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        enum_value_prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        hoisted_class_prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        always_hoist_enums: bool | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        quote_class_fields: bool | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        hoist_classes: bool | "auto" | string[] | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        map_style: "angle" | "object" | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        render_null_as: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+    ) -> string throws never {
+        $rust_io_function
+    }
 }
 
 /// A typed chat-role marker produced by `${role("system")}` in a prompt.
@@ -27,21 +42,30 @@ class ContextClient {
 class Context {
     client: ContextClient,
     tags: map<string, unknown>,
-    output_format: string,
     _output_format: OutputFormat,
 
-    function output_format_with(
+    function output_format(
         self,
-        prefix: string? = null,
-        or_splitter: string? = null,
-        enum_value_prefix: string? = null,
-        hoisted_class_prefix: string? = null,
-        always_hoist_enums: bool? = null,
-        quote_class_fields: bool? = null,
-        hoist_classes: string[]? = null,
-        map_style: string? = null,
-        render_null_as: string? = null,
+        prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        or_splitter: string | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        enum_value_prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        hoisted_class_prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        always_hoist_enums: bool | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        quote_class_fields: bool | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        hoist_classes: bool | "auto" | string[] | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        map_style: "angle" | "object" | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        render_null_as: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
     ) -> string throws never {
-        $rust_io_function
+        self._output_format._render(
+            prefix = prefix,
+            or_splitter = or_splitter,
+            enum_value_prefix = enum_value_prefix,
+            hoisted_class_prefix = hoisted_class_prefix,
+            always_hoist_enums = always_hoist_enums,
+            quote_class_fields = quote_class_fields,
+            hoist_classes = hoist_classes,
+            map_style = map_style,
+            render_null_as = render_null_as,
+        )
     }
 }

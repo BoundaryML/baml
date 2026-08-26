@@ -9,8 +9,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
-use baml_project::ProjectDatabase;
+use baml_db::{ProjectDatabase, baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_type::RuntimeTy;
 use bex_engine::{
     BexCallArg, BexEngine, BexExternalValue, CancellationToken, FunctionCallContext,
@@ -387,9 +386,6 @@ impl TestArgs {
                 (warmth.reuse_plan, warmth.stdlib_interface_hit);
             let db = &session.db;
             let cache = &session.cache;
-            let project = db
-                .get_project()
-                .ok_or_else(|| anyhow!("no project context"))?;
 
             // ── 2. Diagnostics ─────────────────────────────────────────────
             // Keep `baml test` quiet during the compile phase. `baml check`
@@ -402,7 +398,7 @@ impl TestArgs {
                 let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
                 (incremental.merged, Some(incremental.fresh_by_file))
             } else {
-                (baml_project::collect_diagnostics(db), None)
+                (baml_db::collect_diagnostics(db), None)
             };
             let errors: Vec<_> = diagnostics
                 .iter()
@@ -421,7 +417,7 @@ impl TestArgs {
             }
 
             // ── 3. Discover legacy tests from HIR ──────────────────────────
-            let legacy = discover_legacy_tests(db, project);
+            let legacy = discover_legacy_tests(db);
 
             // ── 4. Compile + engine + runtime ──────────────────────────────
             let compile_options = baml_compiler2_emit::CompileOptions {
@@ -921,30 +917,26 @@ fn cached_legacy_test(t: &LegacyTest) -> crate::bytecode_cache::CachedLegacyTest
 // Legacy test discovery + execution (unchanged behavior, narrowed types)
 // ---------------------------------------------------------------------------
 
-#[allow(unused_variables)]
 // BUG: test discovery is duplicated with different semantics in
-// `baml_project::symbols::list_tests_with_metadata`. This copy iterates files
+// `baml_ide::symbols::list_tests_with_metadata`. This copy iterates files
 // (sees duplicate-named tests) and qualifies function refs unconditionally
-// with the *test's* namespace; the playground copy iterates resolved
+// with the *test's* namespace; the `baml_ide` copy iterates resolved
 // namespace items (keep-first winner) and qualifies only when the ref
 // resolves in the same namespace. Neither handles a cross-namespace ref by
 // the *resolved function's* namespace, which is the correct rule. Unify on
-// one `baml_surface`-side derivation once that rule is ratified.
-fn discover_legacy_tests(
-    db: &ProjectDatabase,
-    project: baml_workspace::Project,
-) -> Vec<LegacyTest> {
+// one `baml_ide`-side derivation once that rule is ratified.
+fn discover_legacy_tests(db: &ProjectDatabase) -> Vec<LegacyTest> {
     use baml_db::baml_compiler2_ppir::item_data::{file_tests, test_data};
 
     let mut tests = Vec::new();
-    let root = project.root(db);
 
-    for source_file in db.get_source_files() {
+    for source_file in db.workspace_files() {
         // Root-relative for display, matching how emit records source paths —
         // keeps `--list` output identical between compiled and
         // bytecode-cache-served runs.
+        let root = source_file.source_root(db).path(db);
         let file_path = source_file.path(db);
-        let file_path = file_path.strip_prefix(&root).unwrap_or(&file_path);
+        let file_path = file_path.strip_prefix(root).unwrap_or(&file_path);
         let namespace = baml_db::baml_compiler2_hir::file_package::file_package(db, source_file)
             .namespace_path
             .iter()
@@ -1098,6 +1090,14 @@ fn run_filtered_report(
     invocation: &TestInvocation,
 ) -> Result<BexExternalValue> {
     let (call_ctx, logs) = ctx.call_context(CallId::next());
+    // Cap concurrently RUNNING test bodies at twice the core count. The
+    // runner admits a leaf only when a slot is free, so a five-thousand-test
+    // corpus holds ~2N live VM threads instead of five thousand — which keeps
+    // per-thread GC costs bounded and keeps wall-clock timing assertions
+    // meaningful under full-corpus load.
+    let max_concurrency =
+        i64::try_from(std::thread::available_parallelism().map_or(8, std::num::NonZero::get) * 2)
+            .unwrap_or(16);
     let result = ctx.block_on_with_logs(
         ctx.engine.call_function(
             "testing.TestRegistry.run_filtered",
@@ -1107,6 +1107,7 @@ fn run_filtered_report(
                 string_array(&invocation.profile_exclude),
                 string_array(&invocation.cli_include),
                 string_array(&invocation.cli_exclude),
+                BexExternalValue::Int(max_concurrency),
             ],
             call_ctx,
             true,

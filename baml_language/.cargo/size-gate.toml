@@ -42,14 +42,25 @@ policy.max_delta_pct = 3.0
 # Baselines include the first-class C# generator now linked into baml-cli.
 # Reclaiming the `syn` cost would mean dropping prettyplease (raw,
 # unformatted generated SDK output).
+#
+# Ceilings are ~3% above the first unwind binaries CI actually measured
+# (run 32893558553 on cf74e4881, after `[profile.release]` moved to
+# `panic = "unwind"`). The earlier estimate — canary's abort numbers scaled
+# by the 1.25x unwind ratio measured on aarch64-apple-darwin — undershot:
+# the real ratio is platform-specific (~1.30x on macOS, ~1.49x on
+# x86_64-windows-msvc, where SEH tables are costlier and the CI runner has
+# no llvm-strip, so file size is the unstripped binary). Linux was not
+# measured on that run (job cancelled); its ceiling extrapolates the macOS
+# correction and firms up when CI records it. The daily baseline refresh
+# re-pegs the baselines to CI's recorded sizes.
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = "25.4 MiB"
+max_file_bytes = "62.0 MiB"
 
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "31.5 MiB"
+max_file_bytes = "80.9 MiB"
 
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = "27.1 MiB"
+max_file_bytes = "78.8 MiB"
 
 [artifacts.packed-program]
 kind = "pack"
@@ -64,13 +75,13 @@ policy.max_delta_pct = 3.0
 # bytecode ships in every packed program. Each ceiling is ~3% above the
 # re-recorded baseline in `.ci/size-gate`.
 [artifacts.packed-program.platform.aarch64-apple-darwin]
-max_file_bytes = "20.8 MiB"
+max_file_bytes = "26.4 MiB"
 
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = "25.0 MiB"
+max_file_bytes = "31.9 MiB"
 
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_file_bytes = "21.9 MiB"
+max_file_bytes = "27.9 MiB"
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"
@@ -93,4 +104,4 @@ wasm = true
 policy.max_delta_pct = 3.0
 
 [artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
-max_gzip_bytes = "5.4 MiB"
+max_gzip_bytes = "5.6 MiB"

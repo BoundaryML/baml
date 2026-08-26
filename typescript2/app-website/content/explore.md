@@ -399,7 +399,7 @@ function extract_resume(text: string) -> Resume {
   client: "openai/gpt-4o-mini"
   prompt: `
     Extract the resume.
-    ${ctx.output_format}
+    ${ctx.output_format()}
     ${text}
   `
 }
@@ -450,7 +450,7 @@ Design proposal: [BEP-023](https://beps.boundaryml.com/beps/23).
 Agents frequently write code and then execute it. Ordinary `eval` is unsafe and discards type information. BAML's planned reflection API compiles generated code against an expected signature and returns typed compiler errors that can be fed back to the agent.
 
 ```baml
-let package = baml.reflect.new_package("generated");
+let package = reflect.new_package("generated");
 // Add generated source to the package, then compile it.
 let callback = package.build().get<() -> string>("hello");
 print(callback())

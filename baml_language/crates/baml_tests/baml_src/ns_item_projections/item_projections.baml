@@ -12,14 +12,14 @@
 // realized from the caller's frame at runtime.
 
 interface Sizer {
-    function pick(self, other: Self) -> Self
-    function grow(self) -> Self { self.pick(self) }
+    function pick(self, other: Self) -> Self throws never
+    function grow(self) -> Self throws never { self.pick(self) }
 }
 
 // The same method name under two interfaces: the bare spelling is ambiguous
 // (E0121), and the qualifier is the only road to each impl.
-interface Alpha { function tag(self, other: Self) -> int }
-interface Beta { function tag(self, other: Self) -> int }
+interface Alpha { function tag(self, other: Self) -> int throws never }
+interface Beta { function tag(self, other: Self) -> int throws never }
 
 class Twin {
     n: int
@@ -59,7 +59,7 @@ test "parenthesized_qualifier_halves" {
 // A generic interface implemented at two instantiations: the qualifier's
 // generic arguments select the impl, so they are part of its identity.
 interface Convert<T> {
-    function conv(self, other: Self) -> T
+    function conv(self, other: Self) -> T throws never
 }
 
 class Poly {
@@ -89,8 +89,8 @@ test "qualifier_generics_select_the_instantiation" {
 // there is no receiver to derive it from — it must be written, realized from
 // the caller's frame, or solved from the expected type.
 interface Buildable {
-    function build(seed: int) -> Self
-    function describe(self) -> string
+    function build(seed: int) -> Self throws never
+    function describe(self) -> string throws never
 }
 
 class Widget {
@@ -241,7 +241,7 @@ test "alias_of_interface_as_qualifier" {
 // determined once `Self` is known.
 interface Keyed {
     type Key
-    function key(self) -> Self.Key
+    function key(self) -> Self.Key throws never
 }
 class Row {
     id: int
@@ -305,7 +305,7 @@ test "selfless_static_on_generic_class_through_every_spelling" {
 // variable matches only through an impl's own parameter — a blanket rule or
 // a bound — never by collapsing to one ground instantiation.
 interface Marked<V> {
-    function mark(self) -> V
+    function mark(self) -> V throws never
 }
 
 class Dual {
@@ -338,25 +338,25 @@ test "symbolic_qualifier_dispatches_per_instantiation" {
 // Runtime type arguments (`unreflect`) flow as ordinary operands through the
 // qualified spellings, exactly as static ones do.
 interface Stamper {
-    function stamp<U>(self, u: U) -> string
-    function emboss<U>(u: U) -> string
+    function stamp<U>(self, u: U) -> string throws never
+    function emboss<U>(u: U) -> string throws never
 }
 
 class Press {
     implements Stamper {
         function stamp<U>(self, u: U) -> string throws never {
-            "stamp " + type.of<U>().to_string()
+            "stamp " + reflect.Type.of<U>().to_string()
         }
 
         function emboss<U>(u: U) -> string throws never {
-            "emboss " + type.of<U>().to_string()
+            "emboss " + reflect.Type.of<U>().to_string()
         }
     }
 }
 
 test "runtime_type_arguments_flow_through_qualified_spellings" {
     let p = Press {}
-    let t = type.of<int>()
+    let t = reflect.Type.of<int>()
     assert.equal(Stamper.stamp<unreflect(t)>(p, 5), "stamp int")
     assert.equal((Press as Stamper).stamp<unreflect(t)>(p, 5), "stamp int")
     assert.equal((Press as Stamper).emboss<unreflect(t)>(5), "emboss int")
@@ -374,8 +374,8 @@ test "as_remains_usable_as_an_identifier" {
 // An interface method may be named with a contextual keyword; every access
 // spelling must reach it, the qualified one included.
 interface Keyworded {
-    function implements(self) -> int
-    function extends(self) -> int
+    function implements(self) -> int throws never
+    function extends(self) -> int throws never
 }
 class Keyed2 {
     implements Keyworded {
@@ -400,16 +400,16 @@ test "keyword_named_members_are_reachable_through_the_qualifier" {
 // frame: the owner's class arguments and the method's own generics. Supplying
 // only one half leaves the body's slots unrealizable.
 interface Embosser {
-    function emboss<U>(u: U) -> string
-    function fresh(seed: int) -> Self
-    function label(self) -> string
+    function emboss<U>(u: U) -> string throws never
+    function fresh(seed: int) -> Self throws never
+    function label(self) -> string throws never
 }
 class Plate<T> {
     tag: string
 
     implements Embosser {
         function emboss<U>(u: U) -> string throws never {
-            "emboss " + type.of<U>().to_string()
+            "emboss " + reflect.Type.of<U>().to_string()
         }
 
         function fresh(seed: int) -> Self throws never {

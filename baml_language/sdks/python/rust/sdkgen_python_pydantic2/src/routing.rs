@@ -69,10 +69,10 @@ const PYTHON_KEYWORDS: &[&str] = &[
 
 /// Sanitize a path segment so it's a usable Python module identifier.
 ///
-/// In addition to the hard keywords above, `type` retains its existing
-/// trailing-underscore spelling. The `baml.type` carrier submodule would
-/// otherwise shadow the builtin `type` in sibling annotations. Runtime BAML
-/// FQNs are built from `Name`, not `LeafPath`, so routing does not alter them.
+/// In addition to the hard keywords above, a user namespace named `type`
+/// receives a trailing underscore so it cannot shadow the Python builtin in
+/// sibling annotations. Runtime BAML FQNs are built from `Name`, not
+/// `LeafPath`, so routing does not alter them.
 fn sanitize_python_module_segment(seg: &str) -> String {
     if seg == "type" || PYTHON_KEYWORDS.contains(&seg) {
         format!("{seg}_")
@@ -100,6 +100,7 @@ fn route_inner(name: &Name, honor_stream_suffix: bool) -> LeafPath {
         "user" => {}
         "baml" => segs.push("baml".to_string()),
         "ai" => segs.push("ai".to_string()),
+        "reflect" => segs.push("reflect".to_string()),
         other => {
             segs.push("vendor".to_string());
             segs.push(sanitize_python_module_segment(other));
@@ -167,6 +168,7 @@ mod tests {
             generic_params: Vec::new(),
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("x"),
                 docstring: None,
                 ty: Ty::Int {
@@ -353,14 +355,11 @@ mod tests {
 
     #[test]
     fn type_namespace_segment_is_sanitized() {
-        // The `baml.type` carrier namespace (BEP-066): a generated
-        // submodule literally named `type` shadows the builtin `type`
-        // in `baml/__init__.pyi` annotations (pyright
-        // reportInvalidTypeForm). H-1's `type_` mangling applies to the
-        // module segment; the runtime BAML FQN (`baml.type.of`) is
-        // unaffected.
-        let n = name("baml", &["type"], "of_value");
+        // A user submodule literally named `type` shadows the builtin in
+        // sibling annotations (pyright reportInvalidTypeForm). The module
+        // segment is mangled while the runtime BAML FQN is unaffected.
+        let n = name("user", &["type"], "of_value");
         let lp = route(&n, &func_sym());
-        assert_eq!(lp.segments, vec!["baml".to_string(), "type_".to_string()]);
+        assert_eq!(lp.segments, vec!["type_".to_string()]);
     }
 }

@@ -182,7 +182,7 @@ function inferred_generic_type_args.Cat.Animal.speak(self: inferred_generic_type
 
 function inferred_generic_type_args.Counter.element_type(self: inferred_generic_type_args.Counter<#1>) -> string {
     load_type #1
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
@@ -251,7 +251,7 @@ function inferred_generic_type_args.LoneIter.NextIter<T, never>.next2(self: infe
 
 function inferred_generic_type_args.Named.tname(self: inferred_generic_type_args.Named<#1>) -> string {
     load_type #1
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
@@ -304,7 +304,7 @@ function inferred_generic_type_args.PlainThing.Describable.describe(self: inferr
 
 function inferred_generic_type_args.ProbeA.TypeProbe.seen(self: inferred_generic_type_args.ProbeA, value: #0) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
@@ -353,7 +353,7 @@ function inferred_generic_type_args.StrCounter.Counter<T>.describe(self: inferre
 
 function inferred_generic_type_args.TypedBox.Describable.describe(self: inferred_generic_type_args.TypedBox<#0>) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
@@ -407,7 +407,7 @@ function inferred_generic_type_args.default_method_typevar_name() -> string {
 
 function inferred_generic_type_args.echo_type(a: #0) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 
@@ -424,7 +424,7 @@ function inferred_generic_type_args.free_fn_inferred_t() -> string {
 
 function inferred_generic_type_args.free_fn_tname(a: #0[]) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 

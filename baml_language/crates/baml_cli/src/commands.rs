@@ -1,5 +1,5 @@
-// Wires up the BAML CLI subcommands: Run, Describe, Generate, Test,
-// Format, and LanguageServer. `baml run` is the top-level entry for
+// Wires up the BAML CLI subcommands: Run, Generate, Test, and
+// Format. `baml run` is the top-level entry for
 // standalone execution.
 
 use std::path::{Path, PathBuf};
@@ -57,7 +57,7 @@ pub(crate) struct RuntimeCli {
     pub(crate) command: Commands,
 
     /// Name of the invoked top-level subcommand, as registered with clap
-    /// (e.g. `"fmt"`, `"lsp"`). Not a CLI argument: it's populated in
+    /// (e.g. `"fmt"`, `"check"`). Not a CLI argument: it's populated in
     /// [`Self::parse_from_smart`] from the parsed matches so telemetry can
     /// report the exact clap name without a hand-maintained mapping.
     #[arg(skip)]
@@ -140,6 +140,11 @@ pub(crate) enum Commands {
     #[command(about = "Remove segmented local profiler data")]
     Clean(crate::clean_command::CleanArgs),
 
+    #[command(about = "Describe a BAML symbol", name = "describe")]
+    Describe(crate::describe_command::DescribeArgs),
+    #[command(about = "Query the local profile store with SQL")]
+    Query(crate::query_command::QueryArgs),
+
     // #[command(about = "Starts a server that translates LLM responses to BAML responses")]
     // Serve(baml_runtime::cli::serve::ServeArgs),
 
@@ -167,9 +172,6 @@ pub(crate) enum Commands {
 
     // #[command(about = "Print Bytecode from BAML files", hide = true)]
     // DumpBytecode(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
-    #[command(about = "Describe a BAML symbol", name = "describe")]
-    Describe(crate::describe_command::DescribeArgs),
-
     #[command(about = "Generate client code from BAML definitions")]
     Generate(crate::generate::GenerateArgs),
 
@@ -185,9 +187,6 @@ pub(crate) enum Commands {
     #[command(about = "Run a BAML function or script")]
     Run(crate::run_command::RunArgs),
 
-    #[command(about = "Open the BAML playground in your browser")]
-    Playground(crate::playground_command::PlaygroundArgs),
-
     #[command(about = "Package a BAML target as a standalone executable")]
     Pack(crate::pack_command::PackArgs),
 
@@ -202,6 +201,12 @@ pub(crate) enum Commands {
         after_long_help = "Examples:\n  Install the latest skills:\n    baml agent install\n\n  Install in a specific project:\n    baml agent install --project ./my-project"
     )]
     Agent(crate::agent_command::AgentArgs),
+
+    #[command(
+        about = "Open the BAML playground in a browser",
+        after_long_help = "Examples:\n  Open the nearest project:\n    baml playground\n\n  Serve a project without opening a browser:\n    baml playground --project ./my-project --no-open"
+    )]
+    Playground(crate::playground_command::PlaygroundArgs),
 
     #[command(about = "Start a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
@@ -374,14 +379,15 @@ impl RuntimeCli {
             Commands::New(args) => args.run(),
             Commands::Check(args) => args.run(),
             Commands::Clean(args) => args.run(),
+            Commands::Describe(args) => args.run(),
+            Commands::Query(args) => args.run(),
             Commands::Run(args) => args.run(),
-            Commands::Playground(args) => args.run(),
             Commands::Pack(args) => args.run(),
             Commands::Ide(args) => args.run(),
             Commands::Agent(args) => args.run(),
-            Commands::Describe(args) => args.run(),
             Commands::Generate(args) => args.run(),
             Commands::Test(args) => args.run(),
+            Commands::Playground(args) => args.run(),
             Commands::LanguageServer(args) => match args.run() {
                 Ok(()) => Ok(crate::ExitCode::Success),
                 Err(e) => {
@@ -406,13 +412,14 @@ impl Commands {
         match self {
             Self::Check(args) => args.from.is_some(),
             Self::Clean(args) => args.from.is_some(),
+            Self::Query(args) => args.from.is_some(),
             Self::Format(args) => args.from.is_some(),
             Self::Describe(args) => args.from.is_some(),
             Self::Generate(args) => args.has_legacy_project(),
             Self::Test(args) => args.from.is_some(),
             Self::Run(args) => args.from.is_some(),
-            Self::Playground(args) => args.from.is_some(),
             Self::Pack(args) => args.from.is_some(),
+            Self::Playground(args) => args.from.is_some(),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
             }) => args.dir.is_some(),
@@ -428,13 +435,14 @@ impl Commands {
         match self {
             Self::Check(args) => args.from = Some(project.clone()),
             Self::Clean(args) => args.from = Some(project.clone()),
+            Self::Query(args) => args.from = Some(project.clone()),
             Self::Format(args) => args.from = Some(project.clone()),
             Self::Describe(args) => args.from = Some(project.clone()),
             Self::Generate(args) => args.apply_project(&project),
             Self::Test(args) => args.from = Some(project.clone()),
             Self::Run(args) => args.from = Some(project.clone()),
-            Self::Playground(args) => args.from = Some(project.clone()),
             Self::Pack(args) => args.from = Some(project.clone()),
+            Self::Playground(args) => args.from = Some(project.clone()),
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
             }) => args.dir = Some(project),
@@ -481,24 +489,24 @@ mod tests {
     const PUBLIC_COMMAND_PATHS: &[&[&str]] = &[
         &[],
         &["check"],
+        &["describe"],
         &["auth"],
         &["auth", "login"],
         &["auth", "whoami"],
         &["auth", "logout"],
         &["feedback"],
         &["fmt"],
-        &["describe"],
         &["generate"],
         &["test"],
         &["init"],
         &["new"],
         &["run"],
-        &["playground"],
         &["pack"],
         &["ide"],
         &["ide", "install"],
         &["agent"],
         &["agent", "install"],
+        &["playground"],
         &["lsp"],
         &["help"],
     ];
@@ -515,8 +523,8 @@ mod tests {
         let cli = RuntimeCli::parse_from_smart(vec!["baml-cli".into(), "fmt".into()]);
         assert_eq!(cli.invoked_subcommand.as_deref(), Some("fmt"));
 
-        let cli = RuntimeCli::parse_from_smart(vec!["baml-cli".into(), "lsp".into()]);
-        assert_eq!(cli.invoked_subcommand.as_deref(), Some("lsp"));
+        let cli = RuntimeCli::parse_from_smart(vec!["baml-cli".into(), "check".into()]);
+        assert_eq!(cli.invoked_subcommand.as_deref(), Some("check"));
     }
 
     #[test]
@@ -641,13 +649,6 @@ mod tests {
     }
 
     #[test]
-    fn root_help_lists_playground_command() {
-        let help = help_for(&["baml-cli", "--help"]);
-        assert!(help.contains("playground"), "{help}");
-        assert!(help.contains("Open the BAML playground"), "{help}");
-    }
-
-    #[test]
     fn output_dials_are_global_and_independent() {
         let cli = RuntimeCli::parse_from_smart(vec![
             "baml-cli".into(),
@@ -733,16 +734,6 @@ mod tests {
                 assert!(help.contains(text), "missing `{text}` in:\n{help}");
             }
         }
-    }
-
-    #[test]
-    fn playground_help_presents_public_baml_command() {
-        let help = help_for(&["baml-cli", "playground", "--help"]);
-        assert!(help.contains("Usage: baml playground [OPTIONS]"), "{help}");
-        assert!(help.contains("--file <PATH>"), "{help}");
-        assert!(help.contains("--project <PATH>"), "{help}");
-        assert!(help.contains("--port <PORT>"), "{help}");
-        assert!(help.contains("--no-open"), "{help}");
     }
 
     #[test]
@@ -882,6 +873,12 @@ mod tests {
             &["baml", "init", "./my-project", "--name", "my_project"],
             &["baml", "new", "./my-project"],
             &["baml", "new", "./my-project", "--name", "my_project"],
+            &["baml", "ide", "install"],
+            &["baml", "ide", "install", "--cursor"],
+            &["baml", "ide", "install", "--output-dir", "./extensions"],
+            &["baml", "agent", "install"],
+            &["baml", "agent", "install", "--project", "./my-project"],
+            &["baml", "agent", "install", "--source", "./skills.tar.gz"],
             &["baml", "playground"],
             &[
                 "baml",
@@ -898,12 +895,6 @@ mod tests {
                 "--port",
                 "4265",
             ],
-            &["baml", "ide", "install"],
-            &["baml", "ide", "install", "--cursor"],
-            &["baml", "ide", "install", "--output-dir", "./extensions"],
-            &["baml", "agent", "install"],
-            &["baml", "agent", "install", "--project", "./my-project"],
-            &["baml", "agent", "install", "--source", "./skills.tar.gz"],
             &["baml", "lsp"],
             &["baml", "lsp", "--workspace", "./my-project"],
             &["baml", "help", "run"],

@@ -682,7 +682,7 @@ jobs:
   verify-swift-sdk:
     name: Verify Swift SDK (release artifact links + runs)
     # Consumes the RELEASE-form artifact build-swift-sdk produced (5 slices,
-    # release-bridge-swift profile) from a clean SwiftPM project — catches
+    # release profile, panic = "unwind") from a clean SwiftPM project — catches
     # release-only breakage the debug sdk-test gate can't (e.g. strict
     # concurrency under the release toolchain). macos-15 for Swift 6.1.
     needs: [plan, build-swift-sdk]

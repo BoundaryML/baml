@@ -12,13 +12,13 @@
 
 use std::sync::{Arc, atomic::AtomicBool};
 
-use baml_project::testing::compile_source;
-use baml_type::{RealizedTy, TyTemplate};
+use baml_db::testing::compile_source;
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
-    ConstValue, FunctionCaptureProps, GlobalIndex, Instruction, Object, ObjectIndex, Value,
+    ConstValue, FunctionCaptureProps, GlobalIndex, Instruction, Object, ObjectIndex, RealizedTy,
+    TyTemplate, Value,
     bytecode::Bytecode,
-    types::{Function, FunctionKind, FunctionOrigin, MintId, Program},
+    types::{Function, FunctionKind, FunctionOrigin, Program},
 };
 
 /// Minimal valid BAML source used as the base for all tests.
@@ -123,8 +123,7 @@ fn run_with_bytecode_keep_vm(
 // ─── 3.1 & 3.5 ── LoadType with a fully-concrete template ───────────────────
 
 /// `LoadType(k)` where `k` is a `ConstValue::Type(TyTemplate::from(int))`
-/// should push an `Object::Type` whose `TypeValue` carries `RealizedTy::int()`
-/// and a deterministic static mint.
+/// should push an `Object::Type` whose `TypeValue` carries `RealizedTy::int()`.
 #[test]
 fn load_type_concrete_int() {
     let template = TyTemplate::from(baml_type::RealizedTy::int());
@@ -144,7 +143,6 @@ fn load_type_concrete_int() {
                 RealizedTy::int(),
                 "LoadType(int) should materialise RealizedTy::int"
             );
-            assert!(matches!(type_value.mint(), MintId::Static(_)));
         }
         other => panic!("expected Object::Type, got {other:?}"),
     }

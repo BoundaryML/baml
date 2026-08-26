@@ -32,7 +32,7 @@ const SOURCE: &str = r###"
         }
 
         function main() -> string {
-            let content = #"# Created Pipeline (Marketing)
+            let content = `# Created Pipeline (Marketing)
 
 ---
 
@@ -47,7 +47,7 @@ const SOURCE: &str = r###"
 ## 2. Second Idea
 
 - Bullet two here.
-"#
+`
             let facts = parse_subject_file(content, "x")
             facts[0].section + ":" + facts[0].text + "|" + facts[1].section + ":" + facts[1].text
         }

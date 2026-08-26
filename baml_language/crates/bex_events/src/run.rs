@@ -235,6 +235,12 @@ impl RunOutcome {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunResult {
     pub value_ref: Option<ValueRef>,
+    /// The result value inlined as artifact-safe outbound bytes
+    /// (`BamlOutboundValue` protobuf; base64 on the wire). The road a
+    /// completed run's value reaches the client by when no `value_ref`
+    /// points into a value store — a test report or function result would
+    /// otherwise complete with nothing for the renderer to draw.
+    pub value: Option<Vec<u8>>,
     pub renderer_hint: Option<String>,
     pub supporting_payload_ids: Vec<PayloadId>,
 }

@@ -1254,7 +1254,7 @@ function live_bedrock_answers() -> bool {
         profile = baml.env.get("AWS_PROFILE"),
         max_tokens = 64,
     );
-    let result = ai.Agent<string>.new(client = cl).run(LiveBedrockEcho@spec("Say pong."));
+    let result = ai.Agent.new(client = cl).run(LiveBedrockEcho@spec("Say pong."));
     result.value.trim().length() > 0
 }
 

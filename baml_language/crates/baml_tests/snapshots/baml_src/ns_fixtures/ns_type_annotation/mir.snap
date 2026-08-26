@@ -6,7 +6,7 @@ fn user.fixtures.type_annotation.test_type_annotation(function_name: string) -> 
     // Locals:
     let _0: string // _0 // return
     let _1: string // function_name // param
-    let _2: type // t
+    let _2: reflect.Type // t
 
     bb0: {
         _2 = sys_op const fn ai.internal.get_return_type(copy _1) -> bb1;
@@ -26,7 +26,7 @@ fn user.fixtures.type_annotation.test_let_binding(function_name: string) -> stri
     // Locals:
     let _0: string // _0 // return
     let _1: string // function_name // param
-    let _2: type // t
+    let _2: reflect.Type // t
 
     bb0: {
         _2 = sys_op const fn ai.internal.get_return_type(copy _1) -> bb1;
@@ -42,10 +42,10 @@ fn user.fixtures.type_annotation.test_let_binding(function_name: string) -> stri
     }
 }
 
-fn user.fixtures.type_annotation.test_param(t: type) -> string {
+fn user.fixtures.type_annotation.test_param(t: reflect.Type) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: type // t // param
+    let _1: reflect.Type // t // param
 
     bb0: {
         _0 = const "ok";
@@ -57,9 +57,9 @@ fn user.fixtures.type_annotation.test_param(t: type) -> string {
     }
 }
 
-fn user.fixtures.type_annotation.test_return_type(function_name: string) -> type {
+fn user.fixtures.type_annotation.test_return_type(function_name: string) -> reflect.Type {
     // Locals:
-    let _0: type // _0 // return
+    let _0: reflect.Type // _0 // return
     let _1: string // function_name // param
 
     bb0: {

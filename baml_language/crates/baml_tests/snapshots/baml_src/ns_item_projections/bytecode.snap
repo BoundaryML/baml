@@ -224,7 +224,7 @@ function item_projections.Loud.Sayer.say(self: item_projections.Loud) -> string 
 
 function item_projections.Plate.Embosser.emboss(u: #1) -> string {
     load_type #1
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _2
     load_const "emboss "
     load_var _2
@@ -265,7 +265,7 @@ function item_projections.Poly.Convert<string>.conv(self: item_projections.Poly,
 
 function item_projections.Press.Stamper.emboss(u: #0) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _2
     load_const "emboss "
     load_var _2
@@ -275,7 +275,7 @@ function item_projections.Press.Stamper.emboss(u: #0) -> string {
 
 function item_projections.Press.Stamper.stamp(self: item_projections.Press, u: #0) -> string {
     load_type #0
-    call baml.TypeValue.baml.ToString.to_string
+    call baml.root.ToString$for$reflect.Type.to_string
     store_var _3
     load_const "stamp "
     load_var _3

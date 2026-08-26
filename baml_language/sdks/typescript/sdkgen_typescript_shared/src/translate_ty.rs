@@ -135,7 +135,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
 
         Ty::Class(name, args, _) => {
             // Host token positions intentionally erase the distinct reflected
-            // kind hierarchy (H-9). All `baml.reflect.<kind>.Type` values cross
+            // kind hierarchy (H-9). All `reflect.<kind>.Type` values cross
             // the bridge as the same opaque `BamlType` definition handle.
             if is_reflect_kind_type(name) {
                 return TranslatedType::bare("BamlType");
@@ -240,11 +240,10 @@ fn is_reflect_kind_type(name: &Name) -> bool {
         "primitive",
         "union",
     ];
-    name.package().as_str() == "baml"
+    name.package().as_str() == "reflect"
         && name.name() == "Type"
-        && name.namespace().len() == 2
-        && name.namespace()[0].as_str() == "reflect"
-        && KINDS.contains(&name.namespace()[1].as_str())
+        && name.namespace().len() == 1
+        && KINDS.contains(&name.namespace()[0].as_str())
 }
 
 fn media_ref(bare: &str, ctx: &TranslateCtx) -> TranslatedType {

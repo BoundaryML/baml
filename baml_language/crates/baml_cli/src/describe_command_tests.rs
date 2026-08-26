@@ -5,9 +5,8 @@
 
 use std::path::Path;
 
-use baml_db::baml_compiler2_hir;
-use baml_lsp2_actions::ResolvedTarget;
-use baml_project::ProjectDatabase;
+use baml_db::{ProjectDatabase, baml_compiler2_hir};
+use baml_ide::ResolvedTarget;
 
 use crate::describe_command::{
     definition_line_range, dispatch, write_description, write_keyword, write_listing,
@@ -23,10 +22,17 @@ use crate::describe_command::{
 fn make_db(files: &[(&str, &str)]) -> ProjectDatabase {
     let root = Path::new("/test");
     let mut db = ProjectDatabase::new();
-    db.set_project_root(root);
+    db.ensure_stdlib_sources();
+    let workspace = db
+        .add_source_root(baml_db::SourceRootSpec {
+            path: root.to_path_buf(),
+            package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: baml_db::SourceRootKind::Workspace,
+        })
+        .unwrap_or_else(|e| unreachable!("workspace root must be addable: {e}"));
     for (path, content) in files {
         let full_path = root.join(path);
-        db.add_or_update_file(&full_path, content);
+        db.add_or_update_file_in(workspace, &full_path, content);
     }
     db
 }
@@ -34,7 +40,7 @@ fn make_db(files: &[(&str, &str)]) -> ProjectDatabase {
 /// Capture `write_description` output as a String.
 fn capture_description(
     db: &ProjectDatabase,
-    desc: &baml_lsp2_actions::SymbolDescription,
+    desc: &baml_ide::SymbolDescription,
     budget: usize,
 ) -> String {
     let mut buf = Vec::new();
@@ -59,7 +65,7 @@ fn truncation_budgets(output: &str) -> Vec<usize> {
 
 fn assert_reported_budget_is_minimum(
     db: &ProjectDatabase,
-    desc: &baml_lsp2_actions::SymbolDescription,
+    desc: &baml_ide::SymbolDescription,
     probe_budget: usize,
 ) -> usize {
     let truncated = capture_description(db, desc, probe_budget);
@@ -101,7 +107,7 @@ fn capture_keyword(name: &str) -> String {
 }
 
 /// Capture `write_listing` output as a String.
-fn capture_listing(entries: &[baml_lsp2_actions::ListingEntry]) -> String {
+fn capture_listing(entries: &[baml_ide::ListingEntry]) -> String {
     let mut buf = Vec::new();
     write_listing(&mut buf, entries, Path::new("/test")).unwrap();
     String::from_utf8(buf).unwrap()
@@ -160,16 +166,15 @@ fn describe_via_dispatch(db: &ProjectDatabase, name: &str) -> String {
     match dispatch(db, name) {
         Some(ResolvedTarget::Keyword(ref kw)) => capture_keyword(kw),
         Some(ResolvedTarget::Package(pkg)) => {
-            let entries = baml_lsp2_actions::list_package_items(db, pkg);
+            let entries = baml_ide::list_package_items(db, pkg);
             capture_listing(&entries)
         }
         Some(ResolvedTarget::Namespace { package, ns_path }) => {
-            let entries =
-                baml_lsp2_actions::list_namespace_items(db, package, &ns_path).unwrap_or_default();
+            let entries = baml_ide::list_namespace_items(db, package, &ns_path).unwrap_or_default();
             capture_listing(&entries)
         }
         Some(ResolvedTarget::Item(def)) => {
-            if let Some(desc) = baml_lsp2_actions::describe_by_definition(db, &files, def) {
+            if let Some(desc) = baml_ide::describe_by_definition(db, &files, def) {
                 capture_description(db, &desc, 30)
             } else {
                 format!("NO DESCRIPTION: {name}\n")
@@ -180,7 +185,7 @@ fn describe_via_dispatch(db: &ProjectDatabase, name: &str) -> String {
             member_name,
         }) => {
             if let Some(desc) =
-                baml_lsp2_actions::describe_item_member(db, &files, parent, member_name.as_str())
+                baml_ide::describe_item_member(db, &files, parent, member_name.as_str())
             {
                 capture_description(db, &desc, 30)
             } else {
@@ -189,7 +194,7 @@ fn describe_via_dispatch(db: &ProjectDatabase, name: &str) -> String {
         }
         None => {
             // Fallback: substring describe (CLI behavior).
-            let descs = baml_lsp2_actions::describe(db, &files, name);
+            let descs = baml_ide::describe(db, &files, name);
             if descs.is_empty() {
                 format!("NOT FOUND: {name}\n")
             } else {
@@ -267,7 +272,7 @@ function LlmIdentity(input: string) -> string {
 fn render_project_listing() {
     let db = multi_ns_project();
     let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("user"));
-    let entries = baml_lsp2_actions::list_package_items(&db, pkg_id);
+    let entries = baml_ide::list_package_items(&db, pkg_id);
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
 }
@@ -279,7 +284,7 @@ fn render_namespace_listing_llm() {
     let db = multi_ns_project();
     let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("user"));
     let ns_path = vec![baml_db::Name::new("llm")];
-    let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
+    let entries = baml_ide::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
 }
@@ -290,7 +295,7 @@ fn render_namespace_listing_llm() {
 fn render_describe_class() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_lsp2_actions::describe(&db, &files, "Point");
+    let descs = baml_ide::describe(&db, &files, "Point");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -300,7 +305,7 @@ fn render_describe_class() {
 fn render_describe_enum() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_lsp2_actions::describe(&db, &files, "Color");
+    let descs = baml_ide::describe(&db, &files, "Color");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -327,10 +332,129 @@ class Person {
 "#,
     )]);
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_lsp2_actions::describe(&db, &files, "Named");
+    let descs = baml_ide::describe(&db, &files, "Named");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
+}
+
+/// A project whose interface exercises the whole facet surface: an
+/// associated type, a field, a required method, a defaulted method with a
+/// docstring and body, an in-body implements block, and a free implement
+/// block.
+fn interface_surface_project() -> ProjectDatabase {
+    make_db(&[(
+        "interfaces.baml",
+        r#"
+/// A thing with a name.
+interface Named {
+    type Output
+
+    name: string,
+
+    /// The display label.
+    function label(self) -> string throws never
+
+    /// Greets by label.
+    ///
+    /// Meant for demos.
+    function greet(self) -> string throws never {
+        let base = self.label();
+        base
+    }
+}
+
+class Person {
+    name: string,
+    implements Named {
+        type Output = int
+        function label(self) -> string {
+            self.name
+        }
+    }
+}
+
+class Robot {
+    name: string,
+}
+
+implement Named for Robot {
+    type Output = string
+    function label(self) -> string {
+        "robot"
+    }
+}
+"#,
+    )])
+}
+
+fn describe_named(db: &ProjectDatabase) -> baml_ide::SymbolDescription {
+    let files = baml_compiler2_hir::compiler2_all_files(db);
+    let mut descs = baml_ide::describe(db, &files, "Named");
+    assert_eq!(descs.len(), 1);
+    descs.remove(0)
+}
+
+/// At the default budget everything fits: enumeration, docstrings, the
+/// defaulted body, implementations.
+#[test]
+fn render_describe_interface_full_surface() {
+    let db = interface_surface_project();
+    let output = capture_description(&db, &describe_named(&db), 30);
+    insta::assert_snapshot!(output);
+}
+
+/// Facet layering under a tight budget: the member ENUMERATION renders
+/// complete (every declaration — the reader can always drill in), while
+/// docstrings and bodies give way, most-valuable-first.
+#[test]
+fn a_tight_budget_keeps_every_interface_declaration() {
+    let db = interface_surface_project();
+    let output = capture_description(&db, &describe_named(&db), 8);
+
+    // Every member's declaration is present…
+    for declaration in [
+        "type Output;",
+        "name: string,",
+        "function label(self) -> string throws never",
+        "function greet(self) -> string throws never { ... }",
+    ] {
+        assert!(
+            output.contains(declaration),
+            "expected the full enumeration at budget 8, missing `{declaration}`:\n{output}"
+        );
+    }
+    // …the item docstring (the highest-priority disclosure) made it…
+    assert!(output.contains("/// A thing with a name."));
+    // …but the lower layers gave way: member docstrings and the body.
+    assert!(!output.contains("Meant for demos."));
+    assert!(!output.contains("self.label()"));
+    assert!(output.contains("[INFO] showing"));
+}
+
+/// The docstring layer admits in member-priority order and never splits a
+/// docstring mid-sentence: with room for the item docstring and the first
+/// method docstring only (budget 9 exhausts the layer exactly there), the
+/// defaulted method's longer docstring is absent in full, not truncated.
+#[test]
+fn interface_docstrings_admit_in_priority_order_and_atomically() {
+    let db = interface_surface_project();
+    let output = capture_description(&db, &describe_named(&db), 9);
+
+    assert!(output.contains("/// A thing with a name."));
+    assert!(output.contains("/// The display label."));
+    assert!(
+        !output.contains("Greets by label."),
+        "the defaulted method's docstring must be absent in FULL, not cut:\n{output}"
+    );
+    assert!(!output.contains("self.label()"));
+}
+
+/// The full-output budget hint is exact for the facet-layered path too.
+#[test]
+fn interface_budget_hint_is_minimal() {
+    let db = interface_surface_project();
+    assert_reported_budget_is_minimum(&db, &describe_named(&db), 8);
 }
 
 #[test]
@@ -354,7 +478,7 @@ class IntDecoder {
 "#,
     )]);
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_lsp2_actions::describe(&db, &files, "IntDecoder");
+    let descs = baml_ide::describe(&db, &files, "IntDecoder");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     assert!(
@@ -368,7 +492,7 @@ class IntDecoder {
 fn render_describe_function_with_docstring() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_lsp2_actions::describe(&db, &files, "ExtractPoint");
+    let descs = baml_ide::describe(&db, &files, "ExtractPoint");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -387,7 +511,7 @@ fn render_describe_ns_item() {
     let def = pkg.lookup_type(&ns_path, &item_name).unwrap();
 
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let desc = baml_lsp2_actions::describe_by_definition(&db, &files, def).unwrap();
+    let desc = baml_ide::describe_by_definition(&db, &files, def).unwrap();
     let output = capture_description(&db, &desc, 30);
     insta::assert_snapshot!(output);
 }
@@ -399,7 +523,7 @@ fn render_describe_ns_item() {
 fn render_builtin_package_listing() {
     let db = simple_project();
     let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
-    let entries = baml_lsp2_actions::list_package_items(&db, pkg_id);
+    let entries = baml_ide::list_package_items(&db, pkg_id);
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
     let listed_names: Vec<&str> = output
@@ -423,10 +547,33 @@ fn render_builtin_namespace_env() {
     let db = simple_project();
     let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
     let ns_path = vec![baml_db::Name::new("env")];
-    let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
+    let entries = baml_ide::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
+}
+
+/// `baml describe reflect` routes through the ordinary root-package path.
+#[test]
+fn render_reflect_package_listing() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "reflect");
+    assert!(output.contains("reflect.Type"), "{output}");
+    assert!(output.contains("reflect.Package"), "{output}");
+    assert!(!output.contains("baml.reflect"), "{output}");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn describe_reflect_type_and_intrinsic() {
+    let db = simple_project();
+    let type_output = describe_via_dispatch(&db, "reflect.Type");
+    assert!(type_output.contains("class Type"), "{type_output}");
+    let intrinsic_output = describe_via_dispatch(&db, "reflect.Type.of");
+    assert!(
+        intrinsic_output.contains("function of<T>() -> reflect.Type"),
+        "{intrinsic_output}"
+    );
 }
 
 /// `baml describe ai.internal` — list items in the `ai.internal` namespace,
@@ -437,7 +584,7 @@ fn render_builtin_namespace_ai_internal() {
     let db = simple_project();
     let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("ai"));
     let ns_path = vec![baml_db::Name::new("internal")];
-    let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
+    let entries = baml_ide::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
@@ -448,7 +595,7 @@ fn render_builtin_namespace_ai_internal() {
 fn render_testing_package_listing() {
     let db = simple_project();
     let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("testing"));
-    let entries = baml_lsp2_actions::list_package_items(&db, pkg_id);
+    let entries = baml_ide::list_package_items(&db, pkg_id);
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
@@ -459,7 +606,7 @@ fn render_testing_package_listing() {
 fn render_assert_package_listing() {
     let db = simple_project();
     let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("assert"));
-    let entries = baml_lsp2_actions::list_package_items(&db, pkg_id);
+    let entries = baml_ide::list_package_items(&db, pkg_id);
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
@@ -470,7 +617,7 @@ fn render_assert_package_listing() {
 fn render_describe_builtin_string() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_lsp2_actions::describe(&db, &files, "String");
+    let descs = baml_ide::describe(&db, &files, "String");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -481,7 +628,7 @@ fn render_describe_builtin_string() {
 fn render_describe_builtin_deep_copy() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_lsp2_actions::describe(&db, &files, "deep_copy");
+    let descs = baml_ide::describe(&db, &files, "deep_copy");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     insta::assert_snapshot!(output);
@@ -506,20 +653,21 @@ fn render_describe_builtin_item_by_definition() {
     let def = pkg.lookup_type(&root_ns, &item_name).unwrap();
 
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let desc = baml_lsp2_actions::describe_by_definition(&db, &files, def).unwrap();
+    let desc = baml_ide::describe_by_definition(&db, &files, def).unwrap();
     let output = capture_description(&db, &desc, 30);
     insta::assert_snapshot!(output);
 }
 
-/// `non_user_package_names()` should return the builtin packages.
+/// `non_workspace_package_names()` should return the builtin packages.
 #[test]
-fn non_user_package_names_includes_builtins() {
+fn non_workspace_package_names_includes_builtins() {
     let db = simple_project();
-    let names = baml_lsp2_actions::non_user_package_names(&db);
-    assert!(names.contains("baml"), "expected 'baml' in {names:?}");
-    assert!(names.contains("testing"), "expected 'testing' in {names:?}");
-    assert!(names.contains("assert"), "expected 'assert' in {names:?}");
-    assert!(!names.contains("user"), "should not contain 'user'");
+    let names = baml_ide::non_workspace_package_names(&db);
+    let has = |name: &str| names.iter().any(|pkg| pkg.as_str() == name);
+    assert!(has("baml"), "expected 'baml' in {names:?}");
+    assert!(has("testing"), "expected 'testing' in {names:?}");
+    assert!(has("assert"), "expected 'assert' in {names:?}");
+    assert!(!has("user"), "should not contain 'user'");
 }
 
 // ── Member detail tests ─────────────────────────────────────────────────────
@@ -535,7 +683,7 @@ fn render_describe_member_field() {
     let def = pkg.lookup_type(&root_ns, &item_name).unwrap();
 
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let desc = baml_lsp2_actions::describe_item_member(&db, &files, def, "x").unwrap();
+    let desc = baml_ide::describe_item_member(&db, &files, def, "x").unwrap();
     let output = capture_description(&db, &desc, 30);
     insta::assert_snapshot!(output);
 }
@@ -551,7 +699,7 @@ fn render_describe_ns_member() {
     let def = pkg.lookup_type(&ns_path, &item_name).unwrap();
 
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let desc = baml_lsp2_actions::describe_item_member(&db, &files, def, "model").unwrap();
+    let desc = baml_ide::describe_item_member(&db, &files, def, "model").unwrap();
     let output = capture_description(&db, &desc, 30);
     insta::assert_snapshot!(output);
 }
@@ -568,7 +716,7 @@ fn render_describe_ns_member() {
 fn deep_namespace_listing_produces_dotted_fqn() {
     let db = deep_ns_project();
     let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("user"));
-    let entries = baml_lsp2_actions::list_package_items(&db, pkg_id);
+    let entries = baml_ide::list_package_items(&db, pkg_id);
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
 }
@@ -764,7 +912,7 @@ class Wrapper<T> {
 fn render_describe_class_with_methods() {
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_lsp2_actions::describe(&db, &files, "User");
+    let descs = baml_ide::describe(&db, &files, "User");
     assert_eq!(descs.len(), 1);
     insta::assert_snapshot!(capture_description(&db, &descs[0], 30));
 }
@@ -775,7 +923,7 @@ fn render_describe_class_with_methods() {
 fn render_describe_class_with_static_methods() {
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_lsp2_actions::describe(&db, &files, "Counter");
+    let descs = baml_ide::describe(&db, &files, "Counter");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
     assert!(output.contains("methods:"));
@@ -789,7 +937,7 @@ fn render_describe_class_with_static_methods() {
 fn render_describe_generic_class_with_methods() {
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_lsp2_actions::describe(&db, &files, "Wrapper");
+    let descs = baml_ide::describe(&db, &files, "Wrapper");
     assert_eq!(descs.len(), 1);
     insta::assert_snapshot!(capture_description(&db, &descs[0], 30));
 }
@@ -824,15 +972,15 @@ fn describe_preserves_comment_like_lines_inside_strings() {
         r##"
 function PromptFn() -> string {
     // a real comment that must be stripped
-    #"
+    `
 // not a comment — this is prompt content
 keep this line
-"#
+`
 }
 "##,
     )]);
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_lsp2_actions::describe(&db, &files, "PromptFn");
+    let descs = baml_ide::describe(&db, &files, "PromptFn");
     assert_eq!(descs.len(), 1);
     let output = capture_description(&db, &descs[0], 30);
 
@@ -887,20 +1035,6 @@ fn describe_builtin_method_drill_in_via_alias() {
     );
 }
 
-/// The CLI describe surface carries the same listing contract as runtime
-/// reflection, so a reader learns from the docs that a generic entry needs
-/// specializing rather than mistaking it for an unusable listing.
-#[test]
-fn describe_package_functions_documents_the_generic_listing_contract() {
-    let db = simple_project();
-    let output = describe_via_dispatch(&db, "baml.reflect.Package.functions");
-    assert!(
-        output.contains("including generic ones") && output.contains("specialize(args)"),
-        "expected generic-listing contract in builtin method docs:\n{output}",
-    );
-    insta::assert_snapshot!(output);
-}
-
 /// Drilling into builtin methods by their class name (`Array.reduce`,
 /// `String.split`, `Map.get`) resolves the unqualified class against the stdlib.
 #[test]
@@ -910,13 +1044,16 @@ fn describe_builtin_method_drill_in_via_class_name() {
     let cases = [
         (
             "Array.reduce",
-            "function reduce(self, reducer: (A, T) -> A throws E, initial: A) -> A throws E",
+            "function reduce<A, E>(self, reducer: (A, T) -> A throws E, initial: A) -> A throws E",
         ),
         (
             "String.split",
-            "function split(self, delimiter: string) -> string[]",
+            "function split(self, delimiter: string) -> string[] throws never",
         ),
-        ("Map.get", "function get(self, key: K) -> V | null"),
+        (
+            "Map.get",
+            "function get(self, key: K) -> V | null throws never",
+        ),
     ];
 
     for (name, expected_signature) in cases {
@@ -995,7 +1132,7 @@ fn definition_line_range_comment_only_span_does_not_reverse() {
 fn render_describe_methods_respect_budget() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_lsp2_actions::describe(&db, &files, "String");
+    let descs = baml_ide::describe(&db, &files, "String");
     assert_eq!(descs.len(), 1);
 
     let tight = capture_description(&db, &descs[0], 5);
@@ -1057,13 +1194,13 @@ fn render_describe_methods_respect_budget() {
 fn render_describe_budget_hint_covers_dependencies_and_references() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let point = baml_lsp2_actions::describe(&db, &files, "Point");
+    let point = baml_ide::describe(&db, &files, "Point");
     assert_eq!(point.len(), 1);
     assert_reported_budget_is_minimum(&db, &point[0], 0);
 
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let wrapper = baml_lsp2_actions::describe(&db, &files, "Wrapper");
+    let wrapper = baml_ide::describe(&db, &files, "Wrapper");
     assert_eq!(wrapper.len(), 1);
     assert_reported_budget_is_minimum(&db, &wrapper[0], 0);
 }
@@ -1074,7 +1211,7 @@ fn render_describe_budget_hint_covers_dependencies_and_references() {
 fn render_describe_fields_only_body_fits_tight_budget() {
     let db = methods_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_lsp2_actions::describe(&db, &files, "User");
+    let descs = baml_ide::describe(&db, &files, "User");
     assert_eq!(descs.len(), 1);
 
     let tight = capture_description(&db, &descs[0], 5);
@@ -1113,7 +1250,7 @@ fn render_describe_fields_only_body_fits_tight_budget() {
 fn render_describe_no_hint_when_full() {
     let db = simple_project();
     let files = baml_compiler2_hir::compiler2_all_files(&db);
-    let descs = baml_lsp2_actions::describe(&db, &files, "Point");
+    let descs = baml_ide::describe(&db, &files, "Point");
     assert_eq!(descs.len(), 1);
     // Point has only a few lines; budget of 30 is sufficient.
     let output = capture_description(&db, &descs[0], 30);

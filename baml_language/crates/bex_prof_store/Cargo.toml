@@ -1,0 +1,44 @@
+[package]
+name = "bex_prof_store"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Leaf crate for the BEX profiling store: id types, durable formats, writer/reader, and the CCT/evidence backend"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+# Dependency allowlist (TASK/baml-query-scope.md B0): this crate must stay a
+# leaf — no VM, engine, tokio, or protobuf dependencies. `baml_query_profiles`
+# depends on it directly; a test in that crate enforces the allowlist.
+[dependencies]
+baml_version = { workspace = true }
+base64 = { workspace = true }
+crossbeam-channel = { workspace = true }
+hex = { workspace = true }
+rustc-hash = { workspace = true }
+sha2 = { workspace = true }
+smallvec = { workspace = true }
+uuid = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+fs2 = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { workspace = true, features = [ "js" ] }
+web-time = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[target.'cfg(unix)'.dev-dependencies]
+libc = { workspace = true }

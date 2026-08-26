@@ -293,9 +293,7 @@ impl<'a> BexValue<'a> {
                 if class.name.display_name().as_str() != expected_class_name {
                     return Err(AccessError::TypeMismatch {
                         expected: expected_class_name,
-                        // The comparison above already reads the source
-                        // spelling; so must the name it reports back.
-                        actual: class.name.render_source_dotted(),
+                        actual: class.name.to_string(),
                     });
                 }
                 Ok(BexClass::Value(class, instance))
@@ -312,12 +310,20 @@ impl<'a> BexValue<'a> {
             .map(|cls| T::from(cls))
     }
 
+    /// Read a `type` argument at the sys-op lane's head.
+    ///
+    /// Identity travels with the type, so the definition tables a sys-op
+    /// consults can be keyed by declaration rather than by name — and nothing
+    /// returned here holds a pointer, so a collection during the sys-op's await
+    /// cannot invalidate it.
     pub fn as_baml_type_owned(
         self,
         heap: &BexHeap,
         _permit: PermitProof<'_>,
-    ) -> Result<baml_type::RuntimeTy, AccessError> {
-        fn from_ptr(ptr: &HeapPtr) -> Result<baml_type::RuntimeTy, AccessError> {
+    ) -> Result<baml_type::RuntimeTy<baml_type::TaggedTypeName>, AccessError> {
+        fn from_ptr(
+            ptr: &HeapPtr,
+        ) -> Result<baml_type::RuntimeTy<baml_type::TaggedTypeName>, AccessError> {
             let obj = unsafe { ptr.get() };
             let Object::Type(tv) = obj else {
                 return Err(AccessError::TypeMismatch {
@@ -325,17 +331,33 @@ impl<'a> BexValue<'a> {
                     actual: obj.to_string(),
                 });
             };
-            // `Object::Type` stores a realized type; widen it into `RuntimeTy`.
-            // The mint stays behind (BEP-066 H-4: identity never crosses).
-            Ok(tv.ty.clone().into())
+            // `Object::Type` stores a realized type at the runtime's head;
+            // carry identity and the declaration's own name off the heap, then
+            // widen into `RuntimeTy`.
+            Ok(baml_type::RuntimeTy::from(
+                tv.ty
+                    .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
+                    .map_err(|head| AccessError::TypeMismatch {
+                        expected: "a resolved declaration",
+                        actual: head.to_string(),
+                    })?,
+            ))
         }
 
         match self {
             BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::Type(ty))) => {
                 Ok(ty.clone())
             }
-            BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::TypeDef(definition))) => {
-                Ok(definition.root.clone())
+            // The portable definition graph is name-headed and carries no
+            // identities, so it cannot be read onto the lane. Its one real
+            // consumer is the inbound authoring path, which resolves names
+            // against the VM to obtain declarations (and therefore tags); that
+            // resolution is not available here. Dies with the graph itself.
+            BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::TypeDef(_))) => {
+                Err(AccessError::TypeMismatch {
+                    expected: "a type value",
+                    actual: "a portable type definition".to_string(),
+                })
             }
             BexValue::ExternalValue(BexExternalValue::Handle(handle)) => {
                 let ptr = heap
@@ -553,6 +575,7 @@ fn convert_object(
         Object::ImplRule(..) => unconvertible("impl_rule"),
         Object::Class(..) => unconvertible("class"),
         Object::Enum(..) => unconvertible("enum"),
+        Object::TypeAlias(..) => unconvertible("type alias"),
         Object::Future(..) => unconvertible("future"),
         Object::UnscheduledFuture(..) => unconvertible("unscheduled_future"),
 
@@ -607,16 +630,29 @@ fn convert_object(
                 })
                 .collect::<Result<_, _>>()?;
             Ok(BexExternalValue::Instance {
-                // Source spelling, as at every other host boundary: the mint
-                // keys identity inside the VM and means nothing to an SDK.
-                class_name: class.name.render_source_dotted(),
+                class_name: class.name.to_string(),
                 // Instances store realized class type args; widen them into the
                 // `RuntimeTy` the external boundary carries.
                 type_args: instance
                     .class_type_args
                     .iter()
-                    .map(baml_type::RuntimeTy::from)
-                    .collect(),
+                    .map(|arg| {
+                        arg.try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
+                            .map(|named| baml_type::RuntimeTy::from(&named))
+                            .or_else(|head| {
+                                // Lossy mode (traces) degrades the one
+                                // unnameable argument to `unknown` instead of
+                                // discarding the whole value tree.
+                                if lossy {
+                                    return Ok(baml_type::RuntimeTy::unknown());
+                                }
+                                Err(AccessError::TypeMismatch {
+                                    expected: "a nameable type argument",
+                                    actual: head.to_string(),
+                                })
+                            })
+                    })
+                    .collect::<Result<_, _>>()?,
                 fields,
             })
         }
@@ -636,14 +672,24 @@ fn convert_object(
                         expected: format!("variant index {}", variant.index),
                     })?;
             Ok(BexExternalValue::Variant {
-                enum_name: enum_.name.render_source_dotted(),
+                enum_name: enum_.name.to_string(),
                 variant_name: variant_def.name.clone(),
             })
         }
         Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
-        // Only the described type crosses the boundary (BEP-066 H-4).
+        // Only the described type crosses the boundary (BEP-066 H-4), and it
+        // crosses onto the sys-op lane's head: identity plus the declaration's
+        // own name, with no pointer to go stale if the collector runs while the
+        // sys-op awaits.
         Object::Type(tv) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(
-            tv.ty.clone().into(),
+            baml_type::RuntimeTy::from(
+                tv.ty
+                    .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
+                    .map_err(|head| AccessError::TypeMismatch {
+                        expected: "a resolved declaration",
+                        actual: head.to_string(),
+                    })?,
+            ),
         ))),
         Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
         Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),

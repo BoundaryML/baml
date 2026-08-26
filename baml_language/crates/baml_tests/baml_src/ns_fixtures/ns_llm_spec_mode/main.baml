@@ -1,7 +1,7 @@
 // BEP spec mode: LLM functions with and without a `tools` field.
 //
 // PlainChat has NO tools field: an instructions-only backtick prompt with the
-// `${ctx.output_format}` hole.
+// `${ctx.output_format()}` hole.
 //
 // SpecAgent has a tools field: it gets the SpecAgent$spec companion, its
 // direct call runs the ai Agent loop, and `tools` accepts both a literal
@@ -25,7 +25,7 @@ function PlainChat(q: string) -> string {
   prompt: `
     Be terse.
     ${q}
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 
@@ -34,7 +34,7 @@ function SpecAgent(q: string) -> Answer {
   tools: [double_it]
   prompt: `
     ${q}
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 
@@ -43,7 +43,7 @@ function NamedTools(q: string) -> Answer {
   tools: more_tools()
   prompt: `
     ${q}
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 

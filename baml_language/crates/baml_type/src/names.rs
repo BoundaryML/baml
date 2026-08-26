@@ -97,76 +97,6 @@ impl QualifiedTypeName {
         Self::new(Name::new(RESERVED_USER_PACKAGE), Vec::new(), name)
     }
 
-    /// A runtime-minted local type. The hidden namespace makes the canonical
-    /// name unique per mint while user-facing rendering remains the requested
-    /// source name. `$dyn` is not a legal user namespace segment, so this
-    /// convention cannot collide with a static declaration.
-    pub fn runtime_local(name: Name, mint: u64) -> Self {
-        Self::new(
-            Name::new(RESERVED_USER_PACKAGE),
-            Self::runtime_namespace(mint, &[]),
-            name,
-        )
-    }
-
-    /// [`runtime_local`](Self::runtime_local) for a name that already lives in
-    /// a namespace: the hidden `$dyn.<mint>` segments are prepended, so a
-    /// runtime-compiled package's `ns.Item` becomes `user.$dyn.7.ns.Item` and
-    /// keeps its own namespace structure below the discriminator.
-    ///
-    /// `None` when `self` is not a plain local name — a dependency type, or one
-    /// that is already runtime-minted, has an identity that is not this
-    /// package's to reassign.
-    pub fn to_runtime_local(&self, mint: u64) -> Option<Self> {
-        (self.is_local() && !self.is_runtime_minted()).then(|| Self {
-            pkg: Package::Local,
-            namespace: Self::runtime_namespace(mint, &self.namespace),
-            name: self.name.clone(),
-        })
-    }
-
-    /// The hidden namespace a runtime mint contributes, ahead of `rest`.
-    fn runtime_namespace(mint: u64, rest: &[Name]) -> Vec<Name> {
-        std::iter::once(Name::new(RUNTIME_MINT_NAMESPACE))
-            .chain(std::iter::once(Name::new(mint.to_string())))
-            .chain(rest.iter().cloned())
-            .collect()
-    }
-
-    pub fn is_runtime_minted(&self) -> bool {
-        self.is_local()
-            && self
-                .namespace
-                .first()
-                .is_some_and(|segment| segment.as_str() == RUNTIME_MINT_NAMESPACE)
-    }
-
-    /// Whether this name was minted by `mint` — the discriminator check that
-    /// keeps one runtime package's declarations from answering for another's.
-    pub fn has_runtime_mint(&self, mint: u64) -> bool {
-        self.is_runtime_minted()
-            && self
-                .namespace
-                .get(1)
-                .is_some_and(|segment| segment.as_str().parse::<u64>() == Ok(mint))
-    }
-
-    /// The namespace below the hidden runtime-mint discriminator — what the
-    /// name would have been had it never been minted. Empty for a name that is
-    /// minted at the package root, and the whole namespace for one that is not
-    /// minted at all. Lookups keyed on a *source-visible* namespace (a package's
-    /// own `LocalName` tables) go through this rather than `namespace()`.
-    pub fn source_namespace(&self) -> &[Name] {
-        if self.is_runtime_minted() {
-            // `get` rather than a slice: `from_dotted_path` will happily build a
-            // truncated `user.$dyn.Foo` out of an untrusted string, and a name
-            // that cannot be one this crate minted must render, not panic.
-            self.namespace.get(2..).unwrap_or_default()
-        } else {
-            &self.namespace
-        }
-    }
-
     pub fn package(&self) -> &Name {
         self.pkg.as_name()
     }
@@ -208,6 +138,14 @@ impl QualifiedTypeName {
         self.package().as_str() == "baml" && self.namespace.is_empty() && self.name.as_str() == name
     }
 
+    /// [`Self::is_builtin_root_type`] for the `reflect` package's root
+    /// namespace (`reflect.AnyFunction`, `reflect.AnyClass`, …).
+    pub fn is_reflect_root_type(&self, name: &str) -> bool {
+        self.package().as_str() == "reflect"
+            && self.namespace.is_empty()
+            && self.name.as_str() == name
+    }
+
     /// Returns `true` if this type lives in the `baml.panics` namespace
     /// (i.e. it is a panic class or the `Panic` type alias).
     pub fn is_panic_type(&self) -> bool {
@@ -231,7 +169,7 @@ impl QualifiedTypeName {
     pub fn display_name(&self) -> Name {
         if self.is_local() {
             let parts: Vec<String> = self
-                .source_namespace()
+                .namespace
                 .iter()
                 .map(std::string::ToString::to_string)
                 .chain(std::iter::once(self.name.to_string()))
@@ -268,29 +206,15 @@ impl QualifiedTypeName {
     /// "no `user.` in names" rule. The canonical form (`user_facing = false`)
     /// keeps the package for dumps/identity.
     pub fn render_dotted(&self, user_facing: bool) -> String {
-        // A runtime mint is an identity token, never a spelling: user-facing
-        // rendering shows the name the source asked for, below the hidden
-        // discriminator.
-        let segments = if user_facing {
-            self.source_namespace()
-        } else {
-            &self.namespace
-        };
-        self.dotted(segments, user_facing && self.is_local())
-    }
-
-    /// Join `[package.]segments.name`, eliding the package when asked. The one
-    /// place the dotted spelling is assembled — every renderer picks which
-    /// namespace segments to show and whether the package is elided, and shares
-    /// this.
-    fn dotted(&self, segments: &[Name], elide_package: bool) -> String {
-        let namespace = segments
+        let namespace = self
+            .namespace
             .iter()
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join(".");
+        let elide = user_facing && self.is_local();
         let pkg = self.package();
-        match (elide_package, namespace.is_empty()) {
+        match (elide, namespace.is_empty()) {
             (true, true) => self.name.to_string(),
             (true, false) => format!("{namespace}.{}", self.name),
             (false, true) => format!("{}.{}", pkg, self.name),
@@ -303,28 +227,6 @@ impl QualifiedTypeName {
     /// Call this instead of post-processing the canonical string.
     pub fn render_user_facing(&self) -> String {
         self.render_dotted(true)
-    }
-
-    /// The package-qualified spelling with the runtime mint elided: a minted
-    /// `user.$dyn.7.Item` renders `user.Item`, and every unminted name renders
-    /// exactly as [`fmt::Display`] does.
-    ///
-    /// A mint is an identity token, never a spelling. Surfaces that print a
-    /// package-qualified name to somebody outside the VM — a coercion or decode
-    /// error, a host SDK's `class_name`, a trace value — go through this so a
-    /// minted declaration reads the way the same declaration read before it was
-    /// minted. `Display` keeps the discriminator, because dumps and identity
-    /// comparisons are the one audience that needs to tell two `Item`s apart.
-    pub fn render_source_dotted(&self) -> String {
-        self.source_spelling().to_string()
-    }
-
-    /// [`render_source_dotted`](Self::render_source_dotted) as a borrowing
-    /// [`fmt::Display`] adapter, so an error message can interpolate it
-    /// (`format!("class `{}` not found", qtn.source_spelling())`) without
-    /// building a `String` first.
-    pub fn source_spelling(&self) -> SourceSpelling<'_> {
-        SourceSpelling(self)
     }
 
     /// Return the primitive represented by a builtin companion class.
@@ -361,6 +263,58 @@ impl QualifiedTypeName {
             .collect();
         BuiltinTypeName::from_builtin_definition_path(&path).map(BuiltinTypeName::alias)
     }
+
+    /// The addressable spelling: the shortest form that pastes back into
+    /// `baml describe` (and name resolution generally) and finds this type
+    /// again from any scope. The single source of describe's paste-back
+    /// addressing convention:
+    ///
+    /// - builtin companion class with a lowercase alias → the alias
+    ///   (`string`);
+    /// - workspace type at package root → its bare name (`Foo`);
+    /// - workspace type in a namespace → `root.<ns>.<Name>` (the workspace
+    ///   package is addressed as `root` — its literal name would read as an
+    ///   item *named* that, which is nothing);
+    /// - other dependency type → `<pkg>.<path>` (`baml.json.JsonObject`).
+    pub fn render_addressable(&self) -> String {
+        if let Some(alias) = self.builtin_alias() {
+            return alias.to_string();
+        }
+        if self.is_local() {
+            // Runtime-minted declarations no longer thread a discriminator
+            // through the namespace (their identity is the type tag), so
+            // the written namespace is the address.
+            if self.namespace().is_empty() {
+                self.name.to_string()
+            } else {
+                let path = self
+                    .namespace()
+                    .iter()
+                    .chain(std::iter::once(&self.name))
+                    .map(Name::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                format!("{ADDRESSABLE_USER_PACKAGE}.{path}")
+            }
+        } else {
+            self.render_user_facing()
+        }
+    }
+}
+
+/// How the workspace package is spelled in addressable paths (`root.ns.Foo`):
+/// the counterpart of [`RESERVED_USER_PACKAGE`] for paste-back output. The
+/// literal package name would read as an item named `user`, which is nothing.
+pub const ADDRESSABLE_USER_PACKAGE: &str = "root";
+
+/// The package-name prefix for addressable paths: the workspace package is
+/// spelled [`ADDRESSABLE_USER_PACKAGE`], every other package by its own name.
+pub fn addressable_package(package: &Name) -> &str {
+    if package.as_str() == RESERVED_USER_PACKAGE {
+        ADDRESSABLE_USER_PACKAGE
+    } else {
+        package.as_str()
+    }
 }
 
 /// The reserved implicit root package for user-authored code. It is the
@@ -368,14 +322,6 @@ impl QualifiedTypeName {
 /// user-facing output (`user.Dog` → `Dog`). The canonical `Display` keeps it
 /// (for dumps/identity); only the user-facing path elides it.
 pub const RESERVED_USER_PACKAGE: &str = "user";
-
-/// The hidden namespace segment that marks a runtime-minted name. It is not a
-/// legal user namespace segment, so a minted name can never collide with a
-/// statically declared one. The segment after it is the mint that made the
-/// name unique. Single source of truth for the convention —
-/// [`QualifiedTypeName::runtime_local`] writes it and
-/// [`QualifiedTypeName::is_runtime_minted`] reads it.
-pub const RUNTIME_MINT_NAMESPACE: &str = "$dyn";
 
 /// Prefix of synthetic effect-polymorphism type parameters. These are an
 /// internal encoding (`__effect_param_0`, …); user-facing rendering shows them
@@ -395,116 +341,6 @@ pub fn is_synthetic_effect_param(name: &Name) -> bool {
 impl fmt::Display for QualifiedTypeName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.render_dotted(false))
-    }
-}
-
-/// [`fmt::Display`] adapter for [`QualifiedTypeName::source_spelling`]: the
-/// package-qualified name with the runtime mint elided.
-pub struct SourceSpelling<'a>(&'a QualifiedTypeName);
-
-impl fmt::Display for SourceSpelling<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0.dotted(self.0.source_namespace(), false))
-    }
-}
-
-#[cfg(test)]
-mod runtime_mint_tests {
-    use baml_base::Name;
-
-    use crate::QualifiedTypeName;
-
-    fn local_ns(namespace: &[&str], name: &str) -> QualifiedTypeName {
-        QualifiedTypeName::new(
-            Name::new(super::RESERVED_USER_PACKAGE),
-            namespace.iter().copied().map(Name::new).collect(),
-            Name::new(name),
-        )
-    }
-
-    #[test]
-    fn minting_keeps_the_source_namespace_below_the_discriminator() {
-        let minted = local_ns(&["models"], "Item")
-            .to_runtime_local(7)
-            .expect("a plain local name can be minted");
-        assert!(minted.is_runtime_minted());
-        assert!(minted.has_runtime_mint(7));
-        assert!(!minted.has_runtime_mint(8));
-        assert_eq!(minted.source_namespace(), [Name::new("models")]);
-        // Canonical form keys the definition; every rendered form is the
-        // spelling the source wrote.
-        assert_eq!(minted.to_string(), "user.$dyn.7.models.Item");
-        assert_eq!(minted.render_user_facing(), "models.Item");
-        assert_eq!(minted.display_name().as_str(), "models.Item");
-        assert_eq!(minted.render_source_dotted(), "user.models.Item");
-    }
-
-    /// The package-qualified surfaces (a host SDK's `class_name`, a coercion or
-    /// decode error) must read exactly as they read before the name was minted.
-    #[test]
-    fn the_source_spelling_matches_the_unminted_name() {
-        for plain in [local_ns(&[], "Item"), local_ns(&["models"], "Item")] {
-            let minted = plain.to_runtime_local(7).expect("mintable");
-            assert_eq!(minted.render_source_dotted(), plain.to_string());
-            assert_eq!(minted.source_spelling().to_string(), plain.to_string());
-            assert_eq!(minted.render_user_facing(), plain.render_user_facing());
-        }
-    }
-
-    /// An unminted name renders identically through both spellings, so a call
-    /// site can mask unconditionally without a `is_runtime_minted` guard.
-    #[test]
-    fn an_unminted_name_renders_the_same_either_way() {
-        for name in [
-            local_ns(&[], "Item"),
-            local_ns(&["models"], "Item"),
-            QualifiedTypeName::new(
-                Name::new("baml"),
-                vec![Name::new("json")],
-                Name::new("json"),
-            ),
-        ] {
-            assert_eq!(name.render_source_dotted(), name.to_string());
-        }
-    }
-
-    #[test]
-    fn two_mints_of_one_name_are_distinct_keys() {
-        let name = local_ns(&[], "Item");
-        let first = name.to_runtime_local(1).expect("mintable");
-        let second = name.to_runtime_local(2).expect("mintable");
-        assert_ne!(first, second);
-        assert_eq!(first.render_user_facing(), second.render_user_facing());
-        // Neither collides with the plain declaration they were spelled from.
-        assert_ne!(first, name);
-        assert_ne!(second, name);
-    }
-
-    #[test]
-    fn a_dependency_or_already_minted_name_is_not_reminted() {
-        let dependency = QualifiedTypeName::new(Name::new("baml"), vec![], Name::new("Item"));
-        assert_eq!(dependency.to_runtime_local(7), None);
-        let minted = local_ns(&[], "Item").to_runtime_local(7).expect("mintable");
-        assert_eq!(minted.to_runtime_local(9), None);
-    }
-
-    /// `from_dotted_path` accepts any dotted string, including a truncated one
-    /// that looks minted but carries no mint. It must still render.
-    #[test]
-    fn a_truncated_mint_namespace_does_not_panic() {
-        let truncated = QualifiedTypeName::from_dotted_path("user.$dyn.Item");
-        assert!(truncated.is_runtime_minted());
-        assert!(!truncated.has_runtime_mint(7));
-        assert!(truncated.source_namespace().is_empty());
-        assert_eq!(truncated.render_user_facing(), "Item");
-    }
-
-    #[test]
-    fn a_plain_name_reports_its_whole_namespace_as_source() {
-        let plain = local_ns(&["models"], "Item");
-        assert!(!plain.is_runtime_minted());
-        assert!(!plain.has_runtime_mint(7));
-        assert_eq!(plain.source_namespace(), plain.namespace().as_slice());
     }
 }
 

@@ -285,10 +285,10 @@ fn detect_install_root_in(cwd: &Path, git_toplevel: Option<&Path>, home: Option<
         // at all. Installing at cwd is always safe.
         (None, None) => vec![cwd.to_path_buf()],
     };
-    baml_workspace::find_baml_project_root_from_ancestors(
+    baml_db::find_baml_project_root_from_ancestors(
         ancestors,
-        |dir| dir.join(baml_workspace::BAML_TOML).is_file(),
-        |dir| dir.join(baml_workspace::BAML_SRC_DIR).is_dir(),
+        |dir| dir.join(baml_db::BAML_TOML).is_file(),
+        |dir| dir.join(baml_db::BAML_SRC_DIR).is_dir(),
     )
     .unwrap_or_else(|| match git_toplevel {
         Some(toplevel) => toplevel.to_path_buf(),

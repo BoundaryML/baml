@@ -435,8 +435,8 @@ function user.greet() -> string  [expr] {
 function user.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool>  [expr] {
   {  } map { "result": 1 }
 }
-function user.TestTarget(client: ai.Client? = null) -> string  [llm] {
-  ai.Agent.new(client = client).run(TestTarget$spec()).value
+function user.TestTarget(client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
+  ai.Agent.new(client = client, on_event = on_event).run(TestTarget$spec()).value
 }
 function user.TestTarget$build_request(client: ai.Client? = null) -> baml.http.Request  [expr] {
   TestTarget$spec().build_request(override_client = client)
@@ -445,13 +445,13 @@ function user.TestTarget$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.TestTarget$render_prompt() -> ai.Prompt  [expr] {
-  TestTarget$spec().prompt(output_format = ai.wire.render_output_format(type.of()))
+  TestTarget$spec().prompt()
 }
 function user.TestTarget$spec() -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "TestTarget", args: map {  }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Hello";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(BasicClient) }
+  ai.FunctionSpec { spec_name: "TestTarget", args: map {  }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Hello";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(BasicClient) }
 }
-function user.TestTarget$stream(client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
-  ai.stream.from_spec(TestTarget$spec(), client = client)
+function user.TestTarget$stream(client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(TestTarget$spec(), client = client, on_event = on_event)
 }
 enum user.BlockAttributedEnum {X, Y}
 enum user.DottedAttrEnum {X, Y}
@@ -502,8 +502,8 @@ function user.F() -> int  [expr] {
 function user.FinalExpr(a: int, b: int) -> int  [expr] {
   {  } a Add b
 }
-function user.LlmBasic(name: string, client: ai.Client? = null) -> string  [llm] {
-  ai.Agent.new(client = client).run(LlmBasic$spec(name)).value
+function user.LlmBasic(name: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
+  ai.Agent.new(client = client, on_event = on_event).run(LlmBasic$spec(name)).value
 }
 function user.LlmBasic$build_request(name: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
   LlmBasic$spec(name).build_request(override_client = client)
@@ -512,16 +512,16 @@ function user.LlmBasic$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.LlmBasic$render_prompt(name: string) -> ai.Prompt  [expr] {
-  LlmBasic$spec(name).prompt(output_format = ai.wire.render_output_format(type.of()))
+  LlmBasic$spec(name).prompt()
 }
 function user.LlmBasic$spec(name: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "LlmBasic", args: map { "name": name }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Say hello to ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } name);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }
+  ai.FunctionSpec { spec_name: "LlmBasic", args: map { "name": name }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Say hello to ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } name);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }
 }
-function user.LlmBasic$stream(name: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
-  ai.stream.from_spec(LlmBasic$spec(name), client = client)
+function user.LlmBasic$stream(name: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(LlmBasic$spec(name), client = client, on_event = on_event)
 }
-function user.LlmMultiLine(text: string, client: ai.Client? = null) -> string  [llm] {
-  ai.Agent.new(client = client).run(LlmMultiLine$spec(text)).value
+function user.LlmMultiLine(text: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
+  ai.Agent.new(client = client, on_event = on_event).run(LlmMultiLine$spec(text)).value
 }
 function user.LlmMultiLine$build_request(text: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
   LlmMultiLine$spec(text).build_request(override_client = client)
@@ -530,16 +530,16 @@ function user.LlmMultiLine$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.LlmMultiLine$render_prompt(text: string) -> ai.Prompt  [expr] {
-  LlmMultiLine$spec(text).prompt(output_format = ai.wire.render_output_format(type.of()))
+  LlmMultiLine$spec(text).prompt()
 }
 function user.LlmMultiLine$spec(text: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "LlmMultiLine", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Analyze the follo...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_cur =  __tt_cur Add "\nReturn a summary.";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }
+  ai.FunctionSpec { spec_name: "LlmMultiLine", args: map { "text": text }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Analyze the follo...";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_cur =  __tt_cur Add "\nReturn a summary.";  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }
 }
-function user.LlmMultiLine$stream(text: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
-  ai.stream.from_spec(LlmMultiLine$spec(text), client = client)
+function user.LlmMultiLine$stream(text: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(LlmMultiLine$spec(text), client = client, on_event = on_event)
 }
-function user.LlmReversedOrder(text: string, client: ai.Client? = null) -> string  [llm] {
-  ai.Agent.new(client = client).run(LlmReversedOrder$spec(text)).value
+function user.LlmReversedOrder(text: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
+  ai.Agent.new(client = client, on_event = on_event).run(LlmReversedOrder$spec(text)).value
 }
 function user.LlmReversedOrder$build_request(text: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
   LlmReversedOrder$spec(text).build_request(override_client = client)
@@ -548,16 +548,16 @@ function user.LlmReversedOrder$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.LlmReversedOrder$render_prompt(text: string) -> ai.Prompt  [expr] {
-  LlmReversedOrder$spec(text).prompt(output_format = ai.wire.render_output_format(type.of()))
+  LlmReversedOrder$spec(text).prompt()
 }
 function user.LlmReversedOrder$spec(text: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "LlmReversedOrder", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Summarize: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }
+  ai.FunctionSpec { spec_name: "LlmReversedOrder", args: map { "text": text }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Summarize: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }
 }
-function user.LlmReversedOrder$stream(text: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
-  ai.stream.from_spec(LlmReversedOrder$spec(text), client = client)
+function user.LlmReversedOrder$stream(text: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(LlmReversedOrder$spec(text), client = client, on_event = on_event)
 }
-function user.LlmStringClient(text: string, client: ai.Client? = null) -> string  [llm] {
-  ai.Agent.new(client = client).run(LlmStringClient$spec(text)).value
+function user.LlmStringClient(text: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
+  ai.Agent.new(client = client, on_event = on_event).run(LlmStringClient$spec(text)).value
 }
 function user.LlmStringClient$build_request(text: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
   LlmStringClient$spec(text).build_request(override_client = client)
@@ -566,16 +566,16 @@ function user.LlmStringClient$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.LlmStringClient$render_prompt(text: string) -> ai.Prompt  [expr] {
-  LlmStringClient$spec(text).prompt(output_format = ai.wire.render_output_format(type.of()))
+  LlmStringClient$spec(text).prompt()
 }
 function user.LlmStringClient$spec(text: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "LlmStringClient", args: map { "text": text }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Summarize: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.ResponsesClient.new(model = "gpt-4o") }
+  ai.FunctionSpec { spec_name: "LlmStringClient", args: map { "text": text }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Summarize: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } text);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: openai.ResponsesClient.new(model = "gpt-4o") }
 }
-function user.LlmStringClient$stream(text: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
-  ai.stream.from_spec(LlmStringClient$spec(text), client = client)
+function user.LlmStringClient$stream(text: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(LlmStringClient$spec(text), client = client, on_event = on_event)
 }
-function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string, client: ai.Client? = null) -> string  [llm] {
-  ai.Agent.new(client = client).run(LlmWithLongSignature$spec(first_context, second_context, third_context, user_query)).value
+function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string, client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
+  ai.Agent.new(client = client, on_event = on_event).run(LlmWithLongSignature$spec(first_context, second_context, third_context, user_query)).value
 }
 function user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string, client: ai.Client? = null) -> baml.http.Request  [expr] {
   LlmWithLongSignature$spec(first_context, second_context, third_context, user_query).build_request(override_client = client)
@@ -584,13 +584,13 @@ function user.LlmWithLongSignature$parse(json: string) -> string  [expr] {
   baml.sap.parse(json)
 }
 function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> ai.Prompt  [expr] {
-  LlmWithLongSignature$spec(first_context, second_context, third_context, user_query).prompt(output_format = ai.wire.render_output_format(type.of()))
+  LlmWithLongSignature$spec(first_context, second_context, third_context, user_query).prompt()
 }
 function user.LlmWithLongSignature$spec(first_context: string, second_context: string, third_context: string, user_query: string) -> ai.FunctionSpec<string>  [expr] {
-  ai.FunctionSpec { spec_name: "LlmWithLongSignature", args: map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }, prompt_template: ( __spec_output_format: string) -> { { let ctx = ai.internal.SpecCtx { output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Context: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } first_context);  __tt_cur =  __tt_cur Add " ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } second_context);  __tt_cur =  __tt_cur Add " ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } third_context);  __tt_cur =  __tt_cur Add "\nQuery: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } user_query);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }
+  ai.FunctionSpec { spec_name: "LlmWithLongSignature", args: map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }, prompt_template: ( __spec_output_format: ai.OutputFormat) -> { { let ctx = ai.internal.SpecCtx { _output_format:  __spec_output_format }; let  __spec_tagged_prompt = { let  __tt_parts: string[] = []; let  __tt_values: unknown[] = []; let  __tt_cur = "";  __tt_cur =  __tt_cur Add "Context: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } first_context);  __tt_cur =  __tt_cur Add " ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } second_context);  __tt_cur =  __tt_cur Add " ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } third_context);  __tt_cur =  __tt_cur Add "\nQuery: ";  __tt_parts.push( __tt_cur);  __tt_cur = "";  __tt_values.push({  } user_query);  __tt_parts.push( __tt_cur) } baml.TaggedString { parts:  __tt_parts, values:  __tt_values } } ai.internal.assemble_llm_prompt( __spec_tagged_prompt.parts,  __spec_tagged_prompt.values) }, toolbox: ai.tools.Toolbox.new([]), default_client: ai.clients.resolve(GPT4) }
 }
-function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: ai.stream.StreamingClient? = null) -> ai.stream.Stream<string | null, string>  [expr] {
-  ai.stream.from_spec(LlmWithLongSignature$spec(first_context, second_context, third_context, user_query), client = client)
+function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: ai.stream.StreamingClient? = null, on_event: (ai.events.Event) -> void? = null) -> ai.stream.Stream<string | null, string>  [expr] {
+  ai.stream.from_spec(LlmWithLongSignature$spec(first_context, second_context, third_context, user_query), client = client, on_event = on_event)
 }
 function user.LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<string, int | string | bool | float | null>>  [expr] {
   {  } map { "a": map { "b": 1 } }
@@ -740,7 +740,7 @@ class user.OtherVec$stream {
   q: user.OtherPoint$stream | null
 }
 function user.OtherExprs(a: int, b: int) -> int  [expr] {
-  { 0; 1; 42; 999999; 0.0; 3.14; 99.999; "hello"; "a short string"; "a much longer str..."; true; false; null; "raw string"; "raw string with \"..."; "\n        multi-li..."; a; a Add b; a; a Add b Mul a Sub b; a Add b Mul a Sub b Add a Mul a Add b Mul b Mul a Add b Mul a Add b Sub a Sub b Mul a Sub b; a; a; Neg a; Not true; Neg Neg a; Not a Gt b; Neg a; Neg a; []; [1]; [1, 2, 3]; [1, 2, 3, 4, 5]; ["short", "array"]; ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q"]; ["this is a long st...", "another long stri...", "yet another one t...", "and one more stri..."]; ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa"]; [[1, 2], [3, 4]]; [[1, 2, 3], [4, 5, 6], [7, 8, 9]]; [[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]], [[13, 14], [15, 16]]]; [1, 2]; [1, 2]; ["this is a long st...", "another long stri...", "yet another that ...", "and one more stri..."]; ["this is a long st...", "another long stri...", "yet another that ...", "and one more stri..."]; map { "key": 1 }; map { "a": 1, "b": 2 }; map { "a": 1, "b": 2, "c": 3, "d": 4, "e": 5 }; map { "first_key": "first value", "second_key": "second value", "third_key": "third value", "fourth_key": "fourth value", "fifth_key": "fifth" }; map { "outer": map { "inner_a": 1, "inner_b": 2, "inner_c": 3 }, "other": map { "inner_d": 4, "inner_e": 5, "inner_f": 6 } }; map { "k": 1 }; map { "k": 1 }; user.OtherPoint { x: 1, y: 2 }; user.OtherVec { p: user.OtherPoint { x: 1, y: 2 }, q: user.OtherPoint { x: 3, y: 4 } }; user.OtherVec { p: user.OtherPoint { x: 100000, y: 200000 }, q: user.OtherPoint { x: 300000, y: 400000 } }; user.OtherTriple { a: user.OtherVec { p: user.OtherPoint { x: 1, y: 2 }, q: user.OtherPoint { x: 3, y: 4 } }, b: user.OtherVec { p: user.OtherPoint { x: 5, y: 6 }, q: user.OtherPoint { x: 7, y: 8 } }, c: user.OtherVec { p: user.OtherPoint { x: 9, y: 10 }, q: user.OtherPoint { x: 11, y: 12 } } }; user.OtherPoint { x: 1, y: 2 }; user.OtherPoint { x: 1, y: 2 }; user.OtherVec { p: user.OtherPoint { x: 100000, y: 200000 }, q: user.OtherPoint { x: 300000, y: 400000 } }; { let x = 1 } x Add 1; { let x = a Add b; let y = x Mul 2 } y; { let x = { let y = { let z = a Add b } z Mul z } y Add y } x Mul x; { let x = if (a Gt b) {  } match (a) { 0 => { let inner = b Mul 2 } inner Add 1, _ => a } else {  } b } x; [1, 2, 3]; map { "k": 1 }; user.OtherPoint { x: 1, y: 2 } } a Add b
+  { 0; 1; 42; 999999; 0.0; 3.14; 99.999; "hello"; "a short string"; "a much longer str..."; true; false; null; `...`; `...`; `...`; a; a Add b; a; a Add b Mul a Sub b; a Add b Mul a Sub b Add a Mul a Add b Mul b Mul a Add b Mul a Add b Sub a Sub b Mul a Sub b; a; a; Neg a; Not true; Neg Neg a; Not a Gt b; Neg a; Neg a; []; [1]; [1, 2, 3]; [1, 2, 3, 4, 5]; ["short", "array"]; ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q"]; ["this is a long st...", "another long stri...", "yet another one t...", "and one more stri..."]; ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa"]; [[1, 2], [3, 4]]; [[1, 2, 3], [4, 5, 6], [7, 8, 9]]; [[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]], [[13, 14], [15, 16]]]; [1, 2]; [1, 2]; ["this is a long st...", "another long stri...", "yet another that ...", "and one more stri..."]; ["this is a long st...", "another long stri...", "yet another that ...", "and one more stri..."]; map { "key": 1 }; map { "a": 1, "b": 2 }; map { "a": 1, "b": 2, "c": 3, "d": 4, "e": 5 }; map { "first_key": "first value", "second_key": "second value", "third_key": "third value", "fourth_key": "fourth value", "fifth_key": "fifth" }; map { "outer": map { "inner_a": 1, "inner_b": 2, "inner_c": 3 }, "other": map { "inner_d": 4, "inner_e": 5, "inner_f": 6 } }; map { "k": 1 }; map { "k": 1 }; user.OtherPoint { x: 1, y: 2 }; user.OtherVec { p: user.OtherPoint { x: 1, y: 2 }, q: user.OtherPoint { x: 3, y: 4 } }; user.OtherVec { p: user.OtherPoint { x: 100000, y: 200000 }, q: user.OtherPoint { x: 300000, y: 400000 } }; user.OtherTriple { a: user.OtherVec { p: user.OtherPoint { x: 1, y: 2 }, q: user.OtherPoint { x: 3, y: 4 } }, b: user.OtherVec { p: user.OtherPoint { x: 5, y: 6 }, q: user.OtherPoint { x: 7, y: 8 } }, c: user.OtherVec { p: user.OtherPoint { x: 9, y: 10 }, q: user.OtherPoint { x: 11, y: 12 } } }; user.OtherPoint { x: 1, y: 2 }; user.OtherPoint { x: 1, y: 2 }; user.OtherVec { p: user.OtherPoint { x: 100000, y: 200000 }, q: user.OtherPoint { x: 300000, y: 400000 } }; { let x = 1 } x Add 1; { let x = a Add b; let y = x Mul 2 } y; { let x = { let y = { let z = a Add b } z Mul z } y Add y } x Mul x; { let x = if (a Gt b) {  } match (a) { 0 => { let inner = b Mul 2 } inner Add 1, _ => a } else {  } b } x; [1, 2, 3]; map { "k": 1 }; user.OtherPoint { x: 1, y: 2 } } a Add b
 }
 function user.BasicTemplate(name: string) -> string  [expr] {
   {  } `...`

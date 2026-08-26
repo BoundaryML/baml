@@ -79,7 +79,7 @@ message BamlOutboundValue {
     BamlValuePromptAst prompt_ast_value = 18;
     bytes uint8array_value = 19;
     string bigint_value = 20;
-    // A reflected BAML type returned as a value (e.g. `type.of<T>()`).
+    // A reflected BAML type returned as a value (e.g. `reflect.Type.of<T>()`).
     // Shares the `BamlTy` representation with the inbound side.
     BamlTy ty_value = 21;
     // Definition-carrying type handle. Identity is intentionally not encoded.

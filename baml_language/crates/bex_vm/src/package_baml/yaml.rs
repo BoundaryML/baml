@@ -49,7 +49,7 @@ fn convert_yaml_value(vm: &mut BexVm, value: serde_yaml::Value) -> Result<Value,
                 .collect::<Result<Vec<Value>, VmRustFnError>>()?;
             // YAML is parsed into the `baml.json.json` value algebra.
             Ok(Value::object(
-                vm.alloc_array(super::json::json_alias_ty(), values),
+                vm.alloc_array(super::json::json_alias_ty(vm), values),
             ))
         }
         serde_yaml::Value::Mapping(map) => {
@@ -66,8 +66,8 @@ fn convert_yaml_value(vm: &mut BexVm, value: serde_yaml::Value) -> Result<Value,
             }
             // `baml.json.json` maps: string keys, `json` values.
             Ok(Value::object(vm.alloc_map(
-                baml_type::RealizedTy::string(),
-                super::json::json_alias_ty(),
+                bex_vm_types::RealizedTy::string(),
+                super::json::json_alias_ty(vm),
                 entries,
             )))
         }

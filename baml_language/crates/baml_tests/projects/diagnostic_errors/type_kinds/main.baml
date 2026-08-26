@@ -1,16 +1,16 @@
-function non_exhaustive(t: type) -> string {
+function non_exhaustive(t: reflect.Type) -> string {
   match (t.kind()) {
-    baml.reflect.class.Type => "class",
-    baml.reflect.enum.Type => "enum",
-    baml.reflect.union.Type => "union",
-    baml.reflect.literal.Type => "literal",
-    baml.reflect.array.Type => "array",
-    baml.reflect.map.Type => "map",
-    baml.reflect.interface.Type => "interface",
-    baml.reflect.primitive.Type => "primitive"
+    reflect.class.Type => "class",
+    reflect.enum.Type => "enum",
+    reflect.union.Type => "union",
+    reflect.literal.Type => "literal",
+    reflect.array.Type => "array",
+    reflect.map.Type => "map",
+    reflect.interface.Type => "interface",
+    reflect.primitive.Type => "primitive"
   }
 }
 
-function kinds_are_not_constructible() -> baml.reflect.class.Type {
-  baml.reflect.class.Type {}
+function kinds_are_not_constructible() -> reflect.class.Type {
+  reflect.class.Type {}
 }

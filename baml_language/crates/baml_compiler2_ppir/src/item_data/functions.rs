@@ -97,6 +97,23 @@ pub fn function_llm_meta<'db>(
         })
 }
 
+/// The source geometry of an LLM function's prompt literal (the literal's
+/// range plus every `${…}` construct inside it), or `None` for non-LLM
+/// functions and unusable prompts. Recorded at CST lowering — the desugared
+/// spec body's spans alias the prompt, so consumers classify prose vs code
+/// through this instead.
+#[salsa::tracked(returns(ref))]
+pub fn llm_prompt_spans<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> Option<ast::LlmPromptSpans> {
+    let item_tree = crate::file_item_tree(db, function.file(db));
+    item_tree[function.id(db)]
+        .declarative_meta
+        .as_ref()
+        .and_then(|ast::DeclarativeMeta::Llm(llm)| llm.prompt_spans.clone())
+}
+
 /// Span-free semantic data for a function's *elaborated* signature — the
 /// canonical callable view TIR consumes.
 ///

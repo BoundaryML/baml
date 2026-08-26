@@ -1,17 +1,26 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
-use crate::HeapPtr;
+use crate::{HeapPtr, ObjectIndex};
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct InterfaceDef {
     // Signature
     pub name: baml_type::TypeName,
-    pub args: Vec<(baml_type::Name, Vec<baml_type::RuntimeInterface>)>,
-    pub requires: Vec<baml_type::RuntimeInterface>,
+
+    /// This interface's head identity, content-addressed from its
+    /// fully-qualified name at emit time — the identity a `TypeHead` referring
+    /// to this interface compares by.
+    ///
+    /// Interfaces have no dispatch tag: an interface is an existential, so no
+    /// *value* is ever "of" an interface in the sense `TypeTag` reports. This is
+    /// identity only.
+    pub type_tag: baml_type::typetag::TypeTag,
+    pub args: Vec<(baml_type::Name, Vec<crate::RuntimeInterface>)>,
+    pub requires: Vec<crate::RuntimeInterface>,
 
     // Member Types
-    pub assoc: Vec<(baml_type::Name, baml_type::RuntimeInterface)>,
+    pub assoc: Vec<(baml_type::Name, crate::RuntimeInterface)>,
     /// The interface's declared fields, in declaration order. **Position is
     /// identity**: a field's index here is the index every implementation's
     /// [`RuntimeImplRule::field_links`] is baked against, and the index a
@@ -19,6 +28,13 @@ pub struct InterfaceDef {
     /// dropped, reordered, or deduplicated.
     pub fields: Vec<InterfaceFieldDef>,
     pub methods: Vec<InterfaceMethodDef>,
+
+    /// Runtime package that declared this interface; null for a static
+    /// declaration. A member back-edge: reaching the interface keeps its
+    /// package alive, the same ownership shape ``Class::owner``
+    /// gives classes and enums. This is a GC edge, never serialized.
+    #[borsh(skip)]
+    pub owner: HeapPtr,
 }
 
 /// One field an interface declares, at its dispatch index (its position in
@@ -31,19 +47,30 @@ pub struct InterfaceFieldDef {
     /// `TypeVar`/`AssociatedTypeProjection` here — the `RuntimeTy` family carries
     /// both — and is resolved dynamically against the receiver's impl, never
     /// pre-collapsed to a frame slot (an interface *declaration* has no frame).
-    pub ty: baml_type::RuntimeTy,
+    pub ty: crate::RuntimeTy,
 }
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct InterfaceMethodDef {
     pub name: baml_type::Name,
-    pub args: Vec<baml_type::RuntimeTy>,
-    pub kwargs: Vec<(baml_type::Name, baml_type::RuntimeTy)>,
-    pub returns: baml_type::RuntimeTy,
-    pub errors: baml_type::RuntimeTy,
-    /// Fully-qualified callable name when the interface supplies a default
-    /// body. Required methods carry `None`.
-    pub default_fqn: Option<String>,
+    pub args: Vec<crate::RuntimeTy>,
+    pub kwargs: Vec<(baml_type::Name, crate::RuntimeTy)>,
+    pub returns: crate::RuntimeTy,
+    pub errors: crate::RuntimeTy,
+    /// The default body's pooled function, when the interface supplies one;
+    /// `None` for a required method. This is the wire form: an [`ObjectIndex`]
+    /// into the program's object pool, relocated by the linker like any other
+    /// cross-object operand (see `relink::visit_object_operands`) and bound to
+    /// [`default_fn`](Self::default_fn) at load — exactly as
+    /// [`ProgramMethodImpl::fqn`](super::ProgramMethodImpl::fqn) becomes
+    /// [`MethodImpl::fqn`](MethodImpl::fqn).
+    pub default: Option<ObjectIndex>,
+    /// The loaded default body: null for a required method, or for an
+    /// interface whose pool has not been bound yet. Never serialized —
+    /// pointers are runtime-only. Runtime consumers (a witness synthesizing an
+    /// implementor's rule) read this and never a name.
+    #[borsh(skip)]
+    pub default_fn: HeapPtr,
 }
 
 /// A single interface bound on an impl's generic parameter — `T extends I`, or a
@@ -56,9 +83,9 @@ pub struct InterfaceMethodDef {
 /// interfaces, not types, so an intersection of bounds is a *set* of these.
 #[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct InterfaceBound {
-    pub interface: baml_type::TypeName,
-    pub args: Vec<baml_type::TyTemplate>,
-    pub assoc: Vec<(baml_type::Name, baml_type::TyTemplate)>,
+    pub interface: crate::TypeHead,
+    pub args: Vec<crate::TyTemplate>,
+    pub assoc: Vec<(baml_type::Name, crate::TyTemplate)>,
 }
 
 /// A resolved interface-method implementation in a [`RuntimeImplRule`]: the
@@ -77,7 +104,7 @@ pub struct InterfaceBound {
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct MethodImpl {
     pub fqn: HeapPtr,
-    pub frame: Vec<baml_type::TyTemplate>,
+    pub frame: Vec<crate::TyTemplate>,
 }
 
 /// One interface implementation, baked for the runtime resolver
@@ -95,7 +122,7 @@ pub struct RuntimeImplRule {
     /// `Class(Wrap, [TypeArgRef(0)])`, `implement I for Foo` →
     /// `Concrete(Class(Foo, []))`, `implement<T> I for T[]` →
     /// `Array(TypeArgRef(0))`.
-    pub for_ty_pattern: baml_type::TyTemplate,
+    pub for_ty_pattern: crate::TyTemplate,
     /// Per impl generic parameter (de Bruijn-indexed), the *set* of interface
     /// bounds it must satisfy. `T extends A & B` is the set `{A, B}`; an empty set
     /// is unbounded (an intersection of bounds is a set of interfaces, not a
@@ -109,9 +136,9 @@ pub struct RuntimeImplRule {
     /// Type args of the implemented interface (for generic interfaces such as
     /// `Container<T>`; empty for interfaces with no type parameters). Lets
     /// reflection distinguish instantiations.
-    pub interface_args: Vec<baml_type::TyTemplate>,
+    pub interface_args: Vec<crate::TyTemplate>,
     /// Associated-type bindings of the implemented interface.
-    pub interface_assoc: Vec<(baml_type::Name, baml_type::TyTemplate)>,
+    pub interface_assoc: Vec<(baml_type::Name, crate::TyTemplate)>,
     /// Method name → its [`MethodImpl`] (the callee's `Object::Function` pointer +
     /// invocation frame), resolved at dispatch time. Complete: the methods this
     /// impl overrides *plus* the interface's inherited default methods (the bake

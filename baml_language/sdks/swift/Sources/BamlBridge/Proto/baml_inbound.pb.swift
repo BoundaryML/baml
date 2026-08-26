@@ -137,8 +137,8 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
     set {value = .bigintValue(newValue)}
   }
 
-  /// A reflected BAML type passed as a value (mirrors a `type`-typed BAML
-  /// value, e.g. the result of `reflect.type_of<T>()`). Accepted as an
+  /// A reflected BAML type passed as a value (mirrors a `reflect.Type` BAML
+  /// value, e.g. the result of `reflect.Type.of<T>()`). Accepted as an
   /// argument value so the host can pass types as data.
   var tyValue: BamlBridge_Cffi_V1_BamlTy {
     get {
@@ -173,8 +173,8 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
     case handle(BamlBridge_Cffi_V1_BamlHandle)
     case uint8ArrayValue(Data)
     case bigintValue(String)
-    /// A reflected BAML type passed as a value (mirrors a `type`-typed BAML
-    /// value, e.g. the result of `reflect.type_of<T>()`). Accepted as an
+    /// A reflected BAML type passed as a value (mirrors a `reflect.Type` BAML
+    /// value, e.g. the result of `reflect.Type.of<T>()`). Accepted as an
     /// argument value so the host can pass types as data.
     case tyValue(BamlBridge_Cffi_V1_BamlTy)
     /// Definition-carrying reflected type. New hosts use this for values that

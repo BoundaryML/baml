@@ -2,7 +2,7 @@ use std::{sync::Once, time::Duration};
 
 static START: Once = Once::new();
 
-pub fn spawn() {
+pub(crate) fn spawn() {
     START.call_once(|| {
         let spawn_result = std::thread::Builder::new()
             .name("baml-lsp-deadlock-watchdog".to_string())

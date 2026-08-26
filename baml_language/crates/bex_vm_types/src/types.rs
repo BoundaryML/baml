@@ -15,12 +15,15 @@ mod future;
 mod interface;
 mod object;
 mod package;
+mod type_alias;
 mod type_value;
 mod value;
 
 use std::collections::HashMap;
 
-use baml_type::RuntimeTy;
+/// Re-exported from `baml_type`, which owns the naming vocabulary; the
+/// runtime spells it unqualified everywhere it builds a declaration.
+pub use baml_type::DeclarationName;
 use borsh::{BorshDeserialize, BorshSerialize};
 pub use class::*;
 pub use const_value::*;
@@ -33,10 +36,11 @@ pub use interface::*;
 pub use object::*;
 pub use package::*;
 pub use tokio_util::sync::CancellationToken;
+pub use type_alias::*;
 pub use type_value::*;
 pub use value::*;
 
-use crate::{heap_ptr::HeapPtr, indexable::ObjectPool};
+use crate::{RuntimeTy, heap_ptr::HeapPtr, indexable::ObjectPool};
 
 // ============================================================================
 // Type Tags for Jump Table Dispatch
@@ -105,6 +109,22 @@ pub struct Program {
     /// references are order-independent). The single source of truth for interface
     /// dispatch, named-item lookup, and recursive-alias rendering.
     pub packages: IndexMap<baml_type::Name, ProgramPackage>,
+
+    /// Conservative source-content identity of the compiled file set
+    /// (streams spec §2.3): SHA-256 over the domain string, compiler
+    /// version, and every (path, bytes) pair. `None` when the compiling
+    /// host chose not to provide one (e.g. mounted-unit links) — the
+    /// profiler then falls back to a random per-engine `ProgramId`, which
+    /// over-splits (the safe direction).
+    ///
+    /// In-memory metadata, NOT compiled content: it is `borsh(skip)`ped so
+    /// program/unit byte-identity oracles compare compiled output only,
+    /// and per-file `CompilationUnit`s never carry project-wide state. A
+    /// host that materializes a `Program` from stored bytes restamps it
+    /// (the CLI bytecode cache recomputes from the project files it just
+    /// validated); a host that cannot leaves `None`.
+    #[borsh(skip)]
+    pub source_content_hash: Option<[u8; 32]>,
 }
 
 /// Metadata for building a client tree at runtime.
@@ -152,20 +172,35 @@ impl Program {
         idx
     }
 
-    /// Flatten every package's recursive type aliases into one
-    /// `TypeName → RuntimeTy` map (only recursive aliases survive; non-recursive
-    /// ones are expanded inline), reconstructing each qualified name from its
+    /// Flatten every package's recursive type aliases into one map keyed by
+    /// declaration identity (only recursive aliases survive; non-recursive ones
+    /// are expanded inline), reconstructing each alias's declared name from its
     /// package + `LocalName`. The shape output-format rendering consumes.
-    pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TypeName, RuntimeTy> {
+    ///
+    /// Aliases are `Object::TypeAlias` declarations, so this dereferences each
+    /// through the object pool rather than reading a side map — which is also
+    /// where the identity comes from.
+    pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TaggedTypeName, crate::RealizedTy> {
         let mut out = IndexMap::new();
         for (pkg_name, package) in &self.packages {
-            for (local, ty) in &package.recursive_type_aliases {
+            for (local, idx) in &package.type_aliases {
+                let Some(Object::TypeAlias(alias)) = self.objects.get(idx.raw()) else {
+                    // An index that does not resolve to an alias means the pool
+                    // and the package map disagree — skip rather than guess.
+                    continue;
+                };
                 let qtn = baml_type::TypeName::new(
                     pkg_name.clone(),
                     local.namespace.clone(),
                     local.name.clone(),
                 );
-                out.insert(qtn, ty.clone());
+                out.insert(
+                    baml_type::TaggedTypeName::new(
+                        alias.type_tag,
+                        baml_type::DeclarationName::Declared(qtn),
+                    ),
+                    alias.definition.clone(),
+                );
             }
         }
         out

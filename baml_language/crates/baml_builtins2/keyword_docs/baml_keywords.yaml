@@ -330,8 +330,18 @@ retry_policy:
       }
     }
 
+env:
+  summary: "Names an environment variable to read later, without reading it now."
+  syntax: |
+    client MyClient = openai.ResponsesClient.new(
+      model = "gpt-4o-mini",
+      api_key = env.OPENAI_API_KEY,
+    )
+  details: |
+    `env.VAR_NAME` builds a `baml.env.Ref`, which carries the variable's name and nothing else. The value is read when the reference is used: `.get()` gives `null` for an unset variable, `.get_or_panic()` stops with an error, and `.or(fallback)` substitutes a default. Because nothing is read where the reference is written, a top-level `client` can name a variable the host only sets after startup, and the secret never ends up inside the client value. Write `baml.env.get("VAR_NAME")` to read a variable directly; there is no `env.get(...)` shorthand.
+
 type:
-  summary: "Creates a type alias, and declares associated type members inside interfaces."
+  summary: "Creates type bindings; runtime type values use reflect.Type."
   syntax: |
     type UserId = string
     type Result = string | int
@@ -345,8 +355,12 @@ type:
         type Item = int
       }
     }
+    function from_runtime(t: reflect.Type) -> reflect.Type {
+      type T = unreflect(t)
+      reflect.Type.of<T>()
+    }
   details: |
-    At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`.
+    At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`. Inside a function, `type T = unreflect(t)` creates a scoped type binding from a runtime value. The old `type.of<T>()` shorthand and bare `type` value annotation do not exist; write `reflect.Type.of<T>()` and `reflect.Type`.
 
 void:
   summary: "The return type of a function that produces no value."
@@ -1042,3 +1056,35 @@ pattern:
     if let x: T = v { ... } else { ... }
   details: |
     Full guide: `baml describe patterns`. Match-arm reference: `baml describe match`.
+
+query:
+  summary: "SQL over the local profile store: `baml query \"SELECT …\"`."
+  syntax: |
+    baml query "SHOW TABLES"
+    baml query "SELECT thread_id, status, total_errors, started_at FROM threads
+                WHERE parent_thread_id IS NULL ORDER BY started_at DESC LIMIT 20"
+    baml query "SELECT fqn, sum(calls_started) calls, sum(self_ns) self_ns
+                FROM call_path_stats GROUP BY fqn ORDER BY self_ns DESC LIMIT 10"
+    baml query "SELECT call_id, args['customer']['age'] AS age, output
+                FROM calls WHERE args['customer']['age'] >= 30" --format jsonl
+    baml query --schema --table calls
+  details: |
+    Every `baml run`/`baml test` writes an execution profile under
+    `.baml/profiles-v1` (when profiling is enabled — `BAML_PROFILE=0`
+    disables it; `baml run -v` reports the profiler's status);
+    `baml query` binds that store into a fixed snapshot
+    and runs portable SQL (DataFusion dialect) over the versioned catalog.
+    Relations (`_v1` names with unversioned aliases): `threads` (one row per
+    logical thread; a row with `parent_thread_id IS NULL` is an execution and
+    carries status/duration/totals), `call_path_stats` (population-true
+    call-tree aggregates), `calls` (individually retained call spans with
+    virtual `args`/`output`/`error` value columns), `errors`,
+    `function_definitions`, `health`, plus the `hot_call_paths` view. Value
+    columns support
+    ordinary subscripts and comparisons — `args['customer']['age'] >= 30`,
+    `args = baml_value_json('{"x":1}')` — hydrated on demand and accounted in
+    the terminal outcome (`valueEvaluations`). Discovery: `--schema`,
+    `SHOW TABLES`, `SHOW COLUMNS FROM calls`, `DESCRIBE threads`,
+    `EXPLAIN <query>`. Output: `--format table|json|jsonl` (jsonl ends with a
+    `queryOutcome` frame). Exit codes: 0 complete, 1 evidence-incomplete,
+    2 invalid SQL/authorization, 3 budget, 4 cancelled, 5 store/internal.

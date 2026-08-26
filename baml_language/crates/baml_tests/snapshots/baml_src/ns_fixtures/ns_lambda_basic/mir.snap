@@ -105,9 +105,9 @@ fn user.fixtures.lambda_basic.test_map_inferred() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: (int) -> int throws never
-    let _3: type
-    let _4: type
-    let _5: type
+    let _3: reflect.Type
+    let _4: reflect.Type
+    let _5: reflect.Type
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];

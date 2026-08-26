@@ -16,7 +16,7 @@ function pass_type_as_string(function_name: string) -> string {
 }
 
 // Positive case: `type`-to-`type` continues to type-check cleanly.
-function type_to_type(function_name: string) -> type {
-    let t: type = ai.internal.get_return_type(function_name);
+function type_to_type(function_name: string) -> reflect.Type {
+    let t: reflect.Type = ai.internal.get_return_type(function_name);
     return t;
 }

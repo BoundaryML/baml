@@ -68,7 +68,7 @@ function _input_for(spec: ai.FunctionSpec<string>) -> ai.ModelTurnInput {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: type.of<string>(),
+        output_type: reflect.Type.of<string>(),
     }
 }
 
@@ -76,7 +76,7 @@ function _input_for(spec: ai.FunctionSpec<string>) -> ai.ModelTurnInput {
 
 function RequestShape(input: string) -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `${input} ${ctx.output_format}`
+    prompt: `${input} ${ctx.output_format()}`
 }
 
 test "generated build_request companion is network-free and overridable" {
@@ -98,7 +98,7 @@ test "generated companions apply defaulted llm arguments" {
 }
 
 test "generated build_request companion is reflection-visible" {
-    let f: baml.AnyFunction<
+    let f: reflect.AnyFunction<
         Returns = baml.http.Request,
         Throws = ai.errors.Failure
             | baml.errors.InvalidArgument
@@ -107,7 +107,7 @@ test "generated build_request companion is reflection-visible" {
             | baml.errors.Timeout
             | baml.errors.UnknownError
             | baml.panics.Cancelled
-            | baml.reflect.errors.CompilationError
+            | reflect.errors.CompilationError
     > = RequestShape$build_request;
     let request = reflect.call_any(f, { "input": "hello", "client": PreviewResponses });
     assert.equal(request.url, "http://localhost:1234/v1/responses")
@@ -128,7 +128,7 @@ class Outer<T> {
 }
 
 test "generic nested output format uses concrete class arguments" {
-    let rendered = ai.wire.render_output_format(type.of<Outer<Choice>>());
+    let rendered = ai.wire.render_output_format(reflect.Type.of<Outer<Choice>>());
     assert.is_true(rendered.includes("'Empty'"));
     assert.is_true(!rendered.includes("TypeVar"));
     assert.is_true(!rendered.includes("T[]"))
@@ -136,7 +136,7 @@ test "generic nested output format uses concrete class arguments" {
 
 function GenericShape<T>() -> Outer<T> {
     client: PreviewResponses
-    prompt: `${ctx.output_format}`
+    prompt: `${ctx.output_format()}`
 }
 
 test "generic build_request specializes nested output format" {
@@ -150,7 +150,7 @@ test "generic build_request specializes nested output format" {
 
 function FirstShape() -> string {
     client: PreviewResponses
-    prompt: `hello ${ctx.output_format}`
+    prompt: `hello ${ctx.output_format()}`
 }
 
 test "client wrapper rendering is pure and deterministic" {
@@ -221,7 +221,7 @@ test "chat preview preserves urls unless invoke would inline them" {
 
 function RoledShape() -> string {
     client: "openai/gpt-4o-mini"
-    prompt: `${role("system")}Follow the rules.${role("user")}Answer this.${ctx.output_format}`
+    prompt: `${role("system")}Follow the rules.${role("user")}Answer this.${ctx.output_format()}`
 }
 
 function _roled_body(request: baml.http.Request) -> baml.json.json {

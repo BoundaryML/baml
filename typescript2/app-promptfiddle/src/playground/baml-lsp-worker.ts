@@ -439,9 +439,6 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         type: 'runPatch',
       } as WorkerOutMessage);
       break;
-    case 'profileArtifactChunk':
-      postOut(notification as WorkerOutMessage);
-      break;
     case 'runSnapshot':
       postOut({
         boundaryId: notification.boundaryId,
@@ -1065,6 +1062,21 @@ self.onmessage = async (event: MessageEvent) => {
 
     case 'expandTestSet':
       runtime?.expandTestSet(msg.project, msg.generation, msg.testsetName);
+      return;
+
+    // Telemetry reads `.baml/profiles-v1` on disk, which only the local
+    // toolchain server can reach. The WASM runtime has no such store, so
+    // these say so rather than failing silently or timing out.
+    case 'listExecutions':
+    case 'openExecution':
+    case 'readTelemetryMedia':
+      postOut({
+        code: 'telemetryUnavailable',
+        message:
+          'Telemetry needs the local profile store, which the in-browser runtime does not have.',
+        requestId: msg.requestId,
+        type: 'commandError',
+      });
       return;
 
     case 'dispose':

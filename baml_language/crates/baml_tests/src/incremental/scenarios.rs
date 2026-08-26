@@ -10,9 +10,10 @@ use baml_db::{SourceFile, baml_compiler2_hir};
 use salsa::Setter;
 
 use super::IncrementalTestDb;
+use crate::engine::TestDbExt;
 
 /// Query the semantic index for all files in a project (forces full HIR build).
-fn query_semantic_index(db: &baml_project::ProjectDatabase, file: SourceFile) {
+fn query_semantic_index(db: &baml_db::ProjectDatabase, file: SourceFile) {
     let _ = baml_compiler2_hir::file_semantic_index(db, file);
 }
 
@@ -24,7 +25,7 @@ fn query_semantic_index(db: &baml_project::ProjectDatabase, file: SourceFile) {
 fn editing_function_body_preserves_item_tree() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r##"
 function Greet(name: string) -> string {
@@ -67,7 +68,7 @@ function Greet(name: string) -> string {
 fn renaming_function_invalidates_item_tree() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r##"
 function OldName(x: string) -> string {
@@ -108,7 +109,7 @@ function NewName(x: string) -> string {
 fn adding_class_invalidates_item_tree() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r#"
 class Person {
@@ -163,7 +164,7 @@ class NewClass {
 fn comment_changes_recompute_item_tree() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r#"
 class MyClass {
@@ -203,7 +204,7 @@ class MyClass {
 fn editing_one_file_doesnt_affect_other() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file_a = test_db.db_mut().add_file(
+    let file_a = test_db.db_mut().file(
         "file_a.baml",
         r#"
 class ClassA {
@@ -212,7 +213,7 @@ class ClassA {
 "#,
     );
 
-    let file_b = test_db.db_mut().add_file(
+    let file_b = test_db.db_mut().file(
         "file_b.baml",
         r#"
 class ClassB {
@@ -260,7 +261,7 @@ class ClassA {
 fn type_inference_cached_on_no_change() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r##"
 function Greet(name: string) -> string {
@@ -282,7 +283,7 @@ function Greet(name: string) -> string {
 fn type_inference_cached_on_whitespace_change() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r##"function Greet(name: string) -> string {
     client: GPT4
@@ -318,7 +319,7 @@ fn type_inference_cached_on_whitespace_change() {
 fn type_inference_invalidated_on_signature_change() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r##"
 function Greet(name: string) -> string {
@@ -358,7 +359,7 @@ function Greet(name: string) -> int {
 // ones (spans ignored by `PartialEq`). These tests pin both halves of that.
 
 fn type_alias_loc<'db>(
-    db: &'db baml_project::ProjectDatabase,
+    db: &'db baml_db::ProjectDatabase,
     file: SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::loc::TypeAliasLoc<'db> {
@@ -379,7 +380,7 @@ fn type_alias_loc<'db>(
 fn whitespace_edit_preserves_item_data_but_moves_spans() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file("test.baml", "type Ids = int[]\n");
+    let file = test_db.db_mut().file("test.baml", "type Ids = int[]\n");
 
     let (data_before, span_before) = {
         let db = test_db.db();
@@ -419,7 +420,7 @@ fn whitespace_edit_preserves_item_data_but_moves_spans() {
 fn semantic_edit_changes_item_data() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file("test.baml", "type Ids = int[]\n");
+    let file = test_db.db_mut().file("test.baml", "type Ids = int[]\n");
 
     let data_before = {
         let db = test_db.db();
@@ -440,7 +441,7 @@ fn semantic_edit_changes_item_data() {
 }
 
 fn class_loc<'db>(
-    db: &'db baml_project::ProjectDatabase,
+    db: &'db baml_db::ProjectDatabase,
     file: SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::loc::ClassLoc<'db> {
@@ -456,7 +457,7 @@ fn class_loc<'db>(
 }
 
 fn function_loc<'db>(
-    db: &'db baml_project::ProjectDatabase,
+    db: &'db baml_db::ProjectDatabase,
     file: SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::loc::FunctionLoc<'db> {
@@ -486,7 +487,7 @@ type ClassFingerprint = (
 );
 
 fn class_fingerprint(
-    db: &baml_project::ProjectDatabase,
+    db: &baml_db::ProjectDatabase,
     file: SourceFile,
     name: &str,
 ) -> ClassFingerprint {
@@ -507,7 +508,7 @@ fn class_fingerprint(
 fn editing_one_class_preserves_the_others_data() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         "class Person {\n  name string\n}\n\nclass Address {\n  city string\n}\n",
     );
@@ -539,7 +540,7 @@ fn editing_one_class_preserves_the_others_data() {
 fn moving_an_attribute_preserves_class_data() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         "class Person {\n  name string @description(\"who\")\n}\n",
     );
@@ -564,7 +565,7 @@ fn moving_an_attribute_preserves_class_data() {
 fn editing_a_function_body_preserves_its_signature_data() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         "function Add(x: int, y: int) -> int {\n  x + y\n}\n",
     );
@@ -607,7 +608,7 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
     // their parent" — so the span-join was ambiguous exactly there. If the index
     // and the scan disagree for any of these, migrating the call sites is a
     // behavior change and needs to be handled deliberately.
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         "function Add(x: int, y: int) -> int {\n  x + y\n}\n\n\
          function Sub(x: int, y: int) -> int {\n  x - y\n}\n\n\
@@ -673,7 +674,7 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
 fn function_scope_survives_a_whitespace_edit() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         "function Add(x: int, y: int) -> int {\n  x + y\n}\n",
     );
@@ -707,7 +708,7 @@ fn scope_owner_round_trips() {
 
     let file = test_db
         .db_mut()
-        .add_file("test.baml", "function Add(x: int) -> int {\n  x\n}\n");
+        .file("test.baml", "function Add(x: int) -> int {\n  x\n}\n");
 
     let db = test_db.db();
     let loc = function_loc(db, file, "Add");
@@ -730,7 +731,7 @@ fn scope_owner_round_trips() {
 fn method_owner_index_agrees_with_the_scans_it_replaces() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r#"
 interface Greeter {
@@ -878,7 +879,7 @@ function free_standing(x: int) -> int throws never {
 fn elaborated_function_data_cuts_off_and_still_elaborates() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         "function Apply(x: int, f: (int) -> int) -> int throws never {\n  f(x)\n}\n",
     );
@@ -925,7 +926,7 @@ fn elaborated_function_data_cuts_off_and_still_elaborates() {
 fn editing_a_function_prompt_preserves_its_llm_meta() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         "function Greet(name: string) -> string {\n  client: GPT4\n  prompt: `Hi ${name}`\n}\n",
     );
@@ -959,7 +960,7 @@ fn editing_a_function_prompt_preserves_its_llm_meta() {
 // ── hir_ty inference firewall (S2/S3) ────────────────────────────────────────
 
 /// Run hir_ty inference for every body owner in `file`.
-fn query_hir_ty_inference(db: &baml_project::ProjectDatabase, file: SourceFile) {
+fn query_hir_ty_inference(db: &baml_db::ProjectDatabase, file: SourceFile) {
     for owner in baml_compiler2_ppir::file_body_owners(db, file) {
         let _ = baml_compiler2_hir_ty::infer::infer_body(db, owner);
     }
@@ -970,7 +971,7 @@ fn query_hir_ty_inference(db: &baml_project::ProjectDatabase, file: SourceFile) 
 #[test]
 fn hir_ty_inference_cached_on_repeat() {
     let mut test_db = IncrementalTestDb::new();
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         "function f(x: int) -> int throws never {\n    x + 1\n}\n",
     );
@@ -994,11 +995,11 @@ fn hir_ty_inference_cached_on_repeat() {
 #[test]
 fn hir_ty_editing_one_file_preserves_other_files_inference() {
     let mut test_db = IncrementalTestDb::new();
-    let file_a = test_db.db_mut().add_file(
+    let file_a = test_db.db_mut().file(
         "a.baml",
         "function alpha() -> int throws never {\n    1\n}\n",
     );
-    let file_b = test_db.db_mut().add_file(
+    let file_b = test_db.db_mut().file(
         "b.baml",
         "function beta() -> int throws never {\n    2\n}\n",
     );
@@ -1030,11 +1031,11 @@ fn hir_ty_editing_one_file_preserves_other_files_inference() {
 #[test]
 fn hir_ty_body_edit_with_stable_signature_does_not_reinfer_callers() {
     let mut test_db = IncrementalTestDb::new();
-    let file_a = test_db.db_mut().add_file(
+    let file_a = test_db.db_mut().file(
         "a.baml",
         "function callee() -> int throws never {\n    1\n}\n",
     );
-    let file_b = test_db.db_mut().add_file(
+    let file_b = test_db.db_mut().file(
         "b.baml",
         "function caller() -> int throws never {\n    callee()\n}\n",
     );

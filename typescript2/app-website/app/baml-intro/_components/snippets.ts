@@ -105,7 +105,7 @@ class Question { text: string }`;
 
 /* ---------------- 1d · eval / codemode (coming soon) ----------------
  * Direction-of-travel only; the reflection API below is not yet shipped. */
-export const BAML_EVAL = `let raw = baml.reflect.new_package("my_package");
+export const BAML_EVAL = `let raw = reflect.new_package("my_package");
 baml.package.set_file("virtual/path/to/file.baml", \`
    function hello() -> string {
      "hello world"
@@ -118,7 +118,7 @@ print(cb());
 
 // and its typesafe!
 let cb = pkg.get<() -> int>("hello") catch (e) {
-    baml.reflect.CompilerTypeError => {
+    reflect.CompilerTypeError => {
         print(\`"hello" is not a function that returns int. \${e}\`)
     }
 };`;
@@ -457,7 +457,7 @@ function classify(text: string) -> Verdict {
     Classify the sentiment of the text. Sarcasm counts
     as the sentiment actually expressed.
     Text: \${text}
-    \${ctx.output_format}
+    \${ctx.output_format()}
   \`
 }`;
 
@@ -473,7 +473,7 @@ function generate_image(thing: string) -> image {
   client: AiGatewayImagen
   prompt: \`
     Create an image from this prompt: \${thing}
-    \${ctx.output_format}
+    \${ctx.output_format()}
   \`
 }
 
@@ -482,7 +482,7 @@ function describe(img: image) -> string {
   prompt: \`
     Describe this image in one vivid sentence.
     \${img}
-    \${ctx.output_format}
+    \${ctx.output_format()}
   \`
 }
 
@@ -778,7 +778,7 @@ function take_guess(
 
         Encourage players to make a guess when they seem to have enough information.
 
-        \${ctx.output_format}
+        \${ctx.output_format()}
 
         Conversation history:
 

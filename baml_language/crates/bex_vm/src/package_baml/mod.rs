@@ -39,19 +39,15 @@ mod ops_bitwise;
 mod ops_math;
 mod prompt;
 mod random;
-pub(crate) mod reflect;
-mod resolve;
-pub(crate) mod runtime_class_builder;
+pub(crate) mod resolve;
 pub(crate) use resolve::ImplResolver;
-mod root;
+pub(crate) mod root;
 mod spawn;
 mod stack_trace;
 mod string;
 mod sys;
 mod time;
 mod toml;
-mod type_class;
-pub(crate) mod type_kinds;
 mod uint8array;
 mod unknown_error;
 mod yaml;
@@ -95,7 +91,7 @@ pub enum NativeCallResult {
     YieldToCall {
         callee: HeapPtr,
         args: Vec<Value>,
-        type_args: Vec<baml_type::RealizedTy>,
+        type_args: Vec<bex_vm_types::RealizedTy>,
         continuation: Box<dyn Continuation>,
     },
 }
@@ -151,7 +147,7 @@ impl Continuation for PassThroughContinuation {
 /// builtins take it in place of `&[Value]` with no body changes.
 pub struct ArrayView<'a> {
     /// The receiver array's declared element type (`T` of `T[]`).
-    pub ty: &'a baml_type::RealizedTy,
+    pub ty: &'a bex_vm_types::RealizedTy,
     /// The receiver array's elements.
     pub data: &'a [Value],
 }
@@ -172,9 +168,9 @@ impl std::ops::Deref for ArrayView<'_> {
 /// it in place of `&IndexMap<BexStr, Value>` with no body changes.
 pub struct MapView<'a> {
     /// The receiver map's declared key type (`K` of `map<K, V>`).
-    pub key_ty: &'a baml_type::RealizedTy,
+    pub key_ty: &'a bex_vm_types::RealizedTy,
     /// The receiver map's declared value type (`V` of `map<K, V>`).
-    pub value_ty: &'a baml_type::RealizedTy,
+    pub value_ty: &'a bex_vm_types::RealizedTy,
     /// The receiver map's entries.
     pub data: &'a indexmap::IndexMap<bex_str::BexStr, Value>,
 }
@@ -246,8 +242,12 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
             Object::Bigint(_) => "baml.Comparable$for$bigint.compare".to_string(),
             Object::Instance(inst) => {
                 let class_ptr = inst.class;
-                let fqn = match vm.get_object(class_ptr) {
-                    Object::Class(c) => c.name.render_dotted(false),
+                let qtn = match vm.get_object(class_ptr) {
+                    // `compare` methods register as globals under the class's
+                    // declared FQN at emit time. An anonymous class has no
+                    // declared FQN and no emitted methods, so it cannot
+                    // implement `Comparable` — same as the non-instance arm.
+                    Object::Class(c) => c.name.declared().cloned(),
                     _ => {
                         return Err(VmRustFnError::InternalError(
                             VmInternalError::MissingNativeFunction {
@@ -256,7 +256,13 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
                         ));
                     }
                 };
-                format!("{fqn}.baml.Comparable.compare")
+                let Some(qtn) = qtn else {
+                    return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                        message: "_compare_shim: element type does not implement Comparable"
+                            .to_string(),
+                    }));
+                };
+                format!("{}.baml.Comparable.compare", qtn.render_dotted(false))
             }
             _ => {
                 return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
@@ -318,7 +324,7 @@ pub(super) fn make_to_string_callee(vm: &mut BexVm, v: Value) -> Option<HeapPtr>
 /// arrays, maps) — `string.from` renders those structurally.
 ///
 /// Covers `Object::Instance` (user/builtin classes) plus the two builtin
-/// non-instance implementors, `type` (`baml.TypeValue`) and `uint8array`
+/// non-instance implementors, `type` (`reflect.Type`) and `uint8array`
 /// (`baml.Uint8Array`); without them `string.from(v)` would diverge from
 /// `v.to_string()` (e.g. a `type` rendering structurally instead of as its type
 /// name, or bytes as `[1, 2]` instead of their UTF-8 text). Allocation-free
@@ -329,10 +335,10 @@ pub(super) fn to_string_override_fn_name(vm: &BexVm, v: Value) -> Option<String>
     let fqn = match v.kind() {
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Instance(inst) => match vm.get_object(inst.class) {
-                Object::Class(c) => c.name.render_dotted(false),
+                Object::Class(c) => c.name.declared()?.render_dotted(false),
                 _ => return None,
             },
-            Object::Type(_) => "baml.TypeValue".to_string(),
+            Object::Type(_) => "reflect.Type".to_string(),
             Object::Uint8Array(_) => "baml.Uint8Array".to_string(),
             _ => return None,
         },
@@ -372,7 +378,7 @@ pub(super) fn to_json_override_fn_name(vm: &BexVm, v: Value) -> Option<String> {
     let fqn = match v.kind() {
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Instance(inst) => match vm.get_object(inst.class) {
-                Object::Class(c) => c.name.render_dotted(false),
+                Object::Class(c) => c.name.declared()?.render_dotted(false),
                 _ => return None,
             },
             _ => return None,
@@ -406,6 +412,10 @@ const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
     (
         "boundary.",
         <crate::package_boundary::PackageBoundaryImpl as crate::package_boundary::BamlPackageBoundary>::get_native_fn,
+    ),
+    (
+        "reflect.",
+        <crate::package_reflect::PackageReflectImpl as crate::package_reflect::BamlPackageReflect>::get_native_fn,
     ),
 ];
 

@@ -69,9 +69,8 @@ class HostUnavailable {
     message: string,
 }
 
-/// The right operand of a bigint shift (`<<` / `>>`) was negative.
-/// The type system can't rule this out because the shift count is a
-/// runtime `bigint` value.
+/// The right operand of a shift (`<<` / `>>`) was negative.
+/// The type system can't rule this out because the shift count is a runtime value.
 class NegativeBitShift {
     message: string,
 }

@@ -21,12 +21,14 @@
 //! no spelling reaches a runtime failure.
 
 use baml_compiler_diagnostics::Severity;
-use baml_project::{collect_diagnostics, testing::setup_test_db};
-use baml_tests::baml_test;
+use baml_tests::{
+    baml_test,
+    stdlib_prefix::{check_user_files, setup_test_db},
+};
 use bex_engine::BexExternalValue;
 
 fn compile_errors(source: &str) -> Vec<(String, String)> {
-    collect_diagnostics(&setup_test_db(source))
+    check_user_files(&setup_test_db(source))
         .into_iter()
         .filter(|diagnostic| diagnostic.severity == Severity::Error)
         .map(|diagnostic| (diagnostic.code().to_string(), diagnostic.message))
@@ -57,6 +59,124 @@ fn assert_accepted(source: &str) {
     assert!(errors.is_empty(), "expected no errors, got: {errors:#?}");
 }
 
+#[test]
+fn nested_runtime_type_atoms_parse_and_typecheck_in_body_positions() {
+    assert_accepted(
+        r#"
+class Wrapper<T> { value T }
+
+function erase<T>(value: unknown) -> string { "ok" }
+
+function main(t: reflect.Type, value: unknown) -> bool throws unknown {
+    let call_ok = erase<Wrapper<unreflect(t)>>(value) == "ok"
+    let binding_ok = {
+        type T = Wrapper<unreflect(t)>
+        let values = baml.json.from_json<T[]>(baml.json.parse("[]"))
+        values.length() == 0
+    }
+    let annotated: Wrapper<unreflect(t)>? = null
+    call_ok
+        && binding_ok
+        && annotated == null
+        && value is Wrapper<unreflect(t)>
+        && match value {
+            Wrapper<unreflect(t)> => true,
+            _ => false,
+        }
+}
+"#,
+    );
+}
+
+#[test]
+fn nested_runtime_type_escape_uses_e0168_and_rewrites_only_the_hole() {
+    let source = r#"
+class Wrapper<T> { value T }
+
+function ident<T>() -> T throws string { throw "stop" }
+
+function main(t: reflect.Type) -> unknown throws unknown {
+    ident<Wrapper<unreflect(t)>>()
+}
+"#;
+    assert_single_escape(source);
+    let rendered = render_errors(source);
+    assert!(
+        rendered.contains("type Out = unreflect(t);") && rendered.contains("ident<Wrapper<Out>>()"),
+        "nested E0168 rewrite did not preserve the surrounding type:\n{rendered}",
+    );
+}
+
+#[test]
+fn nested_runtime_type_escape_through_throws_is_e0168() {
+    assert_single_escape(
+        r#"
+class Wrapper<T> { value T }
+class Boom<T> { payload T }
+
+function risky<T>() -> int throws Boom<T> { 0 }
+
+function main(t: reflect.Type) -> unknown throws unknown {
+    risky<Wrapper<unreflect(t)>>()
+}
+"#,
+    );
+}
+
+#[test]
+fn nested_runtime_type_escape_through_optional_chain_is_e0168() {
+    assert_single_escape(
+        r#"
+class Wrapper<T> { value T }
+
+class Source {
+    function pick<T>(self) -> T throws string { throw "stop" }
+}
+
+function main(t: reflect.Type, source: Source?) -> unknown throws unknown {
+    source?.pick<Wrapper<unreflect(t)>>()
+}
+"#,
+    );
+}
+
+#[test]
+fn item_signature_runtime_type_atoms_each_get_one_checker_diagnostic() {
+    let errors = compile_errors(
+        r#"
+class Wrapper<T> { value T }
+interface Marker<T> {}
+
+class FieldSite {
+    value Wrapper<unreflect(reflect.Type.of<string>())>
+}
+
+class ImplementsSite {
+    implements Marker<unreflect(reflect.Type.of<string>())> {}
+}
+
+function signature_site(
+    value: Wrapper<unreflect(reflect.Type.of<string>())>
+) -> Wrapper<unreflect(reflect.Type.of<string>())> {
+    value
+}
+
+function bound_site<T extends Wrapper<unreflect(reflect.Type.of<string>())>>() -> null { null }
+type AliasSite = Wrapper<unreflect(reflect.Type.of<string>())>
+"#,
+    );
+    assert_eq!(
+        errors.len(),
+        6,
+        "expected one diagnostic per item occurrence: {errors:#?}"
+    );
+    assert!(errors.iter().all(|(code, message)| {
+        code == "E0168"
+            && message
+                == "a runtime type has no scope here; bind it inside a function body: `type T = unreflect(…)`"
+    }));
+}
+
 /// The exact codes a source reports — for the audited shapes whose refusal is
 /// some other rule's to make, so a later change that hands them to E0168 (or
 /// to nothing at all) has to come through here.
@@ -77,7 +197,7 @@ fn render_errors(source: &str) -> String {
     use baml_compiler_diagnostics::render::{DiagnosticFormat, RenderConfig, render_diagnostics};
 
     let db = setup_test_db(source);
-    let diagnostics: Vec<_> = collect_diagnostics(&db)
+    let diagnostics: Vec<_> = check_user_files(&db)
         .into_iter()
         .filter(|diagnostic| diagnostic.severity == Severity::Error)
         .collect();
@@ -125,6 +245,7 @@ class ProbeClient {
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
             ai.ModelTurn {
+                calls: [],
                 content: [ai.content.Text { text: self.reply }],
                 stop_reason: ai.content.StopReason.Complete,
                 usage: null,
@@ -137,11 +258,11 @@ class ProbeClient {
 // ── Refused: the result type would keep naming the call-scoped parameter ────
 
 /// The B-1582 item-1 spelling, verbatim from the ticket. `ai.Agent<T>.new`
-/// returns `Agent<T>`, so the constructed value's published type is
-/// `Agent<unknown>` while the instance carries the real runtime class — the
-/// disagreement that later made `.run` fail to dispatch at all. The spec the
-/// runner is handed is the ticket's second inline slot, and `@spec<T>` embeds
-/// the parameter the same way, so both slots are named.
+/// returns a spec value that outlives the call, so its inline slot is still
+/// an escape. `Agent` itself is no longer generic — `Out` rides `run` and is
+/// inferred from the spec — so the ticket's first inline slot (the Agent
+/// turbofish) no longer exists; writing it is an ordinary arity error, and
+/// only the `@spec<T>` slot needs the name.
 #[test]
 fn agent_constructed_with_an_inline_runtime_type_is_refused() {
     assert_escapes(
@@ -151,15 +272,36 @@ fn agent_constructed_with_an_inline_runtime_type_is_refused() {
 
         function DynamicOutput<T>() -> T {{
             client: DefaultClient
-            prompt: `${{ctx.output_format}}`
+            prompt: `${{ctx.output_format()}}`
         }}
 
-        function main(t: type, c: ai.Client) -> unknown throws unknown {{
-            ai.Agent<unreflect(t)>.new(client = c).run(DynamicOutput@spec<unreflect(t)>())
+        function main(t: reflect.Type, c: ai.Client) -> unknown throws unknown {{
+            ai.Agent.new(client = c).run(DynamicOutput@spec<unreflect(t)>())
         }}
         "##
         ),
-        2,
+        1,
+    );
+
+    // The retired spelling: a turbofish on the non-generic Agent is a plain
+    // arity error, not an escape.
+    let errors = compile_errors(&format!(
+        r##"
+        {PROBE_CLIENT}
+
+        function DynamicOutput<T>() -> T {{
+            client: DefaultClient
+            prompt: `${{ctx.output_format()}}`
+        }}
+
+        function main(t: reflect.Type, c: ai.Client) -> unknown throws unknown {{
+            ai.Agent<unreflect(t)>.new(client = c).run(DynamicOutput@spec<unreflect(t)>())
+        }}
+        "##
+    ));
+    assert!(
+        errors.iter().any(|(code, _)| code == "E0005"),
+        "the Agent turbofish should be an arity error, got: {errors:?}"
     );
 }
 
@@ -174,7 +316,7 @@ fn class_literal_with_an_inline_runtime_type_is_refused_before_lowering() {
         r#"
 class Holder<T> { label string }
 
-function main(t: type) -> unknown {
+function main(t: reflect.Type) -> unknown {
     Holder<unreflect(t)> { label: "h" }
 }
 "#,
@@ -196,7 +338,7 @@ class Holder<T> {
     }
 }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: reflect.Type) -> unknown throws unknown {
     Holder<unreflect(t)>.new("h")
 }
 "#,
@@ -213,7 +355,7 @@ class Wrapper<T> { inner T }
 
 function wrap<T>(v: T) -> Wrapper<T> throws never { Wrapper<T> { inner: v } }
 
-function main(t: type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
+function main(t: reflect.Type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
 "#,
     );
 }
@@ -221,7 +363,7 @@ function main(t: type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
 /// The same report from the CALL side, whose span and rewrite travel a
 /// different road than the class literal's: the slot span comes from
 /// `DiagnosticLocation::UnreflectArg` through `AstSourceMap`, and the rewrite
-/// is assembled in `TirDiagnostic::render_with_type_refs` from the file text.
+/// is assembled in `TirDiagnostic::render_with_body_type_refs` from the file text.
 /// The code+message assertions above would not notice either degrading.
 #[test]
 fn the_report_at_a_call_site_names_the_slot_and_spells_the_fix() {
@@ -232,24 +374,24 @@ class Wrapper<T> { inner T }
 
 function wrap<T>(v: T) -> Wrapper<T> throws never { Wrapper<T> { inner: v } }
 
-function main(t: type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
+function main(t: reflect.Type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
 "#
         ),
         @"
     E0168
 
       × this runtime type must be given a name before it can be used here
-       ╭─[test.baml:6:57]
-     6 │ function main(t: type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
-       ·                                                         ──────┬─────
-       ·                                                               ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the value this expression creates would still need it afterwards
+       ╭─[test.baml:6:65]
+     6 │ function main(t: reflect.Type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
+       ·                                                                 ──────┬─────
+       ·                                                                       ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the value this expression creates would still need it afterwards
        ╰────
       ╰─▶   ☞ name the type first, then use the name:
             │     type Out = unreflect(t);
             │     wrap<Out>(1)
-             ╭─[test.baml:6:57]
-           6 │ function main(t: type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
-             ·                                                         ────────────
+             ╭─[test.baml:6:65]
+           6 │ function main(t: reflect.Type) -> unknown throws unknown { wrap<unreflect(t)>(1) }
+             ·                                                                 ────────────
              ╰────
     "
     );
@@ -262,7 +404,7 @@ fn a_result_under_a_builtin_constructor_is_refused() {
         r#"
 function listed<T>(v: T) -> T[]? throws never { [v] }
 
-function main(t: type) -> unknown throws unknown { listed<unreflect(t)>(1) }
+function main(t: reflect.Type) -> unknown throws unknown { listed<unreflect(t)>(1) }
 "#,
     );
 }
@@ -277,7 +419,7 @@ fn the_report_names_the_slot_and_spells_the_fix() {
             r#"
 class Holder<T> { label string }
 
-function main(t: type) -> unknown {
+function main(t: reflect.Type) -> unknown {
     Holder<unreflect(t)> { label: "h" }
 }
 "#
@@ -316,7 +458,7 @@ class Boom<T> { payload T }
 
 function risky<T>(v: T) -> int throws Boom<T> { throw Boom<T> { payload: v } }
 
-function main(t: type) -> unknown { risky<unreflect(t)>(1) }
+function main(t: reflect.Type) -> unknown { risky<unreflect(t)>(1) }
 "#,
     );
 }
@@ -338,7 +480,7 @@ function risky<T>(v: T, fail: bool) -> int {
     0
 }
 
-function main(t: type) -> unknown { risky<unreflect(t)>(1, true) }
+function main(t: reflect.Type) -> unknown { risky<unreflect(t)>(1, true) }
 "#,
     );
 }
@@ -357,24 +499,24 @@ function risky<T>(v: T, fail: bool) -> int {
     0
 }
 
-function main(t: type) -> unknown { risky<unreflect(t)>(1, true) }
+function main(t: reflect.Type) -> unknown { risky<unreflect(t)>(1, true) }
 "#
         ),
         @"
     E0168
 
       × this runtime type must be given a name before it can be used here
-       ╭─[test.baml:9:43]
-     9 │ function main(t: type) -> unknown { risky<unreflect(t)>(1, true) }
-       ·                                           ──────┬─────
-       ·                                                 ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the error this call can throw would still need it afterwards
+       ╭─[test.baml:9:51]
+     9 │ function main(t: reflect.Type) -> unknown { risky<unreflect(t)>(1, true) }
+       ·                                                   ──────┬─────
+       ·                                                         ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the error this call can throw would still need it afterwards
        ╰────
       ╰─▶   ☞ name the type first, then use the name:
             │     type Out = unreflect(t);
             │     risky<Out>(1, true)
-             ╭─[test.baml:9:43]
-           9 │ function main(t: type) -> unknown { risky<unreflect(t)>(1, true) }
-             ·                                           ────────────
+             ╭─[test.baml:9:51]
+           9 │ function main(t: reflect.Type) -> unknown { risky<unreflect(t)>(1, true) }
+             ·                                                   ────────────
              ╰────
     "
     );
@@ -390,7 +532,7 @@ class Boom<T> { payload T }
 
 function risky<T>(v: T) -> int throws Boom<T> { throw Boom<T> { payload: v } }
 
-function main(t: type) -> unknown {
+function main(t: reflect.Type) -> unknown {
     risky<unreflect(t)>(1) catch (e) { _ => 0 }
 }
 "#,
@@ -411,7 +553,7 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
+function main(t: reflect.Type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
 "#,
     );
 }
@@ -429,7 +571,7 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, s: Source?) -> unknown {
+function main(t: reflect.Type, s: Source?) -> unknown {
     s?.again().pick<unreflect(t)>(1)
 }
 "#,
@@ -446,7 +588,7 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, xs: Source[]?) -> unknown {
+function main(t: reflect.Type, xs: Source[]?) -> unknown {
     xs?.[0].pick<unreflect(t)>(1)
 }
 "#,
@@ -466,7 +608,7 @@ class Source {
     function wrapit<T>(self, v: T) -> Wrapper<T> throws never { Wrapper<T> { inner: v } }
 }
 
-function main(t: type, s: Source?) -> unknown { s?.wrapit<unreflect(t)>(1) }
+function main(t: reflect.Type, s: Source?) -> unknown { s?.wrapit<unreflect(t)>(1) }
 "#,
     );
 }
@@ -483,24 +625,24 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
+function main(t: reflect.Type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
 "#
         ),
         @"
     E0168
 
       × this runtime type must be given a name before it can be used here
-       ╭─[test.baml:6:57]
-     6 │ function main(t: type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
-       ·                                                         ──────┬─────
-       ·                                                               ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the value this expression creates would still need it afterwards
+       ╭─[test.baml:6:65]
+     6 │ function main(t: reflect.Type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
+       ·                                                                 ──────┬─────
+       ·                                                                       ╰── a type created at runtime only lasts for one call when written inline with `unreflect(...)`, but the value this expression creates would still need it afterwards
        ╰────
       ╰─▶   ☞ name the type first, then use the name:
             │     type Out = unreflect(t);
             │     s?.pick<Out>(1)
-             ╭─[test.baml:6:57]
-           6 │ function main(t: type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
-             ·                                                         ────────────
+             ╭─[test.baml:6:65]
+           6 │ function main(t: reflect.Type, s: Source?) -> unknown { s?.pick<unreflect(t)>(1) }
+             ·                                                                 ────────────
              ╰────
     "
     );
@@ -520,10 +662,10 @@ fn a_result_that_is_the_parameter_stays_legal() {
 
         function Extract<T>(document: string) -> T {{
             client: DefaultClient
-            prompt: `${{document}} ${{ctx.output_format}}`
+            prompt: `${{document}} ${{ctx.output_format()}}`
         }}
 
-        function main(t: type, document: string) -> unknown throws unknown {{
+        function main(t: reflect.Type, document: string) -> unknown throws unknown {{
             Extract$parse<unreflect(t)>(document)
         }}
         "##
@@ -540,10 +682,10 @@ fn a_result_that_never_mentions_the_parameter_stays_legal() {
 
         function Extract<T>(document: string) -> T {{
             client: DefaultClient
-            prompt: `${{document}} ${{ctx.output_format}}`
+            prompt: `${{document}} ${{ctx.output_format()}}`
         }}
 
-        function main(t: type, document: string) -> string throws unknown {{
+        function main(t: reflect.Type, document: string) -> string throws unknown {{
             Extract$render_prompt<unreflect(t)>(document).text()
         }}
         "##
@@ -562,7 +704,7 @@ function erase<T>(v: T) -> Wrapper<unknown> throws never {
     Wrapper<unknown> { inner: v }
 }
 
-function main(t: type) -> unknown throws unknown { erase<unreflect(t)>(1) }
+function main(t: reflect.Type) -> unknown throws unknown { erase<unreflect(t)>(1) }
 "#,
     );
 }
@@ -578,7 +720,7 @@ class Wrapper<T> { inner T }
 
 function wrap<T>(v: T) -> Wrapper<T> throws never { Wrapper<T> { inner: v } }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: reflect.Type) -> unknown throws unknown {
     type Out = unreflect(t)
     let literal = Holder<Out> { label: "h" }
     let wrapped = wrap<Out>(1)
@@ -598,7 +740,7 @@ fn a_throws_that_is_the_parameter_stays_legal() {
         r#"
 function fail<T>(v: T) -> int throws T { throw v }
 
-function main(t: type) -> unknown { fail<unreflect(t)>(1) }
+function main(t: reflect.Type) -> unknown { fail<unreflect(t)>(1) }
 "#,
     );
 }
@@ -616,7 +758,7 @@ function risky<T>(v: T, fail: bool) -> T throws Boom {
     v
 }
 
-function main(t: type) -> unknown { risky<unreflect(t)>(1, false) }
+function main(t: reflect.Type) -> unknown { risky<unreflect(t)>(1, false) }
 "#,
     );
 }
@@ -633,7 +775,7 @@ class Source {
     function pick<T>(self, v: T) -> T throws never { v }
 }
 
-function main(t: type, s: Source) -> unknown { s?.pick<unreflect(t)>(1) }
+function main(t: reflect.Type, s: Source) -> unknown { s?.pick<unreflect(t)>(1) }
 "#,
     );
 }
@@ -651,7 +793,7 @@ class Source {
     function put<T>(self, v: T) -> bool throws never { true }
 }
 
-function main(t: type, s: Source?) -> unknown { s?.put<unreflect(t)>(1) }
+function main(t: reflect.Type, s: Source?) -> unknown { s?.put<unreflect(t)>(1) }
 "#,
     );
 }
@@ -671,7 +813,7 @@ class Source {
     }
 }
 
-function main(t: type, s: Source?) -> unknown { s?.erase<unreflect(t)>(1) }
+function main(t: reflect.Type, s: Source?) -> unknown { s?.erase<unreflect(t)>(1) }
 "#,
     );
 }
@@ -689,7 +831,7 @@ class Source {
 
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type, s: Source?) -> unknown {
+function main(t: reflect.Type, s: Source?) -> unknown {
     s?.keep(ident<unreflect(t)>(1))
 }
 "#,
@@ -716,7 +858,7 @@ fn spawning_and_awaiting_the_result_stays_legal() {
         r#"
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: reflect.Type) -> unknown throws unknown {
     let running = spawn { ident<unreflect(t)>(1) }
     await running
 }
@@ -734,7 +876,7 @@ class Wrapper<T> { inner T }
 
 function wrap<T>(v: T) -> Wrapper<T> throws never { Wrapper<T> { inner: v } }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: reflect.Type) -> unknown throws unknown {
     let running = spawn { wrap<unreflect(t)>(1) }
     await running
 }
@@ -750,7 +892,7 @@ fn catching_the_result_stays_legal() {
         r#"
 function ident<T>(v: T) -> T throws string { v }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: reflect.Type) -> unknown throws unknown {
     ident<unreflect(t)>(1) catch (e) { _ => 0 }
 }
 "#,
@@ -765,7 +907,7 @@ fn joining_the_result_in_match_arms_stays_legal() {
         r#"
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type, flag: bool) -> unknown throws unknown {
+function main(t: reflect.Type, flag: bool) -> unknown throws unknown {
     match flag {
         true => ident<unreflect(t)>(1),
         false => 0,
@@ -788,10 +930,10 @@ fn a_streaming_call_with_an_inline_runtime_type_is_refused_twice() {
 
         function Extract<T>(document: string) -> T {{
             client: DefaultClient
-            prompt: `${{document}} ${{ctx.output_format}}`
+            prompt: `${{document}} ${{ctx.output_format()}}`
         }}
 
-        function main(t: type, document: string) -> unknown throws unknown {{
+        function main(t: reflect.Type, document: string) -> unknown throws unknown {{
             Extract$stream<unreflect(t)>(document)
         }}
         "##
@@ -810,7 +952,7 @@ fn a_postfix_bang_is_not_a_spelling_this_rule_has_to_cover() {
         r#"
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type) -> unknown throws unknown { ident<unreflect(t)>(1)! }
+function main(t: reflect.Type) -> unknown throws unknown { ident<unreflect(t)>(1)! }
 "#,
         &["E0010"],
     );
@@ -828,7 +970,7 @@ class Point { x int, y int }
 
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: reflect.Type) -> unknown throws unknown {
     Point { ...ident<unreflect(t)>(Point { x: 1, y: 2 }), x: 3 }
 }
 "#,
@@ -846,7 +988,7 @@ fn an_array_spread_is_not_a_spelling_this_rule_has_to_cover() {
         r#"
 function listed<T>(v: T) -> T[] throws never { [v] }
 
-function main(t: type) -> unknown { [...listed<unreflect(t)>(1)] }
+function main(t: reflect.Type) -> unknown { [...listed<unreflect(t)>(1)] }
 "#,
         &["E0010"],
     );
@@ -860,7 +1002,7 @@ fn an_annotated_binding_of_the_result_stays_legal() {
         r#"
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type) -> unknown {
+function main(t: reflect.Type) -> unknown {
     let held: unknown = ident<unreflect(t)>(1)
     held
 }
@@ -876,7 +1018,7 @@ fn collecting_the_result_into_a_literal_stays_legal() {
         r#"
 function ident<T>(v: T) -> T throws never { v }
 
-function main(t: type) -> unknown throws unknown {
+function main(t: reflect.Type) -> unknown throws unknown {
     let collected = [ident<unreflect(t)>(1), ident<unreflect(t)>(2)]
     collected
 }
@@ -922,8 +1064,9 @@ function main() -> int throws unknown { unreflect(3).value }
 /// The refusal is only useful if its suggestion works. This is the ticket's
 /// Agent scenario (the #4501 oracle) rewritten exactly as E0168 spells it: the
 /// same program with `type Out = unreflect(...)` in front and `Out` in the
-/// slots. It compiles, dispatches through `implements Runner<Out>`, and parses
-/// the reflected output type.
+/// spec slot. It compiles, dispatches through the inherent `Agent.run<Out>`,
+/// and parses the reflected output type. (`Agent` itself is no longer
+/// generic, so the spec slot is the only one to name.)
 #[tokio::test]
 async fn applying_the_suggestion_compiles_and_runs() {
     let scenario = |bind: &str, slot: &str| {
@@ -933,16 +1076,16 @@ async fn applying_the_suggestion_compiles_and_runs() {
 
         function DynamicOutput<T>() -> T {{
             client: DefaultClient
-            prompt: `${{ctx.output_format}}`
+            prompt: `${{ctx.output_format()}}`
         }}
 
         function main() -> string throws unknown {{
             let output_type = reflect.class.new("RuntimeOutput", {{
-                "name": type.of<string>(),
+                "name": reflect.Type.of<string>(),
             }}).as_type()
             {bind}
-            let run = ai.Agent<{slot}>.new(
-                client = ProbeClient {{ reply: #"{{"name":"Pixel"}}"# }},
+            let run = ai.Agent.new(
+                client = ProbeClient {{ reply: `{{"name":"Pixel"}}` }},
             ).run(DynamicOutput@spec<{slot}>())
             reflect.class.get_field<string>(run.value, "name")
         }}
@@ -950,7 +1093,7 @@ async fn applying_the_suggestion_compiles_and_runs() {
         )
     };
 
-    assert_escapes(&scenario("", "unreflect(output_type)"), 2);
+    assert_escapes(&scenario("", "unreflect(output_type)"), 1);
 
     // Exactly the rewrite E0168 prints: name the type first, then use the name.
     let applied = scenario("type Out = unreflect(output_type)", "Out");
@@ -983,7 +1126,7 @@ function risky<T>(v: T, fail: bool) -> int throws Boom<T> {{
 }}
 
 function main() -> int{clause} {{
-    let t = type.of<string>()
+    let t = reflect.Type.of<string>()
     {bind}
     risky<{slot}>("x", false)
 }}
@@ -1028,7 +1171,7 @@ fn a_lambda_clause_inside_the_block_is_quoted_as_written() {
             r#"
 class Boom<T> { payload T }
 
-function main(t: type) -> unknown throws never {
+function main(t: reflect.Type) -> unknown throws never {
     type Out = unreflect(t)
     let f = (v: int) -> int throws Boom<Out> { throw "plain" }
     f(1)
@@ -1069,14 +1212,14 @@ class Source {
 function ident<T>(v: T) -> T throws string { v }
 
 function main() -> string throws unknown {
-    let t = type.of<string>()
+    let t = reflect.Type.of<string>()
     let src = Source {}
     let direct = ident<unreflect(t)>("a")
     let awaited = await spawn { ident<unreflect(t)>("b") }
     let caught = ident<unreflect(t)>("c") catch (e) { _ => 0 }
     let collected = [ident<unreflect(t)>("d")]
     let chained = src?.pick<unreflect(t)>("e")
-    `${type.of_value(direct).to_string()} ${type.of_value(awaited).to_string()} ${type.of_value(caught).to_string()} ${type.of_value(collected[0]).to_string()} ${type.of_value(chained).to_string()}`
+    `${reflect.Type.of_value(direct).to_string()} ${reflect.Type.of_value(awaited).to_string()} ${reflect.Type.of_value(caught).to_string()} ${reflect.Type.of_value(collected[0]).to_string()} ${reflect.Type.of_value(chained).to_string()}`
 }
 "#;
     assert_accepted(program);

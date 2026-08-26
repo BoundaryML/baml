@@ -277,7 +277,7 @@ function images_render(
     // The schema block an ordinary client injects is noise for an image
     // endpoint (`Return an image output.` is the only shape it can produce),
     // so the rendered prompt carries the authored text alone.
-    let text = _oai_images_prompt_text(input.prompt(""), journal);
+    let text = _oai_images_prompt_text(input.prompt(ai.internal.build_output_format(input.output_type)), journal);
     let request = OaImagesRequest {
         model: c.model,
         prompt: text,
@@ -331,7 +331,7 @@ function _oai_images_fetch_inline(location: string, fallback_mime: string) -> im
     let response = baml.http.fetch(location) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw ai.errors.NetworkFailure {
+            throw ai.errors.NetworkFailure { status_code: null,
                 provider: "openai-images",
                 detail: `fetching the generated image at ${location} failed: ${e.to_string()}`,
                 raw_body: null,
@@ -339,7 +339,7 @@ function _oai_images_fetch_inline(location: string, fallback_mime: string) -> im
         },
     };
     if (!response.ok()) {
-        throw ai.errors.NetworkFailure {
+        throw ai.errors.NetworkFailure { status_code: null,
             provider: "openai-images",
             detail: `fetching the generated image at ${location} returned HTTP ${response.status_code}`,
             raw_body: null,
@@ -400,7 +400,7 @@ function images_parse(c: root.ImageClient, resp: OaImagesResponse) -> ai.ModelTu
     } else {
         null
     };
-    ai.ModelTurn {
+    ai.ModelTurn { calls: [],
         content: content,
         stop_reason: ai.content.StopReason.Complete,
         usage: usage,
@@ -414,6 +414,12 @@ function images_parse(c: root.ImageClient, resp: OaImagesResponse) -> ai.ModelTu
 // ai.stream.StreamingClient.
 function images_invoke(c: root.ImageClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = images_render(c, input);
-    let resp = ai.wire.send_as<OaImagesResponse>(req, "openai-images");
-    images_parse(c, resp)
+    let sent = ai.wire.send_as_with_wire<OaImagesResponse>(
+        req,
+        "openai-images",
+        c.id(),
+        capture_wire = c.capture_wire,
+    );
+    let turn = images_parse(c, sent.value);
+    ai.ModelTurn { ...turn, calls: [sent.call] }
 }
