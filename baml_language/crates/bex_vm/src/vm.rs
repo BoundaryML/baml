@@ -2309,7 +2309,7 @@ impl BexVm {
             if baml_builtins2::stdlib_package_names().contains(&qtn.package().as_str()) {
                 return self.package(qtn.package());
             }
-            let runtime = current.runtime.as_ref()?;
+            let runtime = current.runtime()?;
             if let Some(dependency) = runtime.dependency_names.get(qtn.package().as_str()) {
                 return self.get_object(*dependency).as_package();
             }
@@ -2526,12 +2526,7 @@ impl BexVm {
         // The head *is* the key: a declaration this package created has an
         // entry, and one it merely imported or composed does not — which is
         // exactly the set that must reuse the created-once value.
-        let ptr = package
-            .runtime
-            .as_ref()?
-            .type_values
-            .get(&head.ptr())
-            .copied()?;
+        let ptr = package.runtime()?.type_values.get(&head.ptr()).copied()?;
         match self.get_object(ptr) {
             Object::Type(value) if &value.ty == ty => Some(ptr),
             _ => None,
@@ -2546,8 +2541,7 @@ impl BexVm {
             unreachable!("runtime owner does not point to Object::Package")
         };
         package
-            .runtime
-            .as_ref()
+            .runtime()
             .and_then(|runtime| runtime.load_global(index.raw()))
             .expect("runtime global index was validated by dynamic link")
     }
@@ -2567,8 +2561,7 @@ impl BexVm {
             unreachable!("runtime owner does not point to Object::Package")
         };
         let runtime = package
-            .runtime
-            .as_ref()
+            .runtime()
             .expect("runtime function owner has a runtime image");
         if runtime.initialized {
             return Err(VmInternalError::StoreGlobalAfterInit);
@@ -2595,8 +2588,7 @@ impl BexVm {
             unreachable!("runtime owner does not point to Object::Package")
         };
         package
-            .runtime
-            .as_ref()
+            .runtime()
             .and_then(|runtime| runtime.objects.get(idx.raw()))
             .copied()
             .expect("runtime object index was validated by dynamic link")

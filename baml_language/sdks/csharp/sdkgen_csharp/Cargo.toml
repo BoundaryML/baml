@@ -11,10 +11,10 @@ repository = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
+baml_artifact = { workspace = true }
 baml_base = { workspace = true }
 baml_codegen_types = { workspace = true }
 bex_vm_types = { workspace = true }
-borsh = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

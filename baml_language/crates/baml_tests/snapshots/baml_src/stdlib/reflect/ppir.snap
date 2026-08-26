@@ -114,9 +114,11 @@ class reflect.errors.CompilationError$stream {
 }
 class reflect.errors.EvaluationError {
   message: string
+  cause: unknown
 }
 class reflect.errors.EvaluationError$stream {
   message: string | null
+  cause: unknown
 }
 class reflect.errors.SessionBusy {
   message: string
@@ -221,6 +223,12 @@ class reflect.Arg$stream {
   name: string | null
   type: unknown
 }
+class reflect.CompileArtifact {
+  _inner: unknown
+}
+class reflect.CompileArtifact$stream {
+  _inner: unknown
+}
 class reflect.Diagnostic {
   code: string
   span: reflect.Span?
@@ -307,11 +315,12 @@ class reflect.WithMeta$stream {
 }
 type reflect.TypeKind = reflect.class.Type | reflect.enum.Type | reflect.union.Type | reflect.literal.Type | reflect.array.Type | reflect.map.Type | reflect.interface.Type | reflect.primitive.Type | reflect.function.Type
 type reflect.TypeKind$stream = reflect.class.Type$stream | reflect.enum.Type$stream | reflect.union.Type$stream | reflect.literal.Type$stream | reflect.array.Type$stream | reflect.map.Type$stream | reflect.interface.Type$stream | reflect.primitive.Type$stream | reflect.function.Type$stream
-function reflect._compile(files: map<string, string>, packages: map<string, reflect.Package>) -> reflect.Package  [builtin]
-function reflect._compile(self: ?, source: string) -> reflect.Package  [builtin]
-function reflect._finish(artifact: reflect.Package, packages: map<string, reflect.Package>) -> reflect.Package  [builtin]
-function reflect._finish(self: ?, artifact: reflect.Package) -> T  [builtin]
+function reflect._compile(files: map<string, string>, packages: map<string, reflect.Package>) -> reflect.CompileArtifact  [builtin]
+function reflect._compile(self: ?, source: string) -> reflect.CompileArtifact  [builtin]
+function reflect._finish(artifact: reflect.CompileArtifact, packages: map<string, reflect.Package>) -> reflect.Package  [builtin]
+function reflect._finish(self: ?, artifact: reflect.CompileArtifact) -> T  [builtin]
 function reflect._new(packages: map<string, reflect.Package>) -> reflect.Session  [builtin]
+function reflect._render_cause(value: unknown) -> string  [builtin]
 function reflect.as_type(self: ?) -> reflect.Type  [missing]
 function reflect.attributes(self: ?) -> reflect.Meta  [expr] {
   { let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() } class_type.meta()
@@ -326,7 +335,7 @@ function reflect.diagnostics(self: ?) -> reflect.Diagnostic[]  [builtin]
 function reflect.diagnostics(self: ?) -> reflect.Diagnostic[]  [builtin]
 function reflect.enums(self: ?) -> map<string, reflect.enum.Type>  [builtin]
 function reflect.eval(self: ?, source: string) -> T  [expr] {
-  { let artifact = self._compile(source) } self._finish(artifact) catch (_) { _ => throw reflect.errors.EvaluationError { message: "session evaluatio..." } }
+  { let artifact = self._compile(source) } self._finish(artifact) catch (cause) { _ => { throw reflect.errors.EvaluationError { message: _render_cause(cause), cause: cause } } }
 }
 function reflect.functions(self: ?) -> map<string, reflect.function.Type>  [builtin]
 function reflect.get(self: ?, name: string) -> T?  [expr] {

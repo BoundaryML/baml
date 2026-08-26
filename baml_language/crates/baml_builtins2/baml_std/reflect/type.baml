@@ -31,8 +31,9 @@ class Type {
     function optional(self) -> reflect.union.Type throws never { $rust_function }
 
     /// Render deterministic canonical BAML source for this definition.
-    //baml:vm
-    function to_baml(self) -> string throws never { $rust_function }
+    /// Non-equivalent declarations with the same display name are rejected.
+    //baml:mut_vm
+    function to_baml(self) -> string throws reflect.errors.CompilationError { $rust_function }
 
     /// Returns the precise kind view of this type value: a freshly
     /// allocated view instance wrapping the receiver in its `_ty` field.

@@ -144,6 +144,9 @@ pub enum TirTypeError {
     /// `escape` picks the note; the headline and the fix are the same either
     /// way.
     RuntimeTypeMustBeNamed { escape: RuntimeTypeEscape },
+    /// `unreflect(...)` in a declaration signature has no executable scope
+    /// in which to allocate its runtime type slot.
+    RuntimeTypeHasNoScope,
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
@@ -944,6 +947,11 @@ impl fmt::Display for TirTypeError {
             TirTypeError::RuntimeTypeMustBeNamed { .. } => {
                 let diagnostic =
                     baml_compiler_diagnostics::runtime_type::runtime_type_must_be_named();
+                f.write_str(diagnostic.message.as_str())
+            }
+            TirTypeError::RuntimeTypeHasNoScope => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::runtime_type_has_no_scope();
                 f.write_str(diagnostic.message.as_str())
             }
             TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
@@ -2204,10 +2212,9 @@ pub fn removed_reflect_spelling(name: &Name) -> Option<TirTypeError> {
         (format!("reflect.Type.{rest}"), true)
     } else if written == "baml.reflect" {
         ("reflect".to_string(), false)
-    } else if let Some(rest) = written.strip_prefix("baml.reflect.") {
-        (format!("reflect.{rest}"), false)
     } else {
-        return None;
+        let rest = written.strip_prefix("baml.reflect.")?;
+        (format!("reflect.{rest}"), false)
     };
     Some(TirTypeError::RemovedReflectSpelling {
         written: name.clone(),

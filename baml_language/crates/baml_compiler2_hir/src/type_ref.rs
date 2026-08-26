@@ -43,6 +43,11 @@ pub struct TypeRef {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeRefKind {
+    /// Runtime type atom. Body-owned stores carry the carrier expression;
+    /// declaration-owned stores leave it absent for the checker diagnostic.
+    Unreflect {
+        operand: Option<baml_compiler2_ast::ExprId>,
+    },
     /// Named type path: `User`, `baml.http.Request`, `Stream<T>`.
     Path {
         segments: Vec<Name>,
@@ -194,6 +199,7 @@ impl std::fmt::Display for TypeRefDisplay<'_> {
 
         let store = self.store;
         match &store[self.id].kind {
+            TypeRefKind::Unreflect { .. } => write!(f, "unreflect(…)"),
             TypeRefKind::Path {
                 segments,
                 generic_args,
@@ -385,6 +391,7 @@ impl TypeRefBuilder {
         let attrs: Box<[Attribute]> = te.kind.attrs().iter().map(Attribute::from).collect();
 
         let kind = match &te.kind {
+            K::Unreflect { operand, .. } => TypeRefKind::Unreflect { operand: *operand },
             K::Path {
                 segments,
                 generic_args,

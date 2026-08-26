@@ -15,12 +15,12 @@ description = "Standalone host binary for packaged BAML programs"
 workspace = true
 
 [dependencies]
+baml_artifact = { workspace = true }
 baml_exec = { workspace = true }
 bex_engine = { workspace = true, default-features = false, features = [ "ring-crypto" ] }
 bex_events = { workspace = true }
 bex_project = { workspace = true, default-features = false, features = [ "ring-crypto" ] }
 sys_native = { workspace = true, default-features = false, features = [ "bundle-http", "ring-crypto" ] }
-borsh = { workspace = true }
 libsui = { workspace = true }
 tokio = { workspace = true, features = [ "rt" ] }
 

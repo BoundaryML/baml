@@ -37,7 +37,7 @@ async fn self_recursive_employee_renders_and_parses() {
             return prompt
                 + "\n<RESULT>" + manager_name
                 + "|" + (pending.resolved() == employee_t.as_type()).to_string()
-                + "|" + baml.json.encode(value)
+                + "|" + baml.json.to_string(value)
         }
         "##
     );

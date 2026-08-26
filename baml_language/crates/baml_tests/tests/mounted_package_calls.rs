@@ -156,7 +156,8 @@ fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
         ),
         "canonical PPIR companions must be part of the mounted export surface"
     );
-    let blob = borsh::to_vec(iface).expect("serialize app interface");
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, iface)
+        .expect("serialize app interface");
 
     let units = emit_units(&db, &compile_options(), OPT).expect("library fixture emits units");
     (blob, units)
@@ -168,7 +169,8 @@ fn consumer_program(user_src: &str) -> Program {
     let (blob, lib_units) = compile_library();
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new("/mounted-calls"));
-    db.set_mounted_packages([("app".to_string(), blob)].into());
+    db.set_mounted_packages([("app".to_string(), blob)].into())
+        .unwrap();
     db.file("main.baml", user_src);
     assert_no_diagnostic_errors(&db);
 
@@ -410,7 +412,8 @@ fn mounted_stream_companion_supports_consumer_llm_expansion() {
     let (blob, _) = compile_library();
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new("/mounted-calls"));
-    db.set_mounted_packages([("app".to_string(), blob)].into());
+    db.set_mounted_packages([("app".to_string(), blob)].into())
+        .unwrap();
     db.file(
         "main.baml",
         r##"
@@ -519,11 +522,13 @@ function intrinsic_type<T>() -> reflect.Type throws never {
     );
     assert_no_diagnostic_errors(&lib_db);
     let iface = package_interface(&lib_db, PackageId::new(&lib_db, Name::new("app")));
-    let blob = borsh::to_vec(iface).expect("serialize builtin app interface");
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, iface)
+        .expect("serialize builtin app interface");
 
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new("/mounted-calls"));
-    db.set_mounted_packages([("app".to_string(), blob)].into());
+    db.set_mounted_packages([("app".to_string(), blob)].into())
+        .unwrap();
     db.file(
         "main.baml",
         r#"

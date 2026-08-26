@@ -40,20 +40,64 @@ pub struct Package {
     /// `Object::TypeAlias`. Non-recursive aliases are expanded at lowering and
     /// never reach here.
     pub type_aliases: IndexMap<LocalName, HeapPtr>,
-    /// Enriched, source-less compiler interface for mounting this package under
-    /// an alias in a later `Package.compile` call.
+    /// Versioned artifact containing the enriched, source-less compiler
+    /// interface for mounting this package under an alias in a later
+    /// `Package.compile` call.
     pub interface_blob: Vec<u8>,
     /// Compiler-synthesized test registrar for this package, when it has tests.
     pub test_init: Option<HeapPtr>,
     /// Exact runtime type values attached by `Package.with_types`.
     #[borsh(skip)]
     pub mounted_types: IndexMap<String, HeapPtr>,
-    /// Present only for a package produced by `reflect.Package.compile`.
+    /// Runtime-only state, discriminated so a package cannot be both an
+    /// ordinary runtime package and a Session (or a Session without an image).
     #[borsh(skip)]
-    pub runtime: Option<Box<RuntimePackage>>,
-    /// Present only for the package-shaped payload owned by a Session.
-    #[borsh(skip)]
-    pub session: Option<Box<SessionState>>,
+    pub kind: PackageKind,
+}
+
+/// The three legal runtime shapes of a [`Package`].
+#[derive(Clone, Debug, Default)]
+pub enum PackageKind {
+    /// A package loaded from the serialized program image.
+    #[default]
+    Static,
+    /// A package produced by `reflect.Package.compile`.
+    Runtime(Box<RuntimePackage>),
+    /// The package-shaped runtime image and persistent state owned by a Session.
+    Session {
+        runtime: Box<RuntimePackage>,
+        state: Box<SessionState>,
+    },
+}
+
+impl Package {
+    pub fn runtime(&self) -> Option<&RuntimePackage> {
+        match &self.kind {
+            PackageKind::Static => None,
+            PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => Some(runtime),
+        }
+    }
+
+    pub fn runtime_mut(&mut self) -> Option<&mut RuntimePackage> {
+        match &mut self.kind {
+            PackageKind::Static => None,
+            PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => Some(runtime),
+        }
+    }
+
+    pub fn session(&self) -> Option<&SessionState> {
+        match &self.kind {
+            PackageKind::Session { state, .. } => Some(state),
+            PackageKind::Static | PackageKind::Runtime(_) => None,
+        }
+    }
+
+    pub fn session_mut(&mut self) -> Option<&mut SessionState> {
+        match &mut self.kind {
+            PackageKind::Session { state, .. } => Some(state),
+            PackageKind::Static | PackageKind::Runtime(_) => None,
+        }
+    }
 }
 
 /// Compiler-free persistent state of one `reflect.Session`.
@@ -102,7 +146,8 @@ pub struct RuntimePackage {
     pub dependency_names: IndexMap<String, HeapPtr>,
     /// The candidate `$init`, if one exists.
     pub init: Option<HeapPtr>,
-    /// False while `$init` may write package globals; true after commit.
+    /// False while `$init` may write package globals; true after commit. A
+    /// Session keeps this false because its globals remain mutable across evals.
     pub initialized: bool,
 }
 
@@ -130,19 +175,19 @@ pub struct ProgramPackage {
     /// Implemented-interface `ObjectIndex` → the impl rules of it declared in
     /// this package (may target an interface from a dependency).
     pub impl_rules: IndexMap<ObjectIndex, Vec<ProgramImplRule>>,
-    /// `borsh(PackageInterface)`, captured at build time and embedded in packs.
+    /// Recursive type aliases defined in the package.
     pub type_aliases: IndexMap<LocalName, ObjectIndex>,
-    /// `borsh(PackageInterface)`, captured at build time and embedded in packs.
+    /// Versioned `PackageInterface` artifact captured at build time and
+    /// embedded in generated programs.
     pub interface_blob: Vec<u8>,
     /// The package's synthesized `$init_test`, if present.
     pub test_init: Option<ObjectIndex>,
 }
 
 impl ProgramPackage {
-    /// Sort every per-kind map and each impl-rule list into the content-determined
-    /// order the serialized `Program` requires, so the bytes are reproducible
-    /// regardless of the source maps' iteration order (`type_aliases` in
-    /// particular is sourced from a per-process-seeded `std::HashMap`).
+    /// Canonicalize implementation rules, whose source tables do not carry a
+    /// user-observable declaration order. Declaration maps deliberately keep
+    /// the deterministic source order established by the compiler pipeline.
     ///
     /// Impl rules key on their rendered `for_ty_pattern`; that `Display` drops
     /// module paths, so `{:?}` (module-qualified identity) breaks ties, and the
@@ -152,14 +197,7 @@ impl ProgramPackage {
     ///
     /// The full-compile emit and the incremental linker both apply this so their
     /// `Program`s stay byte-identical.
-    pub fn sort_maps(&mut self) {
-        self.exported_names.sort();
-        self.exported_names.dedup();
-        self.classes.sort_keys();
-        self.enums.sort_keys();
-        self.type_aliases.sort_keys();
-        self.interfaces.sort_keys();
-        self.functions.sort_keys();
+    pub fn canonicalize_impl_rules(&mut self) {
         self.impl_rules.sort_keys();
         for rules in self.impl_rules.values_mut() {
             rules.sort_by_cached_key(|rule| {
@@ -186,7 +224,7 @@ pub struct ProgramImplRule {
     pub methods: IndexMap<Name, ProgramMethodImpl>,
     /// See [`RuntimeImplRule::field_links`](super::RuntimeImplRule::field_links).
     /// Positional, so — unlike the name-keyed maps — it needs no canonical ordering
-    /// pass in [`ProgramPackage::sort_maps`].
+    /// pass in [`ProgramPackage::canonicalize_impl_rules`].
     pub field_links: Box<[u32]>,
 }
 

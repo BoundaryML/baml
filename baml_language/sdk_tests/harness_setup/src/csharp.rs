@@ -119,7 +119,8 @@ fn generate_fixture(
     );
 
     let symbols = baml_ide::build_symbol_pool(&db);
-    let bytecode = borsh::to_vec(
+    let bytecode = baml_artifact::encode(
+        baml_artifact::ArtifactKind::Program,
         &db.get_bytecode()
             .unwrap_or_else(|error| panic!("C# bytecode compilation failed: {error:?}")),
     )

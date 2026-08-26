@@ -111,7 +111,6 @@ function promptast_accessors.pa_message_metadata_survives_assembly() -> string {
     load_field .role
     call baml.String.from
     store_var _24
-    load_type map<string, baml.json.json>
     load_var m
     load_field .metadata
     call baml.json.to_json

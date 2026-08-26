@@ -238,7 +238,7 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
     let program = db
         .get_bytecode()
         .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode compilation failed: {e:?}"));
-    let baml_bytecode = borsh::to_vec(&program)
+    let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)
         .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode serialization failed: {e}"));
     let user_baml_files: Vec<UserBamlFile> = source_files
         .iter()

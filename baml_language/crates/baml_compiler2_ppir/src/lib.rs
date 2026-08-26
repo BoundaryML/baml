@@ -25,6 +25,7 @@ use baml_compiler2_hir::{
     semantic_index::FileSemanticIndex,
 };
 pub use expand::{ExpandCtx, SapAttrs, expand_partial, stream_expand};
+use indexmap::{IndexMap, IndexSet};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 use text_size::TextRange;
@@ -1007,8 +1008,8 @@ pub fn namespace_items<'db>(
     matching_files.sort_by_key(|a| a.path(db));
 
     // Uses PPIR's file_symbol_contributions (canonical, includes *$stream types).
-    let mut type_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();
-    let mut value_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();
+    let mut type_defs: IndexMap<Name, Vec<Contribution<'db>>> = IndexMap::new();
+    let mut value_defs: IndexMap<Name, Vec<Contribution<'db>>> = IndexMap::new();
 
     for file in &matching_files {
         let contributions = file_symbol_contributions(db, *file);
@@ -1020,8 +1021,8 @@ pub fn namespace_items<'db>(
         }
     }
 
-    let mut types: FxHashMap<Name, Definition<'db>> = FxHashMap::default();
-    let mut values: FxHashMap<Name, Definition<'db>> = FxHashMap::default();
+    let mut types: IndexMap<Name, Definition<'db>> = IndexMap::new();
+    let mut values: IndexMap<Name, Definition<'db>> = IndexMap::new();
     let mut conflicts: Vec<NameConflict<'db>> = Vec::new();
 
     for (name, contribs) in type_defs {
@@ -1079,16 +1080,13 @@ pub fn package_items<'db>(db: &'db dyn Db, package_id: PackageId<'db>) -> Packag
     // discovery must not inherit `HashSet`'s per-process randomized order.
     // Discovery reads only the package's own roots ([`package_files`]), so
     // edits to another root's file set never invalidate this fold.
-    let mut ns_paths: Vec<Vec<Name>> = Vec::new();
+    let mut ns_paths: IndexSet<Vec<Name>> = IndexSet::new();
     for file in baml_compiler2_hir::package::package_files(db, package_id) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
         debug_assert_eq!(pkg_info.package, *package_name);
-        ns_paths.push(pkg_info.namespace_path.clone());
+        ns_paths.insert(pkg_info.namespace_path.clone());
     }
-    ns_paths.sort();
-    ns_paths.dedup();
-
-    let mut namespaces: FxHashMap<Vec<Name>, NamespaceItems<'db>> = FxHashMap::default();
+    let mut namespaces: IndexMap<Vec<Name>, NamespaceItems<'db>> = IndexMap::new();
     let mut all_conflicts: Vec<NameConflict<'db>> = Vec::new();
     for ns_path in ns_paths {
         let ns_id = NamespaceId::new(db, package_name.clone(), ns_path.clone());

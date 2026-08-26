@@ -348,6 +348,19 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
+    fn walk_type_operands(
+        &mut self,
+        ty: &ast::TypeExpr,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) {
+        let mut operands = Vec::new();
+        ty.unreflect_operands(&mut operands);
+        for operand in operands {
+            self.walk_expr(operand, body, source_map, true);
+        }
+    }
+
     /// Walk an `ExprBody` arena in source order, recording expression ownership
     /// and local bindings in the lexical scope that owns each expression.
     fn walk_expr_body(&mut self, body: &ast::ExprBody, source_map: &ast::AstSourceMap) {
@@ -434,7 +447,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         match &body.stmts[stmt_id] {
             ast::Stmt::Expr(expr) => self.walk_expr(*expr, body, source_map, true),
             ast::Stmt::TypeBinding { value, .. } => {
-                self.walk_expr(*value, body, source_map, true);
+                self.walk_type_operands(value, body, source_map);
             }
             ast::Stmt::Let {
                 pattern,
@@ -610,9 +623,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::Expr::Match {
-                scrutinee, arms, ..
+                scrutinee,
+                scrutinee_type,
+                arms,
             } => {
                 self.walk_expr(*scrutinee, body, source_map, true);
+                if let Some(type_id) = scrutinee_type {
+                    self.walk_type_operands(&body.type_annotations[*type_id], body, source_map);
+                }
                 for &arm_id in arms {
                     self.walk_match_arm(arm_id, body, source_map);
                 }
@@ -697,9 +715,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             } => {
                 self.walk_expr(*callee, body, source_map, true);
                 for type_arg in type_args {
-                    if let ast::TypeArg::Unreflect(operand) = type_arg {
-                        self.walk_expr(*operand, body, source_map, true);
-                    }
+                    self.walk_type_operands(type_arg, body, source_map);
                 }
                 for arg in args {
                     self.walk_expr(arg.expr, body, source_map, true);
@@ -712,8 +728,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::Expr::Object {
-                fields, spreads, ..
+                type_args,
+                fields,
+                spreads,
+                ..
             } => {
+                for type_arg in type_args {
+                    self.walk_type_operands(type_arg, body, source_map);
+                }
                 for field in fields {
                     self.walk_expr(field.value, body, source_map, true);
                 }
@@ -732,10 +754,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_expr(entry.value, body, source_map, true);
                 }
             }
-            ast::Expr::MemberAccess { base, .. }
-            | ast::Expr::Upcast { base, .. }
-            | ast::Expr::OptionalMemberAccess { base, .. } => {
+            ast::Expr::MemberAccess { base, .. } | ast::Expr::OptionalMemberAccess { base, .. } => {
                 self.walk_expr(*base, body, source_map, true);
+            }
+            ast::Expr::Upcast { base, target } => {
+                self.walk_expr(*base, body, source_map, true);
+                self.walk_type_operands(target, body, source_map);
             }
             ast::Expr::Index { base, index } | ast::Expr::OptionalIndex { base, index } => {
                 self.walk_expr(*base, body, source_map, true);
@@ -749,21 +773,27 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.resolve_path_expr(expr_id, root, use_scope, use_offset);
                 }
             }
-            ast::Expr::GenericApply { base, .. } => {
+            ast::Expr::GenericApply { base, type_args } => {
                 // `foo<int>` references the base callable; walk it so the path
                 // root is recorded for name resolution. Type args are types,
                 // not value references, so they need no walking here.
                 self.walk_expr(*base, body, source_map, true);
+                for type_arg in type_args {
+                    self.walk_type_operands(type_arg, body, source_map);
+                }
             }
             ast::Expr::Literal(_)
             | ast::Expr::ByteStringLiteral(_)
             | ast::Expr::Null
             | ast::Expr::Block { .. }
-            // Both halves are TYPES, so a qualified item reference opens no
-            // scope and names no local: nothing here to walk or resolve.
-            | ast::Expr::QualifiedPath { .. }
             | ast::Expr::Lambda(_)
             | ast::Expr::Missing => {}
+            ast::Expr::QualifiedPath {
+                qself, interface, ..
+            } => {
+                self.walk_type_operands(qself, body, source_map);
+                self.walk_type_operands(interface, body, source_map);
+            }
         }
     }
 
@@ -898,6 +928,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         source_map: &ast::AstSourceMap,
     ) {
         match &body.patterns[pat_id] {
+            ast::Pattern::Type(ty) => self.walk_type_operands(ty, body, source_map),
             ast::Pattern::Unreflect(operand) => {
                 self.walk_expr(*operand, body, source_map, true);
             }
@@ -906,7 +937,18 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_pattern_expressions(*subpat, body, source_map);
                 }
             }
-            ast::Pattern::Class { fields, .. } => {
+            ast::Pattern::Class {
+                generic_args,
+                associated_type_bindings,
+                fields,
+                ..
+            } => {
+                for ty in generic_args {
+                    self.walk_type_operands(ty, body, source_map);
+                }
+                for binding in associated_type_bindings {
+                    self.walk_type_operands(&binding.ty, body, source_map);
+                }
                 for field in fields {
                     self.walk_pattern_expressions(field.pat, body, source_map);
                 }
@@ -915,8 +957,11 @@ impl<'db> SemanticIndexBuilder<'db> {
                 prefix,
                 rest,
                 suffix,
-                ..
+                ascription,
             } => {
+                if let Some(ty) = ascription {
+                    self.walk_type_operands(ty, body, source_map);
+                }
                 for pattern in prefix {
                     self.walk_pattern_expressions(*pattern, body, source_map);
                 }
@@ -932,7 +977,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_pattern_expressions(*pattern, body, source_map);
                 }
             }
-            ast::Pattern::Wildcard | ast::Pattern::Type(_) => {}
+            ast::Pattern::Wildcard => {}
         }
     }
 
@@ -1221,6 +1266,20 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.emit_duplicate_param_diagnostics(&lambda.params);
         self.lambda_stack.push(scope_id);
         self.walk_parameter_defaults(&lambda.params, &lambda.defaults);
+
+        let metadata_scope = ExprMetadataScope::Body(scope_id);
+        self.expr_metadata_scope_stack.push(metadata_scope);
+        for param in &lambda.params {
+            if let Some(ty) = &param.type_expr {
+                self.walk_type_operands(ty, body, source_map);
+            }
+        }
+        if let Some(ty) = &lambda.return_type {
+            self.walk_type_operands(ty, body, source_map);
+        }
+        if let Some(ty) = &lambda.throws {
+            self.walk_type_operands(ty, body, source_map);
+        }
         if let Some(lambda_body) = lambda.body {
             // The body shares this arena, but it still gets its own metadata
             // namespace keyed by the lambda's scope. That keeps HIR agreeing
@@ -1229,13 +1288,11 @@ impl<'db> SemanticIndexBuilder<'db> {
             // mismatch here does not fail loudly: `path_resolution` simply
             // misses, flow narrowing silently stops inside every lambda, and
             // reconstructed closure signatures silently degrade to `unknown`.
-            let metadata_scope = ExprMetadataScope::Body(scope_id);
-            self.expr_metadata_scope_stack.push(metadata_scope);
             self.walk_expr(lambda_body, body, source_map, false);
-            let popped = self.expr_metadata_scope_stack.pop();
-            debug_assert_eq!(popped, Some(metadata_scope));
             self.analyze_lambda_captures(scope_id, body, source_map);
         }
+        let popped = self.expr_metadata_scope_stack.pop();
+        debug_assert_eq!(popped, Some(metadata_scope));
         self.lambda_stack.pop();
         self.pop_scope();
     }
@@ -2415,6 +2472,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn render_type_expr(type_expr: &ast::TypeExpr) -> String {
         match &type_expr.kind {
+            ast::TypeExprKind::Unreflect { .. } => "unreflect(…)".to_string(),
             ast::TypeExprKind::Path { segments, .. } => segments
                 .iter()
                 .map(Name::as_str)

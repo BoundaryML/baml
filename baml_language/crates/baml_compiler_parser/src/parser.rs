@@ -694,10 +694,13 @@ impl<'a> Parser<'a> {
                 // (see `kind_can_end_projection_self`). Without the gate,
                 // expressions like `(as).x` or `(1 + as).x` — where `as` is a
                 // variable — would be hijacked into the projection parse.
-                TokenKind::Word if token.text == "as" && paren_depth == 1 && angle_depth == 0 => {
-                    if previous_significant.is_some_and(Self::kind_can_end_projection_self) {
-                        saw_as = true;
-                    }
+                TokenKind::Word
+                    if token.text == "as"
+                        && paren_depth == 1
+                        && angle_depth == 0
+                        && previous_significant.is_some_and(Self::kind_can_end_projection_self) =>
+                {
+                    saw_as = true;
                 }
                 _ => {}
             }
@@ -2975,6 +2978,27 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_type_primary(&mut self, consume_union: bool) {
+        // `unreflect(expr)` is a type atom. Its legality is deliberately not
+        // a grammar decision: body positions lower it to a scoped runtime
+        // binding, while declaration signatures diagnose it in the checker.
+        if self.at_contextual_kw("unreflect")
+            && self
+                .peek(1)
+                .is_some_and(|token| token.kind == TokenKind::LParen)
+        {
+            self.with_node(SyntaxKind::UNREFLECT_TYPE, |p| {
+                p.bump();
+                p.expect(TokenKind::LParen);
+                if p.at(TokenKind::RParen) {
+                    p.error_here("`unreflect` requires an operand".to_string());
+                } else {
+                    p.parse_expr();
+                }
+                p.expect(TokenKind::RParen);
+            });
+            return;
+        }
+
         // Function values cannot declare their own generic parameters, so a
         // leading `<...>` on a function type is rejected. Recover by consuming the
         // list and parsing the `(...) -> R` so the rest of the file still parses.
@@ -4587,14 +4611,7 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("type binding name".to_string());
             }
             p.expect(TokenKind::Equals);
-            if p.at_contextual_kw("unreflect") {
-                p.bump();
-            } else {
-                p.error_unexpected_token("'unreflect'".to_string());
-            }
-            p.expect(TokenKind::LParen);
-            p.parse_expr();
-            p.expect(TokenKind::RParen);
+            p.parse_type();
             p.eat(TokenKind::Semicolon);
         });
     }
@@ -5063,22 +5080,6 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        if self.at_contextual_kw("unreflect")
-            && self
-                .peek(1)
-                .is_some_and(|token| token.kind == TokenKind::LParen)
-        {
-            self.with_node(SyntaxKind::UNREFLECT_PATTERN, |p| {
-                p.bump();
-                p.expect(TokenKind::LParen);
-                if !p.at(TokenKind::RParen) {
-                    p.parse_expr();
-                }
-                p.expect(TokenKind::RParen);
-            });
-            return;
-        }
-
         if self.at(TokenKind::LBracket) {
             // Arrays use `[` / `]` so the closing bracket terminates the
             // atom cleanly — sub-patterns inside should regain normal
@@ -5293,6 +5294,35 @@ impl<'a> Parser<'a> {
         let mut depth: i32 = 1;
         let mut i = self.skip_trivia_and_comments_from(start + 1);
         while i < self.tokens.len() {
+            // Runtime type operands are arbitrary expressions. Treat their
+            // balanced parentheses as opaque so comparisons inside the
+            // operand cannot perturb the surrounding generic-argument depth.
+            if self.tokens[i].kind == TokenKind::Word && self.tokens[i].text == "unreflect" {
+                let after_word = self.skip_trivia_and_comments_from(i + 1);
+                if self.tokens.get(after_word).map(|token| token.kind) == Some(TokenKind::LParen) {
+                    let mut paren_depth = 1_u32;
+                    let mut j = self.skip_trivia_and_comments_from(after_word + 1);
+                    while let Some(token) = self.tokens.get(j) {
+                        match token.kind {
+                            TokenKind::LParen => paren_depth += 1,
+                            TokenKind::RParen => {
+                                paren_depth -= 1;
+                                if paren_depth == 0 {
+                                    j += 1;
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                        j = self.skip_trivia_and_comments_from(j + 1);
+                    }
+                    if paren_depth != 0 {
+                        return None;
+                    }
+                    i = self.skip_trivia_and_comments_from(j);
+                    continue;
+                }
+            }
             match self.tokens[i].kind {
                 TokenKind::Less => depth += 1,
                 TokenKind::Greater => {
@@ -7130,14 +7160,14 @@ impl<'a> Parser<'a> {
 
             // Parse first type argument
             if !p.at(TokenKind::Greater) && !p.at(TokenKind::GreaterGreater) {
-                p.parse_generic_arg();
+                p.parse_type();
 
                 // Parse remaining type arguments
                 while p.eat(TokenKind::Comma) {
                     if p.at(TokenKind::Greater) || p.at(TokenKind::GreaterGreater) {
                         break; // Trailing comma
                     }
-                    p.parse_generic_arg();
+                    p.parse_type();
                 }
             }
 
@@ -7164,26 +7194,6 @@ impl<'a> Parser<'a> {
             }
             self.pending_greaters = 0;
             self.pending_greater_span = None;
-        }
-    }
-
-    /// Parse one call-site generic argument. `unreflect` remains an ordinary
-    /// identifier everywhere else; only the exact `unreflect(` shape in this
-    /// position activates the marker.
-    fn parse_generic_arg(&mut self) {
-        if self.at_contextual_kw("unreflect")
-            && self.peek(1).is_some_and(|t| t.kind == TokenKind::LParen)
-        {
-            self.with_node(SyntaxKind::UNREFLECT_ARG, |p| {
-                p.bump();
-                p.expect(TokenKind::LParen);
-                if !p.at(TokenKind::RParen) {
-                    p.parse_expr();
-                }
-                p.expect(TokenKind::RParen);
-            });
-        } else {
-            self.parse_type();
         }
     }
 
@@ -8357,28 +8367,13 @@ impl<'a> Parser<'a> {
             // Equals
             p.expect(TokenKind::Equals);
 
-            let runtime_binding = p.at_contextual_kw("unreflect")
-                && p.peek(1).map(|token| token.kind) == Some(TokenKind::LParen);
-            if runtime_binding {
-                p.error_here(
-                    "runtime type bindings are only allowed inside a function, lambda, or block"
-                        .to_string(),
-                );
-                // Consume the runtime operand as an expression so the explicit
-                // placement diagnostic does not cascade into unrelated
-                // top-level parse errors.
-                p.bump();
-                p.expect(TokenKind::LParen);
-                p.parse_expr();
-                p.expect(TokenKind::RParen);
-            } else {
-                // Type definition
-                p.parse_type();
+            // Type definition. Runtime type atoms are accepted here too; the
+            // declaration checker reports that they have no lexical scope.
+            p.parse_type();
 
-                // Optional attributes (not including those taken by the type)
-                while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                    p.parse_at_attribute();
-                }
+            // Optional attributes (not including those taken by the type)
+            while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
+                p.parse_at_attribute();
             }
 
             // Optional semicolon
@@ -8670,14 +8665,40 @@ mod tests {
     }
 
     #[test]
-    fn top_level_runtime_type_binding_has_an_explicit_diagnostic() {
+    fn top_level_runtime_type_atom_parses_for_checker_diagnostics() {
         let source = "type T = unreflect(reflect.Type.of<string>())\n";
-        let (_root, errors) = parse_source(source);
-        assert!(errors.iter().any(|error| matches!(
-            error,
-            ParseError::InvalidSyntax { message, .. }
-                if message.contains("runtime type bindings are only allowed inside")
-        )));
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
+                .count(),
+            1,
+        );
+    }
+
+    #[test]
+    fn empty_unreflect_operand_reports_one_targeted_error() {
+        let source = "type T = unreflect()\n";
+        let (root, errors) = parse_source(source);
+        assert_eq!(
+            errors.len(),
+            1,
+            "empty unreflect must not cause a parse-error cascade: {errors:#?}"
+        );
+        assert!(
+            matches!(
+                &errors[0],
+                ParseError::InvalidSyntax { message, .. }
+                    if message == "`unreflect` requires an operand"
+            ),
+            "expected a targeted empty-unreflect diagnostic, got: {errors:#?}"
+        );
+        assert_eq!(
+            root.text().to_string(),
+            source,
+            "recovery must stay lossless"
+        );
     }
 
     /// Parsing must stay lossless: the original source — shebang included —
@@ -10888,6 +10909,31 @@ function Demo() -> int {
                 .descendants()
                 .all(|n| n.kind() != SyntaxKind::BINDING_PATTERN),
             "bare identifier should NOT produce a BINDING_PATTERN"
+        );
+    }
+
+    #[test]
+    fn destructure_generic_lookahead_ignores_unreflect_operand_comparisons() {
+        let source = r#"
+function Demo(x: unknown, a: int, b: int) -> bool {
+  match x {
+    Wrapper<unreflect(a < b && true)> { value } => true,
+    _ => false,
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let first_arm = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::MATCH_ARM)
+            .expect("first match arm");
+        assert!(
+            first_arm
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::DESTRUCTURE_PATTERN),
+            "generic class pattern should retain its trailing destructure"
         );
     }
 

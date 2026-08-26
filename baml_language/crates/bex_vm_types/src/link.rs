@@ -1115,8 +1115,8 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     // ---- Package merge (design §3b step 5) ----------------------------------
     // Each package's fragment is carried by exactly one unit (its first unit).
     // Merge every fragment into the image's `packages`, resolving each symbolic
-    // fully-qualified name to an absolute object index, then re-sort exactly as
-    // `build_packages` does so the serialized order is content-determined.
+    // fully-qualified name to an absolute object index, then canonicalize the
+    // implementation-rule tables exactly as `build_packages` does.
     for unit in units {
         merge_package_fragment(
             &mut program,
@@ -1227,14 +1227,12 @@ fn merge_package_fragment(
     Ok(())
 }
 
-/// Re-sort every per-package map and the top-level `packages` map exactly as the
-/// full compile's `build_packages` tail does, so the serialized order is
-/// content-determined regardless of merge order. Per-package sorting is shared
-/// with the full compile through [`ProgramPackage::sort_maps`] so the two paths
-/// cannot drift.
+/// Canonicalize implementation rules exactly as the full compile's
+/// `build_packages` tail does. Declaration maps retain the fragment's source
+/// order; the top-level package map remains content-sorted.
 fn sort_packages(program: &mut Program) {
     for pkg in program.packages.values_mut() {
-        pkg.sort_maps();
+        pkg.canonicalize_impl_rules();
     }
     program.packages.sort_keys();
 }

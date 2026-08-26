@@ -20,7 +20,7 @@
 use std::collections::HashSet;
 
 use crate::ast::{
-    Expr, ExprBody, ExprId, PatId, Pattern, Stmt, StmtId, TemplateSegment, TemplateTag, TypeArg,
+    Expr, ExprBody, ExprId, PatId, Pattern, Stmt, StmtId, TemplateSegment, TemplateTag,
 };
 
 /// A direct child of an expression or statement.
@@ -28,6 +28,12 @@ use crate::ast::{
 pub enum BodyNode {
     Expr(ExprId),
     Stmt(StmtId),
+}
+
+fn append_type_operands(ty: &crate::ast::TypeExpr, out: &mut Vec<BodyNode>) {
+    let mut operands = Vec::new();
+    ty.unreflect_operands(&mut operands);
+    out.extend(operands.into_iter().map(BodyNode::Expr));
 }
 
 impl ExprBody {
@@ -43,15 +49,39 @@ impl ExprBody {
             | Expr::ByteStringLiteral(_)
             | Expr::Null
             | Expr::Path(_)
-            // Both halves of a qualified item reference are TYPES, so the
-            // node has no expression children to walk.
-            | Expr::QualifiedPath { .. }
-            | Expr::Lambda(_)
             | Expr::Missing => {}
-            Expr::GenericApply { base, .. }
-            | Expr::MemberAccess { base, .. }
-            | Expr::OptionalMemberAccess { base, .. }
-            | Expr::Upcast { base, .. } => out.push(BodyNode::Expr(*base)),
+            Expr::QualifiedPath {
+                qself, interface, ..
+            } => {
+                append_type_operands(qself, out);
+                append_type_operands(interface, out);
+            }
+            Expr::Lambda(def) => {
+                for param in &def.params {
+                    if let Some(ty) = &param.type_expr {
+                        append_type_operands(ty, out);
+                    }
+                }
+                if let Some(ty) = &def.return_type {
+                    append_type_operands(ty, out);
+                }
+                if let Some(ty) = &def.throws {
+                    append_type_operands(ty, out);
+                }
+            }
+            Expr::GenericApply { base, type_args } => {
+                out.push(BodyNode::Expr(*base));
+                for ty in type_args {
+                    append_type_operands(ty, out);
+                }
+            }
+            Expr::MemberAccess { base, .. } | Expr::OptionalMemberAccess { base, .. } => {
+                out.push(BodyNode::Expr(*base));
+            }
+            Expr::Upcast { base, target } => {
+                out.push(BodyNode::Expr(*base));
+                append_type_operands(target, out);
+            }
             Expr::Unary { expr, .. } | Expr::OptionalChain { expr } => {
                 out.push(BodyNode::Expr(*expr));
             }
@@ -79,9 +109,14 @@ impl ExprBody {
                 out.extend(else_branch.map(BodyNode::Expr));
             }
             Expr::Match {
-                scrutinee, arms, ..
+                scrutinee,
+                scrutinee_type,
+                arms,
             } => {
                 out.push(BodyNode::Expr(*scrutinee));
+                if let Some(type_id) = scrutinee_type {
+                    append_type_operands(&self.type_annotations[*type_id], out);
+                }
                 for arm in arms {
                     let arm = &self.match_arms[*arm];
                     self.pattern_expr_children(arm.pattern, out);
@@ -130,10 +165,9 @@ impl ExprBody {
                 args,
             } => {
                 out.push(BodyNode::Expr(*callee));
-                out.extend(type_args.iter().filter_map(|arg| match arg {
-                    TypeArg::Static(_) => None,
-                    TypeArg::Unreflect(expr) => Some(BodyNode::Expr(*expr)),
-                }));
+                for ty in type_args {
+                    append_type_operands(ty, out);
+                }
                 out.extend(args.iter().map(|arg| BodyNode::Expr(arg.expr)));
             }
             Expr::OptionalCall { callee, args } => {
@@ -141,8 +175,14 @@ impl ExprBody {
                 out.extend(args.iter().map(|arg| BodyNode::Expr(arg.expr)));
             }
             Expr::Object {
-                fields, spreads, ..
+                type_args,
+                fields,
+                spreads,
+                ..
             } => {
+                for ty in type_args {
+                    append_type_operands(ty, out);
+                }
                 out.extend(fields.iter().map(|field| BodyNode::Expr(field.value)));
                 out.extend(spreads.iter().map(|s| BodyNode::Expr(s.expr)));
             }
@@ -187,14 +227,26 @@ impl ExprBody {
     /// `unreflect(expr)` atoms contribute expression children.
     pub fn pattern_expr_children(&self, id: PatId, out: &mut Vec<BodyNode>) {
         match &self.patterns[id] {
-            Pattern::Wildcard | Pattern::Type(_) => {}
+            Pattern::Wildcard => {}
+            Pattern::Type(ty) => append_type_operands(ty, out),
             Pattern::Unreflect(operand) => out.push(BodyNode::Expr(*operand)),
             Pattern::Bind { subpat, .. } => {
                 if let Some(subpat) = subpat {
                     self.pattern_expr_children(*subpat, out);
                 }
             }
-            Pattern::Class { fields, .. } => {
+            Pattern::Class {
+                generic_args,
+                associated_type_bindings,
+                fields,
+                ..
+            } => {
+                for ty in generic_args {
+                    append_type_operands(ty, out);
+                }
+                for binding in associated_type_bindings {
+                    append_type_operands(&binding.ty, out);
+                }
                 for field in fields {
                     self.pattern_expr_children(field.pat, out);
                 }
@@ -203,8 +255,11 @@ impl ExprBody {
                 prefix,
                 rest,
                 suffix,
-                ..
+                ascription,
             } => {
+                if let Some(ty) = ascription {
+                    append_type_operands(ty, out);
+                }
                 for pattern in prefix {
                     self.pattern_expr_children(*pattern, out);
                 }
@@ -227,12 +282,10 @@ impl ExprBody {
     pub fn stmt_children(&self, id: StmtId, out: &mut Vec<BodyNode>) {
         match &self.stmts[id] {
             Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
-            Stmt::Expr(expr)
-            | Stmt::TypeBinding { value: expr, .. }
-            | Stmt::Throw { value: expr }
-            | Stmt::Defer { body: expr } => {
+            Stmt::Expr(expr) | Stmt::Throw { value: expr } | Stmt::Defer { body: expr } => {
                 out.push(BodyNode::Expr(*expr));
             }
+            Stmt::TypeBinding { value, .. } => append_type_operands(value, out),
             Stmt::Return(expr) => out.extend(expr.map(BodyNode::Expr)),
             Stmt::Let {
                 pattern,

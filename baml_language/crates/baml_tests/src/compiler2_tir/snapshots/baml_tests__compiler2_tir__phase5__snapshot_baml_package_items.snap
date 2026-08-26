@@ -200,7 +200,6 @@ namespace baml.json:
   function _path_field
   function _path_index
   function deserialize<T>
-  function encode<T>
   function field
   function from<T>
   function from_json<T>
@@ -213,8 +212,8 @@ namespace baml.json:
   function stringify
   function stringify_pretty
   function to<T>
-  function to_json<T>
-  function to_string<T>
+  function to_json
+  function to_string
 namespace baml.media:
   class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
   class Image { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }

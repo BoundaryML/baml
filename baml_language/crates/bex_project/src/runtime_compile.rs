@@ -25,7 +25,8 @@ use bex_vm_types::{
     InitTail, RuntimeCompileArtifact, RuntimeCompileDiagnostic, RuntimeCompileMode,
     RuntimeCompileRequest, RuntimeDiagnosticSeverity, RuntimePackageMount,
     RuntimeSessionCompileArtifact, RuntimeSessionCompileRequest, RuntimeSessionInitializer,
-    RuntimeSessionStep, RuntimeSourceSpan, SessionVisibleKind, SessionVisibleSymbol,
+    RuntimeSessionStep, RuntimeSessionStepKind, RuntimeSourceSpan, SessionVisibleKind,
+    SessionVisibleSymbol,
     bytecode::Instruction,
     relink::{IndexOperand, visit_object_operands},
 };
@@ -34,6 +35,12 @@ use rowan::ast::AstNode;
 
 type RuntimeLinkStub = (Vec<Name>, Name, String);
 type EnrichedRuntimeMount = (Vec<u8>, Vec<RuntimeLinkStub>);
+
+#[derive(Default)]
+struct MountedDeclarationDocs {
+    declaration: Option<String>,
+    members: IndexMap<Name, Option<String>>,
+}
 
 const RUNTIME_VIRTUAL_ROOT: &str = "<runtime>";
 const BUILTIN_VIRTUAL_ROOT: &str = "<builtin>";
@@ -187,6 +194,44 @@ fn enrich_runtime_mount(
             && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
     }
 
+    fn relocated_name(
+        name: &baml_type::QualifiedTypeName,
+        alias: &Name,
+    ) -> baml_type::QualifiedTypeName {
+        if name.is_local() {
+            baml_type::QualifiedTypeName::new(
+                alias.clone(),
+                name.namespace().clone(),
+                name.name().clone(),
+            )
+        } else {
+            name.clone()
+        }
+    }
+
+    fn relocate_ty(ty: &mut baml_type::Ty, alias: &Name) {
+        *ty = ty.map_heads(&mut |name| relocated_name(name, alias));
+    }
+
+    fn relocate_interface(interface: &mut baml_type::Interface, alias: &Name) {
+        *interface = interface.map_heads(&mut |name| relocated_name(name, alias));
+    }
+
+    fn relocate_bounds(bounds: &mut [Vec<baml_type::Interface>], alias: &Name) {
+        for interface in bounds.iter_mut().flatten() {
+            relocate_interface(interface, alias);
+        }
+    }
+
+    fn write_docstring(source: &mut String, docstring: Option<&str>, indent: &str) {
+        let Some(docstring) = docstring.map(str::trim).filter(|docs| !docs.is_empty()) else {
+            return;
+        };
+        for line in docstring.lines() {
+            writeln!(source, "{indent}/// {line}").expect("writing to String is infallible");
+        }
+    }
+
     fn relocate_function(
         function: &mut ExportedFunction,
         alias: &Name,
@@ -194,6 +239,17 @@ fn enrich_runtime_mount(
         stubs: &mut Vec<(Vec<Name>, Name, String)>,
     ) {
         use baml_compiler2_hir_ty::callable::{ExternalCallTarget, ExternalLinkability};
+
+        for param in &mut function.params {
+            *param = param.map_heads(&mut |name| relocated_name(name, alias));
+        }
+        relocate_ty(&mut function.return_type, alias);
+        if let Some(throws) = &mut function.declared_throws {
+            relocate_ty(throws, alias);
+        }
+        relocate_ty(&mut function.callable_throws, alias);
+        relocate_bounds(&mut function.generic_param_bounds, alias);
+
         if !matches!(function.linkability, ExternalLinkability::Linkable) {
             return;
         }
@@ -287,15 +343,16 @@ fn enrich_runtime_mount(
         stubs.push((namespace, name, source));
     }
 
-    let mut interface =
-        borsh::from_slice::<PackageInterface>(&package.interface_blob).map_err(|error| {
-            RuntimeCompileDiagnostic {
-                code: "E_RUNTIME_INTERFACE".to_string(),
-                message: error.to_string(),
-                severity: RuntimeDiagnosticSeverity::Error,
-                span: None,
-            }
-        })?;
+    let mut interface = baml_artifact::decode::<PackageInterface>(
+        baml_artifact::ArtifactKind::PackageInterface,
+        &package.interface_blob,
+    )
+    .map_err(|error| RuntimeCompileDiagnostic {
+        code: "E_RUNTIME_INTERFACE".to_string(),
+        message: error.to_string(),
+        severity: RuntimeDiagnosticSeverity::Error,
+        span: None,
+    })?;
     // A package object may be mounted under any source-visible alias. Its
     // exported call targets retain the package's original identity in the
     // persisted interface, so relocate those symbolic link names to the alias.
@@ -303,6 +360,20 @@ fn enrich_runtime_mount(
     let alias = Name::new(alias);
     let viewpoint = StubViewpoint { aliases };
     let mut stubs = Vec::new();
+    for throw_set in interface
+        .throw_sets
+        .direct
+        .values_mut()
+        .chain(interface.throw_sets.transitive.values_mut())
+    {
+        *throw_set = std::mem::take(throw_set)
+            .into_iter()
+            .map(|mut ty| {
+                relocate_ty(&mut ty, &alias);
+                ty
+            })
+            .collect();
+    }
     for function in interface
         .functions
         .values_mut()
@@ -314,11 +385,17 @@ fn enrich_runtime_mount(
         for (export_name, exported) in exported_types {
             match exported {
                 ExportedType::Class {
+                    qtn,
                     fields,
                     methods,
                     generic_params,
-                    ..
+                    generic_param_bounds,
                 } => {
+                    *qtn = relocated_name(qtn, &alias);
+                    for (_, ty, _) in fields.iter_mut() {
+                        relocate_ty(ty, &alias);
+                    }
+                    relocate_bounds(generic_param_bounds, &alias);
                     // The emitter needs a concrete class object in the mounted
                     // package's discarded source units so a consumer literal
                     // decomposes to an external object reference. At runtime
@@ -340,12 +417,19 @@ fn enrich_runtime_mount(
                             format!("<{}>", generics.join(", "))
                         };
                         let mut source = format!("class {export_name}{generic_suffix} {{\n");
-                        for (field, ..) in fields.iter() {
-                            // Mounted inference owns the exact field type. The
-                            // source stub exists only to allocate/link the
-                            // positional class object, so `unknown` avoids
-                            // re-spelling hidden runtime-qualified names.
-                            writeln!(&mut source, "  {field} unknown")
+                        for (field, ty, attrs) in fields.iter() {
+                            // Source-backed lookup wins before the mounted
+                            // interface in HIR. Preserve every spellable field
+                            // type here so nested projections see the same ABI;
+                            // only genuinely hidden package names degrade to
+                            // `unknown` in the link-only source.
+                            let ty = if viewpoint.hides_type(ty) {
+                                "unknown".to_string()
+                            } else {
+                                ty.to_string()
+                            };
+                            write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
+                            writeln!(&mut source, "  {field} {ty}")
                                 .expect("writing to String is infallible");
                         }
                         source.push_str("}\n");
@@ -358,12 +442,29 @@ fn enrich_runtime_mount(
                 ExportedType::Interface {
                     qtn,
                     generic_params,
+                    param_bounds,
+                    requires,
                     associated_types,
                     fields,
                     required_methods,
                     default_methods,
                     ..
                 } => {
+                    relocate_bounds(param_bounds, &alias);
+                    for interface in requires {
+                        relocate_interface(interface, &alias);
+                    }
+                    for associated in associated_types.iter_mut() {
+                        if let Some(bound) = &mut associated.bound {
+                            relocate_interface(bound, &alias);
+                        }
+                        if let Some(default) = &mut associated.default {
+                            relocate_ty(default, &alias);
+                        }
+                    }
+                    for (_, ty, _) in fields.iter_mut() {
+                        relocate_ty(ty, &alias);
+                    }
                     for function in required_methods.iter_mut().chain(default_methods) {
                         relocate_function(function, &alias, &viewpoint, &mut stubs);
                     }
@@ -388,7 +489,7 @@ fn enrich_runtime_mount(
                         writeln!(&mut source, "  type {}", associated.name)
                             .expect("writing to String is infallible");
                     }
-                    for (field, ty, _) in fields {
+                    for (field, ty, attrs) in fields {
                         // Keep ordinary source-spellable ABI intact, but avoid
                         // spelling a package this world cannot resolve from any
                         // nested type.
@@ -397,13 +498,15 @@ fn enrich_runtime_mount(
                         } else {
                             ty.to_string()
                         };
+                        write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
                         writeln!(&mut source, "  {field}: {ty}")
                             .expect("writing to String is infallible");
                     }
                     source.push_str("}\n");
                     stubs.push((namespace, name, source));
                 }
-                ExportedType::Enum { variants, .. } => {
+                ExportedType::Enum { qtn, variants } => {
+                    *qtn = relocated_name(qtn, &alias);
                     if source_identifier(export_name)
                         && export_namespace.iter().all(source_identifier)
                         && variants.iter().all(source_identifier)
@@ -417,11 +520,23 @@ fn enrich_runtime_mount(
                         stubs.push((export_namespace.clone(), export_name.clone(), source));
                     }
                 }
-                ExportedType::TypeAlias { .. } => {}
+                ExportedType::TypeAlias { qtn, resolved } => {
+                    *qtn = relocated_name(qtn, &alias);
+                    relocate_ty(resolved, &alias);
+                }
             }
         }
     }
     for implementation in &mut interface.impls {
+        relocate_interface(&mut implementation.interface, &alias);
+        relocate_ty(&mut implementation.for_ty_pattern, &alias);
+        relocate_bounds(&mut implementation.param_bounds, &alias);
+        for (_, ty) in &mut implementation.associated_types {
+            relocate_ty(ty, &alias);
+        }
+        if let ExportedImplOrigin::InBodyClass { class_qtn } = &mut implementation.origin {
+            *class_qtn = relocated_name(class_qtn, &alias);
+        }
         for function in &mut implementation.methods {
             relocate_function(function, &alias, &viewpoint, &mut stubs);
         }
@@ -435,6 +550,7 @@ fn enrich_runtime_mount(
     // live tag, carried for exactly this check, tells them apart).
     let mut minted_tags: IndexMap<Name, baml_type::typetag::TypeTag> = IndexMap::new();
     let mut minted_rows: IndexMap<Name, ExportedType> = IndexMap::new();
+    let mut minted_docs: IndexMap<Name, MountedDeclarationDocs> = IndexMap::new();
     let duplicate_minted = |name: &Name| RuntimeCompileDiagnostic {
         code: "E0011".to_string(),
         message: format!(
@@ -452,6 +568,13 @@ fn enrich_runtime_mount(
                 continue;
             }
             minted_tags.insert(class.name.clone(), class.tag);
+            minted_docs.insert(
+                class.name.clone(),
+                MountedDeclarationDocs {
+                    declaration: class.docstring.clone(),
+                    members: IndexMap::new(),
+                },
+            );
             minted_rows.insert(
                 class.name.clone(),
                 ExportedType::Class {
@@ -470,6 +593,7 @@ fn enrich_runtime_mount(
                                 ExportedFieldAttrs {
                                     alias: attrs.alias.clone(),
                                     description: attrs.description.clone(),
+                                    docstring: attrs.docstring.clone(),
                                 },
                             )
                         })
@@ -488,6 +612,17 @@ fn enrich_runtime_mount(
                 continue;
             }
             minted_tags.insert(enm.name.clone(), enm.tag);
+            minted_docs.insert(
+                enm.name.clone(),
+                MountedDeclarationDocs {
+                    declaration: enm.docstring.clone(),
+                    members: enm
+                        .variants
+                        .iter()
+                        .map(|(name, attrs)| (name.clone(), attrs.docstring.clone()))
+                        .collect(),
+                },
+            );
             minted_rows.insert(
                 enm.name.clone(),
                 ExportedType::Enum {
@@ -496,7 +631,7 @@ fn enrich_runtime_mount(
                         Vec::new(),
                         enm.name.clone(),
                     ),
-                    variants: enm.variants.clone(),
+                    variants: enm.variants.iter().map(|(name, _)| name.clone()).collect(),
                 },
             );
         }
@@ -516,17 +651,31 @@ fn enrich_runtime_mount(
     }
     // Every mounted row gets a source link stub so a consumer literal can
     // decompose to an external object reference; runtime linking resolves it
-    // to the live declaration. Mounted inference owns the real field types, so
-    // stub fields are `unknown`.
+    // to the live declaration. Source-backed lookup wins before the mounted
+    // interface in HIR, so preserve spellable field types here as well.
     for (name, row) in &minted_rows {
         match row {
             ExportedType::Class { fields, .. }
                 if source_identifier(name)
                     && fields.iter().all(|(field, ..)| source_identifier(field)) =>
             {
-                let mut source = format!("class {name} {{\n");
-                for (field, ..) in fields {
-                    writeln!(&mut source, "  {field} unknown")
+                let mut source = String::new();
+                write_docstring(
+                    &mut source,
+                    minted_docs
+                        .get(name)
+                        .and_then(|docs| docs.declaration.as_deref()),
+                    "",
+                );
+                writeln!(&mut source, "class {name} {{").expect("writing to String is infallible");
+                for (field, ty, attrs) in fields {
+                    let ty = if viewpoint.hides_type(ty) {
+                        "unknown".to_string()
+                    } else {
+                        ty.to_string()
+                    };
+                    write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
+                    writeln!(&mut source, "  {field} {ty}")
                         .expect("writing to String is infallible");
                 }
                 source.push_str("}\n");
@@ -535,8 +684,21 @@ fn enrich_runtime_mount(
             ExportedType::Enum { variants, .. }
                 if source_identifier(name) && variants.iter().all(source_identifier) =>
             {
-                let mut source = format!("enum {name} {{\n");
+                let mut source = String::new();
+                let docs = minted_docs.get(name);
+                write_docstring(
+                    &mut source,
+                    docs.and_then(|docs| docs.declaration.as_deref()),
+                    "",
+                );
+                writeln!(&mut source, "enum {name} {{").expect("writing to String is infallible");
                 for variant in variants {
+                    write_docstring(
+                        &mut source,
+                        docs.and_then(|docs| docs.members.get(variant))
+                            .and_then(|docs| docs.as_deref()),
+                        "  ",
+                    );
                     writeln!(&mut source, "  {variant}").expect("writing to String is infallible");
                 }
                 source.push_str("}\n");
@@ -595,24 +757,53 @@ fn enrich_runtime_mount(
             }
             None => {
                 match &exported {
-                    ExportedType::Class { fields, .. }
+                    ExportedType::Class { qtn, fields, .. }
                         if source_identifier(&mount.export_name)
                             && fields.iter().all(|(name, ..)| source_identifier(name)) =>
                     {
-                        let mut source = format!("class {} {{\n", mount.export_name);
-                        for (field, ..) in fields {
-                            writeln!(&mut source, "  {field} unknown")
+                        let mut source = String::new();
+                        write_docstring(
+                            &mut source,
+                            minted_docs
+                                .get(qtn.name())
+                                .and_then(|docs| docs.declaration.as_deref()),
+                            "",
+                        );
+                        writeln!(&mut source, "class {} {{", mount.export_name)
+                            .expect("writing to String is infallible");
+                        for (field, ty, attrs) in fields {
+                            write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
+                            let ty = if viewpoint.hides_type(ty) {
+                                "unknown".to_string()
+                            } else {
+                                ty.to_string()
+                            };
+                            writeln!(&mut source, "  {field} {ty}")
                                 .expect("writing to String is infallible");
                         }
                         source.push_str("}\n");
                         stubs.push((Vec::new(), mount.export_name.clone(), source));
                     }
-                    ExportedType::Enum { variants, .. }
+                    ExportedType::Enum { qtn, variants }
                         if source_identifier(&mount.export_name)
                             && variants.iter().all(source_identifier) =>
                     {
-                        let mut source = format!("enum {} {{\n", mount.export_name);
+                        let mut source = String::new();
+                        let docs = minted_docs.get(qtn.name());
+                        write_docstring(
+                            &mut source,
+                            docs.and_then(|docs| docs.declaration.as_deref()),
+                            "",
+                        );
+                        writeln!(&mut source, "enum {} {{", mount.export_name)
+                            .expect("writing to String is infallible");
                         for variant in variants {
+                            write_docstring(
+                                &mut source,
+                                docs.and_then(|docs| docs.members.get(variant))
+                                    .and_then(|docs| docs.as_deref()),
+                                "  ",
+                            );
                             writeln!(&mut source, "  {variant}")
                                 .expect("writing to String is infallible");
                         }
@@ -644,7 +835,7 @@ fn enrich_runtime_mount(
     }
     stubs.sort();
     stubs.dedup();
-    borsh::to_vec(&interface)
+    baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
         .map(|blob| (blob, stubs))
         .map_err(|error| RuntimeCompileDiagnostic {
             code: "E_RUNTIME_INTERFACE".to_string(),
@@ -868,9 +1059,7 @@ fn runtime_type_binding_parts(source: &str) -> Option<(String, &str)> {
 fn runtime_type_binding_prelude(bindings: &IndexMap<String, SessionVisibleSymbol>) -> String {
     let mut prelude = String::new();
     for symbol in bindings.values() {
-        if symbol.kind == SessionVisibleKind::TypeBinding
-            && let Some(type_value) = &symbol.type_value
-        {
+        if let SessionVisibleKind::TypeBinding { type_value } = &symbol.kind {
             let _ = writeln!(
                 prelude,
                 "type {} = unreflect({type_value});",
@@ -1144,7 +1333,6 @@ fn lower_session_submission(
             let symbol = SessionVisibleSymbol {
                 internal: internal(&name),
                 kind: SessionVisibleKind::Declaration,
-                type_value: None,
             };
             declaration_name_ranges.insert(range, symbol.internal.clone());
             declarations.insert(name, symbol);
@@ -1154,7 +1342,7 @@ fn lower_session_submission(
     let mut declaration_mapping = request
         .visible
         .iter()
-        .filter(|(_, symbol)| symbol.kind != SessionVisibleKind::Let)
+        .filter(|(_, symbol)| !matches!(symbol.kind, SessionVisibleKind::Let))
         .map(|(name, symbol)| (name.clone(), symbol.internal.clone()))
         .collect::<IndexMap<_, _>>();
     declaration_mapping.extend(
@@ -1258,11 +1446,12 @@ fn lower_session_submission(
     let mut active_type_bindings = request
         .visible
         .iter()
-        .filter(|(_, symbol)| symbol.kind == SessionVisibleKind::TypeBinding)
+        .filter(|(_, symbol)| matches!(symbol.kind, SessionVisibleKind::TypeBinding { .. }))
         .map(|(name, symbol)| (name.clone(), symbol.clone()))
         .collect::<IndexMap<_, _>>();
     let mut generated = declaration_source.clone();
     let mut steps = Vec::new();
+    let mut result_step = None;
 
     for (index, element) in elements.iter().enumerate() {
         let (node, wrapped_range, has_semicolon, is_statement) = match element {
@@ -1333,8 +1522,9 @@ fn lower_session_submission(
             let source = format!("let {backing_name} = {{\n{prelude}({operand})\n}}\n");
             let symbol = SessionVisibleSymbol {
                 internal: type_name,
-                kind: SessionVisibleKind::TypeBinding,
-                type_value: Some(backing_name.clone()),
+                kind: SessionVisibleKind::TypeBinding {
+                    type_value: backing_name.clone(),
+                },
             };
             (backing_name, source, None, Some((name, symbol)))
         } else {
@@ -1349,19 +1539,22 @@ fn lower_session_submission(
                 let symbol = SessionVisibleSymbol {
                     internal: internal_name.clone(),
                     kind: SessionVisibleKind::Let,
-                    type_value: None,
                 };
                 binding = Some((name, symbol));
                 internal_name
             } else {
-                format!("__baml_session_{sequence}_stmt_{index}")
+                // Synthetic step globals must live outside `internal()`'s
+                // namespace so a user binding such as `stmt_1` cannot mint
+                // the same name.
+                format!("__baml_stmt_{sequence}_{index}")
             };
             let assignment = is_statement
                 .then(|| assignment_parts(raw))
                 .flatten()
                 .and_then(|(target, operator, rhs)| {
                     let symbol = request.visible.get(target)?;
-                    (symbol.kind == SessionVisibleKind::Let).then_some((symbol, operator, rhs))
+                    matches!(symbol.kind, SessionVisibleKind::Let)
+                        .then_some((symbol, operator, rhs))
                 });
             let (source, commit_global) = if let Some((target, operator, rhs)) = assignment {
                 let rhs = rewrite_identifiers(
@@ -1434,39 +1627,46 @@ fn lower_session_submission(
         generated.push_str(&step_source);
         let returns_value =
             index + 1 == elements.len() && !is_outer_let && !is_statement && !has_semicolon;
+        if returns_value {
+            result_step = Some(steps.len());
+        }
+        let kind = binding
+            .clone()
+            .map_or(RuntimeSessionStepKind::Expression, |(name, symbol)| {
+                RuntimeSessionStepKind::Binding {
+                    name,
+                    symbol,
+                    replay_source: step_source.clone(),
+                }
+            });
         steps.push(RuntimeSessionStep {
             global: format!("user.{generated_name}"),
             commit_global,
-            binding: binding.clone(),
-            replay_source: binding.as_ref().map(|_| step_source),
-            returns_value,
+            kind,
         });
         if let Some((name, symbol)) = binding {
             visible_mapping.insert(name.clone(), symbol.internal.clone());
-            if symbol.kind == SessionVisibleKind::TypeBinding {
+            if matches!(symbol.kind, SessionVisibleKind::TypeBinding { .. }) {
                 active_type_bindings.insert(name, symbol);
             }
         }
     }
 
-    if !steps.iter().any(|step| step.returns_value) {
-        let generated_name = format!("__baml_session_{sequence}_result");
+    if result_step.is_none() {
+        // This fallback must likewise be outside `internal()`'s namespace:
+        // otherwise a user binding called `result` collides with it.
+        let generated_name = format!("__baml_result_{sequence}");
         let step_source = format!("let {generated_name} = null\n");
         generated.push_str(&step_source);
+        result_step = Some(steps.len());
         steps.push(RuntimeSessionStep {
             global: format!("user.{generated_name}"),
             commit_global: None,
-            binding: None,
-            replay_source: None,
-            returns_value: true,
+            kind: RuntimeSessionStepKind::Expression,
         });
     }
-    let result_global = steps
-        .iter()
-        .find(|step| step.returns_value)
-        .expect("session lowering always has a result")
-        .global
-        .clone();
+    let result_step = result_step.expect("session lowering always has a result");
+    let result_global = steps[result_step].global.clone();
     Ok(LoweredSession {
         source: generated,
         artifact: RuntimeSessionCompileArtifact {
@@ -1474,6 +1674,7 @@ fn lower_session_submission(
             declaration_source,
             declarations,
             steps,
+            result_step: Some(result_step),
             initializers: Vec::new(),
         },
         result_global,
@@ -1752,7 +1953,14 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             .map(|(name, blob, _)| (name.clone(), blob.clone()))
             .collect::<BTreeMap<_, _>>();
         let precompiled_stdlib_names = stdlib.interfaces.keys().cloned().collect::<Vec<_>>();
-        db.set_mounted_packages(mounted);
+        db.set_mounted_packages(mounted).map_err(|message| {
+            vec![RuntimeCompileDiagnostic {
+                code: "E_RUNTIME_INTERFACE".to_string(),
+                message,
+                severity: RuntimeDiagnosticSeverity::Error,
+                span: None,
+            }]
+        })?;
         db.set_precompiled_stdlib_packages(stdlib.interfaces);
         debug_assert!(
             precompiled_stdlib_names.iter().all(|name| {
@@ -1840,8 +2048,20 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 .result_global
                 .strip_prefix("user.")
                 .unwrap_or(session.result_global.as_str());
-            let actual =
-                let_initializer_type(&db, result_name).unwrap_or_else(baml_type::Ty::unknown);
+            let Some(actual) = let_initializer_type(&db, result_name) else {
+                return Err(vec![RuntimeCompileDiagnostic {
+                    code: "E_RUNTIME_SESSION".to_string(),
+                    message: format!(
+                        "internal compiler error: Session result binding `{result_name}` has no initializer type"
+                    ),
+                    severity: RuntimeDiagnosticSeverity::Error,
+                    span: Some(RuntimeSourceSpan {
+                        file: file.to_string(),
+                        start: 0,
+                        end: 0,
+                    }),
+                }]);
+            };
             // The check runs in the compiler's context, which names declarations
             // rather than pointing at them. `eval<T>` can be handed a
             // runtime-created type, which has no name to recover — the engine
@@ -1877,14 +2097,16 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         }
 
         let interface = package_interface(&db, PackageId::new(&db, Name::new("user")));
-        let interface_blob = borsh::to_vec(interface).map_err(|error| {
-            vec![RuntimeCompileDiagnostic {
-                code: "E_RUNTIME_INTERFACE".to_string(),
-                message: error.to_string(),
-                severity: RuntimeDiagnosticSeverity::Error,
-                span: None,
-            }]
-        })?;
+        let interface_blob =
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
+                .map_err(|error| {
+                    vec![RuntimeCompileDiagnostic {
+                        code: "E_RUNTIME_INTERFACE".to_string(),
+                        message: error.to_string(),
+                        severity: RuntimeDiagnosticSeverity::Error,
+                        span: None,
+                    }]
+                })?;
         let options = CompileOptions {
             emit_test_cases: crate::precompiled_stdlib_config::EMIT_TEST_CASES,
         };
@@ -1932,17 +2154,17 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             }
             session.artifact.initializers = initializers;
         }
-        // The public artifact still carries these as two independent `Option`s,
-        // so the pair splits here — once, at the boundary that demands it —
-        // rather than being threaded through the function as separate values.
-        let (session_artifact, session_lease) =
-            session.map_or((None, None), |s| (Some(s.artifact), Some(s.lease)));
+        let kind = session.map_or(bex_vm_types::ArtifactKind::Package, |session| {
+            bex_vm_types::ArtifactKind::Session {
+                meta: session.artifact,
+                lease: session.lease,
+            }
+        });
         Ok(RuntimeCompileArtifact {
             units,
             interface_blob,
             diagnostics,
-            session: session_artifact,
-            session_lease,
+            kind,
         })
     }
 }
@@ -1950,6 +2172,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
 #[cfg(test)]
 mod tests {
     use baml_compiler2_hir::file_package::file_package;
+    use baml_compiler2_hir_ty::package_interface::{FunctionThrowSets, PackageInterface};
 
     use super::*;
 
@@ -2067,5 +2290,94 @@ mod tests {
             runtime_relative_virtual_path(Path::new(RUNTIME_VIRTUAL_ROOT)),
             ""
         );
+    }
+
+    #[test]
+    fn runtime_mount_stubs_preserve_declaration_and_variant_docstrings() {
+        let interface = PackageInterface {
+            types: IndexMap::new(),
+            functions: IndexMap::new(),
+            throw_sets: FunctionThrowSets::default(),
+            namespaces: std::collections::BTreeSet::default(),
+            impls: Vec::new(),
+        };
+        let interface_blob =
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
+                .expect("empty package interface encodes");
+        let class_name = Name::new("RuntimeClass");
+        let enum_name = Name::new("RuntimeState");
+        let class_qtn =
+            baml_type::QualifiedTypeName::new(Name::new("app"), Vec::new(), class_name.clone());
+        let enum_qtn =
+            baml_type::QualifiedTypeName::new(Name::new("app"), Vec::new(), enum_name.clone());
+        let package = RuntimePackageMount {
+            interface_blob,
+            types: vec![
+                bex_vm_types::RuntimeTypeMount {
+                    export_name: Name::new("ClassAlias"),
+                    ty: baml_type::RealizedTy::Class(
+                        class_qtn,
+                        Vec::new(),
+                        baml_type::TyAttr::default(),
+                    ),
+                    classes: vec![bex_vm_types::RuntimeMountedClass {
+                        name: class_name,
+                        tag: baml_type::typetag::TypeTag::of_head("runtime.RuntimeClass"),
+                        docstring: Some("Runtime class docs".to_string()),
+                        fields: vec![(
+                            Name::new("value"),
+                            baml_type::Ty::string(),
+                            bex_vm_types::RuntimeMountedFieldAttrs {
+                                docstring: Some("Runtime field docs".to_string()),
+                                ..Default::default()
+                            },
+                        )],
+                    }],
+                    enums: Vec::new(),
+                    witnesses: Vec::new(),
+                },
+                bex_vm_types::RuntimeTypeMount {
+                    export_name: Name::new("StateAlias"),
+                    ty: baml_type::RealizedTy::Enum(enum_qtn, baml_type::TyAttr::default()),
+                    classes: Vec::new(),
+                    enums: vec![bex_vm_types::RuntimeMountedEnum {
+                        name: enum_name,
+                        tag: baml_type::typetag::TypeTag::of_head("runtime.RuntimeState"),
+                        docstring: Some("Runtime enum docs".to_string()),
+                        variants: vec![(
+                            Name::new("READY"),
+                            bex_vm_types::RuntimeMountedVariantAttrs {
+                                docstring: Some("Runtime variant docs".to_string()),
+                            },
+                        )],
+                    }],
+                    witnesses: Vec::new(),
+                },
+            ],
+        };
+
+        let (_, stubs) = enrich_runtime_mount("app", &[Name::new("app")], package)
+            .expect("runtime mount enriches");
+        let sources = stubs
+            .into_iter()
+            .map(|(_, _, source)| source)
+            .collect::<Vec<_>>();
+
+        assert!(sources.iter().any(|source| {
+            source.starts_with("/// Runtime class docs\nclass RuntimeClass {")
+                && source.contains("  /// Runtime field docs\n  value string")
+        }));
+        assert!(sources.iter().any(|source| {
+            source.starts_with("/// Runtime class docs\nclass ClassAlias {")
+                && source.contains("  /// Runtime field docs\n  value string")
+        }));
+        assert!(sources.iter().any(|source| {
+            source.starts_with("/// Runtime enum docs\nenum RuntimeState {")
+                && source.contains("  /// Runtime variant docs\n  READY")
+        }));
+        assert!(sources.iter().any(|source| {
+            source.starts_with("/// Runtime enum docs\nenum StateAlias {")
+                && source.contains("  /// Runtime variant docs\n  READY")
+        }));
     }
 }
