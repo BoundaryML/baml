@@ -980,6 +980,7 @@ dependencies = [
  "baml_compiler_syntax",
  "baml_db",
  "baml_type",
+ "baml_type_runtime",
  "bitflags 2.11.1",
  "insta",
  "la-arena",

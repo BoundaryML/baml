@@ -1274,8 +1274,21 @@ impl LoweringContext {
     }
 
     fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
+        let lambda_parameter_spans = match &expr {
+            Expr::Lambda(lambda) => Some(
+                lambda
+                    .params
+                    .iter()
+                    .map(|param| param.name_span)
+                    .collect::<Vec<_>>(),
+            ),
+            _ => None,
+        };
         let id = self.exprs.alloc(expr);
         self.source_map.expr_spans.alloc(range);
+        if let Some(spans) = lambda_parameter_spans {
+            self.source_map.lambda_parameter_spans.insert(id, spans);
+        }
         if self.synthesizing {
             self.source_map.synthetic_exprs.insert(id);
         }

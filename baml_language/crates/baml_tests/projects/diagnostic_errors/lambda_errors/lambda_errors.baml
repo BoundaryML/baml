@@ -33,3 +33,11 @@ function test_unknown_return_type() -> int {
     let f = (x: int) -> NonExistentType { x }
     0
 }
+
+// Incompatible constraints after an initially unconstrained lambda
+function test_conflicting_later_constraints() -> int {
+    let f = (x) -> { x }
+    let int_identity: (int) -> int throws never = f
+    let string_identity: (string) -> string throws never = f
+    int_identity(0)
+}

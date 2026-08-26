@@ -627,9 +627,16 @@ enum HoleAnchor {
 /// contains it. Writeback uses this to report unsolved variables before
 /// replacing them with the error sentinel.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct InferVarOrigin {
-    location: crate::diagnostics::DiagnosticLocation,
-    containing_type: Ty,
+enum InferVarOrigin {
+    TypeMustBeKnown {
+        location: crate::diagnostics::DiagnosticLocation,
+        containing_type: Ty,
+    },
+    LambdaParameter {
+        lambda: ExprId,
+        parameter_index: usize,
+        name: baml_type::Name,
+    },
 }
 
 /// S17 pending diagnostic (engine-internal): arena-anchored, payload
@@ -7558,10 +7565,9 @@ impl<'db> InferenceContext<'db> {
 
     /// Lambda typing (rust-analyzer's `deduce_closure_signature` shape).
     /// Written signature slots win; unannotated slots fill from the expected
-    /// function type flowing down. An unannotated parameter with no
-    /// expectation has no source of truth: the Error sentinel (TIR's
-    /// `CannotInferLambdaParamType`; the diagnostic is S17's). An omitted
-    /// `throws` stays the honest Error sentinel until S12 infers effects.
+    /// function type flowing down, or become fresh inference variables that
+    /// later uses can constrain. An omitted `throws` is inferred from the
+    /// lambda's body.
     fn infer_lambda(
         &mut self,
         body: &ExprBody,
@@ -7590,21 +7596,34 @@ impl<'db> InferenceContext<'db> {
                 _ => None,
             });
 
+        if let Some((expected_params, _, _)) = &expected_fn
+            && expected_params.len() != def.params.len()
+        {
+            self.pending_diags.push(PendingDiag::ArgCountMismatch {
+                expr,
+                expected: expected_params.len(),
+                got: def.params.len(),
+            });
+        }
+
         let param_tys: Vec<Ty> = def
             .params
             .iter()
             .enumerate()
-            .map(|(index, _)| {
+            .map(|(index, param)| {
                 let annotated = signature
                     .as_ref()
                     .and_then(|sig| sig.params.get(index).copied().flatten());
                 match annotated {
                     Some(type_ref) => self.lower_body_annotation(type_ref),
-                    None => expected_fn
+                    None => match expected_fn
                         .as_ref()
                         .and_then(|(params, _, _)| params.get(index))
-                        .map(|param| param.ty.clone())
-                        .unwrap_or_else(Ty::error),
+                    {
+                        Some(expected) => expected.ty.clone(),
+                        None if expected_fn.is_some() => Ty::error(),
+                        None => self.untyped_lambda_parameter_ty(expr, index, param.name.clone()),
+                    },
                 }
             })
             .collect();
@@ -10228,7 +10247,7 @@ impl<'db> InferenceContext<'db> {
         self.infer_var_origin_order.push(var);
         self.infer_var_origins.insert(
             var,
-            InferVarOrigin {
+            InferVarOrigin::TypeMustBeKnown {
                 location: crate::diagnostics::DiagnosticLocation::Expr(expr),
                 containing_type: containing_type.clone(),
             },
@@ -10236,9 +10255,35 @@ impl<'db> InferenceContext<'db> {
         containing_type
     }
 
+    fn untyped_lambda_parameter_ty(
+        &mut self,
+        lambda: ExprId,
+        parameter_index: usize,
+        name: baml_type::Name,
+    ) -> Ty {
+        let ty = self.table.new_first_demand_var_ty();
+        let TyKind::Infer { var: Some(var), .. } = ty.kind() else {
+            unreachable!("a fresh lambda parameter variable must be an inference type");
+        };
+        let var = *var;
+        self.infer_var_origin_order.push(var);
+        self.infer_var_origins.insert(
+            var,
+            InferVarOrigin::LambdaParameter {
+                lambda,
+                parameter_index,
+                name,
+            },
+        );
+        ty
+    }
+
     fn take_unresolved_infer_diagnostics(
         &mut self,
-    ) -> Vec<(crate::diagnostics::DiagnosticLocation, baml_type::Ty)> {
+    ) -> Vec<(
+        crate::diagnostics::DiagnosticLocation,
+        crate::diagnostics::TirTypeError,
+    )> {
         let mut diagnostics = Vec::new();
         for var in std::mem::take(&mut self.infer_var_origin_order) {
             let Some(origin) = self.infer_var_origins.remove(&var) else {
@@ -10247,17 +10292,40 @@ impl<'db> InferenceContext<'db> {
             let Some(root) = self.table.unsolved_root_var(var) else {
                 continue;
             };
-            let full_type = self.table.resolve_completely(&origin.containing_type);
-            if full_type.has_error() {
-                continue;
-            }
+            let (location, error) = match origin {
+                InferVarOrigin::TypeMustBeKnown {
+                    location,
+                    containing_type,
+                } => {
+                    let full_type = self.table.resolve_completely(&containing_type);
+                    if full_type.has_error() {
+                        continue;
+                    }
+                    (
+                        location,
+                        crate::diagnostics::TirTypeError::TypeMustBeKnown {
+                            full_type: infer_to_diagnostic_unknown(&full_type).to_plain(),
+                        },
+                    )
+                }
+                InferVarOrigin::LambdaParameter {
+                    lambda,
+                    parameter_index,
+                    name,
+                } => (
+                    crate::diagnostics::DiagnosticLocation::LambdaParameter(
+                        lambda,
+                        parameter_index,
+                    ),
+                    crate::diagnostics::TirTypeError::CannotInferLambdaParamType {
+                        param_name: name,
+                    },
+                ),
+            };
             if !self.diagnosed_infer_vars.insert(root) {
                 continue;
             }
-            diagnostics.push((
-                origin.location,
-                infer_to_diagnostic_unknown(&full_type).to_plain(),
-            ));
+            diagnostics.push((location, error));
         }
         diagnostics
     }
@@ -10433,9 +10501,9 @@ impl<'db> InferenceContext<'db> {
                 DiagnosticLocation, DiagnosticSeverity, TirDiagnostic, TirTypeError,
             };
             let mut diags: Vec<TirDiagnostic<'db>> = Vec::new();
-            for (location, full_type) in unresolved_infer_diagnostics {
+            for (location, error) in unresolved_infer_diagnostics {
                 diags.push(TirDiagnostic {
-                    error: TirTypeError::TypeMustBeKnown { full_type },
+                    error,
                     severity: DiagnosticSeverity::Error,
                     primary: location,
                     related: Vec::new(),
@@ -11382,6 +11450,7 @@ impl<'db> InferenceContext<'db> {
                 DiagnosticLocation::Expr(id)
                 | DiagnosticLocation::ExprMember(id)
                 | DiagnosticLocation::ExprSegment(id, _)
+                | DiagnosticLocation::LambdaParameter(id, _)
                 | DiagnosticLocation::ObjectFieldName(_, id) => (0u8, u32::from(id.into_raw())),
                 DiagnosticLocation::Stmt(id) => (1, u32::from(id.into_raw())),
                 DiagnosticLocation::TypeAnnot(id) => (2, u32::from(id.into_raw())),
@@ -11885,15 +11954,13 @@ impl<'db> InferenceContext<'db> {
                     maximum
                 }
                 _ => {
-                    // No join: genuinely incompatible demands. An empty
-                    // CONTAINER's slot follows TIR's establishment-order
-                    // rule - the FIRST ground demand wins so the binding
-                    // stays usable and every later incompatible demand
-                    // (and any violated upper) reports through the
-                    // provisional re-check at finalize. Any other var (a
-                    // call instantiation) fails resolution instead
-                    // (ruling 1: disagreeing lowers reject, not join).
-                    if self.table.is_establishment_var(var) {
+                    // No join: genuinely incompatible demands. A monomorphic
+                    // source with no initial type follows first-demand order:
+                    // the first ground demand wins so later incompatible
+                    // demands report through the provisional re-check at
+                    // finalize. Other vars, such as call instantiations, fail
+                    // resolution instead.
+                    if self.table.is_first_demand_var(var) {
                         widened.first().cloned().unwrap_or_else(Ty::error)
                     } else {
                         return false;

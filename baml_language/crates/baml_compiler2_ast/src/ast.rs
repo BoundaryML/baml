@@ -703,6 +703,8 @@ pub struct AstSourceMap {
     /// For object-constructor fields, the span of the field name keyed by
     /// `(object_expr_id, value_expr_id)`.
     pub object_field_name_spans: HashMap<(ExprId, ExprId), TextRange>,
+    /// For lambda expressions, the spans of their parameter names in declaration order.
+    pub lambda_parameter_spans: HashMap<ExprId, Vec<TextRange>>,
     /// For `unreflect(value)` type-argument slots, the span of the WHOLE slot
     /// (marker, parens and all), keyed by the carrier expression inside it.
     /// The carrier's own span covers only `value`, so diagnostics about the
@@ -735,6 +737,7 @@ impl AstSourceMap {
             path_segment_spans: HashMap::new(),
             call_arg_label_spans: HashMap::new(),
             object_field_name_spans: HashMap::new(),
+            lambda_parameter_spans: HashMap::new(),
             unreflect_arg_spans: HashMap::new(),
             synthetic_exprs: HashSet::new(),
             synthetic_stmts: HashSet::new(),
@@ -809,6 +812,15 @@ impl AstSourceMap {
             .get(&(object_id, value_id))
             .copied()
             .unwrap_or_else(|| self.expr_span(value_id))
+    }
+
+    /// Look up a lambda parameter-name span by declaration index.
+    /// Returns the full lambda expression span as fallback.
+    pub fn lambda_parameter_span(&self, id: ExprId, parameter_index: usize) -> TextRange {
+        self.lambda_parameter_spans
+            .get(&id)
+            .and_then(|spans| spans.get(parameter_index).copied())
+            .unwrap_or_else(|| self.expr_span(id))
     }
 
     /// Look up the span of the `unreflect(...)` type-argument slot whose

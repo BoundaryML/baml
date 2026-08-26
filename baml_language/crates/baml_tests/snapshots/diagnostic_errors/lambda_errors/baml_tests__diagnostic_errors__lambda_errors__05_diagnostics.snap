@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 35998
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
@@ -11,6 +10,22 @@ assertion_line: 35998
    ·                                  ────┬────
    ·                                      ╰── expected `string`, found `int`
    ╰────
+
+  [type] E0002
+
+  × cannot infer type of lambda parameter `x` — add a type annotation or provide context
+   ╭─[lambda_errors.baml:9:16]
+ 9 │     let bad = (x) -> { x * 2 }
+   ·                ─
+   ╰────
+
+  [type] E0005
+
+  × expected 1 argument(s), got 2
+    ╭─[lambda_errors.baml:16:15]
+ 16 │     items.map((x, y) -> { x })
+    ·               ───────────────
+    ╰────
 
   [type] E0001
 
@@ -44,4 +59,13 @@ assertion_line: 35998
     ╭─[lambda_errors.baml:33:25]
  33 │     let f = (x: int) -> NonExistentType { x }
     ·                         ───────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[lambda_errors.baml:41:60]
+ 41 │     let string_identity: (string) -> string throws never = f
+    ·                                                            ┬
+    ·                                                            ╰── expected `(string) -> string throws never`, found `(x: int) -> int throws never`
     ╰────
