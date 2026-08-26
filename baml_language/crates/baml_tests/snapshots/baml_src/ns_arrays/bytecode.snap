@@ -1284,7 +1284,7 @@ function arrays.ComparableFlaky.baml.Comparable.compare(self: arrays.ComparableF
     load_var _4
     store_var a
     load_var other
-    load_field .0
+    load_field .value
     store_var _7
     load_var _7
     narrow_bind int, slot=6
@@ -1310,7 +1310,7 @@ function arrays.ComparableScore.baml.Comparable.compare(self: arrays.ComparableS
     load_var self
     load_field .points
     load_var other
-    load_field .0
+    load_field .points
     load_type baml.Comparable<CompareError = never>
     load_const "compare"
     virtual_call nargs=2 ntypeargs=0
@@ -1323,7 +1323,7 @@ function arrays.OutOfBodyScore.baml.Comparable.compare(self: arrays.OutOfBodySco
     load_var self
     load_field .points
     load_var other
-    load_field .0
+    load_field .points
     load_type baml.Comparable<CompareError = never>
     load_const "compare"
     virtual_call nargs=2 ntypeargs=0
@@ -1336,7 +1336,7 @@ function arrays.SortableItem.baml.Comparable.compare(self: arrays.SortableItem, 
     load_var self
     load_field .rank
     load_var other
-    load_field .0
+    load_field .rank
     load_type baml.Comparable<CompareError = never>
     load_const "compare"
     virtual_call nargs=2 ntypeargs=0

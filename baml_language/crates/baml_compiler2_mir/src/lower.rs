@@ -2889,6 +2889,16 @@ impl<'db> LoweringContext<'db> {
 
     fn erase_compiler_only_ty(ty: Tir2Ty) -> Tir2Ty {
         match ty {
+            // BUG: `Error` here is NOT only "a diagnostic was emitted". Finalize
+            // also erases a still-free var to `Error` when a call is deferred to
+            // a runtime gate (`type T = unreflect(expr)`), which is well-typed
+            // source with no diagnostic — see
+            // `ns_runtime_type_binding_generic_calls`. Laundering both to the top
+            // type is what keeps that source compiling, and it is also what
+            // defuses `ResolvedAliases::convert`'s `unreachable!` on every MIR
+            // path. Fix by giving a runtime-gated slot its own representation
+            // (the deferred-slot marker `inferred_ty_to_template` wants too),
+            // then delete this arm so the guard can do its job.
             Tir2Ty::Error { attr } => Tir2Ty::BuiltinUnknown { attr },
             Tir2Ty::TypeVar(param, attr) if baml_type::is_synthetic_effect_param(param.name()) => {
                 Tir2Ty::BuiltinUnknown { attr }
@@ -2970,43 +2980,42 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// Lower a method-signature type expression (a parameter or return type) to
-    /// a runtime type. In a method signature `Self` is the receiver type
-    /// variable and `Self.Assoc` is an associated-type projection onto it. A bare
-    /// `lower_type_expr_in_ns` has neither in scope and would erase both to
-    /// `Ty::Error`, tripping the runtime lowering boundary — so bind `Self` to
-    /// its rigid type variable through the `self_ty` channel, which roots both a
-    /// bare `Self` and each `Self.Assoc` projection at it.
+    /// a runtime type, in the owner's declaration environment.
+    ///
+    /// The environment is `hir_ty`'s, not one rebuilt here: `owner_self_ty` and
+    /// `owner_impl_target` are what resolve `Self` and, through it, each
+    /// `Self.Assoc` projection. Synthesizing a symbolic `Self` instead gives it
+    /// a `ParamTy` identity absent from `function_generic_bounds`, so the
+    /// projection cannot determine its declaring interface and lowers to
+    /// `Ty::Error` — which then trips the runtime lowering boundary.
     fn lower_signature_runtime_ty(
         &self,
         te: &baml_compiler2_ast::TypeExpr,
         pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
         ns_context: &[baml_base::Name],
     ) -> RuntimeTy {
-        let mut generic_params = self.enclosing_generic_params();
-        let self_param = generic_params
-            .iter()
-            .find(|param| param.as_str() == "Self")
-            .cloned()
-            .unwrap_or_else(|| {
-                let index = generic_params
-                    .iter()
-                    .map(ParamTy::index)
-                    .max()
-                    .map_or(0, |index| index + 1);
-                let param = ParamTy::new(index, Name::new("Self"));
-                generic_params.push(param.clone());
-                param
-            });
+        let generic_params = self.enclosing_generic_params();
         let generic_param_bounds = self.enclosing_generic_param_bounds();
-        let tir_ty = lower_expr_in_scope(
+        let (self_ty, impl_target) = match self.func_loc {
+            Some(func_loc) => (
+                baml_compiler2_hir_ty::lower::owner_self_ty(self.db, func_loc, &generic_params),
+                baml_compiler2_hir_ty::lower::owner_impl_target(self.db, func_loc, &generic_params),
+            ),
+            None => (None, None),
+        };
+        let mut builder = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
+        let id = builder.lower(te);
+        let (store, _spans) = builder.finish();
+        let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_package(
             self.db,
-            te,
             pkg_items,
-            ns_context,
-            &generic_params,
-            &generic_param_bounds,
-            Some(Tir2Ty::TypeVar(self_param, TyAttr::default())),
-        );
+            ns_context.to_vec(),
+        )
+        .with_frame(generic_params)
+        .with_bounds(generic_param_bounds)
+        .with_self_ty(self_ty)
+        .with_impl_target(impl_target);
+        let tir_ty = ctx.lower_type_ref(&store, id).to_plain();
         self.convert_tir_ty_for_runtime(&tir_ty)
     }
 

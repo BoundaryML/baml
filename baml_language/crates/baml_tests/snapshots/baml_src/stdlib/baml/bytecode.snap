@@ -579,13 +579,13 @@ function baml.Bool.random(rng: baml.random.Rng) -> bool {
 
 function baml.Comparable$for$bigint.compare(self: bigint, other: bigint) -> int {
     load_var2 1 2
-    cmp_op <
+    cmp_bigint_op <
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var2 1 2
-    cmp_op >
+    cmp_bigint_op >
     pop_jump_if_false L1
     jump L2
 
@@ -612,13 +612,13 @@ function baml.Comparable$for$float.compare(self: float, other: float) -> int {
 
 function baml.Comparable$for$int.compare(self: int, other: int) -> int {
     load_var2 1 2
-    cmp_op <
+    cmp_int_op <
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var2 1 2
-    cmp_op >
+    cmp_int_op >
     pop_jump_if_false L1
     jump L2
 
