@@ -5688,7 +5688,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     load_var url
     store_var _40
     load_var _40
-    narrow_bind string, slot=18
+    narrow_bind string, slot=19
     pop_jump_if_false L2
     jump L3
 
@@ -5726,14 +5726,14 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     load_const 30
     call baml.time.Duration.from_seconds
     store_var _69
-    load_var2 19 31
+    load_var2 20 32
     call baml.http.fetch
     store_var response
     jump L10
     load_var e
     store_var _70
     load_var _70
-    narrow_bind baml.errors.Timeout, slot=32
+    narrow_bind baml.errors.Timeout, slot=33
     pop_jump_if_false L8
     jump L9
 
@@ -5846,7 +5846,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     call baml.String.trim
     store_var _116
     load_const null
-    load_var2 44 45
+    load_var2 45 46
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
     jump L27
 
@@ -5886,7 +5886,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     call baml.String.index_of
     store_var _44
     load_var _44
-    narrow_bind int, slot=20
+    narrow_bind int, slot=21
     pop_jump_if_false L18
     jump L22
 
@@ -5936,7 +5936,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     load_var media_url
     call baml.String.length
     store_var _49
-    load_var2 19 23
+    load_var2 20 24
     load_var _49
     call baml.String.slice
     store_var _46
@@ -5946,7 +5946,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     call baml.String.slice
     store_var _50
     load_const null
-    load_var2 22 25
+    load_var2 23 26
     init_instance ai.wire.ResolvedMedia .url, .base64, .mime_type
     jump L27
 
@@ -5989,7 +5989,11 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
 
   L25:
     load_var handle
-    sys_op baml.fs.File.bytes
+    load_type baml.io.Read
+    load_const "bytes"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _24
+    load_var _24
     call baml.Uint8Array.to_base64
     store_var data
     jump L26
@@ -6002,7 +6006,7 @@ function ai.internal._resolve_media_content(url: string | null, file: string | n
     load_var path
     call baml.String.from
     store_var _30
-    load_type baml.errors.InvalidArgument | baml.errors.Io
+    load_type baml.errors.Io
     load_var e
     call baml.String.from
     store_var _34
@@ -6609,43 +6613,71 @@ function ai.internal.validate_output_type(return_type: reflect.Type) -> void {
 }
 
 function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, params: map<string, unknown>) -> baml.json.json {
-    load_var self
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?4
+    make_cell
+    store_var ?4
+    load_deref ?1
     load_field .next_id
-    store_var id
-    load_var self
+    store_deref ?4
+    load_deref ?1
     copy 0
     load_field .next_id
     load_const 1
     bin_op +
     store_field .next_id
-    load_var2 4 2
+    load_deref ?4
+    load_deref ?2
     load_var params
     call ai.mcp.rpc_line
     store_var _6
-    load_var2 1 5
+    load_deref ?1
+    load_var _6
     call ai.mcp.McpConnection._send
     pop 1
+    load_deref ?1
+    load_field .timeout_ms
+    call baml.time.Duration.from_milliseconds
+    store_var _9
+    load_type never
+    load_type ai.errors.InvalidRequest | ai.errors.NetworkFailure
+    load_var2 7 1
+    load_var2 4 2
+    make_closure .<lambda(McpConnection._request, 0)>, 3
+    call baml.future.with_timeout
+    jump L2
+    load_var e
+    is_type baml.errors.Timeout
+    pop_jump_if_false L0
+    jump L1
 
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
+    load_var e
+    rethrow
 
   L1:
     load_type string
-    load_var self
+    load_deref ?1
     load_field .server_name
     call baml.String.from
-    store_var _65
-    load_type string
-    load_var method
+    store_var _17
+    load_type int
+    load_deref ?1
+    load_field .timeout_ms
     call baml.String.from
-    store_var _69
+    store_var _22
     load_const "mcp/"
-    load_var _65
+    load_var _17
     bin_op +
-    load_const "no response for "
-    load_var _69
+    load_const "reading from the MCP server timed out after "
+    load_var _22
+    bin_op +
+    load_const "ms"
     bin_op +
     load_const null
     load_const null
@@ -6653,145 +6685,7 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
     throw
 
   L2:
-    load_var self
-    load_field .p
-    load_field .stdout
-    load_type baml.iter.Iterator<Error = baml.errors.Io | baml.errors.Timeout, Item = string>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0
-    store_var next
-    jump L3
-    load_var e
-    throw_if_panic
-    load_type string
-    load_var self
-    load_field .server_name
-    call baml.String.from
-    store_var _13
-    load_type baml.errors.Io | baml.errors.Timeout
-    load_var e
-    call baml.String.from
-    store_var _18
-    load_type string
-    load_var _18
-    call baml.String.from
-    store_var _17
-    load_const "mcp/"
-    load_var _13
-    bin_op +
-    load_const "reading from the MCP server failed: "
-    load_var _17
-    bin_op +
-    load_const null
-    load_const null
-    init_instance ai.errors.NetworkFailure .provider, .detail, .status_code, .raw_body
-    throw
-
-  L3:
-    load_var next
-    store_var _21
-    load_var _21
-    narrow_bind string, slot=11
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
-    load_type string
-    load_var self
-    load_field .server_name
-    call baml.String.from
-    store_var _57
-    load_type string
-    load_var method
-    call baml.String.from
-    store_var _61
-    load_const "mcp/"
-    load_var _57
-    bin_op +
-    load_const "the MCP server stream ended before answering "
-    load_var _61
-    bin_op +
-    load_const null
-    load_const null
-    init_instance ai.errors.NetworkFailure .provider, .detail, .status_code, .raw_body
-    throw
-
-  L5:
-    load_var _21
-    call baml.String.trim
-    store_var trimmed
-    load_var trimmed
-    call baml.String.length
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_false L0
-    load_var trimmed
-    call baml.json.parse
-    store_var msg
-    jump L6
-    load_var e
-    throw_if_panic
-    load_const null
-    store_var msg
-
-  L6:
-    load_type int
-    load_var msg
-    load_const ".id"
-    load_const -1
-    call baml.json.path_or
-    load_var id
-    cmp_int_op ==
-    pop_jump_if_false L0
-    load_type baml.json.json
-    load_var msg
-    load_const ".error"
-    load_const null
-    call baml.json.path_or
-    store_var err
-    load_var err
-    load_const null
-    call baml.ops.equals_equals
-    unary_op !
-    pop_jump_if_false L7
-    jump L8
-
-  L7:
-    load_type baml.json.json
-    load_var msg
-    load_const ".result"
-    load_const null
-    call baml.json.path_or
     return
-
-  L8:
-    load_type string
-    load_var self
-    load_field .server_name
-    call baml.String.from
-    store_var _42
-    load_type int | null
-    load_var err
-    load_const ".code"
-    load_const null
-    call baml.json.path_or
-    store_var _45
-    load_type string
-    load_var err
-    load_const ".message"
-    load_const "MCP error"
-    call baml.json.path_or
-    store_var _48
-    load_var err
-    call baml.json.stringify
-    store_var _51
-    load_const "mcp/"
-    load_var _42
-    bin_op +
-    load_var2 17 18
-    load_var _51
-    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    throw
 }
 
 function ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> void {
@@ -6805,8 +6699,11 @@ function ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) ->
     store_var framed
     load_var self
     load_field .p
+    load_field .stdin
     load_var framed
-    sys_op baml.sys.Process.write_stdin
+    load_type baml.io.Write
+    load_const "write"
+    virtual_call nargs=2 ntypeargs=0
     pop 1
     jump L0
     load_var e
@@ -6960,8 +6857,8 @@ function ai.mcp.McpConnection.connect(name: string, command: string, args: strin
     load_const null
     load_var timeout_ms
     load_const null
-    load_const true
-    init_instance baml.sys.ProcessOptions .cwd, .env, .timeout_ms, .stdin, .keep_stdin_open
+    load_const null
+    init_instance baml.sys.ProcessOptions .cwd, .env, .timeout_ms, .stdin, .stderr
     sys_op baml.sys.start_process
     store_var p
     jump L1
@@ -6991,9 +6888,14 @@ function ai.mcp.McpConnection.connect(name: string, command: string, args: strin
     throw
 
   L1:
+    load_var p
+    load_field .stdout
+    call baml.sys.ReadPipe.lines
+    store_var _20
     load_var2 1 5
+    load_var2 11 4
     load_const 1
-    init_instance ai.mcp.McpConnection .server_name, .p, .next_id
+    init_instance ai.mcp.McpConnection .server_name, .p, .out, .timeout_ms, .next_id
     store_var conn
     load_var conn
     load_const "initialize"
@@ -7020,8 +6922,8 @@ function ai.mcp.McpConnection.connect(name: string, command: string, args: strin
     load_const "notifications/initialized"
     load_const null
     call ai.mcp.rpc_line
-    store_var _26
-    load_var2 10 11
+    store_var _28
+    load_var2 10 12
     call ai.mcp.McpConnection._send
     pop 1
     load_var conn

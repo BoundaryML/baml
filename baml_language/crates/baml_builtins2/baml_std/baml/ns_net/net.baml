@@ -35,45 +35,21 @@ class TcpStream {
         $rust_io_function
     }
 
-    /// Reads the next available bytes from the stream. Blocks until data arrives.
-    /// Returns an empty `uint8array` once the peer has closed the connection (EOF).
-    ///
-    /// `timeout` bounds the wait for data; `null` (the default) blocks
-    /// indefinitely. On expiry this throws `root.errors.Timeout` and the stream
-    /// remains usable for a subsequent read.
-    function read(
-        self,
-        timeout: root.time.Duration? = null,
-    ) -> uint8array throws root.errors.Io | root.errors.Timeout {
-        self._read(_timeout_nanos(timeout))
+    implements root.io.Read {
+        /// Read at most `limit` bytes. Blocks until data or EOF is available.
+        function read(self, limit: int) -> uint8array? throws root.errors.Io {
+            $rust_io_function
+        }
     }
 
-    function _read(
-        self,
-        timeout_nanos: bigint,
-    ) -> uint8array throws root.errors.Io | root.errors.Timeout {
-        $rust_io_function
-    }
+    implements root.io.Write {
+        /// Attempt one write and return the number of bytes accepted.
+        function write_some(self, data: uint8array) -> int throws root.errors.Io {
+            $rust_io_function
+        }
 
-    /// Writes `data` to the stream. Blocks until every byte has been flushed.
-    ///
-    /// `timeout` bounds the flush; `null` (the default) blocks indefinitely. On
-    /// expiry this throws `root.errors.Timeout`; an unknown amount of `data` may
-    /// already have been written.
-    function write(
-        self,
-        data: uint8array,
-        timeout: root.time.Duration? = null,
-    ) -> null throws root.errors.Io | root.errors.Timeout {
-        self._write(data, _timeout_nanos(timeout))
-    }
-
-    function _write(
-        self,
-        data: uint8array,
-        timeout_nanos: bigint,
-    ) -> null throws root.errors.Io | root.errors.Timeout {
-        $rust_io_function
+        /// No-op because TCP streams are unbuffered.
+        function flush(self) -> void throws never {}
     }
 
     /// Closes the connection.

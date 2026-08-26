@@ -34,7 +34,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use indexmap::IndexMap;
-use sys_types::{BexExternalValue, runtime_io::RuntimeIo};
+use sys_types::runtime_io::RuntimeIo;
 
 /// Total deadline for one credential HTTP round trip, in nanoseconds (the unit
 /// `RuntimeIo::http__send` takes).
@@ -139,12 +139,7 @@ impl BamlAuthIo {
     }
 
     async fn file_text(&self, path: &str) -> Option<String> {
-        let handle = self
-            .io
-            .fs_open(path.to_string(), BexExternalValue::String("r".into()))
-            .await
-            .ok()?;
-        self.io.fs_file_text(&handle).await.ok()
+        self.io.fs_read(path.to_string()).await.ok()
     }
 
     /// One HTTP round trip through the runtime, returning `(status, body)`.

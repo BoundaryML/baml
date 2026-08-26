@@ -267,7 +267,6 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
 
     for expected in [
         "public sealed partial class File : global::System.IDisposable",
-        "public string Read(",
         "public long SeekFrom(\n        string whence,",
         "public string Text(",
         "public File Clone() => new(\n        resource.Clone());",
@@ -292,6 +291,41 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
     assert!(!file.contains("public global::Baml.BamlHandle Handle"));
     assert!(!file.contains("private readonly global::Baml.BamlHandle"));
 
+    for absent in [
+        " Read(",
+        " ReadAsync(",
+        " ReadBytes(",
+        " ReadBytesAsync(",
+        " Flush(",
+        " FlushAsync(",
+    ] {
+        assert!(
+            !file.contains(absent),
+            "generated File resource exposed interface member `{absent}`"
+        );
+    }
+    assert_eq!(
+        file.matches(" Write(").count(),
+        1,
+        "expected exactly one concrete File.Write method"
+    );
+
+    let tcp_stream = fs::read_to_string(generated.join("Net").join("TcpStream.g.cs"))
+        .expect("failed to read generated typed TcpStream resource surface");
+    for absent in [
+        " Read(",
+        " ReadAsync(",
+        " Write(",
+        " WriteAsync(",
+        " Flush(",
+        " FlushAsync(",
+    ] {
+        assert!(
+            !tcp_stream.contains(absent),
+            "generated TcpStream resource exposed interface member `{absent}`"
+        );
+    }
+
     let resource_surfaces = [
         (
             "Fs/File.g.cs",
@@ -300,18 +334,12 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
                 " TextAsync(",
                 " Bytes(",
                 " BytesAsync(",
-                " Read(",
-                " ReadAsync(",
-                " ReadBytes(",
-                " ReadBytesAsync(",
                 " Close(",
                 " CloseAsync(",
                 " SeekFrom(",
                 " SeekFromAsync(",
                 " Write(",
                 " WriteAsync(",
-                " WriteBytes(",
-                " WriteBytesAsync(",
             ],
         ),
         (
@@ -366,16 +394,7 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
         ),
         (
             "Net/TcpStream.g.cs",
-            vec![
-                " Connect(",
-                " ConnectAsync(",
-                " Read(",
-                " ReadAsync(",
-                " Write(",
-                " WriteAsync(",
-                " Close(",
-                " CloseAsync(",
-            ],
+            vec![" Connect(", " ConnectAsync(", " Close(", " CloseAsync("],
         ),
         (
             "Net/TcpListener.g.cs",

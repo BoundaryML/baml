@@ -22,11 +22,11 @@
 
 // Connect succeeds, then close() invalidates the shared handle so a subsequent
 // read() on the same socket fails deterministically ("TcpStream is closed").
-function net_tcp_read_after_close_errors_fn() -> uint8array {
+function net_tcp_read_after_close_errors_fn() -> uint8array? {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let sock = baml.net.TcpStream.connect(server.addr);
     sock.close();
-    sock.read()
+    sock.read(4096)
 }
 
 test "net_tcp_read_after_close_errors" {
@@ -38,11 +38,11 @@ test "net_tcp_read_after_close_errors" {
     }
 }
 
-function net_tcp_listener_accept_after_close_errors_fn() -> uint8array {
+function net_tcp_listener_accept_after_close_errors_fn() -> uint8array? {
     let listener = baml.net.TcpListener.bind("127.0.0.1:0");
     listener.close();
     let sock = listener.accept();
-    sock.read()
+    sock.read(4096)
 }
 
 test "net_tcp_listener_accept_after_close_errors" {

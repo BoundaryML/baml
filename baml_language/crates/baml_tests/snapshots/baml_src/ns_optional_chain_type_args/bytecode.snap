@@ -1097,7 +1097,9 @@ function optional_chain_type_args.sys_op_optional_receiver_fn() -> string {
   L0:
     load_var path
     call user.optional_chain_type_args.optional_file
-    sys_op baml.fs.File.text
+    load_type baml.io.Read
+    load_const "text"
+    virtual_call nargs=1 ntypeargs=0
     store_var text
     jump L2
 
@@ -1133,7 +1135,9 @@ function optional_chain_type_args.sys_op_plain_receiver_fn() -> string {
     load_var path
     load_const "r"
     sys_op baml.fs.open
-    sys_op baml.fs.File.text
+    load_type baml.io.Read
+    load_const "text"
+    virtual_call nargs=1 ntypeargs=0
     store_var text
     load_var path
     sys_op baml.fs.remove
