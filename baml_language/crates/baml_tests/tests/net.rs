@@ -209,6 +209,35 @@ async fn net_read_is_cancellable() {
 }
 
 #[tokio::test]
+async fn net_close_cancels_pending_read() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+
+    let server = tokio::spawn(async move {
+        let _conn = listener.accept().await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    });
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> string {{
+                let sock = baml.net.TcpStream.connect("{addr}");
+                let read = spawn {{ sock.read(1024) }};
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(25n));
+                sock.close();
+                (await read) catch (e) {{
+                    baml.errors.Io => {{ return "closed"; }}
+                }};
+                "completed"
+            }}
+        "#
+    ));
+    server.await.unwrap();
+
+    assert_eq!(output.result, Ok(BexExternalValue::String("closed".into())));
+}
+
+#[tokio::test]
 async fn net_read_completes_before_cancellation() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap().to_string();

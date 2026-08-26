@@ -600,19 +600,24 @@ function fs.fs_file_close_invalidates_handle_fn() -> bool {
 
   L1:
     load_const true
-    store_var threw
+    store_var _0
     jump L3
 
   L2:
     load_const false
-    store_var threw
+    store_var _0
 
   L3:
     load_var path
     sys_op baml.fs.remove
     pop 1
-    load_var threw
+    load_var _0
     return
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var _7
+    rethrow
 }
 
 function fs.fs_file_close_is_idempotent_fn() -> void {
@@ -786,19 +791,24 @@ function fs.fs_file_read_negative_n_errors_fn() -> bool {
 
   L1:
     load_const true
-    store_var threw
+    store_var _0
     jump L3
 
   L2:
     load_const false
-    store_var threw
+    store_var _0
 
   L3:
     load_var path
     sys_op baml.fs.remove
     pop 1
-    load_var threw
+    load_var _0
     return
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var _6
+    rethrow
 }
 
 function fs.fs_file_read_truncates_at_eof_fn() -> uint8array {
@@ -864,19 +874,24 @@ function fs.fs_file_read_zero_errors_fn() -> bool {
 
   L1:
     load_const true
-    store_var threw
+    store_var _0
     jump L3
 
   L2:
     load_const false
-    store_var threw
+    store_var _0
 
   L3:
     load_var path
     sys_op baml.fs.remove
     pop 1
-    load_var threw
+    load_var _0
     return
+    load_var path
+    sys_op baml.fs.remove
+    pop 1
+    load_var _6
+    rethrow
 }
 
 function fs.fs_file_rw_seek_and_read_fn() -> string {

@@ -6540,16 +6540,23 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
     load_var ?1
     make_cell
     store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?4
+    make_cell
+    store_var ?4
     load_deref ?1
     load_field .next_id
-    store_var id
+    store_deref ?4
     load_deref ?1
     copy 0
     load_field .next_id
     load_const 1
     bin_op +
     store_field .next_id
-    load_var2 4 2
+    load_deref ?4
+    load_deref ?2
     load_var params
     call ai.mcp.rpc_line
     store_var _6
@@ -6557,27 +6564,44 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
     load_var _6
     call ai.mcp.McpConnection._send
     pop 1
+    load_deref ?1
+    load_field .timeout_ms
+    call baml.time.Duration.from_milliseconds
+    store_var _9
+    load_type never
+    load_type ai.errors.InvalidRequest | ai.errors.NetworkFailure
+    load_var2 7 1
+    load_var2 4 2
+    make_closure .<lambda(McpConnection._request, 0)>, 3
+    call baml.future.with_timeout
+    jump L2
+    load_var e
+    is_type baml.errors.Timeout
+    pop_jump_if_false L0
+    jump L1
 
   L0:
-    load_const true
-    pop_jump_if_false L1
-    jump L2
+    load_var e
+    rethrow
 
   L1:
     load_type string
     load_deref ?1
     load_field .server_name
     call baml.String.from
-    store_var _69
-    load_type string
-    load_var method
+    store_var _17
+    load_type int
+    load_deref ?1
+    load_field .timeout_ms
     call baml.String.from
-    store_var _73
+    store_var _22
     load_const "mcp/"
-    load_var _69
+    load_var _17
     bin_op +
-    load_const "no response for "
-    load_var _73
+    load_const "reading from the MCP server timed out after "
+    load_var _22
+    bin_op +
+    load_const "ms"
     bin_op +
     load_const null
     load_const null
@@ -6585,146 +6609,7 @@ function ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: strin
     throw
 
   L2:
-    load_deref ?1
-    load_field .timeout_ms
-    call baml.time.Duration.from_milliseconds
-    store_var _10
-    load_type string | baml.iter.Done
-    load_type baml.errors.Io
-    load_var2 7 1
-    make_closure .<lambda(McpConnection._request, 0)>, 1
-    call baml.future.with_timeout
-    jump L3
-    load_var e
-    throw_if_panic
-    load_type string
-    load_deref ?1
-    load_field .server_name
-    call baml.String.from
-    store_var _17
-    load_type never
-    load_var e
-    call baml.String.from
-    store_var _22
-    load_type string
-    load_var _22
-    call baml.String.from
-    store_var _21
-    load_const "mcp/"
-    load_var _17
-    bin_op +
-    load_const "reading from the MCP server failed: "
-    load_var _21
-    bin_op +
-    load_const null
-    load_const null
-    init_instance ai.errors.NetworkFailure .provider, .detail, .status_code, .raw_body
-    throw
-
-  L3:
-    store_var _25
-    load_var _25
-    narrow_bind string, slot=11
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
-    load_type string
-    load_deref ?1
-    load_field .server_name
-    call baml.String.from
-    store_var _61
-    load_type string
-    load_var method
-    call baml.String.from
-    store_var _65
-    load_const "mcp/"
-    load_var _61
-    bin_op +
-    load_const "the MCP server stream ended before answering "
-    load_var _65
-    bin_op +
-    load_const null
-    load_const null
-    init_instance ai.errors.NetworkFailure .provider, .detail, .status_code, .raw_body
-    throw
-
-  L5:
-    load_var _25
-    call baml.String.trim
-    store_var trimmed
-    load_var trimmed
-    call baml.String.length
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_false L0
-    load_var trimmed
-    call baml.json.parse
-    store_var msg
-    jump L6
-    load_var e
-    throw_if_panic
-    load_const null
-    store_var msg
-
-  L6:
-    load_type int
-    load_var msg
-    load_const ".id"
-    load_const -1
-    call baml.json.path_or
-    load_var id
-    cmp_int_op ==
-    pop_jump_if_false L0
-    load_type baml.json.json
-    load_var msg
-    load_const ".error"
-    load_const null
-    call baml.json.path_or
-    store_var err
-    load_var err
-    load_const null
-    call baml.ops.equals_equals
-    unary_op !
-    pop_jump_if_false L7
-    jump L8
-
-  L7:
-    load_type baml.json.json
-    load_var msg
-    load_const ".result"
-    load_const null
-    call baml.json.path_or
     return
-
-  L8:
-    load_type string
-    load_deref ?1
-    load_field .server_name
-    call baml.String.from
-    store_var _46
-    load_type int | null
-    load_var err
-    load_const ".code"
-    load_const null
-    call baml.json.path_or
-    store_var _49
-    load_type string
-    load_var err
-    load_const ".message"
-    load_const "MCP error"
-    call baml.json.path_or
-    store_var _52
-    load_var err
-    call baml.json.stringify
-    store_var _55
-    load_const "mcp/"
-    load_var _46
-    bin_op +
-    load_var2 17 18
-    load_var _55
-    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    throw
 }
 
 function ai.mcp.McpConnection._send(self: ai.mcp.McpConnection, line: string) -> void {

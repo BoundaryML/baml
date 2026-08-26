@@ -75,13 +75,14 @@ test "read text decodes strict utf8" {
 
 test "read text rejects invalid utf8" {
     let reader = ChunkReader { data: uint8array.from_array([255]), cursor: 0, chunk_size: 1 };
-    let failed = {
-        reader.text();
-        false
-    } catch (e) {
-        baml.errors.ParseError => true
-    };
-    assert.is_true(failed)
+    assert.is_true(
+        {
+            reader.text();
+            false
+        } catch (e) {
+            baml.errors.ParseError => true
+        },
+    )
 }
 
 test "write retries partial writes" {
@@ -91,23 +92,25 @@ test "write retries partial writes" {
 }
 
 test "write rejects zero progress" {
-    let failed = {
-        ZeroWriter {  }.write(b"abc");
-        false
-    } catch (e) {
-        baml.errors.Io => true
-    };
-    assert.is_true(failed)
+    assert.is_true(
+        {
+            ZeroWriter {  }.write(b"abc");
+            false
+        } catch (e) {
+            baml.errors.Io => true
+        },
+    )
 }
 
 test "write rejects oversized progress" {
-    let failed = {
-        OversizedWriter {  }.write(b"abc");
-        false
-    } catch (e) {
-        baml.errors.Io => true
-    };
-    assert.is_true(failed)
+    assert.is_true(
+        {
+            OversizedWriter {  }.write(b"abc");
+            false
+        } catch (e) {
+            baml.errors.Io => true
+        },
+    )
 }
 
 test "uint8array index_of finds bytes" {

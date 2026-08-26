@@ -411,6 +411,33 @@ async fn start_process_stdout_read_is_cancellable() {
 }
 
 #[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_stdout_close_cancels_pending_read() {
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "while :; do :; done"],
+                    null,
+                );
+                defer { process.close() }
+
+                let read = spawn { process.stdout.read(1024) };
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(25n));
+                process.stdout.close();
+                (await read) catch (e) {
+                    baml.errors.Io => { return "closed"; }
+                };
+                "completed"
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::String("closed".into())));
+}
+
+#[tokio::test]
 #[cfg(unix)]
 async fn claude_code_client_preserves_process_wait_timeout() {
     use std::os::unix::fs::PermissionsExt as _;

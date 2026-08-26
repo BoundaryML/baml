@@ -6864,19 +6864,19 @@ fn ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, par
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: ai.mcp.McpConnection // self // param [captured]
-    let _2: string // method // param
+    let _2: string // method // param [captured]
     let _3: map<string, unknown> // params // param
-    let _4: int // id
+    let _4: int // id [captured]
     let _5: void
     let _6: string
     let _7: int
-    let _8: string | baml.iter.Done // next
-    let _9: unknown // e
-    let _10: baml.time.Duration
-    let _11: int
-    let _12: () -> string | baml.iter.Done throws baml.errors.Io
+    let _8: unknown // e
+    let _9: baml.time.Duration
+    let _10: int
+    let _11: () -> never throws ai.errors.InvalidRequest | ai.errors.NetworkFailure
+    let _12: reflect.Type
     let _13: reflect.Type
-    let _14: reflect.Type
+    let _14: bool
     let _15: ai.errors.NetworkFailure
     let _16: string
     let _17: string
@@ -6885,58 +6885,8 @@ fn ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, par
     let _20: string
     let _21: string
     let _22: string
-    let _23: reflect.Type
+    let _23: int
     let _24: reflect.Type
-    let _25: string | baml.iter.Done
-    let _26: string // line
-    let _27: string // trimmed
-    let _28: bool
-    let _29: int
-    let _30: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // msg
-    let _31: unknown // e
-    let _32: string
-    let _33: bool
-    let _34: int
-    let _35: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _36: reflect.Type
-    let _37: int
-    let _38: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // err
-    let _39: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _40: reflect.Type
-    let _41: bool
-    let _42: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _43: bool
-    let _44: ai.errors.InvalidRequest
-    let _45: string
-    let _46: string
-    let _47: string
-    let _48: reflect.Type
-    let _49: int | null
-    let _50: int | float | string | bool | baml.json.json[] | map<string, baml.json.json>
-    let _51: reflect.Type
-    let _52: string
-    let _53: int | float | string | bool | baml.json.json[] | map<string, baml.json.json>
-    let _54: reflect.Type
-    let _55: string
-    let _56: int | float | string | bool | baml.json.json[] | map<string, baml.json.json>
-    let _57: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _58: reflect.Type
-    let _59: ai.errors.NetworkFailure
-    let _60: string
-    let _61: string
-    let _62: string
-    let _63: reflect.Type
-    let _64: string
-    let _65: string
-    let _66: reflect.Type
-    let _67: ai.errors.NetworkFailure
-    let _68: string
-    let _69: string
-    let _70: string
-    let _71: reflect.Type
-    let _72: string
-    let _73: string
-    let _74: reflect.Type
 
     bb0: {
         _4 = copy _1.4;
@@ -6946,202 +6896,301 @@ fn ai.mcp.McpConnection._request(self: ai.mcp.McpConnection, method: string, par
     }
 
     bb1: {
-        _5 = call const fn ai.mcp.McpConnection._send(copy _1, copy _6) -> [bb6];
+        _5 = call const fn ai.mcp.McpConnection._send(copy _1, copy _6) -> [bb2];
     }
 
     bb2: {
-        throw_if_panic copy _31 -> bb3;
+        _10 = copy _1.3;
+        _9 = call const fn baml.time.Duration.from_milliseconds(copy _10) -> [bb3, unwind: bb5];
     }
 
     bb3: {
-        _30 = const null;
-        goto -> bb4;
+        _11 = make_closure lambda[0](copy _1, copy _4, copy _2);
+        _12 = load_type(never);
+        _13 = load_type(ai.errors.InvalidRequest | ai.errors.NetworkFailure);
+        _0 = call const fn baml.future.with_timeout<copy _12, copy _13>(copy _9, copy _11) -> [bb4, unwind: bb5];
     }
 
     bb4: {
-        _35 = copy _30;
-        _36 = load_type(int);
-        _34 = call const fn baml.json.path_or<copy _36>(copy _35, const ".id", const -1_i64) -> [bb5];
-    }
-
-    bb5: {
-        _37 = copy _4;
-        _33 = copy _34 == copy _37;
-        branch copy _33 -> [bb25, bb6];
-    }
-
-    bb6: {
-        branch const true -> [bb10, bb7];
-    }
-
-    bb7: {
-        _70 = copy _1.0;
-        _71 = load_type(string);
-        _69 = call const fn baml.String.from<copy _71>(copy _70) -> [bb8];
-    }
-
-    bb8: {
-        _68 = const "mcp/" + copy _69;
-        _74 = load_type(string);
-        _73 = call const fn baml.String.from<copy _74>(copy _2) -> [bb9];
-    }
-
-    bb9: {
-        _72 = const "no response for " + copy _73;
-        _67 = ai.errors.NetworkFailure { copy _68, copy _72, const null, const null };
-        throw copy _67;
-    }
-
-    bb10: {
-        _11 = copy _1.3;
-        _10 = call const fn baml.time.Duration.from_milliseconds(copy _11) -> [bb11, unwind: bb12];
-    }
-
-    bb11: {
-        _12 = make_closure lambda[0](copy _1);
-        _13 = load_type(string | baml.iter.Done);
-        _14 = load_type(baml.errors.Io);
-        _8 = call const fn baml.future.with_timeout<copy _13, copy _14>(copy _10, copy _12) -> [bb17, unwind: bb12];
-    }
-
-    bb12: {
-        throw_if_panic copy _9 -> bb13;
-    }
-
-    bb13: {
-        _18 = copy _1.0;
-        _19 = load_type(string);
-        _17 = call const fn baml.String.from<copy _19>(copy _18) -> [bb14];
-    }
-
-    bb14: {
-        _16 = const "mcp/" + copy _17;
-        _23 = load_type(never);
-        _22 = call const fn baml.String.from<copy _23>(copy _9) -> [bb15];
-    }
-
-    bb15: {
-        _24 = load_type(string);
-        _21 = call const fn baml.String.from<copy _24>(copy _22) -> [bb16];
-    }
-
-    bb16: {
-        _20 = const "reading from the MCP server failed: " + copy _21;
-        _15 = ai.errors.NetworkFailure { copy _16, copy _20, const null, const null };
-        throw copy _15;
-    }
-
-    bb17: {
-        _25 = copy _8;
-        _25 = narrow_bind copy _25 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb21, bb18];
-    }
-
-    bb18: {
-        _62 = copy _1.0;
-        _63 = load_type(string);
-        _61 = call const fn baml.String.from<copy _63>(copy _62) -> [bb19];
-    }
-
-    bb19: {
-        _60 = const "mcp/" + copy _61;
-        _66 = load_type(string);
-        _65 = call const fn baml.String.from<copy _66>(copy _2) -> [bb20];
-    }
-
-    bb20: {
-        _64 = const "the MCP server stream ended before answering " + copy _65;
-        _59 = ai.errors.NetworkFailure { copy _60, copy _64, const null, const null };
-        throw copy _59;
-    }
-
-    bb21: {
-        _26 = copy _25;
-        _27 = call const fn baml.String.trim(copy _26) -> [bb22];
-    }
-
-    bb22: {
-        _29 = call const fn baml.String.length(copy _27) -> [bb23];
-    }
-
-    bb23: {
-        _28 = copy _29 > const 0_i64;
-        branch copy _28 -> [bb24, bb6];
-    }
-
-    bb24: {
-        _32 = copy _27;
-        _30 = call const fn baml.json.parse(copy _32) -> [bb4, unwind: bb2];
-    }
-
-    bb25: {
-        _39 = copy _30;
-        _40 = load_type(baml.json.json);
-        _38 = call const fn baml.json.path_or<copy _40>(copy _39, const ".error", const null) -> [bb26];
-    }
-
-    bb26: {
-        _42 = copy _38;
-        _43 = call const fn baml.ops.equals_equals(copy _42, const null) -> [bb27];
-    }
-
-    bb27: {
-        _41 = !copy _43;
-        branch copy _41 -> [bb30, bb28];
-    }
-
-    bb28: {
-        _57 = copy _30;
-        _58 = load_type(baml.json.json);
-        _0 = call const fn baml.json.path_or<copy _58>(copy _57, const ".result", const null) -> [bb29];
-    }
-
-    bb29: {
         return;
     }
 
-    bb30: {
-        _47 = copy _1.0;
-        _48 = load_type(string);
-        _46 = call const fn baml.String.from<copy _48>(copy _47) -> [bb31];
+    bb5: {
+        _14 = is_type(copy _8, baml.errors.Timeout);
+        branch copy _14 -> [bb7, bb6];
     }
 
-    bb31: {
-        _45 = const "mcp/" + copy _46;
-        _50 = copy _38;
-        _51 = load_type(int | null);
-        _49 = call const fn baml.json.path_or<copy _51>(copy _50, const ".code", const null) -> [bb32];
+    bb6: {
+        rethrow copy _8;
     }
 
-    bb32: {
-        _53 = copy _38;
-        _54 = load_type(string);
-        _52 = call const fn baml.json.path_or<copy _54>(copy _53, const ".message", const "MCP error") -> [bb33];
+    bb7: {
+        _18 = copy _1.0;
+        _19 = load_type(string);
+        _17 = call const fn baml.String.from<copy _19>(copy _18) -> [bb8];
     }
 
-    bb33: {
-        _56 = copy _38;
-        _55 = call const fn baml.json.stringify(copy _56) -> [bb34];
+    bb8: {
+        _16 = const "mcp/" + copy _17;
+        _23 = copy _1.3;
+        _24 = load_type(int);
+        _22 = call const fn baml.String.from<copy _24>(copy _23) -> [bb9];
     }
 
-    bb34: {
-        _44 = ai.errors.InvalidRequest { copy _45, copy _49, copy _52, copy _55 };
-        throw copy _44;
+    bb9: {
+        _21 = const "reading from the MCP server timed out after " + copy _22;
+        _20 = copy _21 + const "ms";
+        _15 = ai.errors.NetworkFailure { copy _16, copy _20, const null, const null };
+        throw copy _15;
     }
 }
 
 // lambda[0]
-fn .<lambda(McpConnection._request, 0)>() -> string | baml.iter.Done {
+fn .<lambda(McpConnection._request, 0)>() -> never {
     // Locals:
-    let _0: string | baml.iter.Done // _0 // return
-    let _1: (baml.sys.ReadPipeLines) -> string | baml.iter.Done throws baml.errors.Io
+    let _0: never // _0 // return
+    let _1: string | baml.iter.Done // next
+    let _2: unknown // e
+    let _3: (baml.sys.ReadPipeLines) -> string | baml.iter.Done throws baml.errors.Io
+    let _4: ai.errors.NetworkFailure
+    let _5: string
+    let _6: string
+    let _7: string
+    let _8: reflect.Type
+    let _9: string
+    let _10: string
+    let _11: string
+    let _12: reflect.Type
+    let _13: reflect.Type
+    let _14: string | baml.iter.Done
+    let _15: string // line
+    let _16: string // trimmed
+    let _17: bool
+    let _18: int
+    let _19: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // msg
+    let _20: unknown // e
+    let _21: string
+    let _22: bool
+    let _23: int
+    let _24: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _25: reflect.Type
+    let _26: int
+    let _27: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // err
+    let _28: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _29: reflect.Type
+    let _30: bool
+    let _31: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _32: bool
+    let _33: ai.errors.InvalidRequest
+    let _34: string
+    let _35: string
+    let _36: string
+    let _37: reflect.Type
+    let _38: int | null
+    let _39: int | float | string | bool | baml.json.json[] | map<string, baml.json.json>
+    let _40: reflect.Type
+    let _41: string
+    let _42: int | float | string | bool | baml.json.json[] | map<string, baml.json.json>
+    let _43: reflect.Type
+    let _44: string
+    let _45: int | float | string | bool | baml.json.json[] | map<string, baml.json.json>
+    let _46: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _47: reflect.Type
+    let _48: ai.errors.NetworkFailure
+    let _49: string
+    let _50: string
+    let _51: string
+    let _52: reflect.Type
+    let _53: string
+    let _54: string
+    let _55: string
+    let _56: reflect.Type
+    let _57: ai.errors.NetworkFailure
+    let _58: string
+    let _59: string
+    let _60: string
+    let _61: reflect.Type
+    let _62: string
+    let _63: string
+    let _64: string
+    let _65: reflect.Type
 
     bb0: {
-        _1 = copy capture[0].2;
-        _0 = call const fn baml.sys.ReadPipeLines.root.iter.Iterator.next(copy _1) -> [bb1];
+        goto -> bb5;
     }
 
     bb1: {
+        throw_if_panic copy _20 -> bb2;
+    }
+
+    bb2: {
+        _19 = const null;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _24 = copy _19;
+        _25 = load_type(int);
+        _23 = call const fn baml.json.path_or<copy _25>(copy _24, const ".id", const -1_i64) -> [bb4];
+    }
+
+    bb4: {
+        _26 = copy capture[1];
+        _22 = copy _23 == copy _26;
+        branch copy _22 -> [bb23, bb5];
+    }
+
+    bb5: {
+        branch const true -> [bb9, bb6];
+    }
+
+    bb6: {
+        _60 = copy capture[0].0;
+        _61 = load_type(string);
+        _59 = call const fn baml.String.from<copy _61>(copy _60) -> [bb7];
+    }
+
+    bb7: {
+        _58 = const "mcp/" + copy _59;
+        _64 = copy capture[2];
+        _65 = load_type(string);
+        _63 = call const fn baml.String.from<copy _65>(copy _64) -> [bb8];
+    }
+
+    bb8: {
+        _62 = const "no response for " + copy _63;
+        _57 = ai.errors.NetworkFailure { copy _58, copy _62, const null, const null };
+        throw copy _57;
+    }
+
+    bb9: {
+        _3 = copy capture[0].2;
+        _1 = call const fn baml.sys.ReadPipeLines.root.iter.Iterator.next(copy _3) -> [bb15, unwind: bb10];
+    }
+
+    bb10: {
+        throw_if_panic copy _2 -> bb11;
+    }
+
+    bb11: {
+        _7 = copy capture[0].0;
+        _8 = load_type(string);
+        _6 = call const fn baml.String.from<copy _8>(copy _7) -> [bb12];
+    }
+
+    bb12: {
+        _5 = const "mcp/" + copy _6;
+        _12 = load_type(baml.errors.Io);
+        _11 = call const fn baml.String.from<copy _12>(copy _2) -> [bb13];
+    }
+
+    bb13: {
+        _13 = load_type(string);
+        _10 = call const fn baml.String.from<copy _13>(copy _11) -> [bb14];
+    }
+
+    bb14: {
+        _9 = const "reading from the MCP server failed: " + copy _10;
+        _4 = ai.errors.NetworkFailure { copy _5, copy _9, const null, const null };
+        throw copy _4;
+    }
+
+    bb15: {
+        _14 = copy _1;
+        _14 = narrow_bind copy _14 as String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } } -> [bb19, bb16];
+    }
+
+    bb16: {
+        _51 = copy capture[0].0;
+        _52 = load_type(string);
+        _50 = call const fn baml.String.from<copy _52>(copy _51) -> [bb17];
+    }
+
+    bb17: {
+        _49 = const "mcp/" + copy _50;
+        _55 = copy capture[2];
+        _56 = load_type(string);
+        _54 = call const fn baml.String.from<copy _56>(copy _55) -> [bb18];
+    }
+
+    bb18: {
+        _53 = const "the MCP server stream ended before answering " + copy _54;
+        _48 = ai.errors.NetworkFailure { copy _49, copy _53, const null, const null };
+        throw copy _48;
+    }
+
+    bb19: {
+        _15 = copy _14;
+        _16 = call const fn baml.String.trim(copy _15) -> [bb20];
+    }
+
+    bb20: {
+        _18 = call const fn baml.String.length(copy _16) -> [bb21];
+    }
+
+    bb21: {
+        _17 = copy _18 > const 0_i64;
+        branch copy _17 -> [bb22, bb5];
+    }
+
+    bb22: {
+        _21 = copy _16;
+        _19 = call const fn baml.json.parse(copy _21) -> [bb3, unwind: bb1];
+    }
+
+    bb23: {
+        _28 = copy _19;
+        _29 = load_type(baml.json.json);
+        _27 = call const fn baml.json.path_or<copy _29>(copy _28, const ".error", const null) -> [bb24];
+    }
+
+    bb24: {
+        _31 = copy _27;
+        _32 = call const fn baml.ops.equals_equals(copy _31, const null) -> [bb25];
+    }
+
+    bb25: {
+        _30 = !copy _32;
+        branch copy _30 -> [bb28, bb26];
+    }
+
+    bb26: {
+        _46 = copy _19;
+        _47 = load_type(baml.json.json);
+        _0 = call const fn baml.json.path_or<copy _47>(copy _46, const ".result", const null) -> [bb27];
+    }
+
+    bb27: {
         return;
+    }
+
+    bb28: {
+        _36 = copy capture[0].0;
+        _37 = load_type(string);
+        _35 = call const fn baml.String.from<copy _37>(copy _36) -> [bb29];
+    }
+
+    bb29: {
+        _34 = const "mcp/" + copy _35;
+        _39 = copy _27;
+        _40 = load_type(int | null);
+        _38 = call const fn baml.json.path_or<copy _40>(copy _39, const ".code", const null) -> [bb30];
+    }
+
+    bb30: {
+        _42 = copy _27;
+        _43 = load_type(string);
+        _41 = call const fn baml.json.path_or<copy _43>(copy _42, const ".message", const "MCP error") -> [bb31];
+    }
+
+    bb31: {
+        _45 = copy _27;
+        _44 = call const fn baml.json.stringify(copy _45) -> [bb32];
+    }
+
+    bb32: {
+        _33 = ai.errors.InvalidRequest { copy _34, copy _38, copy _41, copy _44 };
+        throw copy _33;
     }
 }
 

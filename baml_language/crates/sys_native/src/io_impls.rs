@@ -1230,6 +1230,7 @@ struct LiveProcessHandle {
 
 struct ReadPipeHandle {
     reader: tokio::sync::Mutex<Option<Box<dyn tokio::io::AsyncRead + Send + Unpin>>>,
+    close_tx: tokio::sync::watch::Sender<bool>,
     label: String,
 }
 
@@ -1285,12 +1286,25 @@ fn read_pipe(
     reader: impl tokio::io::AsyncRead + Send + Unpin + 'static,
     label: String,
 ) -> owned::sys::ReadPipe {
+    let (close_tx, _close_rx) = tokio::sync::watch::channel(false);
     owned::sys::ReadPipe {
         _pipe: Arc::new(ReadPipeHandle {
             reader: tokio::sync::Mutex::new(Some(Box::new(reader))),
+            close_tx,
             label,
         }),
     }
+}
+
+fn read_pipe_closed_error(label: &str) -> VmBamlError {
+    VmBamlError::Io {
+        message: format!("Read pipe for '{label}' is closed"),
+    }
+}
+
+async fn close_read_pipe(handle: &ReadPipeHandle) {
+    handle.close_tx.send_replace(true);
+    handle.reader.lock().await.take();
 }
 
 fn write_pipe(
@@ -1374,17 +1388,27 @@ impl io::IoClassSysReadPipe for NativeSysOps {
         };
         SysOpOutput::async_op(async move {
             let handle = downcast_read_pipe(&readpipe)?;
+            let mut close_rx = handle.close_tx.subscribe();
+            if *close_rx.borrow() {
+                return Err(read_pipe_closed_error(&handle.label).into());
+            }
             let mut guard = handle.reader.lock().await;
-            let reader = guard.as_mut().ok_or_else(|| VmBamlError::Io {
-                message: format!("Read pipe for '{}' is closed", handle.label),
-            })?;
+            if *close_rx.borrow() {
+                return Err(read_pipe_closed_error(&handle.label).into());
+            }
+            let reader = guard
+                .as_mut()
+                .ok_or_else(|| read_pipe_closed_error(&handle.label))?;
             let mut buffer = vec![0u8; limit];
-            let read = reader
-                .read(&mut buffer)
-                .await
-                .map_err(|error| VmBamlError::Io {
+            let read = tokio::select! {
+                biased;
+                _ = close_rx.changed() => {
+                    return Err(read_pipe_closed_error(&handle.label).into());
+                }
+                result = reader.read(&mut buffer) => result.map_err(|error| VmBamlError::Io {
                     message: format!("Failed to read from '{}': {error}", handle.label),
-                })?;
+                })?,
+            };
             if read == 0 {
                 return Ok(None);
             }
@@ -1402,7 +1426,7 @@ impl io::IoClassSysReadPipe for NativeSysOps {
     ) -> SysOpOutput<()> {
         SysOpOutput::async_op(async move {
             let handle = downcast_read_pipe(&readpipe)?;
-            handle.reader.lock().await.take();
+            close_read_pipe(&handle).await;
             Ok(())
         })
     }
@@ -1545,7 +1569,7 @@ impl io::IoClassSysProcess for NativeSysOps {
                 .flatten()
             {
                 if let Ok(handle) = downcast_read_pipe(pipe) {
-                    handle.reader.lock().await.take();
+                    close_read_pipe(&handle).await;
                 }
             }
             Ok(())
@@ -1868,16 +1892,19 @@ fn sleep_nanos_from_delay(delay: BexExternalValue) -> Result<u64, VmRustFnError>
 // Network
 // ============================================================================
 
-// Network handles mirror `FsFileHandle`: the socket lives inside a
-// `Mutex<Option<_>>` so `close()` can `take()` it, after which every other
-// reference to the same handle deterministically observes a closed socket.
+// Network handles keep each socket in an optional slot so `close()` can take
+// it, after which every other reference observes a closed socket.
 //
-// `TcpStream` ops need `&mut` access, so (like `fs::File`) we hold the guard
-// across the await. `TcpListener`/`UdpSocket` ops only need `&self`, so we keep
-// each socket behind an inner `Arc` and clone it out under a brief lock — that
-// way `close()` stays deterministic without serializing concurrent
+// `TcpStream` ops need `&mut` access, so they hold the guard across the await
+// and select against a close notification. `TcpListener`/`UdpSocket` ops only
+// need `&self`, so each socket has an inner `Arc` cloned under a brief lock.
+// This keeps `close()` deterministic without serializing concurrent
 // `accept`/`recv_from`/`send_to` on the same socket.
-type NetTcpStreamHandle = tokio::sync::Mutex<Option<tokio::net::TcpStream>>;
+struct NetTcpStreamHandle {
+    stream: tokio::sync::Mutex<Option<tokio::net::TcpStream>>,
+    close_tx: tokio::sync::watch::Sender<bool>,
+}
+
 type NetTcpListenerHandle = tokio::sync::Mutex<Option<Arc<tokio::net::TcpListener>>>;
 type NetUdpSocketHandle = tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>;
 
@@ -1906,6 +1933,22 @@ fn downcast_tcpstream(
         .map_err(|_| VmBamlError::DevOther {
             message: "Invalid TcpStream handle type".to_string(),
         })
+}
+
+fn net_tcp_stream(stream: tokio::net::TcpStream) -> owned::net::TcpStream {
+    let (close_tx, _close_rx) = tokio::sync::watch::channel(false);
+    owned::net::TcpStream {
+        _handle: Arc::new(NetTcpStreamHandle {
+            stream: tokio::sync::Mutex::new(Some(stream)),
+            close_tx,
+        }),
+    }
+}
+
+fn tcp_stream_closed_error() -> VmBamlError {
+    VmBamlError::Io {
+        message: "TcpStream is closed".to_string(),
+    }
 }
 
 fn downcast_tcplistener(
@@ -1963,9 +2006,7 @@ impl io::IoClassNetTcpStream for NativeSysOps {
             .map_err(|e| VmBamlError::Io {
                 message: format!("Failed to connect to '{addr}': {e}"),
             })?;
-            let handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(Some(stream)));
-            Ok(owned::net::TcpStream { _handle: handle })
+            Ok(net_tcp_stream(stream))
         })
     }
 
@@ -1989,17 +2030,25 @@ impl io::IoClassNetTcpStream for NativeSysOps {
         };
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;
-            let mut guard = handle.lock().await;
-            let stream = guard.as_mut().ok_or_else(|| VmBamlError::Io {
-                message: "TcpStream is closed".to_string(),
-            })?;
+            let mut close_rx = handle.close_tx.subscribe();
+            if *close_rx.borrow() {
+                return Err(tcp_stream_closed_error().into());
+            }
+            let mut guard = handle.stream.lock().await;
+            if *close_rx.borrow() {
+                return Err(tcp_stream_closed_error().into());
+            }
+            let stream = guard.as_mut().ok_or_else(tcp_stream_closed_error)?;
             let mut buffer = vec![0u8; limit];
-            let read = stream
-                .read(&mut buffer)
-                .await
-                .map_err(|e| VmBamlError::Io {
+            let read = tokio::select! {
+                biased;
+                _ = close_rx.changed() => {
+                    return Err(tcp_stream_closed_error().into());
+                }
+                result = stream.read(&mut buffer) => result.map_err(|e| VmBamlError::Io {
                     message: format!("Failed to read from socket: {e}"),
-                })?;
+                })?,
+            };
             if read == 0 {
                 return Ok(None);
             }
@@ -2020,13 +2069,24 @@ impl io::IoClassNetTcpStream for NativeSysOps {
 
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;
-            let mut guard = handle.lock().await;
-            let stream = guard.as_mut().ok_or_else(|| VmBamlError::Io {
-                message: "TcpStream is closed".to_string(),
-            })?;
-            let written = stream.write(&data).await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to write to socket: {e}"),
-            })?;
+            let mut close_rx = handle.close_tx.subscribe();
+            if *close_rx.borrow() {
+                return Err(tcp_stream_closed_error().into());
+            }
+            let mut guard = handle.stream.lock().await;
+            if *close_rx.borrow() {
+                return Err(tcp_stream_closed_error().into());
+            }
+            let stream = guard.as_mut().ok_or_else(tcp_stream_closed_error)?;
+            let written = tokio::select! {
+                biased;
+                _ = close_rx.changed() => {
+                    return Err(tcp_stream_closed_error().into());
+                }
+                result = stream.write(&data) => result.map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to write to socket: {e}"),
+                })?,
+            };
             i64::try_from(written).map_err(|_| {
                 VmRustFnError::from(VmBamlError::Io {
                     message: "socket write count exceeds int range".to_string(),
@@ -2046,9 +2106,10 @@ impl io::IoClassNetTcpStream for NativeSysOps {
 
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;
+            handle.close_tx.send_replace(true);
             // Take the stream out of the shared handle so any other reference
             // observes a closed socket on its next op. Already-closed is a no-op.
-            let Some(mut stream) = handle.lock().await.take() else {
+            let Some(mut stream) = handle.stream.lock().await.take() else {
                 return Ok(());
             };
             // shutdown() flushes pending writes and closes the write half, so
@@ -2110,11 +2171,7 @@ impl io::IoClassNetTcpListener for NativeSysOps {
             let (stream, _peer) = inner.accept().await.map_err(|e| VmBamlError::Io {
                 message: format!("Failed to accept connection: {e}"),
             })?;
-            let sock_handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(Some(stream)));
-            Ok(owned::net::TcpStream {
-                _handle: sock_handle,
-            })
+            Ok(net_tcp_stream(stream))
         })
     }
 

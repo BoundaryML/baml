@@ -203,14 +203,13 @@ function fs_file_read_negative_n_errors_fn() -> bool {
     let path = fs_tmp("read_negative_n.txt");
     baml.fs.write(path, "abc");
     let f = baml.fs.open(path, "r");
-    let threw = {
+    defer { baml.fs.remove(path) }
+    {
         f.read(-1);
         false
     } catch (e) {
         baml.errors.Io => true
-    };
-    baml.fs.remove(path);
-    threw
+    }
 }
 
 test "fs_file_read_negative_n_errors" {
@@ -221,14 +220,13 @@ function fs_file_read_zero_errors_fn() -> bool {
     let path = fs_tmp("read_zero.txt");
     baml.fs.write(path, "abc");
     let f = baml.fs.open(path, "r");
-    let threw = {
+    defer { baml.fs.remove(path) }
+    {
         f.read(0);
         false
     } catch (e) {
         baml.errors.Io => true
-    };
-    baml.fs.remove(path);
-    threw
+    }
 }
 
 test "fs_file_read_zero_errors" {
@@ -244,14 +242,13 @@ function fs_file_close_invalidates_handle_fn() -> bool {
     baml.fs.write(path, "content");
     let f = baml.fs.open(path, "r");
     f.close();
-    let threw = {
+    defer { baml.fs.remove(path) }
+    {
         f.text();
         false
     } catch (e) {
         baml.errors.Io => true
-    };
-    baml.fs.remove(path);
-    threw
+    }
 }
 
 test "fs_file_close_invalidates_handle" {
