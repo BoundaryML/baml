@@ -10,7 +10,7 @@ expression: outcome.dump
 230..247 '"{\"va...: 42}"': "{\"value\": 42}"
 253..270 'let b:...x<int>': user.TfBox<int>
 260..270 'TfBox<int>': user.TfBox<int>
-273..283 'TfBox<int>': user.TfBox<int>
+273..278 'TfBox': user.TfBox<int>
 273..293 'TfBox<...m_json': (j: baml.json.json) -> user.TfBox<int> throws baml.json.JsonDecodeError
 273..296 'TfBox<...son(j)': user.TfBox<int>
 294..295 'j': baml.json.json

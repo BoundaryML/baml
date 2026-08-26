@@ -144,18 +144,18 @@ impl Printable for Validated<'_, raw_ast::ExprNode> {
             | ValidatedExprNode::ContinueExpr(_)
             | ValidatedExprNode::AwaitExpr(_)) => {
                 let range = match verbatim {
-                    ValidatedExprNode::TaggedTemplateExpr(node) => node.text_range(),
-                    ValidatedExprNode::UpcastExpr(node) => node.text_range(),
-                    ValidatedExprNode::QualifiedPathExpr(node) => node.text_range(),
-                    ValidatedExprNode::SpecExpr(node) => node.text_range(),
-                    ValidatedExprNode::ThrowExpr(node) => node.text_range(),
-                    ValidatedExprNode::ReturnExpr(node) => node.text_range(),
-                    ValidatedExprNode::BreakExpr(node) => node.text_range(),
-                    ValidatedExprNode::ContinueExpr(node) => node.text_range(),
-                    ValidatedExprNode::AwaitExpr(node) => node.text_range(),
+                    ValidatedExprNode::TaggedTemplateExpr(node) => node.non_trivia_text_range(),
+                    ValidatedExprNode::UpcastExpr(node) => node.non_trivia_text_range(),
+                    ValidatedExprNode::QualifiedPathExpr(node) => node.non_trivia_text_range(),
+                    ValidatedExprNode::SpecExpr(node) => node.non_trivia_text_range(),
+                    ValidatedExprNode::ThrowExpr(node) => node.non_trivia_text_range(),
+                    ValidatedExprNode::ReturnExpr(node) => node.non_trivia_text_range(),
+                    ValidatedExprNode::BreakExpr(node) => node.non_trivia_text_range(),
+                    ValidatedExprNode::ContinueExpr(node) => node.non_trivia_text_range(),
+                    ValidatedExprNode::AwaitExpr(node) => node.non_trivia_text_range(),
                     _ => unreachable!("matched verbatim expression"),
                 };
-                printer.print_input_range_trimmed_start(range);
+                printer.print_input_range(range);
                 PrintInfo {
                     multi_lined: printer.input[range].contains('\n'),
                 }
@@ -1961,6 +1961,18 @@ impl<'tree> ValidatedPrintChain<'tree> {
         let from = validated_peel_to_needed_paren(from, trivia, false);
         match from.as_variant() {
             ValidatedExprNode::PathExpr(path) => {
+                if let Some(head) = path
+                    .direct_elements()
+                    .find_map(|element| element.node::<raw_ast::ExprNode>())
+                {
+                    let mut chain = Self::new(head, trivia);
+                    chain.members.extend(
+                        path.direct_elements()
+                            .filter_map(|element| element.node::<raw_ast::GenericArgs>())
+                            .map(ValidatedPrintChainItem::Generic),
+                    );
+                    return chain;
+                }
                 let mut first = None;
                 let mut members = Vec::new();
                 Self::flatten_path(path, &mut first, &mut members);

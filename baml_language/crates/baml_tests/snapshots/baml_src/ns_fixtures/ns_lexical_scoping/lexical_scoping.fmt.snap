@@ -48,8 +48,7 @@ function for_loop_restores_outer() -> int {
     let x = 1;
     for (let x in [2, 3]) {
         x;
-    }
-    ;
+    };
     x
 }
 

@@ -75,19 +75,6 @@ function LoopStmts(items: int[], flag: bool) -> int {
         result += i;
     };
 
-    // ===== C-style for with omitted expressions =====
-    for (;;) {
-        break;
-    };
-
-    for (; flag;) {
-        break;
-    };
-
-    for (let i = 0;; i += 1) {
-        break;
-    };
-
     // ===== Iterator-style for loop =====
     for (let item in items) {
         result += item;

@@ -1046,10 +1046,9 @@ function main() -> string throws unknown {
 }
 "####;
 
-/// A wider numeric operand: ordinary code accepts this, so a Session must too
-/// — the refusal must be about the binding's type, never about the shape the
-/// rewrite happens to generate.
-const SESSION_COMPOUND_WITH_A_WIDER_OPERAND: &str = r####"
+/// A wider numeric operand is refused through the same type-checking road in
+/// ordinary code and a Session.
+const SESSION_COMPOUND_WITH_AN_INVALID_OPERAND: &str = r####"
 function main() -> string throws unknown {
   let s = reflect.Session.new()
   s.eval(`let n = 5`)
@@ -1171,15 +1170,12 @@ function main() -> string throws unknown {
     );
 }
 
-/// The check must not be stricter than ordinary code either. Ordinary BAML
-/// COMPILES `n += 1.5` on an `int` binding and fails at runtime (a hole of its
-/// own, and not this PR's to close); a Session must reach the same place
-/// rather than invent a refusal of its own. This is also the tripwire for how
-/// the value is spliced: a fresh literal loses its freshness inside
-/// parentheses, so wrapping it would make this line a compile error in
-/// Sessions and nowhere else.
+/// The check must match ordinary code. A bare float used to lower as a missing
+/// expression here, which accidentally let this compile and fail at runtime.
+/// Literal nodes make the direct and parenthesized spellings follow the same
+/// type-checking road.
 #[tokio::test]
-async fn a_session_assignment_is_no_stricter_than_ordinary_code() {
+async fn a_session_assignment_matches_ordinary_code_for_a_wider_operand() {
     let ordinary = r#"
 function main() -> string throws unknown {
     let n = 5
@@ -1187,34 +1183,18 @@ function main() -> string throws unknown {
     `${n}`
 }
 "#;
-    assert!(
-        ordinary_compile_errors(ordinary).is_empty(),
-        "the ordinary spelling is expected to compile; if it no longer does, this pair needs a \
-         new operand rather than a new verdict",
-    );
-    // The half that makes the tripwire a tripwire: the SAME line refuses to
-    // compile once the value is parenthesized, which is what the rewrite used
-    // to do to every value it spliced.
+    let expected = "E0001: mismatched types: expected `int`, found `float`".to_string();
+    assert_eq!(ordinary_compile_errors(ordinary), vec![expected.clone()]);
     assert_eq!(
         ordinary_compile_errors(&ordinary.replace("n += 1.5", "n += (1.5)")),
-        vec!["E0001: mismatched types: expected `int`, found `float`".to_string()],
+        vec![expected.clone()],
     );
-    // Ordinary code compiles this line and dies on it. The Session reaches the
-    // same place — that is what "no stricter" means here, hole included.
-    let ordinary_run = baml_test!(ordinary);
-    assert!(
-        ordinary_run.result.is_err(),
-        "ordinary code is expected to fail at RUNTIME here, not compile-time: {:?}",
-        ordinary_run.result,
+    let program = session_program(
+        SESSION_ASSIGN_PROBE,
+        SESSION_COMPOUND_WITH_AN_INVALID_OPERAND,
     );
-    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_COMPOUND_WITH_A_WIDER_OPERAND);
     let output = baml_test!(&program);
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String(
-            "compiled, panicked at runtime".into()
-        ))
-    );
+    assert_eq!(output.result, Ok(BexExternalValue::String(expected.into())));
 }
 
 /// A user binding whose name could collide with the local the rewrite

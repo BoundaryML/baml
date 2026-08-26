@@ -271,6 +271,14 @@ where
             .map_or_else(|| self.text_range(), |token| token.text_range())
     }
 
+    #[must_use]
+    pub fn non_trivia_text_range(&self) -> TextRange {
+        TextRange::new(
+            self.first_token_range().start(),
+            self.last_token_range().end(),
+        )
+    }
+
     pub fn direct_elements(&self) -> ValidatedDirectElements<'tree> {
         ValidatedDirectElements {
             tree: self.tree,

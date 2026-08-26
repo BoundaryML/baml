@@ -14,6 +14,7 @@ expression: outcome.dump
 650..660 'giv_direct': throws never
 683..759 '{\n   ...(5)\n}': int
 689..694 'let f': (x: int) -> int throws never
+697..703 'giv_id': (x: int) -> int throws never
 697..708 'giv_id<int>': (x: int) -> int throws never
 753..754 'f': (x: int) -> int throws never
 753..757 'f(5)': int
@@ -21,6 +22,7 @@ expression: outcome.dump
 770..779 'giv_multi': throws never
 805..914 '{\n   ...o")\n}': string
 811..816 'let f': (a: int, b: string) -> string throws never
+819..827 'giv_pair': (a: int, b: string) -> string throws never
 819..840 'giv_pa...tring>': (a: int, b: string) -> string throws never
 899..900 'f': (a: int, b: string) -> string throws never
 899..912 'f(1, "hello")': string
@@ -29,6 +31,7 @@ expression: outcome.dump
 925..938 'giv_dependent': throws never
 966..1036 '{\n   ...(x)\n}': T
 972..977 'let f': (x: T) -> T throws never
+980..986 'giv_id': (x: T) -> T throws never
 980..989 'giv_id<T>': (x: T) -> T throws never
 1030..1031 'f': (x: T) -> T throws never
 1030..1034 'f(x)': T

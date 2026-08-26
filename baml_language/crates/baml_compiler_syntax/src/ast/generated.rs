@@ -65,7 +65,17 @@ impl FunctionDef {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
+            .find(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_IMPLEMENTS
+                        | SyntaxKind::KW_IMPLEMENT
+                        | SyntaxKind::KW_EXTENDS
+                        | SyntaxKind::KW_REQUIRES
+                        | SyntaxKind::KW_INTERFACE
+                )
+            })
     }
     pub fn generic_param_list(&self) -> Option<GenericParamList> {
         support::child(&self.syntax)
@@ -1160,6 +1170,21 @@ impl TypeExpr {
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
+    pub fn type_expr(&self) -> AstChildren<TypeExpr> {
+        support::children(&self.syntax)
+    }
+    pub fn as_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_AS))
+    }
+    pub fn r_paren_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
+    }
     pub fn function_type_param(&self) -> AstChildren<FunctionTypeParam> {
         support::children(&self.syntax)
     }
@@ -1169,20 +1194,11 @@ impl TypeExpr {
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| matches!(token.kind(), SyntaxKind::COMMA))
     }
-    pub fn r_paren_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| matches!(token.kind(), SyntaxKind::R_PAREN))
-    }
     pub fn arrow_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| matches!(token.kind(), SyntaxKind::ARROW))
-    }
-    pub fn type_expr(&self) -> AstChildren<TypeExpr> {
-        support::children(&self.syntax)
     }
     pub fn throws_clause(&self) -> AstChildren<ThrowsClause> {
         support::children(&self.syntax)
@@ -1692,7 +1708,17 @@ impl MethodSig {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
+            .find(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_IMPLEMENTS
+                        | SyntaxKind::KW_IMPLEMENT
+                        | SyntaxKind::KW_EXTENDS
+                        | SyntaxKind::KW_REQUIRES
+                        | SyntaxKind::KW_INTERFACE
+                )
+            })
     }
     pub fn generic_param_list(&self) -> Option<GenericParamList> {
         support::child(&self.syntax)
@@ -2561,7 +2587,7 @@ impl AstNode for PathExpr {
 }
 
 impl PathExpr {
-    pub fn path_expr(&self) -> Option<PathExpr> {
+    pub fn expr_node(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn generic_args(&self) -> Option<GenericArgs> {
@@ -3200,6 +3226,9 @@ impl FieldAccessExpr {
                         | SyntaxKind::KW_INTERFACE
                         | SyntaxKind::KW_FUNCTION
                         | SyntaxKind::KW_IMPLEMENTS
+                        | SyntaxKind::KW_IMPLEMENT
+                        | SyntaxKind::KW_EXTENDS
+                        | SyntaxKind::KW_REQUIRES
                         | SyntaxKind::KW_SPAWN
                         | SyntaxKind::KW_AWAIT
                 )
@@ -3300,7 +3329,21 @@ impl QualifiedPathExpr {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::WORD))
+            .find(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_CLIENT
+                        | SyntaxKind::KW_CLASS
+                        | SyntaxKind::KW_ENUM
+                        | SyntaxKind::KW_INTERFACE
+                        | SyntaxKind::KW_FUNCTION
+                        | SyntaxKind::KW_IMPLEMENTS
+                        | SyntaxKind::KW_IMPLEMENT
+                        | SyntaxKind::KW_EXTENDS
+                        | SyntaxKind::KW_REQUIRES
+                )
+            })
     }
 }
 
@@ -3383,6 +3426,9 @@ impl OptionalFieldAccessExpr {
                         | SyntaxKind::KW_INTERFACE
                         | SyntaxKind::KW_FUNCTION
                         | SyntaxKind::KW_IMPLEMENTS
+                        | SyntaxKind::KW_IMPLEMENT
+                        | SyntaxKind::KW_EXTENDS
+                        | SyntaxKind::KW_REQUIRES
                         | SyntaxKind::KW_SPAWN
                         | SyntaxKind::KW_AWAIT
                 )
@@ -4855,12 +4901,6 @@ impl AstNode for CatchStackTraceBinding {
 }
 
 impl CatchStackTraceBinding {
-    pub fn comma_token(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::COMMA))
-    }
     pub fn name_token(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
@@ -5702,17 +5742,23 @@ impl BacktickForOpen {
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| matches!(token.kind(), SyntaxKind::L_PAREN))
     }
-    pub fn let_stmt(&self) -> Option<LetStmt> {
-        support::child(&self.syntax)
+    pub fn let_stmt(&self) -> AstChildren<LetStmt> {
+        support::children(&self.syntax)
     }
-    pub fn in_token(&self) -> Option<SyntaxToken> {
+    pub fn expr_node(&self) -> AstChildren<ExprNode> {
+        support::children(&self.syntax)
+    }
+    pub fn in_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::KW_IN))
+            .filter(|token| matches!(token.kind(), SyntaxKind::KW_IN))
     }
-    pub fn expr_node(&self) -> Option<ExprNode> {
-        support::child(&self.syntax)
+    pub fn semicolon_tokens(&self) -> impl Iterator<Item = SyntaxToken> + '_ {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::SEMICOLON))
     }
     pub fn r_paren_token(&self) -> Option<SyntaxToken> {
         self.syntax
@@ -5814,7 +5860,7 @@ impl BacktickIfOpen {
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| matches!(token.kind(), SyntaxKind::KW_IF))
     }
-    pub fn paren_expr(&self) -> Option<ParenExpr> {
+    pub fn expr_node(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {
@@ -5870,7 +5916,7 @@ impl BacktickElseIf {
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| matches!(token.kind(), SyntaxKind::KW_IF))
     }
-    pub fn paren_expr(&self) -> Option<ParenExpr> {
+    pub fn expr_node(&self) -> Option<ExprNode> {
         support::child(&self.syntax)
     }
     pub fn r_brace_token(&self) -> Option<SyntaxToken> {

@@ -23,8 +23,7 @@ function simple_continue() -> int {
 function break_in_for() -> int {
     for (let i = 0; i < 10; i = i + 1) {
         break;
-    }
-    ;
+    };
     return 1;
 }
 
@@ -32,8 +31,7 @@ function break_in_for() -> int {
 function continue_in_for() -> int {
     for (let i = 0; i < 10; i = i + 1) {
         continue;
-    }
-    ;
+    };
     return 2;
 }
 

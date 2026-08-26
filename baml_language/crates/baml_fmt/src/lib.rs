@@ -1824,6 +1824,25 @@ mod while_let_format_tests {
 }
 
 #[cfg(test)]
+mod for_format_tests {
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed on `for`");
+        assert_eq!(formatted, expected);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_c_style_for_with_omitted_expressions() {
+        let source = "function f(flag: bool) -> int {\n    for (;;) {\n        break;\n    }\n    for (; flag;) {\n        break;\n    }\n    for (let i = 0;; i += 1) {\n        break;\n    }\n    0\n}\n";
+        assert_formats_to(source, source);
+    }
+}
+
+#[cfg(test)]
 mod const_format_tests {
     use super::*;
 

@@ -27,7 +27,7 @@ TopLevelDeclaration =
 FunctionDef =
   BlockAttribute*
   'function'
-  name_token:'#word'
+  name_token:('#word' | 'implements' | 'implement' | 'extends' | 'requires' | 'interface')
   GenericParamList?
   ParameterList
   ('->' | '=>')
@@ -89,7 +89,7 @@ RequiresClause = 'requires' TypeExpr (',' TypeExpr)* ','?
 MethodSig =
   BlockAttribute*
   'function'
-  name_token:'#word'
+  name_token:('#word' | 'implements' | 'implement' | 'extends' | 'requires' | 'interface')
   GenericParamList?
   ParameterList
   ('->' | '=>')
@@ -199,6 +199,7 @@ TypeExpr =
   | ('-'? ('#bigint' | '#integer' | '#float'))
   | ('true' | 'false' | 'null')
   | ('#word' ('.' ('#word' | 'spawn' | 'await' | 'class' | 'enum' | 'interface' | 'function'))*)
+  | ('(' TypeExpr 'as' TypeExpr ')' '.' '#word')
   | ('(' (FunctionTypeParam | ',')* ')' ('->' TypeExpr ThrowsClause?)?)
   )
   (TypeArgs | '[' ']' | '?' | Attribute)*
@@ -208,6 +209,7 @@ TypeExpr =
   | ('-'? ('#bigint' | '#integer' | '#float'))
   | ('true' | 'false' | 'null')
   | ('#word' ('.' ('#word' | 'spawn' | 'await' | 'class' | 'enum' | 'interface' | 'function'))*)
+  | ('(' TypeExpr 'as' TypeExpr ')' '.' '#word')
   | ('(' (FunctionTypeParam | ',')* ')' ('->' TypeExpr ThrowsClause?)?)
   ) (TypeArgs | '[' ']' | '?' | Attribute)*)*
 
@@ -280,7 +282,7 @@ BlockItem =
 | TestExprDef
 | TestsetDef
 PathExpr =
-  PathExpr GenericArgs
+  ExprNode GenericArgs
 | ('#word' | 'client' | 'class' | 'enum' | 'interface' | 'function' | 'implements' | 'spawn' | 'await')
   (('.' | '::') ('#word' | 'client' | 'class' | 'enum' | 'interface' | 'function' | 'implements' | 'spawn' | 'await'))*
 
@@ -321,11 +323,11 @@ IndexExpr = base:ExprNode '[' index:ExprNode ']'
 TaggedTemplateExpr = tag:ExprNode BacktickStringLiteral
 OptionalCallExpr = callee:ExprNode '?.' CallArgs
 OptionalIndexExpr = base:ExprNode '?.' '[' index:ExprNode ']'
-FieldAccessExpr = base:ExprNode '.' name_token:('#word' | 'client' | 'class' | 'enum' | 'interface' | 'function' | 'implements' | 'spawn' | 'await')
+FieldAccessExpr = base:ExprNode '.' name_token:('#word' | 'client' | 'class' | 'enum' | 'interface' | 'function' | 'implements' | 'implement' | 'extends' | 'requires' | 'spawn' | 'await')
 UpcastExpr = base:ExprNode '.' 'as' GenericArgs
-QualifiedPathExpr = '(' TypeExpr 'as' TypeExpr ')' '.' name_token:'#word'
+QualifiedPathExpr = '(' TypeExpr 'as' TypeExpr ')' '.' name_token:('#word' | 'client' | 'class' | 'enum' | 'interface' | 'function' | 'implements' | 'implement' | 'extends' | 'requires')
 SpecExpr = base:PathExpr '@' spec_token:'#word'
-OptionalFieldAccessExpr = base:ExprNode '?.' name_token:('#word' | 'client' | 'class' | 'enum' | 'interface' | 'function' | 'implements' | 'spawn' | 'await')
+OptionalFieldAccessExpr = base:ExprNode '?.' name_token:('#word' | 'client' | 'class' | 'enum' | 'interface' | 'function' | 'implements' | 'implement' | 'extends' | 'requires' | 'spawn' | 'await')
 EnvAccessExpr = env_token:'#word' '.' name_token:'#word'
 ParenExpr = '(' ExprNode ')'
 
@@ -368,7 +370,7 @@ CatchClause =
 CatchArm = Pattern CatchStackTraceBinding? '=>' value:ExprNode ','?
 CatchPattern = Pattern
 CatchBinding = name_token:'#word'
-CatchStackTraceBinding = ',' name_token:'#word'
+CatchStackTraceBinding = name_token:'#word'
 
 ThrowExpr = 'throw' value:ExprNode
 ReturnExpr = 'return' value:ExprNode?
@@ -454,10 +456,10 @@ BacktickSegmentNode =
 
 BacktickText = AnyElement*
 BacktickInterpolation = '$' (ExprNode | LetStmt)
-BacktickForOpen = '$' '{' 'for' '(' LetStmt 'in' ExprNode ')' '}'
+BacktickForOpen = '$' '{' 'for' '('? (LetStmt | ExprNode | 'in' | ';')* ')'? '}'
 BacktickEndfor = '$' '{' endfor_token:'#word' '}'
-BacktickIfOpen = '$' '{' 'if' ParenExpr '}'
-BacktickElseIf = '$' '{' 'else' 'if' ParenExpr '}'
+BacktickIfOpen = '$' '{' 'if' ExprNode '}'
+BacktickElseIf = '$' '{' 'else' 'if' ExprNode '}'
 BacktickElse = '$' '{' 'else' '}'
 BacktickEndif = '$' '{' endif_token:'#word' '}'
 

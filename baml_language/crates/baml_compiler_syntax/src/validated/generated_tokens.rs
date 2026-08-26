@@ -77,6 +77,186 @@ impl FromCST for Word {
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Implements {
+    pub token_span: TextRange,
+}
+impl Implements {
+    #[must_use]
+    pub const fn new(token_span: TextRange) -> Self {
+        Self { token_span }
+    }
+    #[must_use]
+    pub const fn new_from_span(token_span: TextRange) -> Self {
+        Self::new(token_span)
+    }
+}
+impl ValidatedToken for Implements {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for Implements {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::KW_IMPLEMENTS
+    }
+}
+impl FromCST for Implements {
+    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(element)?;
+        StrongAstError::assert_kind_token(&token, SyntaxKind::KW_IMPLEMENTS)?;
+        Ok(Self::new(token.text_range()))
+    }
+}
+impl std::fmt::Display for Implements {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("implements")
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Implement {
+    pub token_span: TextRange,
+}
+impl Implement {
+    #[must_use]
+    pub const fn new(token_span: TextRange) -> Self {
+        Self { token_span }
+    }
+    #[must_use]
+    pub const fn new_from_span(token_span: TextRange) -> Self {
+        Self::new(token_span)
+    }
+}
+impl ValidatedToken for Implement {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for Implement {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::KW_IMPLEMENT
+    }
+}
+impl FromCST for Implement {
+    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(element)?;
+        StrongAstError::assert_kind_token(&token, SyntaxKind::KW_IMPLEMENT)?;
+        Ok(Self::new(token.text_range()))
+    }
+}
+impl std::fmt::Display for Implement {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("implement")
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Extends {
+    pub token_span: TextRange,
+}
+impl Extends {
+    #[must_use]
+    pub const fn new(token_span: TextRange) -> Self {
+        Self { token_span }
+    }
+    #[must_use]
+    pub const fn new_from_span(token_span: TextRange) -> Self {
+        Self::new(token_span)
+    }
+}
+impl ValidatedToken for Extends {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for Extends {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::KW_EXTENDS
+    }
+}
+impl FromCST for Extends {
+    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(element)?;
+        StrongAstError::assert_kind_token(&token, SyntaxKind::KW_EXTENDS)?;
+        Ok(Self::new(token.text_range()))
+    }
+}
+impl std::fmt::Display for Extends {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("extends")
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Requires {
+    pub token_span: TextRange,
+}
+impl Requires {
+    #[must_use]
+    pub const fn new(token_span: TextRange) -> Self {
+        Self { token_span }
+    }
+    #[must_use]
+    pub const fn new_from_span(token_span: TextRange) -> Self {
+        Self::new(token_span)
+    }
+}
+impl ValidatedToken for Requires {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for Requires {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::KW_REQUIRES
+    }
+}
+impl FromCST for Requires {
+    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(element)?;
+        StrongAstError::assert_kind_token(&token, SyntaxKind::KW_REQUIRES)?;
+        Ok(Self::new(token.text_range()))
+    }
+}
+impl std::fmt::Display for Requires {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("requires")
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Interface {
+    pub token_span: TextRange,
+}
+impl Interface {
+    #[must_use]
+    pub const fn new(token_span: TextRange) -> Self {
+        Self { token_span }
+    }
+    #[must_use]
+    pub const fn new_from_span(token_span: TextRange) -> Self {
+        Self::new(token_span)
+    }
+}
+impl ValidatedToken for Interface {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for Interface {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::KW_INTERFACE
+    }
+}
+impl FromCST for Interface {
+    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(element)?;
+        StrongAstError::assert_kind_token(&token, SyntaxKind::KW_INTERFACE)?;
+        Ok(Self::new(token.text_range()))
+    }
+}
+impl std::fmt::Display for Interface {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("interface")
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Arrow {
     pub token_span: TextRange,
 }
@@ -509,78 +689,6 @@ impl std::fmt::Display for Semicolon {
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Interface {
-    pub token_span: TextRange,
-}
-impl Interface {
-    #[must_use]
-    pub const fn new(token_span: TextRange) -> Self {
-        Self { token_span }
-    }
-    #[must_use]
-    pub const fn new_from_span(token_span: TextRange) -> Self {
-        Self::new(token_span)
-    }
-}
-impl ValidatedToken for Interface {
-    fn span(&self) -> TextRange {
-        self.token_span
-    }
-}
-impl KnownKind for Interface {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::KW_INTERFACE
-    }
-}
-impl FromCST for Interface {
-    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
-        let token = StrongAstError::assert_is_token(element)?;
-        StrongAstError::assert_kind_token(&token, SyntaxKind::KW_INTERFACE)?;
-        Ok(Self::new(token.text_range()))
-    }
-}
-impl std::fmt::Display for Interface {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("interface")
-    }
-}
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Requires {
-    pub token_span: TextRange,
-}
-impl Requires {
-    #[must_use]
-    pub const fn new(token_span: TextRange) -> Self {
-        Self { token_span }
-    }
-    #[must_use]
-    pub const fn new_from_span(token_span: TextRange) -> Self {
-        Self::new(token_span)
-    }
-}
-impl ValidatedToken for Requires {
-    fn span(&self) -> TextRange {
-        self.token_span
-    }
-}
-impl KnownKind for Requires {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::KW_REQUIRES
-    }
-}
-impl FromCST for Requires {
-    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
-        let token = StrongAstError::assert_is_token(element)?;
-        StrongAstError::assert_kind_token(&token, SyntaxKind::KW_REQUIRES)?;
-        Ok(Self::new(token.text_range()))
-    }
-}
-impl std::fmt::Display for Requires {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("requires")
-    }
-}
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeKw {
     pub token_span: TextRange,
 }
@@ -617,78 +725,6 @@ impl std::fmt::Display for TypeKw {
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Extends {
-    pub token_span: TextRange,
-}
-impl Extends {
-    #[must_use]
-    pub const fn new(token_span: TextRange) -> Self {
-        Self { token_span }
-    }
-    #[must_use]
-    pub const fn new_from_span(token_span: TextRange) -> Self {
-        Self::new(token_span)
-    }
-}
-impl ValidatedToken for Extends {
-    fn span(&self) -> TextRange {
-        self.token_span
-    }
-}
-impl KnownKind for Extends {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::KW_EXTENDS
-    }
-}
-impl FromCST for Extends {
-    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
-        let token = StrongAstError::assert_is_token(element)?;
-        StrongAstError::assert_kind_token(&token, SyntaxKind::KW_EXTENDS)?;
-        Ok(Self::new(token.text_range()))
-    }
-}
-impl std::fmt::Display for Extends {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("extends")
-    }
-}
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Implements {
-    pub token_span: TextRange,
-}
-impl Implements {
-    #[must_use]
-    pub const fn new(token_span: TextRange) -> Self {
-        Self { token_span }
-    }
-    #[must_use]
-    pub const fn new_from_span(token_span: TextRange) -> Self {
-        Self::new(token_span)
-    }
-}
-impl ValidatedToken for Implements {
-    fn span(&self) -> TextRange {
-        self.token_span
-    }
-}
-impl KnownKind for Implements {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::KW_IMPLEMENTS
-    }
-}
-impl FromCST for Implements {
-    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
-        let token = StrongAstError::assert_is_token(element)?;
-        StrongAstError::assert_kind_token(&token, SyntaxKind::KW_IMPLEMENTS)?;
-        Ok(Self::new(token.text_range()))
-    }
-}
-impl std::fmt::Display for Implements {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("implements")
-    }
-}
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct As {
     pub token_span: TextRange,
 }
@@ -722,42 +758,6 @@ impl FromCST for As {
 impl std::fmt::Display for As {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("as")
-    }
-}
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Implement {
-    pub token_span: TextRange,
-}
-impl Implement {
-    #[must_use]
-    pub const fn new(token_span: TextRange) -> Self {
-        Self { token_span }
-    }
-    #[must_use]
-    pub const fn new_from_span(token_span: TextRange) -> Self {
-        Self::new(token_span)
-    }
-}
-impl ValidatedToken for Implement {
-    fn span(&self) -> TextRange {
-        self.token_span
-    }
-}
-impl KnownKind for Implement {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::KW_IMPLEMENT
-    }
-}
-impl FromCST for Implement {
-    fn from_cst(element: SyntaxElement) -> Result<Self, StrongAstError> {
-        let token = StrongAstError::assert_is_token(element)?;
-        StrongAstError::assert_kind_token(&token, SyntaxKind::KW_IMPLEMENT)?;
-        Ok(Self::new(token.text_range()))
-    }
-}
-impl std::fmt::Display for Implement {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("implement")
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

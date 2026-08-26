@@ -430,18 +430,7 @@ fn corpus_snapshots() {
 // BUG: the formatter's strong-AST builder rejects array rest-binding patterns
 // (`if let [let a, ..let r] = xs`): "An element ... was a node when it should
 // have been a token".
-// BUG: the formatter's strong-AST builder rejects BIGINT_LITERAL in match-arm
-// literal positions ("Expected ... INTEGER_LITERAL, or FLOAT_LITERAL, but
-// found BIGINT_LITERAL").
-// BUG: the formatter's strong-AST builder rejects the `~` bitwise-not operator
-// ("Expected token/node unary operator, but found TILDE").
-const KNOWN_FORMATTER_REJECTS: &[&str] = &[
-    "ns_array_rest_binding/array_rest_binding.baml",
-    "ns_bigints/bigints.baml",
-    "ns_literal_pattern_membership/literal_pattern_membership.baml",
-    "ns_operators/operators.baml",
-    "ns_truthiness/truthiness.baml",
-];
+const KNOWN_FORMATTER_REJECTS: &[&str] = &["ns_array_rest_binding/array_rest_binding.baml"];
 
 /// Formatter coverage for the corpus: fixture files get an output snapshot;
 /// every corpus file must format successfully and idempotently.
