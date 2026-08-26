@@ -217,11 +217,14 @@ function exec(
 ///
 /// Throws `baml.errors.InvalidArgument` when `options.detached` is combined
 /// with `timeout_ms`.
+///
+/// Throws `baml.errors.Unsupported` when `options.detached` is requested on a
+/// platform that cannot create detached processes.
 function start_process(
     program: string,
     args: string[]?,
     options: ProcessOptions?,
-) -> Process throws root.errors.Io | root.errors.InvalidArgument {
+) -> Process throws root.errors.Io | root.errors.InvalidArgument | root.errors.Unsupported {
     $rust_io_function
 }
 

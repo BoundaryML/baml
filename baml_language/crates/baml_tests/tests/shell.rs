@@ -256,7 +256,7 @@ async fn exec_with_timeout() {
 async fn start_process_yields_stdout_before_exit() {
     let output = baml_test!(
         r#"
-            function main() -> bool throws baml.errors.Io | baml.errors.Timeout {
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument | baml.errors.Unsupported {
                 let process = baml.sys.start_process(
                     "sh",
                     ["-c", "printf 'first\n'; while :; do :; done"],
@@ -283,7 +283,7 @@ async fn start_process_yields_stdout_before_exit() {
 async fn start_process_iterates_lines_and_final_unterminated_line() {
     let output = baml_test!(
         r#"
-            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument | baml.errors.Unsupported {
                 let process = baml.sys.start_process(
                     "sh",
                     ["-c", "printf 'one\ntwo'"],
@@ -312,7 +312,7 @@ async fn start_process_iterates_lines_and_final_unterminated_line() {
 async fn start_process_reads_complete_stdout_as_text() {
     let output = baml_test!(
         r#"
-            function main() -> string throws baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout {
+            function main() -> string throws baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout | baml.errors.InvalidArgument | baml.errors.Unsupported {
                 let process = baml.sys.start_process(
                     "sh",
                     ["-c", "printf 'hello'"],
@@ -341,7 +341,7 @@ async fn start_process_reads_complete_stdout_as_text() {
 async fn start_process_supports_incremental_stdin() {
     let output = baml_test!(
         r#"
-            function main() -> string throws baml.errors.Io | baml.errors.Timeout {
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument | baml.errors.Unsupported {
                 let process = baml.sys.start_process("cat", [], null);
                 defer { process.close() }
 
@@ -641,7 +641,7 @@ async fn start_process_stderr_modes_without_pipe() {
 async fn start_process_detached_new_session() {
     let output = baml_test!(
         r#"
-            function main() -> string throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument {
+            function main() -> string throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument | baml.errors.Unsupported {
                 let process = baml.sys.start_process(
                     "sh",
                     ["-c", "echo \"$$ $(cut -d' ' -f6 /proc/$$/stat)\"; exec sleep 30"],
@@ -695,7 +695,7 @@ async fn start_process_detached_new_session() {
 async fn start_process_detached_handle_is_usable() {
     let output = baml_test!(
         r#"
-            function main() -> bool throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument {
+            function main() -> bool throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument | baml.errors.Unsupported {
                 let process = baml.sys.start_process(
                     "ping",
                     ["-n", "31", "127.0.0.1"],

@@ -103,6 +103,33 @@ fn options_to_js(options: Option<&io::owned::sys::ProcessOptions>) -> JsValue {
     }
 }
 
+fn validate_buffered_process_options(
+    options: Option<&io::owned::sys::ProcessOptions>,
+    operation: &str,
+) -> Result<(), VmBamlError> {
+    if options.and_then(|options| options.detached) == Some(true) {
+        return Err(VmBamlError::InvalidArgument {
+            message: format!(
+                "ProcessOptions.detached is not supported by {operation}; use start_process"
+            ),
+        });
+    }
+    Ok(())
+}
+
+fn validate_start_process_options(
+    options: Option<&io::owned::sys::ProcessOptions>,
+) -> Result<(), VmBamlError> {
+    if options.and_then(|options| options.detached) == Some(true)
+        && options.and_then(|options| options.timeout_ms).is_some()
+    {
+        return Err(VmBamlError::InvalidArgument {
+            message: "ProcessOptions.detached cannot be combined with timeout_ms".to_string(),
+        });
+    }
+    Ok(())
+}
+
 impl io::IoClassSysReadPipe for WasmSys {
     fn read(
         &self,
@@ -228,6 +255,9 @@ impl IoNamespaceSys for WasmSys {
         options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ShellOutput> {
+        if let Err(error) = validate_buffered_process_options(options.as_ref(), "exec") {
+            return SysOpOutput::err(error);
+        }
         let exec_fn = self.exec_fn.clone();
         SysOpOutput::async_op(SendFuture(async move {
             let program_js: JsValue = program.into();
@@ -266,9 +296,12 @@ impl IoNamespaceSys for WasmSys {
         _call_id: CallId,
         _program: String,
         _args: Option<Vec<String>>,
-        _options: Option<io::owned::sys::ProcessOptions>,
+        options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::Process> {
+        if let Err(error) = validate_start_process_options(options.as_ref()) {
+            return SysOpOutput::err(error);
+        }
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Live processes are not supported on this platform".to_string(),
         })
@@ -282,6 +315,9 @@ impl IoNamespaceSys for WasmSys {
         options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ShellOutput> {
+        if let Err(error) = validate_buffered_process_options(options.as_ref(), "shell") {
+            return SysOpOutput::err(error);
+        }
         let shell_fn = self.shell_fn.clone();
         SysOpOutput::async_op(SendFuture(async move {
             let command_js: JsValue = command.into();
@@ -385,5 +421,52 @@ fn sleep_millis_from_delay(delay: BexExternalValue) -> Result<i32, VmRustFnError
                 other.type_name()
             ),
         })),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn options(detached: Option<bool>, timeout_ms: Option<i64>) -> io::owned::sys::ProcessOptions {
+        io::owned::sys::ProcessOptions {
+            cwd: None,
+            env: None,
+            timeout_ms,
+            stdin: None,
+            stderr: None,
+            detached,
+        }
+    }
+
+    #[test]
+    fn buffered_processes_reject_detached_options() {
+        let options = options(Some(true), None);
+        assert!(matches!(
+            validate_buffered_process_options(Some(&options), "exec"),
+            Err(VmBamlError::InvalidArgument { .. })
+        ));
+        assert!(matches!(
+            validate_buffered_process_options(Some(&options), "shell"),
+            Err(VmBamlError::InvalidArgument { .. })
+        ));
+    }
+
+    #[test]
+    fn start_process_rejects_detached_timeout() {
+        let options = options(Some(true), Some(100));
+        assert!(matches!(
+            validate_start_process_options(Some(&options)),
+            Err(VmBamlError::InvalidArgument { .. })
+        ));
+    }
+
+    #[test]
+    fn valid_process_options_pass_validation() {
+        let timeout = options(None, Some(100));
+        let detached = options(Some(true), None);
+        assert!(validate_buffered_process_options(Some(&timeout), "exec").is_ok());
+        assert!(validate_start_process_options(Some(&timeout)).is_ok());
+        assert!(validate_start_process_options(Some(&detached)).is_ok());
     }
 }
