@@ -82,7 +82,7 @@ walkdir = { workspace = true }
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
 
-# `baml.sys.is_alive` uses OpenProcess + GetExitCodeProcess on Windows.
+# `baml.sys.is_alive` uses OpenProcess + WaitForSingleObject on Windows.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = [
   "Win32_Foundation",

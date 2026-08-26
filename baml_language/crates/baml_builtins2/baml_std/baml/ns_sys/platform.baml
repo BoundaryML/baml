@@ -67,9 +67,8 @@ interface Unix requires Platform {
     /// Sends a signal to every process in the Unix process group `pgid`
     /// (`kill(-pgid, sig)`).
     ///
-    /// Group signalling is the reliable way to take down a whole spawned
-    /// tree: a child started detached (its own session/process group) can be
-    /// signalled as a unit by its pgid.
+    /// Group signalling is the reliable way to take down a whole process
+    /// tree whose leader was started in its own process group.
     ///
     /// Throws `root.errors.Io` when `pgid` is not positive, no such process
     /// group exists, or the OS denies the signal.

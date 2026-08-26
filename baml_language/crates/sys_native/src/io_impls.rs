@@ -1971,10 +1971,16 @@ impl io::IoNamespaceSys for NativeSysOps {
         pid: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<bool> {
+        #[cfg(any(unix, windows))]
         match probe_process_alive(pid) {
             Ok(alive) => SysOpOutput::ok(alive),
             Err(error) => SysOpOutput::err(error),
         }
+        #[cfg(not(any(unix, windows)))]
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process-id".to_string(),
+            message: "Probing processes by ID is not supported on this platform".to_string(),
+        })
     }
 
     fn platform(
@@ -2038,20 +2044,16 @@ fn probe_process_alive(pid: i64) -> Result<bool, VmBamlError> {
     }
 }
 
-/// Liveness probe backing `baml.sys.is_alive`: open the process and check
-/// whether its exit code is still `STILL_ACTIVE`. `OpenProcess` fails with
-/// `ERROR_INVALID_PARAMETER` when no such process exists.
+/// Liveness probe backing `baml.sys.is_alive`: open the process and poll its
+/// handle. `OpenProcess` fails with `ERROR_INVALID_PARAMETER` when no such
+/// process exists; access denied means it exists but cannot be inspected.
 #[cfg(windows)]
 #[allow(unsafe_code)]
 fn probe_process_alive(pid: i64) -> Result<bool, VmBamlError> {
-    use windows_sys::Win32::Foundation::{CloseHandle, ERROR_INVALID_PARAMETER};
+    use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::System::Threading::{
-        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+        OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, WaitForSingleObject,
     };
-
-    // `STILL_ACTIVE` (`STATUS_PENDING`) is the exit code of a running
-    // process.
-    const STILL_ACTIVE: u32 = 259;
 
     let raw_pid = validate_pid(pid)?;
     // SAFETY: all handles are checked for validity, and `handle` is closed
@@ -2059,33 +2061,49 @@ fn probe_process_alive(pid: i64) -> Result<bool, VmBamlError> {
     unsafe {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, raw_pid);
         if handle.is_null() {
-            let error = std::io::Error::last_os_error();
-            if error.raw_os_error() == Some(i32::try_from(ERROR_INVALID_PARAMETER).unwrap_or(0)) {
-                return Ok(false);
-            }
-            return Err(VmBamlError::Io {
-                message: format!("Failed to open process {pid}: {error}"),
-            });
+            return classify_open_process_error(pid, std::io::Error::last_os_error());
         }
-        let mut exit_code: u32 = 0;
-        let queried = GetExitCodeProcess(handle, &mut exit_code);
+        let wait_result = WaitForSingleObject(handle, 0);
         let error = std::io::Error::last_os_error();
         CloseHandle(handle);
-        if queried == 0 {
-            Err(VmBamlError::Io {
-                message: format!("Failed to read exit code of process {pid}: {error}"),
-            })
-        } else {
-            Ok(exit_code == STILL_ACTIVE)
-        }
+        classify_process_wait(pid, wait_result, error)
     }
 }
 
-#[cfg(not(any(unix, windows)))]
-fn probe_process_alive(pid: i64) -> Result<bool, VmBamlError> {
-    Err(VmBamlError::Unsupported {
-        message: format!("Probing process {pid} is not supported on this platform"),
-    })
+#[cfg(windows)]
+fn classify_open_process_error(pid: i64, error: std::io::Error) -> Result<bool, VmBamlError> {
+    use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER};
+
+    match error
+        .raw_os_error()
+        .and_then(|code| u32::try_from(code).ok())
+    {
+        Some(ERROR_INVALID_PARAMETER) => Ok(false),
+        Some(ERROR_ACCESS_DENIED) => Ok(true),
+        _ => Err(VmBamlError::Io {
+            message: format!("Failed to open process {pid}: {error}"),
+        }),
+    }
+}
+
+#[cfg(windows)]
+fn classify_process_wait(
+    pid: i64,
+    wait_result: u32,
+    error: std::io::Error,
+) -> Result<bool, VmBamlError> {
+    use windows_sys::Win32::Foundation::{WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT};
+
+    match wait_result {
+        WAIT_TIMEOUT => Ok(true),
+        WAIT_OBJECT_0 => Ok(false),
+        WAIT_FAILED => Err(VmBamlError::Io {
+            message: format!("Failed to query process {pid}: {error}"),
+        }),
+        other => Err(VmBamlError::Io {
+            message: format!("Unexpected wait result {other} for process {pid}"),
+        }),
+    }
 }
 
 /// Map a `baml.sys.Signal` value to its POSIX signal number.
@@ -3874,3 +3892,83 @@ impl io::IoNamespaceAiInternal for NativeSysOps {
 // state + SetOnce + cancel token) and are dispatched via the native-call
 // path (`$rust_function` in `ns_future/future.baml`), not through sys-ops.
 // See `bex_vm::package_baml` for the trait impl.
+
+#[cfg(test)]
+mod process_control_tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn validate_pid_enforces_unix_pid_range() {
+        assert_eq!(validate_pid(1).unwrap(), 1);
+        assert_eq!(validate_pid(i64::from(i32::MAX)).unwrap(), i32::MAX);
+        for pid in [0, -1, i64::MAX, i64::from(u32::MAX) + 1] {
+            assert!(matches!(validate_pid(pid), Err(VmBamlError::Io { .. })));
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn validate_pid_enforces_windows_pid_range() {
+        assert_eq!(validate_pid(1).unwrap(), 1);
+        assert_eq!(validate_pid(i64::from(u32::MAX)).unwrap(), u32::MAX);
+        for pid in [0, -1, i64::MAX, i64::from(u32::MAX) + 1] {
+            assert!(matches!(validate_pid(pid), Err(VmBamlError::Io { .. })));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn signal_number_maps_all_known_variants_and_rejects_unknown_values() {
+        let signal = |variant_name: &str| BexExternalValue::Variant {
+            enum_name: "baml.sys.Signal".to_string(),
+            variant_name: variant_name.to_string(),
+        };
+
+        assert_eq!(signal_number(&signal("Terminate")).unwrap(), libc::SIGTERM);
+        assert_eq!(signal_number(&signal("Interrupt")).unwrap(), libc::SIGINT);
+        assert_eq!(signal_number(&signal("Kill")).unwrap(), libc::SIGKILL);
+        assert_eq!(signal_number(&signal("Hangup")).unwrap(), libc::SIGHUP);
+        assert!(matches!(
+            signal_number(&signal("Unknown")),
+            Err(VmBamlError::Io { .. })
+        ));
+        assert!(matches!(
+            signal_number(&BexExternalValue::Null),
+            Err(VmBamlError::Io { .. })
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_open_process_errors_preserve_liveness_contract() {
+        use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER};
+
+        let os_error = |code| {
+            std::io::Error::from_raw_os_error(i32::try_from(code).expect("Win32 error fits i32"))
+        };
+        assert!(!classify_open_process_error(42, os_error(ERROR_INVALID_PARAMETER)).unwrap());
+        assert!(classify_open_process_error(42, os_error(ERROR_ACCESS_DENIED)).unwrap());
+        assert!(matches!(
+            classify_open_process_error(42, os_error(1234)),
+            Err(VmBamlError::Io { .. })
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_wait_result_distinguishes_running_exited_and_failed() {
+        use windows_sys::Win32::Foundation::{WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT};
+
+        let no_error = std::io::Error::from_raw_os_error(0);
+        assert!(classify_process_wait(42, WAIT_TIMEOUT, no_error).unwrap());
+        assert!(
+            !classify_process_wait(42, WAIT_OBJECT_0, std::io::Error::from_raw_os_error(0))
+                .unwrap()
+        );
+        assert!(matches!(
+            classify_process_wait(42, WAIT_FAILED, std::io::Error::from_raw_os_error(1234)),
+            Err(VmBamlError::Io { .. })
+        ));
+    }
+}

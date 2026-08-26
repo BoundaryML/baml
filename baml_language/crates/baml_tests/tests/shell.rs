@@ -717,9 +717,9 @@ async fn is_alive_reports_self() {
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
-/// Windows variant of the liveness probe: a live child reads as alive, and
-/// once killed its exit code is no longer `STILL_ACTIVE`, so it reads as
-/// dead even if the process object has not been fully torn down yet.
+/// Windows variant of the liveness probe: a live child handle is unsignalled,
+/// and once killed its handle becomes signalled, so it reads as dead even if
+/// the process object has not been fully torn down yet.
 #[tokio::test]
 #[cfg(target_os = "windows")]
 async fn is_alive_tracks_child_lifetime() {

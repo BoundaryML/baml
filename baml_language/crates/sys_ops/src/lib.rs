@@ -1889,7 +1889,8 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _pid: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<bool> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process-id".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }

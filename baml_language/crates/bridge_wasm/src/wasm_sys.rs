@@ -409,7 +409,8 @@ impl IoNamespaceSys for WasmSys {
         _pid: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<bool> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process-id".to_string(),
             message: "Probing processes by ID is not supported on this platform".to_string(),
         })
     }
