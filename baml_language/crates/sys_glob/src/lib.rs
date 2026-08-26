@@ -1,5 +1,11 @@
 //! Bun-compatible glob pattern matcher shared by `sys_native` and `bridge_wasm`.
 //!
+//! Patterns and paths use a portable, slash-separated grammar on every platform.
+//! Windows paths must therefore be written as `C:/...` or `//server/share/...`;
+//! backslash remains the glob escape character rather than a path separator. `Glob.scan`
+//! converts native walker entries at its boundary, while `Glob.matches` expects callers
+//! to supply this portable form directly.
+//!
 //! Supports: `*` (any non-separator chars), `**` (any chars including separators),
 //! `?` (single non-separator char), `[...]` (character classes), `{a,b}` (alternations),
 //! `!` prefix (negation), `\` (escape).
@@ -54,8 +60,9 @@ impl GlobPattern {
         self.target
     }
 
-    /// Test a single arbitrary path string against the compiled pattern.
-    /// Used by `Glob.matches(path)` where the caller decides what to pass.
+    /// Test one portable, slash-separated path against the compiled pattern.
+    /// Used by `Glob.matches(path)`; callers must convert native separators at
+    /// their filesystem boundary before calling this method.
     pub fn is_match(&self, path: &str) -> bool {
         let matched = self.re.is_match(path);
         if self.negated { !matched } else { matched }
@@ -344,6 +351,21 @@ mod tests {
         assert!(!g.is_match_entry("file.rs", "C:/scan/file.rs"));
     }
 
+    #[test]
+    fn absolute_unc_patterns_use_portable_slash_form() {
+        let g = GlobPattern::new("//server/share/**/*.baml").unwrap();
+        assert_eq!(g.target(), super::MatchTarget::Absolute);
+        assert!(g.is_match_entry("project/main.baml", "//server/share/project/main.baml"));
+        assert!(!g.is_match_entry("project/main.baml", "//other/share/project/main.baml"));
+    }
+
+    #[test]
+    fn backslash_is_an_escape_not_a_native_separator() {
+        let g = GlobPattern::new(r"dir\*.baml").unwrap();
+        assert!(g.is_match("dir*.baml"));
+        assert!(!g.is_match("dir/file.baml"));
+        assert!(!g.is_match(r"dir\file.baml"));
+    }
     #[test]
     fn match_entry_picks_relative_form_for_plain_pattern() {
         // Pattern `.*` (literal dot, then `*`) under the OR-against-three-forms
