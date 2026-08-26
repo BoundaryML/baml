@@ -334,8 +334,7 @@ fn process_body(
 /// - `Ty::Unknown` — no useful info
 /// - `Ty::Never` — unreachable / error types
 fn should_suppress_type(ty: &Ty) -> bool {
-    baml_type::contains_error_recovery(ty)
-        || matches!(ty, Ty::Unknown { .. } | Ty::Never { .. })
+    baml_type::contains_error_recovery(ty) || matches!(ty, Ty::Unknown { .. } | Ty::Never { .. })
 }
 
 /// True if `callee` names a test/testset registration method

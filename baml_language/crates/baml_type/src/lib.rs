@@ -165,11 +165,10 @@ pub fn contains_ty_where(ty: &Ty, pred: &dyn Fn(&Ty) -> bool) -> bool {
         Ty::AssociatedTypeProjection {
             base, interface, ..
         } => contains_ty_where(base, pred) || interface.tys().any(|t| contains_ty_where(t, pred)),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_ty_where(inner, pred),
+        Ty::List(inner, _) => contains_ty_where(inner, pred),
         Ty::Map {
             key: k, value: v, ..
-        }
-        | Ty::EvolvingMap(k, v, _) => contains_ty_where(k, pred) || contains_ty_where(v, pred),
+        } => contains_ty_where(k, pred) || contains_ty_where(v, pred),
         Ty::Union(tys, _) => tys.iter().any(|t| contains_ty_where(t, pred)),
         Ty::Future(value, error, _) => {
             contains_ty_where(value, pred) || contains_ty_where(error, pred)

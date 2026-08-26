@@ -2119,7 +2119,7 @@ impl<'db> InferenceContext<'db> {
             .iter()
             .any(|binding| ty_mentions_param(expected, &binding.parameter));
         if depends_on_scoped_type {
-            let ty = self.infer_expr(body, expr, &Expectation::None);
+            let ty = self.infer_deferred_runtime_expr(body, expr, expected);
             // Erasing only the dynamic leaves a static skeleton: `list<T>`
             // still rejects an `int`, while a `list<int>` advances to the
             // runtime gate for its element relation. This is the same
@@ -2183,6 +2183,18 @@ impl<'db> InferenceContext<'db> {
             self.record_function_adapter(expr, &ty, expected);
         }
         ty
+    }
+
+    /// Infer an expression whose outer type relation is checked at runtime.
+    /// A lambda still receives the callback shape for contextual signature
+    /// deduction: a runtime-bound parameter is opaque, not absent.
+    fn infer_deferred_runtime_expr(&mut self, body: &ExprBody, expr: ExprId, expected: &Ty) -> Ty {
+        let expectation = if matches!(body.exprs[expr], Expr::Lambda(_)) {
+            Expectation::has_type(expected.clone())
+        } else {
+            Expectation::None
+        };
+        self.infer_expr(body, expr, &expectation)
     }
 
     /// rustc/r-a record coercions as per-expression adjustments consumed
@@ -5347,10 +5359,8 @@ impl<'db> InferenceContext<'db> {
                 }
                 match matched[index] {
                     Some(param_index) if runtime_dependent.contains_key(&param_index) => {
-                        // The value still participates in ordinary inference;
-                        // only its runtime-dependent expectation is deferred.
-                        self.infer_expr(body, arg.expr, &Expectation::None);
                         let expected = runtime_dependent[&param_index].clone();
+                        self.infer_deferred_runtime_expr(body, arg.expr, &expected);
                         self.result
                             .call_plans
                             .entry(call)
