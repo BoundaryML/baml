@@ -17,15 +17,20 @@
 // Rerun the ranking when the team shifts; the table below is the only
 // thing that changes.
 
-/// GitHub login of the engineer who owns a subsystem.
-function shepherd_for(subsystem: Subsystem) -> string {
+/// GitHub logins of the engineers who own a subsystem, most active first.
+function shepherds_for(subsystem: Subsystem) -> string[] {
     match (subsystem) {
-        Subsystem.Syntax => "aaronvg",
-        Subsystem.Compiler => "codeshaunted",
-        Subsystem.Runtime => "antoniosarosi",
-        Subsystem.StdLibrary => "2kai2kai2",
-        Subsystem.Tooling => "sxlijin",
+        Subsystem.Syntax => ["aaronvg", "codeshaunted", "2kai2kai2"],
+        Subsystem.Compiler => ["codeshaunted", "antoniosarosi", "2kai2kai2"],
+        Subsystem.Runtime => ["antoniosarosi", "2kai2kai2", "sxlijin"],
+        Subsystem.StdLibrary => ["2kai2kai2", "antoniosarosi", "codeshaunted"],
+        Subsystem.Tooling => ["sxlijin", "codeshaunted", "2kai2kai2"],
     }
+}
+
+/// The shepherd an issue in this subsystem goes to: the most active owner.
+function shepherd_for(subsystem: Subsystem) -> string {
+    shepherds_for(subsystem).at(0) ?? baml.sys.panic("no shepherds for " + subsystem.to_string())
 }
 
 /// Route an issue to the shepherd of its subsystem. Idempotent: an issue
@@ -51,63 +56,63 @@ function organize_issue(issue: Issue) -> Issue {
     }
 }
 
-testset "organize_issue" {
-    let unassigned = Issue {
+/// Test fixture: an issue in `subsystem`, optionally already shepherded.
+function issue_in(subsystem: Subsystem, shepherd: string?) -> Issue {
+    Issue {
         id: "ISSUE-1",
-        title: "rust codegen panics on naming_convention",
+        title: "t",
         description: "…",
-        shepherd: null,
-        subsystem: Subsystem.Tooling,
+        shepherd: shepherd,
+        subsystem: subsystem,
         repros: [],
         version: "0.17.0",
         feedback_ids: ["FB-1"],
         status: Open { state: "open" },
         comments: [],
         resolution_plan: null,
-    };
-
-    test "routes by subsystem" {
-        assert.equal(organize_issue(unassigned).shepherd ?? "", "sxlijin");
     }
+}
 
-    test "every subsystem has an owner" {
-        for (
-            let s in [
-                Subsystem.Syntax,
-                Subsystem.Compiler,
-                Subsystem.Runtime,
-                Subsystem.StdLibrary,
-                Subsystem.Tooling,
-            ]
-        ) {
-            assert.is_true(shepherd_for(s).length() > 0);
+// Checks the deterministic matcher: every subsystem routes to the first of
+// its owners, and organize_issue only ever touches `shepherd`.
+testset "organize_issue" {
+    for (
+        let s in [
+            Subsystem.Syntax,
+            Subsystem.Compiler,
+            Subsystem.Runtime,
+            Subsystem.StdLibrary,
+            Subsystem.Tooling,
+        ]
+    ) {
+        test ("routes " + s.to_string() + " to its first owner") {
+            let owners = shepherds_for(s);
+            assert.is_true(owners.length() >= 2);
+            assert.equal(organize_issue(issue_in(s, null)).shepherd ?? "", owners.at(0) ?? "");
         }
     }
 
-    test "keeps an existing shepherd" {
-        let assigned = organize_issue(unassigned);
-        let again = organize_issue(
-            Issue {
-                id: assigned.id,
-                title: assigned.title,
-                description: assigned.description,
-                shepherd: "someone-else",
-                subsystem: Subsystem.Compiler,
-                repros: assigned.repros,
-                version: assigned.version,
-                feedback_ids: assigned.feedback_ids,
-                status: assigned.status,
-                comments: assigned.comments,
-                resolution_plan: assigned.resolution_plan,
-            },
+    test "known routes" {
+        assert.equal(organize_issue(issue_in(Subsystem.Tooling, null)).shepherd ?? "", "sxlijin");
+        assert.equal(
+            organize_issue(issue_in(Subsystem.Compiler, null)).shepherd ?? "",
+            "codeshaunted",
         );
-        assert.equal(again.shepherd ?? "", "someone-else");
+    }
+
+    test "keeps an existing shepherd" {
+        assert.equal(
+            organize_issue(issue_in(Subsystem.Compiler, "someone-else")).shepherd ?? "",
+            "someone-else",
+        );
     }
 
     test "nothing but the shepherd changes" {
-        let out = organize_issue(unassigned);
-        assert.equal(out.id, unassigned.id);
-        assert.equal(out.subsystem, unassigned.subsystem);
-        assert.equal(out.feedback_ids.length(), 1);
+        let before = issue_in(Subsystem.Runtime, null);
+        let after = organize_issue(before);
+        assert.equal(after.id, before.id);
+        assert.equal(after.subsystem, before.subsystem);
+        assert.equal(after.feedback_ids.length(), 1);
+        assert.equal(after.version, before.version);
     }
 }
