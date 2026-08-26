@@ -113,7 +113,6 @@ pub enum ItemKind {
     Function,
     TemplateString,
     Client,
-    Test,
     RetryPolicy,
     Let,
 }
@@ -146,7 +145,6 @@ impl SymbolKind {
                 ItemKind::Function => DefinitionKind::Function,
                 ItemKind::TemplateString => DefinitionKind::TemplateString,
                 ItemKind::Client => DefinitionKind::Client,
-                ItemKind::Test => DefinitionKind::Test,
                 ItemKind::RetryPolicy => DefinitionKind::RetryPolicy,
                 ItemKind::Let => DefinitionKind::Let,
             },
@@ -210,7 +208,6 @@ fn classify_definition_kind(kind: DefinitionKind) -> KindClass {
         DefinitionKind::Function => KindClass::Item(ItemKind::Function),
         DefinitionKind::TemplateString => KindClass::Item(ItemKind::TemplateString),
         DefinitionKind::Client => KindClass::Item(ItemKind::Client),
-        DefinitionKind::Test => KindClass::Item(ItemKind::Test),
         DefinitionKind::RetryPolicy => KindClass::Item(ItemKind::RetryPolicy),
         DefinitionKind::Let => KindClass::Item(ItemKind::Let),
         DefinitionKind::Field => KindClass::Member(MemberKind::Field),
@@ -974,7 +971,6 @@ fn is_item_node(kind: SyntaxKind) -> bool {
             | SyntaxKind::FUNCTION_DEF
             | SyntaxKind::ENUM_DEF
             | SyntaxKind::CLIENT_DEF
-            | SyntaxKind::TEST_DEF
             | SyntaxKind::TEST_EXPR_DEF
             | SyntaxKind::TESTSET_DEF
             | SyntaxKind::RETRY_POLICY_DEF
@@ -1832,18 +1828,6 @@ fn find_dependencies(
             let client = baml_compiler2_ppir::item_data::client_data(db, client_loc);
             if let Some(ref policy_name) = client.retry_policy_name {
                 let name_str = policy_name.as_str().to_string();
-                if seen.insert(name_str.clone()) {
-                    if let Some(dep) = resolve_dep_from_outline(db, files, &name_str) {
-                        deps.push(dep);
-                    }
-                }
-            }
-        }
-        baml_compiler2_hir::contributions::Definition::Test(test_loc) => {
-            // Extract the test's function references.
-            let test = baml_compiler2_ppir::item_data::test_data(db, test_loc);
-            for func_name in &test.function_refs {
-                let name_str = func_name.as_str().to_string();
                 if seen.insert(name_str.clone()) {
                     if let Some(dep) = resolve_dep_from_outline(db, files, &name_str) {
                         deps.push(dep);

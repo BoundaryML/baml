@@ -27,9 +27,7 @@
 //! The resulting single `Program` runs on the ordinary engine harness.
 
 use baml_base::Name;
-use baml_compiler2_emit::{
-    CompileOptions, OptLevel, emit_units, generate_project_bytecode_with_mounted_units,
-};
+use baml_compiler2_emit::{OptLevel, emit_units, generate_project_bytecode_with_mounted_units};
 use baml_compiler2_hir::package::PackageId;
 use baml_compiler2_hir_ty::package_interface::package_interface;
 use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
@@ -131,12 +129,6 @@ function parse_positive(n: int) -> int throws ParseError {
 
 const OPT: OptLevel = OptLevel::One;
 
-fn compile_options() -> CompileOptions {
-    CompileOptions {
-        emit_test_cases: false,
-    }
-}
-
 /// Compile the library under `<builtin>/app/` and capture both
 /// artifacts — the `borsh(PackageInterface)` blob (check surface) and the
 /// symbolic `CompilationUnit` set (run surface; links to `stdlib ++ app`, a
@@ -158,7 +150,7 @@ fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
     );
     let blob = borsh::to_vec(iface).expect("serialize app interface");
 
-    let units = emit_units(&db, &compile_options(), OPT).expect("library fixture emits units");
+    let units = emit_units(&db, OPT).expect("library fixture emits units");
     (blob, units)
 }
 
@@ -172,7 +164,7 @@ fn consumer_program(user_src: &str) -> Program {
     db.file("main.baml", user_src);
     assert_no_diagnostic_errors(&db);
 
-    generate_project_bytecode_with_mounted_units(&db, &compile_options(), OPT, &lib_units)
+    generate_project_bytecode_with_mounted_units(&db, OPT, &lib_units)
         .expect("consumer compiles against the mounted blob")
 }
 

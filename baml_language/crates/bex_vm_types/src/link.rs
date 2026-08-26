@@ -314,7 +314,6 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
         global_imports: stub_global_imports,
         exports,
         package_fragment: ProgramPackageFrag::default(),
-        test_cases: Vec::new(),
         callable_throws_fragment: Vec::new(),
         init_tail: None,
     };
@@ -1127,10 +1126,6 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     }
     sort_packages(&mut program);
 
-    // ---- Whole-program tails (design §3b step 5) ----------------------------
-    for unit in units {
-        program.test_cases.extend(unit.test_cases.iter().cloned());
-    }
     Ok(program)
 }
 
@@ -1347,7 +1342,6 @@ mod tests {
                 globals: vec![("user.foo".to_string(), 0), ("user.bar".to_string(), 1)],
             },
             package_fragment: ProgramPackageFrag::default(),
-            test_cases: Vec::new(),
             callable_throws_fragment: Vec::new(),
             init_tail: None,
         }
@@ -1464,7 +1458,6 @@ mod tests {
                 globals: vec![("a.f".to_string(), 0)],
             },
             package_fragment: ProgramPackageFrag::default(),
-            test_cases: Vec::new(),
             callable_throws_fragment: Vec::new(),
             init_tail: None,
         };
@@ -1487,7 +1480,6 @@ mod tests {
                 globals: vec![("b.g".to_string(), 0)],
             },
             package_fragment: ProgramPackageFrag::default(),
-            test_cases: Vec::new(),
             callable_throws_fragment: Vec::new(),
             init_tail: None,
         };

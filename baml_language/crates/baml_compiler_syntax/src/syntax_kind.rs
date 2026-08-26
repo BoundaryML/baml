@@ -160,7 +160,6 @@ pub enum SyntaxKind {
     INTERFACE_DEF,
     CLIENT_DEF,
     GENERATOR_DEF,
-    TEST_DEF,
     TEST_EXPR_DEF,
     TESTSET_DEF,
     RETRY_POLICY_DEF,

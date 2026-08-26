@@ -216,12 +216,7 @@ pub fn namespace_items<'db>(
             .copied()
             .collect();
 
-        // Tests are function-scoped (identity is functionName/testName), so
-        // same-named tests for different functions remain legal.
-        let all_tests = entries
-            .iter()
-            .all(|entry| matches!(entry.definition, Definition::Test(_)));
-        if entries.len() < 2 || all_tests {
+        if entries.len() < 2 {
             continue;
         }
 

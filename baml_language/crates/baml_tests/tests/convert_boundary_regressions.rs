@@ -3,7 +3,6 @@
 //! `Ty::Unknown`/`Ty::Error` reaches it. These cover producers that previously
 //! leaked `Unknown` into runtime lowering for *valid* programs.
 
-use baml_compiler2_emit::CompileOptions;
 use baml_db::ProjectDatabase;
 use baml_tests::engine::TestDbExt;
 
@@ -17,25 +16,14 @@ fn db_with(src: &str) -> ProjectDatabase {
 /// Lower the project to bytecode. A panic here (e.g. `Ty::Unknown` reaching the
 /// convert boundary) fails the test directly.
 fn bytecode_ok(db: &ProjectDatabase) -> Result<(), String> {
-    baml_compiler2_emit::generate_project_bytecode(
-        db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-    )
-    .map(|_| ())
-    .map_err(|e| format!("{e:?}"))
+    baml_compiler2_emit::generate_project_bytecode(db)
+        .map(|_| ())
+        .map_err(|e| format!("{e:?}"))
 }
 
 /// Lower the project to bytecode and return the `Program` for inspection.
 fn compile_program(db: &ProjectDatabase) -> bex_vm_types::Program {
-    baml_compiler2_emit::generate_project_bytecode(
-        db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-    )
-    .expect("should compile to bytecode")
+    baml_compiler2_emit::generate_project_bytecode(db).expect("should compile to bytecode")
 }
 
 /// `throw <non-literal expression>` in a function with no `throws` clause.

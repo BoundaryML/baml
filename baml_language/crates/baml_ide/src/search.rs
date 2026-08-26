@@ -429,7 +429,6 @@ fn collect_definition_candidates(
         // findable by name.
         Definition::TemplateString(_)
         | Definition::Client(_)
-        | Definition::Test(_)
         | Definition::RetryPolicy(_)
         | Definition::Let(_) => None,
     };
@@ -451,7 +450,6 @@ fn def_kind(def: Definition<'_>) -> DefinitionKind {
         Definition::Function(_) => DefinitionKind::Function,
         Definition::TemplateString(_) => DefinitionKind::TemplateString,
         Definition::Client(_) => DefinitionKind::Client,
-        Definition::Test(_) => DefinitionKind::Test,
         Definition::RetryPolicy(_) => DefinitionKind::RetryPolicy,
         Definition::Let(_) => DefinitionKind::Let,
     }

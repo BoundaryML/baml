@@ -4,7 +4,7 @@
 //! compiler2 pipeline through `generate_project_bytecode`, and verifies
 //! the resulting `Program` has the expected structure.
 
-use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
+use baml_compiler2_emit::generate_project_bytecode;
 use baml_db::ProjectDatabase;
 
 use crate::engine::TestDbExt;
@@ -27,13 +27,7 @@ fn make_db() -> ProjectDatabase {
 }
 
 fn compile(db: &ProjectDatabase) -> bex_vm_types::Program {
-    generate_project_bytecode(
-        db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-    )
-    .expect("compilation should succeed")
+    generate_project_bytecode(db).expect("compilation should succeed")
 }
 
 #[test]

@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0098
+
+  × removed language feature
+   ╭─[removed_legacy_test.baml:5:1]
+ 5 │ test FunctionsFirst {
+   · ─────────┬─────────
+   ·          ╰── Legacy test declarations were removed. Use an expression-body test with a quoted name, for example: `test "Name" { assert.equal(Foo(...), expected) }`.
+   ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_legacy_test.baml:12:1]
+ 12 │ test ArgsFirst {
+    · ───────┬──────
+    ·        ╰── Legacy test declarations were removed. Use an expression-body test with a quoted name, for example: `test "Name" { assert.equal(Foo(...), expected) }`.
+    ╰────

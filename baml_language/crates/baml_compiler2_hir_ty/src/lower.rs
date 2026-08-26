@@ -1094,7 +1094,6 @@ impl<'db> LowerCtx<'db> {
             Definition::Function(_)
             | Definition::TemplateString(_)
             | Definition::Client(_)
-            | Definition::Test(_)
             | Definition::RetryPolicy(_)
             | Definition::Let(_) => Ty::error(),
         }

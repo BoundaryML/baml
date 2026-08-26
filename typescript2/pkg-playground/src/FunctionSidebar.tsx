@@ -42,11 +42,7 @@ import type {
   SerializedTestDef,
   SerializedTestSet,
 } from './serialized-test-tree';
-import {
-  previewTestKey,
-  type FunctionInfo,
-  type TestInfo,
-} from './worker-protocol';
+import type { FunctionInfo } from './worker-protocol';
 import {
   getSidebarLeafPaddingLeft,
   SIDEBAR_LEAF_ICON_CLASS,
@@ -256,9 +252,6 @@ export interface FunctionSidebarProps {
   /** Disable Run/Test-derived actions until the current build is ready. */
   runtimeControlsDisabled?: boolean;
   testTree?: SerializedTestDef[] | null;
-  previewTests?: TestInfo[];
-  selectedPreviewTestKey?: string | null;
-  onSelectPreviewTest?: (test: TestInfo) => void;
   selectedTestName?: string | null;
   onSelectTest?: (name: string) => void;
   selectedFn: string | null;
@@ -443,9 +436,6 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   isLoadingProject = false,
   runtimeControlsDisabled = false,
   testTree,
-  previewTests = [],
-  selectedPreviewTestKey,
-  onSelectPreviewTest,
   selectedTestName,
   onSelectTest,
   selectedFn,
@@ -486,13 +476,6 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   };
 
   const treeItems = testTree ?? [];
-  const previewNameCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const test of previewTests) {
-      counts.set(test.name, (counts.get(test.name) ?? 0) + 1);
-    }
-    return counts;
-  }, [previewTests]);
   let emptyFunctionMessage = 'No matches';
   if (isLoadingProject) {
     emptyFunctionMessage = 'Loading project...';
@@ -679,50 +662,18 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
             </div>
 
             <CollapsibleContent>
-              {!testTree && previewTests.length === 0 && (
+              {!testTree && (
                 <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
                   No test data yet
                 </div>
               )}
 
-              {testTree &&
-                treeItems.length === 0 &&
-                previewTests.length === 0 && (
+              {testTree && treeItems.length === 0 && (
                   <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
                     No tests found
                   </div>
                 )}
 
-              {previewTests.map((test) => {
-                const key = previewTestKey(test);
-                const duplicateName =
-                  (previewNameCounts.get(test.name) ?? 0) > 1;
-                return (
-                  <button
-                    type="button"
-                    key={key}
-                    className={cn(
-                      SIDEBAR_LEAF_ROW_CLASS,
-                      'cursor-pointer',
-                      selectedPreviewTestKey === key
-                        ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
-                        : 'text-vsc-text-muted hover:bg-vsc-hover',
-                    )}
-                    style={{ paddingLeft: getSidebarLeafPaddingLeft() }}
-                    onClick={() => onSelectPreviewTest?.(test)}
-                    title={`Use ${test.name} args for ${test.functionName}`}
-                  >
-                    <FlaskConical className={SIDEBAR_LEAF_ICON_CLASS} />
-                    <span className="truncate">
-                      {test.name}
-                      {duplicateName ? ` → ${test.functionName}` : ''}
-                    </span>
-                    <span className="ml-auto text-[9px] text-vsc-text-faint shrink-0">
-                      preview
-                    </span>
-                  </button>
-                );
-              })}
 
               {treeItems.map((def, i) => (
                 <TestTreeNode

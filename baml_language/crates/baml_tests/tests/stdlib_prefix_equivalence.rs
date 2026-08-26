@@ -17,7 +17,7 @@
 use std::{collections::HashSet, path::Path};
 
 use baml_compiler_diagnostics::Severity;
-use baml_compiler2_emit::{CompileOptions, OptLevel, generate_project_bytecode_with_opt};
+use baml_compiler2_emit::{OptLevel, generate_project_bytecode_with_opt};
 use baml_db::{ProjectDatabase, collect_diagnostics, testing};
 use baml_tests::{
     engine::TestDbExt,
@@ -102,12 +102,6 @@ function tagged(t: string) -> Inner { Inner { tag: t } }
     ),
 ];
 
-fn opts() -> CompileOptions {
-    CompileOptions {
-        emit_test_cases: false,
-    }
-}
-
 fn honest_bytes(opt: OptLevel) -> Vec<u8> {
     let mut db = ProjectDatabase::new();
     db.workspace(Path::new("."));
@@ -115,7 +109,7 @@ fn honest_bytes(opt: OptLevel) -> Vec<u8> {
         db.file(*path, content);
     }
     testing::assert_no_diagnostic_errors(&db);
-    let program = generate_project_bytecode_with_opt(&db, &opts(), opt).expect("honest compile");
+    let program = generate_project_bytecode_with_opt(&db, opt).expect("honest compile");
     borsh::to_vec(&program).expect("serialize honest program")
 }
 

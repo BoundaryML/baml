@@ -332,7 +332,6 @@ impl SymbolId {
             Definition::Function(_)
             | Definition::TemplateString(_)
             | Definition::Client(_)
-            | Definition::Test(_)
             | Definition::RetryPolicy(_)
             | Definition::Let(_) => IdKind::Value,
         };
@@ -617,7 +616,6 @@ pub enum ExportItemKind {
     Function,
     TemplateString,
     Client,
-    Test,
     RetryPolicy,
     Global,
 }
@@ -631,7 +629,6 @@ fn item_kind(def: Definition<'_>) -> ExportItemKind {
         Definition::Function(_) => ExportItemKind::Function,
         Definition::TemplateString(_) => ExportItemKind::TemplateString,
         Definition::Client(_) => ExportItemKind::Client,
-        Definition::Test(_) => ExportItemKind::Test,
         Definition::RetryPolicy(_) => ExportItemKind::RetryPolicy,
         Definition::Let(_) => ExportItemKind::Global,
     }
@@ -762,7 +759,6 @@ fn definition_name(db: &Db, def: Definition<'_>) -> Name {
         Definition::Function(loc) => item_data::function_data(db, loc).name.clone(),
         Definition::TemplateString(loc) => item_data::template_string_data(db, loc).name.clone(),
         Definition::Client(loc) => item_data::client_data(db, loc).name.clone(),
-        Definition::Test(loc) => item_data::test_data(db, loc).name.clone(),
         Definition::RetryPolicy(loc) => item_data::retry_policy_data(db, loc).name.clone(),
         Definition::Let(loc) => item_data::let_data(db, loc).name.clone(),
     }
@@ -777,7 +773,6 @@ fn definition_file(db: &Db, def: Definition<'_>) -> SourceFile {
         Definition::Function(loc) => loc.file(db),
         Definition::TemplateString(loc) => loc.file(db),
         Definition::Client(loc) => loc.file(db),
-        Definition::Test(loc) => loc.file(db),
         Definition::RetryPolicy(loc) => loc.file(db),
         Definition::Let(loc) => loc.file(db),
     }
@@ -792,7 +787,6 @@ fn definition_span(db: &Db, def: Definition<'_>) -> TextRange {
         Definition::Function(loc) => item_data::function_source_map(db, loc).span,
         Definition::TemplateString(loc) => item_data::template_string_source_map(db, loc).span,
         Definition::Client(loc) => item_data::client_source_map(db, loc).span,
-        Definition::Test(loc) => item_data::test_source_map(db, loc).span,
         Definition::RetryPolicy(loc) => item_data::retry_policy_source_map(db, loc).span,
         Definition::Let(loc) => item_data::let_source_map(db, loc).span,
     }
@@ -810,7 +804,6 @@ fn definition_docstring<'db>(db: &'db Db, def: Definition<'db>) -> Option<&'db s
         Definition::Function(loc) => item_data::function_data(db, loc).docstring.as_deref(),
         Definition::TemplateString(_)
         | Definition::Client(_)
-        | Definition::Test(_)
         | Definition::RetryPolicy(_)
         | Definition::Let(_) => None,
     }
@@ -1338,7 +1331,6 @@ fn export_item<'db>(
         },
         Definition::TemplateString(_)
         | Definition::Client(_)
-        | Definition::Test(_)
         | Definition::RetryPolicy(_)
         | Definition::Let(_) => ItemDetail::Plain {},
     };
