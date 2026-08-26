@@ -29,6 +29,8 @@ class Feedback {
     /// Toolchain version the reporter saw the bug on (e.g. "0.17.0");
     /// "unknown" when the report does not say.
     toolchain: string,
+    /// Files attached to the report (`baml feedback --files`), name -> content.
+    files: map<string, string>,
     comments: Comment[],
     /// Issues already linked to this feedback (empty until triaged).
     issue_ids: string[],

@@ -109,6 +109,9 @@ function create_repro(fb: Feedback) -> Repro {
         Report body:
         ${fb.body}
 
+        Attached files:
+        ${format_files(fb.files)}
+
         Comment chain:
         ${format_comments(fb.comments)}
 
@@ -356,26 +359,45 @@ function format_files(files: map<string, string>) -> string {
 
 // ==================== Eval ====================
 //
-// THE metric: from feedback that could have led to a GitHub issue, does
-// create_repro produce the repro the maintainer put in that issue? Scored as
-// keyword recall: the issue's reference repro is reduced (once, at dataset
-// build time) to the input tokens a repro must contain — subcommand, flags,
-// constructs, option names — and ours must contain >= 70% of them.
+// Two metrics, each a testset with testing.PassRate(0.6):
 //
-// The dataset lives in Supabase (tables triage_issues / triage_feedback,
-// see eval/supabase/schema.sql) so it travels with the project instead of a
-// checkout. SUPABASE_URL + SUPABASE_KEY (anon, read-only) select it; the
-// testset does not exist without them.
-//   baml test -i "root::repro_match::*"
+//   repro_match      from feedback, does create_repro produce the repro the
+//                    issue calls for? Keyword recall against the reference
+//                    repro's input tokens (>= 0.7), and — when the toolchain
+//                    can run it — the repro must actually compile/evaluate.
+//   issue_enrichment given feedback and the reference repro, does write_issue
+//                    produce the issue a maintainer wants? LLM-judged
+//                    similarity against the reference issue (>= 0.7).
+//
+// The dataset lives in Supabase (triage_issues / triage_feedback, see
+// eval/supabase/schema.sql): feedback is what agent sessions passed to
+// `baml feedback`; reference repros come from the issue when it has one
+// (repro_source = github) and are LLM-authored otherwise (generated).
+// SUPABASE_URL + SUPABASE_KEY (anon, read-only) select it; without them the
+// testsets have no tests.
+//   baml test -i "root::repro_match::*" -i "root::issue_enrichment::*"
+
+/// The issue as the pipeline should write it: IssueDraft's shape with the
+/// full set of good repros, minimal first.
+class ReferenceIssue {
+    title: string,
+    description: string,
+    subsystem: Subsystem,
+    resolution_plan: string?,
+    repros: Repro[],
+}
 
 /// A row of triage_issues.
 class IssueRow {
     number: int,
     title: string,
-    /// The maintainer's own repro from the GitHub issue (verbatim).
+    /// The reference repro (verbatim from the issue, or authored).
     reference_repro: string,
+    /// "github" = the issue's own Reproduction section; "generated" = LLM-authored.
+    repro_source: string,
     /// Input tokens a repro must contain to exercise the same defect.
     keywords: string[],
+    reference_issue: ReferenceIssue,
 }
 
 /// A row of triage_feedback — a Feedback with its author flattened.
@@ -389,7 +411,8 @@ class FeedbackRow {
     author_github: string?,
     author_device_id: string?,
     toolchain: string,
-    comments: Comment[],
+    files: map<string, string>,
+    session: string?,
 }
 
 function to_feedback(r: FeedbackRow) -> Feedback {
@@ -400,7 +423,8 @@ function to_feedback(r: FeedbackRow) -> Feedback {
         source: r.source,
         author: Author { email: r.author_email, github: r.author_github, device_id: r.author_device_id },
         toolchain: r.toolchain,
-        comments: r.comments,
+        files: r.files,
+        comments: [],
         issue_ids: [],
     }
 }
@@ -462,29 +486,117 @@ function keyword_recall(ours: string, keywords: string[]) -> float {
     }
 }
 
-// One test per feedback record; the testset passes when >= 25% of repros
-// match their issue's reference. Live LLM calls.
-testset "repro_match" with testing.PassRate(0.25) {
+function draft_text(d: IssueDraft) -> string {
+    baml.json.stringify_pretty(d.to_json()) catch (_) {
+        _ => "<unserializable>",
+    }
+}
+
+function reference_text(r: ReferenceIssue) -> string {
+    baml.json.stringify_pretty(r.to_json()) catch (_) {
+        _ => "<unserializable>",
+    }
+}
+
+class IssueJudgment {
+    /// 0.0 (different defect / unusable ticket) .. 1.0 (a maintainer would
+    /// accept OURS in place of the REFERENCE).
+    similarity: float,
+    /// What OURS gets wrong or misses relative to the reference.
+    missing: string?,
+}
+
+/// Judge our ticket against the reference ticket for the same issue.
+function judge_issue(ours: string, reference: string) -> IssueJudgment {
+    client: Triage
+    prompt: `
+        Two engineering tickets for the same BAML toolchain bug. REFERENCE is
+        how the maintainers want it written; OURS was produced automatically
+        from a user report. Score how well OURS stands in for REFERENCE:
+        same defect and subsystem, description conveys the same symptoms and
+        expected-vs-actual, repros exercise the same trigger, resolution plan
+        points the same way. Wording and length do not matter.
+        1.0 = interchangeable; 0.7 = same defect, minor gaps; 0.4 = related
+        but a maintainer would have to rewrite it; 0.0 = wrong defect.
+
+        REFERENCE:
+        ${reference}
+
+        OURS:
+        ${ours}
+
+        ${ctx.output_format}
+    `
+}
+
+testset "repro_match" with testing.PassRate(0.6) {
     if (supabase_configured()) {
         let issues = load_issues();
         for (let row in load_feedback()) {
             test (row.id) {
                 // `let`s in the loop body reach these closures with the LAST
-                // iteration's value (only the loop variable is captured per
-                // iteration), so everything is derived from `row` in here.
+                // iteration's value, so everything is derived from `row`.
                 let key = row.issue_number.to_string();
                 let issue = issues.get(key) ?? baml.sys.panic("no triage_issues row for #" + key);
                 let repro = create_repro(to_feedback(row));
                 let recall = keyword_recall(format_repro(repro), issue.keywords);
+                let run = run_repro(repro);
                 log.info(
                     {
                         "feedback": row.id,
                         "issue": key,
+                        "repro_source": issue.repro_source,
                         "keyword_recall": recall,
                         "command": repro.command,
+                        "run": run.verdict.to_string(),
+                        "observed": run.observed,
                     },
                 );
                 assert.is_true(recall >= 0.7);
+                // a programmatic repro must actually run when this host can
+                // run it (the `baml test` VM has no runtime compiler — then
+                // the verdict is Inconclusive and only recall is asserted)
+                let runnable = !run.observed.includes("runtime compiler unavailable");
+                let programmatic = match (repro.expectation) {
+                    let e: RequiresInspection => false,
+                    _ => command_covered_by_compile(repro.command),
+                };
+                if (runnable && programmatic) {
+                    assert.is_true(run.verdict != Verdict.Inconclusive);
+                };
+            }
+        }
+    };
+}
+
+testset "issue_enrichment" with testing.PassRate(0.6) {
+    if (supabase_configured()) {
+        let issues = load_issues();
+        for (let row in load_feedback()) {
+            test (row.id) {
+                let key = row.issue_number.to_string();
+                let issue = issues.get(key) ?? baml.sys.panic("no triage_issues row for #" + key);
+                let reference = issue.reference_issue;
+                let repro = reference.repros.at(0)
+                    ?? baml.sys.panic("reference issue #" + key + " has no repros");
+                let draft = write_issue(
+                    to_feedback(row),
+                    repro,
+                    ReproRun {
+                        verdict: Verdict.Inconclusive,
+                        observed: "not run during enrichment eval",
+                    },
+                );
+                let j = judge_issue(draft_text(draft), reference_text(reference));
+                log.info(
+                    {
+                        "feedback": row.id,
+                        "issue": key,
+                        "similarity": j.similarity,
+                        "missing": j.missing,
+                    },
+                );
+                assert.is_true(j.similarity >= 0.7);
             }
         }
     };
@@ -505,6 +617,7 @@ testset "feedback" {
               "source": "Github",
               "author": { "email": null, "github": "octocat", "device_id": "dev-9" },
               "toolchain": "0.17.0",
+              "files": {},
               "comments": [],
               "issue_ids": []
             }
@@ -596,6 +709,13 @@ testset "llm_parsing" {
         let draft = write_issue$parse(raw);
         assert.equal(draft.subsystem, Subsystem.StdLibrary);
         assert.equal(draft.more_repros.length(), 1);
+    }
+}
+
+testset "judge_parsing" {
+    test "judge_issue reply parses" {
+        let j = judge_issue$parse(#"{ "similarity": 0.8, "missing": null }"#);
+        assert.equal(j.similarity, 0.8);
     }
 }
 
