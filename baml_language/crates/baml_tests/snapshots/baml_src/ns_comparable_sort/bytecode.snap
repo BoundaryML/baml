@@ -194,7 +194,7 @@ function comparable_sort.Num.Cmp.compare(self: comparable_sort.Num, other: compa
     load_var self
     load_field .value
     load_var other
-    load_field .0
+    load_field .value
     sub_int
     return
 }
@@ -203,7 +203,7 @@ function comparable_sort.OobScore.baml.Comparable.compare(self: comparable_sort.
     load_var self
     load_field .points
     load_var other
-    load_field .0
+    load_field .points
     load_type baml.Comparable<CompareError = never>
     load_const "compare"
     virtual_call nargs=2 ntypeargs=0
@@ -216,7 +216,7 @@ function comparable_sort.ParityItem.baml.Comparable.compare(self: comparable_sor
     load_var self
     load_field .rank
     load_var other
-    load_field .0
+    load_field .rank
     load_type baml.Comparable<CompareError = never>
     load_const "compare"
     virtual_call nargs=2 ntypeargs=0
@@ -229,7 +229,7 @@ function comparable_sort.Ranked.baml.Comparable.compare(self: comparable_sort.Ra
     load_var self
     load_field .rank
     load_var other
-    load_field .0
+    load_field .rank
     load_type baml.Comparable<CompareError = never>
     load_const "compare"
     virtual_call nargs=2 ntypeargs=0
@@ -242,7 +242,7 @@ function comparable_sort.Resume.baml.Comparable.compare(self: comparable_sort.Re
     load_var self
     load_field .rank
     load_var other
-    load_field .0
+    load_field .rank
     load_type baml.Comparable<CompareError = never>
     load_const "compare"
     virtual_call nargs=2 ntypeargs=0
@@ -261,7 +261,7 @@ function comparable_sort.RouteItem.baml.Comparable.compare(self: comparable_sort
     load_var self
     load_field .rank
     load_var other
-    load_field .0
+    load_field .rank
     load_type baml.Comparable<CompareError = never>
     load_const "compare"
     virtual_call nargs=2 ntypeargs=0
@@ -280,7 +280,7 @@ function comparable_sort.Score.baml.Comparable.compare(self: comparable_sort.Sco
     load_var self
     load_field .points
     load_var other
-    load_field .0
+    load_field .points
     cmp_int_op <
     pop_jump_if_false L0
     jump L3
@@ -289,7 +289,7 @@ function comparable_sort.Score.baml.Comparable.compare(self: comparable_sort.Sco
     load_var self
     load_field .points
     load_var other
-    load_field .0
+    load_field .points
     cmp_int_op >
     pop_jump_if_false L1
     jump L2
@@ -313,7 +313,7 @@ function comparable_sort.ScorePts.baml.Comparable.compare(self: comparable_sort.
     load_var self
     load_field .points
     load_var other
-    load_field .0
+    load_field .points
     load_type baml.Comparable<CompareError = never>
     load_const "compare"
     virtual_call nargs=2 ntypeargs=0

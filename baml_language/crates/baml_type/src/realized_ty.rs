@@ -39,7 +39,7 @@ impl<N: Clone> RealizedTy<N> {
 
     /// `unknown` (the top type) with default attributes.
     pub fn unknown() -> Self {
-        RealizedTy::BuiltinUnknown {
+        RealizedTy::Unknown {
             attr: TyAttr::default(),
         }
     }
@@ -202,11 +202,11 @@ mod tests {
     }
 
     #[test]
-    fn nested_unknown_in_list_blocks_conversion() {
-        let ty: Ty = Ty::List(Box::new(Ty::Unknown { attr: def() }), def());
+    fn nested_infer_in_list_blocks_conversion() {
+        let ty: Ty = Ty::List(Box::new(Ty::Infer { attr: def() }), def());
         assert_eq!(
             RealizedTy::try_from(&ty),
-            Err(NotRealizedTy { variant: "Unknown" })
+            Err(NotRealizedTy { variant: "Infer" })
         );
     }
 
@@ -224,39 +224,28 @@ mod tests {
     }
 
     #[test]
-    fn nested_evolving_list_in_union_blocks_conversion() {
+    fn nested_error_in_union_blocks_conversion() {
         let ty: Ty = Ty::Union(
-            vec![
-                Ty::Int { attr: def() },
-                Ty::EvolvingList(Box::new(Ty::Never { attr: def() }), def()),
-            ],
+            vec![Ty::Int { attr: def() }, Ty::Error { attr: def() }],
             def(),
         );
         assert_eq!(
             RealizedTy::try_from(&ty),
-            Err(NotRealizedTy {
-                variant: "EvolvingList"
-            })
+            Err(NotRealizedTy { variant: "Error" })
         );
     }
 
     #[test]
-    fn nested_evolving_map_in_function_ret_blocks_conversion() {
+    fn nested_infer_in_function_ret_blocks_conversion() {
         let ty: Ty = Ty::Function {
             params: vec![],
-            ret: Box::new(Ty::EvolvingMap(
-                Box::new(Ty::Never { attr: def() }),
-                Box::new(Ty::Never { attr: def() }),
-                def(),
-            )),
+            ret: Box::new(Ty::Infer { attr: def() }),
             throws: Box::new(Ty::Void { attr: def() }),
             attr: def(),
         };
         assert_eq!(
             RealizedTy::try_from(&ty),
-            Err(NotRealizedTy {
-                variant: "EvolvingMap"
-            })
+            Err(NotRealizedTy { variant: "Infer" })
         );
     }
 }

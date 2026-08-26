@@ -408,11 +408,10 @@ fn plain_interface_ty(bound: &baml_type::interned::InterfaceRef) -> Tir2Ty {
 fn tir_contains_projection(ty: &Tir2Ty) -> bool {
     match ty {
         Tir2Ty::AssociatedTypeProjection { .. } => true,
-        Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => tir_contains_projection(inner),
+        Tir2Ty::List(inner, _) => tir_contains_projection(inner),
         Tir2Ty::Map {
             key: k, value: v, ..
-        }
-        | Tir2Ty::EvolvingMap(k, v, _) => tir_contains_projection(k) || tir_contains_projection(v),
+        } => tir_contains_projection(k) || tir_contains_projection(v),
         Tir2Ty::Union(members, _) => members.iter().any(tir_contains_projection),
         Tir2Ty::Class(_, type_args, _) => type_args.iter().any(tir_contains_projection),
         Tir2Ty::Interface(_, type_args, associated_bindings, _) => {
@@ -504,13 +503,15 @@ fn lower_tir_template(
                 None
             }
         }
-        Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => Some(TyTemplate::list(
-            lower_tir_template(inner, resolved, generic_layout, mode)?,
-        )),
+        Tir2Ty::List(inner, _) => Some(TyTemplate::list(lower_tir_template(
+            inner,
+            resolved,
+            generic_layout,
+            mode,
+        )?)),
         Tir2Ty::Map {
             key: k, value: v, ..
-        }
-        | Tir2Ty::EvolvingMap(k, v, _) => Some(TyTemplate::map(
+        } => Some(TyTemplate::map(
             lower_tir_template(k, resolved, generic_layout, mode)?,
             lower_tir_template(v, resolved, generic_layout, mode)?,
         )),
@@ -851,7 +852,7 @@ fn member_is_opaque_for_tag_proof(m: &RuntimeTy) -> bool {
     match m {
         RuntimeTy::TypeAlias(..)
         | RuntimeTy::TypeVar(..)
-        | RuntimeTy::BuiltinUnknown { .. }
+        | RuntimeTy::Unknown { .. }
         | RuntimeTy::AssociatedTypeProjection { .. }
         | RuntimeTy::Interface(..)
         | RuntimeTy::Void { .. } => true,
@@ -2048,11 +2049,20 @@ impl<'db> LoweringContext<'db> {
         self.lower_expr(collection, Place::local(coll_local));
 
         let (iterable_tn, iterable_args, iterable_assoc) = iterable_view;
+        // A bare `Iterable` view pins nothing — iterating a `T extends Iterable`
+        // or an unpinned existential reaches here with an empty binding list.
+        // The top type is a sound supertype for the element, and it is what this
+        // path already produced (the old `Unknown` sentinel was laundered to
+        // `Unknown` by `erase_compiler_only_ty`), so spelling it directly
+        // keeps behavior identical while removing the sentinel.
+        //
+        // BUG: the faithful element type is the symbolic projection
+        // `(collection as Iterable).Item`, which `RuntimeTy` carries and the
+        // runtime can resolve from the receiver. Erasing to `unknown` throws
+        // that away; fix alongside the `erase_compiler_only_ty` cleanup.
         let item_tir_ty =
-            Self::associated_binding_ty(&iterable_assoc, "Item").unwrap_or_else(|| {
-                Tir2Ty::Unknown {
-                    attr: TyAttr::default(),
-                }
+            Self::associated_binding_ty(&iterable_assoc, "Item").unwrap_or(Tir2Ty::Unknown {
+                attr: TyAttr::default(),
             });
         let elem_ty = self.convert_tir_ty_for_runtime(&item_tir_ty);
 
@@ -2877,18 +2887,20 @@ impl<'db> LoweringContext<'db> {
 
     fn erase_compiler_only_ty(ty: Tir2Ty) -> Tir2Ty {
         match ty {
-            Tir2Ty::Unknown { attr } | Tir2Ty::Error { attr } => Tir2Ty::BuiltinUnknown { attr },
+            // BUG: `Error` here is NOT only "a diagnostic was emitted". Finalize
+            // also erases a still-free var to `Error` when a call is deferred to
+            // a runtime gate (`type T = unreflect(expr)`), which is well-typed
+            // source with no diagnostic — see
+            // `ns_runtime_type_binding_generic_calls`. Laundering both to the top
+            // type is what keeps that source compiling, and it is also what
+            // defuses `ResolvedAliases::convert`'s `unreachable!` on every MIR
+            // path. Fix by giving a runtime-gated slot its own representation
+            // (the deferred-slot marker `inferred_ty_to_template` wants too),
+            // then delete this arm so the guard can do its job.
+            Tir2Ty::Error { attr } => Tir2Ty::Unknown { attr },
             Tir2Ty::TypeVar(param, attr) if baml_type::is_synthetic_effect_param(param.name()) => {
-                Tir2Ty::BuiltinUnknown { attr }
+                Tir2Ty::Unknown { attr }
             }
-            Tir2Ty::EvolvingList(inner, attr) => {
-                Tir2Ty::List(Box::new(Self::erase_compiler_only_ty(*inner)), attr)
-            }
-            Tir2Ty::EvolvingMap(key, value, attr) => Tir2Ty::Map {
-                key: Box::new(Self::erase_compiler_only_ty(*key)),
-                value: Box::new(Self::erase_compiler_only_ty(*value)),
-                attr,
-            },
             Tir2Ty::Literal(lit, _freshness, attr) => {
                 Tir2Ty::Literal(lit, baml_type::Freshness::Regular, attr)
             }
@@ -2966,43 +2978,42 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// Lower a method-signature type expression (a parameter or return type) to
-    /// a runtime type. In a method signature `Self` is the receiver type
-    /// variable and `Self.Assoc` is an associated-type projection onto it. A bare
-    /// `lower_type_expr_in_ns` has neither in scope and would erase both to
-    /// `Ty::Unknown`, tripping the runtime lowering boundary — so bind `Self` to
-    /// its rigid type variable through the `self_ty` channel, which roots both a
-    /// bare `Self` and each `Self.Assoc` projection at it.
+    /// a runtime type, in the owner's declaration environment.
+    ///
+    /// The environment is `hir_ty`'s, not one rebuilt here: `owner_self_ty` and
+    /// `owner_impl_target` are what resolve `Self` and, through it, each
+    /// `Self.Assoc` projection. Synthesizing a symbolic `Self` instead gives it
+    /// a `ParamTy` identity absent from `function_generic_bounds`, so the
+    /// projection cannot determine its declaring interface and lowers to
+    /// `Ty::Error` — which then trips the runtime lowering boundary.
     fn lower_signature_runtime_ty(
         &self,
         te: &baml_compiler2_ast::TypeExpr,
         pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
         ns_context: &[baml_base::Name],
     ) -> RuntimeTy {
-        let mut generic_params = self.enclosing_generic_params();
-        let self_param = generic_params
-            .iter()
-            .find(|param| param.as_str() == "Self")
-            .cloned()
-            .unwrap_or_else(|| {
-                let index = generic_params
-                    .iter()
-                    .map(ParamTy::index)
-                    .max()
-                    .map_or(0, |index| index + 1);
-                let param = ParamTy::new(index, Name::new("Self"));
-                generic_params.push(param.clone());
-                param
-            });
+        let generic_params = self.enclosing_generic_params();
         let generic_param_bounds = self.enclosing_generic_param_bounds();
-        let tir_ty = lower_expr_in_scope(
+        let (self_ty, impl_target) = match self.func_loc {
+            Some(func_loc) => (
+                baml_compiler2_hir_ty::lower::owner_self_ty(self.db, func_loc, &generic_params),
+                baml_compiler2_hir_ty::lower::owner_impl_target(self.db, func_loc, &generic_params),
+            ),
+            None => (None, None),
+        };
+        let mut builder = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
+        let id = builder.lower(te);
+        let (store, _spans) = builder.finish();
+        let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_package(
             self.db,
-            te,
             pkg_items,
-            ns_context,
-            &generic_params,
-            &generic_param_bounds,
-            Some(Tir2Ty::TypeVar(self_param, TyAttr::default())),
-        );
+            ns_context.to_vec(),
+        )
+        .with_frame(generic_params)
+        .with_bounds(generic_param_bounds)
+        .with_self_ty(self_ty)
+        .with_impl_target(impl_target);
+        let tir_ty = ctx.lower_type_ref(&store, id).to_plain();
         self.convert_tir_ty_for_runtime(&tir_ty)
     }
 
@@ -3939,9 +3950,7 @@ impl<'db> LoweringContext<'db> {
     fn array_element_template(&self, expr_id: AstExprId) -> TyTemplate {
         let generic_params = self.enclosing_generic_params();
         match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
-            Some(Tir2Ty::List(elem, _) | Tir2Ty::EvolvingList(elem, _)) => {
-                self.ty_to_template(elem, &generic_params)
-            }
+            Some(Tir2Ty::List(elem, _)) => self.ty_to_template(elem, &generic_params),
             _ => TyTemplate::from(RealizedTy::unknown()),
         }
     }
@@ -3953,7 +3962,7 @@ impl<'db> LoweringContext<'db> {
     fn map_kv_templates(&self, expr_id: AstExprId) -> (TyTemplate, TyTemplate) {
         let generic_params = self.enclosing_generic_params();
         match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
-            Some(Tir2Ty::Map { key, value, .. } | Tir2Ty::EvolvingMap(key, value, _)) => (
+            Some(Tir2Ty::Map { key, value, .. }) => (
                 self.ty_to_template(key, &generic_params),
                 self.ty_to_template(value, &generic_params),
             ),
@@ -4048,10 +4057,7 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn is_pattern_type_recovery(ty: &RuntimeTy) -> bool {
-        matches!(
-            ty,
-            RuntimeTy::Void { .. } | RuntimeTy::BuiltinUnknown { .. }
-        )
+        matches!(ty, RuntimeTy::Void { .. } | RuntimeTy::Unknown { .. })
     }
 
     /// Get the TIR-inferred root segment type for a multi-segment Path expression.
@@ -4107,7 +4113,7 @@ impl<'db> LoweringContext<'db> {
         let definition = self.top_level_let_at(expr_id, name)?;
         let root_ty = self
             .path_root_ty(expr_id)
-            .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
+            .unwrap_or_else(|| RuntimeTy::Unknown {
                 attr: TyAttr::default(),
             });
         let root_local = self.builder.temp(root_ty.clone());
@@ -4379,7 +4385,7 @@ impl<'db> LoweringContext<'db> {
             let param_ty = if param.name.as_str() == "self"
                 && matches!(
                     param.ty.kind,
-                    baml_compiler2_ast::TypeExprKind::Unknown { .. }
+                    baml_compiler2_ast::TypeExprKind::Missing { .. }
                 ) {
                 if let Some(imp) = enclosing_impl
                     && let baml_compiler2_ppir::item_data::ImplSubjectData::Free {
@@ -4895,7 +4901,7 @@ impl<'db> LoweringContext<'db> {
                 // Inference has no answer to give (an already-diagnosed
                 // lambda): keep the placeholder rather than invent a type.
                 None => (
-                    baml_type::TyTemplate::BuiltinUnknown {
+                    baml_type::TyTemplate::Unknown {
                         attr: baml_type::TyAttr::default(),
                     },
                     "unknown".to_string(),
@@ -4968,7 +4974,7 @@ impl<'db> LoweringContext<'db> {
             None => inferred_sig
                 .as_ref()
                 .and_then(|(_, _, throws)| inferred_template(self, throws))
-                .unwrap_or_else(|| baml_type::TyTemplate::BuiltinUnknown {
+                .unwrap_or_else(|| baml_type::TyTemplate::Unknown {
                     attr: baml_type::TyAttr::default(),
                 }),
         };
@@ -5495,7 +5501,7 @@ impl LoweringContext<'_> {
                 let values_local = self.builder.declare_local(
                     Some(Name::new("__tt_values")),
                     RuntimeTy::List(
-                        Box::new(RuntimeTy::BuiltinUnknown {
+                        Box::new(RuntimeTy::Unknown {
                             attr: TyAttr::default(),
                         }),
                         TyAttr::default(),
@@ -5682,7 +5688,7 @@ impl LoweringContext<'_> {
                     let error_local = *shared_error.get_or_insert_with(|| {
                         self.builder.declare_local(
                             None,
-                            RuntimeTy::BuiltinUnknown {
+                            RuntimeTy::Unknown {
                                 attr: TyAttr::default(),
                             },
                             None,
@@ -5691,7 +5697,7 @@ impl LoweringContext<'_> {
                     let ctx_local = *shared_ctx.get_or_insert_with(|| {
                         self.builder.declare_local(
                             None,
-                            RuntimeTy::BuiltinUnknown {
+                            RuntimeTy::Unknown {
                                 attr: TyAttr::default(),
                             },
                             None,
@@ -6812,13 +6818,12 @@ impl<'db> LoweringContext<'db> {
                         // If TIR inferred a more specific type for the root local,
                         // update the MIR local's declared type so the emitter can
                         // resolve field names for display (e.g. `load_field .index`).
-                        if matches!(
-                            self.builder.local_ty(root_local),
-                            RuntimeTy::BuiltinUnknown { .. }
-                        ) && !matches!(
-                            tir_root,
-                            RuntimeTy::BuiltinUnknown { .. } | RuntimeTy::Void { .. }
-                        ) {
+                        if matches!(self.builder.local_ty(root_local), RuntimeTy::Unknown { .. })
+                            && !matches!(
+                                tir_root,
+                                RuntimeTy::Unknown { .. } | RuntimeTy::Void { .. }
+                            )
+                        {
                             self.builder.local_decl_mut(root_local).ty = tir_root.clone();
                         }
                         tir_root
@@ -6828,7 +6833,7 @@ impl<'db> LoweringContext<'db> {
                 }
                 Place::Capture(_) => {
                     self.path_root_ty(expr_id)
-                        .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
+                        .unwrap_or_else(|| RuntimeTy::Unknown {
                             attr: TyAttr::default(),
                         })
                 }
@@ -6909,11 +6914,11 @@ impl<'db> LoweringContext<'db> {
                 }
             }
 
-            let target_ty = self.path_segment_ty(expr_id, seg_idx).unwrap_or_else(|| {
-                RuntimeTy::BuiltinUnknown {
-                    attr: TyAttr::default(),
-                }
-            });
+            let target_ty =
+                self.path_segment_ty(expr_id, seg_idx)
+                    .unwrap_or_else(|| RuntimeTy::Unknown {
+                        attr: TyAttr::default(),
+                    });
             let target_place = if is_last {
                 dest.clone()
             } else {
@@ -8112,22 +8117,17 @@ impl<'db> LoweringContext<'db> {
         if !is_sugar_callee(&callee_expr, "to_string") {
             return false;
         }
-        // Fires only when TIR left the callee *untyped* (`Unknown`/`Error`) — no
+        // Fires only when the checker left the callee *untyped* (`Error`) — no
         // real `to_string` method resolved. A real implementor (any `baml.ToString`
         // / interface impl) types the callee as a method and is dispatched by the
         // normal paths. Key on the callee's TIR type, not on resolution presence: a
         // generic typevar receiver records a placeholder resolution yet still has an
         // untyped callee, and must take the fallback rather than ICE on it.
-        // A nullable receiver types the missing member as `Unknown | null`, so test
+        // A nullable receiver types the missing member as `Error | null`, so test
         // the non-null part (matches the TIR fallback gate).
         let callee_untyped = self
             .tir_expr_type(self.expr_metadata_key(callee))
-            .is_none_or(|t| {
-                matches!(
-                    t.remove_null(),
-                    Tir2Ty::Unknown { .. } | Tir2Ty::Error { .. }
-                )
-            });
+            .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
         if !callee_untyped {
             return false;
         }
@@ -8143,7 +8143,7 @@ impl<'db> LoweringContext<'db> {
                 // handling: a single-segment root may be a local OR a closure
                 // capture; a multi-segment receiver is a field chain off either.
                 // (Can't reuse `lower_path_receiver_to_local`: it assumes a local
-                // root and `expr_ty(callee)` would ICE on the Unknown callee.)
+                // root and `expr_ty(callee)` would ICE on the untyped callee.)
                 let recv_op = if receiver_segments.len() == 1 {
                     let Some(place) = self.place_for_path(callee, &receiver_segments[0]) else {
                         return false;
@@ -8158,7 +8158,7 @@ impl<'db> LoweringContext<'db> {
                         ))
                         .cloned()
                         .map(|t| self.convert_tir_ty_for_runtime(&t))
-                        .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
+                        .unwrap_or_else(|| RuntimeTy::Unknown {
                             attr: TyAttr::default(),
                         });
                     let recv_local = self.builder.temp(recv_ty);
@@ -8187,24 +8187,24 @@ impl<'db> LoweringContext<'db> {
         let caller_generic_params = self.enclosing_generic_params();
         let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
             Some(t)
-                if !matches!(t, Tir2Ty::Unknown { .. })
-                    && !baml_type_runtime::contains_typevar_where(t, &|name| {
-                        !caller_generic_params.iter().any(|p| p == name)
-                    }) =>
+                if !baml_type_runtime::contains_typevar_where(t, &|name| {
+                    !caller_generic_params.iter().any(|p| p == name)
+                }) =>
             {
-                // An `Unknown`/`Error` sentinel ANYWHERE in the receiver type is
+                // An `Error` sentinel ANYWHERE in the receiver type is
                 // not lowerable — `ty_to_template` ICEs on it rather than
                 // degrading — so erase the whole type to `unknown`, its only
                 // sound static erasure. A `catch`/`catch_all` binder reaches here
                 // that way: its type is the union of the base expression's throw
-                // facts, and an unaccounted callee contributes an `Unknown` fact
-                // by design, so `e` is legitimately typed `SomeError | Unknown`.
+                // facts, and an unaccounted callee contributes the top type
+                // `unknown` by design, so `e` is legitimately typed
+                // `SomeError | unknown`.
                 // Erase rather than drop to ntypeargs=0 — these generic shims
                 // bind `T` in a frame slot their own bodies read, so a
                 // zero-type-arg call traps in the VM.
                 let erased;
                 let t = if baml_type_runtime::contains_error_recovery(t) {
-                    erased = Tir2Ty::BuiltinUnknown {
+                    erased = Tir2Ty::Unknown {
                         attr: TyAttr::default(),
                     };
                     &erased
@@ -8283,12 +8283,7 @@ impl<'db> LoweringContext<'db> {
         // Fires only when TIR left the callee untyped (no real `to_json` method).
         let callee_untyped = self
             .tir_expr_type(self.expr_metadata_key(callee))
-            .is_none_or(|t| {
-                matches!(
-                    t.remove_null(),
-                    Tir2Ty::Unknown { .. } | Tir2Ty::Error { .. }
-                )
-            });
+            .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
         if !callee_untyped {
             return false;
         }
@@ -8314,7 +8309,7 @@ impl<'db> LoweringContext<'db> {
                         ))
                         .cloned()
                         .map(|t| self.convert_tir_ty_for_runtime(&t))
-                        .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
+                        .unwrap_or_else(|| RuntimeTy::Unknown {
                             attr: TyAttr::default(),
                         });
                     let recv_local = self.builder.temp(recv_ty);
@@ -8341,24 +8336,24 @@ impl<'db> LoweringContext<'db> {
         let caller_generic_params = self.enclosing_generic_params();
         let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
             Some(t)
-                if !matches!(t, Tir2Ty::Unknown { .. })
-                    && !baml_type_runtime::contains_typevar_where(t, &|name| {
-                        !caller_generic_params.iter().any(|p| p == name)
-                    }) =>
+                if !baml_type_runtime::contains_typevar_where(t, &|name| {
+                    !caller_generic_params.iter().any(|p| p == name)
+                }) =>
             {
-                // An `Unknown`/`Error` sentinel ANYWHERE in the receiver type is
+                // An `Error` sentinel ANYWHERE in the receiver type is
                 // not lowerable — `ty_to_template` ICEs on it rather than
                 // degrading — so erase the whole type to `unknown`, its only
                 // sound static erasure. A `catch`/`catch_all` binder reaches here
                 // that way: its type is the union of the base expression's throw
-                // facts, and an unaccounted callee contributes an `Unknown` fact
-                // by design, so `e` is legitimately typed `SomeError | Unknown`.
+                // facts, and an unaccounted callee contributes the top type
+                // `unknown` by design, so `e` is legitimately typed
+                // `SomeError | unknown`.
                 // Erase rather than drop to ntypeargs=0 — these generic shims
                 // bind `T` in a frame slot their own bodies read, so a
                 // zero-type-arg call traps in the VM.
                 let erased;
                 let t = if baml_type_runtime::contains_error_recovery(t) {
-                    erased = Tir2Ty::BuiltinUnknown {
+                    erased = Tir2Ty::Unknown {
                         attr: TyAttr::default(),
                     };
                     &erased
@@ -8447,12 +8442,7 @@ impl<'db> LoweringContext<'db> {
         }
         let callee_untyped = self
             .tir_expr_type(self.expr_metadata_key(callee))
-            .is_none_or(|t| {
-                matches!(
-                    t.remove_null(),
-                    Tir2Ty::Unknown { .. } | Tir2Ty::Error { .. }
-                )
-            });
+            .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
         if !callee_untyped {
             return false;
         }
@@ -8466,24 +8456,24 @@ impl<'db> LoweringContext<'db> {
         let caller_generic_params = self.enclosing_generic_params();
         let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
             Some(t)
-                if !matches!(t, Tir2Ty::Unknown { .. })
-                    && !baml_type_runtime::contains_typevar_where(t, &|name| {
-                        !caller_generic_params.iter().any(|p| p == name)
-                    }) =>
+                if !baml_type_runtime::contains_typevar_where(t, &|name| {
+                    !caller_generic_params.iter().any(|p| p == name)
+                }) =>
             {
-                // An `Unknown`/`Error` sentinel ANYWHERE in the receiver type is
+                // An `Error` sentinel ANYWHERE in the receiver type is
                 // not lowerable — `ty_to_template` ICEs on it rather than
                 // degrading — so erase the whole type to `unknown`, its only
                 // sound static erasure. A `catch`/`catch_all` binder reaches here
                 // that way: its type is the union of the base expression's throw
-                // facts, and an unaccounted callee contributes an `Unknown` fact
-                // by design, so `e` is legitimately typed `SomeError | Unknown`.
+                // facts, and an unaccounted callee contributes the top type
+                // `unknown` by design, so `e` is legitimately typed
+                // `SomeError | unknown`.
                 // Erase rather than drop to ntypeargs=0 — these generic shims
                 // bind `T` in a frame slot their own bodies read, so a
                 // zero-type-arg call traps in the VM.
                 let erased;
                 let t = if baml_type_runtime::contains_error_recovery(t) {
-                    erased = Tir2Ty::BuiltinUnknown {
+                    erased = Tir2Ty::Unknown {
                         attr: TyAttr::default(),
                     };
                     &erased
@@ -8895,7 +8885,7 @@ impl<'db> LoweringContext<'db> {
                                 // Neither pinned nor defaulted: a diagnosed
                                 // incomplete impl — keep the top type for
                                 // error recovery.
-                                .unwrap_or_else(|| Tir2Ty::BuiltinUnknown {
+                                .unwrap_or_else(|| Tir2Ty::Unknown {
                                     attr: TyAttr::default(),
                                 })
                         })
@@ -9166,10 +9156,7 @@ impl<'db> LoweringContext<'db> {
                         self.binding_id_for_path(*base, &segments[0]).is_some()
                             || self.path_root_is_top_level_let(*base, &segments[0])
                     }
-                    _ => self
-                        .tir_expr_type(self.expr_metadata_key(*base))
-                        .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
-                        .unwrap_or(false),
+                    _ => self.tir_expr_type(self.expr_metadata_key(*base)).is_some(),
                 };
                 // Check if the resolved method expects a `self` receiver.
                 // Static methods (e.g. ParseCache.new) have no `self` param
@@ -9506,7 +9493,7 @@ impl<'db> LoweringContext<'db> {
                         class,
                         ..
                     })),
-                    Some(Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _)),
+                    Some(Tir2Ty::List(inner, _)),
                 ) if package.as_str() == "baml"
                     && namespace.is_empty()
                     && class.as_str() == "Array" =>
@@ -9520,7 +9507,7 @@ impl<'db> LoweringContext<'db> {
                         class,
                         ..
                     })),
-                    Some(Tir2Ty::Map { key, value, .. } | Tir2Ty::EvolvingMap(key, value, _)),
+                    Some(Tir2Ty::Map { key, value, .. }),
                 ) if package.as_str() == "baml"
                     && namespace.is_empty()
                     && class.as_str() == "Map" =>
@@ -10254,7 +10241,7 @@ impl LoweringContext<'_> {
     /// Fixing that needs the callee's declared params here, or effect-position
     /// classification for user-written params in inference; either way it is a
     /// wrong ANSWER rather than the ICE this guard removes.
-    // BUG: widening an Error-recovery sentinel to `BuiltinUnknown` launders a
+    // BUG: widening an Error-recovery sentinel to `Unknown` launders a
     // compile error into the top type (an unrecoverable check must stay
     // `Error` so downstream diagnostics stay suppressed). The deferred slot
     // deserves its own marker realized at the runtime gate, not `unknown`.
@@ -10263,7 +10250,7 @@ impl LoweringContext<'_> {
             || baml_type_runtime::contains_typevar_where(ty, &|name| {
                 !generic_params.iter().any(|param| param == name)
             }) {
-            Tir2Ty::BuiltinUnknown {
+            Tir2Ty::Unknown {
                 attr: TyAttr::default(),
             }
         } else {
@@ -10523,7 +10510,7 @@ impl LoweringContext<'_> {
                     !caller_generic_params.iter().any(|param| param == name)
                 })
             {
-                *ty = Tir2Ty::BuiltinUnknown {
+                *ty = Tir2Ty::Unknown {
                     attr: TyAttr::default(),
                 };
             }
@@ -11326,26 +11313,6 @@ impl<'db> LoweringContext<'db> {
             return;
         }
 
-        // Check if this is a package path intermediate (e.g. `baml.HttpMethod` in
-        // `baml.HttpMethod.Get`). TIR marks these as RuntimeTy::Unknown. Emit null placeholder.
-        // CRITICAL: only treat the expression as a namespace intermediate if the BASE
-        // is also Unknown (i.e. `baml` in `baml.HttpMethod`). If the base has a
-        // concrete type, this is a real field access whose field type happens to be
-        // Unknown (unresolved type annotation). In that case, fall through to emit
-        // the field projection.
-        if let Some(Tir2Ty::Unknown { .. }) = self.tir_expr_type(self.expr_metadata_key(expr_id)) {
-            let base_is_also_unknown = self
-                .tir_expr_type(self.expr_metadata_key(base))
-                .map(|ty| matches!(ty, Tir2Ty::Unknown { .. }))
-                .unwrap_or(true);
-            if base_is_also_unknown {
-                self.builder
-                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-                return;
-            }
-            // Base is a real value (non-Unknown type) — fall through to field projection
-        }
-
         // Regular field access
         let base_ty = self.expr_ty(base);
         let base_op = self.lower_to_operand(base);
@@ -12001,7 +11968,7 @@ impl<'db> LoweringContext<'db> {
             .tir_path_segment_type((self.current_metadata_scope, callee, recv_ty_idx))
             .cloned()
             .map(|t| self.convert_tir_ty_for_runtime(&t))
-            .unwrap_or_else(|| RuntimeTy::BuiltinUnknown {
+            .unwrap_or_else(|| RuntimeTy::Unknown {
                 attr: TyAttr::default(),
             });
         let local = self.builder.temp(recv_ty);
@@ -12549,8 +12516,8 @@ impl<'db> LoweringContext<'db> {
         }
         // The root view is the request itself, verbatim; only the
         // `requires` EXPANSION goes through hir_ty's realized closure.
-        // A TIR-internal sentinel in an argument (`Unknown`/`Evolving`,
-        // dual-provider only) cannot intern - it degrades to the error
+        // An `Error` sentinel in an argument
+        // cannot intern - it degrades to the error
         // sentinel FOR THE WALK, while the root view keeps the plain
         // originals.
         let interned = |ty: &Tir2Ty| {
@@ -13333,11 +13300,12 @@ impl LoweringContext<'_> {
                             Place::Local(local) => self
                                 .path_root_ty(expr_id)
                                 .unwrap_or_else(|| self.builder.local_ty(local)),
-                            Place::Capture(_) => self.path_root_ty(expr_id).unwrap_or_else(|| {
-                                RuntimeTy::BuiltinUnknown {
-                                    attr: TyAttr::default(),
-                                }
-                            }),
+                            Place::Capture(_) => {
+                                self.path_root_ty(expr_id)
+                                    .unwrap_or_else(|| RuntimeTy::Unknown {
+                                        attr: TyAttr::default(),
+                                    })
+                            }
                             _ => unreachable!("path roots are locals or captures"),
                         };
                         (place, ty)
@@ -15826,7 +15794,7 @@ impl LoweringContext<'_> {
         });
         let error_local = self.builder.declare_local(
             single_clause_binding_name,
-            RuntimeTy::BuiltinUnknown {
+            RuntimeTy::Unknown {
                 attr: TyAttr::default(),
             },
             None,
@@ -15838,7 +15806,7 @@ impl LoweringContext<'_> {
             .then(|| {
                 self.builder.declare_local(
                     None,
-                    RuntimeTy::BuiltinUnknown {
+                    RuntimeTy::Unknown {
                         attr: TyAttr::default(),
                     },
                     None,
@@ -15855,7 +15823,7 @@ impl LoweringContext<'_> {
                 Some(name) if binding_is_captured => {
                     let local = self.builder.declare_local(
                         Some(name.clone()),
-                        RuntimeTy::BuiltinUnknown {
+                        RuntimeTy::Unknown {
                             attr: TyAttr::default(),
                         },
                         None,
@@ -15881,7 +15849,7 @@ impl LoweringContext<'_> {
                     Some(name) if is_captured => {
                         let local = self.builder.declare_local(
                             Some(name.clone()),
-                            RuntimeTy::BuiltinUnknown {
+                            RuntimeTy::Unknown {
                                 attr: TyAttr::default(),
                             },
                             None,

@@ -27,7 +27,7 @@ message BamlTy {
     BamlTyUnion union = 7;
     BamlTyLiteral literal = 8;
     BamlTyTypeAlias type_alias = 9;
-    // `unknown` decodes to `RuntimeTy::BuiltinUnknown` — the top type.
+    // `unknown` decodes to `RuntimeTy::Unknown` — the top type.
     BamlTyUnknown unknown = 10;
     BamlTyMedia media = 11;
     BamlTyInterface interface = 12;

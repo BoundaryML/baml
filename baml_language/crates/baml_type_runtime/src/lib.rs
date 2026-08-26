@@ -350,14 +350,6 @@ fn collect(
             if !opts.allow_typevar_actuals && matches!(actual_ty, Ty::TypeVar(_, _)) {
                 return;
             }
-            // An `Unknown` actual carries NO information: binding it (or
-            // unioning it into an existing binding) only poisons the result —
-            // e.g. an expected return of `SpawnParams<unknown, unknown>`
-            // driving phase-0 must not turn a param-bound `T = int` into
-            // `int | unknown`.
-            if matches!(actual_ty, Ty::Unknown { .. }) {
-                return;
-            }
             vars.entry(name.clone())
                 .or_default()
                 .push((variance, actual_ty.clone()));
@@ -693,11 +685,10 @@ pub fn contains_ty_where(ty: &Ty, pred: &dyn Fn(&Ty) -> bool) -> bool {
         Ty::AssociatedTypeProjection {
             base, interface, ..
         } => contains_ty_where(base, pred) || interface.tys().any(|t| contains_ty_where(t, pred)),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_ty_where(inner, pred),
+        Ty::List(inner, _) => contains_ty_where(inner, pred),
         Ty::Map {
             key: k, value: v, ..
-        }
-        | Ty::EvolvingMap(k, v, _) => contains_ty_where(k, pred) || contains_ty_where(v, pred),
+        } => contains_ty_where(k, pred) || contains_ty_where(v, pred),
         Ty::Union(tys, _) => tys.iter().any(|t| contains_ty_where(t, pred)),
         Ty::Future(value, error, _) => {
             contains_ty_where(value, pred) || contains_ty_where(error, pred)
@@ -730,13 +721,13 @@ pub fn contains_typevar(ty: &Ty) -> bool {
     contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(_, _)))
 }
 
-/// Does `ty` carry an error-recovery sentinel (`Ty::Error` or `Ty::Unknown`)
+/// Does `ty` carry an error-recovery sentinel (`Ty::Error`)
 /// anywhere in its structure? An expression recorded with such a type already
 /// failed to compile at its own site; downstream consumers (e.g. call-site
 /// generic inference) use this to recognize an already-failed input and avoid
 /// cascading a second diagnostic off it.
 pub fn contains_error_recovery(ty: &Ty) -> bool {
-    contains_ty_where(ty, &|t| matches!(t, Ty::Error { .. } | Ty::Unknown { .. }))
+    contains_ty_where(ty, &|t| matches!(t, Ty::Error { .. }))
 }
 
 /// Returns `true` if `ty` contains any type variable for which `pred` returns
@@ -759,7 +750,7 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&ParamTy) -> bool
     }
 
     match ty {
-        Ty::TypeVar(name, attr) if should_erase(name) => Ty::BuiltinUnknown { attr: attr.clone() },
+        Ty::TypeVar(name, attr) if should_erase(name) => Ty::Unknown { attr: attr.clone() },
         Ty::Class(qtn, args, attr) => Ty::Class(
             qtn.clone(),
             args.iter()
@@ -782,20 +773,11 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&ParamTy) -> bool
             Box::new(erase_typevars_matching(inner, should_erase)),
             attr.clone(),
         ),
-        Ty::EvolvingList(inner, attr) => Ty::EvolvingList(
-            Box::new(erase_typevars_matching(inner, should_erase)),
-            attr.clone(),
-        ),
         Ty::Map { key, value, attr } => Ty::Map {
             key: Box::new(erase_typevars_matching(key, should_erase)),
             value: Box::new(erase_typevars_matching(value, should_erase)),
             attr: attr.clone(),
         },
-        Ty::EvolvingMap(key, value, attr) => Ty::EvolvingMap(
-            Box::new(erase_typevars_matching(key, should_erase)),
-            Box::new(erase_typevars_matching(value, should_erase)),
-            attr.clone(),
-        ),
         Ty::Union(members, attr) => Ty::Union(
             members
                 .iter()

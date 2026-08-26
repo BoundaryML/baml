@@ -230,7 +230,7 @@ fn never<H: Head>() -> &'static NormalTy<H> {
 }
 
 fn unknown_top<H: Head>() -> &'static NormalTy<H> {
-    &const { NormalTy::BuiltinUnknown }
+    &const { NormalTy::Unknown }
 }
 
 fn bool_leaf<H: Head>() -> &'static NormalTy<H> {

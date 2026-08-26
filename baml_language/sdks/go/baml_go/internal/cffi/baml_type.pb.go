@@ -478,7 +478,7 @@ type BamlTy_TypeAlias struct {
 }
 
 type BamlTy_Unknown struct {
-	// `unknown` decodes to `RuntimeTy::BuiltinUnknown` — the top type.
+	// `unknown` decodes to `RuntimeTy::Unknown` — the top type.
 	Unknown *BamlTyUnknown `protobuf:"bytes,10,opt,name=unknown,proto3,oneof"`
 }
 

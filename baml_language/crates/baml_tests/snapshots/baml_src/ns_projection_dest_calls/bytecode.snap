@@ -48,7 +48,7 @@ function projection_dest_calls.PdcTag.baml.ops.Equals.eq(self: projection_dest_c
     load_var self
     load_field .id
     load_var other
-    load_field .0
+    load_field .id
     cmp_int_op ==
     return
 }

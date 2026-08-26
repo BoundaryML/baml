@@ -253,7 +253,7 @@ function item_projections.Poly.Convert<int>.conv(self: item_projections.Poly, ot
     load_var self
     load_field .n
     load_var other
-    load_field .0
+    load_field .n
     add_int
     return
 }
@@ -298,7 +298,7 @@ function item_projections.Sized.Sizer.pick(self: item_projections.Sized, other: 
     load_var self
     load_field .s
     load_var other
-    load_field .0
+    load_field .s
     cmp_int_op >
     pop_jump_if_false L0
     jump L1
@@ -332,7 +332,7 @@ function item_projections.Twin.Alpha.tag(self: item_projections.Twin, other: ite
 
 function item_projections.Twin.Beta.tag(self: item_projections.Twin, other: item_projections.Twin) -> int {
     load_var other
-    load_field .0
+    load_field .n
     return
 }
 

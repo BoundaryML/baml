@@ -901,7 +901,7 @@ fn ty_value_to_serde(
             path,
             "future",
         )),
-        RealizedTy::BuiltinUnknown { .. } => Err(raise_serialize(
+        RealizedTy::Unknown { .. } => Err(raise_serialize(
             vm,
             "cannot serialize unknown type",
             path,
@@ -1309,7 +1309,7 @@ fn ty_serde_to_value(
 
         RealizedTy::Function { .. }
         | RealizedTy::Future(_, _, _)
-        | RealizedTy::BuiltinUnknown { .. }
+        | RealizedTy::Unknown { .. }
         | RealizedTy::Void { .. } => {
             // These variants do not provide a concrete JSON schema to validate
             // against here. Preserve structural JSON conversion for values

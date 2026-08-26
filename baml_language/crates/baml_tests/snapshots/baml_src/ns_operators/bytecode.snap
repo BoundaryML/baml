@@ -453,7 +453,7 @@ function operators.Boom.baml.ops.Compare.lt(self: operators.Boom, other: operato
     load_field .n
     div_int
     load_var other
-    load_field .0
+    load_field .n
     cmp_int_op <
     return
 }
@@ -462,7 +462,7 @@ function operators.Boom.baml.ops.Equals.eq(self: operators.Boom, other: operator
     load_var self
     load_field .n
     load_var other
-    load_field .0
+    load_field .n
     cmp_int_op ==
     return
 }
@@ -510,7 +510,7 @@ function operators.OddOrder.baml.ops.Compare.lt(self: operators.OddOrder, other:
     load_var self
     load_field .n
     load_var other
-    load_field .0
+    load_field .n
     cmp_int_op <
     return
 }
@@ -519,7 +519,7 @@ function operators.OddOrder.baml.ops.Equals.eq(self: operators.OddOrder, other: 
     load_var self
     load_field .n
     load_var other
-    load_field .0
+    load_field .n
     cmp_int_op ==
     return
 }
@@ -556,7 +556,7 @@ function operators.Ranked.baml.ops.Compare.lt(self: operators.Ranked, other: ope
     load_var self
     load_field .rank
     load_var other
-    load_field .0
+    load_field .rank
     cmp_int_op <
     return
 }
@@ -565,7 +565,7 @@ function operators.Ranked.baml.ops.Equals.eq(self: operators.Ranked, other: oper
     load_var self
     load_field .rank
     load_var other
-    load_field .0
+    load_field .rank
     cmp_int_op ==
     return
 }
@@ -614,7 +614,7 @@ function operators.Tier.baml.ops.Compare.lt(self: operators.Tier, other: operato
     load_var self
     load_field .level
     load_var other
-    load_field .0
+    load_field .level
     cmp_int_op <
     return
 }
@@ -623,7 +623,7 @@ function operators.Tier.baml.ops.Equals.eq(self: operators.Tier, other: operator
     load_var self
     load_field .level
     load_var other
-    load_field .0
+    load_field .level
     cmp_int_op ==
     return
 }
@@ -658,7 +658,7 @@ function operators.Wrapped.baml.ops.Compare.lt(self: operators.Wrapped<#0>, othe
     load_var self
     load_field .weight
     load_var other
-    load_field .0
+    load_field .weight
     cmp_int_op <
     return
 }
@@ -667,7 +667,7 @@ function operators.Wrapped.baml.ops.Equals.eq(self: operators.Wrapped<#0>, other
     load_var self
     load_field .weight
     load_var other
-    load_field .0
+    load_field .weight
     cmp_int_op ==
     return
 }

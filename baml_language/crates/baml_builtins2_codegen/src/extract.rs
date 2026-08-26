@@ -924,8 +924,8 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         TypeExprKind::Function { .. } => BamlType::Named("function".to_string()),
         TypeExprKind::AssociatedTypeProjection { .. }
         | TypeExprKind::Unreflect { .. }
-        | TypeExprKind::BuiltinUnknown { .. }
         | TypeExprKind::Unknown { .. }
+        | TypeExprKind::Missing { .. }
         | TypeExprKind::Error { .. }
         | TypeExprKind::Infer { .. } => BamlType::Named("unknown".to_string()),
         TypeExprKind::Type { .. } => BamlType::Named("type".to_string()),

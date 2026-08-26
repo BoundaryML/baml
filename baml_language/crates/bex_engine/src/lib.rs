@@ -1405,7 +1405,7 @@ struct SpawnParamsData {
 /// as its [`TypeContext`](baml_type::normalize::TypeContext)), so a thrown
 /// concrete that *implements* a declared interface contract is on-contract (the
 /// context-free `RuntimeTy::is_subtype_of` fork could not see that membership).
-/// `BuiltinUnknown` accepts everything (the "throws unknown" fallback for
+/// `Unknown` accepts everything (the "throws unknown" fallback for
 /// undeclared host contracts); concrete classes reject anything not in their
 /// subtype lattice.
 ///
@@ -1419,9 +1419,9 @@ fn enforce_host_throw_contract(
     value: Value,
     contract: &RuntimeTy,
 ) -> Value {
-    // `BuiltinUnknown` is the top type — short-circuit before any heap
+    // `Unknown` is the top type — short-circuit before any heap
     // walking.
-    if matches!(contract, RuntimeTy::BuiltinUnknown { .. }) {
+    if matches!(contract, RuntimeTy::Unknown { .. }) {
         return value;
     }
     let runtime_ty = value_runtime_baml_ty(value, thread.proof());

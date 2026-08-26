@@ -2013,13 +2013,12 @@ fn collect_ty_deps(
         Ty::Enum(qtn, _) | Ty::TypeAlias(qtn, _) => {
             collect_qtn_dep(db, files, qtn, deps, seen);
         }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+        Ty::List(inner, _) => {
             collect_ty_deps(db, files, inner, deps, seen);
         }
         Ty::Map {
             key: k, value: v, ..
-        }
-        | Ty::EvolvingMap(k, v, _) => {
+        } => {
             collect_ty_deps(db, files, k, deps, seen);
             collect_ty_deps(db, files, v, deps, seen);
         }

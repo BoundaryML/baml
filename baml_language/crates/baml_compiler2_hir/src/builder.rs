@@ -2447,7 +2447,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             // `throws never` and `throws unknown` are the two explicit effect
             // bounds and are both valid for host-bound functions. The latter
             // is needed by continuations that execute user bytecode.
-            ast::TypeExprKind::Never { .. } | ast::TypeExprKind::BuiltinUnknown { .. } => {}
+            ast::TypeExprKind::Never { .. } | ast::TypeExprKind::Unknown { .. } => {}
             _ => invalid.push(Self::render_type_expr(type_expr)),
         }
     }
@@ -2513,11 +2513,11 @@ impl<'db> SemanticIndexBuilder<'db> {
                     throws
                 )
             }
-            ast::TypeExprKind::BuiltinUnknown { .. } => "unknown".to_string(),
+            ast::TypeExprKind::Unknown { .. } => "unknown".to_string(),
             ast::TypeExprKind::Type { .. } => "reflect.Type".to_string(),
             ast::TypeExprKind::Rust { .. } => "$rust_type".to_string(),
             ast::TypeExprKind::Error { .. } => "<error>".to_string(),
-            ast::TypeExprKind::Unknown { .. } => "<unknown>".to_string(),
+            ast::TypeExprKind::Missing { .. } => "<unknown>".to_string(),
             ast::TypeExprKind::Infer { .. } => "_".to_string(),
         }
     }

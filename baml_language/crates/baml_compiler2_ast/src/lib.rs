@@ -388,7 +388,7 @@ mod tests {
                 kind: *kind,
                 attrs: strip_attrs(attrs),
             },
-            TypeExprKind::BuiltinUnknown { attrs } => TypeExprKind::BuiltinUnknown {
+            TypeExprKind::Unknown { attrs } => TypeExprKind::Unknown {
                 attrs: strip_attrs(attrs),
             },
             TypeExprKind::Type { attrs } => TypeExprKind::Type {
@@ -397,7 +397,7 @@ mod tests {
             TypeExprKind::Error { attrs } => TypeExprKind::Error {
                 attrs: strip_attrs(attrs),
             },
-            TypeExprKind::Unknown { attrs } => TypeExprKind::Unknown {
+            TypeExprKind::Missing { attrs } => TypeExprKind::Missing {
                 attrs: strip_attrs(attrs),
             },
             TypeExprKind::Infer { attrs } => TypeExprKind::Infer {

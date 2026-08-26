@@ -734,7 +734,7 @@ fn out_of_body_impl_realizes_self_to_the_for_type() {
 
     // `implement Mergeable for Tone` — a free impl on an enum; `Self` in the
     // override's signature (receiver, parameter, AND return position) must
-    // realize to the for-type, never leak as `Ty::Error`/`Ty::Unknown` (the
+    // realize to the for-type, never leak as `Ty::Error` (the
     // `function_signature_ty` free-impl deficiency this export bypasses).
     let row = impl_row(
         iface,

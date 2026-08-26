@@ -324,7 +324,7 @@ mod tests {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_base::Span::fake(),
-            return_type: crate::TyTemplate::BuiltinUnknown {
+            return_type: crate::TyTemplate::Unknown {
                 attr: baml_type::TyAttr::default(),
             },
             param_names: Vec::new(),

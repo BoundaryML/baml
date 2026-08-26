@@ -196,7 +196,7 @@ pub(crate) fn lower_generic_param_interface_bounds<'db>(
                 });
             }
             // Already diagnosed by lowering the bound expression itself.
-            Ty::Unknown { .. } | Ty::Error { .. } | Ty::BuiltinUnknown { .. } => {}
+            Ty::Error { .. } | Ty::Unknown { .. } => {}
             // BEP-044 requires bounds to be interfaces (E0142).
             other => diags.push(TirTypeError::GenericBoundNotInterface { bound: other }),
         }
@@ -748,10 +748,10 @@ pub fn impl_data_source_map<'db>(
 fn collect_type_var_names(ty: &Ty, out: &mut Vec<ParamTy>) {
     match ty {
         Ty::TypeVar(name, _) => out.push(name.clone()),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+        Ty::List(inner, _) => {
             collect_type_var_names(inner, out);
         }
-        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
+        Ty::Map { key, value, .. } => {
             collect_type_var_names(key, out);
             collect_type_var_names(value, out);
         }
@@ -832,11 +832,11 @@ impl<'db> InterfaceMethodSpec<'db> {
         let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
         let (args, kwargs) = split_params(sig.params.iter().map(|p| {
             // The implicit `self` receiver: name "self" with no declared type
-            // (elaboration synthesizes an `Unknown` node for it).
+            // (elaboration synthesizes a `Missing` node for it).
             let is_self = p.name.as_str() == "self"
                 && matches!(
                     sig.type_refs[p.type_ref].kind,
-                    baml_compiler2_hir::type_ref::TypeRefKind::Unknown
+                    baml_compiler2_hir::type_ref::TypeRefKind::Missing
                 );
             (
                 is_self,
@@ -909,7 +909,7 @@ impl<'db> InterfaceMethodSpec<'db> {
             associated_type_bindings: Box::new([]),
         });
         let unknown_id =
-            scratch.alloc_synthetic(baml_compiler2_hir::type_ref::TypeRefKind::Unknown);
+            scratch.alloc_synthetic(baml_compiler2_hir::type_ref::TypeRefKind::Missing);
         let (scratch_store, _) = scratch.finish();
         let lower = |slot: SigTypeRef, diags: &mut Vec<TirTypeError>| match slot {
             SigTypeRef::Id(id) => lower_ref_in(scope, self.sig_refs, id, diags),
@@ -1641,10 +1641,10 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<Name>) {
             }
         }
         Ty::Enum(qtn, _) | Ty::EnumVariant(qtn, _, _) | Ty::TypeAlias(qtn, _) => push(qtn, out),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+        Ty::List(inner, _) => {
             collect_ty_packages(inner, out);
         }
-        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) | Ty::Future(key, value, _) => {
+        Ty::Map { key, value, .. } | Ty::Future(key, value, _) => {
             collect_ty_packages(key, out);
             collect_ty_packages(value, out);
         }
@@ -1687,9 +1687,8 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<Name>) {
         | Ty::Resource { .. }
         | Ty::PromptAst { .. }
         | Ty::Void { .. }
-        | Ty::BuiltinUnknown { .. }
-        | Ty::Never { .. }
         | Ty::Unknown { .. }
+        | Ty::Never { .. }
         | Ty::Error { .. }
         | Ty::Infer { .. } => {}
     }
@@ -2109,12 +2108,9 @@ impl<'db> ResolvedImpl<'db> {
                     .generic_params
                     .iter()
                     .map(|(name, _)| {
-                        self.bindings
-                            .get(name)
-                            .cloned()
-                            .unwrap_or(Ty::BuiltinUnknown {
-                                attr: TyAttr::default(),
-                            })
+                        self.bindings.get(name).cloned().unwrap_or(Ty::Unknown {
+                            attr: TyAttr::default(),
+                        })
                     })
                     .collect();
                 return Some(ResolvedMethod {

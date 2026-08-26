@@ -179,7 +179,7 @@ pub(crate) fn translate_ty(
             )
         ),
         Ty::Union(items, _) => translate_union(items, ctx, sink),
-        Ty::BuiltinUnknown { .. } => "java.lang.Object".to_string(),
+        Ty::Unknown { .. } => "java.lang.Object".to_string(),
         Ty::Function { params, ret, .. } => translate_callable(params, ret, ctx, sink),
         Ty::Void { .. } => match pos {
             TyPosition::TopLevel => "void".to_string(),
@@ -676,7 +676,7 @@ pub(crate) fn union_arm_token(ty: &Ty) -> String {
                 }
             }
         },
-        Ty::BuiltinUnknown { .. } => "Unknown".to_string(),
+        Ty::Unknown { .. } => "Unknown".to_string(),
         Ty::Function { .. } => "Callable".to_string(),
         Ty::Void { .. } => "Void".to_string(),
         Ty::Never { .. } => "Never".to_string(),
@@ -905,7 +905,7 @@ mod tests {
         Ty::Void { attr: a() }
     }
     fn unknown() -> Ty {
-        Ty::BuiltinUnknown { attr: a() }
+        Ty::Unknown { attr: a() }
     }
     fn rust_type() -> Ty {
         Ty::RustType { attr: a() }
