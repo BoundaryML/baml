@@ -69,6 +69,7 @@ text-size = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
 toml_edit = { workspace = true }
+url = { workspace = true }
 uuid = { workspace = true }
 webbrowser = { workspace = true }
 
