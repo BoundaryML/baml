@@ -880,8 +880,10 @@ function chat_sse_decodes_text_and_usage() -> string {
                     let done: ai.stream.Done => {
                         break;
                     },
-                    let piece: string => {
-                        deltas.push(piece);
+                    let batch: string[] => {
+                        for (let piece in batch) {
+                            deltas.push(piece);
+                        }
                         null
                     },
                 };
@@ -926,7 +928,7 @@ function chat_stream_total_timeout_after_delta() -> string {
             );
             let stream = cl.invoke_stream(_chat_input("hi"));
             let first = match (stream.next()) {
-                let text: string => text,
+                let batch: string[] => batch.join(""),
                 let done: ai.stream.Done => "Done",
             };
             let outcome = `${stream.final_turn().terminal_text() ?? ""}` catch_all (e) {

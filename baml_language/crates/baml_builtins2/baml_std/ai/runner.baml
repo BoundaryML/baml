@@ -3,11 +3,13 @@
 // journal writes, and the typed parse of the final output.
 // Mirrors _planv2/pages/02_guides/02_specs_and_runners/02_the_default_runner.md.
 
-interface Runner<Out> {
-    type Output
-    type Error
+interface Runner {
+    /// The error surface of this runner (`never` if the runner cannot throw).
+    type Error = never
 
-    function run(self, spec: FunctionSpec<Out>) -> Self.Output throws Self.Error
+    /// Execute one spec to completion. `Out` lives on the method and is
+    /// inferred from the spec argument, so no call site needs to name it.
+    function run<Out>(self, spec: FunctionSpec<Out>) -> RunResult<Out> throws Self.Error
 }
 
 class RunResult<Out> {
@@ -311,107 +313,111 @@ class Agent {
         entries.length()
     }
 
-    // Inherent rather than a `Runner<Out>` impl: with `Out` on the method,
-    // the interface's `type Output` associated type would have to depend on a
-    // method-level parameter, which associated types cannot express. The
-    // `Runner<Out>` interface above is unchanged and remains the extension
-    // point for custom runners.
-    function run<Out>(self, spec: FunctionSpec<Out>) -> RunResult<Out> {
-        let schema_attempts = self._validated_schema_attempts();
-        let selected = self.client ?? spec.default_client;
-        let j = Journal.new(spec);
-        let seen = self._emit_from(j, 0);
-        let steps = 0;
-        let total = root.events.Usage {
-            input_tokens: 0,
-            output_tokens: 0,
-            cached_input_tokens: null,
-            reasoning_tokens: null,
-        };
-        // the futility breaker: identical repeated failures stop the run
-        let fail_counts: map<string, int> = {};
-        while (steps < self.max_steps) {
-            // Repair re-asks happen inside the step and share this total
-            // schema-attempt budget.
-            let turn = self._attempt_turn<Out>(selected, spec, j, total, schema_attempts);
-            steps = steps + 1;
-            seen = self._emit_from(j, seen);
-            let calls = turn.tool_uses();
-            if (calls.length() > 0) {
-                let before = j.entries().length();
-                // execute concurrently; each call appends its correlated result
-                let futures = calls.map((call) -> {
-                    spawn { self._run_one_tool(spec.tools(), call, j) }
-                });
-                let _ = await baml.future.all(futures) catch_all (e) {
-                    _ => {
-                        // A Raise-mode tool failure: its ToolFailed event is
-                        // already on the record; deliver it before the error
-                        // propagates so listeners never miss journal events.
-                        seen = self._emit_from(j, seen);
-                        throw e
-                    },
-                };
+    implements Runner {
+        type Error = baml.errors.InvalidArgument
+            | baml.errors.Timeout
+            | baml.errors.UnknownError
+            | baml.panics.Cancelled
+            | reflect.errors.CompilationError
+            | root.errors.Failure
+
+        function run<Out>(self, spec: FunctionSpec<Out>) -> RunResult<Out> {
+            let schema_attempts = self._validated_schema_attempts();
+            let selected = self.client ?? spec.default_client;
+            let j = Journal.new(spec);
+            let seen = self._emit_from(j, 0);
+            let steps = 0;
+            let total = root.events.Usage {
+                input_tokens: 0,
+                output_tokens: 0,
+                cached_input_tokens: null,
+                reasoning_tokens: null,
+            };
+            // the futility breaker: identical repeated failures stop the run
+            let fail_counts: map<string, int> = {};
+            while (steps < self.max_steps) {
+                // Repair re-asks happen inside the step and share this total
+                // schema-attempt budget.
+                let turn = self._attempt_turn<Out>(selected, spec, j, total, schema_attempts);
+                steps = steps + 1;
                 seen = self._emit_from(j, seen);
-                // Reporting a failure lets the model adapt; repeating the
-                // IDENTICAL failing call is futile, and each step can be
-                // expensive. Three identical failures end the run.
-                let entries = j.entries();
-                let i = before;
-                while (i < entries.length()) {
-                    if let f: root.events.ToolFailed = entries.at(i) {
-                        let failed_call = calls.find((one: root.content.ToolUse) -> {
-                            one.id == f.id
-                        });
-                        if let known: root.content.ToolUse = failed_call {
-                            let key = `${known.name}|${f.message}`;
-                            let n = (fail_counts.get(key) ?? 0) + 1;
-                            let _ = fail_counts.set(key, n);
-                            if (n >= 3) {
-                                throw root.errors.ToolFailedError {
-                                        id: known.id,
-                                        name: known.name,
-                                        message: `the same tool call failed ${n} times; stopping the run: ${f.message}`,
-                                        cause: null,
-                                    }
+                let calls = turn.tool_uses();
+                if (calls.length() > 0) {
+                    let before = j.entries().length();
+                    // execute concurrently; each call appends its correlated result
+                    let futures = calls.map((call) -> {
+                        spawn { self._run_one_tool(spec.tools(), call, j) }
+                    });
+                    let _ = await baml.future.all(futures) catch_all (e) {
+                        _ => {
+                            // A Raise-mode tool failure: its ToolFailed event is
+                            // already on the record; deliver it before the error
+                            // propagates so listeners never miss journal events.
+                            seen = self._emit_from(j, seen);
+                            throw e
+                        },
+                    };
+                    seen = self._emit_from(j, seen);
+                    // Reporting a failure lets the model adapt; repeating the
+                    // IDENTICAL failing call is futile, and each step can be
+                    // expensive. Three identical failures end the run.
+                    let entries = j.entries();
+                    let i = before;
+                    while (i < entries.length()) {
+                        if let f: root.events.ToolFailed = entries.at(i) {
+                            let failed_call = calls.find((one: root.content.ToolUse) -> {
+                                one.id == f.id
+                            });
+                            if let known: root.content.ToolUse = failed_call {
+                                let key = `${known.name}|${f.message}`;
+                                let n = (fail_counts.get(key) ?? 0) + 1;
+                                let _ = fail_counts.set(key, n);
+                                if (n >= 3) {
+                                    throw root.errors.ToolFailedError {
+                                            id: known.id,
+                                            name: known.name,
+                                            message: `the same tool call failed ${n} times; stopping the run: ${f.message}`,
+                                            cause: null,
+                                        }
+                                }
                             }
                         }
+                        i = i + 1;
                     }
-                    i = i + 1;
-                }
-            } else {
-                let candidate = turn.terminal_text() ?? "";
-                // A media-shaped Out comes from the turn's media blocks;
-                // everything else, including a media Out the turn produced
-                // no media for, goes through the ordinary text parse. That
-                // second branch is REACHABLE for a media Out and is how
-                // absence is expressed: SAP answers `null` for `image?` /
-                // `image[]?` and `[]` for `image[]`, and only a required
-                // `image` fails there (`_parses` agrees, by construction).
-                let value = if (self._has_media_output<Out>(turn)) {
-                    self._media_value<Out>(turn, selected.id())
                 } else {
-                    baml.sap.parse<Out>(candidate) catch_all (e) {
+                    let candidate = turn.terminal_text() ?? "";
+                    // A media-shaped Out comes from the turn's media blocks;
+                    // everything else, including a media Out the turn produced
+                    // no media for, goes through the ordinary text parse. That
+                    // second branch is REACHABLE for a media Out and is how
+                    // absence is expressed: SAP answers `null` for `image?` /
+                    // `image[]?` and `[]` for `image[]`, and only a required
+                    // `image` fails there (`_parses` agrees, by construction).
+                    let value = if (self._has_media_output<Out>(turn)) {
+                        self._media_value<Out>(turn, selected.id())
+                    } else {
+                        baml.sap.parse<Out>(candidate) catch_all (e) {
+                            _ => {
+                                throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
+                            },
+                        }
+                    };
+                    let value_json = baml.json.to_json(value) catch_all (e) {
                         _ => {
-                            throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
+                            throw baml.errors.UnknownError.with_message<never>(
+                                    e,
+                                    "final value serialization failed",
+                                )
                         },
-                    }
-                };
-                let value_json = baml.json.to_json(value) catch_all (e) {
-                    _ => {
-                        throw baml.errors.UnknownError.with_message<never>(
-                                e,
-                                "final value serialization failed",
-                            )
-                    },
-                };
-                j.append_all(
-                    [root.events.FinalProduced { value_json: baml.json.stringify(value_json) }],
-                );
-                seen = self._emit_from(j, seen);
-                return RunResult { value: value, journal: j, usage: total };
+                    };
+                    j.append_all(
+                        [root.events.FinalProduced { value_json: baml.json.stringify(value_json) }],
+                    );
+                    seen = self._emit_from(j, seen);
+                    return RunResult { value: value, journal: j, usage: total };
+                }
             }
+            throw root.errors.StepBudgetExceeded { steps: steps }
         }
-        throw root.errors.StepBudgetExceeded { steps: steps }
     }
 }

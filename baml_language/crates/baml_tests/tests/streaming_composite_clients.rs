@@ -134,7 +134,7 @@ async fn retry_does_not_reopen_after_visible_prefix() {
             );
             let stream = retried.invoke_stream(input());
             let first = match (stream.next()) {{
-                let text: string => text,
+                let batch: string[] => batch.join(""),
                 let done: ai.stream.Done => "done",
             }};
             let second = stream.next() catch (e) {{

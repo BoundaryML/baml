@@ -25,6 +25,32 @@ struct PromptContentSink {
 
 impl PromptContentSink {
     fn into_content(mut self) -> Arc<PromptAstSimple> {
+        // Legacy renderer parity: when media splits a message into parts,
+        // every text chunk was trimmed and whitespace-only chunks between
+        // media dropped. Text-only content is left untouched.
+        if self
+            .parts
+            .iter()
+            .any(|part| matches!(part.as_ref(), PromptAstSimple::Media(_)))
+        {
+            self.parts = self
+                .parts
+                .into_iter()
+                .filter_map(|part| match part.as_ref() {
+                    PromptAstSimple::String(text) => {
+                        let trimmed = text.trim();
+                        if trimmed.is_empty() {
+                            None
+                        } else if trimmed.len() == text.len() {
+                            Some(part)
+                        } else {
+                            Some(Arc::new(PromptAstSimple::String(trimmed.to_string())))
+                        }
+                    }
+                    _ => Some(part),
+                })
+                .collect();
+        }
         match self.parts.len() {
             0 => Arc::new(PromptAstSimple::String(String::new())),
             1 => self.parts.pop().unwrap(),
@@ -61,9 +87,58 @@ impl StructuralRenderSink for PromptContentSink {
 struct PromptRole {
     name: String,
     metadata: serde_json::Value,
+    // The assembler prepends a synthetic "system" role when a prompt has no
+    // leading marker (see ai internal helpers). Legacy parity: only messages
+    // opened by an AUTHORED marker are edge-trimmed; a role-less prompt keeps
+    // its rendered bytes.
+    synthetic: bool,
 }
 
-fn message(role: PromptRole, content: PromptContentSink) -> Arc<PromptAst> {
+// Legacy renderer parity: each chat message's content is trimmed of leading
+// and trailing whitespace (whitespace-only edge text parts removed, edge text
+// parts trimmed). Media parts at the edges are untouched. Without this, the
+// newline after a `${role(...)}` marker line and the blank line before the
+// next marker leak into every explicit-role message.
+fn trim_message_edges(sink: &mut PromptContentSink) {
+    while let Some(first) = sink.parts.first() {
+        match first.as_ref() {
+            PromptAstSimple::String(text) => {
+                let trimmed = text.trim_start();
+                if trimmed.is_empty() {
+                    sink.parts.remove(0);
+                } else {
+                    if trimmed.len() != text.len() {
+                        sink.parts[0] = Arc::new(PromptAstSimple::String(trimmed.to_string()));
+                    }
+                    break;
+                }
+            }
+            _ => break,
+        }
+    }
+    while let Some(last) = sink.parts.last() {
+        match last.as_ref() {
+            PromptAstSimple::String(text) => {
+                let trimmed = text.trim_end();
+                if trimmed.is_empty() {
+                    sink.parts.pop();
+                } else {
+                    if trimmed.len() != text.len() {
+                        let index = sink.parts.len() - 1;
+                        sink.parts[index] = Arc::new(PromptAstSimple::String(trimmed.to_string()));
+                    }
+                    break;
+                }
+            }
+            _ => break,
+        }
+    }
+}
+
+fn message(role: PromptRole, mut content: PromptContentSink, trim: bool) -> Arc<PromptAst> {
+    if trim {
+        trim_message_edges(&mut content);
+    }
     Arc::new(PromptAst::Message {
         role: role.name,
         content: content.into_content(),
@@ -98,10 +173,15 @@ fn prompt_role(vm: &BexVm, value: Value) -> Option<PromptRole> {
         _ => return None,
     };
     let name = vm.as_string(fields.get(name_index)?).ok()?;
-    let metadata = super::json::value_to_serde(vm, *fields.get(metadata_index)?);
+    let mut metadata = super::json::value_to_serde(vm, *fields.get(metadata_index)?);
+    let mut synthetic = false;
+    if let serde_json::Value::Object(entries) = &mut metadata {
+        synthetic = entries.remove("__baml_synthetic_role").is_some();
+    }
     Some(PromptRole {
         name: name.as_str().to_string(),
         metadata,
+        synthetic,
     })
 }
 
@@ -115,7 +195,7 @@ struct PromptAssembly {
 impl PromptAssembly {
     fn finish(self, vm: &mut BexVm) -> NativeCallResult {
         let mut render_state = StringRenderState::with_overrides(&self.pending, &self.results);
-        let mut messages: Vec<Arc<PromptAst>> = Vec::new();
+        let mut pending_messages: Vec<(PromptRole, PromptContentSink)> = Vec::new();
         let mut current_role: Option<PromptRole> = None;
         let mut content = PromptContentSink::default();
 
@@ -128,7 +208,7 @@ impl PromptAssembly {
 
             if let Some(role) = prompt_role(vm, value) {
                 if let Some(previous_role) = current_role.replace(role) {
-                    messages.push(message(previous_role, std::mem::take(&mut content)));
+                    pending_messages.push((previous_role, std::mem::take(&mut content)));
                 }
             } else {
                 render_to_sink(vm, value, false, 0, &mut render_state, &mut content);
@@ -143,7 +223,17 @@ impl PromptAssembly {
 
         let ast = match current_role {
             Some(role) => {
-                messages.push(message(role, content));
+                pending_messages.push((role, content));
+                // Legacy renderer parity: when the prompt carries ANY authored
+                // role marker, every message's content is edge-trimmed —
+                // including the leading implicit system chunk. A prompt with
+                // no authored markers (only the assembler's synthetic system
+                // role) keeps its rendered bytes untouched.
+                let trim = pending_messages.iter().any(|(role, _)| !role.synthetic);
+                let mut messages: Vec<Arc<PromptAst>> = pending_messages
+                    .into_iter()
+                    .map(|(role, content)| message(role, content, trim))
+                    .collect();
                 if messages.len() == 1 {
                     messages.pop().unwrap()
                 } else {

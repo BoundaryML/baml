@@ -256,6 +256,8 @@ class Retry {
                 retry: retry,
                 current: null,
                 emitted: false,
+                pending_text: [],
+                pending_cursor: 0,
                 terminal: [],
                 terminal_cursor: 0,
                 finished: false,
@@ -499,6 +501,8 @@ class Fallback {
                 retry: advance,
                 current: null,
                 emitted: false,
+                pending_text: [],
+                pending_cursor: 0,
                 terminal: [],
                 terminal_cursor: 0,
                 finished: false,
@@ -521,6 +525,11 @@ class StreamRelay {
     retry: (root.errors.Failure) -> bool throws root.errors.InvokeError,
     current: root.stream.TurnStream?,
     emitted: bool,
+    // Deltas from the current stream's last batch not yet re-emitted:
+    // next() returns every ready delta at once; next_event relays them
+    // one TextDelta at a time so downstream granularity is preserved.
+    pending_text: string[],
+    pending_cursor: int,
     terminal: root.stream.StreamEvent[],
     terminal_cursor: int,
     finished: bool,
@@ -567,6 +576,13 @@ class StreamRelay {
     }
 
     function next_event(self) -> root.stream.StreamEvent | root.stream.Done {
+        if (self.pending_cursor < self.pending_text.length()) {
+            let text = self.pending_text.at(self.pending_cursor)
+                ?? baml.sys.panic("StreamRelay lost a pending delta");
+            self.pending_cursor += 1;
+            self.emitted = true;
+            return root.stream.TextDelta { text: text };
+        }
         if (self.terminal_cursor < self.terminal.length()) {
             let event = self.terminal.at(self.terminal_cursor)
                 ?? baml.sys.panic("StreamRelay lost a terminal event");
@@ -588,13 +604,18 @@ class StreamRelay {
             }
         }
         if let stream: root.stream.TurnStream = self.current {
-            let next: string | root.stream.Done | StreamRelayError = stream.next() catch_all (e) {
+            let next: string[] | root.stream.Done | StreamRelayError = stream.next() catch_all (e) {
                 _ => StreamRelayError { error: e },
             };
             match (next) {
-                let text: string => {
+                let batch: string[] => {
                     self.emitted = true;
-                    root.stream.TextDelta { text: text }
+                    self.pending_text = batch;
+                    self.pending_cursor = 1;
+                    root.stream.TextDelta {
+                        text: batch.at(0)
+                            ?? baml.sys.panic("StreamRelay received an empty batch"),
+                    }
                 },
                 let done: root.stream.Done => {
                     let final: root.ModelTurn | StreamRelayError = stream.final_turn() catch_all (e) {

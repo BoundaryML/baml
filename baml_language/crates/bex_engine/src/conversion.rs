@@ -739,6 +739,23 @@ impl BexEngine {
                         })
                         .collect();
 
+                let mut fields = fields?;
+
+                // Media wrapper instances flatten to the canonical
+                // `Adt(Media(_))` on the wire: the host bridges construct and
+                // decode media through the ADT (media_roundtrip.rs pins this),
+                // while the VM-internal form is the stdlib wrapper class.
+                if matches!(
+                    class.name.to_string().as_str(),
+                    "baml.media.Image" | "baml.media.Audio" | "baml.media.Video" | "baml.media.Pdf"
+                ) {
+                    if let Some(BexExternalValue::Adt(BexExternalAdt::Media(arc))) =
+                        fields.shift_remove(bex_external_types::MEDIA_WRAPPER_DATA_FIELD)
+                    {
+                        return Ok(BexExternalValue::Adt(BexExternalAdt::Media(arc)));
+                    }
+                }
+
                 Ok(BexExternalValue::Instance {
                     class_name: class.name.to_string(),
                     type_args: instance
@@ -746,7 +763,7 @@ impl BexEngine {
                         .iter()
                         .map(|arg| overlay_wire_ty(&bex_vm_types::RuntimeTy::from(arg)))
                         .collect::<Result<Vec<_>, _>>()?,
-                    fields: fields?,
+                    fields,
                 })
             }
 
@@ -1661,7 +1678,52 @@ impl BexEngine {
                 });
             }
             BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
-                Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
+                // A bare rust_data is only correct when the destination slot
+                // IS the wrapper's `_data: $rust_type` field. Anywhere else
+                // (a declared `image`/`audio`/... parameter, a media slot in
+                // a container, or no context at all) the usable value is the
+                // stdlib wrapper class instance — methods and the prompt
+                // renderer dispatch on that instance, so a bare rust_data
+                // panics `mime_type()` and silently drops media parts from
+                // rendered requests (renders as literal `<rust_data>`).
+                // The OUTBOUND path flattens the wrapper back to the
+                // canonical `Adt(Media(_))`, so the engine's wire contract
+                // (media_roundtrip.rs) is ADT in both directions while the
+                // VM-internal form matches BAML-constructed media.
+                if matches!(expected_ty, Some(RuntimeTy::RustType { .. })) {
+                    Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
+                } else {
+                    let class_name = match arc.kind {
+                        baml_type::MediaKind::Image => "baml.media.Image",
+                        baml_type::MediaKind::Audio => "baml.media.Audio",
+                        baml_type::MediaKind::Video => "baml.media.Video",
+                        baml_type::MediaKind::Pdf => "baml.media.Pdf",
+                        baml_type::MediaKind::Generic => {
+                            return Err(EngineError::TypeMismatch {
+                                message:
+                                    "cannot materialize a generic media value as a wrapper instance"
+                                        .to_string(),
+                            });
+                        }
+                    };
+                    let mut fields = indexmap::IndexMap::new();
+                    fields.insert(
+                        bex_external_types::MEDIA_WRAPPER_DATA_FIELD.to_string(),
+                        BexExternalValue::Adt(BexExternalAdt::Media(arc)),
+                    );
+                    return self.convert_external_to_vm_value_with_ty_and_runtime(
+                        holder,
+                        BexExternalValue::Instance {
+                            class_name: class_name.to_string(),
+                            type_args: vec![],
+                            fields,
+                        },
+                        None,
+                        dynamic_classes,
+                        dynamic_enums,
+                        runtime_named_objects,
+                    );
+                }
             }
             BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { heap_handle, .. }) => {
                 Value::object(self.resolve_handle(holder.proof(), &heap_handle).expect(
@@ -3138,10 +3200,15 @@ fn value_matches_type_with_definitions(
             BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_)),
             RuntimeTy::Type { .. },
         ) => true,
-        (BexExternalValue::Union { value, metadata }, RuntimeTy::Union(members, _)) => {
+        (union_value @ BexExternalValue::Union { metadata, .. }, RuntimeTy::Union(members, _)) => {
             members.iter().any(|member| {
+                // Recurse with the ANNOTATED carrier, not the unwrapped
+                // payload: sparse inbound annotations are the value's
+                // identity for media members (the wrapper's shape never
+                // matches `Media` structurally), and the per-member arms
+                // below unwrap for every non-annotation-dependent case.
                 selected_arm_equal(member, &metadata.selected_option)
-                    && value_matches_type_with_definitions(value, member, aliases, classes)
+                    && value_matches_type_with_definitions(union_value, member, aliases, classes)
             })
         }
         // `value_satisfies_json` peels sparse inbound leaf annotations (the
@@ -3151,6 +3218,23 @@ fn value_matches_type_with_definitions(
             if is_canonical_json_alias(name) =>
         {
             value_satisfies_json(union_value)
+        }
+        // A media value crosses the FFI as a class-shaped `{_data: handle}`
+        // wrap carrying a sparse `Media(kind)` annotation. The annotation is
+        // the value's identity — the payload shape never matches `Media`
+        // structurally — so honor it before unwrapping (otherwise media
+        // items inside union-typed containers, e.g. `image[]?`, are
+        // rejected while the direct-typed path accepts them).
+        (BexExternalValue::Union { metadata, .. }, RuntimeTy::Media(expected_kind, _))
+            if metadata.is_inbound_type_annotation
+                && matches!(
+                    &metadata.selected_option,
+                    RuntimeTy::Media(kind, _)
+                        if *expected_kind == baml_type::MediaKind::Generic
+                            || kind == expected_kind
+                ) =>
+        {
+            true
         }
         (BexExternalValue::Union { value, .. }, ty) => {
             value_matches_type_with_definitions(value, ty, aliases, classes)
@@ -6309,5 +6393,56 @@ mod inference_unifier_tests {
         let actual = union(vec![int(), string()]);
         let out = infer(&formal, &actual);
         assert_eq!(out.get("T"), Some(&string()));
+    }
+}
+
+#[cfg(test)]
+mod union_media_annotation_tests {
+    use super::*;
+
+    /// An inbound media value annotated `image` must satisfy a DECLARED
+    /// union containing that media kind (`image | string`). The wrapper
+    /// payload's shape never matches `Media` structurally — the sparse
+    /// annotation is the value's identity — so the union-member check must
+    /// recurse with the annotated carrier, not the unwrapped payload.
+    #[test]
+    fn annotated_media_matches_declared_media_or_string_union() {
+        let media_ty = RuntimeTy::Media(baml_type::MediaKind::Image, baml_type::TyAttr::default());
+        let declared = RuntimeTy::Union(
+            vec![
+                media_ty.clone(),
+                RuntimeTy::String {
+                    attr: baml_type::TyAttr::default(),
+                },
+            ],
+            baml_type::TyAttr::default(),
+        );
+        let wrapper = BexExternalValue::Instance {
+            class_name: "baml.media.Image".to_string(),
+            type_args: vec![],
+            fields: indexmap::IndexMap::new(),
+        };
+        let annotated = BexExternalValue::typed(wrapper, media_ty);
+        assert!(value_matches_type_with_definitions(
+            &annotated,
+            &declared,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+        ));
+
+        // control: a string-annotated payload still matches through the
+        // generic unwrap path
+        let annotated_string = BexExternalValue::typed(
+            BexExternalValue::String("hi".into()),
+            RuntimeTy::String {
+                attr: baml_type::TyAttr::default(),
+            },
+        );
+        assert!(value_matches_type_with_definitions(
+            &annotated_string,
+            &declared,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+        ));
     }
 }
