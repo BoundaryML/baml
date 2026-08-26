@@ -161,20 +161,10 @@ pub struct ProjectDiagnostic {
 #[derive(Tsify, Serialize)]
 #[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
-pub struct TestInfo {
-    pub name: String,
-    pub function_name: String,
-    pub args_json: String,
-}
-
-#[derive(Tsify, Serialize)]
-#[tsify(into_wasm_abi)]
-#[serde(rename_all = "camelCase")]
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
     pub generation: u64,
     pub functions: Vec<FunctionInfo>,
-    pub tests: Vec<TestInfo>,
     /// Shared type table for `FunctionInfo.params` refs; `None` = binary
     /// predates the args form. Must match the native host's `ProjectUpdate`.
     #[serde(skip_serializing_if = "Option::is_none")]

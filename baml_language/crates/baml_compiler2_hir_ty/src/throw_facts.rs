@@ -476,7 +476,6 @@ fn resolve_path_to_ty<'db>(
         | Definition::Function(_)
         | Definition::TemplateString(_)
         | Definition::Client(_)
-        | Definition::Test(_)
         | Definition::RetryPolicy(_)
         | Definition::Let(_) => None,
     }

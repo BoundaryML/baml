@@ -1161,38 +1161,6 @@ function legacy() -> string {
     }
 
     #[test]
-    fn removed_hash_string_test_arg_lowers_to_null_recovery() {
-        let source = r##"
-function target(value: string) -> string { value }
-
-test Legacy {
-  functions [target]
-  args {
-    value #"legacy"#
-  }
-}
-"##;
-        let tokens = lex_lossless(source, FileId::new(0));
-        let (green, errors) = parse_file(&tokens);
-        assert!(!errors.is_empty(), "removed hash strings must fail parsing");
-
-        let root = SyntaxNode::new_root(green);
-        let (items, _diags, _env_var_refs) = lower_file(&root);
-        let test = items
-            .into_iter()
-            .find_map(|item| match item {
-                Item::Test(test) => Some(test),
-                _ => None,
-            })
-            .expect("expected recovered test");
-
-        assert!(matches!(
-            test.args.as_slice(),
-            [(name, crate::ast::TestArgValue::Null)] if name.as_str() == "value"
-        ));
-    }
-
-    #[test]
     fn ast_default_indices_skip_missing_name_slots() {
         let source = r#"
 function Broken(: int, b: string = "x") -> string {

@@ -1237,14 +1237,6 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
             }
         }
 
-        Definition::Test(loc) => {
-            let data = baml_compiler2_ppir::item_data::test_data(db, loc);
-            TypeInfo::OtherItem {
-                name: data.name.as_str().to_string(),
-                kind: "test",
-            }
-        }
-
         Definition::RetryPolicy(loc) => {
             let data = baml_compiler2_ppir::item_data::retry_policy_data(db, loc);
             TypeInfo::OtherItem {

@@ -31,8 +31,8 @@ use baml_compiler2_ppir::{
     function_body,
     item_data::{
         GenericParamData, class_data, enum_data, file_classes, file_enums, file_free_impls,
-        file_functions, file_interfaces, file_lets, file_tests, function_data, function_llm_meta,
-        impl_block_data, interface_data, method_interface_target, test_data,
+        file_functions, file_interfaces, file_lets, function_data, function_llm_meta,
+        impl_block_data, interface_data, method_interface_target,
     },
 };
 use baml_type::{ParamTy, RuntimeTy, TyAttr};
@@ -1356,11 +1356,6 @@ pub trait Db: baml_compiler2_mir::Db {
     }
 }
 
-/// Compile options.
-pub struct CompileOptions {
-    pub emit_test_cases: bool,
-}
-
 /// Errors that can occur during bytecode generation.
 #[derive(Debug)]
 pub enum LoweringError {
@@ -1563,20 +1558,16 @@ fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
 }
 
 /// Generate bytecode for the entire project (default: `OptLevel::Two`).
-pub fn generate_project_bytecode(
-    db: &dyn crate::Db,
-    options: &CompileOptions,
-) -> Result<Program, LoweringError> {
-    generate_project_bytecode_with_opt(db, options, OptLevel::Two)
+pub fn generate_project_bytecode(db: &dyn crate::Db) -> Result<Program, LoweringError> {
+    generate_project_bytecode_with_opt(db, OptLevel::Two)
 }
 
 /// Generate bytecode for the entire project with a specific optimization level.
 pub fn generate_project_bytecode_with_opt(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    let mut program = generate_impl(db, options, opt, None, false, None)?;
+    let mut program = generate_impl(db, opt, None, false, None)?;
     program.source_content_hash = Some(project_source_content_hash(db));
     Ok(program)
 }
@@ -1619,16 +1610,7 @@ pub fn generate_stdlib_program(
     db: &dyn crate::Db,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_impl(
-        db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-        opt,
-        None,
-        true,
-        None,
-    )
+    generate_impl(db, opt, None, true, None)
 }
 
 /// Generate project bytecode on top of a precompiled stdlib `Program` slice
@@ -1641,11 +1623,10 @@ pub fn generate_stdlib_program(
 /// `emit_determinism` integration tests).
 pub fn generate_project_bytecode_with_stdlib(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     base: &Program,
 ) -> Result<Program, LoweringError> {
-    let mut program = generate_impl(db, options, opt, Some(base), false, None)?;
+    let mut program = generate_impl(db, opt, Some(base), false, None)?;
     program.source_content_hash = Some(project_source_content_hash(db));
     Ok(program)
 }
@@ -1655,14 +1636,12 @@ pub fn generate_project_bytecode_with_stdlib(
 /// resolution; `dependency_units` provide the matching runtime symbols.
 pub fn generate_project_bytecode_with_mounted_units(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     dependency_units: &[CompilationUnit],
 ) -> Result<Program, MountedPackageLinkError> {
     let base = bex_vm_types::link::link(dependency_units)
         .map_err(MountedPackageLinkError::DependencyLink)?;
-    generate_impl(db, options, opt, Some(&base), false, None)
-        .map_err(MountedPackageLinkError::Consumer)
+    generate_impl(db, opt, Some(&base), false, None).map_err(MountedPackageLinkError::Consumer)
 }
 
 /// Incremental compile that lowers function bodies only for dirty files, reuses
@@ -1680,7 +1659,7 @@ pub fn generate_project_bytecode_with_mounted_units(
 /// `clean_files` is the caller's optimistic clean set; a file is only truly
 /// reused when its inferred transitive `throws` still match the previous compile
 /// (design §4 — the throws gate). `prev_units` must come from the same compiler
-/// build / options / stdlib base.
+/// build and stdlib base.
 ///
 /// # Errors
 ///
@@ -1689,13 +1668,12 @@ pub fn generate_project_bytecode_with_mounted_units(
 /// dirty-file emit.
 pub fn generate_project_bytecode_with_reuse_units(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     base: &Program,
     prev_units: &[CompilationUnit],
     clean_files: &HashSet<String>,
 ) -> Result<Program, LoweringError> {
-    generate_project_bytecode_with_reuse_artifacts(db, options, opt, base, prev_units, clean_files)
+    generate_project_bytecode_with_reuse_artifacts(db, opt, base, prev_units, clean_files)
         .map(|(program, _)| program)
 }
 
@@ -1704,7 +1682,6 @@ pub fn generate_project_bytecode_with_reuse_units(
 /// the linked program a second time.
 pub fn generate_project_bytecode_with_reuse_artifacts(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     base: &Program,
     prev_units: &[CompilationUnit],
@@ -1729,9 +1706,9 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
     // `$init_test` tail (design §9 R2): it is rebuilt from every file's `let`s /
     // `test` blocks (clean `let` initializers re-lowered off salsa-cached MIR),
     // so a dirty tail-producing file no longer aborts reuse.
-    let partial = generate_impl(db, options, opt, Some(base), false, Some(clean_files))?;
+    let partial = generate_impl(db, opt, Some(base), false, Some(clean_files))?;
 
-    let mut fresh_units = decompose_units(db, options, &partial)?;
+    let mut fresh_units = decompose_units(db, &partial)?;
 
     // The freshly-synthesized (symbolic) tail: whichever fresh unit the
     // decomposition placed it on. It reflects the *current* project's lets/tests
@@ -1865,11 +1842,10 @@ pub fn reuse_throws_mismatches(
 /// tail — see design §9 R1/R2 — or an unattributable pool object).
 pub fn emit_units(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    let program = generate_project_bytecode_with_opt(db, options, opt)?;
-    decompose_units(db, options, &program)
+    let program = generate_project_bytecode_with_opt(db, opt)?;
+    decompose_units(db, &program)
 }
 
 /// Emit relocatable source units on top of a compiler-built stdlib prefix.
@@ -1881,12 +1857,11 @@ pub fn emit_units(
 /// objects and impl rules instead of copying them into a runtime package.
 pub fn emit_units_with_stdlib(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     stdlib: &Program,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    let program = generate_project_bytecode_with_stdlib(db, options, opt, stdlib)?;
-    decompose_units_after_prefix(db, options, &program, stdlib.objects.len())
+    let program = generate_project_bytecode_with_stdlib(db, opt, stdlib)?;
+    decompose_units_after_prefix(db, &program, stdlib.objects.len())
 }
 
 /// Per-object attribution kind, computed during the pool walk.
@@ -1906,8 +1881,8 @@ enum PoolObjKind {
 ///
 /// Used by the CLI to persist content-addressed units after a compile so the
 /// next incremental compile can reuse clean files independently.
-/// `program` must be the output of a compile over `db` with `options` (a full
-/// compile, a stdlib splice, or a reuse relink — all byte-identical), so the
+/// `program` must be the output of a compile over `db` (a full compile, a
+/// stdlib splice, or a reuse relink - all byte-identical), so the
 /// decomposition's file-attribution invariants hold.
 ///
 /// # Errors
@@ -1917,16 +1892,14 @@ enum PoolObjKind {
 #[allow(clippy::too_many_lines)]
 pub fn decompose_units(
     db: &dyn baml_compiler2_mir::Db,
-    options: &CompileOptions,
     program: &Program,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    decompose_units_after_prefix(db, options, program, 0)
+    decompose_units_after_prefix(db, program, 0)
 }
 
 #[allow(clippy::too_many_lines)]
 fn decompose_units_after_prefix(
     db: &dyn baml_compiler2_mir::Db,
-    options: &CompileOptions,
     program: &Program,
     prefix_objects: usize,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
@@ -2410,20 +2383,6 @@ fn decompose_units_after_prefix(
         };
         let frag = build_package_fragment(program, pkg, &fn_obj_name)?;
         units[carrier].package_fragment = frag;
-    }
-
-    // ---- Test cases (Pass 8 fragment, per file by source path) --------------
-    if options.emit_test_cases {
-        for test in &program.test_cases {
-            if let Some(&fi) = rel_to_file.get(test.source_file.as_str()) {
-                units[fi].test_cases.push(test.clone());
-            } else {
-                return Err(LoweringError::Internal(format!(
-                    "test case `{}` has source_file `{}` matching no file",
-                    test.name, test.source_file
-                )));
-            }
-        }
     }
 
     // ---- Interface fragments (Phase 2b, per user file) ----------------------
@@ -2977,7 +2936,6 @@ fn inject_clean_object_placeholders(
 /// operands to names identically to a full compile. `None` is a full compile.
 fn generate_impl(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     base: Option<&Program>,
     stdlib_only: bool,
@@ -3092,28 +3050,6 @@ fn generate_impl(
     }
     tables.program_packages.sort_keys();
     program.packages = tables.program_packages;
-
-    // --- Pass 8: Test cases (only when requested) ---
-    if options.emit_test_cases {
-        for file in &all_files {
-            for &test_loc in file_tests(db, *file) {
-                let test = test_data(db, test_loc);
-                let function_names: Vec<String> =
-                    test.function_refs.iter().map(ToString::to_string).collect();
-                let args: indexmap::IndexMap<String, bex_vm_types::TestArgValue> = test
-                    .args
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), convert_test_arg_value(v)))
-                    .collect();
-                program.test_cases.push(bex_vm_types::TestCase {
-                    name: test.name.to_string(),
-                    function_names,
-                    args,
-                    source_file: relative_source_path(db, *file),
-                });
-            }
-        }
-    }
 
     Ok(program)
 }
@@ -4045,44 +3981,6 @@ fn emit_file_group(
     }
 
     Ok(())
-}
-
-/// Convert a compiler2 `TestArgValue` to a `bex_vm_types::TestArgValue`.
-fn convert_test_arg_value(
-    v: &baml_compiler2_hir::item_tree::TestArgValue,
-) -> bex_vm_types::TestArgValue {
-    use baml_compiler2_hir::item_tree::TestArgValue as Hir2Arg;
-    match v {
-        Hir2Arg::Null => bex_vm_types::TestArgValue::Null,
-        Hir2Arg::Int(i) => bex_vm_types::TestArgValue::Int(*i),
-        Hir2Arg::FloatBits(bits) => bex_vm_types::TestArgValue::Float(f64::from_bits(*bits)),
-        Hir2Arg::Bool(b) => bex_vm_types::TestArgValue::Bool(*b),
-        Hir2Arg::String(s) => bex_vm_types::TestArgValue::String(s.clone()),
-        Hir2Arg::Array(items) => {
-            // Use Null element type as placeholder — full type inference not run yet
-            bex_vm_types::TestArgValue::Array {
-                element_type: baml_type::RuntimeTy::Null {
-                    attr: baml_type::TyAttr::default(),
-                },
-                items: items.iter().map(convert_test_arg_value).collect(),
-            }
-        }
-        Hir2Arg::Map(entries) => {
-            let converted: indexmap::IndexMap<String, bex_vm_types::TestArgValue> = entries
-                .iter()
-                .map(|(k, v)| (k.clone(), convert_test_arg_value(v)))
-                .collect();
-            bex_vm_types::TestArgValue::Map {
-                key_type: baml_type::RuntimeTy::String {
-                    attr: baml_type::TyAttr::default(),
-                },
-                value_type: baml_type::RuntimeTy::Null {
-                    attr: baml_type::TyAttr::default(),
-                },
-                entries: converted,
-            }
-        }
-    }
 }
 
 /// Compute the inferred throws type for a function by querying TIR throw inference.

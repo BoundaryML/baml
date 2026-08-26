@@ -1650,7 +1650,6 @@ pub enum Item {
     Interface(InterfaceDef),
     TypeAlias(TypeAliasDef),
     Client(ClientDef),
-    Test(TestDef),
     TemplateString(TemplateStringDef),
     RetryPolicy(RetryPolicyDef),
     Let(LetDef),
@@ -2023,38 +2022,6 @@ pub struct ConfigItemDef {
     pub key: Name,
     pub value: std::string::String,
     pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TestDef {
-    pub name: Name,
-    /// Functions targeted by this legacy config-block test.
-    pub function_refs: Vec<Name>,
-    /// Statically declared test arguments.
-    pub args: Vec<(Name, TestArgValue)>,
-    pub span: TextRange,
-    pub name_span: TextRange,
-}
-
-/// A JSON-compatible value declared in a legacy test's `args` block.
-///
-/// Floats are stored as bit patterns so the AST remains `Eq`, which is
-/// required by the incremental compiler's early-cutoff comparisons.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TestArgValue {
-    Null,
-    Int(i64),
-    FloatBits(u64),
-    Bool(bool),
-    String(std::string::String),
-    Array(Vec<TestArgValue>),
-    Map(Vec<(std::string::String, TestArgValue)>),
-}
-
-impl TestArgValue {
-    pub fn float(value: f64) -> Self {
-        Self::FloatBits(value.to_bits())
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

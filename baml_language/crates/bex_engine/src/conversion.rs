@@ -4770,36 +4770,6 @@ fn coerce_numeric_to_declared_type(
     }
 }
 
-/// Convert a compiled `TestArgValue` to a `BexExternalValue` for function calls.
-pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue {
-    match v {
-        bex_vm_types::TestArgValue::Null => BexExternalValue::Null,
-        bex_vm_types::TestArgValue::Int(i) => BexExternalValue::Int(*i),
-        bex_vm_types::TestArgValue::Float(f) => BexExternalValue::Float(*f),
-        bex_vm_types::TestArgValue::Bool(b) => BexExternalValue::Bool(*b),
-        bex_vm_types::TestArgValue::String(s) => BexExternalValue::String(s.as_str().into()),
-        bex_vm_types::TestArgValue::Array {
-            element_type,
-            items,
-        } => BexExternalValue::Array {
-            element_type: overlay_wire_ty(element_type).unwrap_or_else(|_| RuntimeTy::unknown()),
-            items: items.iter().map(test_arg_to_external).collect(),
-        },
-        bex_vm_types::TestArgValue::Map {
-            key_type,
-            value_type,
-            entries,
-        } => BexExternalValue::Map {
-            key_type: overlay_wire_ty(key_type).unwrap_or_else(|_| RuntimeTy::unknown()),
-            value_type: overlay_wire_ty(value_type).unwrap_or_else(|_| RuntimeTy::unknown()),
-            entries: entries
-                .iter()
-                .map(|(k, v)| (k.clone(), test_arg_to_external(v)))
-                .collect(),
-        },
-    }
-}
-
 #[cfg(test)]
 mod union_container_selection_tests {
     use std::sync::Arc;

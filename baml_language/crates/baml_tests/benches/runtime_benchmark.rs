@@ -14,7 +14,7 @@
 
 use std::{path::Path, sync::Arc};
 
-use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
+use baml_compiler2_emit::generate_project_bytecode;
 use baml_db::ProjectDatabase;
 use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, FunctionCallContextBuilder};
@@ -63,13 +63,7 @@ fn compile_source(source: &str) -> (ProjectDatabase, BexEngine) {
     let mut db = ProjectDatabase::new();
     db.workspace(Path::new("."));
     db.file("bench.baml", source);
-    let bytecode = generate_project_bytecode(
-        &db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-    )
-    .expect("benchmark compilation failed");
+    let bytecode = generate_project_bytecode(&db).expect("benchmark compilation failed");
     let engine = BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), vec![])
         .expect("benchmark engine creation failed");
     (db, engine)

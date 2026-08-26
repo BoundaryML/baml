@@ -41,18 +41,3 @@ fn .<lambda($init_test_ns_fixtures_ns_test_old_and_new_main, 0)>() -> void {
         return;
     }
 }
-
-fn user.fixtures.test_old_and_new.Greet(name: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // name // param
-
-    bb0: {
-        _0 = const "Hello, {name}!";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
