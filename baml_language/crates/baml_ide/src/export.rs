@@ -144,8 +144,8 @@ fn ty_head(ty: &Ty) -> Option<TyHead> {
             Some(TyHead::Nominal(qtn.clone()))
         }
         Ty::EnumVariant(qtn, _, _) => Some(TyHead::Nominal(qtn.clone())),
-        Ty::List(_, _) | Ty::EvolvingList(_, _) => Some(TyHead::Nominal(container_qtn("Array"))),
-        Ty::Map { .. } | Ty::EvolvingMap(_, _, _) => Some(TyHead::Nominal(container_qtn("Map"))),
+        Ty::List(_, _) => Some(TyHead::Nominal(container_qtn("Array"))),
+        Ty::Map { .. } => Some(TyHead::Nominal(container_qtn("Map"))),
         Ty::Function { .. } => Some(TyHead::Function),
         Ty::Future(_, _, _) => Some(TyHead::Future),
         // Lossy by design: the alias head attaches without expansion.
@@ -448,7 +448,7 @@ impl TyRef {
             display: ty.render_canonical(),
             head,
             // `RuntimeTy` excludes exactly the compiler-sentinel axis
-            // (`Error`/`Unknown`/`Evolving*`/`Infer`) while keeping symbolic
+            // (`Error`/`Unknown`/`Infer`) while keeping symbolic
             // projections and type variables — the precise "is this a real
             // type" oracle.
             unresolved: RuntimeTy::try_from(ty).is_err(),

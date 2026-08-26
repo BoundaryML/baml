@@ -712,13 +712,10 @@ fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
             cg::Ty::EnumVariant(name_from_qtn(qtn), variant.clone(), attr())
         }
         TirTy::TypeAlias(qtn, _) => cg::Ty::TypeAlias(name_from_qtn(qtn), attr()),
-        TirTy::List(inner, _) | TirTy::EvolvingList(inner, _) => {
-            cg::Ty::List(Box::new(convert(inner)), attr())
-        }
+        TirTy::List(inner, _) => cg::Ty::List(Box::new(convert(inner)), attr()),
         TirTy::Map {
             key: k, value: v, ..
-        }
-        | TirTy::EvolvingMap(k, v, _) => cg::Ty::Map {
+        } => cg::Ty::Map {
             key: Box::new(convert(k)),
             value: Box::new(convert(v)),
             attr: attr(),

@@ -95,13 +95,10 @@ fn contains_bound_typevar(ty: &Ty, generic_params: &[ParamTy]) -> bool {
                     .iter()
                     .any(|(_, ty)| contains_bound_typevar(ty, generic_params))
         }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-            contains_bound_typevar(inner, generic_params)
-        }
+        Ty::List(inner, _) => contains_bound_typevar(inner, generic_params),
         Ty::Map {
             key: k, value: v, ..
         }
-        | Ty::EvolvingMap(k, v, _)
         | Ty::Future(k, v, _) => {
             contains_bound_typevar(k, generic_params) || contains_bound_typevar(v, generic_params)
         }
@@ -135,11 +132,10 @@ fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
                 args.iter().any(|a| occurs(param, a, in_union))
                     || assoc.iter().any(|(_, t)| occurs(param, t, in_union))
             }
-            Ty::List(inner, _) | Ty::EvolvingList(inner, _) => occurs(param, inner, in_union),
+            Ty::List(inner, _) => occurs(param, inner, in_union),
             Ty::Map {
                 key: k, value: v, ..
             }
-            | Ty::EvolvingMap(k, v, _)
             | Ty::Future(k, v, _) => occurs(param, k, in_union) || occurs(param, v, in_union),
             Ty::AssociatedTypeProjection {
                 base, interface, ..
@@ -181,19 +177,11 @@ fn nf(ty: &Ty, enum_variants: EnumVariants) -> Ty {
             enum_variants,
         ),
         Ty::List(inner, attr) => Ty::List(Box::new(nf(inner, enum_variants)), attr.clone()),
-        Ty::EvolvingList(inner, attr) => {
-            Ty::EvolvingList(Box::new(nf(inner, enum_variants)), attr.clone())
-        }
         Ty::Map { key, value, attr } => Ty::Map {
             key: Box::new(nf(key, enum_variants)),
             value: Box::new(nf(value, enum_variants)),
             attr: attr.clone(),
         },
-        Ty::EvolvingMap(k, v, attr) => Ty::EvolvingMap(
-            Box::new(nf(k, enum_variants)),
-            Box::new(nf(v, enum_variants)),
-            attr.clone(),
-        ),
         Ty::Future(value, error, attr) => Ty::Future(
             Box::new(nf(value, enum_variants)),
             Box::new(nf(error, enum_variants)),
@@ -507,7 +495,7 @@ fn unify_into_at(
                 depth + 1,
             ))
         }
-        (Ty::List(xi, _), Ty::List(yi, _)) | (Ty::EvolvingList(xi, _), Ty::EvolvingList(yi, _)) => {
+        (Ty::List(xi, _), Ty::List(yi, _)) => {
             unify_into_at(xi, yi, vars, aliases, bindings, depth + 1)
         }
         (
@@ -517,16 +505,14 @@ fn unify_into_at(
             Ty::Map {
                 key: yk, value: yv, ..
             },
-        )
-        | (Ty::EvolvingMap(xk, xv, _), Ty::EvolvingMap(yk, yv, _)) => unify_into_at(
-            xk,
-            yk,
+        ) => unify_into_at(xk, yk, vars, aliases, bindings, depth + 1).and(unify_into_at(
+            xv,
+            yv,
             vars,
             aliases,
             bindings,
             depth + 1,
-        )
-        .and(unify_into_at(xv, yv, vars, aliases, bindings, depth + 1)),
+        )),
         (Ty::Future(xv, xe, _), Ty::Future(yv, ye, _)) => unify_into_at(
             xv,
             yv,
@@ -942,11 +928,10 @@ fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> 
             args.iter().any(|a| occurs_in(n, a, vars, bindings))
                 || assoc.iter().any(|(_, ty)| occurs_in(n, ty, vars, bindings))
         }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => occurs_in(n, inner, vars, bindings),
+        Ty::List(inner, _) => occurs_in(n, inner, vars, bindings),
         Ty::Map {
             key: k, value: v, ..
         }
-        | Ty::EvolvingMap(k, v, _)
         | Ty::Future(k, v, _) => occurs_in(n, k, vars, bindings) || occurs_in(n, v, vars, bindings),
         Ty::AssociatedTypeProjection {
             base, interface, ..
@@ -998,19 +983,11 @@ fn substitute_plain(ty: &Ty, bindings: &TypeBindings) -> Ty {
         Ty::List(inner, attr) => {
             Ty::List(Box::new(substitute_plain(inner, bindings)), attr.clone())
         }
-        Ty::EvolvingList(inner, attr) => {
-            Ty::EvolvingList(Box::new(substitute_plain(inner, bindings)), attr.clone())
-        }
         Ty::Map { key, value, attr } => Ty::Map {
             key: Box::new(substitute_plain(key, bindings)),
             value: Box::new(substitute_plain(value, bindings)),
             attr: attr.clone(),
         },
-        Ty::EvolvingMap(k, v, attr) => Ty::EvolvingMap(
-            Box::new(substitute_plain(k, bindings)),
-            Box::new(substitute_plain(v, bindings)),
-            attr.clone(),
-        ),
         Ty::Future(value, error, attr) => Ty::Future(
             Box::new(substitute_plain(value, bindings)),
             Box::new(substitute_plain(error, bindings)),

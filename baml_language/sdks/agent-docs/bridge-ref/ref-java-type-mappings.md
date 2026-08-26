@@ -195,8 +195,6 @@ nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wi
 | (no TIR row in Python) | `Ty::PromptAst` | prompt-AST type | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
 | `Ty::Unknown { … }` | no CodegenTy variant | error recovery sentinel | never reaches codegen | — | — | n/a |
 | `Ty::Error { … }` | no CodegenTy variant | hard error sentinel | never reaches codegen | — | — | n/a |
-| `Ty::EvolvingList(T, …)` | freezes before codegen | mutable empty-array literal | frozen upstream to `Ty::List(T)` → `java.util.List<T>` | (same) | `BamlType.list(D)` | n/a |
-| `Ty::EvolvingMap(K, V, …)` | freezes before codegen | mutable empty-map literal | frozen upstream to `Ty::Map` → `java.util.Map<String, V>` | (same) | `map<…>` | n/a |
 
 Per-row deviation flags:
 

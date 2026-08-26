@@ -27,8 +27,8 @@
 //! drift is a compile error), with deliberate spec-driven deltas: `Infer`
 //! carries an optional [`InferVar`] so inference-table variables are native
 //! (`None` is the syntactic `_` hole, exactly what the plain enum's `Infer`
-//! means today); TIR's internal recovery sentinels (plain `Unknown`,
-//! `EvolvingList`, `EvolvingMap`) are unrepresentable - see the note at the
+//! means today); TIR's internal recovery sentinel (plain `Unknown`) is
+//! unrepresentable - see the note at the
 //! end of [`TyKind`]; and the top type takes its spec name `Unknown` here
 //! (the plain enum calls it `BuiltinUnknown` only because the sentinel had
 //! claimed the shorter name).
@@ -341,11 +341,6 @@ pub enum TyKind {
     //   names are the single `Error` sentinel (rust-analyzer's model), "no
     //   expectation" is `Expectation::None`, and "not yet inferred" is a
     //   fresh `Infer` variable.
-    // - `EvolvingList` (= 31) / `EvolvingMap` (= 32): TIR-internal sentinels
-    //   for empty-container element refinement. The hir_ty engine expresses
-    //   the same thing honestly as `List`/`Map` over inference variables, so
-    //   these must not be representable here; they only ever exist
-    //   mid-TIR-inference and never cross a boundary this module imports.
     // - `TypeArgRef` (= 34): the frame axis exists only in `TyTemplate`, not
     //   in the plain `Ty` this module mirrors; it joins this representation
     //   when the family axes migrate at cutover.
@@ -628,9 +623,9 @@ impl Ty {
     ///
     /// # Panics
     ///
-    /// On the plain `Unknown`/`EvolvingList`/`EvolvingMap`: TIR-internal
-    /// inference sentinels that must never reach this boundary (hir_ty uses
-    /// the single `Error` sentinel and inference variables instead).
+    /// On the plain `Unknown`: a TIR-internal inference sentinel that must
+    /// never reach this boundary (hir_ty uses the single `Error` sentinel and
+    /// inference variables instead).
     pub fn from_plain(ty: &crate::Ty) -> Ty {
         let interned_all =
             |tys: &[crate::Ty]| -> Box<[Ty]> { tys.iter().map(Ty::from_plain).collect() };
@@ -719,14 +714,12 @@ impl Ty {
             crate::Ty::BuiltinUnknown { attr } => TyKind::Unknown { attr: attr.clone() },
             crate::Ty::Never { attr } => TyKind::Never { attr: attr.clone() },
             crate::Ty::Error { attr } => TyKind::Error { attr: attr.clone() },
-            crate::Ty::Unknown { .. }
-            | crate::Ty::EvolvingList(..)
-            | crate::Ty::EvolvingMap(..) => {
+            crate::Ty::Unknown { .. } => {
                 panic!(
-                    "plain Ty::Unknown/EvolvingList/EvolvingMap are TIR-internal inference \
-                     sentinels with no interned form (hir_ty uses the single Error sentinel \
-                     and inference variables instead; the interned Unknown is the TOP type, \
-                     i.e. plain BuiltinUnknown). They must never reach this boundary."
+                    "plain Ty::Unknown is a TIR-internal inference sentinel with no interned \
+                     form (hir_ty uses the single Error sentinel and inference variables \
+                     instead; the interned Unknown is the TOP type, i.e. plain \
+                     BuiltinUnknown). It must never reach this boundary."
                 )
             }
             crate::Ty::Infer { attr } => TyKind::Infer {
@@ -987,19 +980,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "TIR-internal inference sentinels")]
-    fn tir_evolving_sentinels_are_unrepresentable() {
-        let plain = crate::Ty::EvolvingList(
-            Box::new(crate::Ty::Int {
-                attr: TyAttr::default(),
-            }),
-            TyAttr::default(),
-        );
-        let _ = Ty::from_plain(&plain);
-    }
-
-    #[test]
-    #[should_panic(expected = "TIR-internal inference sentinels")]
+    #[should_panic(expected = "TIR-internal inference sentinel")]
     fn tir_unknown_sentinel_is_unrepresentable() {
         let plain = crate::Ty::Unknown {
             attr: TyAttr::default(),

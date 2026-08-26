@@ -693,11 +693,10 @@ pub fn contains_ty_where(ty: &Ty, pred: &dyn Fn(&Ty) -> bool) -> bool {
         Ty::AssociatedTypeProjection {
             base, interface, ..
         } => contains_ty_where(base, pred) || interface.tys().any(|t| contains_ty_where(t, pred)),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_ty_where(inner, pred),
+        Ty::List(inner, _) => contains_ty_where(inner, pred),
         Ty::Map {
             key: k, value: v, ..
-        }
-        | Ty::EvolvingMap(k, v, _) => contains_ty_where(k, pred) || contains_ty_where(v, pred),
+        } => contains_ty_where(k, pred) || contains_ty_where(v, pred),
         Ty::Union(tys, _) => tys.iter().any(|t| contains_ty_where(t, pred)),
         Ty::Future(value, error, _) => {
             contains_ty_where(value, pred) || contains_ty_where(error, pred)
@@ -782,20 +781,11 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&ParamTy) -> bool
             Box::new(erase_typevars_matching(inner, should_erase)),
             attr.clone(),
         ),
-        Ty::EvolvingList(inner, attr) => Ty::EvolvingList(
-            Box::new(erase_typevars_matching(inner, should_erase)),
-            attr.clone(),
-        ),
         Ty::Map { key, value, attr } => Ty::Map {
             key: Box::new(erase_typevars_matching(key, should_erase)),
             value: Box::new(erase_typevars_matching(value, should_erase)),
             attr: attr.clone(),
         },
-        Ty::EvolvingMap(key, value, attr) => Ty::EvolvingMap(
-            Box::new(erase_typevars_matching(key, should_erase)),
-            Box::new(erase_typevars_matching(value, should_erase)),
-            attr.clone(),
-        ),
         Ty::Union(members, attr) => Ty::Union(
             members
                 .iter()

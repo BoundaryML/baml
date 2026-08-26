@@ -15,7 +15,7 @@
 //! subenum layers ([`crate::RuntimeTy`], [`crate::RealizedTy`],
 //! [`crate::ConcreteTy`]) are subsets of `Ty`, so a runtime caller widens up via
 //! the infallible `Ty::from(..)` and calls the same checker. The compiler-only
-//! variants (`Unknown`, `Error`, `EvolvingList`, `EvolvingMap`) are handled here
+//! variants (`Unknown`, `Error`) are handled here
 //! because inference asks subtype questions while those variants are live; a
 //! runtime caller simply never produces them.
 //!
@@ -557,9 +557,7 @@ pub fn is_subtype<H: Head, C: TypeContext<H>>(sub: &Ty<H>, sup: &Ty<H>, ctx: &C)
 /// This is deliberately *conservative* — it decides only same-kind pairs whose
 /// heads are stable and never uses a cross-kind "different discriminant ⇒
 /// differ" catch-all. That catch-all would be unsound under the current
-/// normalization: `List`/`EvolvingList` and `Map`/`EvolvingMap` are distinct
-/// `Ty` constructors that canonicalize to the *same* `NormalTy` head, and
-/// `TypeAlias` / `Union` / `AssociatedTypeProjection` / generic `Media` /
+/// normalization: `TypeAlias` / `Union` / `AssociatedTypeProjection` / generic `Media` /
 /// `Infer` heads can be rewritten into any other shape. Leaving every such case
 /// undecided (`false`) preserves correctness; only the unambiguous nominal
 /// misses are fast-rejected. Context-independent: canonicalization preserves
@@ -1219,12 +1217,10 @@ impl<H: Head> NormalTy<H, Named> {
             }
             Ty::Enum(qn, _) => NormalTy::Enum(qn.clone()),
             Ty::EnumVariant(qn, v, _) => NormalTy::EnumVariant(qn.clone(), v.clone()),
-            // Evolving containers are the list/map analogues during inference;
-            // their type identity is the same as the frozen form.
-            Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+            Ty::List(inner, _) => {
                 NormalTy::List(Box::new(Self::from_ty(inner, ctx, expanding, fuel)))
             }
-            Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => NormalTy::Map {
+            Ty::Map { key, value, .. } => NormalTy::Map {
                 key: Box::new(Self::from_ty(key, ctx, expanding, fuel)),
                 value: Box::new(Self::from_ty(value, ctx, expanding, fuel)),
             },

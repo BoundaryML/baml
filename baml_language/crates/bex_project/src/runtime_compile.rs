@@ -133,10 +133,8 @@ impl StubViewpoint<'_> {
             Ty::Enum(name, _) | Ty::EnumVariant(name, ..) | Ty::TypeAlias(name, _) => {
                 !self.spellable_package(name)
             }
-            Ty::List(inner, _) | Ty::EvolvingList(inner, _) => self.hides_type(inner),
-            Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
-                self.hides_type(key) || self.hides_type(value)
-            }
+            Ty::List(inner, _) => self.hides_type(inner),
+            Ty::Map { key, value, .. } => self.hides_type(key) || self.hides_type(value),
             Ty::Union(members, _) => members.iter().any(|ty| self.hides_type(ty)),
             Ty::Function {
                 params,

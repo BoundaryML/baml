@@ -408,11 +408,10 @@ fn plain_interface_ty(bound: &baml_type::interned::InterfaceRef) -> Tir2Ty {
 fn tir_contains_projection(ty: &Tir2Ty) -> bool {
     match ty {
         Tir2Ty::AssociatedTypeProjection { .. } => true,
-        Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => tir_contains_projection(inner),
+        Tir2Ty::List(inner, _) => tir_contains_projection(inner),
         Tir2Ty::Map {
             key: k, value: v, ..
-        }
-        | Tir2Ty::EvolvingMap(k, v, _) => tir_contains_projection(k) || tir_contains_projection(v),
+        } => tir_contains_projection(k) || tir_contains_projection(v),
         Tir2Ty::Union(members, _) => members.iter().any(tir_contains_projection),
         Tir2Ty::Class(_, type_args, _) => type_args.iter().any(tir_contains_projection),
         Tir2Ty::Interface(_, type_args, associated_bindings, _) => {
@@ -504,13 +503,15 @@ fn lower_tir_template(
                 None
             }
         }
-        Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => Some(TyTemplate::list(
-            lower_tir_template(inner, resolved, generic_layout, mode)?,
-        )),
+        Tir2Ty::List(inner, _) => Some(TyTemplate::list(lower_tir_template(
+            inner,
+            resolved,
+            generic_layout,
+            mode,
+        )?)),
         Tir2Ty::Map {
             key: k, value: v, ..
-        }
-        | Tir2Ty::EvolvingMap(k, v, _) => Some(TyTemplate::map(
+        } => Some(TyTemplate::map(
             lower_tir_template(k, resolved, generic_layout, mode)?,
             lower_tir_template(v, resolved, generic_layout, mode)?,
         )),
@@ -2882,14 +2883,6 @@ impl<'db> LoweringContext<'db> {
             Tir2Ty::TypeVar(param, attr) if baml_type::is_synthetic_effect_param(param.name()) => {
                 Tir2Ty::BuiltinUnknown { attr }
             }
-            Tir2Ty::EvolvingList(inner, attr) => {
-                Tir2Ty::List(Box::new(Self::erase_compiler_only_ty(*inner)), attr)
-            }
-            Tir2Ty::EvolvingMap(key, value, attr) => Tir2Ty::Map {
-                key: Box::new(Self::erase_compiler_only_ty(*key)),
-                value: Box::new(Self::erase_compiler_only_ty(*value)),
-                attr,
-            },
             Tir2Ty::Literal(lit, _freshness, attr) => {
                 Tir2Ty::Literal(lit, baml_type::Freshness::Regular, attr)
             }
@@ -3940,9 +3933,7 @@ impl<'db> LoweringContext<'db> {
     fn array_element_template(&self, expr_id: AstExprId) -> TyTemplate {
         let generic_params = self.enclosing_generic_params();
         match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
-            Some(Tir2Ty::List(elem, _) | Tir2Ty::EvolvingList(elem, _)) => {
-                self.ty_to_template(elem, &generic_params)
-            }
+            Some(Tir2Ty::List(elem, _)) => self.ty_to_template(elem, &generic_params),
             _ => TyTemplate::from(RealizedTy::unknown()),
         }
     }
@@ -3954,7 +3945,7 @@ impl<'db> LoweringContext<'db> {
     fn map_kv_templates(&self, expr_id: AstExprId) -> (TyTemplate, TyTemplate) {
         let generic_params = self.enclosing_generic_params();
         match self.tir_expr_type(self.expr_metadata_key(expr_id)) {
-            Some(Tir2Ty::Map { key, value, .. } | Tir2Ty::EvolvingMap(key, value, _)) => (
+            Some(Tir2Ty::Map { key, value, .. }) => (
                 self.ty_to_template(key, &generic_params),
                 self.ty_to_template(value, &generic_params),
             ),
@@ -9507,7 +9498,7 @@ impl<'db> LoweringContext<'db> {
                         class,
                         ..
                     })),
-                    Some(Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _)),
+                    Some(Tir2Ty::List(inner, _)),
                 ) if package.as_str() == "baml"
                     && namespace.is_empty()
                     && class.as_str() == "Array" =>
@@ -9521,7 +9512,7 @@ impl<'db> LoweringContext<'db> {
                         class,
                         ..
                     })),
-                    Some(Tir2Ty::Map { key, value, .. } | Tir2Ty::EvolvingMap(key, value, _)),
+                    Some(Tir2Ty::Map { key, value, .. }),
                 ) if package.as_str() == "baml"
                     && namespace.is_empty()
                     && class.as_str() == "Map" =>
@@ -12550,8 +12541,8 @@ impl<'db> LoweringContext<'db> {
         }
         // The root view is the request itself, verbatim; only the
         // `requires` EXPANSION goes through hir_ty's realized closure.
-        // A TIR-internal sentinel in an argument (`Unknown`/`Evolving`,
-        // dual-provider only) cannot intern - it degrades to the error
+        // A TIR-internal `Unknown` sentinel in an argument
+        // cannot intern - it degrades to the error
         // sentinel FOR THE WALK, while the root view keeps the plain
         // originals.
         let interned = |ty: &Tir2Ty| {

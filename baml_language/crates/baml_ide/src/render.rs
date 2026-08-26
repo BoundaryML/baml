@@ -96,11 +96,6 @@ impl TyRenderStrategy for TyDisplayContext<'_> {
             name.to_string()
         }
     }
-
-    // Hover/completion hide the streaming-only `(evolving)` annotation.
-    fn show_evolving(&self) -> bool {
-        false
-    }
 }
 
 /// Context-free strategy: full canonical paths (real package names,
@@ -120,10 +115,6 @@ impl TyRenderStrategy for PlainTyRender {
         } else {
             name.to_string()
         }
-    }
-
-    fn show_evolving(&self) -> bool {
-        false
     }
 }
 
@@ -208,10 +199,6 @@ impl TyRenderStrategy for AddressableTyRender {
             name.to_string()
         }
     }
-
-    fn show_evolving(&self) -> bool {
-        false
-    }
 }
 
 /// Strategy for [`display_owner_ty`]: [`PlainTyRender`] plus the companion
@@ -230,10 +217,6 @@ impl TyRenderStrategy for OwnerTyRender {
         } else {
             name.to_string()
         }
-    }
-
-    fn show_evolving(&self) -> bool {
-        false
     }
 }
 

@@ -251,9 +251,7 @@ fn pattern_atom_meet(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Over
         (
             Ty::Class(..)
             | Ty::List(..)
-            | Ty::EvolvingList(..)
             | Ty::Map { .. }
-            | Ty::EvolvingMap(..)
             | Ty::Future(..)
             | Ty::Int { .. }
             | Ty::Bigint { .. }

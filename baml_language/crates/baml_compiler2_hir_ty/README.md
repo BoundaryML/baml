@@ -284,11 +284,10 @@ pointed at the error channel:
    rust-analyzer interns its types outside salsa. It mirrors the plain
    master enum (exhaustive conversions make drift a compile error), with
    spec-driven deltas: `Infer` gains an optional `InferVar`; TIR's internal
-   recovery sentinels are deliberately unrepresentable -
-   `EvolvingList`/`EvolvingMap` (the new engine models empty-container
-   refinement with inference variables) and the plain enum's `Unknown` (the
-   new engine has exactly one error sentinel, `Error`, rust-analyzer style;
-   TIR's other two uses of `Unknown` become `Expectation::None` and fresh
+   recovery sentinel is deliberately unrepresentable - the plain enum's
+   `Unknown` (the new engine has exactly one error sentinel, `Error`,
+   rust-analyzer style; TIR's other two uses of `Unknown` become
+   `Expectation::None` and fresh
    infer vars); and the top type takes its spec name `Unknown` (the plain
    enum's `BuiltinUnknown`, so prefixed only because the sentinel had
    claimed the shorter name). The plain enum and

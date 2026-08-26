@@ -533,17 +533,11 @@ pub fn reduce_ground_projections(db: &dyn baml_compiler2_ppir::Db, ty: &Ty, fuel
             }
         }
         Ty::List(inner, attr) => Ty::List(Box::new(recurse(inner)), attr.clone()),
-        Ty::EvolvingList(inner, attr) => Ty::EvolvingList(Box::new(recurse(inner)), attr.clone()),
         Ty::Map { key, value, attr } => Ty::Map {
             key: Box::new(recurse(key)),
             value: Box::new(recurse(value)),
             attr: attr.clone(),
         },
-        Ty::EvolvingMap(key, value, attr) => Ty::EvolvingMap(
-            Box::new(recurse(key)),
-            Box::new(recurse(value)),
-            attr.clone(),
-        ),
         Ty::Future(value, error, attr) => Ty::Future(
             Box::new(recurse(value)),
             Box::new(recurse(error)),

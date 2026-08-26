@@ -2622,7 +2622,7 @@ impl<'db> InferenceContext<'db> {
                     }
                     None if elements.is_empty() => {
                         // `[]`: a list over a fresh element variable - the
-                        // honest replacement for the EvolvingList sentinel.
+                        // honest replacement for TIR's evolving-list sentinel.
                         self.untyped_empty_container_ty(expr, Ty::list)
                     }
                     None => {

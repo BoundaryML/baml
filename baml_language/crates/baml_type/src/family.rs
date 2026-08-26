@@ -306,13 +306,9 @@ ty_family! {
         Error {
             attr: TyAttr,
         } = 30,
-        /// Evolving list — an empty `[]` literal at a mutable binding whose element
-        /// type is refined by mutations. Frozen to `List` at the runtime boundary.
-        #[axis(tir)]
-        EvolvingList(Box<Ty<N>>, TyAttr) = 31,
-        /// Evolving map — the map analogue of [`Ty::EvolvingList`].
-        #[axis(tir)]
-        EvolvingMap(Box<Ty<N>>, Box<Ty<N>>, TyAttr) = 32,
+        // reserved: 31 and 32 were `EvolvingList`/`EvolvingMap`, the TIR-era
+        // empty-container refinement helpers. The inference engine expresses the
+        // same thing honestly as `List`/`Map` over inference variables.
         /// Inference hole — the wildcard `_` written in a type-argument or
         /// `throws`-clause position. A leaf placeholder that asks the checker to
         /// infer the type at this slot from surrounding context (the initializer
@@ -681,7 +677,9 @@ mod tests {
     }
 
     /// Lock the Borsh wire format. Every family member uses the explicit master
-    /// discriminants, with slot 23 reserved for the removed `WatchAccessor`.
+    /// discriminants, with slots 23, 31, and 32 reserved for removed variants.
+    /// `Infer`'s tag of 33 is what proves a removed variant leaves a gap rather
+    /// than renumbering the tail.
     #[test]
     fn borsh_uses_explicit_discriminants() {
         assert_eq!(tag::<Ty>(Ty::Int { attr: a() }), 0);
@@ -689,14 +687,6 @@ mod tests {
         assert_eq!(
             tag::<Ty>(Ty::List(Box::new(Ty::Bool { attr: a() }), a())),
             13
-        );
-        assert_eq!(
-            tag::<Ty>(Ty::EvolvingMap(
-                Box::new(Ty::Never { attr: a() }),
-                Box::new(Ty::Never { attr: a() }),
-                a()
-            )),
-            32
         );
         assert_eq!(tag::<Ty>(Ty::Infer { attr: a() }), 33);
         assert_eq!(

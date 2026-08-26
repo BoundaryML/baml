@@ -1037,7 +1037,7 @@ pub fn match_ty_pattern_into(
             }
             Some(())
         }
-        (Ty::List(p, _), Ty::List(c, _)) | (Ty::EvolvingList(p, _), Ty::EvolvingList(c, _)) => {
+        (Ty::List(p, _), Ty::List(c, _)) => {
             match_ty_pattern_into(p, c, generic_params, aliases, bindings)
         }
         (
@@ -1047,8 +1047,7 @@ pub fn match_ty_pattern_into(
             Ty::Map {
                 key: ck, value: cv, ..
             },
-        )
-        | (Ty::EvolvingMap(pk, pv, _), Ty::EvolvingMap(ck, cv, _)) => {
+        ) => {
             match_ty_pattern_into(pk, ck, generic_params, aliases, bindings)?;
             match_ty_pattern_into(pv, cv, generic_params, aliases, bindings)
         }
@@ -1633,10 +1632,10 @@ fn collect_type_generic_bound_errors<'db>(
                 check_head_args(facts, &params, &declared, args, errors);
             }
         }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+        Ty::List(inner, _) => {
             collect_type_generic_bound_errors(db, facts, inner, seen_aliases, errors);
         }
-        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
+        Ty::Map { key, value, .. } => {
             collect_type_generic_bound_errors(db, facts, key, seen_aliases, errors);
             collect_type_generic_bound_errors(db, facts, value, seen_aliases, errors);
         }

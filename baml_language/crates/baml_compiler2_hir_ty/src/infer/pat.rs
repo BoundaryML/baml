@@ -865,9 +865,7 @@ impl<'db> InferenceContext<'db> {
         let scrut = self.expand_alias_chain(scrut);
         match (&pat, &scrut) {
             (P::Never { .. }, _) => true,
-            (P::List(a, _) | P::EvolvingList(a, _), P::List(b, _) | P::EvolvingList(b, _)) => {
-                self.pattern_matchable(a, b)
-            }
+            (P::List(a, _), P::List(b, _)) => self.pattern_matchable(a, b),
             (
                 P::Map {
                     key: ka, value: va, ..
@@ -1662,7 +1660,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
             // over its declared fields (rustc's non-enum struct shape).
             P::Interface(..) => vec![Ctor::Interface(ty.clone())],
             // Slice splitting owns list columns; empty defers to it.
-            P::List(..) | P::EvolvingList(..) => vec![],
+            P::List(..) => vec![],
             // Everything else is an infinite or open alphabet.
             _ => vec![Ctor::NonExhaustive],
         }
@@ -1730,7 +1728,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
 
     fn list_element_type(&self, ty: &baml_type::Ty) -> baml_type::Ty {
         match self.peel_aliases(ty.clone(), 8) {
-            baml_type::Ty::List(element, _) | baml_type::Ty::EvolvingList(element, _) => *element,
+            baml_type::Ty::List(element, _) => *element,
             other => other,
         }
     }

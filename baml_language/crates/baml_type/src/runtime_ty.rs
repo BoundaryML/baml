@@ -8,9 +8,9 @@
 //! value is statically free of compiler-only variants all the way down.
 //!
 //! Conversions:
-//! - [`RuntimeTy::try_from`] (`&Ty`/`Ty`) is fallible: it rejects the four
-//!   compiler-only variants (`Unknown`, `Error`, `EvolvingList`, `EvolvingMap`)
-//!   even when nested, returning [`NotRuntimeTy`].
+//! - [`RuntimeTy::try_from`] (`&Ty`/`Ty`) is fallible: it rejects the
+//!   compiler-only variants (`Unknown`, `Error`, `Infer`) even when nested,
+//!   returning [`NotRuntimeTy`].
 //! - [`Ty::from`] (`RuntimeTy`/`&RuntimeTy`) is infallible.
 
 use std::collections::{HashMap, HashSet};
@@ -265,8 +265,7 @@ impl ResolvedAliases {
 }
 
 /// Lower a compiler-facing [`Ty`] into a runtime-safe [`RuntimeTy`], expanding
-/// non-recursive type aliases inline and freezing evolving containers
-/// (`EvolvingList`/`EvolvingMap` → `List`/`Map`). Every other variant —
+/// non-recursive type aliases inline. Every other variant —
 /// including `Never`, `TypeVar`, and `AssociatedTypeProjection` — maps
 /// faithfully to its same-named [`RuntimeTy`] variant: the runtime carries them
 /// for reflection and dynamic dispatch, and erasing them would violate the
@@ -346,16 +345,6 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
         Ty::Literal(lit, _freshness, attr) => {
             RuntimeTy::Literal(lit.clone(), Freshness::Regular, attr.clone())
         }
-
-        // Evolving containers → freeze to regular containers
-        Ty::EvolvingList(inner, attr) => {
-            RuntimeTy::List(Box::new(lower_to_runtime(inner, resolved)?), attr.clone())
-        }
-        Ty::EvolvingMap(k, v, attr) => RuntimeTy::Map {
-            key: Box::new(lower_to_runtime(k, resolved)?),
-            value: Box::new(lower_to_runtime(v, resolved)?),
-            attr: attr.clone(),
-        },
 
         // Functions — preserve the param metadata; body type-vars (captured from
         // the enclosing context) are resolved faithfully by the recursive
@@ -471,10 +460,8 @@ fn ty_has_cycle(
 ) -> bool {
     match ty {
         Ty::TypeAlias(qn, _) if aliases.contains_key(qn) => has_cycle(qn, aliases, visited, stack),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-            ty_has_cycle(inner, aliases, visited, stack)
-        }
-        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
+        Ty::List(inner, _) => ty_has_cycle(inner, aliases, visited, stack),
+        Ty::Map { key, value, .. } => {
             ty_has_cycle(key, aliases, visited, stack)
                 || ty_has_cycle(value, aliases, visited, stack)
         }
@@ -661,39 +648,28 @@ mod tests {
     }
 
     #[test]
-    fn nested_evolving_list_in_union_blocks_conversion() {
+    fn nested_error_in_union_blocks_conversion() {
         let ty: Ty = Ty::Union(
-            vec![
-                Ty::Int { attr: def() },
-                Ty::EvolvingList(Box::new(Ty::Never { attr: def() }), def()),
-            ],
+            vec![Ty::Int { attr: def() }, Ty::Error { attr: def() }],
             def(),
         );
         assert_eq!(
             RuntimeTy::try_from(&ty),
-            Err(NotRuntimeTy {
-                variant: "EvolvingList"
-            })
+            Err(NotRuntimeTy { variant: "Error" })
         );
     }
 
     #[test]
-    fn nested_evolving_map_in_function_ret_blocks_conversion() {
+    fn nested_infer_in_function_ret_blocks_conversion() {
         let ty: Ty = Ty::Function {
             params: vec![],
-            ret: Box::new(Ty::EvolvingMap(
-                Box::new(Ty::Never { attr: def() }),
-                Box::new(Ty::Never { attr: def() }),
-                def(),
-            )),
+            ret: Box::new(Ty::Infer { attr: def() }),
             throws: Box::new(Ty::Void { attr: def() }),
             attr: def(),
         };
         assert_eq!(
             RuntimeTy::try_from(&ty),
-            Err(NotRuntimeTy {
-                variant: "EvolvingMap"
-            })
+            Err(NotRuntimeTy { variant: "Infer" })
         );
     }
 }

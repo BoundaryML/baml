@@ -2080,11 +2080,6 @@ impl TyRenderStrategy for TyDisplayContext<'_> {
             name.to_string()
         }
     }
-
-    // Diagnostics hide the streaming-only `(evolving)` annotation.
-    fn show_evolving(&self) -> bool {
-        false
-    }
 }
 
 /// Render `ty` as seen from `file`: names in the file's own package collapse

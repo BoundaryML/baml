@@ -179,7 +179,7 @@ impl Ty {
     ///   - `Interface` (existential) and `Union` — no single concrete implementor;
     ///   - `Function` (an arrow type) and `RustType` (an opaque native leaf);
     ///   - `Void`, the top type `BuiltinUnknown`, and the compiler-only sentinels
-    ///     `Unknown` / `Error` / `EvolvingList` / `EvolvingMap`;
+    ///     `Unknown` / `Error`;
     ///   - `TypeAlias` — callers resolve aliases first, so a surviving alias here
     ///     is unresolved (recursive or missing), i.e. not a valid bare target.
     ///
@@ -217,17 +217,15 @@ impl Ty {
             | Ty::BuiltinUnknown { .. }
             | Ty::Unknown { .. }
             | Ty::Error { .. }
-            | Ty::Infer { .. }
-            | Ty::EvolvingList(..)
-            | Ty::EvolvingMap(..) => false,
+            | Ty::Infer { .. } => false,
         }
     }
 
     /// Whether this is a **concrete** type per the TYPE_SYSTEM.md taxonomy: a type
     /// every value of which has exactly one run-time representation that method
     /// dispatch can key on. The concrete category is the primitives, `Media`, classes,
-    /// enums, the containers `T[]` / `map<K, V>` (with their inference-time `Evolving*`
-    /// forms), function types, `Future`, the builtin handles `Type` / `Resource` /
+    /// enums, the containers `T[]` / `map<K, V>`, function types, `Future`, the
+    /// builtin handles `Type` / `Resource` /
     /// `PromptAst`, and the native `RustType`.
     ///
     /// NOT concrete — the doc's *abstract* and *literal* categories, plus `never`:
@@ -267,8 +265,6 @@ impl Ty {
             | Ty::Enum(..)
             | Ty::List(..)
             | Ty::Map { .. }
-            | Ty::EvolvingList(..)
-            | Ty::EvolvingMap(..)
             | Ty::Function { .. }
             | Ty::Future(..)
             | Ty::Type { .. }
@@ -463,33 +459,6 @@ impl Ty {
         }
     }
 
-    /// Promote empty containers to evolving containers.
-    ///
-    /// Called at mutable binding sites (`let` without annotation), right
-    /// after `widen_fresh()`. This is the mirror of `widen_fresh()`:
-    /// - `widen_fresh` *removes* literal specificity (1 → int)
-    /// - `make_evolving` *adds* container mutability (List(Never) → EvolvingList(Never))
-    ///
-    /// Only converts `List(Never)` and `Map(Never, Never)` — non-empty
-    /// container literals already have a known element type and don't need
-    /// evolving semantics.
-    #[must_use]
-    pub fn make_evolving(self) -> Ty {
-        match self {
-            Ty::List(inner, attr) if matches!(*inner, Ty::Never { .. }) => {
-                Ty::EvolvingList(inner, attr)
-            }
-            Ty::Map {
-                key: k,
-                value: v,
-                attr,
-            } if matches!(*k, Ty::Never { .. }) && matches!(*v, Ty::Never { .. }) => {
-                Ty::EvolvingMap(k, v, attr)
-            }
-            other => other,
-        }
-    }
-
     /// `T[]` (list) with default attributes.
     pub fn list(inner: Ty) -> Self {
         Ty::List(Box::new(inner), TyAttr::default())
@@ -630,9 +599,7 @@ impl Ty {
             | Ty::Never { .. }
             | Ty::Unknown { .. }
             | Ty::Error { .. }
-            | Ty::Infer { .. }
-            | Ty::EvolvingList(..)
-            | Ty::EvolvingMap(..) => Err("compiler-only type should not reach runtime".to_string()),
+            | Ty::Infer { .. } => Err("compiler-only type should not reach runtime".to_string()),
             Ty::Int { .. }
             | Ty::Bigint { .. }
             | Ty::Float { .. }
@@ -741,12 +708,6 @@ pub trait TyRenderStrategy<N = QualifiedTypeName> {
 
     /// Render a type-variable name (`T`, or a synthetic effect param).
     fn type_var(&self, name: &Name) -> String;
-
-    /// Whether evolving list/map types are annotated `(evolving)`.
-    /// Canonical/user-facing: yes; the LSP's hover hides it.
-    fn show_evolving(&self) -> bool {
-        true
-    }
 }
 
 impl Ty {
@@ -833,24 +794,6 @@ impl<N: Clone> Ty<N> {
             Ty::Map {
                 key: k, value: v, ..
             } => format!("map<{}, {}>", k.render_with(s), v.render_with(s)),
-            Ty::EvolvingList(inner, _) => {
-                if matches!(**inner, Ty::Never { .. }) {
-                    "_[]".to_string()
-                } else if s.show_evolving() {
-                    format!("{}[] (evolving)", inner.render_as_postfix_base(s))
-                } else {
-                    format!("{}[]", inner.render_as_postfix_base(s))
-                }
-            }
-            Ty::EvolvingMap(k, v, _) => {
-                if matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. }) {
-                    "map<_, _>".to_string()
-                } else if s.show_evolving() {
-                    format!("map<{}, {}> (evolving)", k.render_with(s), v.render_with(s))
-                } else {
-                    format!("map<{}, {}>", k.render_with(s), v.render_with(s))
-                }
-            }
             Ty::Union(members, _) => {
                 // `?` is sugar that exists only in source/lowering; after that a
                 // nullable type is a plain union and renders as `T | null`.
@@ -1133,8 +1076,6 @@ impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
             Ty::Unknown { .. } => write!(f, "unknown"),
             Ty::Error { .. } => write!(f, "<error>"),
             Ty::Infer { .. } => write!(f, "_"),
-            Ty::EvolvingList(inner, _) => write!(f, "{inner}[]"),
-            Ty::EvolvingMap(key, value, _) => write!(f, "map<{key}, {value}>"),
             // Opaque leaf types: render identically to `render_with` so the two
             // renderers never diverge.
             Ty::RustType { .. } => write!(f, "$rust_type"),
@@ -1259,7 +1200,6 @@ mod tests {
             Ty::Error {
                 attr: TyAttr::default(),
             },
-            Ty::EvolvingList(boxed(ty_int()), TyAttr::default()),
         ];
         for ty in &invalid {
             assert!(
@@ -1277,8 +1217,7 @@ mod tests {
         // Concrete: a single run-time representation dispatch can key on. Note the
         // differences from `is_valid_impl_subject` — `Function`/`Future`/`RustType`
         // are concrete types even though they are not written-impl targets (for
-        // `Future`, only because that is unimplemented), and the `Evolving*`
-        // inference forms are lists/maps.
+        // `Future`, only because that is unimplemented).
         let concrete = [
             ty_int(),
             Ty::Bigint {
@@ -1296,7 +1235,6 @@ mod tests {
                 value: boxed(ty_int()),
                 attr: TyAttr::default(),
             },
-            Ty::EvolvingList(boxed(ty_int()), TyAttr::default()),
             Ty::Function {
                 params: vec![],
                 ret: boxed(Ty::null()),
