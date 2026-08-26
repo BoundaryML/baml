@@ -23,9 +23,25 @@ pub enum RenderError {
         instantiation: String,
     },
     #[error(
-        "Classes '{first}' and '{second}' both render as '{rendered_name}' in the output schema"
+        "Output definitions '{first}' and '{second}' both render as '{rendered_name}' in the output schema"
     )]
     RenderedClassNameCollision {
+        rendered_name: String,
+        first: String,
+        second: String,
+    },
+    #[error(
+        "Output definitions '{first}' and '{second}' both render as '{rendered_name}' in the output schema"
+    )]
+    RenderedEnumNameCollision {
+        rendered_name: String,
+        first: String,
+        second: String,
+    },
+    #[error(
+        "Type alias definitions for '{rendered_name}' have non-equivalent targets '{first}' and '{second}'"
+    )]
+    RenderedTypeAliasNameCollision {
         rendered_name: String,
         first: String,
         second: String,
@@ -151,7 +167,7 @@ impl OutputFormatContent {
         // Compute which classes and enums to hoist
         let hoisted_classes = self.compute_hoisted_classes(options);
         let hoisted_enums = self.compute_hoisted_enums(options);
-        self.validate_hoisted_class_names(&hoisted_classes)?;
+        self.validate_hoisted_definition_names(&hoisted_classes, &hoisted_enums)?;
 
         let prefix = self.get_prefix(options, &hoisted_classes);
 
@@ -367,27 +383,43 @@ impl OutputFormatContent {
         hoisted
     }
 
-    fn validate_hoisted_class_names(
+    fn validate_hoisted_definition_names(
         &self,
-        hoisted: &indexmap::IndexSet<String>,
+        hoisted_classes: &indexmap::IndexSet<String>,
+        hoisted_enums: &indexmap::IndexSet<String>,
     ) -> Result<(), RenderError> {
-        let mut definitions_by_rendered_name = IndexMap::<String, String>::new();
-        for definition_key in hoisted {
+        let mut definitions_by_rendered_name = self
+            .recursive_type_aliases
+            .keys()
+            .map(|name| (name.clone(), name.clone()))
+            .collect::<IndexMap<String, String>>();
+        for definition_key in hoisted_classes {
             let Some(cls) = self.find_class(definition_key) else {
                 continue;
             };
             let rendered_name = rendered_hoisted_definition_name(definition_key, cls);
             if let Some(first) = definitions_by_rendered_name.get(&rendered_name) {
-                if first != definition_key {
-                    return Err(RenderError::RenderedClassNameCollision {
-                        rendered_name,
-                        first: first.clone(),
-                        second: definition_key.clone(),
-                    });
-                }
-            } else {
-                definitions_by_rendered_name.insert(rendered_name, definition_key.clone());
+                return Err(RenderError::RenderedClassNameCollision {
+                    rendered_name,
+                    first: first.clone(),
+                    second: definition_key.clone(),
+                });
             }
+            definitions_by_rendered_name.insert(rendered_name, definition_key.clone());
+        }
+        for definition_key in hoisted_enums {
+            let Some(enm) = self.find_enum(definition_key) else {
+                continue;
+            };
+            let rendered_name = rendered_name(&enm.name, enm.alias.as_ref()).to_string();
+            if let Some(first) = definitions_by_rendered_name.get(&rendered_name) {
+                return Err(RenderError::RenderedEnumNameCollision {
+                    rendered_name,
+                    first: first.clone(),
+                    second: definition_key.clone(),
+                });
+            }
+            definitions_by_rendered_name.insert(rendered_name, definition_key.clone());
         }
         Ok(())
     }
@@ -1091,6 +1123,7 @@ fn walk_ty(
     match ty {
         SapTy::Class(type_name, type_args, _) => {
             let output_key = class_instantiation_key(ty);
+            let output_name = type_name.display_name().to_string();
 
             // If this class is already on the ancestry stack, it's a recursive cycle.
             // Only mark classes from the cycle start, not unrelated ancestors.
@@ -1106,7 +1139,7 @@ fn walk_ty(
                     && origins.class_transform_expands(index, type_name, ancestor.arity)
                 {
                     return Err(RenderError::NonRegularRecursiveGeneric {
-                        class: type_name.display_name().to_string(),
+                        class: output_name,
                         ancestor: ancestor.output_name.clone(),
                         instantiation: output_key,
                     });
@@ -1145,7 +1178,7 @@ fn walk_ty(
                 content.classes.insert(
                     output_key.clone(),
                     self::Class {
-                        name: type_name.display_name().to_string(),
+                        name: output_name,
                         alias: class_def.alias.clone(),
                         description: class_def.description.clone(),
                         fields,
@@ -1181,6 +1214,7 @@ fn walk_ty(
                 return Ok(());
             }
             if let Some(enum_def) = find_enum_definition(ctx, type_name) {
+                let output_name = type_name.display_name().to_string();
                 // Skipped variants are already filtered out in bex_engine extraction.
                 let values: Vec<self::EnumValue> = enum_def
                     .variants
@@ -1193,9 +1227,9 @@ fn walk_ty(
                     .collect();
 
                 content.enums.insert(
-                    type_name.display_name().to_string(),
+                    output_name.clone(),
                     self::Enum {
-                        name: type_name.display_name().to_string(),
+                        name: output_name,
                         alias: enum_def.alias.clone(),
                         description: enum_def.description.clone(),
                         values,
@@ -1219,9 +1253,20 @@ fn walk_ty(
                 return Ok(());
             }
             if let Some(target_ty) = find_type_alias_definition(ctx, type_name) {
-                content
-                    .recursive_type_aliases
-                    .insert(type_name.display_name().to_string(), target_ty.clone());
+                let output_name = type_name.display_name().to_string();
+                if let Some(first) = content.recursive_type_aliases.get(&output_name) {
+                    if first != target_ty {
+                        return Err(RenderError::RenderedTypeAliasNameCollision {
+                            rendered_name: output_name,
+                            first: first.to_string(),
+                            second: target_ty.to_string(),
+                        });
+                    }
+                } else {
+                    content
+                        .recursive_type_aliases
+                        .insert(output_name, target_ty.clone());
+                }
                 let target_origins = LaneOrigins::opaque(ancestry.len());
                 walk_ty(target_ty, &target_origins, ctx, content, visited, ancestry)?;
             }
@@ -1264,7 +1309,189 @@ mod tests {
         )
     }
 
+    fn dynamic_key(name: &str) -> DefKey {
+        DefKey::new(
+            baml_type::typetag::TypeTag::fresh_dynamic(),
+            DeclarationName::Anonymous(baml_type::Name::new(name)),
+        )
+    }
+
     use super::*;
+
+    #[test]
+    fn duplicate_hoisted_enum_aliases_are_rejected() {
+        let first = dynamic_key("Choice");
+        let second = dynamic_key("Choice_2");
+        let target = RuntimeTy::Union(
+            vec![
+                RuntimeTy::Enum(first.clone(), TyAttr::default()),
+                RuntimeTy::Enum(second.clone(), TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        let definition = |name: &str| sys_types::EnumDefinition {
+            name: name.to_string(),
+            description: None,
+            alias: Some("SharedChoice".to_string()),
+            variants: vec![sys_types::EnumVariantDefinition {
+                name: "Value".to_string(),
+                description: None,
+                alias: None,
+            }],
+        };
+        let mut enums = indexmap::IndexMap::new();
+        enums.insert(first, definition("Choice"));
+        enums.insert(second, definition("Choice_2"));
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.enum_definitions = Arc::new(enums);
+
+        let content = build_output_format_content(&target, &ctx);
+        let error = content
+            .render(&RenderOptions {
+                always_hoist_enums: RenderSetting::Always(true),
+                ..RenderOptions::default()
+            })
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedEnumNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
+        ));
+    }
+
+    #[test]
+    fn class_and_enum_hoisted_alias_collision_is_rejected() {
+        let class_key = dynamic_key("Choice");
+        let enum_key = dynamic_key("Choice_2");
+        let target = RuntimeTy::Union(
+            vec![
+                RuntimeTy::Class(class_key.clone(), Vec::new(), TyAttr::default()),
+                RuntimeTy::Enum(enum_key.clone(), TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        let mut class = ctx_class_definition(
+            &class_key,
+            vec![ctx_class_field("value", ty_string(), None)],
+        );
+        class.alias = Some("SharedChoice".to_string());
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(class_key, class);
+        let mut enums = indexmap::IndexMap::new();
+        enums.insert(
+            enum_key,
+            sys_types::EnumDefinition {
+                name: "Choice_2".to_string(),
+                description: None,
+                alias: Some("SharedChoice".to_string()),
+                variants: vec![sys_types::EnumVariantDefinition {
+                    name: "Value".to_string(),
+                    description: None,
+                    alias: None,
+                }],
+            },
+        );
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+        ctx.enum_definitions = Arc::new(enums);
+
+        let content = build_output_format_content(&target, &ctx);
+        let error = content
+            .render(&RenderOptions {
+                hoist_classes: HoistClasses::All,
+                always_hoist_enums: RenderSetting::Always(true),
+                ..RenderOptions::default()
+            })
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedEnumNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
+        ));
+    }
+
+    #[test]
+    fn type_alias_and_hoisted_class_alias_collision_is_rejected() {
+        let mut class = mk_class("Choice", vec![("value", ty_string())]);
+        class.alias = Some("SharedChoice".to_string());
+        let mut content = OutputFormatContent::new(ty_class("Choice")).with_class(class);
+        content
+            .recursive_type_aliases
+            .insert("SharedChoice".to_string(), ty_string());
+
+        let error = content
+            .render(&RenderOptions {
+                hoist_classes: HoistClasses::All,
+                ..RenderOptions::default()
+            })
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedClassNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "SharedChoice" && first == "SharedChoice" && second == "Choice"
+        ));
+    }
+
+    #[test]
+    fn same_name_type_aliases_with_different_targets_are_rejected() {
+        let first = dynamic_key("SharedAlias");
+        let second = dynamic_key("SharedAlias");
+        let target = RuntimeTy::Union(
+            vec![
+                RuntimeTy::TypeAlias(first.clone(), TyAttr::default()),
+                RuntimeTy::TypeAlias(second.clone(), TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        let mut aliases = indexmap::IndexMap::new();
+        aliases.insert(first, ty_string());
+        aliases.insert(second, ty_int());
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.type_alias_definitions = Arc::new(aliases);
+
+        let error = build_output_format_content(&target, &ctx)
+            .render(&RenderOptions::default())
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedTypeAliasNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "SharedAlias" && first == "string" && second == "int"
+        ));
+    }
+
+    #[test]
+    fn same_name_type_aliases_with_equivalent_targets_fold_once() {
+        let first = dynamic_key("SharedAlias");
+        let second = dynamic_key("SharedAlias");
+        let target = RuntimeTy::Union(
+            vec![
+                RuntimeTy::TypeAlias(first.clone(), TyAttr::default()),
+                RuntimeTy::TypeAlias(second.clone(), TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        let mut aliases = indexmap::IndexMap::new();
+        aliases.insert(first, ty_string());
+        aliases.insert(second, ty_string());
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.type_alias_definitions = Arc::new(aliases);
+
+        let content = build_output_format_content(&target, &ctx);
+        assert_eq!(content.recursive_type_aliases.len(), 1);
+        assert!(content.render(&RenderOptions::default()).is_ok());
+    }
 
     // -------------------------------------------------------------------------
     // Phase 3: json alias sentinel

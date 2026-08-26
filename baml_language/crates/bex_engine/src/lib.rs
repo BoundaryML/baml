@@ -3967,10 +3967,31 @@ impl BexEngine {
         // Finish all fallible host type narrowing before durable run
         // admission. Once `run.meta` commits, the path below is straight-line
         // into the balanced root event loop.
+        let mut runtime_named_objects = indexmap::IndexMap::new();
+        for type_value in type_values.values() {
+            type_value.ty.visit_heads(&mut |head| {
+                if let Ok(name) = head.to_overlay_name() {
+                    runtime_named_objects
+                        .entry(name.to_string())
+                        .or_insert_with(|| head.ptr());
+                }
+            });
+        }
+        let dynamic_classes = indexmap::IndexMap::new();
+        let dynamic_enums = indexmap::IndexMap::new();
         let type_args = type_args
             .into_iter()
             .map(|(name, ty)| {
-                let anchored = crate::conversion::anchor_wire_ty(&thread.vm, &ty)?;
+                let anchored = self.anchor_wire_ty_with_runtime(
+                    &thread.vm,
+                    thread.proof(),
+                    &ty,
+                    crate::conversion::InboundRuntimeOverlay::new(
+                        &dynamic_classes,
+                        &dynamic_enums,
+                        Some(&runtime_named_objects),
+                    ),
+                )?;
                 match bex_vm_types::RealizedTy::try_from(&anchored) {
                     Ok(realized) => Ok((name, realized)),
                     Err(e) => Err(EngineError::VmInternalError(
@@ -6922,129 +6943,238 @@ impl BexEngine {
         }
     }
 
+    fn runtime_type_mount(
+        vm: &BexVm,
+        alias: &str,
+        export_name: &str,
+        ptr: bex_vm_types::HeapPtr,
+    ) -> Result<bex_vm_types::RuntimeTypeMount, EngineError> {
+        let Object::Type(value) = vm.get_object(ptr) else {
+            return Err(EngineError::TypeMismatch {
+                message: format!("with_types entry `{export_name}` is not a type"),
+            });
+        };
+        // In the consumer compile world, a runtime declaration is spelled
+        // `alias.<item name>`: the mount surface is the only channel that
+        // names it there, whatever its home world called it. Compiled
+        // declarations from another dependency keep their qualified names;
+        // declarations local to this mounted package relocate to its alias.
+        let wire_head =
+            |head: &bex_vm_types::TypeHead| -> Result<baml_type::TypeName, EngineError> {
+                if !head.is_resolved() {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!("mounted type `{export_name}` carries an unresolved head"),
+                    });
+                }
+                if vm.heap.is_compile_time_ptr(head.ptr()) {
+                    let name = head
+                        .declared_name()
+                        .ok_or_else(|| EngineError::TypeMismatch {
+                            message: format!(
+                                "mounted type `{export_name}` names an unnameable compiled head"
+                            ),
+                        })?;
+                    return Ok(if name.is_local() {
+                        baml_type::QualifiedTypeName::new(
+                            baml_type::Name::new(alias),
+                            name.namespace().clone(),
+                            name.name().clone(),
+                        )
+                    } else {
+                        name
+                    });
+                }
+                let item = match vm.get_object(head.ptr()) {
+                    Object::Class(class) => class.name.item_name().clone(),
+                    Object::Enum(enm) => enm.name.item_name().clone(),
+                    Object::Interface(iface) => iface.name.name().clone(),
+                    Object::TypeAlias(alias_def) => alias_def.name.name().clone(),
+                    _ => {
+                        return Err(EngineError::TypeMismatch {
+                            message: format!(
+                                "mounted type `{export_name}` reaches a non-declaration head"
+                            ),
+                        });
+                    }
+                };
+                Ok(baml_type::QualifiedTypeName::new(
+                    baml_type::Name::new(alias),
+                    Vec::new(),
+                    item,
+                ))
+            };
+        let wire_ty = |ty: &bex_vm_types::RuntimeTy| -> Result<baml_type::Ty, EngineError> {
+            let mapped: baml_type::RuntimeTy = ty.try_map_heads(&mut |head| wire_head(head))?;
+            Ok(baml_type::Ty::from(&mapped))
+        };
+        // The mount describes the runtime declarations the type reaches;
+        // the walk over its heads is what finds them.
+        let (class_ptrs, enum_ptrs) = bex_vm::reachable::runtime_nominals(vm, &value.ty);
+        let classes = class_ptrs
+            .iter()
+            .map(|ptr| {
+                let Object::Class(class) = vm.get_object(*ptr) else {
+                    unreachable!("runtime_nominals returned a non-class in the class list")
+                };
+                Ok(bex_vm_types::RuntimeMountedClass {
+                    name: class.name.item_name().clone(),
+                    tag: class.type_tag,
+                    fields: class
+                        .fields
+                        .iter()
+                        .map(|field| {
+                            Ok((
+                                baml_type::Name::new(&field.name),
+                                wire_ty(&field.field_type)?,
+                                bex_vm_types::RuntimeMountedFieldAttrs {
+                                    alias: field.alias.clone(),
+                                    description: field.description.clone(),
+                                },
+                            ))
+                        })
+                        .collect::<Result<Vec<_>, EngineError>>()?,
+                })
+            })
+            .collect::<Result<Vec<_>, EngineError>>()?;
+        let enums = enum_ptrs
+            .iter()
+            .map(|ptr| {
+                let Object::Enum(enm) = vm.get_object(*ptr) else {
+                    unreachable!("runtime_nominals returned a non-enum in the enum list")
+                };
+                Ok(bex_vm_types::RuntimeMountedEnum {
+                    name: enm.name.item_name().clone(),
+                    tag: enm.type_tag,
+                    variants: enm
+                        .variants
+                        .iter()
+                        .map(|variant| baml_type::Name::new(&variant.name))
+                        .collect(),
+                })
+            })
+            .collect::<Result<Vec<_>, EngineError>>()?;
+        // Dynamic witness rules are heap objects rather than TypeValue sidecars,
+        // but the consumer compiler cannot see this VM's dispatch table. Project
+        // the root class's rules into the mount artifact so type checking in the
+        // consumer world sees the same conformances as runtime dispatch.
+        let witnesses = match &value.ty {
+            bex_vm_types::RealizedTy::Class(head, _, _) if head.is_resolved() => {
+                let Object::Class(class) = vm.get_object(head.ptr()) else {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "mounted type `{export_name}` has a non-class declaration head"
+                        ),
+                    });
+                };
+                vm.dynamic_dispatch
+                    .rules_for_class(head.ptr())
+                    .into_iter()
+                    .map(|rule_ptr| {
+                        let Object::ImplRule(rule) = vm.get_object(rule_ptr) else {
+                            return Err(EngineError::TypeMismatch {
+                                message: format!(
+                                    "mounted type `{export_name}` has an invalid witness rule"
+                                ),
+                            });
+                        };
+                        let Object::Interface(interface) = vm.get_object(rule.interface_head)
+                        else {
+                            return Err(EngineError::TypeMismatch {
+                                message: format!(
+                                    "mounted type `{export_name}` has an invalid witness interface"
+                                ),
+                            });
+                        };
+                        if interface.fields.len() != rule.field_links.len() {
+                            return Err(EngineError::TypeMismatch {
+                                message: format!(
+                                    "mounted type `{export_name}` has an incomplete witness field map"
+                                ),
+                            });
+                        }
+                        let interface_head = bex_vm_types::TypeHead::new(
+                            rule.interface_head,
+                            interface.type_tag,
+                        );
+                        let interface_name = wire_head(&interface_head)?;
+                        let interface_args = rule
+                            .interface_args
+                            .iter()
+                            .map(|ty| {
+                                let ty = bex_vm_types::RealizedTy::try_from(ty).map_err(|error| {
+                                    EngineError::TypeMismatch {
+                                        message: format!(
+                                            "mounted type `{export_name}` has an unrealized witness argument: {error}"
+                                        ),
+                                    }
+                                })?;
+                                let ty = bex_vm_types::RuntimeTy::from(ty);
+                                wire_ty(&ty)
+                            })
+                            .collect::<Result<Vec<_>, EngineError>>()?;
+                        let associated_types = rule
+                            .interface_assoc
+                            .iter()
+                            .map(|(name, ty)| {
+                                let ty = bex_vm_types::RealizedTy::try_from(ty).map_err(|error| {
+                                    EngineError::TypeMismatch {
+                                        message: format!(
+                                            "mounted type `{export_name}` has an unrealized witness associated type: {error}"
+                                        ),
+                                    }
+                                })?;
+                                let ty = bex_vm_types::RuntimeTy::from(ty);
+                                Ok((name.clone(), wire_ty(&ty)?))
+                            })
+                            .collect::<Result<Vec<_>, EngineError>>()?;
+                        let field_links = interface
+                            .fields
+                            .iter()
+                            .zip(rule.field_links.iter())
+                            .map(|(field, slot)| {
+                                let class_field = class.fields.get(*slot as usize).ok_or_else(|| {
+                                    EngineError::TypeMismatch {
+                                        message: format!(
+                                            "mounted type `{export_name}` has an out-of-range witness field link"
+                                        ),
+                                    }
+                                })?;
+                                Ok((
+                                    field.name.clone(),
+                                    baml_type::Name::new(&class_field.name),
+                                ))
+                            })
+                            .collect::<Result<Vec<_>, EngineError>>()?;
+                        Ok((
+                            baml_type::Interface::new(
+                                interface_name,
+                                interface_args,
+                                associated_types,
+                            ),
+                            field_links,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, EngineError>>()?
+            }
+            _ => Vec::new(),
+        };
+        let ty = value
+            .ty
+            .try_map_heads(&mut |head| wire_head(head))
+            .map_err(|e: EngineError| e)?;
+        Ok(bex_vm_types::RuntimeTypeMount {
+            export_name: baml_type::Name::new(export_name),
+            ty,
+            classes,
+            enums,
+            witnesses,
+        })
+    }
+
     fn runtime_compile_request(
         vm: &BexVm,
         args: &[Value],
     ) -> Result<bex_vm_types::RuntimeCompileRequest, EngineError> {
-        fn type_mount(
-            vm: &BexVm,
-            alias: &str,
-            export_name: &str,
-            ptr: bex_vm_types::HeapPtr,
-        ) -> Result<bex_vm_types::RuntimeTypeMount, EngineError> {
-            let Object::Type(value) = vm.get_object(ptr) else {
-                return Err(EngineError::TypeMismatch {
-                    message: format!("with_types entry `{export_name}` is not a type"),
-                });
-            };
-            // In the consumer compile world, a runtime declaration is spelled
-            // `alias.<item name>`: the mount surface is the only channel that
-            // names it there, whatever its home world called it. Compiled
-            // declarations keep their own qualified names — those mean the
-            // same thing in every compile world.
-            let wire_head =
-                |head: &bex_vm_types::TypeHead| -> Result<baml_type::TypeName, EngineError> {
-                    if !head.is_resolved() {
-                        return Err(EngineError::TypeMismatch {
-                            message: format!(
-                                "mounted type `{export_name}` carries an unresolved head"
-                            ),
-                        });
-                    }
-                    if vm.heap.is_compile_time_ptr(head.ptr()) {
-                        return head
-                            .declared_name()
-                            .ok_or_else(|| EngineError::TypeMismatch {
-                                message: format!(
-                                    "mounted type `{export_name}` names an unnameable compiled head"
-                                ),
-                            });
-                    }
-                    let item = match vm.get_object(head.ptr()) {
-                        Object::Class(class) => class.name.item_name().clone(),
-                        Object::Enum(enm) => enm.name.item_name().clone(),
-                        Object::Interface(iface) => iface.name.name().clone(),
-                        Object::TypeAlias(alias_def) => alias_def.name.name().clone(),
-                        _ => {
-                            return Err(EngineError::TypeMismatch {
-                                message: format!(
-                                    "mounted type `{export_name}` reaches a non-declaration head"
-                                ),
-                            });
-                        }
-                    };
-                    Ok(baml_type::QualifiedTypeName::new(
-                        baml_type::Name::new(alias),
-                        Vec::new(),
-                        item,
-                    ))
-                };
-            let wire_ty = |ty: &bex_vm_types::RuntimeTy| -> Result<baml_type::Ty, EngineError> {
-                let mapped: baml_type::RuntimeTy = ty.try_map_heads(&mut |head| wire_head(head))?;
-                Ok(baml_type::Ty::from(&mapped))
-            };
-            // The mount describes the runtime declarations the type reaches;
-            // the walk over its heads is what finds them.
-            let (class_ptrs, enum_ptrs) = bex_vm::reachable::runtime_nominals(vm, &value.ty);
-            let classes = class_ptrs
-                .iter()
-                .map(|ptr| {
-                    let Object::Class(class) = vm.get_object(*ptr) else {
-                        unreachable!("runtime_nominals returned a non-class in the class list")
-                    };
-                    Ok(bex_vm_types::RuntimeMountedClass {
-                        name: class.name.item_name().clone(),
-                        tag: class.type_tag,
-                        fields: class
-                            .fields
-                            .iter()
-                            .map(|field| {
-                                Ok((
-                                    baml_type::Name::new(&field.name),
-                                    wire_ty(&field.field_type)?,
-                                    bex_vm_types::RuntimeMountedFieldAttrs {
-                                        alias: field.alias.clone(),
-                                        description: field.description.clone(),
-                                    },
-                                ))
-                            })
-                            .collect::<Result<Vec<_>, EngineError>>()?,
-                    })
-                })
-                .collect::<Result<Vec<_>, EngineError>>()?;
-            let enums = enum_ptrs
-                .iter()
-                .map(|ptr| {
-                    let Object::Enum(enm) = vm.get_object(*ptr) else {
-                        unreachable!("runtime_nominals returned a non-enum in the enum list")
-                    };
-                    Ok(bex_vm_types::RuntimeMountedEnum {
-                        name: enm.name.item_name().clone(),
-                        tag: enm.type_tag,
-                        variants: enm
-                            .variants
-                            .iter()
-                            .map(|variant| baml_type::Name::new(&variant.name))
-                            .collect(),
-                    })
-                })
-                .collect::<Result<Vec<_>, EngineError>>()?;
-            // Witnesses live on the impl rules now, not beside the type; a
-            // mount no longer restates them.
-            let witnesses = Vec::new();
-            let ty = value
-                .ty
-                .try_map_heads(&mut |head| wire_head(head))
-                .map_err(|e: EngineError| e)?;
-            Ok(bex_vm_types::RuntimeTypeMount {
-                export_name: baml_type::Name::new(export_name),
-                ty,
-                classes,
-                enums,
-                witnesses,
-            })
-        }
-
         fn map_entries(
             vm: &BexVm,
             value: Value,
@@ -7121,7 +7251,7 @@ impl BexEngine {
             let types = package
                 .mounted_types
                 .iter()
-                .map(|(name, ptr)| type_mount(vm, alias.as_str(), name, *ptr))
+                .map(|(name, ptr)| Self::runtime_type_mount(vm, alias.as_str(), name, *ptr))
                 .collect::<Result<Vec<_>, _>>()?;
             packages.insert(
                 alias.to_string(),
@@ -7241,11 +7371,17 @@ impl BexEngine {
                     "Session dependency `{alias}` has an invalid runtime payload"
                 )));
             };
+            let types = package
+                .mounted_types
+                .iter()
+                .map(|(name, ptr)| Self::runtime_type_mount(vm, alias.as_str(), name, *ptr))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| invalid(error.to_string()))?;
             packages.insert(
                 alias,
                 bex_vm_types::RuntimePackageMount {
                     interface_blob: package.interface_blob.clone(),
-                    types: Vec::new(),
+                    types,
                 },
             );
         }

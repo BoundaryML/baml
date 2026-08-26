@@ -6816,6 +6816,10 @@ impl<'db> LoweringContext<'db> {
             if let Some((tn, class_type_args)) =
                 self.class_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty)
             {
+                debug_assert!(
+                    self.is_interface_type_name(&tn) || self.class_fields.contains_key(&tn),
+                    "MIR field-access lowering has no class_fields row for `{tn}`"
+                );
                 if let Some(fields) = self.class_fields.get(&tn) {
                     if let Some(&idx) = fields.get(seg.as_str()) {
                         // Substitute the receiver's class type-args into the
@@ -11095,6 +11099,10 @@ impl<'db> LoweringContext<'db> {
 
         // Look up field index from class_fields
         let field_idx = if let RuntimeTy::Class(tn, _, _) = &unwrapped_ty {
+            debug_assert!(
+                self.is_interface_type_name(tn) || self.class_fields.contains_key(tn),
+                "MIR field-access lowering has no class_fields row for `{tn}`"
+            );
             self.class_fields
                 .get(tn)
                 .and_then(|fields| fields.get(&field_str))
@@ -13100,6 +13108,10 @@ impl LoweringContext<'_> {
                     if let Some((tn, class_type_args)) =
                         self.class_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty)
                     {
+                        debug_assert!(
+                            self.is_interface_type_name(&tn) || self.class_fields.contains_key(&tn),
+                            "MIR field-access lowering has no class_fields row for `{tn}`"
+                        );
                         if let Some(fields) = self.class_fields.get(&tn) {
                             if let Some(&idx) = fields.get(seg.as_str()) {
                                 let next_ty = self.class_field_ty(&tn, seg, &class_type_args);
@@ -13235,6 +13247,10 @@ impl LoweringContext<'_> {
                 // Unwrap Optional — we've already null-checked, so use the inner type.
                 let unwrapped_ty = base_ty.strip_null();
                 if let RuntimeTy::Class(tn, _, _) = &unwrapped_ty {
+                    debug_assert!(
+                        self.is_interface_type_name(tn) || self.class_fields.contains_key(tn),
+                        "MIR field-access lowering has no class_fields row for `{tn}`"
+                    );
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
