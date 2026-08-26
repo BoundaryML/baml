@@ -19,6 +19,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_artifact = { workspace = true }
 baml_base = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_compiler2_emit = { workspace = true }
@@ -72,6 +73,7 @@ ignore = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "rt", "rt-multi-thread", "time" ] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+baml_artifact = { workspace = true, features = [ "test-support" ] }
 sys_native = { workspace = true }
 walkdir = { workspace = true }
 

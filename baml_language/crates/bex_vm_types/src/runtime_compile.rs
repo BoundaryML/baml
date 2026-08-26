@@ -57,6 +57,7 @@ pub struct RuntimeTypeMount {
 
 #[derive(Clone, Debug, Default)]
 pub struct RuntimePackageMount {
+    /// Versioned `PackageInterface` artifact checked before the mount is used.
     pub interface_blob: Vec<u8>,
     pub types: Vec<RuntimeTypeMount>,
 }
@@ -246,7 +247,8 @@ pub struct RuntimeCompileDiagnostic {
 pub struct RuntimeCompileArtifact {
     /// Relocatable user units. Builtin/dependency definitions remain imports.
     pub units: Vec<CompilationUnit>,
-    /// Enriched check surface for mounting this package in a later compile.
+    /// Versioned artifact containing the enriched check surface for mounting
+    /// this package in a later compile.
     pub interface_blob: Vec<u8>,
     /// Non-error diagnostics produced by the successful compilation.
     pub diagnostics: Vec<RuntimeCompileDiagnostic>,

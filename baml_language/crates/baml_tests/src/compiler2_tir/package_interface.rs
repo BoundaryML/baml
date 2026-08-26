@@ -853,7 +853,8 @@ fn dep_interface_rows_resolve_only_for_mounted_packages() {
             )]),
         )]
         .into(),
-    );
+    )
+    .unwrap();
     let res_ctx = package_resolution_context(&db, PackageId::new(&db, Name::new("user")));
 
     let path = |parts: &[&str]| -> Vec<Name> { parts.iter().map(|p| Name::new(*p)).collect() };
@@ -1047,11 +1048,11 @@ pub(super) mod mounted {
     use super::super::support::make_db;
 
     /// Compile `files` as the source of a library package named `app` and
-    /// capture its `borsh(PackageInterface)` blob. The files ride under
-    /// `<builtin>/app/…` so `file_package` assigns them the `app` package —
-    /// the blob's qualified names therefore read `app.…`, matching the mount
-    /// alias exactly (re-aliasing a blob under a different name is out of
-    /// scope for this PR).
+    /// capture its `ArtifactKind::PackageInterface` envelope. The files ride
+    /// under `<builtin>/app/…` so `file_package` assigns them the `app`
+    /// package — the blob's qualified names therefore read `app.…`, matching
+    /// the mount alias exactly (re-aliasing a blob under a different name is
+    /// out of scope for this PR).
     pub(crate) fn app_blob(files: &[(&str, &str)]) -> Vec<u8> {
         let mut db = make_db();
         db.dependency("app");
@@ -1066,14 +1067,16 @@ pub(super) mod mounted {
             iface.types.values().any(|ns| !ns.is_empty()),
             "the library fixture must export at least one type"
         );
-        borsh::to_vec(iface).expect("serialize app interface")
+        baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, iface)
+            .expect("serialize app interface")
     }
 
     /// A fresh consumer database with `blob` mounted as `app` and NO `app`
     /// source anywhere.
     fn consumer_db(blob: Vec<u8>, files: &[(&str, &str)]) -> ProjectDatabase {
         let mut db = make_db();
-        db.set_mounted_packages([("app".to_string(), blob)].into());
+        db.set_mounted_packages([("app".to_string(), blob)].into())
+            .unwrap();
         for (path, src) in files {
             db.file(path, src);
         }

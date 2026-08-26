@@ -4,7 +4,6 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use baml_base::Name as BaseName;
 use baml_codegen_types::{Class, Name, Symbol, SymbolPool};
-use borsh::BorshDeserialize as _;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) enum CallableVariant {
@@ -54,8 +53,9 @@ pub(crate) struct RuntimeCallableIdentities {
 
 impl RuntimeCallableIdentities {
     pub(crate) fn from_program_bytes(bytes: &[u8]) -> Result<Self, String> {
-        let program = bex_vm_types::Program::try_from_slice(bytes)
-            .map_err(|error| format!("failed to decode compiled BAML program: {error}"))?;
+        let program: bex_vm_types::Program =
+            baml_artifact::decode(baml_artifact::ArtifactKind::Program, bytes)
+                .map_err(|error| format!("failed to decode compiled BAML program: {error}"))?;
         Ok(Self {
             function_names: program.function_indices.into_keys().collect(),
         })

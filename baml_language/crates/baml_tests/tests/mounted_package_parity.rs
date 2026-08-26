@@ -170,9 +170,13 @@ fn library_artifacts() -> LibraryArtifacts {
     let db = library_db();
     assert_no_diagnostic_errors(&db);
     let interface = package_interface(&db, PackageId::new(&db, Name::new("app"))).clone();
-    let blob = borsh::to_vec(&interface).expect("serialize app package interface");
-    let round_trip =
-        borsh::from_slice::<PackageInterface>(&blob).expect("deserialize app package interface");
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
+        .expect("serialize app package interface");
+    let round_trip = baml_artifact::decode::<PackageInterface>(
+        baml_artifact::ArtifactKind::PackageInterface,
+        &blob,
+    )
+    .expect("deserialize app package interface");
     assert_eq!(
         interface, round_trip,
         "interface blob must round-trip exactly"
@@ -194,7 +198,8 @@ fn source_db(user: &str) -> ProjectDatabase {
 fn blob_db(user: &str, blob: Vec<u8>) -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new(ROOT));
-    db.set_mounted_packages([("app".to_string(), blob)].into());
+    db.set_mounted_packages([("app".to_string(), blob)].into())
+        .unwrap();
     db.file("main.baml", user);
     db
 }

@@ -961,13 +961,27 @@ pub fn package_interface<'db>(
     }
 
     // A mounted package has no source rows. Its serialized interface is the
-    // authoritative compiler surface; stale/corrupt blobs fail closed by
-    // falling through to the empty honest derivation.
+    // authoritative compiler surface, so a stale/corrupt blob must never fall
+    // through to an empty interface. ProjectDatabase validates ordinary mounts
+    // before installation; the panic is a last-resort invariant failure for
+    // custom Db implementations that bypass that boundary.
     if is_external_package(db, &pkg_name)
         && let Some(mounted) = db.mounted_packages()
         && let Some(bytes) = mounted.by_package(db).get(pkg_name.as_str())
-        && let Ok(mut interface) = borsh::from_slice::<PackageInterface>(bytes)
     {
+        let mut interface = if baml_compiler2_hir::package::is_precompiled_package(db, &pkg_name) {
+            borsh::from_slice::<PackageInterface>(bytes).unwrap_or_else(|error| {
+                panic!("compiler-built package `{pkg_name}` has an invalid interface: {error}")
+            })
+        } else {
+            baml_artifact::decode::<PackageInterface>(
+                baml_artifact::ArtifactKind::PackageInterface,
+                bytes,
+            )
+            .unwrap_or_else(|error| {
+                panic!("mounted package `{pkg_name}` has an invalid interface artifact: {error}")
+            })
+        };
         if baml_compiler2_hir::package::is_precompiled_package(db, &pkg_name) {
             mark_precompiled_callables_linkable(&mut interface);
         }
