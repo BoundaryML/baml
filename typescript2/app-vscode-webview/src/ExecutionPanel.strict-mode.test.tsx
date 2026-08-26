@@ -2,7 +2,6 @@
 import {
   type ControlFlowGraph,
   ExecutionPanel,
-  type ProjectUpdate,
   type Run,
   type RuntimePort,
   type WorkerInMessage,
