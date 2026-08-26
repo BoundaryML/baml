@@ -1834,6 +1834,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::RuntimeTypeMustBeNamed { .. } => {
             runtime_type::runtime_type_must_be_named().id
         }
+        TirTypeError::RuntimeTypeHasNoScope => runtime_type::runtime_type_has_no_scope().id,
         TirTypeError::MountedPackageCallUnsupported { path } => {
             runtime_type::mounted_package_call_unsupported(path.as_str()).id
         }
