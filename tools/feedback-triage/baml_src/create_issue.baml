@@ -3,7 +3,6 @@
 // Repros are checked with baml.reflect.Package.compile, in-process. No
 // subprocess, no VM shellout; the LLM-authored command is never executed.
 
-// The locally-authenticated Claude Code CLI — no API key needed.
 client Triage = claude_code.ClaudeCodeClient.new(model = "sonnet", timeout_ms = 600000);
 
 // ==================== Pipeline ====================
@@ -363,12 +362,15 @@ function format_files(files: map<string, string>) -> string {
 // build time) to the input tokens a repro must contain — subcommand, flags,
 // constructs, option names — and ours must contain >= 70% of them.
 //
-// The dataset (eval/, gitignored) is built by the gitignored generator:
-//   baml run -e 'build_eval_dataset(60, 3)'
-// The metric is the testset below:
-//   baml test -i "repro_match::*"
+// The dataset lives in Supabase (tables triage_issues / triage_feedback,
+// see eval/supabase/schema.sql) so it travels with the project instead of a
+// checkout. SUPABASE_URL + SUPABASE_KEY (anon, read-only) select it; the
+// testset does not exist without them.
+//   baml test -i "root::repro_match::*"
 
-class IssueTruth {
+/// A row of triage_issues.
+class IssueRow {
+    number: int,
     title: string,
     /// The maintainer's own repro from the GitHub issue (verbatim).
     reference_repro: string,
@@ -376,18 +378,74 @@ class IssueTruth {
     keywords: string[],
 }
 
-class GroundTruth {
-    issues: map<string, IssueTruth>,
-    feedback_to_issue: map<string, int>,
-    duplicate_groups: string[][],
+/// A row of triage_feedback — a Feedback with its author flattened.
+class FeedbackRow {
+    id: string,
+    issue_number: int,
+    title: string,
+    body: string,
+    source: FeedbackSource,
+    author_email: string?,
+    author_github: string?,
+    author_device_id: string?,
+    toolchain: string,
+    comments: Comment[],
 }
 
-function load_ground_truth(dir: string = "eval") -> GroundTruth {
-    baml.json.from_string<GroundTruth>(baml.fs.read(dir + "/ground_truth.json"))
+function to_feedback(r: FeedbackRow) -> Feedback {
+    Feedback {
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        source: r.source,
+        author: Author { email: r.author_email, github: r.author_github, device_id: r.author_device_id },
+        toolchain: r.toolchain,
+        comments: r.comments,
+        issue_ids: [],
+    }
 }
 
-function load_feedback(dir: string, fid: string) -> Feedback {
-    baml.json.from_string<Feedback>(baml.fs.read(dir + "/feedback/" + fid + ".json"))
+function supabase_configured() -> bool {
+    baml.env.get("SUPABASE_URL") != null && baml.env.get("SUPABASE_KEY") != null
+}
+
+/// GET a PostgREST query and return the JSON body.
+function supabase_get(query: string) -> string {
+    let url = (baml.env.get("SUPABASE_URL") ?? "") + "/rest/v1/" + query;
+    let key = baml.env.get("SUPABASE_KEY") ?? "";
+    let res = baml.http.send(
+        baml.http.Request {
+            method: "GET",
+            url: url,
+            headers: { "apikey": key, "Authorization": "Bearer " + key, "Accept": "application/json" },
+            body: "",
+        },
+        timeout = baml.time.Duration.from_seconds(30),
+    ) catch (e) {
+        _ => baml.sys.panic("supabase: request failed for " + url),
+    };
+    if (res.status_code != 200) {
+        baml.sys.panic("supabase: " + res.status_code.to_string() + " for " + url);
+    };
+    res.text() catch (_) {
+        _ => baml.sys.panic("supabase: unreadable body for " + url),
+    }
+}
+
+function load_issues() -> map<string, IssueRow> {
+    let out: map<string, IssueRow> = {};
+    for (
+        let row in baml.json.from_string<IssueRow[]>(
+            supabase_get("triage_issues?select=*&order=number"),
+        )
+    ) {
+        out.set(row.number.to_string(), row);
+    }
+    out
+}
+
+function load_feedback() -> FeedbackRow[] {
+    baml.json.from_string<FeedbackRow[]>(supabase_get("triage_feedback?select=*&order=id"))
 }
 
 /// Fraction of `keywords` present in `ours` (case-insensitive; "baml-cli"
@@ -405,23 +463,22 @@ function keyword_recall(ours: string, keywords: string[]) -> float {
 }
 
 // One test per feedback record; the testset passes when >= 25% of repros
-// match their issue's reference. Live LLM calls — only exists when the
-// dataset is present locally.
+// match their issue's reference. Live LLM calls.
 testset "repro_match" with testing.PassRate(0.25) {
-    if (baml.fs.exists("eval/ground_truth.json")) {
-        let gt = load_ground_truth();
-        for (let fid in gt.feedback_to_issue.keys()) {
-            test (fid) {
+    if (supabase_configured()) {
+        let issues = load_issues();
+        for (let row in load_feedback()) {
+            test (row.id) {
                 // `let`s in the loop body reach these closures with the LAST
                 // iteration's value (only the loop variable is captured per
-                // iteration), so everything is derived from `fid` in here.
-                let key = (gt.feedback_to_issue.get(fid) ?? 0).to_string();
-                let truth = gt.issues.get(key) ?? baml.sys.panic("no ground truth for issue " + key);
-                let repro = create_repro(load_feedback("eval", fid));
-                let recall = keyword_recall(format_repro(repro), truth.keywords);
+                // iteration), so everything is derived from `row` in here.
+                let key = row.issue_number.to_string();
+                let issue = issues.get(key) ?? baml.sys.panic("no triage_issues row for #" + key);
+                let repro = create_repro(to_feedback(row));
+                let recall = keyword_recall(format_repro(repro), issue.keywords);
                 log.info(
                     {
-                        "feedback": fid,
+                        "feedback": row.id,
                         "issue": key,
                         "keyword_recall": recall,
                         "command": repro.command,
