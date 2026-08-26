@@ -49,12 +49,55 @@ pub struct Package {
     /// Exact runtime type values attached by `Package.with_types`.
     #[borsh(skip)]
     pub mounted_types: IndexMap<String, HeapPtr>,
-    /// Present only for a package produced by `reflect.Package.compile`.
+    /// Runtime-only state, discriminated so a package cannot be both an
+    /// ordinary runtime package and a Session (or a Session without an image).
     #[borsh(skip)]
-    pub runtime: Option<Box<RuntimePackage>>,
-    /// Present only for the package-shaped payload owned by a Session.
-    #[borsh(skip)]
-    pub session: Option<Box<SessionState>>,
+    pub kind: PackageKind,
+}
+
+/// The three legal runtime shapes of a [`Package`].
+#[derive(Clone, Debug, Default)]
+pub enum PackageKind {
+    /// A package loaded from the serialized program image.
+    #[default]
+    Static,
+    /// A package produced by `reflect.Package.compile`.
+    Runtime(Box<RuntimePackage>),
+    /// The package-shaped runtime image and persistent state owned by a Session.
+    Session {
+        runtime: Box<RuntimePackage>,
+        state: Box<SessionState>,
+    },
+}
+
+impl Package {
+    pub fn runtime(&self) -> Option<&RuntimePackage> {
+        match &self.kind {
+            PackageKind::Static => None,
+            PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => Some(runtime),
+        }
+    }
+
+    pub fn runtime_mut(&mut self) -> Option<&mut RuntimePackage> {
+        match &mut self.kind {
+            PackageKind::Static => None,
+            PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => Some(runtime),
+        }
+    }
+
+    pub fn session(&self) -> Option<&SessionState> {
+        match &self.kind {
+            PackageKind::Session { state, .. } => Some(state),
+            PackageKind::Static | PackageKind::Runtime(_) => None,
+        }
+    }
+
+    pub fn session_mut(&mut self) -> Option<&mut SessionState> {
+        match &mut self.kind {
+            PackageKind::Session { state, .. } => Some(state),
+            PackageKind::Static | PackageKind::Runtime(_) => None,
+        }
+    }
 }
 
 /// Compiler-free persistent state of one `reflect.Session`.
@@ -103,7 +146,8 @@ pub struct RuntimePackage {
     pub dependency_names: IndexMap<String, HeapPtr>,
     /// The candidate `$init`, if one exists.
     pub init: Option<HeapPtr>,
-    /// False while `$init` may write package globals; true after commit.
+    /// False while `$init` may write package globals; true after commit. A
+    /// Session keeps this false because its globals remain mutable across evals.
     pub initialized: bool,
 }
 

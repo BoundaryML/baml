@@ -249,10 +249,10 @@ function reflect.AnyClass.type(self: reflect.AnyClass) -> reflect.Type {
     return
 }
 
-function reflect.Package._compile(files: map<string, string>, packages: map<string, reflect.Package>) -> reflect.Package {
+function reflect.Package._compile(files: map<string, string>, packages: map<string, reflect.Package>) -> reflect.CompileArtifact {
 }
 
-function reflect.Package._finish(artifact: reflect.Package, packages: map<string, reflect.Package>) -> reflect.Package {
+function reflect.Package._finish(artifact: reflect.CompileArtifact, packages: map<string, reflect.Package>) -> reflect.Package {
 }
 
 function reflect.Package.classes(self: reflect.Package) -> map<string, reflect.class.Type> {
@@ -306,10 +306,10 @@ function reflect.Package.tests(self: reflect.Package) -> map<string, () -> null 
 function reflect.Package.with_types(self: reflect.Package, types: map<string, reflect.Type | reflect.TypeView>) -> reflect.Package {
 }
 
-function reflect.Session._compile(self: reflect.Session, source: string) -> reflect.Package {
+function reflect.Session._compile(self: reflect.Session, source: string) -> reflect.CompileArtifact {
 }
 
-function reflect.Session._finish(self: reflect.Session, artifact: reflect.Package) -> #0 {
+function reflect.Session._finish(self: reflect.Session, artifact: reflect.CompileArtifact) -> #0 {
 }
 
 function reflect.Session._new(packages: map<string, reflect.Package>) -> reflect.Session {

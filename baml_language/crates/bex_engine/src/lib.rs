@@ -2876,7 +2876,7 @@ impl BexEngine {
             let Object::Package(package) = vm.get_object(owner) else {
                 continue;
             };
-            let Some(runtime) = package.runtime.as_ref() else {
+            let Some(runtime) = package.runtime() else {
                 continue;
             };
             pending.extend(runtime.dependencies.iter().copied());
@@ -7194,8 +7194,7 @@ impl BexEngine {
                 ));
             };
             package
-                .session
-                .as_ref()
+                .session()
                 .map(|state| state.busy.clone())
                 .ok_or_else(|| invalid("Session has an invalid runtime payload".to_string()))?
         };
@@ -7219,17 +7218,15 @@ impl BexEngine {
                     "Session has an invalid runtime payload".to_string(),
                 ));
             };
-            let state = package
-                .session
-                .as_mut()
-                .ok_or_else(|| invalid("Session has an invalid runtime payload".to_string()))?;
+            let bex_vm_types::types::PackageKind::Session { runtime, state } = &mut package.kind
+            else {
+                return Err(invalid(
+                    "Session has an invalid runtime payload".to_string(),
+                ));
+            };
             let sequence = state.submission_counter;
             state.submission_counter = state.submission_counter.saturating_add(1);
-            let dependencies = package
-                .runtime
-                .as_ref()
-                .map(|runtime| runtime.dependency_names.clone())
-                .unwrap_or_default();
+            let dependencies = runtime.dependency_names.clone();
             (
                 state.history.clone(),
                 state.visible.clone(),
@@ -7312,10 +7309,10 @@ impl BexEngine {
             };
             match compiler.compile(request) {
                 Ok(artifact) => Ok(BexExternalValue::Instance {
-                    class_name: "reflect.Package".to_string(),
+                    class_name: "reflect.CompileArtifact".to_string(),
                     type_args: Vec::new(),
                     fields: indexmap::indexmap! {
-                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(artifact)),
+                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(Mutex::new(Some(artifact)))),
                     },
                 }),
                 Err(diagnostics) => {

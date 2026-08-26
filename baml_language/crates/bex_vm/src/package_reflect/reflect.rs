@@ -20,13 +20,14 @@ use baml_compiler_diagnostics::{
 use baml_type::{TyAttr, normalize, normalize::TypeContext};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    AtomicValueSlot, HeapPtr, Interface, Object, RealizedTy, RuntimeCompileArtifact,
-    RuntimeSessionCompileArtifact, SessionEvalLease, Ty,
+    ArtifactKind, AtomicValueSlot, HeapPtr, Interface, Object, RealizedTy, RuntimeCompileArtifact,
+    RuntimeCompileArtifactSlot, RuntimeSessionCompileArtifact, RuntimeSessionStepKind,
+    SessionEvalLease, Ty,
     link::link_dynamic,
     relink::{IndexOperand, visit_object_operands},
     types::{
-        LocalName, MethodImpl, Package, RuntimeImplRule, RuntimePackage, SessionState, TypeValue,
-        Value,
+        LocalName, MethodImpl, Package, PackageKind, RuntimeImplRule, RuntimePackage, SessionState,
+        TypeValue, Value,
     },
 };
 use indexmap::IndexMap;
@@ -92,9 +93,6 @@ fn package_ptr(vm: &BexVm, value: Value) -> Result<HeapPtr, VmRustFnError> {
         }
         .into());
     };
-    if matches!(vm.get_object(wrapper_ptr), Object::Package(_)) {
-        return Ok(wrapper_ptr);
-    }
     let Object::Instance(wrapper) = vm.get_object(wrapper_ptr) else {
         return Err(VmBamlError::InvalidArgument {
             message: "reflect.Package receiver is not an instance".to_string(),
@@ -114,6 +112,39 @@ fn package_ptr(vm: &BexVm, value: Value) -> Result<HeapPtr, VmRustFnError> {
         .into());
     }
     Ok(ptr)
+}
+
+fn take_compile_artifact(
+    vm: &BexVm,
+    value: Value,
+    invalid_message: &str,
+    consumed_message: &str,
+) -> Result<RuntimeCompileArtifact, VmRustFnError> {
+    let Some(inner) = value
+        .as_object_ptr()
+        .and_then(|pointer| match vm.get_object(pointer) {
+            Object::Instance(instance) => Some(instance.load_field(0)),
+            _ => None,
+        })
+    else {
+        return Err(VmBamlError::InvalidArgument {
+            message: invalid_message.to_string(),
+        }
+        .into());
+    };
+    let slot = vm
+        .as_rust_data::<RuntimeCompileArtifactSlot>(&inner)
+        .map_err(|_| VmBamlError::InvalidArgument {
+            message: invalid_message.to_string(),
+        })?;
+    let mut slot = slot.lock().map_err(|_| VmBamlError::InvalidArgument {
+        message: format!("{invalid_message}: artifact state is unavailable"),
+    })?;
+    slot.take().ok_or_else(|| {
+        VmRustFnError::from(VmBamlError::InvalidArgument {
+            message: consumed_message.to_string(),
+        })
+    })
 }
 
 fn local_name(path: &str) -> Option<LocalName> {
@@ -152,12 +183,7 @@ fn stored_package_type(package: &Package, name: &LocalName) -> Option<HeapPtr> {
                 .get(name)
                 .or_else(|| package.enums.get(name))
                 .or_else(|| package.interfaces.get(name))?;
-            package
-                .runtime
-                .as_ref()?
-                .type_values
-                .get(declaration)
-                .copied()
+            package.runtime()?.type_values.get(declaration).copied()
         })
 }
 
@@ -394,7 +420,7 @@ fn package_function_value(vm: &mut BexVm, package_ptr: HeapPtr, name: &LocalName
         .collect::<Vec<_>>()
         .join(".");
     let (slot, runtime_package) = match vm.get_object(package_ptr) {
-        Object::Package(package) => match package.runtime.as_ref() {
+        Object::Package(package) => match package.runtime() {
             Some(runtime) => {
                 let slot = runtime
                     .global_names
@@ -563,8 +589,7 @@ impl Continuation for FinishPackage {
             unreachable!("finish continuation retained a Package")
         };
         package
-            .runtime
-            .as_mut()
+            .runtime_mut()
             .expect("runtime package has an image")
             .initialized = true;
         NativeCallResult::Done(Value::object(self.wrapper))
@@ -690,23 +715,21 @@ impl BamlClassPackage for PackageReflectImpl {
         artifact: &Value,
         packages: &IndexMap<bex_str::BexStr, Value>,
     ) -> NativeCallResult {
-        let Some(artifact_inner) =
-            artifact
-                .as_object_ptr()
-                .and_then(|ptr| match vm.get_object(ptr) {
-                    Object::Instance(instance) => Some(instance.load_field(0)),
-                    _ => None,
-                })
-        else {
-            return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                message: "reflect.Package._finish received an invalid artifact".to_string(),
-            })
-            .into();
-        };
-        let artifact = match vm.as_rust_data::<RuntimeCompileArtifact>(&artifact_inner) {
-            Ok(artifact) => artifact.clone(),
+        let artifact = match take_compile_artifact(
+            vm,
+            *artifact,
+            "reflect.Package._finish received an invalid artifact",
+            "Package compile artifact has already been consumed",
+        ) {
+            Ok(artifact) => artifact,
             Err(error) => return error.into(),
         };
+        if !matches!(&artifact.kind, ArtifactKind::Package) {
+            return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                message: "reflect.Package._finish received a Session.eval artifact".to_string(),
+            })
+            .into();
+        }
         let plan = match link_dynamic(&artifact.units) {
             Ok(plan) => plan,
             Err(error) => {
@@ -755,7 +778,7 @@ impl BamlClassPackage for PackageReflectImpl {
             interface_blob: artifact.interface_blob,
             test_init: None,
             mounted_types: IndexMap::new(),
-            runtime: Some(Box::new(RuntimePackage {
+            kind: PackageKind::Runtime(Box::new(RuntimePackage {
                 objects: Box::new([]),
                 object_names: IndexMap::new(),
                 globals: Box::new([]),
@@ -767,7 +790,6 @@ impl BamlClassPackage for PackageReflectImpl {
                 init: None,
                 initialized: false,
             })),
-            session: None,
         };
         let package_ptr = vm.alloc(Object::Package(Box::new(package)));
 
@@ -886,7 +908,7 @@ impl BamlClassPackage for PackageReflectImpl {
                         else {
                             return None;
                         };
-                        if let Some(runtime) = package.runtime.as_ref() {
+                        if let Some(runtime) = package.runtime() {
                             let index = runtime
                                 .global_names
                                 .get(&format!("user.{local}"))
@@ -1010,7 +1032,7 @@ impl BamlClassPackage for PackageReflectImpl {
         package.impl_rules = impl_rules;
         package.functions = functions;
         package.test_init = test_init;
-        let runtime = package.runtime.as_mut().expect("runtime package image");
+        let runtime = package.runtime_mut().expect("runtime package image");
         runtime.objects = objects.into_boxed_slice();
         runtime.globals = globals.into_boxed_slice();
         runtime.global_names = global_names;
@@ -1038,7 +1060,7 @@ impl BamlClassPackage for PackageReflectImpl {
             let Object::Package(package) = vm.get_object_mut(package_ptr) else {
                 unreachable!()
             };
-            package.runtime.as_mut().expect("runtime image").initialized = true;
+            package.runtime_mut().expect("runtime image").initialized = true;
             NativeCallResult::Done(wrapper)
         }
     }
@@ -1330,8 +1352,7 @@ impl BamlClassPackage for PackageReflectImpl {
         };
         let diagnostics = match vm.get_object(ptr) {
             Object::Package(package) => package
-                .runtime
-                .as_ref()
+                .runtime()
                 .map(|runtime| runtime.diagnostics.clone())
                 .unwrap_or_default(),
             _ => Vec::new(),
@@ -1574,8 +1595,7 @@ fn session_external_object(
 ) -> Option<HeapPtr> {
     if let Object::Package(package) = vm.get_object(session)
         && let Some(pointer) = package
-            .runtime
-            .as_ref()
+            .runtime()
             .and_then(|runtime| runtime.object_names.get(name))
     {
         return Some(*pointer);
@@ -1593,7 +1613,7 @@ fn session_external_global(
     name: &str,
 ) -> Option<Value> {
     if let Object::Package(package) = vm.get_object(session)
-        && let Some(runtime) = package.runtime.as_ref()
+        && let Some(runtime) = package.runtime()
         && let Some(index) = runtime.global_names.get(name)
     {
         return runtime.load_global(*index);
@@ -1607,7 +1627,7 @@ fn session_external_global(
             let Object::Package(package) = vm.get_object(dependency) else {
                 return None;
             };
-            if let Some(runtime) = package.runtime.as_ref() {
+            if let Some(runtime) = package.runtime() {
                 let index = runtime
                     .global_names
                     .get(&format!("user.{local}"))
@@ -1667,23 +1687,27 @@ impl Continuation for SessionExecution {
             let Object::Package(package) = vm.get_object_mut(self.package) else {
                 unreachable!("Session continuation retained its package")
             };
-            let runtime = package.runtime.as_mut().expect("Session runtime image");
+            let PackageKind::Session { runtime, state } = &mut package.kind else {
+                unreachable!("Session continuation retained a Session package")
+            };
             runtime.globals[action.target].store(value);
 
             if let Some(step_index) = action.step {
                 let step = &self.metadata.steps[step_index];
-                let state = package.session.as_mut().expect("Session state");
-                if let Some(source) = &step.replay_source {
+                if let RuntimeSessionStepKind::Binding {
+                    name,
+                    symbol,
+                    replay_source,
+                } = &step.kind
+                {
                     state
                         .history
                         .entry(self.metadata.submission_name.clone())
                         .or_default()
-                        .push_str(source);
-                }
-                if let Some((name, symbol)) = &step.binding {
+                        .push_str(replay_source);
                     state.visible.insert(name.clone(), symbol.clone());
                 }
-                if step.returns_value {
+                if self.metadata.result_step == Some(step_index) {
                     self.result = value;
                 }
             }
@@ -1735,7 +1759,7 @@ fn graft_session_submission(
         let Object::Package(package) = vm.get_object(package_ptr) else {
             unreachable!("Session payload is a Package")
         };
-        let runtime = package.runtime.as_ref().expect("Session runtime image");
+        let runtime = package.runtime().expect("Session runtime image");
         (
             runtime.dependency_names.clone(),
             runtime.global_names.clone(),
@@ -1988,7 +2012,7 @@ fn graft_session_submission(
     // A session's earlier evals published their declarations under fully
     // qualified names; a later eval's type positions name them the same way.
     if let Object::Package(package) = vm.get_object(package_ptr)
-        && let Some(runtime) = package.runtime.as_ref()
+        && let Some(runtime) = package.runtime()
     {
         named_surfaces.extend(
             runtime
@@ -2103,7 +2127,9 @@ fn graft_session_submission(
             .extend(rules);
     }
     package.interface_blob.clone_from(&artifact.interface_blob);
-    let state = package.session.as_mut().expect("Session state");
+    let PackageKind::Session { runtime, state } = &mut package.kind else {
+        unreachable!("Session graft target changed package kind")
+    };
     if !metadata.declaration_source.trim().is_empty() {
         state.history.insert(
             metadata.submission_name.clone(),
@@ -2111,7 +2137,6 @@ fn graft_session_submission(
         );
     }
     state.visible.extend(metadata.declarations.clone());
-    let runtime = package.runtime.as_mut().expect("Session runtime image");
     let mut globals = runtime.globals.to_vec();
     globals.extend(appended.into_iter().map(AtomicValueSlot::new));
     runtime.globals = globals.into_boxed_slice();
@@ -2166,25 +2191,27 @@ impl BamlClassSession for PackageReflectImpl {
             interface_blob: Vec::new(),
             test_init: None,
             mounted_types: IndexMap::new(),
-            runtime: Some(Box::new(RuntimePackage {
-                objects: Box::new([]),
-                object_names: IndexMap::new(),
-                globals: Box::new([]),
-                global_names: IndexMap::new(),
-                type_values: IndexMap::new(),
-                diagnostics: Vec::new(),
-                dependencies: dependencies.values().copied().collect(),
-                dependency_names: dependencies,
-                init: None,
-                // Session cells intentionally stay mutable between evals.
-                initialized: false,
-            })),
-            session: Some(Box::new(SessionState {
-                history: IndexMap::new(),
-                visible: IndexMap::new(),
-                busy: Arc::new(AtomicBool::new(false)),
-                submission_counter: 0,
-            })),
+            kind: PackageKind::Session {
+                runtime: Box::new(RuntimePackage {
+                    objects: Box::new([]),
+                    object_names: IndexMap::new(),
+                    globals: Box::new([]),
+                    global_names: IndexMap::new(),
+                    type_values: IndexMap::new(),
+                    diagnostics: Vec::new(),
+                    dependencies: dependencies.values().copied().collect(),
+                    dependency_names: dependencies,
+                    init: None,
+                    // Session cells intentionally stay mutable between evals.
+                    initialized: false,
+                }),
+                state: Box::new(SessionState {
+                    history: IndexMap::new(),
+                    visible: IndexMap::new(),
+                    busy: Arc::new(AtomicBool::new(false)),
+                    submission_counter: 0,
+                }),
+            },
         };
         let package = vm.alloc(Object::Package(Box::new(package)));
         Ok(copy::Session {
@@ -2198,34 +2225,24 @@ impl BamlClassSession for PackageReflectImpl {
             Ok(package) => package,
             Err(error) => return error.into(),
         };
-        let Some(artifact_inner) =
-            artifact
-                .as_object_ptr()
-                .and_then(|pointer| match vm.get_object(pointer) {
-                    Object::Instance(instance) => Some(instance.load_field(0)),
-                    _ => None,
-                })
-        else {
-            return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                message: "Session._finish received an invalid artifact".to_string(),
-            })
-            .into();
-        };
-        let mut artifact = match vm.as_rust_data::<RuntimeCompileArtifact>(&artifact_inner) {
-            Ok(artifact) => artifact.clone(),
+        let mut artifact = match take_compile_artifact(
+            vm,
+            *artifact,
+            "Session._finish received an invalid artifact",
+            "Session artifact has already been consumed",
+        ) {
+            Ok(artifact) => artifact,
             Err(error) => return error.into(),
         };
-        let Some(metadata) = artifact.session.clone() else {
-            return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                message: "Session._finish received a Package.compile artifact".to_string(),
-            })
-            .into();
-        };
-        let Some(lease) = artifact.session_lease.take() else {
-            return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                message: "Session artifact has already been consumed".to_string(),
-            })
-            .into();
+        let kind = std::mem::replace(&mut artifact.kind, ArtifactKind::Package);
+        let (metadata, lease) = match kind {
+            ArtifactKind::Session { meta, lease } => (meta, lease),
+            ArtifactKind::Package => {
+                return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
+                    message: "Session._finish received a Package.compile artifact".to_string(),
+                })
+                .into();
+            }
         };
         let actions = match graft_session_submission(vm, package, &artifact, &metadata) {
             Ok(actions) => actions,
@@ -2255,8 +2272,7 @@ impl BamlClassSession for PackageReflectImpl {
         };
         let diagnostics = match vm.get_object(package) {
             Object::Package(package) => package
-                .runtime
-                .as_ref()
+                .runtime()
                 .map(|runtime| runtime.diagnostics.clone())
                 .unwrap_or_default(),
             _ => Vec::new(),

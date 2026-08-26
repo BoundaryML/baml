@@ -590,8 +590,8 @@ fn reflect.Package.compile(files: map<string, string>, packages: map<string, ref
     let _1: map<string, string> // files // param
     let _2: map<string, reflect.Package> // packages // param
     let _3: bool
-    let _4: reflect.Package // artifact
-    let _5: reflect.Package
+    let _4: reflect.CompileArtifact // artifact
+    let _5: reflect.CompileArtifact
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -675,10 +675,10 @@ fn reflect.Session.eval(self: reflect.Session, source: string) -> T {
     let _0: T // _0 // return
     let _1: reflect.Session // self // param
     let _2: string // source // param
-    let _3: reflect.Package // artifact
+    let _3: reflect.CompileArtifact // artifact
     let _4: reflect.Type
     let _5: unknown // _
-    let _6: reflect.Package
+    let _6: reflect.CompileArtifact
     let _7: reflect.Type
     let _8: reflect.errors.EvaluationError
 

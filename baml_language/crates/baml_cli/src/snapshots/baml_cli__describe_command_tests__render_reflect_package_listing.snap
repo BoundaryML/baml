@@ -13,10 +13,11 @@ interface        reflect.AnyFunction              <builtin>/reflect/reflect.baml
 interface        reflect.AnyClass                 <builtin>/reflect/reflect.baml:73
 class            reflect.Signature                <builtin>/reflect/reflect.baml:162
 class            reflect.InvalidArgumentError     <builtin>/reflect/reflect.baml:184
-class            reflect.Package                  <builtin>/reflect/reflect.baml:191
-class            reflect.Session                  <builtin>/reflect/reflect.baml:281
-function         reflect.signature                <builtin>/reflect/reflect.baml:323
-function         reflect.call_any                 <builtin>/reflect/reflect.baml:339
+class            reflect.CompileArtifact          <builtin>/reflect/reflect.baml:191
+class            reflect.Package                  <builtin>/reflect/reflect.baml:196
+class            reflect.Session                  <builtin>/reflect/reflect.baml:286
+function         reflect.signature                <builtin>/reflect/reflect.baml:328
+function         reflect.call_any                 <builtin>/reflect/reflect.baml:344
 class            reflect.Type                     <builtin>/reflect/type.baml:8
 class            reflect.array.Type               <builtin>/reflect/ns_array/array.baml:2
 class            reflect.class.Field              <builtin>/reflect/ns_class/class.baml:1

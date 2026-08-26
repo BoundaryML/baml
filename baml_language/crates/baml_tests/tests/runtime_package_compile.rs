@@ -132,6 +132,24 @@ class Broken { value MissingType }
 }
 "####;
 
+#[tokio::test]
+async fn package_finish_refuses_session_compile_artifact() {
+    let output = baml_test!(
+        r####"
+function main() -> bool throws unknown {
+  let session = reflect.Session.new()
+  let artifact = session._compile<int>(`1`)
+  let rejected = false
+  let _ = reflect.Package._finish(artifact, {}) catch (_) {
+    _ => { rejected = true },
+  }
+  rejected && session.eval<int>(`2`) == 2
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
 const SCENARIO_6_SOURCE: &str = r####"
 class AgentState {
   goal string
