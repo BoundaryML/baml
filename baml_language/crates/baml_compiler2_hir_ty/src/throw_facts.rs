@@ -374,60 +374,49 @@ fn throw_fact_from_expr<'db>(
     body: &ExprBody,
 ) -> Ty {
     let fact = match &body.exprs[expr_id] {
-        Expr::Literal(Literal::String(_)) => Ty::String {
+        Expr::Literal(Literal::String(_)) => Some(Ty::String {
             attr: TyAttr::default(),
-        },
-        Expr::Literal(Literal::Int(_)) => Ty::Int {
+        }),
+        Expr::Literal(Literal::Int(_)) => Some(Ty::Int {
             attr: TyAttr::default(),
-        },
-        Expr::Literal(Literal::Float(_)) => Ty::Float {
+        }),
+        Expr::Literal(Literal::Float(_)) => Some(Ty::Float {
             attr: TyAttr::default(),
-        },
-        Expr::Literal(Literal::Bool(_)) => Ty::Bool {
+        }),
+        Expr::Literal(Literal::Bool(_)) => Some(Ty::Bool {
             attr: TyAttr::default(),
-        },
-        Expr::Null => Ty::Null {
+        }),
+        Expr::Null => Some(Ty::Null {
             attr: TyAttr::default(),
-        },
+        }),
         Expr::Path(segments) if !segments.is_empty() => {
             // A thrown bare identifier naming a parameter (`throw s`) carries
             // that parameter's declared type — it is a value, not a type path.
             if let [name] = segments.as_slice()
                 && let Some((_, ty)) = param_types.iter().find(|(param, _)| param == name)
             {
-                ty.clone()
+                Some(ty.clone())
             } else {
                 resolve_path_to_ty(db, pkg_items, ns_context, segments)
             }
         }
         Expr::MemberAccess { .. } => expr_to_path(expr_id, body)
-            .map(|segments| resolve_path_to_ty(db, pkg_items, ns_context, &segments))
-            .unwrap_or(Ty::Unknown {
-                attr: TyAttr::default(),
-            }),
+            .and_then(|segments| resolve_path_to_ty(db, pkg_items, ns_context, &segments)),
         Expr::Object {
             type_name: path, ..
         } => resolve_path_to_ty(db, pkg_items, ns_context, path.segments()),
-        _ => Ty::Unknown {
-            attr: TyAttr::default(),
-        },
+        _ => None,
     };
     // This lightweight, cycle-avoiding pass can't statically name every thrown
-    // value: a call/binary/array/conditional result, or an unresolved path,
-    // falls through to `Ty::Unknown`. `Unknown` is an inference-only sentinel
-    // with no runtime representation — emitting it as a throws fact would trip
-    // the `RuntimeTy` conversion boundary at codegen. Over-approximate to the
-    // top type `unknown` (`BuiltinUnknown`) instead: it is sound (a `catch` must
-    // handle the top type) and has a runtime representation. Full inference
-    // types these precisely for diagnostics; this set only feeds runtime
-    // throws metadata, where a conservative bound is correct.
-    if matches!(fact, Ty::Unknown { .. }) {
-        Ty::BuiltinUnknown {
-            attr: TyAttr::default(),
-        }
-    } else {
-        fact
-    }
+    // value: a call/binary/array/conditional result, or an unresolved path, has
+    // no name to give. Over-approximate to the top type `unknown`
+    // (`Unknown`): it is sound (a `catch` must handle the top type) and
+    // has a runtime representation. Full inference types these precisely for
+    // diagnostics; this set only feeds runtime throws metadata, where a
+    // conservative bound is correct.
+    fact.unwrap_or(Ty::Unknown {
+        attr: TyAttr::default(),
+    })
 }
 
 /// Rewrite a call target name from `self.X` to `ClassName.X`.
@@ -442,13 +431,14 @@ fn rewrite_self_target(target: &Name, class_name: &Name) -> Name {
 }
 
 /// Resolve a path like `["Status", "HttpError"]` or `["ns", "Status", "HttpError"]`
-/// or `["Status"]` to a `Ty`.
+/// or `["Status"]` to a `Ty`, or `None` when the path names nothing this pass
+/// can see (or names a non-type definition).
 fn resolve_path_to_ty<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
     segments: &[Name],
-) -> Ty {
+) -> Option<Ty> {
     // Try treating the last segment as an enum variant and the prefix as
     // the enum path (e.g. `Status.HttpError` or `root.Status.Failed`).
     if segments.len() >= 2 {
@@ -460,30 +450,35 @@ fn resolve_path_to_ty<'db>(
             lookup_type_in_scope(db, pkg_items, ns_context, enum_ns, enum_name)
         {
             let qtn = qualify_def(db, def, enum_name);
-            return Ty::EnumVariant(qtn, variant.clone(), TyAttr::default());
+            return Some(Ty::EnumVariant(qtn, variant.clone(), TyAttr::default()));
         }
     }
 
     // Otherwise resolve the full path as a type.
     let name = segments.last().expect("segments is non-empty");
     let seg_ns = &segments[..segments.len() - 1];
-    if let Some(def) = lookup_type_in_scope(db, pkg_items, ns_context, seg_ns, name) {
-        return match def {
-            Definition::Class(_) => {
-                Ty::Class(qualify_def(db, def, name), vec![], TyAttr::default())
-            }
-            Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),
-            Definition::TypeAlias(_) => {
-                Ty::TypeAlias(qualify_def(db, def, name), TyAttr::default())
-            }
-            _ => Ty::Unknown {
-                attr: TyAttr::default(),
-            },
-        };
-    }
-
-    Ty::Unknown {
-        attr: TyAttr::default(),
+    let def = lookup_type_in_scope(db, pkg_items, ns_context, seg_ns, name)?;
+    match def {
+        Definition::Class(_) => Some(Ty::Class(
+            qualify_def(db, def, name),
+            vec![],
+            TyAttr::default(),
+        )),
+        Definition::Enum(_) => Some(Ty::Enum(qualify_def(db, def, name), TyAttr::default())),
+        Definition::TypeAlias(_) => {
+            Some(Ty::TypeAlias(qualify_def(db, def, name), TyAttr::default()))
+        }
+        // `lookup_type_in_scope` searches the type namespace, so these are
+        // unreachable for its results; either way they are not nameable as a
+        // thrown type. Spelled out rather than wildcarded so a new
+        // `Definition` variant has to be classified here.
+        Definition::Interface(_)
+        | Definition::Function(_)
+        | Definition::TemplateString(_)
+        | Definition::Client(_)
+        | Definition::Test(_)
+        | Definition::RetryPolicy(_)
+        | Definition::Let(_) => None,
     }
 }
 

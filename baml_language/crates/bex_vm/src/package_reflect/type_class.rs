@@ -940,7 +940,7 @@ fn is_non_data_render_type(ty: &bex_vm_types::RealizedTy) -> bool {
         | bex_vm_types::RealizedTy::Resource { .. }
         | bex_vm_types::RealizedTy::PromptAst { .. }
         | bex_vm_types::RealizedTy::Void { .. }
-        | bex_vm_types::RealizedTy::BuiltinUnknown { .. }
+        | bex_vm_types::RealizedTy::Unknown { .. }
         | bex_vm_types::RealizedTy::Never { .. } => true,
         bex_vm_types::RealizedTy::Int { .. }
         | bex_vm_types::RealizedTy::Bigint { .. }
@@ -1036,7 +1036,7 @@ fn first_non_data_type(
         | bex_vm_types::RealizedTy::Resource { .. }
         | bex_vm_types::RealizedTy::PromptAst { .. }
         | bex_vm_types::RealizedTy::Void { .. }
-        | bex_vm_types::RealizedTy::BuiltinUnknown { .. }
+        | bex_vm_types::RealizedTy::Unknown { .. }
         | bex_vm_types::RealizedTy::Never { .. } => None,
     }
 }

@@ -1395,13 +1395,16 @@ function main() -> string throws unknown {
     );
 }
 
-/// The check must not be stricter than ordinary code either. Ordinary BAML
-/// COMPILES `n += 1.5` on an `int` binding and fails at runtime (a hole of its
-/// own, and not this PR's to close); a Session must reach the same place
-/// rather than invent a refusal of its own. This is also the tripwire for how
-/// the value is spliced: a fresh literal loses its freshness inside
-/// parentheses, so wrapping it would make this line a compile error in
-/// Sessions and nowhere else.
+/// The check must be no stricter AND no laxer than ordinary code: `n += 1.5`
+/// on an `int` binding is refused in both, with the same diagnostic. The
+/// operator's `Output` (`int + float` is `float`) is not a subtype of the
+/// destination, so the compound assignment cannot store its result.
+///
+/// This doubles as a splice-fidelity check: the Session rewrites the submitted
+/// line before checking it, so a rewrite that mangled or dropped the value
+/// would land on a different diagnostic (or none) than the ordinary spelling.
+/// Parenthesizing the value is the shape the rewrite used to apply; it must
+/// reach the same verdict too.
 #[tokio::test]
 async fn a_session_assignment_is_no_stricter_than_ordinary_code() {
     let ordinary = r#"
@@ -1411,34 +1414,15 @@ function main() -> string throws unknown {
     `${n}`
 }
 "#;
-    assert!(
-        ordinary_compile_errors(ordinary).is_empty(),
-        "the ordinary spelling is expected to compile; if it no longer does, this pair needs a \
-         new operand rather than a new verdict",
-    );
-    // The half that makes the tripwire a tripwire: the SAME line refuses to
-    // compile once the value is parenthesized, which is what the rewrite used
-    // to do to every value it spliced.
+    let expected = "E0001: mismatched types: expected `int`, found `float`".to_string();
+    assert_eq!(ordinary_compile_errors(ordinary), vec![expected.clone()]);
     assert_eq!(
         ordinary_compile_errors(&ordinary.replace("n += 1.5", "n += (1.5)")),
-        vec!["E0001: mismatched types: expected `int`, found `float`".to_string()],
-    );
-    // Ordinary code compiles this line and dies on it. The Session reaches the
-    // same place — that is what "no stricter" means here, hole included.
-    let ordinary_run = baml_test!(ordinary);
-    assert!(
-        ordinary_run.result.is_err(),
-        "ordinary code is expected to fail at RUNTIME here, not compile-time: {:?}",
-        ordinary_run.result,
+        vec![expected.clone()],
     );
     let program = session_program(SESSION_ASSIGN_PROBE, SESSION_COMPOUND_WITH_A_WIDER_OPERAND);
     let output = baml_test!(&program);
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String(
-            "compiled, panicked at runtime".into()
-        ))
-    );
+    assert_eq!(output.result, Ok(BexExternalValue::String(expected.into())));
 }
 
 /// A user binding whose name could collide with the local the rewrite

@@ -109,7 +109,7 @@ fn function_signature_with_source_map<'db>(
         .iter()
         .map(|p| {
             let type_expr = p.type_expr.clone().unwrap_or_else(|| {
-                TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default())
+                TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default())
             });
             SignatureParam {
                 name: p.name.clone(),
@@ -294,7 +294,7 @@ fn elaborated_function_signature_with_source_map<'db>(
         .iter()
         .map(|p| {
             let type_expr = p.type_expr.clone().unwrap_or_else(|| {
-                TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default())
+                TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default())
             });
             SignatureParam {
                 name: p.name.clone(),

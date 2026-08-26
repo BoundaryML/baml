@@ -636,7 +636,7 @@ fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
         | Ty::Type { .. }
         | Ty::Resource { .. }
         | Ty::PromptAst { .. }
-        | Ty::BuiltinUnknown { .. }
+        | Ty::Unknown { .. }
         | Ty::Never { .. }
         | Ty::Void { .. }
         | Ty::Interface(..)
@@ -901,7 +901,7 @@ fn collect_ty_names(ty: &Ty, out: &mut Vec<baml_codegen_types::Name>) {
         | Ty::Type { .. }
         | Ty::Resource { .. }
         | Ty::PromptAst { .. }
-        | Ty::BuiltinUnknown { .. }
+        | Ty::Unknown { .. }
         | Ty::Never { .. }
         | Ty::Void { .. } => {}
     }
@@ -1018,7 +1018,7 @@ fn collect_alias_dependencies(
         | Ty::Type { .. }
         | Ty::Resource { .. }
         | Ty::PromptAst { .. }
-        | Ty::BuiltinUnknown { .. }
+        | Ty::Unknown { .. }
         | Ty::Never { .. }
         | Ty::Void { .. }
         | Ty::Interface(..)
@@ -1905,7 +1905,7 @@ fn walk_generic_inference_positions(
         | Ty::PromptAst { .. }
         | Ty::Void { .. }
         | Ty::TypeAlias(..)
-        | Ty::BuiltinUnknown { .. }
+        | Ty::Unknown { .. }
         | Ty::Never { .. } => {}
     }
 }

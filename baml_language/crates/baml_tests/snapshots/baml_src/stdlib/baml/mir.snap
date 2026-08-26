@@ -168,11 +168,11 @@ fn baml.Comparable.compare(_1: void, _2: void) -> void {
     }
 }
 
-fn baml.Comparable$for$int.compare(self: int, other: Self) -> int {
+fn baml.Comparable$for$int.compare(self: int, other: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // self // param
-    let _2: Self // other // param
+    let _2: int // other // param
     let _3: bool
     let _4: bool
 
@@ -206,11 +206,11 @@ fn baml.Comparable$for$int.compare(self: int, other: Self) -> int {
     }
 }
 
-fn baml.Comparable$for$bigint.compare(self: bigint, other: Self) -> int {
+fn baml.Comparable$for$bigint.compare(self: bigint, other: bigint) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: bigint // self // param
-    let _2: Self // other // param
+    let _2: bigint // other // param
     let _3: bool
     let _4: bool
 
@@ -244,11 +244,11 @@ fn baml.Comparable$for$bigint.compare(self: bigint, other: Self) -> int {
     }
 }
 
-fn baml.Comparable$for$string.compare(self: string, other: Self) -> int {
+fn baml.Comparable$for$string.compare(self: string, other: string) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: string // self // param
-    let _2: Self // other // param
+    let _2: string // other // param
     let _3: bool
     let _4: bool
 
@@ -292,9 +292,9 @@ fn baml.Sortable.sort(_1: void) -> void {
     }
 }
 
-fn baml.Sortable$for$T[].sort(self: T[]) -> Self {
+fn baml.Sortable$for$T[].sort(self: T[]) -> T[] {
     // Locals:
-    let _0: Self // _0 // return
+    let _0: T[] // _0 // return
     let _1: T[] // self // param
     let _2: bool
     let _3: reflect.Type
@@ -349,11 +349,11 @@ fn .<lambda(sort, 0)>(a: T, b: T) -> int {
 
 fn baml._compare_shim = builtin(vm)
 
-fn baml.Comparable$for$float.compare(self: float, other: Self) -> int {
+fn baml.Comparable$for$float.compare(self: float, other: float) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: float // self // param
-    let _2: Self // other // param
+    let _2: float // other // param
 
     bb0: {
         _0 = call const fn baml._float_total_cmp(copy _1, copy _2) -> [bb1];
@@ -7945,11 +7945,11 @@ fn baml.ops.Compare$for$float.le = builtin(vm)
 
 fn baml.ops.Equals$for$bool.eq = builtin(vm)
 
-fn baml.ops.Compare$for$bool.lt(self: bool, other: Self) -> bool {
+fn baml.ops.Compare$for$bool.lt(self: bool, other: bool) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: bool // self // param
-    let _2: Self // other // param
+    let _2: bool // other // param
     let _3: bool
 
     bb0: {
@@ -7967,11 +7967,11 @@ fn baml.ops.Compare$for$bool.lt(self: bool, other: Self) -> bool {
     }
 }
 
-fn baml.ops.Compare$for$bool.gt(self: bool, other: Self) -> bool {
+fn baml.ops.Compare$for$bool.gt(self: bool, other: bool) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: bool // self // param
-    let _2: Self // other // param
+    let _2: bool // other // param
 
     bb0: {
         _0 = short_circuit(&&) copy _1 -> [eval: bb1, join: bb2];
@@ -7987,11 +7987,11 @@ fn baml.ops.Compare$for$bool.gt(self: bool, other: Self) -> bool {
     }
 }
 
-fn baml.ops.Equals$for$null.eq(self: null, other: Self) -> bool {
+fn baml.ops.Equals$for$null.eq(self: null, other: null) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: null // self // param
-    let _2: Self // other // param
+    let _2: null // other // param
 
     bb0: {
         _0 = const true;
@@ -8003,11 +8003,11 @@ fn baml.ops.Equals$for$null.eq(self: null, other: Self) -> bool {
     }
 }
 
-fn baml.ops.Equals$for$null.neq(self: null, other: Self) -> bool {
+fn baml.ops.Equals$for$null.neq(self: null, other: null) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: null // self // param
-    let _2: Self // other // param
+    let _2: null // other // param
 
     bb0: {
         _0 = const false;
@@ -8031,11 +8031,11 @@ fn baml.ops.Compare$for$string.le = builtin(vm)
 
 fn baml.ops.Equals$for$uint8array.eq = builtin(vm)
 
-fn baml.ops.Equals$for$T[].eq(self: T[], other: Self) -> bool {
+fn baml.ops.Equals$for$T[].eq(self: T[], other: T[]) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: T[] // self // param
-    let _2: Self // other // param
+    let _2: T[] // other // param
 
     bb0: {
         _0 = call const fn baml.ops.equals_equals(copy _1, copy _2) -> [bb1];
@@ -8046,11 +8046,11 @@ fn baml.ops.Equals$for$T[].eq(self: T[], other: Self) -> bool {
     }
 }
 
-fn baml.ops.Equals$for$map<string, V>.eq(self: map<string, V>, other: Self) -> bool {
+fn baml.ops.Equals$for$map<string, V>.eq(self: map<string, V>, other: map<string, V>) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: map<string, V> // self // param
-    let _2: Self // other // param
+    let _2: map<string, V> // other // param
 
     bb0: {
         _0 = call const fn baml.ops.equals_equals(copy _1, copy _2) -> [bb1];
@@ -9421,9 +9421,9 @@ fn baml.time.Instant.baml.ToString.to_string(self: baml.time.Instant) -> string 
 
 fn baml.time.Instant._to_string_impl = builtin(vm)
 
-fn baml.time.Instant.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> Self {
+fn baml.time.Instant.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.Instant {
     // Locals:
-    let _0: Self // _0 // return
+    let _0: baml.time.Instant // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
     let _2: bool
     let _3: unknown // _
@@ -9885,9 +9885,9 @@ fn baml.time.PlainDate.month = builtin(vm)
 
 fn baml.time.PlainDate.day = builtin(vm)
 
-fn baml.time.PlainDate.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> Self {
+fn baml.time.PlainDate.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.PlainDate {
     // Locals:
-    let _0: Self // _0 // return
+    let _0: baml.time.PlainDate // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
     let _2: bool
     let _3: unknown // _
@@ -10361,9 +10361,9 @@ fn baml.time.PlainDateTime.second = builtin(vm)
 
 fn baml.time.PlainDateTime.millisecond = builtin(vm)
 
-fn baml.time.PlainDateTime.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> Self {
+fn baml.time.PlainDateTime.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.PlainDateTime {
     // Locals:
-    let _0: Self // _0 // return
+    let _0: baml.time.PlainDateTime // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
     let _2: bool
     let _3: unknown // _
@@ -10696,9 +10696,9 @@ fn baml.time.PlainTime.millisecond(self: baml.time.PlainTime) -> int {
     }
 }
 
-fn baml.time.PlainTime.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> Self {
+fn baml.time.PlainTime.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.PlainTime {
     // Locals:
-    let _0: Self // _0 // return
+    let _0: baml.time.PlainTime // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
     let _2: bool
     let _3: unknown // _
@@ -11801,9 +11801,9 @@ fn baml.time.ZonedDateTime.millisecond(self: baml.time.ZonedDateTime) -> int {
     }
 }
 
-fn baml.time.ZonedDateTime.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> Self {
+fn baml.time.ZonedDateTime.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.ZonedDateTime {
     // Locals:
-    let _0: Self // _0 // return
+    let _0: baml.time.ZonedDateTime // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
     let _2: bool
     let _3: unknown // _
@@ -12019,9 +12019,9 @@ fn baml.toml.Table.baml.ToJson.to_json(self: baml.toml.Table) -> int | float | s
     }
 }
 
-fn baml.toml.Table.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> Self {
+fn baml.toml.Table.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.toml.Table {
     // Locals:
-    let _0: Self // _0 // return
+    let _0: baml.toml.Table // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
 
     bb0: {

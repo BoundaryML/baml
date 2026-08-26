@@ -686,7 +686,7 @@ impl OutputFormatContent {
 
             SapTy::Function { .. }
             | SapTy::Void { .. }
-            | SapTy::BuiltinUnknown { .. }
+            | SapTy::Unknown { .. }
             | SapTy::EnumVariant(..)
             | SapTy::Future(..)
             | SapTy::TypeVar(..)

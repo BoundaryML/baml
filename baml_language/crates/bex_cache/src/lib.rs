@@ -84,7 +84,13 @@ use sha2::{Digest, Sha256};
 /// a branch — the same both-sides-of-a-merge ambiguity version 7 records. An
 /// 8 image without the opcode would decode fine, but one version must mean one
 /// format.
-pub const FORMAT_VERSION: u32 = 9;
+///
+/// Version 10: the `Ty` wire format retired the TIR-era compiler-only variants
+/// — `EvolvingList`/`EvolvingMap` (31/32) and the `Unknown` error-recovery
+/// sentinel (29). The slots are tombstoned rather than reused, so a 9 image
+/// carrying one in a persisted throw fact would now fail to decode instead of
+/// silently landing on whatever occupies the slot later.
+pub const FORMAT_VERSION: u32 = 10;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

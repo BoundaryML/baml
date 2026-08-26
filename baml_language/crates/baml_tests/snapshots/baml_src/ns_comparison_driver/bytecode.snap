@@ -129,7 +129,7 @@ function comparison_driver.CdMoney.baml.ops.Compare.lt(self: comparison_driver.C
     load_var self
     load_field .cents
     load_var other
-    load_field .0
+    load_field .cents
     cmp_int_op <
     return
 }
@@ -138,7 +138,7 @@ function comparison_driver.CdMoney.baml.ops.Equals.eq(self: comparison_driver.Cd
     load_var self
     load_field .cents
     load_var other
-    load_field .0
+    load_field .cents
     cmp_int_op ==
     return
 }
@@ -147,7 +147,7 @@ function comparison_driver.CdNestedTag.baml.ops.Equals.eq(self: comparison_drive
     load_var self
     load_field .id
     load_var other
-    load_field .0
+    load_field .id
     cmp_int_op ==
     return
 }
@@ -161,7 +161,7 @@ function comparison_driver.CdOdd.baml.ops.Compare.lt(self: comparison_driver.CdO
     load_var self
     load_field .n
     load_var other
-    load_field .0
+    load_field .n
     cmp_int_op <
     return
 }
@@ -170,7 +170,7 @@ function comparison_driver.CdOdd.baml.ops.Equals.eq(self: comparison_driver.CdOd
     load_var self
     load_field .n
     load_var other
-    load_field .0
+    load_field .n
     cmp_int_op ==
     return
 }
@@ -179,7 +179,7 @@ function comparison_driver.CdTag.baml.ops.Equals.eq(self: comparison_driver.CdTa
     load_var self
     load_field .id
     load_var other
-    load_field .0
+    load_field .id
     cmp_int_op ==
     return
 }
@@ -193,7 +193,7 @@ function comparison_driver.baml.ops.Equals$for$CdBox<T>.eq(self: comparison_driv
     load_var self
     load_field .v
     load_var other
-    load_field .0
+    load_field .v
     call baml.ops.equals_equals
     return
 }

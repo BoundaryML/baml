@@ -275,7 +275,7 @@ ty_family! {
         /// The top type - may have any concrete value.
         ///
         /// Similar to TypeScript's `unknown` - any value can be passed where
-        /// `BuiltinUnknown` is expected, but `BuiltinUnknown` cannot be used
+        /// `Unknown` is expected, but `Unknown` cannot be used
         /// where a specific type is required.
         ///
         /// Used in llm.baml for functions like:
@@ -283,7 +283,7 @@ ty_family! {
         /// function render_prompt(function_name: string, args: map<string, unknown>) -> PromptAst
         /// ```
         #[axis(abstract)]
-        BuiltinUnknown {
+        Unknown {
             attr: TyAttr,
         } = 27,
         /// The bottom type — an expression that never produces a value (`return`,
@@ -295,24 +295,18 @@ ty_family! {
 
         // --- TIR-only: present during type checking, erased at the runtime
         // boundary (`lower_to_runtime`). Carried only by `Ty` (the `tir` axis).
-        /// Error-recovery sentinel: the type is structurally unknown (e.g. an
-        /// unresolved name). Distinct from `BuiltinUnknown` (a well-formed top type).
-        #[axis(tir)]
-        Unknown {
-            attr: TyAttr,
-        } = 29,
+        // reserved: 29 was `Unknown`, the TIR-era second error-recovery
+        // sentinel. The inference engine has exactly one (`Error`); TIR's other
+        // uses of `Unknown` are an absent expectation and a fresh inference
+        // variable, neither of which is a type.
         /// Error sentinel: a hard type error was emitted for this expression.
         #[axis(tir)]
         Error {
             attr: TyAttr,
         } = 30,
-        /// Evolving list — an empty `[]` literal at a mutable binding whose element
-        /// type is refined by mutations. Frozen to `List` at the runtime boundary.
-        #[axis(tir)]
-        EvolvingList(Box<Ty<N>>, TyAttr) = 31,
-        /// Evolving map — the map analogue of [`Ty::EvolvingList`].
-        #[axis(tir)]
-        EvolvingMap(Box<Ty<N>>, Box<Ty<N>>, TyAttr) = 32,
+        // reserved: 31 and 32 were `EvolvingList`/`EvolvingMap`, the TIR-era
+        // empty-container refinement helpers. The inference engine expresses the
+        // same thing honestly as `List`/`Map` over inference variables.
         /// Inference hole — the wildcard `_` written in a type-argument or
         /// `throws`-clause position. A leaf placeholder that asks the checker to
         /// infer the type at this slot from surrounding context (the initializer
@@ -437,10 +431,10 @@ mod tests {
         assert_eq!(Ty::from(&ct), t);
 
         // Narrowing still rejects by name at a nested depth.
-        let bad: Interned = Ty::List(Box::new(Ty::Unknown { attr: a() }), a());
+        let bad: Interned = Ty::List(Box::new(Ty::Error { attr: a() }), a());
         assert_eq!(
             RuntimeTy::<u32>::try_from(&bad),
-            Err(NotRuntimeTy { variant: "Unknown" })
+            Err(NotRuntimeTy { variant: "Error" })
         );
 
         // And the wire format round-trips over the substituted head.
@@ -681,7 +675,9 @@ mod tests {
     }
 
     /// Lock the Borsh wire format. Every family member uses the explicit master
-    /// discriminants, with slot 23 reserved for the removed `WatchAccessor`.
+    /// discriminants, with slots 23, 31, and 32 reserved for removed variants.
+    /// `Infer`'s tag of 33 is what proves a removed variant leaves a gap rather
+    /// than renumbering the tail.
     #[test]
     fn borsh_uses_explicit_discriminants() {
         assert_eq!(tag::<Ty>(Ty::Int { attr: a() }), 0);
@@ -690,14 +686,6 @@ mod tests {
             tag::<Ty>(Ty::List(Box::new(Ty::Bool { attr: a() }), a())),
             13
         );
-        assert_eq!(
-            tag::<Ty>(Ty::EvolvingMap(
-                Box::new(Ty::Never { attr: a() }),
-                Box::new(Ty::Never { attr: a() }),
-                a()
-            )),
-            32
-        );
         assert_eq!(tag::<Ty>(Ty::Infer { attr: a() }), 33);
         assert_eq!(
             tag::<RuntimeTy>(RuntimeTy::TypeAlias(qtn("Alias"), a())),
@@ -705,10 +693,7 @@ mod tests {
         );
         // Filtered family members use the same master tags rather than local
         // declaration-order indices.
-        assert_eq!(
-            tag::<RealizedTy>(RealizedTy::BuiltinUnknown { attr: a() }),
-            27
-        );
+        assert_eq!(tag::<RealizedTy>(RealizedTy::Unknown { attr: a() }), 27);
         assert_eq!(
             tag::<TyTemplate>(TyTemplate::TypeAlias(qtn("Alias"), a())),
             24
@@ -729,19 +714,19 @@ mod tests {
 
     #[test]
     fn in_memory_discriminants_are_consistent_across_members() {
-        // `BuiltinUnknown` is master variant #27; `RealizedTy` drops the
+        // `Unknown` is master variant #27; `RealizedTy` drops the
         // `typevar` and `projection` variants before it, yet its tag stays 27.
-        assert_eq!(in_memory_tag::<Ty>(&Ty::BuiltinUnknown { attr: a() }), 27);
+        assert_eq!(in_memory_tag::<Ty>(&Ty::Unknown { attr: a() }), 27);
         assert_eq!(
-            in_memory_tag::<RuntimeTy>(&RuntimeTy::BuiltinUnknown { attr: a() }),
+            in_memory_tag::<RuntimeTy>(&RuntimeTy::Unknown { attr: a() }),
             27
         );
         assert_eq!(
-            in_memory_tag::<CodegenTy>(&CodegenTy::BuiltinUnknown { attr: a() }),
+            in_memory_tag::<CodegenTy>(&CodegenTy::Unknown { attr: a() }),
             27
         );
         assert_eq!(
-            in_memory_tag::<RealizedTy>(&RealizedTy::BuiltinUnknown { attr: a() }),
+            in_memory_tag::<RealizedTy>(&RealizedTy::Unknown { attr: a() }),
             27
         );
         // `Never` (#28) is shared and tag-stable across the deep members.
@@ -839,27 +824,27 @@ mod tests {
             Err(NotRealizedTy { variant: "TypeVar" })
         );
 
-        // A `tir`-only `Unknown` buried in a map value: not even a `RuntimeTy`.
+        // A `tir`-only `Error` buried in a map value: not even a `RuntimeTy`.
         let bad = Ty::Map {
             key: Box::new(Ty::String { attr: a() }),
-            value: Box::new(Ty::List(Box::new(Ty::Unknown { attr: a() }), a())),
+            value: Box::new(Ty::List(Box::new(Ty::Error { attr: a() }), a())),
             attr: a(),
         };
         assert_eq!(
             <&RuntimeTy>::try_from(&bad),
-            Err(NotRuntimeTy { variant: "Unknown" })
+            Err(NotRuntimeTy { variant: "Error" })
         );
         assert_eq!(
             <&CodegenTy>::try_from(&bad),
-            Err(NotCodegenTy { variant: "Unknown" })
+            Err(NotCodegenTy { variant: "Error" })
         );
         assert_eq!(
             <&RealizedTy>::try_from(&bad),
-            Err(NotRealizedTy { variant: "Unknown" })
+            Err(NotRealizedTy { variant: "Error" })
         );
         assert_eq!(
             RuntimeTy::try_from(bad),
-            Err(NotRuntimeTy { variant: "Unknown" })
+            Err(NotRuntimeTy { variant: "Error" })
         );
     }
 }

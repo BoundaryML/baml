@@ -166,7 +166,7 @@ fn build_interface_def(
      -> InterfaceMethodDef {
         // An untyped parameter is a syntax-level error, so it cannot reach
         // emit; the top type keeps the positional layout intact if one did.
-        let unannotated = || bex_vm_types::RuntimeTy::BuiltinUnknown {
+        let unannotated = || bex_vm_types::RuntimeTy::Unknown {
             attr: TyAttr::default(),
         };
         let void = || bex_vm_types::RuntimeTy::Void {
@@ -670,7 +670,7 @@ fn build_packages(
                     .find(|(an, _)| an == name)
                     .map(|(_, t)| t.clone())
                     .unwrap_or_else(|| {
-                        bex_vm_types::TyTemplate::from(baml_type::RealizedTy::BuiltinUnknown {
+                        bex_vm_types::TyTemplate::from(baml_type::RealizedTy::Unknown {
                             attr: TyAttr::default(),
                         })
                     });
@@ -3432,8 +3432,8 @@ fn emit_file_group(
                         // Pass `class_generic_params` as the binding context so
                         // `T`-references inside `class Container<T> { item: T }`
                         // lower to `Tir2Ty::TypeVar("T")` rather than
-                        // `Tir2Ty::Unknown`.  This is the input both to the
-                        // erased-`Ty` (TypeVar→BuiltinUnknown) used by codegen and to
+                        // `Tir2Ty::Error`.  This is the input both to the
+                        // erased-`Ty` (TypeVar→Unknown) used by codegen and to
                         // the `TyTemplate` (TypeVar→TypeArgRef(N)) used by
                         // typed runtime walking.
                         let tir_ty = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, *file)
@@ -3995,7 +3995,7 @@ fn emit_file_group(
                     attr: baml_type::TyAttr::default(),
                 },
                 param_names: vec!["registry".to_string()],
-                param_types: vec![bex_vm_types::TyTemplate::BuiltinUnknown {
+                param_types: vec![bex_vm_types::TyTemplate::Unknown {
                     attr: baml_type::TyAttr::default(),
                 }], // type not needed for chainer dispatch
                 param_has_default: vec![false],
@@ -4829,7 +4829,7 @@ struct LambdaCaptureInfo {
 }
 
 fn unknown_capture_ty() -> RuntimeTy {
-    RuntimeTy::BuiltinUnknown {
+    RuntimeTy::Unknown {
         attr: TyAttr::default(),
     }
 }

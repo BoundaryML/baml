@@ -132,7 +132,7 @@ pub enum TypeExprKind {
         attrs: Vec<RawAttribute>,
     },
     /// The `unknown` keyword type
-    BuiltinUnknown {
+    Unknown {
         attrs: Vec<RawAttribute>,
     },
     /// The `type` meta-type keyword
@@ -147,8 +147,9 @@ pub enum TypeExprKind {
     Error {
         attrs: Vec<RawAttribute>,
     },
-    /// Unknown/missing type
-    Unknown {
+    /// No type was written at this slot (an omitted annotation), as distinct
+    /// from the written `unknown` keyword above.
+    Missing {
         attrs: Vec<RawAttribute>,
     },
     /// The wildcard `_` — an inference hole. Valid only where the type at this
@@ -300,11 +301,11 @@ impl TypeExprKind {
             | Self::Union { attrs, .. }
             | Self::Literal { attrs, .. }
             | Self::Function { attrs, .. }
-            | Self::BuiltinUnknown { attrs }
+            | Self::Unknown { attrs }
             | Self::Type { attrs }
             | Self::Rust { attrs }
             | Self::Error { attrs }
-            | Self::Unknown { attrs }
+            | Self::Missing { attrs }
             | Self::Infer { attrs } => attrs,
         }
     }
@@ -331,11 +332,11 @@ impl TypeExprKind {
             | Self::Union { attrs, .. }
             | Self::Literal { attrs, .. }
             | Self::Function { attrs, .. }
-            | Self::BuiltinUnknown { attrs }
+            | Self::Unknown { attrs }
             | Self::Type { attrs }
             | Self::Rust { attrs }
             | Self::Error { attrs }
-            | Self::Unknown { attrs }
+            | Self::Missing { attrs }
             | Self::Infer { attrs } => attrs,
         }
     }
@@ -474,11 +475,11 @@ impl std::fmt::Display for TypeExprKind {
                 }
                 Ok(())
             }
-            TypeExprKind::BuiltinUnknown { .. } => write!(f, "unknown"),
+            TypeExprKind::Unknown { .. } => write!(f, "unknown"),
             TypeExprKind::Type { .. } => write!(f, "reflect.Type"),
             TypeExprKind::Rust { .. } => write!(f, "$rust_type"),
             TypeExprKind::Error { .. } => write!(f, "error"),
-            TypeExprKind::Unknown { .. } => write!(f, "?"),
+            TypeExprKind::Missing { .. } => write!(f, "?"),
             TypeExprKind::Infer { .. } => write!(f, "_"),
         }
     }

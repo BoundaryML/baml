@@ -96,11 +96,6 @@ impl TyRenderStrategy for TyDisplayContext<'_> {
             name.to_string()
         }
     }
-
-    // Hover/completion hide the streaming-only `(evolving)` annotation.
-    fn show_evolving(&self) -> bool {
-        false
-    }
 }
 
 /// Context-free strategy: full canonical paths (real package names,
@@ -120,10 +115,6 @@ impl TyRenderStrategy for PlainTyRender {
         } else {
             name.to_string()
         }
-    }
-
-    fn show_evolving(&self) -> bool {
-        false
     }
 }
 
@@ -208,10 +199,6 @@ impl TyRenderStrategy for AddressableTyRender {
             name.to_string()
         }
     }
-
-    fn show_evolving(&self) -> bool {
-        false
-    }
 }
 
 /// Strategy for [`display_owner_ty`]: [`PlainTyRender`] plus the companion
@@ -230,10 +217,6 @@ impl TyRenderStrategy for OwnerTyRender {
         } else {
             name.to_string()
         }
-    }
-
-    fn show_evolving(&self) -> bool {
-        false
     }
 }
 
@@ -332,13 +315,13 @@ pub fn display_type_ref(store: &TypeRefStore, id: TypeRefId) -> String {
                 throws
             )
         }
-        K::BuiltinUnknown => "unknown".to_string(),
+        K::Unknown => "unknown".to_string(),
         K::Never => "never".to_string(),
         K::Void => "void".to_string(),
         K::Type => "type".to_string(),
         K::Rust => "$rust_type".to_string(),
         K::Infer => "_".to_string(),
-        K::Error | K::Unknown => "unknown".to_string(),
+        K::Error | K::Missing => "unknown".to_string(),
     };
     humanize_type_string(&rendered)
 }

@@ -1,11 +1,17 @@
 // Characterization net for generic calls made in the scope of a
 // `type T = unreflect(expr)` binding.
 //
-// Such a call is deferred to a runtime gate rather than solved statically, so
-// inference finalizes its own slots to an error-recovery sentinel (a still-free
-// var erases to `Error`). MIR lowering used to hand that sentinel straight to
-// runtime lowering, which treats one as a compiler bug — so this well-typed
-// source ICEd the compiler instead of compiling at all.
+// BUG: this file pins CURRENT behavior, and the current behavior is wrong. Such
+// a call leaves its type slots unsolved, and `erase_infer` turns each into the
+// error sentinel with NO diagnostic — so the file compiles only because MIR
+// launders every `Error` to the top type, which also defeats the runtime
+// lowering guard everywhere else.
+//
+// The ruling: an unsolved inference variable owes a diagnostic whether its `_`
+// was written or implicit. These calls need type arguments they cannot get, so
+// the source below is ILLEGAL and should be rejected at compile time. When
+// unsolved variables are reported, this file becomes a diagnostic fixture
+// rather than a compiling one.
 
 function EmptyOf<T>() -> T[] {
     []

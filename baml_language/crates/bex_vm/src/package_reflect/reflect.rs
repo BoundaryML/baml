@@ -2488,7 +2488,7 @@ struct CallAnyContinuation {
 
 impl Continuation for CallAnyContinuation {
     fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        if matches!(self.expected, RealizedTy::BuiltinUnknown { .. }) {
+        if matches!(self.expected, RealizedTy::Unknown { .. }) {
             return NativeCallResult::Done(value);
         }
 
