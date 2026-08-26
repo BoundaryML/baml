@@ -14,18 +14,30 @@
 //   StdLibrary  2kai2kai2 20, antoniosarosi 17, codeshaunted 13
 //   Tooling     sxlijin 81, codeshaunted 51, 2kai2kai2 41
 //
+// PR counts miss the founders, who touch everything and own nothing by
+// that measure (hellovai: 21 tooling / 6 runtime / 6 compiler / 3 syntax
+// PRs in the window, top-3 nowhere). They are listed last on every
+// subsystem as the catch-all.
+//
 // Rerun the ranking when the team shifts; the table below is the only
 // thing that changes.
 
-/// GitHub logins of the engineers who own a subsystem, most active first.
+/// Listed last on every subsystem: takes whatever the owners cannot.
+function catch_all_shepherds() -> string[] {
+    ["hellovai"]
+}
+
+/// GitHub logins of the engineers who own a subsystem, most active first,
+/// then the catch-all.
 function shepherds_for(subsystem: Subsystem) -> string[] {
-    match (subsystem) {
+    let owners = match (subsystem) {
         Subsystem.Syntax => ["aaronvg", "codeshaunted", "2kai2kai2"],
         Subsystem.Compiler => ["codeshaunted", "antoniosarosi", "2kai2kai2"],
         Subsystem.Runtime => ["antoniosarosi", "2kai2kai2", "sxlijin"],
         Subsystem.StdLibrary => ["2kai2kai2", "antoniosarosi", "codeshaunted"],
         Subsystem.Tooling => ["sxlijin", "codeshaunted", "2kai2kai2"],
-    }
+    };
+    owners.concat(catch_all_shepherds())
 }
 
 /// The shepherd an issue in this subsystem goes to: the most active owner.
@@ -89,6 +101,21 @@ testset "organize_issue" {
             let owners = shepherds_for(s);
             assert.is_true(owners.length() >= 2);
             assert.equal(organize_issue(issue_in(s, null)).shepherd ?? "", owners.at(0) ?? "");
+        }
+    }
+
+    test "the founders back every subsystem" {
+        for (
+            let s in [
+                Subsystem.Syntax,
+                Subsystem.Compiler,
+                Subsystem.Runtime,
+                Subsystem.StdLibrary,
+                Subsystem.Tooling,
+            ]
+        ) {
+            let owners = shepherds_for(s);
+            assert.equal(owners.at(owners.length() - 1) ?? "", "hellovai");
         }
     }
 
