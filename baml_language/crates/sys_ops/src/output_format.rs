@@ -421,10 +421,14 @@ impl OutputFormatContent {
             }
             definitions_by_rendered_name.insert(rendered_name, definition_key.clone());
         }
-        for definition_key in hoisted_enums {
-            let Some(enm) = self.find_enum(definition_key) else {
+        // Validate in DECLARATION order, not hoist-render order: hoisted
+        // enums render in reverse last-reference order (legacy parity), but
+        // collision reporting must stay stable and name the declaration-order
+        // first/second pair.
+        for (definition_key, enm) in &self.enums {
+            if !hoisted_enums.contains(definition_key) {
                 continue;
-            };
+            }
             let rendered_name = rendered_name(&enm.name, enm.alias.as_ref()).to_string();
             if let Some(first) = definitions_by_rendered_name.get(&rendered_name) {
                 return Err(RenderError::RenderedEnumNameCollision {
@@ -490,12 +494,22 @@ impl OutputFormatContent {
                 // `T?` (single non-null member + null) follows the inner type's
                 // prefix — except that a nullable PRIMITIVE, unlike a bare
                 // primitive (which renders no schema at all), does render a
-                // schema (`string or null`) and therefore takes the schema
-                // prefix (legacy renderer parity).
+                // schema (`int or null`) and therefore takes the generic
+                // schema prefix (legacy renderer parity). The bare-primitive
+                // "Answer as an int" prefix would duplicate the type wording
+                // in front of the rendered schema.
                 if non_null.len() == 1 && non_null.len() < variants.len() {
-                    Self::auto_prefix(non_null[0], type_word, hoisted).or_else(|| {
-                        Some(format!("Answer in JSON using this {type_word}:\n"))
-                    })
+                    match non_null[0] {
+                        SapTy::String { .. }
+                        | SapTy::Int { .. }
+                        | SapTy::Bigint { .. }
+                        | SapTy::Float { .. }
+                        | SapTy::Bool { .. } => {
+                            Some(format!("Answer in JSON using this {type_word}:\n"))
+                        }
+                        inner => Self::auto_prefix(inner, type_word, hoisted)
+                            .or_else(|| Some(format!("Answer in JSON using this {type_word}:\n"))),
+                    }
                 } else if non_null.len() > 1 {
                     Some(format!("Answer in JSON using any of these {type_word}s:\n"))
                 } else {
@@ -757,9 +771,16 @@ impl OutputFormatContent {
             } else {
                 // Continuation lines align under the value text (legacy
                 // renderer behavior; keeps multi-line descriptions visually
-                // attached to their value). Docstrings join the description
-                // (upstream behavior) but interior newlines are preserved.
-                format!("{prefix}{value_name}: {}", docs.replace('\n', "\n  "))
+                // attached to their value). The indent is the configured
+                // prefix's width — two spaces for the default "- " (legacy
+                // parity bytes unchanged), zero when the prefix is Never.
+                // Docstrings join the description (upstream behavior) but
+                // interior newlines are preserved.
+                let indent = " ".repeat(prefix.chars().count());
+                format!(
+                    "{prefix}{value_name}: {}",
+                    docs.replace('\r', "").replace('\n', &format!("\n{indent}"))
+                )
             };
             result.push('\n');
             result.push_str(&line);
@@ -1787,7 +1808,12 @@ mod tests {
             attr: TyAttr::default(),
         }));
         let rendered = content.render(&RenderOptions::default()).unwrap();
-        assert_eq!(rendered, Some("string or null".to_string()));
+        // A nullable primitive renders a schema, so it takes the generic
+        // schema prefix (legacy renderer parity) — unlike a bare primitive.
+        assert_eq!(
+            rendered,
+            Some("Answer in JSON using this schema:\nstring or null".to_string())
+        );
     }
 
     #[test]
@@ -1801,7 +1827,10 @@ mod tests {
                 ..RenderOptions::default()
             })
             .unwrap();
-        assert_eq!(rendered, Some("string or omit".to_string()));
+        assert_eq!(
+            rendered,
+            Some("Answer in JSON using this schema:\nstring or omit".to_string())
+        );
     }
 
     #[test]
@@ -2040,7 +2069,12 @@ mod tests {
     }
 
     #[test]
-    fn enum_value_docs_stay_on_one_line() {
+    fn enum_value_docs_preserve_lines_with_prefix_indent() {
+        // Interior newlines are PRESERVED and continuation lines indent by
+        // the prefix width (legacy renderer parity — multi-line enum-value
+        // descriptions render aligned beneath the value text, not collapsed
+        // onto one line). Description and docstring join with a space, and
+        // CRLF normalizes to LF.
         let mut enm = mk_enum("Color", vec!["Red"]);
         enm.values[0].description = Some(" first line\n second line ".to_string());
         enm.values[0].docstring = Some("third line\r\nfourth line".to_string());
@@ -2051,7 +2085,7 @@ mod tests {
             .unwrap()
             .expect("an enum renders");
         assert!(
-            rendered.contains("- Red: first line second line third line fourth line"),
+            rendered.contains("- Red: first line\n   second line third line\n  fourth line"),
             "{rendered}"
         );
     }
@@ -2292,6 +2326,64 @@ mod tests {
                 })
                 .collect(),
         }
+    }
+
+    #[test]
+    fn nullable_primitive_targets_take_the_generic_schema_prefix() {
+        let ty_bigint = || RuntimeTy::Bigint {
+            attr: TyAttr::default(),
+        };
+        for (ty, rendered) in [
+            (ty_int(), "int"),
+            (ty_bigint(), "bigint"),
+            (ty_float(), "float"),
+            (ty_bool(), "bool"),
+            (ty_string(), "string"),
+        ] {
+            let content =
+                build_output_format_content(&ty_optional(ty), &sys_types::SysOpContext::empty());
+            let output = content
+                .render(&RenderOptions::default())
+                .unwrap()
+                .unwrap_or_default();
+            assert_eq!(
+                output,
+                format!("Answer in JSON using this schema:\n{rendered} or null"),
+            );
+        }
+    }
+
+    #[test]
+    fn enum_value_continuation_indent_follows_the_prefix() {
+        let content = || {
+            let mut enm = mk_enum("Choice", vec!["Red"]);
+            enm.values[0].description = Some("first line\nsecond line".to_string());
+            OutputFormatContent::new(ty_enum("Choice")).with_enum(enm)
+        };
+        // default "- " prefix: two-space continuation (legacy parity)
+        let out = content()
+            .render(&RenderOptions::default())
+            .unwrap()
+            .unwrap_or_default();
+        assert!(out.contains("- Red: first line\n  second line"), "{out}");
+        // wider custom prefix: continuation matches its width
+        let out = content()
+            .render(&RenderOptions {
+                enum_value_prefix: RenderSetting::Always("-- ".to_string()),
+                ..RenderOptions::default()
+            })
+            .unwrap()
+            .unwrap_or_default();
+        assert!(out.contains("-- Red: first line\n   second line"), "{out}");
+        // Never: no prefix, no continuation indent
+        let out = content()
+            .render(&RenderOptions {
+                enum_value_prefix: RenderSetting::Never,
+                ..RenderOptions::default()
+            })
+            .unwrap()
+            .unwrap_or_default();
+        assert!(out.contains("Red: first line\nsecond line"), "{out}");
     }
 
     fn mk_recursive(names: &[&str]) -> indexmap::IndexSet<String> {
