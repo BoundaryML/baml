@@ -359,7 +359,7 @@ function format_files(files: map<string, string>) -> string {
 
 // ==================== Eval ====================
 //
-// Two metrics, each a testset with testing.PassRate(0.6):
+// Two metrics, each a testset with testing.PassRate(0.8):
 //
 //   repro_match      from feedback, does create_repro produce the repro the
 //                    issue calls for? Keyword recall against the reference
@@ -529,7 +529,7 @@ function judge_issue(ours: string, reference: string) -> IssueJudgment {
     `
 }
 
-testset "repro_match" with testing.PassRate(0.6) {
+testset "repro_match" with testing.PassRate(0.8) {
     if (supabase_configured()) {
         let issues = load_issues();
         for (let row in load_feedback()) {
@@ -569,7 +569,7 @@ testset "repro_match" with testing.PassRate(0.6) {
     };
 }
 
-testset "issue_enrichment" with testing.PassRate(0.6) {
+testset "issue_enrichment" with testing.PassRate(0.8) {
     if (supabase_configured()) {
         let issues = load_issues();
         for (let row in load_feedback()) {
