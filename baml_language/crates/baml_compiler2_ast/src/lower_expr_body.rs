@@ -1293,7 +1293,7 @@ impl LoweringContext {
         let ty = binding
             .default_or_binding()
             .map(|ty| self.lower_body_type_expr(&ty))
-            .unwrap_or_else(|| TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
+            .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default()));
         Some(AssociatedTypeBinding {
             name: Name::new(name.text()),
             ty: Box::new(ty),
@@ -2103,57 +2103,23 @@ impl LoweringContext {
         let mut lhs: Option<ExprId> = None;
         let mut rhs: Option<ExprId> = None;
 
+        // Operands reach `BINARY_EXPR` as either nodes or bare tokens; the
+        // token half goes through `try_lower_bare_token` rather than a local
+        // copy of it. A copy here previously omitted `FLOAT_LITERAL`, so
+        // `n += 1.5` silently lowered its value to `Expr::Missing` — the
+        // operand vanished, the compound assignment typed as the error
+        // sentinel, and no diagnostic was reported.
         for child in node.children_with_tokens() {
-            match child {
-                rowan::NodeOrToken::Node(n) => {
-                    let expr_id = self.lower_expr(&n);
-                    if lhs.is_none() {
-                        lhs = Some(expr_id);
-                    } else {
-                        rhs = Some(expr_id);
-                    }
-                }
-                rowan::NodeOrToken::Token(token) => {
-                    let span = token.text_range();
-                    match token.kind() {
-                        SyntaxKind::BIGINT_LITERAL => {
-                            let value = self.bigint_literal_value(&token);
-                            let expr_id =
-                                self.alloc_expr(Expr::Literal(Literal::Bigint(value)), span);
-                            if lhs.is_none() {
-                                lhs = Some(expr_id);
-                            } else {
-                                rhs = Some(expr_id);
-                            }
-                        }
-                        SyntaxKind::INTEGER_LITERAL => {
-                            let value = self.int_literal_value(&token);
-                            let expr_id = self.alloc_expr(Expr::Literal(Literal::Int(value)), span);
-                            if lhs.is_none() {
-                                lhs = Some(expr_id);
-                            } else {
-                                rhs = Some(expr_id);
-                            }
-                        }
-                        k if is_ident_token(k) => {
-                            let text = token.text();
-                            let expr_id = match text {
-                                "true" => self.alloc_expr(Expr::Literal(Literal::Bool(true)), span),
-                                "false" => {
-                                    self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)
-                                }
-                                "null" => self.alloc_expr(Expr::Null, span),
-                                _ => self.alloc_expr(Expr::Path(vec![Name::new(text)]), span),
-                            };
-                            if lhs.is_none() {
-                                lhs = Some(expr_id);
-                            } else {
-                                rhs = Some(expr_id);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
+            let Some(expr_id) = (match child {
+                rowan::NodeOrToken::Node(n) => Some(self.lower_expr(&n)),
+                rowan::NodeOrToken::Token(token) => self.try_lower_bare_token(&token),
+            }) else {
+                continue;
+            };
+            if lhs.is_none() {
+                lhs = Some(expr_id);
+            } else {
+                rhs = Some(expr_id);
             }
         }
 
@@ -3684,7 +3650,7 @@ impl LoweringContext {
             })
             .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| self.lower_body_type_expr(&te))
-            .unwrap_or_else(|| TypeExprKind::Unknown { attrs: Vec::new() }.at(node.span_range()));
+            .unwrap_or_else(|| TypeExprKind::Missing { attrs: Vec::new() }.at(node.span_range()));
 
         let id = self.alloc_expr(Expr::Upcast { base, target }, node.span_range());
         if self.needs_chain_wrap.remove(&base) {
@@ -3698,8 +3664,8 @@ impl LoweringContext {
     /// `lower_type_expr`'s qualified projection reads, since the two
     /// spellings share a parse.
     ///
-    /// A missing half stays `TypeExprKind::Unknown` rather than collapsing
-    /// the node to `Missing`: the parser only builds this node when it saw
+    /// A missing half stays `TypeExprKind::Missing` rather than collapsing
+    /// the whole node to `Expr::Missing`: the parser only builds this node when it saw
     /// the full token shape, so a hole here means a malformed type inside
     /// the parens, which the type lowerer reports precisely.
     fn lower_qualified_path_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -3708,9 +3674,9 @@ impl LoweringContext {
             .children()
             .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| self.lower_body_type_expr(&te));
-        let unknown = || TypeExprKind::Unknown { attrs: Vec::new() }.at(span);
-        let qself = types.next().unwrap_or_else(unknown);
-        let interface = types.next().unwrap_or_else(unknown);
+        let missing = || TypeExprKind::Missing { attrs: Vec::new() }.at(span);
+        let qself = types.next().unwrap_or_else(missing);
+        let interface = types.next().unwrap_or_else(missing);
 
         // The member is the WORD after the last `.` — the projection's own
         // separator, which the parser guarantees is the final one.
@@ -4487,7 +4453,7 @@ impl LoweringContext {
         // let __tt_values: unknown[] = [];
         stmts.push(self.tt_let_typed_empty_list(
             &values,
-            TypeExprKind::BuiltinUnknown { attrs: Vec::new() }.at(span),
+            TypeExprKind::Unknown { attrs: Vec::new() }.at(span),
             span,
         ));
         // let __tt_cur = "";

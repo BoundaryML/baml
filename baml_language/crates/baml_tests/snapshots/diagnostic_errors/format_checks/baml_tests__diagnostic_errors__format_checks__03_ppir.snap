@@ -435,6 +435,9 @@ function user.greet() -> string  [expr] {
 function user.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool>  [expr] {
   {  } map { "result": 1 }
 }
+function user.$init_test_config_decls(registry: testing.TestCollector) -> ?  [expr] {
+  { registry.register_test_at("root", "BasicTest", () -> void { {  } TestTarget() }, null); registry.register_test_at("root", "TriviaTest", () -> void { {  } TestTarget() }, null); registry.register_test_at("root", <missing>, () -> void { {  } TestTarget() }, null) } null
+}
 function user.TestTarget(client: ai.Client? = null, on_event: (ai.events.Event) -> void? = null) -> string  [llm] {
   ai.Agent.new(client = client, on_event = on_event).run(TestTarget$spec()).value
 }

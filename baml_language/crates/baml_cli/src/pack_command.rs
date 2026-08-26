@@ -271,13 +271,8 @@ impl PackArgs {
             // cache seam — always a cold compile, same as `baml run --file`.
             let (db, needs_format_hint) = self.load_standalone(file)?;
             check_diagnostics(&db, "cannot pack: compilation errors found", reporter)?;
-            let program = baml_compiler2_emit::generate_project_bytecode(
-                &db,
-                &baml_compiler2_emit::CompileOptions {
-                    emit_test_cases: false,
-                },
-            )
-            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+            let program = baml_compiler2_emit::generate_project_bytecode(&db)
+                .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
             return Ok((db, program, needs_format_hint));
         }
         self.load_and_compile_project(reporter)
@@ -286,8 +281,8 @@ impl PackArgs {
     /// Project-mode load + compile through the bytecode cache — the same warm
     /// flow as `baml run` (`run_command::load_and_compile`): whole-program hit
     /// when nothing changed, per-file unit reuse on a dirty edit, full compile
-    /// otherwise. Pack compiles with `emit_test_cases: false`, so it shares
-    /// run/check's exact cache key space — a pack right after a run (or a
+    /// otherwise. Pack shares run/check's exact cache key space, so a pack
+    /// right after a run (or a
     /// re-pack) serves the identical `Program`. The packaged bytecode is
     /// target-independent (the `--target` triple only selects the host binary
     /// bytes), and emit determinism guarantees a reused image is byte-identical
@@ -345,9 +340,6 @@ impl PackArgs {
 
         let compiled = crate::bytecode_cache::compile_program_artifacts(
             db,
-            &baml_compiler2_emit::CompileOptions {
-                emit_test_cases: false,
-            },
             cache.as_ref(),
             reuse_plan.as_ref(),
         )

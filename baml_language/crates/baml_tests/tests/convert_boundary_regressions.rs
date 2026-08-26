@@ -1,9 +1,8 @@
 //! Regression tests for the TIR→`RuntimeTy` conversion boundary
 //! (`ResolvedAliases::convert`), which panics when an inference-only
-//! `Ty::Unknown`/`Ty::Error` reaches it. These cover producers that previously
+//! `Ty::Error` reaches it. These cover producers that previously
 //! leaked `Unknown` into runtime lowering for *valid* programs.
 
-use baml_compiler2_emit::CompileOptions;
 use baml_db::ProjectDatabase;
 use baml_tests::engine::TestDbExt;
 
@@ -14,35 +13,24 @@ fn db_with(src: &str) -> ProjectDatabase {
     db
 }
 
-/// Lower the project to bytecode. A panic here (e.g. `Ty::Unknown` reaching the
+/// Lower the project to bytecode. A panic here (e.g. `Ty::Error` reaching the
 /// convert boundary) fails the test directly.
 fn bytecode_ok(db: &ProjectDatabase) -> Result<(), String> {
-    baml_compiler2_emit::generate_project_bytecode(
-        db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-    )
-    .map(|_| ())
-    .map_err(|e| format!("{e:?}"))
+    baml_compiler2_emit::generate_project_bytecode(db)
+        .map(|_| ())
+        .map_err(|e| format!("{e:?}"))
 }
 
 /// Lower the project to bytecode and return the `Program` for inspection.
 fn compile_program(db: &ProjectDatabase) -> bex_vm_types::Program {
-    baml_compiler2_emit::generate_project_bytecode(
-        db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-    )
-    .expect("should compile to bytecode")
+    baml_compiler2_emit::generate_project_bytecode(db).expect("should compile to bytecode")
 }
 
 /// `throw <non-literal expression>` in a function with no `throws` clause.
 ///
 /// The HIR-level throw-fact typer can only name literal/path/object operands;
 /// a call/binary/array result falls through. It must over-approximate to
-/// `unknown` (a real runtime type), not leak `Ty::Unknown` (which has no
+/// `unknown` (a real runtime type), not leak `Ty::Error` (which has no
 /// runtime representation) into the throws metadata and panic at codegen. These
 /// are valid, zero-diagnostic programs.
 #[test]
@@ -65,7 +53,7 @@ fn throw_of_non_literal_expression_compiles() {
 
 /// A generic LLM function whose stream-expanded return type embeds a typevar
 /// (`-> Box<T>`). The stream-return lowering must thread the function's generic
-/// params so `T` lowers to a faithful `TypeVar`, not `Ty::Unknown`.
+/// params so `T` lowers to a faithful `TypeVar`, not `Ty::Error`.
 #[test]
 fn generic_llm_function_with_generic_return_compiles() {
     let db = db_with(

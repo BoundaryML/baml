@@ -182,7 +182,7 @@ nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wi
 | `Ty::List(T, …)` | `Ty::List(T)` | `tags string[]` | `java.util.List<T>` (T boxed) | (same) | `BamlType.list(D)` | :136–139 |
 | `Ty::Map(K, V, …)` | `Ty::Map { key, value }` | `metadata map<string,int>` | `java.util.Map<java.lang.String, V>` (key forced to String) | (same) | `BamlType.map(BamlType.STRING, Dval)` | :142–145 |
 | `Ty::Union(types, …)` | `Ty::Union(types)` | `result string \| int` | `baml_bridge.Union2<…>` … `Union10<…>`; arity>10 → `java.lang.Object`; same-base literal union → base | (same) | `BamlType.union(a, b, …)` ordered | :146, :198–233 |
-| `Ty::BuiltinUnknown { … }` | `Ty::BuiltinUnknown` | `unknown` keyword | `java.lang.Object` | (same) | `null` (wire-driven) | :147 |
+| `Ty::Unknown { … }` | `Ty::Unknown` | `unknown` keyword | `java.lang.Object` | (same) | `null` (wire-driven) | :147 |
 | `Ty::Function { params, ret, throws, … }` | `Ty::Function { params, ret }` | callable type | `java.util.function.*` by arity; optional/arity>2 → generated `@FunctionalInterface` (`IntOptCallback` shape, landed `202883518`) | (same) | `null` (wire-driven) | :148, :407–435 |
 | `Ty::Void { … }` | `Ty::Void` (Python calls it `Ty::Unit`) | `-> void` | `void` | `java.lang.Void` | `null` (wire-driven) | :149–152 |
 | no direct TIR variant | `Ty::BamlOptions` (Python-only) | generated function options plumbing | — no CodegenTy variant; options ride the trailing configurator overload | — | — | n/a |
@@ -193,10 +193,7 @@ nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wi
 | (no TIR row in Python) | `Ty::Interface` | interface type | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
 | (no TIR row in Python) | `Ty::Resource` | resource type | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
 | (no TIR row in Python) | `Ty::PromptAst` | prompt-AST type | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
-| `Ty::Unknown { … }` | no CodegenTy variant | error recovery sentinel | never reaches codegen | — | — | n/a |
 | `Ty::Error { … }` | no CodegenTy variant | hard error sentinel | never reaches codegen | — | — | n/a |
-| `Ty::EvolvingList(T, …)` | freezes before codegen | mutable empty-array literal | frozen upstream to `Ty::List(T)` → `java.util.List<T>` | (same) | `BamlType.list(D)` | n/a |
-| `Ty::EvolvingMap(K, V, …)` | freezes before codegen | mutable empty-map literal | frozen upstream to `Ty::Map` → `java.util.Map<String, V>` | (same) | `map<…>` | n/a |
 
 Per-row deviation flags:
 
@@ -224,14 +221,13 @@ Per-row deviation flags:
 > (`BamlType.map(BamlType.STRING, …)`), since `descriptor_expr` recurses on the real key (in
 > practice `String`) — a map union arm matches on it.
 
-> ⚠ **Deviation from Python (unknown / unmodeled types):** `Ty::BuiltinUnknown`, and the
+> ⚠ **Deviation from Python (unknown / unmodeled types):** `Ty::Unknown`, and the
 > not-yet-modeled `Ty::Type` / `Ty::Never` / `Ty::Future` / `Ty::Interface` / `Ty::Resource` /
 > `Ty::PromptAst`, all fall back to `java.lang.Object` (translate_ty.rs:147, :157–162; descriptor
 > `unknown`, lib.rs:401–407). Python drops `Type`/`Never`/`Future` as **unreachable / n/a** for a
 > Python type; Java gives them an explicit `Object` fallback so surrounding generated code still
-> compiles (the same stance as Python's `typing.Any` / TS's `unknown`). `Ty::Unknown` /
-> `Ty::Error` have **no CodegenTy variant at all** in Java, matching Python's "never reaches
-> codegen".
+> compiles (the same stance as Python's `typing.Any` / TS's `unknown`). `Ty::Error` has
+> **no CodegenTy variant at all** in Java, matching Python's "never reaches codegen".
 
 > ⚠ **Deviation from Python (options plumbing):** Python has a codegen `Ty::BamlOptions` →
 > `baml.Options`. Java has no such Ty; per-call options ride the AWS-SDK-v2-style **trailing

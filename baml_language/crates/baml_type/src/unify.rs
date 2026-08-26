@@ -186,13 +186,10 @@ pub fn contains_bound_typevar(ty: &Ty, generic_params: &[ParamTy]) -> bool {
                     .iter()
                     .any(|(_, ty)| contains_bound_typevar(ty, generic_params))
         }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
-            contains_bound_typevar(inner, generic_params)
-        }
+        Ty::List(inner, _) => contains_bound_typevar(inner, generic_params),
         Ty::Map {
             key: k, value: v, ..
         }
-        | Ty::EvolvingMap(k, v, _)
         | Ty::Future(k, v, _) => {
             contains_bound_typevar(k, generic_params) || contains_bound_typevar(v, generic_params)
         }
@@ -229,11 +226,10 @@ pub fn all_typevars_within(ty: &Ty, vars: &[ParamTy]) -> bool {
                     .iter()
                     .all(|(_, ty)| all_typevars_within(ty, vars))
         }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => all_typevars_within(inner, vars),
+        Ty::List(inner, _) => all_typevars_within(inner, vars),
         Ty::Map {
             key: k, value: v, ..
         }
-        | Ty::EvolvingMap(k, v, _)
         | Ty::Future(k, v, _) => all_typevars_within(k, vars) && all_typevars_within(v, vars),
         Ty::Function {
             params,
@@ -278,11 +274,10 @@ pub fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
                 args.iter().any(|a| occurs(param, a, in_union))
                     || assoc.iter().any(|(_, t)| occurs(param, t, in_union))
             }
-            Ty::List(inner, _) | Ty::EvolvingList(inner, _) => occurs(param, inner, in_union),
+            Ty::List(inner, _) => occurs(param, inner, in_union),
             Ty::Map {
                 key: k, value: v, ..
             }
-            | Ty::EvolvingMap(k, v, _)
             | Ty::Future(k, v, _) => occurs(param, k, in_union) || occurs(param, v, in_union),
             Ty::AssociatedTypeProjection {
                 base, interface, ..
@@ -321,9 +316,8 @@ pub fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
             | Ty::PromptAst { .. }
             | Ty::Void { .. }
             | Ty::TypeAlias(..)
-            | Ty::BuiltinUnknown { .. }
-            | Ty::Never { .. }
             | Ty::Unknown { .. }
+            | Ty::Never { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. } => false,
         }
@@ -349,19 +343,11 @@ pub fn nf(ty: &Ty, enum_variants: EnumVariants) -> Ty {
             enum_variants,
         ),
         Ty::List(inner, attr) => Ty::List(Box::new(nf(inner, enum_variants)), attr.clone()),
-        Ty::EvolvingList(inner, attr) => {
-            Ty::EvolvingList(Box::new(nf(inner, enum_variants)), attr.clone())
-        }
         Ty::Map { key, value, attr } => Ty::Map {
             key: Box::new(nf(key, enum_variants)),
             value: Box::new(nf(value, enum_variants)),
             attr: attr.clone(),
         },
-        Ty::EvolvingMap(k, v, attr) => Ty::EvolvingMap(
-            Box::new(nf(k, enum_variants)),
-            Box::new(nf(v, enum_variants)),
-            attr.clone(),
-        ),
         Ty::Future(value, error, attr) => Ty::Future(
             Box::new(nf(value, enum_variants)),
             Box::new(nf(error, enum_variants)),
@@ -421,12 +407,12 @@ fn normalize_union(members: Vec<Ty>, attr: TyAttr, enum_variants: EnumVariants) 
     for member in members {
         match member {
             Ty::Never { .. } => {}
-            Ty::BuiltinUnknown { .. } => return Ty::BuiltinUnknown { attr },
+            Ty::Unknown { .. } => return Ty::Unknown { attr },
             Ty::Union(inner, _) => {
                 for inner_member in inner {
                     match inner_member {
                         Ty::Never { .. } => {}
-                        Ty::BuiltinUnknown { .. } => return Ty::BuiltinUnknown { attr },
+                        Ty::Unknown { .. } => return Ty::Unknown { attr },
                         other if !flat.contains(&other) => flat.push(other),
                         _ => {}
                     }
@@ -579,13 +565,11 @@ fn unify_into_at(
     // treating it as a common instance would stack a spurious overlap — and
     // `Error` is "compatible with anything" downstream, which would *admit* a
     // bogus overlap (the dangerous direction). The *inhabited* top type `unknown`
-    // (`BuiltinUnknown`) is deliberately not bailed here: it binds an opposing
+    // (`Unknown`) is deliberately not bailed here: it binds an opposing
     // variable (below), and is otherwise a distinct atomic type compared by
     // equality — `Box<unknown>` is disjoint from `Box<int>`, exactly how the
     // runtime resolver matches it.
-    if matches!(x, Ty::Unknown { .. } | Ty::Error { .. })
-        || matches!(y, Ty::Unknown { .. } | Ty::Error { .. })
-    {
+    if matches!(x, Ty::Error { .. }) || matches!(y, Ty::Error { .. }) {
         return Overlap::No;
     }
 
@@ -627,7 +611,7 @@ fn unify_into_at(
                 depth + 1,
             ))
         }
-        (Ty::List(xi, _), Ty::List(yi, _)) | (Ty::EvolvingList(xi, _), Ty::EvolvingList(yi, _)) => {
+        (Ty::List(xi, _), Ty::List(yi, _)) => {
             unify_into_at(xi, yi, vars, aliases, bindings, depth + 1)
         }
         (
@@ -637,16 +621,14 @@ fn unify_into_at(
             Ty::Map {
                 key: yk, value: yv, ..
             },
-        )
-        | (Ty::EvolvingMap(xk, xv, _), Ty::EvolvingMap(yk, yv, _)) => unify_into_at(
-            xk,
-            yk,
+        ) => unify_into_at(xk, yk, vars, aliases, bindings, depth + 1).and(unify_into_at(
+            xv,
+            yv,
             vars,
             aliases,
             bindings,
             depth + 1,
-        )
-        .and(unify_into_at(xv, yv, vars, aliases, bindings, depth + 1)),
+        )),
         (Ty::Future(xv, xe, _), Ty::Future(yv, ye, _)) => unify_into_at(
             xv,
             yv,
@@ -741,9 +723,7 @@ fn unify_into_at(
             Ty::Class(..)
             | Ty::Interface(..)
             | Ty::List(..)
-            | Ty::EvolvingList(..)
             | Ty::Map { .. }
-            | Ty::EvolvingMap(..)
             | Ty::Future(..)
             | Ty::Int { .. }
             | Ty::Bigint { .. }
@@ -764,9 +744,8 @@ fn unify_into_at(
             | Ty::Void { .. }
             | Ty::TypeAlias(..)
             | Ty::TypeVar(..)
-            | Ty::BuiltinUnknown { .. }
-            | Ty::Never { .. }
             | Ty::Unknown { .. }
+            | Ty::Never { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. },
             _,
@@ -968,9 +947,6 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
     match ty {
         Ty::TypeVar(name, _) => bindings.get(name).cloned().unwrap_or_else(|| ty.clone()),
         Ty::List(inner, attr) => Ty::List(Box::new(substitute_ty(inner, bindings)), attr.clone()),
-        Ty::EvolvingList(inner, attr) => {
-            Ty::EvolvingList(Box::new(substitute_ty(inner, bindings)), attr.clone())
-        }
         Ty::Map {
             key: k,
             value: v,
@@ -980,11 +956,6 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<ParamTy, Ty>) -> Ty {
             value: Box::new(substitute_ty(v, bindings)),
             attr: attr.clone(),
         },
-        Ty::EvolvingMap(k, v, attr) => Ty::EvolvingMap(
-            Box::new(substitute_ty(k, bindings)),
-            Box::new(substitute_ty(v, bindings)),
-            attr.clone(),
-        ),
         Ty::Future(value, error, attr) => Ty::Future(
             Box::new(substitute_ty(value, bindings)),
             Box::new(substitute_ty(error, bindings)),
@@ -1330,11 +1301,10 @@ fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> 
             args.iter().any(|a| occurs_in(n, a, vars, bindings))
                 || assoc.iter().any(|(_, ty)| occurs_in(n, ty, vars, bindings))
         }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => occurs_in(n, inner, vars, bindings),
+        Ty::List(inner, _) => occurs_in(n, inner, vars, bindings),
         Ty::Map {
             key: k, value: v, ..
         }
-        | Ty::EvolvingMap(k, v, _)
         | Ty::Future(k, v, _) => occurs_in(n, k, vars, bindings) || occurs_in(n, v, vars, bindings),
         Ty::AssociatedTypeProjection {
             base, interface, ..
@@ -1373,9 +1343,8 @@ fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> 
         | Ty::PromptAst { .. }
         | Ty::Void { .. }
         | Ty::TypeAlias(..)
-        | Ty::BuiltinUnknown { .. }
-        | Ty::Never { .. }
         | Ty::Unknown { .. }
+        | Ty::Never { .. }
         | Ty::Error { .. }
         | Ty::Infer { .. } => false,
     }
@@ -2008,10 +1977,10 @@ mod tests {
     }
 
     #[test]
-    fn variable_binds_to_builtin_unknown() {
+    fn variable_binds_to_unknown() {
         // `unknown` is the inhabited top type, so a unification variable binds to it: a
         // blanket `Box<T>` overlaps `Box<unknown>` at `T = unknown`. The old bail that
-        // lumped `BuiltinUnknown` in with the error sentinel wrongly rejected this.
+        // lumped `Unknown` in with the error sentinel wrongly rejected this.
         let vars = vec![param("T")];
         let aliases = std::collections::HashMap::default();
         let mut bindings = TypeBindings::default();
@@ -2028,7 +1997,7 @@ mod tests {
     }
 
     #[test]
-    fn builtin_unknown_is_disjoint_from_distinct_concrete() {
+    fn unknown_is_disjoint_from_distinct_concrete() {
         // `unknown` is a distinct atomic type under invariance, compared by equality:
         // `Box<unknown>` and `Box<int>` do not overlap, matching how the runtime
         // resolver matches `unknown` (only an `unknown` value inhabits `Box<unknown>`).

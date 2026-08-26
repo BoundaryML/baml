@@ -583,7 +583,7 @@ fn convert_object(
         // Deep-copy path for trace payloads: no declared type is available here,
         // so placeholder types with default attr are used.
         Object::Array(array) => Ok(BexExternalValue::Array {
-            element_type: RuntimeTy::BuiltinUnknown {
+            element_type: RuntimeTy::Unknown {
                 attr: baml_type::TyAttr::default(),
             },
             items: array
@@ -596,7 +596,7 @@ fn convert_object(
             key_type: RuntimeTy::String {
                 attr: baml_type::TyAttr::default(),
             },
-            value_type: RuntimeTy::BuiltinUnknown {
+            value_type: RuntimeTy::Unknown {
                 attr: baml_type::TyAttr::default(),
             },
             entries: map

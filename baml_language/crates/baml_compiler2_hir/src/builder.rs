@@ -27,7 +27,7 @@ use crate::{
     item_tree::{ImplBlock, ImplSubject, InterfaceFieldLink},
     loc::{
         ClassLoc, ClientLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
-        TemplateStringLoc, TestLoc, TypeAliasLoc,
+        TemplateStringLoc, TypeAliasLoc,
     },
     scope::{FileScopeId, ItemScopeOwner, Scope, ScopeId, ScopeKind},
     semantic_index::{
@@ -1394,7 +1394,6 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Item::Enum(e) => self.lower_enum(e),
             ast::Item::TypeAlias(ta) => self.lower_type_alias(ta),
             ast::Item::Client(c) => self.lower_client(c),
-            ast::Item::Test(t) => self.lower_test(t),
             ast::Item::TemplateString(ts) => self.lower_template_string(ts),
             ast::Item::RetryPolicy(rp) => self.lower_retry_policy(rp),
             ast::Item::Let(l) => self.lower_let(l),
@@ -1774,23 +1773,6 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.push_scope(ScopeKind::Item, Some(c.name.clone()), c.span);
         let scope = self.current_scope_id();
         self.record_scope_owner(scope, ItemScopeOwner::Client(local_id));
-        self.pop_scope();
-    }
-
-    fn lower_test(&mut self, t: &ast::TestDef) {
-        let local_id = self.item_tree.alloc_test(t);
-        let loc = TestLoc::new(self.db, self.file, local_id);
-        self.value_contributions.push((
-            t.name.clone(),
-            Contribution {
-                name_span: t.name_span,
-                definition: Definition::Test(loc),
-            },
-        ));
-
-        self.push_scope(ScopeKind::Item, Some(t.name.clone()), t.span);
-        let scope = self.current_scope_id();
-        self.record_scope_owner(scope, ItemScopeOwner::Test(local_id));
         self.pop_scope();
     }
 
@@ -2465,7 +2447,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             // `throws never` and `throws unknown` are the two explicit effect
             // bounds and are both valid for host-bound functions. The latter
             // is needed by continuations that execute user bytecode.
-            ast::TypeExprKind::Never { .. } | ast::TypeExprKind::BuiltinUnknown { .. } => {}
+            ast::TypeExprKind::Never { .. } | ast::TypeExprKind::Unknown { .. } => {}
             _ => invalid.push(Self::render_type_expr(type_expr)),
         }
     }
@@ -2531,11 +2513,11 @@ impl<'db> SemanticIndexBuilder<'db> {
                     throws
                 )
             }
-            ast::TypeExprKind::BuiltinUnknown { .. } => "unknown".to_string(),
+            ast::TypeExprKind::Unknown { .. } => "unknown".to_string(),
             ast::TypeExprKind::Type { .. } => "reflect.Type".to_string(),
             ast::TypeExprKind::Rust { .. } => "$rust_type".to_string(),
             ast::TypeExprKind::Error { .. } => "<error>".to_string(),
-            ast::TypeExprKind::Unknown { .. } => "<unknown>".to_string(),
+            ast::TypeExprKind::Missing { .. } => "<unknown>".to_string(),
             ast::TypeExprKind::Infer { .. } => "_".to_string(),
         }
     }

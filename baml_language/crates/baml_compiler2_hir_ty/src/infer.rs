@@ -2622,7 +2622,7 @@ impl<'db> InferenceContext<'db> {
                     }
                     None if elements.is_empty() => {
                         // `[]`: a list over a fresh element variable - the
-                        // honest replacement for the EvolvingList sentinel.
+                        // honest replacement for TIR's evolving-list sentinel.
                         self.untyped_empty_container_ty(expr, Ty::list)
                     }
                     None => {
@@ -4185,9 +4185,7 @@ impl<'db> InferenceContext<'db> {
                         );
                         let comparable = !matches!(
                             lhs_base,
-                            baml_type::Ty::Union(..)
-                                | baml_type::Ty::Interface(..)
-                                | baml_type::Ty::Unknown { .. }
+                            baml_type::Ty::Union(..) | baml_type::Ty::Interface(..)
                         ) && baml_type::normalize::is_subtype(
                             &lhs_base,
                             &compare_existential,
@@ -12591,6 +12589,24 @@ fn function_value_ty(signature: &crate::lower::FunctionSignature, instantiation:
 
 /// Replaces every `Infer` node (unsolved variable or hole) with the Error
 /// sentinel, in place - the finalize half of rulings 2/3.
+///
+// BUG: this erases UNCONDITIONALLY, but the matching diagnostic only covers
+// the `hole_vars` subset (a written `_`, reported as E0147 in `finalize`). An
+// unsolved variable is an unsolved variable whether its `_` was written or
+// implicit, so every one of them owes a diagnostic; the ones that do not get
+// one become an `Error` nothing accounts for, breaking the invariant `Error`
+// carries ("a hard error was already reported here, do not cascade").
+// `ResolvedAliases::convert` relies on that invariant and panics on an `Error`
+// reaching runtime lowering, so MIR launders every `Error` to the top type to
+// stay alive - which defuses the guard on every MIR path (see
+// `erase_compiler_only_ty`).
+//
+// The known undiagnosed producer is a generic call made in the scope of a
+// `type T = unreflect(expr)` binding, whose slots go unsolved (corpus:
+// `ns_runtime_type_binding_generic_calls`). That source is ILLEGAL, not
+// well-typed: the call needs type arguments it cannot get. Report every
+// unsolved variable and it is rejected at compile time, compilation stops
+// before MIR, and the laundering can go.
 fn erase_infer(ty: &Ty) -> Ty {
     if !ty.has_infer() {
         return ty.clone();

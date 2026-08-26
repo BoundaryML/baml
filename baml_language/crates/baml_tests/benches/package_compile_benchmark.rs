@@ -7,7 +7,7 @@
 
 use std::{path::Path, sync::Arc};
 
-use baml_compiler2_emit::{CompileOptions, OptLevel, generate_project_bytecode_with_opt};
+use baml_compiler2_emit::{OptLevel, generate_project_bytecode_with_opt};
 use baml_db::ProjectDatabase;
 use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
@@ -70,14 +70,8 @@ fn engine() -> Arc<BexEngine> {
     let mut db = ProjectDatabase::new();
     db.workspace(Path::new("."));
     db.file("package_compile_bench.baml", OUTER_SOURCE);
-    let program = generate_project_bytecode_with_opt(
-        &db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-        OptLevel::One,
-    )
-    .expect("compile Package.compile benchmark host");
+    let program = generate_project_bytecode_with_opt(&db, OptLevel::One)
+        .expect("compile Package.compile benchmark host");
     Arc::new(
         BexEngine::new_with_runtime_compiler(
             program,

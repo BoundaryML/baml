@@ -12,7 +12,7 @@ use baml_base::Name;
 use baml_compiler_diagnostics::{DiagnosticId, Severity};
 use baml_compiler_lexer::{TokenKind, lex_lossless};
 use baml_compiler_syntax::{BlockElement, BlockExpr, SyntaxKind, SyntaxNode};
-use baml_compiler2_emit::{CompileOptions, emit_units_with_stdlib};
+use baml_compiler2_emit::emit_units_with_stdlib;
 use baml_compiler2_hir::{
     body::{BodyOwnerId, LetBody, let_body},
     contributions::Definition,
@@ -133,10 +133,8 @@ impl StubViewpoint<'_> {
             Ty::Enum(name, _) | Ty::EnumVariant(name, ..) | Ty::TypeAlias(name, _) => {
                 !self.spellable_package(name)
             }
-            Ty::List(inner, _) | Ty::EvolvingList(inner, _) => self.hides_type(inner),
-            Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
-                self.hides_type(key) || self.hides_type(value)
-            }
+            Ty::List(inner, _) => self.hides_type(inner),
+            Ty::Map { key, value, .. } => self.hides_type(key) || self.hides_type(value),
             Ty::Union(members, _) => members.iter().any(|ty| self.hides_type(ty)),
             Ty::Function {
                 params,
@@ -167,9 +165,8 @@ impl StubViewpoint<'_> {
             | Ty::PromptAst { .. }
             | Ty::Void { .. }
             | Ty::TypeVar(..)
-            | Ty::BuiltinUnknown { .. }
-            | Ty::Never { .. }
             | Ty::Unknown { .. }
+            | Ty::Never { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. } => false,
         }
@@ -2038,9 +2035,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         if let Some(session) = &session
             && !matches!(
                 session.expected,
-                bex_vm_types::SessionContract::Checkable(
-                    baml_type::RuntimeTy::BuiltinUnknown { .. }
-                )
+                bex_vm_types::SessionContract::Checkable(baml_type::RuntimeTy::Unknown { .. })
             )
         {
             let file = session.artifact.submission_name.as_str();
@@ -2107,12 +2102,8 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                         span: None,
                     }]
                 })?;
-        let options = CompileOptions {
-            emit_test_cases: crate::precompiled_stdlib_config::EMIT_TEST_CASES,
-        };
         let emitted = emit_units_with_stdlib(
             &db,
-            &options,
             crate::precompiled_stdlib_config::OPT_LEVEL,
             &stdlib.program,
         )

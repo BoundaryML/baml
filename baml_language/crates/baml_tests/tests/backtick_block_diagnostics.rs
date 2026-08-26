@@ -131,7 +131,7 @@ fn for_header_accepts_const_binding() {
 #[test]
 fn unresolved_name_in_interp_reports_cleanly() {
     // BEP §4: a real unresolved name in `${…}` must surface a clean diagnostic,
-    // not slip through as `Ty::Unknown` and ICE at runtime lowering. The
+    // not slip through as `Ty::Error` and ICE at runtime lowering. The
     // untagged-template desugaring never introduces a fresh name reference, so a
     // bare unresolved name here is always genuine user code and is retained.
     let msgs = messages(&untagged("${ nope }"));
@@ -171,7 +171,7 @@ fn unresolved_name_in_interp_reports() {
     // diagnostic — not compile silently. Before the fix the untagged template
     // truncated ALL diagnostics from typing its desugared form (to drop
     // synthetic `.to_string()` noise), which also swallowed this genuine
-    // `UnresolvedName`; the resulting `Ty::Unknown` then ICEd at MIR runtime
+    // `UnresolvedName`; the resulting `Ty::Error` then ICEd at MIR runtime
     // lowering. Now the genuine name error survives the truncation.
     assert_has(&untagged("${ nope }"), "nope");
     assert_has(&prompt("${ nope }"), "nope");

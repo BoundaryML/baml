@@ -95,13 +95,6 @@ pub fn file_actions(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<F
                     kind: FileActionKind::RunInPlayground,
                 });
             }
-            Definition::Test(_) => {
-                actions.push(FileAction {
-                    name: name.to_string(),
-                    name_span: contrib.name_span,
-                    kind: FileActionKind::RunTest,
-                });
-            }
             // Other value-namespace items (client, template string,
             // retry policy, top-level let) don't get code lenses; type
             // definitions never appear in the value namespace.

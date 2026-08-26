@@ -419,7 +419,7 @@ impl<'db> LowerCtx<'db> {
             TypeRefKind::Void => Ty::void(),
             TypeRefKind::Uint8Array => Ty::intern(TyKind::Uint8Array { attr: attr() }),
             TypeRefKind::Media { kind } => Ty::intern(TyKind::Media(*kind, attr())),
-            TypeRefKind::BuiltinUnknown => Ty::intern(TyKind::Unknown { attr: attr() }),
+            TypeRefKind::Unknown => Ty::intern(TyKind::Unknown { attr: attr() }),
             TypeRefKind::Type => Ty::intern(TyKind::Type { attr: attr() }),
             TypeRefKind::Rust => Ty::intern(TyKind::RustType { attr: attr() }),
             TypeRefKind::Optional { inner } => Ty::optional(self.lower_type_ref(store, *inner)),
@@ -541,10 +541,10 @@ impl<'db> LowerCtx<'db> {
                 var: None,
                 attr: attr(),
             }),
-            // `Unknown` is an omitted annotation (a signature must be
+            // `Missing` is an omitted annotation (a signature must be
             // explicit; the diagnostic arrives with S17), `Error` was
             // already diagnosed at parse time.
-            TypeRefKind::Error | TypeRefKind::Unknown => Ty::error(),
+            TypeRefKind::Error | TypeRefKind::Missing => Ty::error(),
         }
     }
 
@@ -1131,7 +1131,6 @@ impl<'db> LowerCtx<'db> {
             Definition::Function(_)
             | Definition::TemplateString(_)
             | Definition::Client(_)
-            | Definition::Test(_)
             | Definition::RetryPolicy(_)
             | Definition::Let(_) => Ty::error(),
         }
@@ -2275,10 +2274,10 @@ pub fn signature_lowering_diagnostics<'db>(
         }
     };
     for param in &data.params {
-        // The unannotated-`self` slot lowers as Unknown by elaboration;
+        // The unannotated-`self` slot lowers as `Missing` by elaboration;
         // it is not a written reference.
         if param.name.as_str() == "self"
-            && matches!(data.type_refs[param.type_ref].kind, TypeRefKind::Unknown)
+            && matches!(data.type_refs[param.type_ref].kind, TypeRefKind::Missing)
         {
             continue;
         }
@@ -2750,7 +2749,7 @@ pub fn function_signature<'db>(
     // The owner's concrete `Self` (r-a's resolver-provided self type)
     // serves BOTH jobs at once: written `Self` in any signature
     // position resolves through the ctx, and an unannotated `self`
-    // receiver (elaboration leaves its slot `Unknown`) takes it
+    // receiver (elaboration leaves its slot `Missing`) takes it
     // directly. Interface owners provide none - their `Self` is the
     // frame's universal slot 0, resolved as a param.
     let concrete_self = owner_self_ty(db, function, &frame);
@@ -2763,7 +2762,7 @@ pub fn function_signature<'db>(
     let owner = baml_compiler2_ppir::item_data::method_owner(db, function);
     let self_ty = |param: &baml_compiler2_ppir::item_data::ElaboratedParamData| {
         if param.name.as_str() != "self"
-            || !matches!(data.type_refs[param.type_ref].kind, TypeRefKind::Unknown)
+            || !matches!(data.type_refs[param.type_ref].kind, TypeRefKind::Missing)
         {
             return None;
         }

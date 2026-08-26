@@ -19,7 +19,6 @@ pub enum TopLevelDeclaration {
     Class(ClassDecl),
     Enum(EnumDecl),
     Client(ClientDecl),
-    Test(TestDecl),
     TestExpr(TestExprDecl),
     TestSet(TestSetDecl),
     RetryPolicy(RetryPolicyDecl),
@@ -38,7 +37,6 @@ impl FromCST for TopLevelDeclaration {
             SyntaxKind::CLASS_DEF => TopLevelDeclaration::Class(ClassDecl::from_cst(elem)?),
             SyntaxKind::ENUM_DEF => TopLevelDeclaration::Enum(EnumDecl::from_cst(elem)?),
             SyntaxKind::CLIENT_DEF => TopLevelDeclaration::Client(ClientDecl::from_cst(elem)?),
-            SyntaxKind::TEST_DEF => TopLevelDeclaration::Test(TestDecl::from_cst(elem)?),
             SyntaxKind::TEST_EXPR_DEF => {
                 TopLevelDeclaration::TestExpr(TestExprDecl::from_cst(elem)?)
             }
@@ -68,7 +66,6 @@ impl Printable for TopLevelDeclaration {
             TopLevelDeclaration::Class(class_decl) => class_decl.print(shape, printer),
             TopLevelDeclaration::Enum(enum_decl) => enum_decl.print(shape, printer),
             TopLevelDeclaration::Client(client_decl) => client_decl.print(shape, printer),
-            TopLevelDeclaration::Test(test_decl) => test_decl.print(shape, printer),
             TopLevelDeclaration::TestExpr(test_expr_decl) => test_expr_decl.print(shape, printer),
             TopLevelDeclaration::TestSet(test_set_decl) => test_set_decl.print(shape, printer),
             TopLevelDeclaration::RetryPolicy(retry_policy_decl) => {
@@ -94,7 +91,6 @@ impl Printable for TopLevelDeclaration {
             TopLevelDeclaration::Class(c) => c.leftmost_token(),
             TopLevelDeclaration::Enum(e) => e.leftmost_token(),
             TopLevelDeclaration::Client(c) => c.leftmost_token(),
-            TopLevelDeclaration::Test(t) => t.leftmost_token(),
             TopLevelDeclaration::TestExpr(t) => t.leftmost_token(),
             TopLevelDeclaration::TestSet(t) => t.leftmost_token(),
             TopLevelDeclaration::RetryPolicy(r) => r.leftmost_token(),
@@ -110,7 +106,6 @@ impl Printable for TopLevelDeclaration {
             TopLevelDeclaration::Class(c) => c.rightmost_token(),
             TopLevelDeclaration::Enum(e) => e.rightmost_token(),
             TopLevelDeclaration::Client(c) => c.rightmost_token(),
-            TopLevelDeclaration::Test(t) => t.rightmost_token(),
             TopLevelDeclaration::TestExpr(t) => t.rightmost_token(),
             TopLevelDeclaration::TestSet(t) => t.rightmost_token(),
             TopLevelDeclaration::RetryPolicy(r) => r.rightmost_token(),
@@ -2875,62 +2870,6 @@ impl Printable for ConfigArray {
     }
     fn rightmost_token(&self) -> TextRange {
         self.close_bracket.span()
-    }
-}
-
-/// Corresponds to a [`SyntaxKind::TEST_DEF`] node.
-#[derive(Debug)]
-pub struct TestDecl {
-    pub keyword: t::Test,
-    pub name: t::Word,
-    pub config_block: ConfigBlock,
-}
-
-impl FromCST for TestDecl {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::TEST_DEF)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        // keyword: "test"
-        let keyword = it.expect_parse()?;
-
-        // name
-        let name = it.expect_parse()?;
-
-        // config block
-        let config_block: ConfigBlock = it.expect_parse()?;
-
-        it.expect_end()?;
-
-        Ok(TestDecl {
-            keyword,
-            name,
-            config_block,
-        })
-    }
-}
-
-impl KnownKind for TestDecl {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::TEST_DEF
-    }
-}
-
-impl Printable for TestDecl {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
-        printer.print_str(" ");
-        printer.print_raw_token(&self.name);
-        printer.print_str(" ");
-        printer.print(&self.config_block, shape)
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.config_block.rightmost_token()
     }
 }
 

@@ -1389,8 +1389,6 @@ pub struct BytecodeProgram {
     pub let_global_indices: HashMap<String, usize>,
     /// Client build metadata, passed through to `SysOpContext`.
     pub client_metadata: HashMap<String, bex_vm_types::ClientBuildMeta>,
-    /// Compiled test cases.
-    pub test_cases: Vec<bex_vm_types::TestCase>,
     /// Per-package program structure (global-index-keyed). The loader allocates
     /// the heap `Object::Package` / `Object::ImplRule` objects and the
     /// `vm.packages` index from this, resolving each `ObjectIndex` to a
@@ -1439,7 +1437,6 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         function_global_indices: program.function_global_indices,
         let_global_indices: program.let_global_indices,
         client_metadata: program.client_metadata,
-        test_cases: program.test_cases,
         packages: program.packages,
     })
 }
@@ -1623,7 +1620,7 @@ fn nominal_identity(
         // Structural, abstract, and literal types name no declaration. An
         // enum *variant* names one but is a proper subset of it, so it is not
         // that declaration's identity.
-        T::BuiltinUnknown { .. }
+        T::Unknown { .. }
         | T::Never { .. }
         | T::Null { .. }
         | T::Bool { .. }

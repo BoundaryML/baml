@@ -695,7 +695,7 @@ fn wire_ty_allocation_bound(ty: &baml_type::RuntimeTy) -> usize {
         | RuntimeTy::Resource { .. }
         | RuntimeTy::PromptAst { .. }
         | RuntimeTy::Void { .. }
-        | RuntimeTy::BuiltinUnknown { .. }
+        | RuntimeTy::Unknown { .. }
         | RuntimeTy::Never { .. } => 0,
     };
     add(node, nested)

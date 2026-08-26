@@ -31,22 +31,21 @@ use baml_base::Literal;
 use baml_type::{PrimitiveType, QualifiedTypeName, Ty, TyAttr};
 use rustc_hash::FxHashSet;
 
-/// Does `ty` carry an error-recovery sentinel (`Ty::Error` or `Ty::Unknown`)
+/// Does `ty` carry an error-recovery sentinel (`Ty::Error`)
 /// anywhere in its structure? Inlined from TIR's `generics.rs` - the one
 /// crate-internal dependency the lifted algorithm had.
 fn contains_error_recovery(ty: &Ty) -> bool {
-    if matches!(ty, Ty::Error { .. } | Ty::Unknown { .. }) {
+    if matches!(ty, Ty::Error { .. }) {
         return true;
     }
     match ty {
         Ty::AssociatedTypeProjection {
             base, interface, ..
         } => contains_error_recovery(base) || interface.tys().any(contains_error_recovery),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_error_recovery(inner),
+        Ty::List(inner, _) => contains_error_recovery(inner),
         Ty::Map {
             key: k, value: v, ..
-        }
-        | Ty::EvolvingMap(k, v, _) => contains_error_recovery(k) || contains_error_recovery(v),
+        } => contains_error_recovery(k) || contains_error_recovery(v),
         Ty::Union(tys, _) => tys.iter().any(contains_error_recovery),
         Ty::Future(value, error, _) => {
             contains_error_recovery(value) || contains_error_recovery(error)
@@ -397,14 +396,13 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
             }
             out.push(']');
         }
-        Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
+        Ty::List(elem, _) => {
             out.push_str("Lst:");
             write_ty_identity(out, elem);
         }
         Ty::Map {
             key: k, value: v, ..
-        }
-        | Ty::EvolvingMap(k, v, _) => {
+        } => {
             out.push_str("M:");
             write_ty_identity(out, k);
             out.push(',');
@@ -418,8 +416,7 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
         }
         Ty::Never { .. } => out.push_str("Never"),
         Ty::Void { .. } => out.push_str("Void"),
-        Ty::BuiltinUnknown { .. } => out.push_str("BUnk"),
-        Ty::Unknown { .. } => out.push_str("Unk"),
+        Ty::Unknown { .. } => out.push_str("BUnk"),
         Ty::Error { .. } => out.push_str("Err"),
         Ty::Infer { .. } => out.push_str("Inf"),
         Ty::RustType { .. } => out.push_str("Rust"),
@@ -907,7 +904,7 @@ fn is_inhabited_default<C: PatCtx + ?Sized>(
         }
         Ty::Union(members, _) => members.iter().any(|m| is_inhabited_default(m, cx, seen)),
         // `T[]` always inhabits `[]`, so it is inhabited regardless of T.
-        Ty::List(_, _) | Ty::EvolvingList(_, _) => true,
+        Ty::List(_, _) => true,
         _ => true,
     }
 }
@@ -1413,7 +1410,7 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> CtorSplit {
         // returns empty (slice splitting normally handles it). Without
         // this short-circuit, the empty result would incorrectly mark the
         // list as vacuously exhaustive.
-        if matches!(col_ty, Ty::List(_, _) | Ty::EvolvingList(_, _)) {
+        if matches!(col_ty, Ty::List(_, _)) {
             return CtorSplit::alphabet(
                 vec![Ctor::Missing],
                 vec![Ctor::Slice(SliceShape::Variable {
@@ -1444,7 +1441,7 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> CtorSplit {
 
     // Slice types need a special split that treats variable-length patterns
     // as covering open-ended length classes — set membership isn't enough.
-    if matches!(col_ty, Ty::List(_, _) | Ty::EvolvingList(_, _)) {
+    if matches!(col_ty, Ty::List(_, _)) {
         return split_slice_ctors(&present_no_wild, has_wildcard);
     }
 
@@ -1721,7 +1718,7 @@ mod tests {
 
         fn list_element_type(&self, ty: &Ty) -> Ty {
             match ty {
-                Ty::List(elem, _) | Ty::EvolvingList(elem, _) => (**elem).clone(),
+                Ty::List(elem, _) => (**elem).clone(),
                 _ => ty.clone(),
             }
         }
@@ -2062,7 +2059,7 @@ mod tests {
                 // For slices, split_ctors handles enumeration via slice splitting;
                 // returning NonExhaustive here is OK because the slice path is taken
                 // before this is consulted.
-                Ty::List(_, _) | Ty::EvolvingList(_, _) => vec![Ctor::NonExhaustive],
+                Ty::List(_, _) => vec![Ctor::NonExhaustive],
                 Ty::Never { .. } => vec![],
                 Ty::TypeVar(_, _) => vec![Ctor::NonExhaustive],
                 _ => vec![Ctor::NonExhaustive],
@@ -2073,7 +2070,7 @@ mod tests {
         }
         fn list_element_type(&self, ty: &Ty) -> Ty {
             match self.expand_alias(ty) {
-                Ty::List(e, _) | Ty::EvolvingList(e, _) => (*e).clone(),
+                Ty::List(e, _) => (*e).clone(),
                 t => t,
             }
         }
@@ -4304,7 +4301,7 @@ mod tests {
                     vec![Ctor::Single(ty.clone())]
                 }
                 Ty::Class(qtn, args, _) => vec![Ctor::Class(qtn.clone(), args.clone())],
-                Ty::List(_, _) | Ty::EvolvingList(_, _) => vec![],
+                Ty::List(_, _) => vec![],
                 Ty::Never { .. } => vec![],
                 Ty::TypeVar(_, _) => vec![Ctor::NonExhaustive],
                 _ => vec![Ctor::NonExhaustive],
@@ -4315,7 +4312,7 @@ mod tests {
         }
         fn list_element_type(&self, ty: &Ty) -> Ty {
             match ty {
-                Ty::List(e, _) | Ty::EvolvingList(e, _) => (**e).clone(),
+                Ty::List(e, _) => (**e).clone(),
                 _ => ty.clone(),
             }
         }

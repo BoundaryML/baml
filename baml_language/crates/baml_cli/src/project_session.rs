@@ -36,22 +36,13 @@ use crate::{
 /// How a command participates in the bytecode cache.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CacheUse {
-    /// Read the warm seeds and store artifacts after a successful compile —
-    /// the `run`/`check`/`pack` keyspace (`emit_test_cases: false`).
+    /// Read warm seeds and store artifacts after a successful compile.
     ReadWrite,
-    /// Same, in the `baml test` keyspace (`emit_test_cases: true`).
-    ReadWriteTests,
     /// Consume warm seeds, never store: introspection commands
     /// (`generate`). Shares the run/check keyspace.
     ReadOnly,
     /// No cache at all (projectless fallback, tests).
     Off,
-}
-
-impl CacheUse {
-    fn emit_test_cases(self) -> bool {
-        matches!(self, CacheUse::ReadWriteTests)
-    }
 }
 
 /// The state of the warm-database preamble after [`ProjectSession::warm_prep`].
@@ -109,7 +100,7 @@ impl ProjectSession {
         let db = build_db_from_sources(&resolved, |_| {});
         let cache = match cache_use {
             CacheUse::Off => None,
-            _ => CacheContext::open(&resolved, cache_use.emit_test_cases()),
+            _ => CacheContext::open(&resolved),
         };
         Self {
             resolved,

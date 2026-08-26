@@ -104,15 +104,16 @@ pub enum TypeRefKind {
         throws: Option<TypeRefId>,
     },
     /// The `unknown` keyword type.
-    BuiltinUnknown,
+    Unknown,
     /// The `type` meta-type keyword.
     Type,
     /// `$rust_type` — opaque Rust-managed state field type.
     Rust,
     /// Error-recovery sentinel.
     Error,
-    /// Missing/omitted type.
-    Unknown,
+    /// No type was written at this slot (an omitted annotation), as distinct
+    /// from the written `unknown` keyword above.
+    Missing,
     /// The wildcard `_` — an inference hole.
     Infer,
 }
@@ -312,11 +313,11 @@ impl std::fmt::Display for TypeRefDisplay<'_> {
                 }
                 Ok(())
             }
-            TypeRefKind::BuiltinUnknown => write!(f, "unknown"),
+            TypeRefKind::Unknown => write!(f, "unknown"),
             TypeRefKind::Type => write!(f, "reflect.Type"),
             TypeRefKind::Rust => write!(f, "$rust_type"),
             TypeRefKind::Error => write!(f, "error"),
-            TypeRefKind::Unknown => write!(f, "?"),
+            TypeRefKind::Missing => write!(f, "?"),
             TypeRefKind::Infer => write!(f, "_"),
         }
     }
@@ -461,11 +462,11 @@ impl TypeRefBuilder {
                 ret: self.lower(ret),
                 throws: throws.as_ref().map(|t| self.lower(t)),
             },
-            K::BuiltinUnknown { .. } => TypeRefKind::BuiltinUnknown,
+            K::Unknown { .. } => TypeRefKind::Unknown,
             K::Type { .. } => TypeRefKind::Type,
             K::Rust { .. } => TypeRefKind::Rust,
             K::Error { .. } => TypeRefKind::Error,
-            K::Unknown { .. } => TypeRefKind::Unknown,
+            K::Missing { .. } => TypeRefKind::Missing,
             K::Infer { .. } => TypeRefKind::Infer,
         };
 

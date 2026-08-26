@@ -978,23 +978,23 @@ source: crates/baml_tests/src/generated_tests.rs
   [hir] E0010
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client C = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:495:1]
- 495 │ ╭─▶ client<llm> C {
- 496 │ │       provider openai
- 497 │ │       options {
- 498 │ │           model "gpt-4"
- 499 │ │       }
- 500 │ ├─▶ }
+     ╭─[config_decls.baml:476:1]
+ 476 │ ╭─▶ client<llm> C {
+ 477 │ │       provider openai
+ 478 │ │       options {
+ 479 │ │           model "gpt-4"
+ 480 │ │       }
+ 481 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
   [hir] E0010
 
   × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`R` has no effect)
-     ╭─[config_decls.baml:502:1]
- 502 │ ╭─▶ retry_policy R {
- 503 │ │       max_retries 1
- 504 │ ├─▶ }
+     ╭─[config_decls.baml:483:1]
+ 483 │ ╭─▶ retry_policy R {
+ 484 │ │       max_retries 1
+ 485 │ ├─▶ }
      · ╰──── retry composes at the client boundary now
      ╰────
 
@@ -1002,23 +1002,23 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client ExtraWhitespaceClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:507:1]
- 507 │ ╭─▶ client<llm>    ExtraWhitespaceClient    {
- 508 │ │       provider    openai
- 509 │ │       options    {
- 510 │ │           model    "gpt-4"
- 511 │ │       }
- 512 │ ├─▶ }
+     ╭─[config_decls.baml:488:1]
+ 488 │ ╭─▶ client<llm>    ExtraWhitespaceClient    {
+ 489 │ │       provider    openai
+ 490 │ │       options    {
+ 491 │ │           model    "gpt-4"
+ 492 │ │       }
+ 493 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
   [hir] E0010
 
   × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`ExtraWhitespaceRetry` has no effect)
-     ╭─[config_decls.baml:514:1]
- 514 │ ╭─▶ retry_policy    ExtraWhitespaceRetry    {
- 515 │ │       max_retries    3
- 516 │ ├─▶ }
+     ╭─[config_decls.baml:495:1]
+ 495 │ ╭─▶ retry_policy    ExtraWhitespaceRetry    {
+ 496 │ │       max_retries    3
+ 497 │ ├─▶ }
      · ╰──── retry composes at the client boundary now
      ╰────
 
@@ -1026,14 +1026,14 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client CommaClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
-     ╭─[config_decls.baml:519:1]
- 519 │ ╭─▶ client<llm> CommaClient {
- 520 │ │       provider openai,
- 521 │ │       options {
- 522 │ │           model "gpt-4",
- 523 │ │           max_tokens 100,
- 524 │ │       }
- 525 │ ├─▶ }
+     ╭─[config_decls.baml:500:1]
+ 500 │ ╭─▶ client<llm> CommaClient {
+ 501 │ │       provider openai,
+ 502 │ │       options {
+ 503 │ │           model "gpt-4",
+ 504 │ │           max_tokens 100,
+ 505 │ │       }
+ 506 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -1041,11 +1041,11 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client SameLineClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
-     ╭─[config_decls.baml:528:1]
- 528 │ ╭─▶ client<llm> SameLineClient {
- 529 │ │       provider openai
- 530 │ │       options { model "gpt-4" }
- 531 │ ├─▶ }
+     ╭─[config_decls.baml:509:1]
+ 509 │ ╭─▶ client<llm> SameLineClient {
+ 510 │ │       provider openai
+ 511 │ │       options { model "gpt-4" }
+ 512 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 

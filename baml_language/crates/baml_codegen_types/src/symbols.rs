@@ -246,7 +246,7 @@ impl WalkAllUnions for Ty {
             | Ty::Type { .. }
             | Ty::Resource { .. }
             | Ty::PromptAst { .. }
-            | Ty::BuiltinUnknown { .. }
+            | Ty::Unknown { .. }
             | Ty::Never { .. }
             | Ty::Literal(..) => {}
             Ty::Class(_, args, _) => {

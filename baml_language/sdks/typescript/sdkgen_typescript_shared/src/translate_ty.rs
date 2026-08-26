@@ -55,7 +55,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
         Ty::Bool { .. } => TranslatedType::bare("boolean"),
         Ty::Null { .. } => TranslatedType::bare("null"),
         Ty::Uint8Array { .. } => TranslatedType::bare("Uint8Array"),
-        Ty::BuiltinUnknown { .. } | Ty::Interface(..) => TranslatedType::bare("unknown"),
+        Ty::Unknown { .. } | Ty::Interface(..) => TranslatedType::bare("unknown"),
         Ty::Void { .. } => TranslatedType::bare("null"),
         Ty::Never { .. } => TranslatedType::bare("never"),
         // `_BamlHandle` is the runtime opaque-handle type; Phase 4 emits the
@@ -413,7 +413,7 @@ mod tests {
             | Ty::List(..)
             | Ty::Map { .. }
             | Ty::Union(..)
-            | Ty::BuiltinUnknown { .. }
+            | Ty::Unknown { .. }
             | Ty::Function { .. }
             | Ty::Future(..)
             | Ty::Void { .. }
@@ -520,8 +520,8 @@ mod tests {
                 expected_imports: &[],
             },
             Case {
-                label: "builtin_unknown",
-                ty: Ty::BuiltinUnknown {
+                label: "unknown",
+                ty: Ty::Unknown {
                     attr: baml_base::TyAttr::EMPTY,
                 },
                 ctx: ctx(&[]),

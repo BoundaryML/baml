@@ -983,7 +983,7 @@ fn classify_token(token: &SyntaxToken) -> Option<Class> {
         SyntaxKind::CATCH_BINDING | SyntaxKind::CATCH_STACK_TRACE_BINDING => {
             word.then_some(decl(SemanticTokenType::Parameter))
         }
-        SyntaxKind::CLIENT_DEF | SyntaxKind::RETRY_POLICY_DEF | SyntaxKind::TEST_DEF => {
+        SyntaxKind::CLIENT_DEF | SyntaxKind::RETRY_POLICY_DEF => {
             word.then_some(decl(SemanticTokenType::Struct))
         }
         SyntaxKind::TEMPLATE_STRING_DEF => word.then_some(decl(SemanticTokenType::Function)),

@@ -10,8 +10,8 @@
 use std::path::{Path, PathBuf};
 
 use baml_compiler2_emit::{
-    CompileOptions, OptLevel, emit_units, generate_project_bytecode,
-    generate_project_bytecode_with_stdlib, generate_stdlib_program,
+    OptLevel, emit_units, generate_project_bytecode, generate_project_bytecode_with_stdlib,
+    generate_stdlib_program,
 };
 use baml_db::{ProjectDatabase, discover_baml_files};
 use baml_tests::engine::TestDbExt;
@@ -31,27 +31,27 @@ fn read_project(root: &Path) -> Vec<(PathBuf, String)> {
 
 /// Build a fresh `ProjectDatabase` (mirroring CLI project loading) and compile
 /// it to serialized bytecode.
-fn compile_to_bytes(root: &Path, sources: &[(PathBuf, String)], emit_test_cases: bool) -> Vec<u8> {
+fn compile_to_bytes(root: &Path, sources: &[(PathBuf, String)]) -> Vec<u8> {
     let mut db = ProjectDatabase::new();
     db.workspace(root);
     for (path, content) in sources {
         db.file(path, content);
     }
-    let program = generate_project_bytecode(&db, &CompileOptions { emit_test_cases })
+    let program = generate_project_bytecode(&db)
         .unwrap_or_else(|e| panic!("compilation of {} failed: {e:?}", root.display()));
     borsh::to_vec(&program).expect("borsh serialization failed")
 }
 
 /// Compile `root` twice on fresh databases and assert byte-identical output.
-fn assert_deterministic(root: &Path, emit_test_cases: bool) {
+fn assert_deterministic(root: &Path) {
     let sources = read_project(root);
     assert!(
         !sources.is_empty(),
         "no .baml files found under {}",
         root.display()
     );
-    let first = compile_to_bytes(root, &sources, emit_test_cases);
-    let second = compile_to_bytes(root, &sources, emit_test_cases);
+    let first = compile_to_bytes(root, &sources);
+    let second = compile_to_bytes(root, &sources);
 
     if first != second {
         let diff_at = first
@@ -77,16 +77,15 @@ fn assert_deterministic(root: &Path, emit_test_cases: bool) {
 #[test]
 fn empty_project_emit_is_deterministic() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("projects/empty");
-    assert_deterministic(&root, false);
+    assert_deterministic(&root);
 }
 
 /// Realistic multi-file workload: the full `baml_src/` test project exercises
 /// classes, enums, interfaces, match tables, clients, and template strings.
-/// `emit_test_cases: true` additionally covers the `test_cases` table.
 #[test]
 fn baml_src_project_emit_is_deterministic() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src");
-    assert_deterministic(&root, true);
+    assert_deterministic(&root);
 }
 
 /// The default (parallel) emit must produce byte-identical output to the
@@ -110,7 +109,7 @@ fn parallel_emit_is_byte_identical_to_serial() {
             .num_threads(threads)
             .build()
             .expect("build rayon pool")
-            .install(|| compile_to_bytes(&root, &sources, true))
+            .install(|| compile_to_bytes(&root, &sources))
     };
     let serial = run_with(1);
     let parallel = run_with(4);
@@ -158,20 +157,16 @@ fn stdlib_splice_is_byte_identical_to_full_compile() {
         .expect("stdlib compile failed");
     let base_bytes = borsh::to_vec(&base).expect("serialize stdlib base");
 
-    for (root, emit_test_cases) in [
-        (empty_root.clone(), false),
-        (Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src"), true),
+    for root in [
+        empty_root.clone(),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src"),
     ] {
         let sources = read_project(&root);
-        let full = compile_to_bytes(&root, &sources, emit_test_cases);
+        let full = compile_to_bytes(&root, &sources);
 
-        let spliced = generate_project_bytecode_with_stdlib(
-            &build_db(&root, &sources),
-            &CompileOptions { emit_test_cases },
-            OptLevel::Two,
-            &base,
-        )
-        .unwrap_or_else(|e| panic!("splice compile of {} failed: {e:?}", root.display()));
+        let spliced =
+            generate_project_bytecode_with_stdlib(&build_db(&root, &sources), OptLevel::Two, &base)
+                .unwrap_or_else(|e| panic!("splice compile of {} failed: {e:?}", root.display()));
         let spliced = borsh::to_vec(&spliced).expect("serialize spliced program");
 
         assert_eq!(
@@ -253,17 +248,11 @@ function count(value: RuntimeValue) -> int throws never {
     let mut full_db = ProjectDatabase::new();
     full_db.workspace(root);
     full_db.file(root.join("main.baml"), source);
-    let full_user_units = emit_units(
-        &full_db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-        OptLevel::One,
-    )
-    .expect("compile Package artifact from full stdlib sources")
-    .into_iter()
-    .filter(|unit| unit.package.as_str() == "user")
-    .collect::<Vec<_>>();
+    let full_user_units = emit_units(&full_db, OptLevel::One)
+        .expect("compile Package artifact from full stdlib sources")
+        .into_iter()
+        .filter(|unit| unit.package.as_str() == "user")
+        .collect::<Vec<_>>();
 
     assert_eq!(
         prefix_artifact.units.len(),

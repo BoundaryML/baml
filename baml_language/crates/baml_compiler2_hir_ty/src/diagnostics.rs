@@ -916,7 +916,7 @@ impl fmt::Display for TirTypeError {
                 )
             }
             TirTypeError::UnresolvedMember { base_type, member } => {
-                if matches!(base_type, Ty::BuiltinUnknown { .. }) {
+                if matches!(base_type, Ty::Unknown { .. }) {
                     write!(f, "cannot access field `{member}` on `unknown`")
                 } else {
                     write!(

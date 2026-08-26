@@ -1242,7 +1242,7 @@ function interfaces.BgfbPair.BgfbEquatable.eq(self: interfaces.BgfbPair, other: 
     load_var self
     load_field .a
     load_var other
-    load_field .0
+    load_field .a
     cmp_int_op ==
     return
 }
@@ -1251,7 +1251,7 @@ function interfaces.BsmvAcc.BsmvAdder.addOne(self: interfaces.BsmvAcc, other: in
     load_var self
     load_field .base
     load_var other
-    load_field .0
+    load_field .base
     add_int
     return
 }
@@ -1308,7 +1308,7 @@ function interfaces.CridNum.CridEquals.eq(self: interfaces.CridNum, other: inter
     load_var self
     load_field .v
     load_var other
-    load_field .0
+    load_field .v
     cmp_int_op ==
     return
 }
@@ -1926,7 +1926,7 @@ function interfaces.GbspPair.GbspEquatable.eq(self: interfaces.GbspPair, other: 
     load_var self
     load_field .a
     load_var other
-    load_field .0
+    load_field .a
     cmp_int_op ==
     return
 }
@@ -2030,7 +2030,7 @@ function interfaces.IdmcPair.IdmcEquatable.eq(self: interfaces.IdmcPair, other: 
     load_var self
     load_field .a
     load_var other
-    load_field .0
+    load_field .a
     cmp_int_op ==
     return
 }
@@ -2109,7 +2109,7 @@ function interfaces.MsmaBox.MsmaEquatable.same(self: interfaces.MsmaBox, other: 
     load_var self
     load_field .value
     load_var other
-    load_field .0
+    load_field .value
     cmp_int_op ==
     return
 }

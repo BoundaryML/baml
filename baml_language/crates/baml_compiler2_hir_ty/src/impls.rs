@@ -28,7 +28,7 @@
 //!
 //! Deliberately NOT replicated from TIR (survey-recorded defects): the
 //! single-bound conjunction asymmetry (bounds are `Vec` end to end
-//! here), and `get_method`'s silent `BuiltinUnknown` fill for unbound
+//! here), and `get_method`'s silent `Unknown` fill for unbound
 //! params (resolution here leaves methods to I3).
 
 use baml_compiler2_hir::{loc::ImplLoc, package::PackageId};
@@ -50,14 +50,12 @@ pub fn interned_ty(ty: &baml_type::Ty) -> Ty {
 }
 
 /// [`interned_ty`], declining input the interned family cannot
-/// represent (TIR's `Unknown`/`Evolving` inference sentinels, live only
-/// while the dual provider serves TIR-typed tables). An oracle asked
-/// about such a type answers "undecidable", never panics.
+/// represent. An oracle asked about such a type answers "undecidable",
+/// never panics.
 pub fn try_interned_ty(ty: &baml_type::Ty) -> Option<Ty> {
     fn representable(ty: &baml_type::Ty) -> bool {
         use baml_type::Ty as P;
         match ty {
-            P::Unknown { .. } | P::EvolvingList(..) | P::EvolvingMap(..) => false,
             P::List(inner, _) => representable(inner),
             P::Map { key, value, .. } => representable(key) && representable(value),
             P::Future(value, error, _) => representable(value) && representable(error),
