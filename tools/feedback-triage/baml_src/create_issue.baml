@@ -182,6 +182,12 @@ function command_covered_by_compile(command: string) -> bool {
     c.starts_with("baml check") || c.starts_with("baml run") || c.starts_with("baml build")
 }
 
+/// Whether this host can compile in-process. The `baml test` VM cannot;
+/// there every check comes back blocked.
+function runtime_compiler_available() -> bool {
+    try_compile({ "probe.baml": "function probe() -> int { 1 }" }).blocked == null
+}
+
 /// Compile the repro, unless something rules the check out first.
 function attempt_repro(repro: Repro) -> CompileAttempt {
     match (repro.expectation) {
@@ -555,13 +561,12 @@ testset "repro_match" with testing.PassRate(0.8) {
                 assert.is_true(recall >= 0.7);
                 // a programmatic repro must actually run when this host can
                 // run it (the `baml test` VM has no runtime compiler — then
-                // the verdict is Inconclusive and only recall is asserted)
-                let runnable = !run.observed.includes("runtime compiler unavailable");
+                // only recall is asserted)
                 let programmatic = match (repro.expectation) {
                     let e: RequiresInspection => false,
                     _ => command_covered_by_compile(repro.command),
                 };
-                if (runnable && programmatic) {
+                if (programmatic && runtime_compiler_available()) {
                     assert.is_true(run.verdict != Verdict.Inconclusive);
                 };
             }
@@ -656,6 +661,12 @@ testset "run_repro" {
             expectation: RequiresInspection { check: "requires_inspection", instructions: "look at fmt output" },
         };
         assert.equal(run_repro(r).verdict, Verdict.Inconclusive);
+    }
+
+    test "compiler availability is a typed probe" {
+        // the `baml test` VM has no runtime compiler; the probe must say so
+        // rather than the caller sniffing message text
+        assert.equal(runtime_compiler_available(), false);
     }
 
     test "compiler-less host degrades to inconclusive, not a wrong verdict" {
