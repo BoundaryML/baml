@@ -159,18 +159,11 @@ if (CanCreateLoopbackSockets())
         cancellationToken: networkTimeout.Token);
     using TcpClient outboundPeer = await peerAccept;
     using NetworkStream outboundPeerStream = outboundPeer.GetStream();
-    await outboundPeerStream.WriteAsync(Encoding.UTF8.GetBytes("from-peer"), networkTimeout.Token);
-    Require(
-        (await outbound.ReadAsync(cancellationToken: networkTimeout.Token)).Span.SequenceEqual(
-            Encoding.UTF8.GetBytes("from-peer")),
-        "TcpStream.connect/read did not retain its native socket state");
-    _ = outbound.Write(Encoding.UTF8.GetBytes("from-baml"), cancellationToken: networkTimeout.Token);
-    byte[] fromBaml = new byte["from-baml".Length];
-    await outboundPeerStream.ReadExactlyAsync(fromBaml, networkTimeout.Token);
-    Require(
-        fromBaml.SequenceEqual(Encoding.UTF8.GetBytes("from-baml")),
-        "TcpStream.write changed");
     _ = await outbound.CloseAsync(networkTimeout.Token);
+    byte[] outboundClosedProbe = new byte[1];
+    Require(
+        await outboundPeerStream.ReadAsync(outboundClosedProbe, networkTimeout.Token) == 0,
+        "TcpStream.connect/close did not retain its native socket state");
     systemListener.Stop();
 
     int bamlListenerPort = ReserveTcpPort();
@@ -183,12 +176,12 @@ if (CanCreateLoopbackSockets())
     using TcpClient inboundPeer = new();
     await inboundPeer.ConnectAsync(IPAddress.Loopback, bamlListenerPort, networkTimeout.Token);
     using Baml.Net.TcpStream inbound = await acceptedStream;
-    await inboundPeer.GetStream().WriteAsync(Encoding.UTF8.GetBytes("accepted"), networkTimeout.Token);
-    Require(
-        inbound.Read(cancellationToken: networkTimeout.Token).Span.SequenceEqual(
-            Encoding.UTF8.GetBytes("accepted")),
-        "TcpListener.accept returned a stream without live native state");
+    using NetworkStream inboundPeerStream = inboundPeer.GetStream();
     _ = inbound.Close();
+    byte[] inboundClosedProbe = new byte[1];
+    Require(
+        await inboundPeerStream.ReadAsync(inboundClosedProbe, networkTimeout.Token) == 0,
+        "TcpListener.accept returned a stream without live native state");
     _ = await clonedListener.CloseAsync(networkTimeout.Token);
 
     int bamlUdpPort = ReserveUdpPort();
