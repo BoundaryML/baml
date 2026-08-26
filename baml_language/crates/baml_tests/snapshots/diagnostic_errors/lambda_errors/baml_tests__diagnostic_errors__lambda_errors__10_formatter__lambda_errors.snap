@@ -25,6 +25,14 @@ function test_arity_mismatch() -> int[] {
     })
 }
 
+// Arity mismatch: lambda has too few params for expected type
+function test_arity_mismatch_too_few() -> int[] {
+    let f: (int, int) -> int[] throws never = (x) -> {
+        [x]
+    };
+    f(1, 2)
+}
+
 // Wrong param type annotation vs expected
 function test_param_type_mismatch() -> int[] {
     let items: int[] = [1, 2, 3];

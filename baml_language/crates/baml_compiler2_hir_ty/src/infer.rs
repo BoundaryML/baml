@@ -7606,12 +7606,13 @@ impl<'db> InferenceContext<'db> {
                 _ => None,
             });
 
-        if let Some((expected_params, _, _)) = &expected_fn
-            && expected_params.len() != def.params.len()
-        {
+        let expected_arity = expected_fn.as_ref().and_then(|(expected_params, _, _)| {
+            (expected_params.len() != def.params.len()).then_some(expected_params.len())
+        });
+        if let Some(expected) = expected_arity {
             self.pending_diags.push(PendingDiag::ArgCountMismatch {
                 expr,
-                expected: expected_params.len(),
+                expected,
                 got: def.params.len(),
             });
         }
@@ -7807,12 +7808,17 @@ impl<'db> InferenceContext<'db> {
                 },
             })
             .collect();
-        Ty::intern(TyKind::Function {
+        let ty = Ty::intern(TyKind::Function {
             params,
             ret: ret_ty,
             throws: throws_ty,
             attr: TyAttr::default(),
-        })
+        });
+        if expected_arity.is_some() {
+            Ty::error()
+        } else {
+            ty
+        }
     }
 
     /// Registers one Implements obligation per declared bound of a
