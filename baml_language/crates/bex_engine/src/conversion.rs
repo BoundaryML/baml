@@ -739,6 +739,23 @@ impl BexEngine {
                         })
                         .collect();
 
+                let mut fields = fields?;
+
+                // Media wrapper instances flatten to the canonical
+                // `Adt(Media(_))` on the wire: the host bridges construct and
+                // decode media through the ADT (media_roundtrip.rs pins this),
+                // while the VM-internal form is the stdlib wrapper class.
+                if matches!(
+                    class.name.to_string().as_str(),
+                    "baml.media.Image" | "baml.media.Audio" | "baml.media.Video" | "baml.media.Pdf"
+                ) {
+                    if let Some(BexExternalValue::Adt(BexExternalAdt::Media(arc))) =
+                        fields.shift_remove(bex_external_types::MEDIA_WRAPPER_DATA_FIELD)
+                    {
+                        return Ok(BexExternalValue::Adt(BexExternalAdt::Media(arc)));
+                    }
+                }
+
                 Ok(BexExternalValue::Instance {
                     class_name: class.name.to_string(),
                     type_args: instance
@@ -746,7 +763,7 @@ impl BexEngine {
                         .iter()
                         .map(|arg| overlay_wire_ty(&bex_vm_types::RuntimeTy::from(arg)))
                         .collect::<Result<Vec<_>, _>>()?,
-                    fields: fields?,
+                    fields,
                 })
             }
 
@@ -1668,7 +1685,11 @@ impl BexEngine {
                 // stdlib wrapper class instance — methods and the prompt
                 // renderer dispatch on that instance, so a bare rust_data
                 // panics `mime_type()` and silently drops media parts from
-                // rendered requests.
+                // rendered requests (renders as literal `<rust_data>`).
+                // The OUTBOUND path flattens the wrapper back to the
+                // canonical `Adt(Media(_))`, so the engine's wire contract
+                // (media_roundtrip.rs) is ADT in both directions while the
+                // VM-internal form matches BAML-constructed media.
                 if matches!(expected_ty, Some(RuntimeTy::RustType { .. })) {
                     Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
                 } else {
@@ -1679,8 +1700,9 @@ impl BexEngine {
                         baml_type::MediaKind::Pdf => "baml.media.Pdf",
                         baml_type::MediaKind::Generic => {
                             return Err(EngineError::TypeMismatch {
-                                message: "cannot materialize a generic media value as a wrapper instance"
-                                    .to_string(),
+                                message:
+                                    "cannot materialize a generic media value as a wrapper instance"
+                                        .to_string(),
                             });
                         }
                     };
@@ -3198,16 +3220,14 @@ fn value_matches_type_with_definitions(
         // structurally — so honor it before unwrapping (otherwise media
         // items inside union-typed containers, e.g. `image[]?`, are
         // rejected while the direct-typed path accepts them).
-        (
-            BexExternalValue::Union { metadata, .. },
-            RuntimeTy::Media(expected_kind, _),
-        ) if metadata.is_inbound_type_annotation
-            && matches!(
-                &metadata.selected_option,
-                RuntimeTy::Media(kind, _)
-                    if *expected_kind == baml_type::MediaKind::Generic
-                        || kind == expected_kind
-            ) =>
+        (BexExternalValue::Union { metadata, .. }, RuntimeTy::Media(expected_kind, _))
+            if metadata.is_inbound_type_annotation
+                && matches!(
+                    &metadata.selected_option,
+                    RuntimeTy::Media(kind, _)
+                        if *expected_kind == baml_type::MediaKind::Generic
+                            || kind == expected_kind
+                ) =>
         {
             true
         }
