@@ -322,8 +322,9 @@ impl OutputFormatContent {
 
     /// Compute which enums should be hoisted (rendered as top-level definitions).
     fn compute_hoisted_enums(&self, options: &RenderOptions) -> indexmap::IndexSet<String> {
+        // Reverse of the walk's last-reference order (legacy renderer parity).
         let mut hoisted = indexmap::IndexSet::new();
-        for (name, enm) in &self.enums {
+        for (name, enm) in self.enums.iter().rev() {
             if enm.values.len() > Self::INLINE_RENDER_ENUM_MAX_VALUES
                 || enm.description.is_some()
                 || enm.values.iter().any(|v| v.description.is_some())
@@ -442,9 +443,14 @@ impl OutputFormatContent {
                     .filter(|v| !matches!(v, SapTy::Null { .. }))
                     .collect();
                 // `T?` (single non-null member + null) follows the inner type's
-                // prefix; a true multi-member union gets the union prefix.
+                // prefix — except that a nullable PRIMITIVE, unlike a bare
+                // primitive (which renders no schema at all), does render a
+                // schema (`string or null`) and therefore takes the schema
+                // prefix (legacy renderer parity).
                 if non_null.len() == 1 && non_null.len() < variants.len() {
-                    Self::auto_prefix(non_null[0], type_word, hoisted)
+                    Self::auto_prefix(non_null[0], type_word, hoisted).or_else(|| {
+                        Some(format!("Answer in JSON using this {type_word}:\n"))
+                    })
                 } else if non_null.len() > 1 {
                     Some(format!("Answer in JSON using any of these {type_word}s:\n"))
                 } else {
@@ -519,9 +525,11 @@ impl OutputFormatContent {
                         | SapTy::Bool { .. }
                         | SapTy::Null { .. } => false,
                         SapTy::Enum(tn, _) => {
-                            // Inline enums render short; hoisted ones are just a name
-                            !hoisted_enums.contains(tn.display_name().as_str())
-                                && inner_str.len() > 15
+                            // Hoisted enums render as a bracketed block (legacy
+                            // parity: `[\n  Name\n]`); inline enums go
+                            // multiline only when long.
+                            hoisted_enums.contains(tn.display_name().as_str())
+                                || inner_str.len() > 15
                         }
                         SapTy::Union(items, _) => items.iter().all(|t| {
                             !matches!(
@@ -561,8 +569,14 @@ impl OutputFormatContent {
             }
 
             SapTy::Union(variants, _) => {
-                let rendered: Vec<String> = variants
+                // Null arms render last (`X or null`), matching the legacy
+                // renderer regardless of the union's internal arm order.
+                let (null_variants, value_variants): (Vec<&SapTy>, Vec<&SapTy>) = variants
                     .iter()
+                    .partition(|v| matches!(v, SapTy::Null { .. }));
+                let rendered: Vec<String> = value_variants
+                    .into_iter()
+                    .chain(null_variants)
                     .filter_map(|v| {
                         self.render_type_hoisted(v, options, hoisted_classes, hoisted_enums)
                             .ok()
@@ -685,7 +699,10 @@ impl OutputFormatContent {
                 RenderSetting::Never => "",
             };
             let line = match &v.description {
-                Some(d) => format!("{prefix}{value_name}: {d}"),
+                // Continuation lines align under the value text (legacy
+                // renderer behavior; keeps multi-line descriptions visually
+                // attached to their value).
+                Some(d) => format!("{prefix}{value_name}: {}", d.replace('\n', "\n  ")),
                 None => format!("{prefix}{value_name}"),
             };
             result.push('\n');
@@ -747,8 +764,14 @@ impl OutputFormatContent {
                 }
             }
         }
-        output.push_str(&fields_str.join("\n"));
-        output.push_str("\n}");
+        if fields_str.is_empty() {
+            // An empty (fully dynamic, not yet extended) class renders as
+            // "{\n}" rather than leaving a blank line between the braces.
+            output.push('}');
+        } else {
+            output.push_str(&fields_str.join("\n"));
+            output.push_str("\n}");
+        }
 
         Ok(output)
     }
@@ -1178,6 +1201,13 @@ fn walk_ty(
         SapTy::Enum(type_name, _) => {
             let key = OutputVisitKey::Enum(type_name.clone());
             if !visited.insert(key) {
+                // Legacy renderer parity: a re-reference moves the enum to the
+                // end of the collection order; hoisted definitions are then
+                // emitted in REVERSE of that (last-referenced first).
+                let display = type_name.display_name().to_string();
+                if let Some(entry) = content.enums.shift_remove(&display) {
+                    content.enums.insert(display, entry);
+                }
                 return Ok(());
             }
             if let Some(enum_def) = find_enum_definition(ctx, type_name) {
