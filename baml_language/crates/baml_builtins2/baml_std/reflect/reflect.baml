@@ -175,12 +175,13 @@ class Signature {
   docstring string?
 }
 
-/// Thrown by `reflect.call_any` when the supplied arguments do not fit the
-/// callee's runtime signature. `argument` names the offending key (`$argN`
-/// placeholders included). An ill-typed value reports the parameter's and
-/// the value's types; a missing required parameter reports the parameter's
-/// type and `never`; a key naming no parameter reports the callee's whole
-/// function type and the value's type.
+/// Thrown by `reflect.call_any` when the supplied arguments or returned value
+/// do not fit its runtime signature. `argument` names the offending key
+/// (`$argN` placeholders included); a return mismatch names the
+/// `reflect.call_any return value` boundary. An ill-typed value reports the
+/// expected and actual types; a missing required parameter reports the
+/// parameter's type and `never`; a key naming no parameter reports the
+/// callee's whole function type and the value's type.
 class InvalidArgumentError {
   argument string
   expected reflect.Type
@@ -347,11 +348,12 @@ function signature(f: AnyFunction) -> Signature throws never {
 /// positional is addressed by its `$argN` placeholder), checked at runtime
 /// against `f`'s signature: a missing required parameter, a key naming no
 /// parameter, or a value that does not fit its parameter's type throws
-/// `InvalidArgumentError`. An absent optional fires the callee's own
-/// default. `R` and `E` are `f`'s `Returns`/`Throws` pins, so a pinned
-/// `AnyFunction<Returns = json, Throws = ToolError>` yields typed results
-/// and an exhaustive catch; a bare `AnyFunction` returns `unknown` and
-/// throws `unknown` (which covers `InvalidArgumentError` and
+/// `InvalidArgumentError`. The returned value is checked against `R` at the
+/// same boundary (except when `R` is `unknown`). An absent optional fires the
+/// callee's own default. `R` and `E` are `f`'s `Returns`/`Throws` pins, so a
+/// pinned `AnyFunction<Returns = json, Throws = ToolError>` yields typed
+/// results and an exhaustive catch; a bare `AnyFunction` returns `unknown`
+/// and throws `unknown` (which covers `InvalidArgumentError` and
 /// `reflect.errors.CompilationError`).
 //baml:mut_vm
 //baml:may_yield
