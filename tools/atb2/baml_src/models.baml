@@ -26,14 +26,19 @@ class Feedback {
     body: string,
     source: FeedbackSource,
     author: Author,
-    /// Toolchain version the reporter saw the bug on (e.g. "0.17.0");
-    /// "unknown" when the report does not say.
-    toolchain: string,
+    /// Toolchain version the reporter saw the bug on (e.g. "0.17.0"); null
+    /// when the report does not say. Read it through `reporter_toolchain`.
+    toolchain: string?,
     /// Files attached to the report (`baml feedback --files`), name -> content.
     files: map<string, string>,
     comments: Comment[],
     /// Issues already linked to this feedback (empty until triaged).
     issue_ids: string[],
+}
+
+/// The reporter's toolchain, or "unknown" when the report did not say.
+function reporter_toolchain(fb: Feedback) -> string {
+    fb.toolchain ?? "unknown"
 }
 
 class InvalidFeedback {
@@ -101,7 +106,8 @@ class Issue {
     subsystem: Subsystem,
     /// An issue accumulates repros over its life; triage seeds the first one.
     repros: Repro[],
-    /// Toolchain version the issue was reproduced on.
+    /// Toolchain version the bug was last seen on: this host's when the
+    /// repro reproduced it here, otherwise the reporter's (unverified).
     version: string,
     /// Feedback that this issue resolves.
     feedback_ids: string[],

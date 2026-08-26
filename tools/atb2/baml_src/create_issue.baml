@@ -22,7 +22,10 @@ function create_issue(fb: Feedback) -> Issue? {
         shepherd: null,
         subsystem: draft.subsystem,
         repros: [repro].concat(draft.more_repros),
-        version: toolchain_version(),
+        version: match (run.verdict) {
+            Verdict.StillBroken => toolchain_version(),
+            _ => reporter_toolchain(fb),
+        },
         feedback_ids: [fb.id],
         status: Open { state: "open" },
         comments: [],
@@ -104,7 +107,7 @@ function create_repro(fb: Feedback) -> Repro {
             command; "instructions" says what to look at after running it.
         - "setup" is null unless env vars or flags are genuinely required.
 
-        Reporter's toolchain: ${fb.toolchain}
+        Reporter's toolchain: ${reporter_toolchain(fb)}
         Report title: ${fb.title}
         Report body:
         ${fb.body}
@@ -158,13 +161,8 @@ function try_compile(files: map<string, string>) -> CompileAttempt {
         baml.errors.Unsupported => {
             blocked("runtime compiler unavailable in this host: " + e.message)
         },
-        _ => {
-            CompileAttempt {
-                pkg: null,
-                error: "compilation failed for an unexpected reason",
-                blocked: null,
-            }
-        },
+        // not a diagnostic about the sources — no verdict can be drawn
+        _ => blocked("compilation failed for an unexpected reason"),
     }
 }
 
@@ -322,7 +320,7 @@ function write_issue(fb: Feedback, repro: Repro, run: ReproRun) -> IssueDraft {
           or another command surface. Same shape as the minimal repro
           (files + command + expectation); empty if nothing meaningful adds.
 
-        Original report (toolchain ${fb.toolchain}): ${fb.title}
+        Original report (toolchain ${reporter_toolchain(fb)}): ${fb.title}
         ${fb.body}
 
         Minimal repro command: ${repro.command}
@@ -631,6 +629,24 @@ testset "feedback" {
         assert.equal(author_identity(fb.author), "octocat");
     }
 
+    test "a report without a toolchain still parses and reads as unknown" {
+        let raw = #"
+            {
+              "id": "FB-3",
+              "title": "t",
+              "body": "b",
+              "source": "BamlFeedback",
+              "author": { "email": null, "github": null, "device_id": "dev-1" },
+              "toolchain": null,
+              "files": {},
+              "comments": [],
+              "issue_ids": []
+            }
+        "#;
+        let fb = baml.json.from_string<Feedback>(raw);
+        assert.equal(reporter_toolchain(fb), "unknown");
+    }
+
     test "no identity throws InvalidFeedback" {
         let anon = Author { email: null, github: null, device_id: null };
         let got = author_identity(anon) catch (_) {
@@ -663,13 +679,7 @@ testset "run_repro" {
         assert.equal(run_repro(r).verdict, Verdict.Inconclusive);
     }
 
-    test "compiler availability is a typed probe" {
-        // the `baml test` VM has no runtime compiler; the probe must say so
-        // rather than the caller sniffing message text
-        assert.equal(runtime_compiler_available(), false);
-    }
-
-    test "compiler-less host degrades to inconclusive, not a wrong verdict" {
+    test "a compiler-less host degrades to inconclusive; a host with one verdicts" {
         let r = Repro {
             files: { "main.baml": "function f() -> int { 41 + 1 }" },
             command: "baml run main.baml",
@@ -677,8 +687,11 @@ testset "run_repro" {
             expectation: ShouldCompile { check: "should_compile" },
         };
         let run = run_repro(r);
-        assert.equal(run.verdict, Verdict.Inconclusive);
-        assert.contains(run.observed, "runtime compiler unavailable");
+        if (runtime_compiler_available()) {
+            assert.equal(run.verdict, Verdict.Fixed);
+        } else {
+            assert.equal(run.verdict, Verdict.Inconclusive);
+        }
     }
 }
 
