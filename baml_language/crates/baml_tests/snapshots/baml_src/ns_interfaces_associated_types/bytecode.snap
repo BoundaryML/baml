@@ -606,7 +606,6 @@ function interfaces_associated_types.ing_stringify_next(iter: interfaces_associa
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
-    load_type int | null
     load_var _2
     call baml.json.to_string
     return

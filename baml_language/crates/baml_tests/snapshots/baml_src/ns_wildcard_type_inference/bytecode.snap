@@ -14,7 +14,6 @@ function wildcard_type_inference.$init_test_ns_wildcard_type_inference_wildcard_
 }
 
 function wildcard_type_inference.wildcard_json_dump(x: int) -> baml.json.json {
-    load_type int
     load_var x
     call baml.json.to_json
     return

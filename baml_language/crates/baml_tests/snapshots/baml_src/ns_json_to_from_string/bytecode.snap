@@ -262,7 +262,6 @@ function json_to_from_string.closure_captures_type_arg_name() -> string {
 }
 
 function json_to_from_string.composite_generic_roundtrip_name() -> string {
-    load_type json_to_from_string.Container<json_to_from_string.User>
     load_const "Ada"
     load_const 30
     init_instance user.json_to_from_string.User .name, .age
@@ -300,7 +299,6 @@ function json_to_from_string.enum_variant_from_string_name() -> string {
 }
 
 function json_to_from_string.enum_variant_roundtrip_eq() -> bool {
-    load_type json_to_from_string.Color
     load_const user.json_to_from_string.Color.Blue
     alloc_variant user.json_to_from_string.Color
     call baml.json.to_string
@@ -428,18 +426,12 @@ function json_to_from_string.media_field_roundtrip_str() -> string {
     load_const "https://example.com/a.png"
     load_const "image/png"
     call baml.media.Image.from_url
-    store_var _2
-    load_type json_to_from_string.ProfileMedia
-    load_var _2
     init_instance user.json_to_from_string.ProfileMedia .avatar
     call baml.json.to_string
     store_var s
     load_type json_to_from_string.ProfileMedia
     load_var s
     call baml.json.from_string
-    store_var d
-    load_type json_to_from_string.ProfileMedia
-    load_var d
     call baml.json.to_string
     return
 }
@@ -455,7 +447,6 @@ function json_to_from_string.optional_field_decode_missing_is_null() -> bool {
 }
 
 function json_to_from_string.recursive_class_roundtrip_value() -> int {
-    load_type json_to_from_string.Tree
     load_const 1
     load_const 2
     load_type json_to_from_string.Tree
@@ -488,7 +479,6 @@ function json_to_from_string.recursive_class_roundtrip_value() -> int {
 }
 
 function json_to_from_string.roundtrip_simple_age() -> int {
-    load_type json_to_from_string.User
     load_const "Ada"
     load_const 30
     init_instance user.json_to_from_string.User .name, .age
@@ -510,7 +500,6 @@ function json_to_from_string.three_level_name() -> string {
 }
 
 function json_to_from_string.to_string_infers_simple_class() -> string {
-    load_type json_to_from_string.User
     load_const "Ada"
     load_const 30
     init_instance user.json_to_from_string.User .name, .age
@@ -521,9 +510,6 @@ function json_to_from_string.to_string_infers_simple_class() -> string {
 function json_to_from_string.to_string_json_passthrough_str() -> string {
     load_const "[1,2,3]"
     call baml.json.parse
-    store_var j
-    load_type baml.json.json
-    load_var j
     call baml.json.to_string
     return
 }

@@ -22,7 +22,7 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{
     ArtifactKind, AtomicValueSlot, HeapPtr, Interface, Object, RealizedTy, RuntimeCompileArtifact,
     RuntimeCompileArtifactSlot, RuntimeSessionCompileArtifact, RuntimeSessionStepKind,
-    SessionEvalLease, Ty,
+    SessionEvalLease, Ty, TyTemplate,
     link::link_dynamic,
     relink::{IndexOperand, visit_object_operands},
     types::{
@@ -34,7 +34,7 @@ use indexmap::IndexMap;
 
 use super::{
     BamlClassPackage, BamlClassSession, BamlPackageReflect, Continuation, ImplResolver,
-    NativeCallResult, PackageReflectImpl, PassThroughContinuation, copy,
+    NativeCallResult, PackageReflectImpl, copy,
 };
 use crate::{
     BexVm,
@@ -2478,6 +2478,59 @@ fn prepare_call_any_argument(vm: &mut BexVm, value: Value, expected: &RealizedTy
     value_fits(vm, value, expected).then_some(value)
 }
 
+/// Checks the result of the dynamically dispatched call against the `R` that
+/// typed `reflect.call_any<R, E>`. The callee runs after the native yields, so
+/// this continuation is the first point where both the promised type and the
+/// returned value are available together.
+struct CallAnyContinuation {
+    expected: RealizedTy,
+}
+
+impl Continuation for CallAnyContinuation {
+    fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        if matches!(self.expected, RealizedTy::BuiltinUnknown { .. }) {
+            return NativeCallResult::Done(value);
+        }
+
+        let matches = crate::type_match::value_matches_template(
+            vm,
+            value,
+            &TyTemplate::from(self.expected.clone()),
+            &[],
+        );
+        match matches {
+            Ok(true) => NativeCallResult::Done(value),
+            Ok(false) => raise_invalid_argument(
+                vm,
+                "reflect.call_any return value",
+                self.expected,
+                value_realized_ty(vm, value),
+            ),
+            Err(error) => error.into(),
+        }
+    }
+
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        let mut roots = Vec::new();
+        self.expected.visit_heads(&mut |head| {
+            if head.is_resolved() {
+                roots.push(head.ptr());
+            }
+        });
+        roots
+    }
+
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        self.expected.visit_heads_mut(&mut |head| {
+            if head.is_resolved()
+                && let Some(&moved) = forwarding.get(&head.ptr())
+            {
+                head.forward_to(moved);
+            }
+        });
+    }
+}
+
 /// `reflect.call_any<R, E>(f, args) -> R throws E | InvalidArgumentError | CompilationError`.
 ///
 /// Every argument is keyed by parameter name; a nameless positional is
@@ -2584,10 +2637,20 @@ fn call_any_impl(
         return raise_invalid_argument(vm, &unknown, expected, got);
     }
 
+    // Read `R` only after argument validation has finished allocating: once
+    // captured below, the continuation owns and roots every declaration head
+    // the realized type refers to while the callee is running.
+    let expected_return = vm
+        .current_call_type_args()
+        .first()
+        .cloned()
+        .unwrap_or_else(RealizedTy::unknown);
     NativeCallResult::YieldToCall {
         callee: f_ptr,
         args: final_args,
         type_args: vec![],
-        continuation: Box::new(PassThroughContinuation),
+        continuation: Box::new(CallAnyContinuation {
+            expected: expected_return,
+        }),
     }
 }
