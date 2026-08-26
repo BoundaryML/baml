@@ -165,8 +165,10 @@ impl PromptAssembly {
         let Some(&next_ptr) = self.pending.get(self.results.len()) else {
             return self.finish(vm);
         };
-        let Some(callee) = make_to_string_callee(vm, Value::object(next_ptr)) else {
-            return self.finish(vm);
+        let callee = match make_to_string_callee(vm, Value::object(next_ptr)) {
+            Err(e) => return NativeCallResult::Error(e.into()),
+            Ok(Some(callee)) => callee,
+            Ok(None) => return self.finish(vm),
         };
         NativeCallResult::YieldToCall {
             callee,

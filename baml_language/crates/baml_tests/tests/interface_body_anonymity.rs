@@ -48,11 +48,14 @@ function main() -> string throws never {
 
 /// The three body shapes this fixture produces, by their display spellings:
 /// the interface default body, the in-class override, and the free-impl
-/// override.
+/// override. An impl block is anonymous, so overrides spell the synthesized
+/// `<(target as iface)>` segment (the lambda convention) — canonical, fully
+/// qualified, and identical for the in-class and out-of-body spellings
+/// (block syntax is not identity).
 const BODY_SPELLINGS: [&str; 3] = [
     "user.Greeter.greet",
-    "user.Overrides.Greeter.greet",
-    "user.Greeter$for$int.greet",
+    "user.<(user.Overrides as user.Greeter)>.greet",
+    "user.<(int as user.Greeter)>.greet",
 ];
 
 #[test]

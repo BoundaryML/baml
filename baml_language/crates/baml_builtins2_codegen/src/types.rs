@@ -48,9 +48,11 @@ impl NativeBuiltin {
     /// Derive the `SysOp` enum variant name from the path.
     /// `"baml.fs.open"` → `"BamlFsOpen"`, `"baml.fs.File.read"` → `"BamlFsFileRead"`,
     /// `"baml.env.get"` → `"BamlEnvGet"`, `"ai.Prompt.text"` → `"AiPromptText"`.
+    /// An impl-block method path (`baml.random.Rng$for$SystemRandom.random`)
+    /// treats `$` as a word boundary → `"BamlRandomRngForSystemRandomRandom"`.
     pub fn sys_op_variant_name(&self) -> String {
         self.path
-            .split('.')
+            .split(['.', '$'])
             .flat_map(|segment| {
                 segment.split('_').map(|word| {
                     let mut chars = word.chars();

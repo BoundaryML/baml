@@ -1520,13 +1520,13 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.emit_duplicate_diagnostics(seen);
 
         // Walk class methods — inside class scope, so methods won't be
-        // contributed as top-level symbols. We collapse class-level methods
-        // and all `implements I { ... }` method overrides into a single id
-        // list so downstream code (which queries `Class::methods`) sees them
-        // uniformly. Disambiguation of which interface a method satisfies
-        // happens in TIR via `class.implements`.
+        // contributed as top-level symbols. `Class::methods` carries ONLY the
+        // class-level methods: an in-body `implements I { … }` method belongs
+        // to its impl block (the compiler sees no distinction between the
+        // in-class and out-of-body spellings beyond syntax), so those ids
+        // live on the `ImplBlock` and resolve through the impl tier.
         self.class_depth += 1;
-        let mut method_ids: Vec<_> = c.methods.iter().map(|m| self.lower_function(m)).collect();
+        let method_ids: Vec<_> = c.methods.iter().map(|m| self.lower_function(m)).collect();
         for impl_block in &c.implements {
             let mut block_method_ids = Vec::new();
             for m in &impl_block.methods {
@@ -1564,7 +1564,6 @@ impl<'db> SemanticIndexBuilder<'db> {
                 docstring: None,
             };
             self.item_tree.alloc_impl(&iface_head, &c.name, block);
-            method_ids.extend(block_method_ids);
         }
         self.class_depth -= 1;
 

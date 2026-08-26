@@ -477,6 +477,16 @@ pub struct ResolvedImpl<'db> {
     pub bindings: FxHashMap<ParamTy, Ty>,
 }
 
+/// A method an impl provides, by where its body lives: a source block's
+/// function item, or a mounted/precompiled row's exported descriptor.
+pub enum ProvidedMethod<'db, 'a> {
+    Source {
+        block: ImplLoc<'db>,
+        func: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    },
+    Mounted(&'a crate::package_interface::ExportedFunction),
+}
+
 #[derive(Clone, PartialEq)]
 enum CachedResolvedImplOrigin<'db> {
     /// Deliberately fact-free: source facts are Salsa-derived and must be
@@ -569,31 +579,35 @@ impl ResolvedImpl<'_> {
 }
 
 impl<'db> ResolvedImpl<'db> {
-    pub fn source_dispatch(
+    /// What this impl PROVIDES for method `name` — the function that runs
+    /// when the impl matches. `None` means the block leaves the method to
+    /// the interface's default body (Rust-trait semantics: an impl provides
+    /// a method or inherits the default; there is no override relation).
+    pub fn provided_method(
         &self,
         db: &'db dyn baml_compiler2_ppir::Db,
         name: &Name,
-    ) -> Option<(ImplLoc<'db>, baml_compiler2_hir::loc::FunctionLoc<'db>)> {
-        let ResolvedImplOrigin::Source { block, methods } = &self.origin else {
-            return None;
-        };
-        methods
-            .iter()
-            .copied()
-            .find(|&method| baml_compiler2_ppir::item_data::function_data(db, method).name == *name)
-            .map(|method| (*block, method))
-    }
-
-    pub fn mounted_method(
-        &self,
-        name: &Name,
-    ) -> Option<&crate::package_interface::ExportedFunction> {
-        let methods = match &self.origin {
-            ResolvedImplOrigin::Mounted { methods } => methods.as_slice(),
-            ResolvedImplOrigin::Precompiled { methods, .. } => *methods,
-            ResolvedImplOrigin::Source { .. } => return None,
-        };
-        methods.iter().find(|method| method.name == *name)
+    ) -> Option<ProvidedMethod<'db, '_>> {
+        match &self.origin {
+            ResolvedImplOrigin::Source { block, methods } => methods
+                .iter()
+                .copied()
+                .find(|&method| {
+                    baml_compiler2_ppir::item_data::function_data(db, method).name == *name
+                })
+                .map(|func| ProvidedMethod::Source {
+                    block: *block,
+                    func,
+                }),
+            ResolvedImplOrigin::Mounted { methods } => methods
+                .iter()
+                .find(|method| method.name == *name)
+                .map(ProvidedMethod::Mounted),
+            ResolvedImplOrigin::Precompiled { methods, .. } => methods
+                .iter()
+                .find(|method| method.name == *name)
+                .map(ProvidedMethod::Mounted),
+        }
     }
 
     pub fn source_block(&self) -> Option<ImplLoc<'db>> {

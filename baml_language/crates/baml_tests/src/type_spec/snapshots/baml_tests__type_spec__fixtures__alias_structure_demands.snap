@@ -6,7 +6,7 @@ expression: outcome.dump
 330..382 '{\n   ...  n\n}': int
 336..341 'let n': int
 344..345 'm': user.AsdMaybe
-344..353 'm?.length': (self: baml.String) -> int throws never
+344..353 'm?.length': (self: string) -> int throws never
 344..355 'm?.length()': int
 344..355 'm?.length()': int | null
 344..360 'm?.len...) ?? 0': int

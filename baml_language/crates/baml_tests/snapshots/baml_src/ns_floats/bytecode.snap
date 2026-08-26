@@ -1441,13 +1441,13 @@ function floats.$init_test_ns_floats_floats(registry: testing.TestCollector) -> 
     return
 }
 
-function floats.FixedFloatRng.baml.random.Rng.random(self: floats.FixedFloatRng, bytes: int) -> uint8array {
+function floats.<(user.floats.FixedFloatRng as baml.random.Rng)>.random(self: floats.FixedFloatRng, bytes: int) -> uint8array {
     load_const b""
     call baml.deep_copy
     return
 }
 
-function floats.FixedFloatRng.baml.random.Rng.random_int(self: floats.FixedFloatRng) -> int {
+function floats.<(user.floats.FixedFloatRng as baml.random.Rng)>.random_int(self: floats.FixedFloatRng) -> int {
     load_var self
     load_field .draw
     return

@@ -216,7 +216,7 @@ fn enclosing_param_count<'db>(
     match baml_compiler2_ppir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => crate::lower::class_generic_frame(db, class).len(),
         Some(MethodOwner::Interface(iface)) => crate::lower::interface_frame(db, iface).len(),
-        Some(MethodOwner::FreeImpl(imp)) => crate::lower::impl_frame(db, imp).len(),
+        Some(MethodOwner::Impl(imp)) => crate::lower::impl_frame(db, imp).len(),
         None => 0,
     }
 }

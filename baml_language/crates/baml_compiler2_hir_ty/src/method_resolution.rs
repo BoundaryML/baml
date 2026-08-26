@@ -53,7 +53,7 @@ pub fn lookup_method<'db>(
 ) -> Option<MethodCandidate<'db>> {
     if let Some((class, class_args)) = receiver_class(facts, receiver, 8) {
         // Implements-block methods resolve here too (static dispatch to the
-        // override, builtin-backed receivers included); the AMBIGUITY rule -
+        // provided method, builtin-backed receivers included); the AMBIGUITY rule -
         // several implemented interfaces declaring the name need `as<I>`
         // qualification even when a candidate exists - is the callers'
         // `concrete_member_ambiguity` pre-check, not an exclusion here.
@@ -274,19 +274,20 @@ pub enum MemberDeclarer<'db> {
         interface: InterfaceLoc<'db>,
         method: FunctionLoc<'db>,
     },
-    /// A concrete receiver's method through a matched impl: the impl's
-    /// override when it provides one, else the interface's default body.
+    /// A concrete receiver's method through a matched impl: the method
+    /// the impl provides when it does, else the interface's default body.
     ImplMethod {
         block: ImplLoc<'db>,
         func: FunctionLoc<'db>,
         /// The callee's OWNER frame, realized by the impl match — the frame
         /// the resolution CARRIES so the call site never re-derives it: the
-        /// impl's generic bindings (declaration order) for an override,
-        /// `[Self = receiver, iface args..]` for an inherited default.
+        /// impl's generic bindings (declaration order) for a provided
+        /// method, `[Self = receiver, iface args..]` for an inherited
+        /// default.
         frame_type_args: Vec<Ty>,
         /// `true` when `func` is the interface's default body (which expects
-        /// the `[Self, iface args..]` convention), `false` for an override
-        /// (the impl-generics convention).
+        /// the `[Self, iface args..]` convention), `false` for a provided
+        /// method (the impl-generics convention).
         from_interface_default: bool,
     },
     /// A concrete receiver's interface FIELD through a matched impl.
@@ -564,6 +565,24 @@ fn lookup_impl_member<'db>(
     receiver: &Ty,
     name: &Name,
 ) -> InterfaceMemberLookup<'db> {
+    // An unsolved receiver instantiation cannot drive the impl matcher, but
+    // an in-class or blanket impl is shaped at the class's OWN parameters,
+    // so its match is decided by the head alone: probe at the rigid self
+    // type and substitute the receiver's actual arguments back into the
+    // result (the inherent tier tolerates unsolved class args the same
+    // way — the argument rides along and unifies later). An impl whose
+    // pattern pins the unsolved argument (`implements Foo for Bin<int>`)
+    // genuinely depends on it and correctly stays unmatched until
+    // inference solves the argument.
+    if let TyKind::Class(qtn, args, _) = receiver.kind()
+        && args.iter().any(Ty::has_infer)
+        && let Some(Definition::Class(class)) = facts.definition_of(qtn)
+    {
+        let frame = crate::lower::class_generic_frame(db, class);
+        let probe = crate::lower::class_self_ty(db, class);
+        let lookup = lookup_impl_member(db, facts, &probe, name);
+        return substitute_lookup_class_args(lookup, &frame, args);
+    }
     let mut providers: Vec<(InterfaceRef, InterfaceMember<'db>)> = Vec::new();
     for resolved in crate::impls::impls_for_type(db, receiver) {
         if !env_discharges_rigid_bounds(db, facts, &resolved) {
@@ -574,95 +593,111 @@ fn lookup_impl_member<'db>(
             member_on_interface(db, facts, &implemented, receiver, name, false)
             && !providers.iter().any(|(seen, _)| *seen == implemented)
         {
-            // Concrete dispatch: the impl block is the declarer. A
-            // method resolves to the impl's override when it provides
-            // one, else the interface's default body (the recorded
-            // callable IS the body the call runs).
-            member.declarer = match member.declarer {
-                MemberDeclarer::VirtualMethod { interface, method } => {
-                    if let Some((block, func)) = resolved.source_dispatch(db, name) {
-                        // The override's frame: the impl's generic params
-                        // realized through the match, in declaration order. A
-                        // matched impl binds every declared param (E0207:
-                        // each appears in the for-type or the interface ref),
-                        // so an absent binding is a resolver bug, never a
-                        // state to paper over with a stand-in type.
-                        let frame_type_args = resolved
-                            .facts
-                            .generic_params()
-                            .iter()
-                            .map(|(param, _)| {
-                                resolved.bindings.get(param).cloned().unwrap_or_else(|| {
-                                    unreachable!(
-                                        "matched impl left generic `{}` unbound",
-                                        param.name()
-                                    )
-                                })
-                            })
-                            .collect();
-                        MemberDeclarer::ImplMethod {
+            // Concrete dispatch. The interface answered the DECLARATION
+            // question (the member exists, its kind, the one-`Self` gate);
+            // the IMPL answers which function runs. Rust-trait semantics:
+            // an impl PROVIDES a method — whose signature may legally
+            // refine the interface's (narrower `throws`, effect-parametric
+            // callback params; E0120's subtype check ratifies it) and is
+            // what the call must type against — or leaves it to the
+            // interface's default body, whose signature IS the
+            // interface's.
+            if member.is_method {
+                match resolved.provided_method(db, name) {
+                    Some(crate::impls::ProvidedMethod::Source { block, func }) => {
+                        // The provided method's frame: the impl's generic
+                        // params realized through the match, in declaration
+                        // order. A matched impl binds every declared param
+                        // (E0207: each appears in the for-type or the
+                        // interface ref), so an absent binding is a resolver
+                        // bug, never a state to paper over with a stand-in
+                        // type. The own suffix (declared generics and
+                        // synthetic effect params alike) stays rigid for the
+                        // CALL SITE to finish, as on the class-method road.
+                        let frame_type_args = realized_impl_frame(&resolved);
+                        let signature = crate::lower::function_signature(db, func);
+                        member.ty = instantiate_signature(signature, &frame_type_args);
+                        member.pending_own = (signature.generic_params.len()
+                            > frame_type_args.len())
+                        .then(|| PendingOwnGenerics::Source {
+                            method: func,
+                            prefix: frame_type_args.clone(),
+                        });
+                        member.declarer = MemberDeclarer::ImplMethod {
                             block,
                             func,
                             frame_type_args,
                             from_interface_default: false,
-                        }
-                    } else if let Some(block) = resolved.source_block() {
-                        // The inherited default's frame: `[Self = receiver,
-                        // iface args..]` — associated types are not slots.
-                        let mut frame_type_args =
-                            Vec::with_capacity(1 + implemented.generics.len());
-                        frame_type_args.push(receiver.clone());
-                        frame_type_args.extend(implemented.generics.iter().cloned());
-                        MemberDeclarer::ImplMethod {
-                            block,
-                            func: method,
-                            frame_type_args,
-                            from_interface_default: true,
-                        }
-                    } else {
-                        let callable = resolved
-                            .mounted_method(name)
-                            .and_then(|method| {
-                                crate::package_interface::resolved_exported_function(
-                                    method,
-                                    Vec::new(),
-                                    Vec::new(),
-                                )
-                                .external
-                            })
-                            .or_else(|| external_interface_callable(db, &implemented.name, name));
-                        match callable {
-                            Some(callable) => MemberDeclarer::ExternalMethod(callable),
-                            None => MemberDeclarer::VirtualMethod { interface, method },
-                        }
+                        };
                     }
-                }
-                external @ MemberDeclarer::ExternalVirtualField { .. } => {
-                    match resolved.source_block() {
-                        Some(block) => MemberDeclarer::ImplField { block },
-                        None => external,
-                    }
-                }
-                virtual_field @ MemberDeclarer::VirtualField { .. } => {
-                    match resolved.source_block() {
-                        Some(block) => MemberDeclarer::ImplField { block },
-                        None => virtual_field,
-                    }
-                }
-                MemberDeclarer::ExternalMethod(callable) => resolved
-                    .mounted_method(name)
-                    .and_then(|method| {
-                        crate::package_interface::resolved_exported_function(
+                    Some(crate::impls::ProvidedMethod::Mounted(method)) => {
+                        // Same discipline off the mounted row's descriptor.
+                        let prefix = realized_impl_frame(&resolved);
+                        let function = crate::package_interface::resolved_exported_function(
                             method,
                             Vec::new(),
                             Vec::new(),
-                        )
-                        .external
-                    })
-                    .map(MemberDeclarer::ExternalMethod)
-                    .unwrap_or(MemberDeclarer::ExternalMethod(callable)),
-                concrete => concrete,
-            };
+                        );
+                        let external = function.external.clone().unwrap_or_else(|| {
+                            unreachable!("resolved_exported_function always attaches an external")
+                        });
+                        member.ty = instantiate_external_signature(&function, &prefix);
+                        member.pending_own = (!function.generic_params.is_empty()).then(|| {
+                            PendingOwnGenerics::External {
+                                function: Box::new(function),
+                                prefix: prefix.clone(),
+                            }
+                        });
+                        member.declarer = MemberDeclarer::ExternalMethod(external);
+                    }
+                    None => {
+                        // The interface's default body runs; the typing from
+                        // `member_on_interface` already IS its signature.
+                        // Only the declarer narrows to the matched impl.
+                        member.declarer = match member.declarer {
+                            MemberDeclarer::VirtualMethod { interface, method } => {
+                                if let Some(block) = resolved.source_block() {
+                                    // The default's frame: `[Self = receiver,
+                                    // iface args..]` — associated types are
+                                    // not slots.
+                                    let mut frame_type_args =
+                                        Vec::with_capacity(1 + implemented.generics.len());
+                                    frame_type_args.push(receiver.clone());
+                                    frame_type_args.extend(implemented.generics.iter().cloned());
+                                    MemberDeclarer::ImplMethod {
+                                        block,
+                                        func: method,
+                                        frame_type_args,
+                                        from_interface_default: true,
+                                    }
+                                } else {
+                                    match external_interface_callable(db, &implemented.name, name) {
+                                        Some(callable) => MemberDeclarer::ExternalMethod(callable),
+                                        None => MemberDeclarer::VirtualMethod { interface, method },
+                                    }
+                                }
+                            }
+                            // A mounted interface's default: the interface
+                            // row's callable already declares it.
+                            other => other,
+                        };
+                    }
+                }
+            } else {
+                // Interface FIELDS: a source block is the declarer (its
+                // field links live there); mounted rows keep the
+                // interface view.
+                member.declarer = match member.declarer {
+                    field @ (MemberDeclarer::VirtualField { .. }
+                    | MemberDeclarer::ExternalVirtualField { .. }) => {
+                        match resolved.source_block() {
+                            Some(block) => MemberDeclarer::ImplField { block },
+                            None => field,
+                        }
+                    }
+                    other => other,
+                };
+            }
             providers.push((implemented, member));
         }
     }
@@ -767,6 +802,21 @@ fn assoc_bound_roots<'db>(
     }
 }
 
+/// A matched impl's generic params realized through the match, in
+/// declaration order — the owner frame of any method the impl provides.
+fn realized_impl_frame(resolved: &crate::impls::ResolvedImpl<'_>) -> Vec<Ty> {
+    resolved
+        .facts
+        .generic_params()
+        .iter()
+        .map(|(param, _)| {
+            resolved.bindings.get(param).cloned().unwrap_or_else(|| {
+                unreachable!("matched impl left generic `{}` unbound", param.name())
+            })
+        })
+        .collect()
+}
+
 /// Discharges the bounds `bounds_hold` skipped as vacuous - impl params
 /// bound to RIGID vars - against the caller's param env: rustc's
 /// caller-bound (`ParamCandidate`) tier, checked here because the env
@@ -829,6 +879,120 @@ fn env_proves<'db>(
         }
     }
     false
+}
+
+/// Substitute the class frame's rigid parameters with the receiver's actual
+/// arguments — the tail of `lookup_impl_member`'s rigid-probe road. Keyed by
+/// full `ParamTy` identity (index AND name), never index alone: the probe's
+/// result mixes the class frame's rigid vars with a method's own rigid
+/// generics, whose frame indices can collide.
+fn substitute_class_params(ty: &Ty, frame: &[ParamTy], args: &[Ty]) -> Ty {
+    use baml_type::interned::TypeFlags;
+    if !ty.flags().contains(TypeFlags::HAS_TYPEVAR) {
+        return ty.clone();
+    }
+    if let TyKind::TypeVar(param, _) = ty.kind()
+        && let Some(position) = frame.iter().position(|candidate| candidate == param)
+        && let Some(replacement) = args.get(position)
+    {
+        return replacement.clone();
+    }
+    Ty::intern(
+        ty.kind()
+            .map_children(|child| substitute_class_params(child, frame, args)),
+    )
+}
+
+/// [`substitute_class_params`] over a whole lookup result: every carried type
+/// — the member type, pending prefixes, declarer frames, and realized
+/// interface views — trades the probe's rigid class vars for the receiver's
+/// actual (possibly still-unsolved) arguments.
+fn substitute_lookup_class_args<'db>(
+    lookup: InterfaceMemberLookup<'db>,
+    frame: &[ParamTy],
+    args: &[Ty],
+) -> InterfaceMemberLookup<'db> {
+    let subst = |ty: &Ty| substitute_class_params(ty, frame, args);
+    let subst_ref = |realized: &InterfaceRef| {
+        InterfaceRef::new(
+            realized.name.clone(),
+            realized.generics.iter().map(subst).collect(),
+            realized
+                .associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), subst(ty)))
+                .collect(),
+        )
+    };
+    match lookup {
+        InterfaceMemberLookup::Found(mut member) => {
+            member.ty = subst(&member.ty);
+            member.pending_own = member.pending_own.map(|pending| match pending {
+                PendingOwnGenerics::Source { method, prefix } => PendingOwnGenerics::Source {
+                    method,
+                    prefix: prefix.iter().map(subst).collect(),
+                },
+                PendingOwnGenerics::External { function, prefix } => PendingOwnGenerics::External {
+                    function,
+                    prefix: prefix.iter().map(subst).collect(),
+                },
+            });
+            member.declarer = match member.declarer {
+                MemberDeclarer::VirtualField {
+                    interface,
+                    realized,
+                    field_index,
+                } => MemberDeclarer::VirtualField {
+                    interface,
+                    realized: subst_ref(&realized),
+                    field_index,
+                },
+                MemberDeclarer::ImplMethod {
+                    block,
+                    func,
+                    frame_type_args,
+                    from_interface_default,
+                } => MemberDeclarer::ImplMethod {
+                    block,
+                    func,
+                    frame_type_args: frame_type_args.iter().map(subst).collect(),
+                    from_interface_default,
+                },
+                MemberDeclarer::ExternalVirtualField {
+                    interface,
+                    realized,
+                    field_index,
+                } => MemberDeclarer::ExternalVirtualField {
+                    interface,
+                    realized: subst_ref(&realized),
+                    field_index,
+                },
+                other @ (MemberDeclarer::VirtualMethod { .. }
+                | MemberDeclarer::ImplField { .. }
+                | MemberDeclarer::ExternalMethod(_)) => other,
+            };
+            InterfaceMemberLookup::Found(member)
+        }
+        InterfaceMemberLookup::Ambiguous { sources, is_field } => {
+            InterfaceMemberLookup::Ambiguous {
+                sources: sources.iter().map(subst_ref).collect(),
+                is_field,
+            }
+        }
+        InterfaceMemberLookup::FieldRequiresProjection { interface } => {
+            InterfaceMemberLookup::FieldRequiresProjection {
+                interface: subst_ref(&interface),
+            }
+        }
+        InterfaceMemberLookup::SelfRestricted {
+            interface,
+            position,
+        } => InterfaceMemberLookup::SelfRestricted {
+            interface: subst_ref(&interface),
+            position,
+        },
+        InterfaceMemberLookup::NotFound => InterfaceMemberLookup::NotFound,
+    }
 }
 
 /// A member declared DIRECTLY on `target`, instantiated for `receiver`.
@@ -1156,6 +1320,36 @@ pub fn type_member_candidates<'db>(
                     MemberSource::Inherent,
                     MemberDecl::Method(method),
                 );
+            }
+            // Impl-provided members: a bare `C.member` also resolves as
+            // `(C as I).member` with the qualifier inferred, so the methods of
+            // the interfaces C's impls provide belong to the type's member
+            // surface (fields do not — see above). Enumerated in an empty
+            // param env: a declaration's members do not depend on where the
+            // reader stands, and an impl whose bounds an empty env cannot
+            // discharge is one a bare qualifier cannot reach either.
+            let facts = Facts::new(db);
+            let self_ty = crate::lower::class_self_ty(db, class);
+            for resolved in crate::impls::impls_for_type(db, &self_ty) {
+                if !env_discharges_rigid_bounds(db, &facts, &resolved) {
+                    continue;
+                }
+                let implemented = resolved.implemented();
+                for (name, is_method, is_static, decl) in
+                    interface_member_rows(db, &facts, &implemented, false)
+                {
+                    if !is_method {
+                        continue;
+                    }
+                    push_candidate(
+                        &mut out,
+                        name,
+                        true,
+                        is_static,
+                        MemberSource::Interface(implemented.clone()),
+                        decl,
+                    );
+                }
             }
         }
         Definition::Enum(enum_loc) => {

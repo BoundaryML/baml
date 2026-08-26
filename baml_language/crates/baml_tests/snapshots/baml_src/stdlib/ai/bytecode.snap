@@ -1,6 +1,12 @@
 ---
 source: crates/baml_tests/src/corpus.rs
 ---
+function ai.<(ai.Prompt as baml.ToString)>.to_string(self: ai.Prompt) -> string {
+    load_var self
+    call ai.Prompt.text
+    return
+}
+
 function ai.Agent._attempt_turn(self: ai.Agent, c: ai.Client, spec: ai.FunctionSpec<#0>, j: ai.Journal, total: ai.events.Usage, attempts_left: int) -> ai.ModelTurn {
     load_var spec
     load_field .prompt_template
@@ -631,7 +637,7 @@ function ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: str
     call baml.String.from
     store_var _83
     load_var t
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     store_var _87
     load_type string
     load_var _87
@@ -735,7 +741,7 @@ function ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: str
 
   L16:
     load_var t
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     store_var _42
     load_type string
     load_var _42
@@ -814,7 +820,7 @@ function ai.Agent._media_value(self: ai.Agent, turn: ai.ModelTurn, provider: str
     call baml.String.from
     store_var _111
     load_var t
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     store_var _115
     load_type string
     load_var _115
@@ -1778,16 +1784,501 @@ function ai.ModelTurn.tool_uses(self: ai.ModelTurn) -> ai.content.ToolUse[] {
 function ai.OutputFormat._render(self: ai.OutputFormat, prefix: string | null | ai.internal.OutputFormatDefault, or_splitter: string | ai.internal.OutputFormatDefault, enum_value_prefix: string | null | ai.internal.OutputFormatDefault, hoisted_class_prefix: string | null | ai.internal.OutputFormatDefault, always_hoist_enums: bool | ai.internal.OutputFormatDefault, quote_class_fields: bool | ai.internal.OutputFormatDefault, hoist_classes: bool | "auto" | string[] | ai.internal.OutputFormatDefault, map_style: "angle" | "object" | ai.internal.OutputFormatDefault, render_null_as: string | null | ai.internal.OutputFormatDefault) -> string {
 }
 
-function ai.Prompt.baml.ToString.to_string(self: ai.Prompt) -> string {
-    load_var self
-    call ai.Prompt.text
-    return
-}
-
 function ai.Prompt.messages(self: ai.Prompt) -> ai.PromptMessage[] {
 }
 
 function ai.Prompt.text(self: ai.Prompt) -> string {
+}
+
+function ai.clients.<(ai.clients.Fallback as ai.Client)>.id(self: ai.clients.Fallback) -> string {
+    load_type ai.Client
+    load_var self
+    load_field .members
+    load_const 0
+    call baml.Array.at
+    store_var _5
+    load_var _5
+    narrow_bind ai.Client, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "fallback"
+    jump L2
+
+  L1:
+    load_var _5
+    load_type ai.Client
+    load_const "id"
+    virtual_call nargs=1 ntypeargs=0
+
+  L2:
+    return
+}
+
+function ai.clients.<(ai.clients.Fallback as ai.Client)>.invoke(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> ai.ModelTurn {
+    load_type ai.events.LLMCall
+    alloc_array 0
+    store_var failed
+    load_var2 1 2
+    load_const 0
+    load_var failed
+    call ai.clients.Fallback._try
+    store_var turn
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    call ai.errors.normalize_invoke
+    throw
+
+  L0:
+    load_var failed
+    container_len
+    store_var _10
+    load_var _10
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var turn
+    store_var _11
+    load_type ai.events.LLMCall
+    load_var2 3 4
+    load_field .calls
+    call baml.Array.concat
+    store_var _12
+    alloc_instance ai.ModelTurn
+    load_var _11
+    init_spread .content, .stop_reason, .usage
+    load_var _12
+    init_field .calls
+    jump L3
+
+  L2:
+    load_var turn
+
+  L3:
+    return
+}
+
+function ai.clients.<(ai.clients.Fallback as ai.Client)>.render(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> baml.http.Request {
+    load_type ai.Client
+    load_var self
+    load_field .members
+    load_const 0
+    call baml.Array.at
+    store_var _7
+    load_var _7
+    narrow_bind ai.Client, slot=5
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "fallback"
+    load_const null
+    load_const "Fallback needs at least one member"
+    load_const null
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    throw
+
+  L1:
+    load_var2 5 2
+    load_type ai.Client
+    load_const "render"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    jump L2
+    load_var e
+    throw_if_panic
+    load_var e
+    call ai.errors.normalize
+    throw
+
+  L2:
+    load_var _0
+    return
+}
+
+function ai.clients.<(ai.clients.Fallback as ai.stream.StreamingClient)>.invoke_stream(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_const 0
+    store_deref ?3
+    load_var2 1 3
+    load_var input
+    make_closure .<lambda(Fallback.invoke_stream, 0)>, 3
+    load_var2 3 1
+    make_closure .<lambda(Fallback.invoke_stream, 1)>, 2
+    load_const null
+    load_const false
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
+    alloc_array 0
+    load_const 0
+    load_const false
+    load_type ai.events.LLMCall
+    alloc_array 0
+    init_instance ai.clients.StreamRelay .open, .retry, .current, .emitted, .terminal, .terminal_cursor, .finished, .calls
+    store_var_load_var relay
+    make_bound_method ai.clients.StreamRelay.next_event
+    call ai.stream.TurnStream.from_event_source
+    store_var stream
+    load_var2 5 4
+    load_field .calls
+    store_field ._calls
+    load_var stream
+    return
+}
+
+function ai.clients.<(ai.clients.Retry as ai.Client)>.id(self: ai.clients.Retry) -> string {
+    load_var self
+    load_field .inner
+    load_type ai.Client
+    load_const "id"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function ai.clients.<(ai.clients.Retry as ai.Client)>.invoke(self: ai.clients.Retry, input: ai.ModelTurnInput) -> ai.ModelTurn {
+    load_type ai.events.LLMCall
+    alloc_array 0
+    store_var failed
+    load_var2 1 2
+    load_var self
+    load_field .max_attempts
+    load_var failed
+    call ai.clients.Retry._attempt
+    store_var turn
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    call ai.errors.normalize_invoke
+    throw
+
+  L0:
+    load_var failed
+    container_len
+    store_var _11
+    load_var _11
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var turn
+    store_var _12
+    load_type ai.events.LLMCall
+    load_var2 3 4
+    load_field .calls
+    call baml.Array.concat
+    store_var _13
+    alloc_instance ai.ModelTurn
+    load_var _12
+    init_spread .content, .stop_reason, .usage
+    load_var _13
+    init_field .calls
+    jump L3
+
+  L2:
+    load_var turn
+
+  L3:
+    return
+}
+
+function ai.clients.<(ai.clients.Retry as ai.Client)>.render(self: ai.clients.Retry, input: ai.ModelTurnInput) -> baml.http.Request {
+    load_var self
+    load_field .inner
+    load_var input
+    load_type ai.Client
+    load_const "render"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    call ai.errors.normalize
+    throw
+
+  L0:
+    load_var _0
+    return
+}
+
+function ai.clients.<(ai.clients.Retry as ai.stream.StreamingClient)>.invoke_stream(self: ai.clients.Retry, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_var ?3
+    make_cell
+    store_var ?3
+    load_deref ?1
+    load_field .max_attempts
+    store_deref ?3
+    load_var2 1 2
+    make_closure .<lambda(Retry.invoke_stream, 0)>, 2
+    load_var2 3 1
+    make_closure .<lambda(Retry.invoke_stream, 1)>, 2
+    load_const null
+    load_const false
+    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
+    alloc_array 0
+    load_const 0
+    load_const false
+    load_type ai.events.LLMCall
+    alloc_array 0
+    init_instance ai.clients.StreamRelay .open, .retry, .current, .emitted, .terminal, .terminal_cursor, .finished, .calls
+    store_var_load_var relay
+    make_bound_method ai.clients.StreamRelay.next_event
+    call ai.stream.TurnStream.from_event_source
+    store_var stream
+    load_var2 5 4
+    load_field .calls
+    store_field ._calls
+    load_var stream
+    return
+}
+
+function ai.clients.<(ai.clients.RoundRobin as ai.Client)>.id(self: ai.clients.RoundRobin) -> string {
+    load_type ai.Client
+    load_var self
+    load_field .members
+    load_const 0
+    call baml.Array.at
+    store_var _5
+    load_var _5
+    narrow_bind ai.Client, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "round-robin"
+    jump L2
+
+  L1:
+    load_var _5
+    load_type ai.Client
+    load_const "id"
+    virtual_call nargs=1 ntypeargs=0
+
+  L2:
+    return
+}
+
+function ai.clients.<(ai.clients.RoundRobin as ai.Client)>.invoke(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> ai.ModelTurn {
+    load_var self
+    load_field .members
+    container_len
+    store_var _5
+    load_var _5
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L4
+
+  L0:
+    load_var self
+    load_field .counter
+    store_var _9
+    load_var self
+    load_field .members
+    container_len
+    store_var _10
+    load_var2 1 1
+    load_field .counter
+    load_const 1
+    bin_op +
+    store_field .counter
+    load_type ai.Client
+    load_var self
+    load_field .members
+    load_var2 6 7
+    mod_int
+    call baml.Array.at
+    store_var _17
+    load_var _17
+    narrow_bind ai.Client, slot=8
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "roundrobin"
+    load_const null
+    load_const "RoundRobin needs at least one member"
+    load_const null
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    throw
+
+  L2:
+    load_var2 8 2
+    load_type ai.Client
+    load_const "invoke"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    jump L3
+    load_var e
+    throw_if_panic
+    load_var e
+    call ai.errors.normalize_invoke
+    throw
+
+  L3:
+    load_var _0
+    return
+
+  L4:
+    load_const "roundrobin"
+    load_const null
+    load_const "RoundRobin needs at least one member"
+    load_const null
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    throw
+}
+
+function ai.clients.<(ai.clients.RoundRobin as ai.Client)>.render(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> baml.http.Request {
+    load_type ai.Client
+    load_var self
+    load_field .members
+    load_const 0
+    call baml.Array.at
+    store_var _7
+    load_var _7
+    narrow_bind ai.Client, slot=5
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "roundrobin"
+    load_const null
+    load_const "RoundRobin needs at least one member"
+    load_const null
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    throw
+
+  L1:
+    load_var2 5 2
+    load_type ai.Client
+    load_const "render"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    jump L2
+    load_var e
+    throw_if_panic
+    load_var e
+    call ai.errors.normalize
+    throw
+
+  L2:
+    load_var _0
+    return
+}
+
+function ai.clients.<(ai.clients.RoundRobin as ai.stream.StreamingClient)>.invoke_stream(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+    load_var self
+    load_field .members
+    container_len
+    store_var _5
+    load_var _5
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L6
+
+  L0:
+    load_var self
+    load_field .counter
+    store_var _9
+    load_var self
+    load_field .members
+    container_len
+    store_var _10
+    load_var self
+    copy 0
+    load_field .counter
+    load_const 1
+    bin_op +
+    store_field .counter
+    load_type ai.Client
+    load_var self
+    load_field .members
+    load_var2 6 7
+    mod_int
+    call baml.Array.at
+    store_var _12
+    load_var _12
+    store_var _16
+    load_var _16
+    narrow_bind ai.stream.StreamingClient, slot=9
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _12
+    store_var _18
+    load_var _18
+    narrow_bind ai.Client, slot=10
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const "roundrobin"
+    load_const null
+    load_const "RoundRobin needs at least one member"
+    load_const null
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    throw
+
+  L3:
+    load_var _18
+    load_type ai.Client
+    load_const "id"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _21
+    load_var _21
+    init_instance ai.errors.StreamingUnsupported .client_id
+    throw
+
+  L4:
+    load_var2 9 2
+    load_type ai.stream.StreamingClient
+    load_const "invoke_stream"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    jump L5
+    load_var e
+    throw_if_panic
+    load_var e
+    call ai.errors.normalize_invoke
+    throw
+
+  L5:
+    load_var _0
+    return
+
+  L6:
+    load_const "roundrobin"
+    load_const null
+    load_const "RoundRobin needs at least one member"
+    load_const null
+    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
+    throw
 }
 
 function ai.clients.Backoff.delay_ms(self: ai.clients.Backoff, attempt: int, f: ai.errors.Failure) -> int {
@@ -1989,155 +2480,6 @@ function ai.clients.Fallback._try(self: ai.clients.Fallback, input: ai.ModelTurn
     return
 }
 
-function ai.clients.Fallback.root.Client.id(self: ai.clients.Fallback) -> string {
-    load_type ai.Client
-    load_var self
-    load_field .members
-    load_const 0
-    call baml.Array.at
-    store_var _5
-    load_var _5
-    narrow_bind ai.Client, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "fallback"
-    jump L2
-
-  L1:
-    load_var _5
-    load_type ai.Client
-    load_const "id"
-    virtual_call nargs=1 ntypeargs=0
-
-  L2:
-    return
-}
-
-function ai.clients.Fallback.root.Client.invoke(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    load_type ai.events.LLMCall
-    alloc_array 0
-    store_var failed
-    load_var2 1 2
-    load_const 0
-    load_var failed
-    call ai.clients.Fallback._try
-    store_var turn
-    jump L0
-    load_var e
-    throw_if_panic
-    load_var e
-    call ai.errors.normalize_invoke
-    throw
-
-  L0:
-    load_var failed
-    container_len
-    store_var _10
-    load_var _10
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var turn
-    store_var _11
-    load_type ai.events.LLMCall
-    load_var2 3 4
-    load_field .calls
-    call baml.Array.concat
-    store_var _12
-    alloc_instance ai.ModelTurn
-    load_var _11
-    init_spread .content, .stop_reason, .usage
-    load_var _12
-    init_field .calls
-    jump L3
-
-  L2:
-    load_var turn
-
-  L3:
-    return
-}
-
-function ai.clients.Fallback.root.Client.render(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> baml.http.Request {
-    load_type ai.Client
-    load_var self
-    load_field .members
-    load_const 0
-    call baml.Array.at
-    store_var _7
-    load_var _7
-    narrow_bind ai.Client, slot=5
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "fallback"
-    load_const null
-    load_const "Fallback needs at least one member"
-    load_const null
-    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    throw
-
-  L1:
-    load_var2 5 2
-    load_type ai.Client
-    load_const "render"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    jump L2
-    load_var e
-    throw_if_panic
-    load_var e
-    call ai.errors.normalize
-    throw
-
-  L2:
-    load_var _0
-    return
-}
-
-function ai.clients.Fallback.root.stream.StreamingClient.invoke_stream(self: ai.clients.Fallback, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-    load_var ?1
-    make_cell
-    store_var ?1
-    load_var ?2
-    make_cell
-    store_var ?2
-    load_var ?3
-    make_cell
-    store_var ?3
-    load_const 0
-    store_deref ?3
-    load_var2 1 3
-    load_var input
-    make_closure .<lambda(Fallback.invoke_stream, 0)>, 3
-    load_var2 3 1
-    make_closure .<lambda(Fallback.invoke_stream, 1)>, 2
-    load_const null
-    load_const false
-    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
-    alloc_array 0
-    load_const 0
-    load_const false
-    load_type ai.events.LLMCall
-    alloc_array 0
-    init_instance ai.clients.StreamRelay .open, .retry, .current, .emitted, .terminal, .terminal_cursor, .finished, .calls
-    store_var_load_var relay
-    make_bound_method ai.clients.StreamRelay.next_event
-    call ai.stream.TurnStream.from_event_source
-    store_var stream
-    load_var2 5 4
-    load_field .calls
-    store_field ._calls
-    load_var stream
-    return
-}
-
 function ai.clients.Retry._attempt(self: ai.clients.Retry, input: ai.ModelTurnInput, remaining: int, failed: ai.events.LLMCall[]) -> ai.ModelTurn {
     load_var self
     load_field .inner
@@ -2289,123 +2631,6 @@ function ai.clients.Retry.new(inner: ai.Client, max_attempts: int, retry_if: ((a
     return
 }
 
-function ai.clients.Retry.root.Client.id(self: ai.clients.Retry) -> string {
-    load_var self
-    load_field .inner
-    load_type ai.Client
-    load_const "id"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _0
-    load_var _0
-    return
-}
-
-function ai.clients.Retry.root.Client.invoke(self: ai.clients.Retry, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    load_type ai.events.LLMCall
-    alloc_array 0
-    store_var failed
-    load_var2 1 2
-    load_var self
-    load_field .max_attempts
-    load_var failed
-    call ai.clients.Retry._attempt
-    store_var turn
-    jump L0
-    load_var e
-    throw_if_panic
-    load_var e
-    call ai.errors.normalize_invoke
-    throw
-
-  L0:
-    load_var failed
-    container_len
-    store_var _11
-    load_var _11
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_var turn
-    store_var _12
-    load_type ai.events.LLMCall
-    load_var2 3 4
-    load_field .calls
-    call baml.Array.concat
-    store_var _13
-    alloc_instance ai.ModelTurn
-    load_var _12
-    init_spread .content, .stop_reason, .usage
-    load_var _13
-    init_field .calls
-    jump L3
-
-  L2:
-    load_var turn
-
-  L3:
-    return
-}
-
-function ai.clients.Retry.root.Client.render(self: ai.clients.Retry, input: ai.ModelTurnInput) -> baml.http.Request {
-    load_var self
-    load_field .inner
-    load_var input
-    load_type ai.Client
-    load_const "render"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    jump L0
-    load_var e
-    throw_if_panic
-    load_var e
-    call ai.errors.normalize
-    throw
-
-  L0:
-    load_var _0
-    return
-}
-
-function ai.clients.Retry.root.stream.StreamingClient.invoke_stream(self: ai.clients.Retry, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-    load_var ?1
-    make_cell
-    store_var ?1
-    load_var ?2
-    make_cell
-    store_var ?2
-    load_var ?3
-    make_cell
-    store_var ?3
-    load_deref ?1
-    load_field .max_attempts
-    store_deref ?3
-    load_var2 1 2
-    make_closure .<lambda(Retry.invoke_stream, 0)>, 2
-    load_var2 3 1
-    make_closure .<lambda(Retry.invoke_stream, 1)>, 2
-    load_const null
-    load_const false
-    load_type ai.stream.TextDelta | ai.stream.TurnMeta | ai.stream.TurnDone
-    alloc_array 0
-    load_const 0
-    load_const false
-    load_type ai.events.LLMCall
-    alloc_array 0
-    init_instance ai.clients.StreamRelay .open, .retry, .current, .emitted, .terminal, .terminal_cursor, .finished, .calls
-    store_var_load_var relay
-    make_bound_method ai.clients.StreamRelay.next_event
-    call ai.stream.TurnStream.from_event_source
-    store_var stream
-    load_var2 5 4
-    load_field .calls
-    store_field ._calls
-    load_var stream
-    return
-}
-
 function ai.clients.RoundRobin.new(members: ai.Client[]) -> ai.clients.RoundRobin {
     load_var members
     container_len
@@ -2423,231 +2648,6 @@ function ai.clients.RoundRobin.new(members: ai.Client[]) -> ai.clients.RoundRobi
     return
 
   L1:
-    load_const "roundrobin"
-    load_const null
-    load_const "RoundRobin needs at least one member"
-    load_const null
-    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    throw
-}
-
-function ai.clients.RoundRobin.root.Client.id(self: ai.clients.RoundRobin) -> string {
-    load_type ai.Client
-    load_var self
-    load_field .members
-    load_const 0
-    call baml.Array.at
-    store_var _5
-    load_var _5
-    narrow_bind ai.Client, slot=2
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "round-robin"
-    jump L2
-
-  L1:
-    load_var _5
-    load_type ai.Client
-    load_const "id"
-    virtual_call nargs=1 ntypeargs=0
-
-  L2:
-    return
-}
-
-function ai.clients.RoundRobin.root.Client.invoke(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    load_var self
-    load_field .members
-    container_len
-    store_var _5
-    load_var _5
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L0
-    jump L4
-
-  L0:
-    load_var self
-    load_field .counter
-    store_var _9
-    load_var self
-    load_field .members
-    container_len
-    store_var _10
-    load_var2 1 1
-    load_field .counter
-    load_const 1
-    bin_op +
-    store_field .counter
-    load_type ai.Client
-    load_var self
-    load_field .members
-    load_var2 6 7
-    mod_int
-    call baml.Array.at
-    store_var _17
-    load_var _17
-    narrow_bind ai.Client, slot=8
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const "roundrobin"
-    load_const null
-    load_const "RoundRobin needs at least one member"
-    load_const null
-    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    throw
-
-  L2:
-    load_var2 8 2
-    load_type ai.Client
-    load_const "invoke"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    jump L3
-    load_var e
-    throw_if_panic
-    load_var e
-    call ai.errors.normalize_invoke
-    throw
-
-  L3:
-    load_var _0
-    return
-
-  L4:
-    load_const "roundrobin"
-    load_const null
-    load_const "RoundRobin needs at least one member"
-    load_const null
-    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    throw
-}
-
-function ai.clients.RoundRobin.root.Client.render(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> baml.http.Request {
-    load_type ai.Client
-    load_var self
-    load_field .members
-    load_const 0
-    call baml.Array.at
-    store_var _7
-    load_var _7
-    narrow_bind ai.Client, slot=5
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "roundrobin"
-    load_const null
-    load_const "RoundRobin needs at least one member"
-    load_const null
-    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    throw
-
-  L1:
-    load_var2 5 2
-    load_type ai.Client
-    load_const "render"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    jump L2
-    load_var e
-    throw_if_panic
-    load_var e
-    call ai.errors.normalize
-    throw
-
-  L2:
-    load_var _0
-    return
-}
-
-function ai.clients.RoundRobin.root.stream.StreamingClient.invoke_stream(self: ai.clients.RoundRobin, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-    load_var self
-    load_field .members
-    container_len
-    store_var _5
-    load_var _5
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L0
-    jump L6
-
-  L0:
-    load_var self
-    load_field .counter
-    store_var _9
-    load_var self
-    load_field .members
-    container_len
-    store_var _10
-    load_var self
-    copy 0
-    load_field .counter
-    load_const 1
-    bin_op +
-    store_field .counter
-    load_type ai.Client
-    load_var self
-    load_field .members
-    load_var2 6 7
-    mod_int
-    call baml.Array.at
-    store_var _12
-    load_var _12
-    store_var _16
-    load_var _16
-    narrow_bind ai.stream.StreamingClient, slot=9
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
-    load_var _12
-    store_var _18
-    load_var _18
-    narrow_bind ai.Client, slot=10
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_const "roundrobin"
-    load_const null
-    load_const "RoundRobin needs at least one member"
-    load_const null
-    init_instance ai.errors.InvalidRequest .provider, .status_code, .detail, .raw_body
-    throw
-
-  L3:
-    load_var _18
-    load_type ai.Client
-    load_const "id"
-    virtual_call nargs=1 ntypeargs=0
-    store_var _21
-    load_var _21
-    init_instance ai.errors.StreamingUnsupported .client_id
-    throw
-
-  L4:
-    load_var2 9 2
-    load_type ai.stream.StreamingClient
-    load_const "invoke_stream"
-    virtual_call nargs=2 ntypeargs=0
-    store_var _0
-    jump L5
-    load_var e
-    throw_if_panic
-    load_var e
-    call ai.errors.normalize_invoke
-    throw
-
-  L5:
-    load_var _0
-    return
-
-  L6:
     load_const "roundrobin"
     load_const null
     load_const "RoundRobin needs at least one member"
@@ -3594,61 +3594,61 @@ function ai.content.Media.new(value: image | audio | video | pdf, provider_id: s
     return
 }
 
-function ai.errors.FinishReasonError.Failure.retry_safety(self: ai.errors.FinishReasonError) -> ai.errors.RetrySafety {
+function ai.errors.<(ai.errors.FinishReasonError as ai.errors.Failure)>.retry_safety(self: ai.errors.FinishReasonError) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.InvalidRequest.Failure.retry_safety(self: ai.errors.InvalidRequest) -> ai.errors.RetrySafety {
+function ai.errors.<(ai.errors.InvalidRequest as ai.errors.Failure)>.retry_safety(self: ai.errors.InvalidRequest) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.NetworkFailure.Failure.retry_safety(self: ai.errors.NetworkFailure) -> ai.errors.RetrySafety {
+function ai.errors.<(ai.errors.NetworkFailure as ai.errors.Failure)>.retry_safety(self: ai.errors.NetworkFailure) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.ParseFailed.Failure.retry_safety(self: ai.errors.ParseFailed) -> ai.errors.RetrySafety {
+function ai.errors.<(ai.errors.ParseFailed as ai.errors.Failure)>.retry_safety(self: ai.errors.ParseFailed) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.PreviewUnsupported.Failure.retry_safety(self: ai.errors.PreviewUnsupported) -> ai.errors.RetrySafety {
+function ai.errors.<(ai.errors.PreviewUnsupported as ai.errors.Failure)>.retry_safety(self: ai.errors.PreviewUnsupported) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.RateLimited.Failure.retry_safety(self: ai.errors.RateLimited) -> ai.errors.RetrySafety {
+function ai.errors.<(ai.errors.RateLimited as ai.errors.Failure)>.retry_safety(self: ai.errors.RateLimited) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.Refused.Failure.retry_safety(self: ai.errors.Refused) -> ai.errors.RetrySafety {
+function ai.errors.<(ai.errors.Refused as ai.errors.Failure)>.retry_safety(self: ai.errors.Refused) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.StepBudgetExceeded.Failure.retry_safety(self: ai.errors.StepBudgetExceeded) -> ai.errors.RetrySafety {
+function ai.errors.<(ai.errors.StepBudgetExceeded as ai.errors.Failure)>.retry_safety(self: ai.errors.StepBudgetExceeded) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Unsafe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.StreamingUnsupported.Failure.retry_safety(self: ai.errors.StreamingUnsupported) -> ai.errors.RetrySafety {
+function ai.errors.<(ai.errors.StreamingUnsupported as ai.errors.Failure)>.retry_safety(self: ai.errors.StreamingUnsupported) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Safe
     alloc_variant ai.errors.RetrySafety
     return
 }
 
-function ai.errors.ToolFailedError.Failure.retry_safety(self: ai.errors.ToolFailedError) -> ai.errors.RetrySafety {
+function ai.errors.<(ai.errors.ToolFailedError as ai.errors.Failure)>.retry_safety(self: ai.errors.ToolFailedError) -> ai.errors.RetrySafety {
     load_const ai.errors.RetrySafety.Unsafe
     alloc_variant ai.errors.RetrySafety
     return
@@ -6514,7 +6514,7 @@ function ai.internal.validate_output_type(return_type: reflect.Type) -> void {
 
   L4:
     load_var return_type
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     store_var _11
     load_const "empty enum `"
     load_var _11

@@ -23,16 +23,16 @@ use baml_compiler2_hir::{
 };
 use baml_compiler2_mir::{
     BuiltinKind, Local, MirFunctionBody, MirFunctionKind, Operand, Place, ResolvedAliases, Rvalue,
-    StatementKind, Terminator, def_to_item_ref, lower_function, lower_let_body,
+    StatementKind, Terminator, def_to_item_ref, lower_function, lower_let_body, native_key_for,
 };
 // PPIR item-data firewall (canonical / post-expansion view, including synthetic
 // `*$stream` items) — enumeration + lookup queries in place of the raw item tree.
 use baml_compiler2_ppir::{
     function_body,
     item_data::{
-        GenericParamData, class_data, enum_data, file_classes, file_enums, file_free_impls,
-        file_functions, file_interfaces, file_lets, file_tests, function_data, function_llm_meta,
-        impl_block_data, interface_data, method_interface_target, test_data,
+        GenericParamData, class_data, enum_data, file_classes, file_enums, file_functions,
+        file_impls, file_interfaces, file_lets, file_tests, function_data, function_llm_meta,
+        impl_block_data, interface_data, test_data,
     },
 };
 use baml_type::{ParamTy, RuntimeTy, TyAttr};
@@ -440,7 +440,7 @@ fn build_packages(
 ) -> Vec<InterfaceDefaultBackfill> {
     use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
     use baml_compiler2_hir_ty::lower::qualify_def;
-    use baml_compiler2_ppir::item_data::{AssociatedTypeBindingData, ImplSubjectData};
+    use baml_compiler2_ppir::item_data::AssociatedTypeBindingData;
     use baml_type as ty;
     use rustc_hash::FxHashMap;
     type BoundsMap = FxHashMap<ty::ParamTy, Vec<baml_type::interned::InterfaceRef>>;
@@ -791,38 +791,6 @@ fn build_packages(
                 )
                 .to_plain()
         };
-        // Each generic param's interface bound set (`T extends A & B` → {A, B}).
-        // A bound is an interface, possibly generic or carrying associated
-        // bindings — `split_interface` captures its args/assoc as templates over
-        // the impl's params. A non-interface bound, rejected upstream, has no
-        // interface to record, so skip the whole rule (`None`); dropping a rule
-        // only ever loses a dispatch, never adds a wrong one. Every conjunct is
-        // emitted: a rule narrowed by two bounds must stay narrowed by both.
-        let bound_sets = |store: &TypeRefStore,
-                          declared: &[GenericParamData],
-                          generics: &[ParamTy],
-                          bounds: &BoundsMap|
-         -> Option<Vec<Vec<InterfaceBound>>> {
-            declared
-                .iter()
-                .map(|param| {
-                    param
-                        .bounds
-                        .iter()
-                        .map(|&id| {
-                            let bound_ty = lower_constraint_head(store, id, generics, bounds);
-                            split_interface(&bound_ty, resolved, generics).map(
-                                |(interface, args, assoc)| InterfaceBound {
-                                    interface: bex_vm_types::TypeHead::of_name(&interface),
-                                    args,
-                                    assoc,
-                                },
-                            )
-                        })
-                        .collect()
-                })
-                .collect()
-        };
         // Associated-type bindings written in an `implements` block body
         // (`type Item = int`) live beside the target, not in it (`split_interface`
         // only sees the target), so lower them here to fold into the implemented
@@ -848,18 +816,16 @@ fn build_packages(
                 .collect()
         };
 
-        // (a) Out-of-body `implement<G> I for FOR { ... }`: primitives,
-        // containers, generic classes, and blanket `for T`. (A non-generic
-        // concrete class's out-of-body impl folds onto the class — see (b).)
-        for &impl_loc in file_free_impls(db, *file) {
+        // ONE rule per `implements` block, whatever its spelling
+        // (TYPE_SYSTEM.md: in-class and out-of-body impls are one form). The
+        // subject decides only where the owner frame, bounds, and field table
+        // come from: an in-class block borrows the enclosing CLASS's generics
+        // and links its fields; a free block declares its own generics and
+        // never has fields to link (E0126). Driving off the blocks keeps a
+        // field-only (method-less) impl registered — membership matters for
+        // reflection and bound checks even when there's nothing to dispatch.
+        for &impl_loc in file_impls(db, *file) {
             let block = impl_block_data(db, impl_loc);
-            let ImplSubjectData::Free {
-                for_target,
-                generics,
-            } = &block.subject
-            else {
-                continue;
-            };
             let store = &block.type_refs;
             let impl_params = baml_compiler2_hir_ty::lower::impl_frame(db, impl_loc);
             let impl_bounds = baml_compiler2_hir_ty::lower::impl_generic_bounds(db, impl_loc);
@@ -879,7 +845,14 @@ fn build_packages(
                 &impl_params,
                 &impl_bounds,
             ));
-            let for_ty = lower(store, *for_target, &impl_params, &impl_bounds);
+            // The implementor: `Self` in `Ty` space, off the UNIFORM impl
+            // surface — `impl_self_ty` (with `impl_frame`/`impl_generic_bounds`
+            // above) owns the in-body-vs-free distinction; emit never matches
+            // the subject.
+            let for_ty = baml_compiler2_hir_ty::lower::impl_self_ty(db, impl_loc).to_plain();
+            let for_ty_pattern = bex_vm_types::anchor_template(
+                &baml_compiler2_mir::tir2_to_template(&for_ty, resolved, &impl_params),
+            );
             let iface_arg_tys = match &iface_ty {
                 ty::Ty::Interface(_, args, _, _) => args.clone(),
                 _ => unreachable!("split_interface matched an interface"),
@@ -892,15 +865,39 @@ fn build_packages(
                 &impl_params,
                 resolved,
             );
-            let for_ty_pattern = bex_vm_types::anchor_template(
-                &baml_compiler2_mir::tir2_to_template(&for_ty, resolved, &impl_params),
-            );
-            let Some(generic_param_bounds) =
-                bound_sets(store, generics, &impl_params, &impl_bounds)
-            else {
+            // Each declared param's bound conjunction, in frame order — the
+            // same uniform surface, converted through the same
+            // `split_interface` road as the target. Fail closed on a bound
+            // that does not split: baking the rule without one WIDENS it (a
+            // rule narrowed by two bounds must stay narrowed by both), so the
+            // whole rule is dropped — losing a dispatch is recoverable,
+            // over-matching is not. E0145 rejected non-interface bounds
+            // upstream, so this fires only on programs that already carry
+            // diagnostics and never reach a runnable artifact.
+            let generic_param_bounds: Option<Vec<Vec<InterfaceBound>>> = impl_params
+                .iter()
+                .map(|param| {
+                    impl_bounds
+                        .get(param)
+                        .into_iter()
+                        .flatten()
+                        .map(|bound| {
+                            split_interface(&bound.existential().to_plain(), resolved, &impl_params)
+                                .map(|(interface, args, assoc)| InterfaceBound {
+                                    interface: bex_vm_types::TypeHead::of_name(&interface),
+                                    args,
+                                    assoc,
+                                })
+                        })
+                        .collect()
+                })
+                .collect();
+            let Some(generic_param_bounds) = generic_param_bounds else {
                 continue;
             };
-            // An impl's own method is compiled against the impl's own generics.
+            // A block's own method is compiled against the owner frame — the
+            // impl's declared generics, which for an in-class block ARE the
+            // class's.
             let impl_frame: Vec<bex_vm_types::TyTemplate> = (0..u32::try_from(impl_params.len())
                 .expect("generic arity fits u32"))
                 .map(bex_vm_types::TyTemplate::TypeArgRef)
@@ -928,6 +925,65 @@ fn build_packages(
             }
             let iface_frame = interface_frame(&for_ty_pattern, &interface_args);
             merge_defaults(&mut methods, &iface_tn, &iface_frame);
+            // The field table for this block, positional over the interface's
+            // own declared fields. Each entry is the class slot the interface
+            // field reads: the block's explicit `field as class_field` link,
+            // else the same-named class field (the default that
+            // `concrete_interface_field_sources` applies in TIR).
+            //
+            // A name that resolves to no class slot means the class does not
+            // cover the interface field — already E0124, so this program has
+            // diagnostics and cannot reach a runnable artifact. Drop the whole
+            // rule rather than bake a partial table: losing a dispatch is
+            // recoverable, a table whose positions no longer line up with the
+            // interface silently reads the wrong field. Matches the
+            // `resolve_fqn` convention above.
+            let field_links: Option<Box<[u32]>> = match (
+                iface_field_decls.get(&iface_tn),
+                baml_compiler2_ppir::item_data::impl_enclosing_class(db, impl_loc),
+            ) {
+                (None, _) => Some(Box::default()),
+                (Some(_), None) => {
+                    // An out-of-body impl of a field-bearing interface is
+                    // E0126. A rule pairing a field-bearing interface with an
+                    // empty table would read out of the table's range, so the
+                    // rule is dropped whole — same fail-closed convention as
+                    // the arm below.
+                    debug_assert!(
+                        false,
+                        "out-of-body impl of field-bearing interface `{iface_tn}` should be \
+                         rejected by E0126",
+                    );
+                    None
+                }
+                (Some(declared), Some(class)) => {
+                    let class_item = class_data(db, class);
+                    let class_tn = qualify_def(db, Definition::Class(class), &class_item.name);
+                    let class_slots = class_field_indices.get(&class_tn.to_string());
+                    declared
+                        .iter()
+                        .map(|iface_field| {
+                            let class_field = block
+                                .field_links
+                                .iter()
+                                .find(|link| link.interface_field == *iface_field)
+                                .map_or(iface_field, |link| &link.class_field);
+                            let slot = class_slots
+                                .and_then(|slots| slots.get(class_field.as_str()))
+                                .copied();
+                            debug_assert!(
+                                slot.is_some(),
+                                "interface `{iface_tn}` field `{iface_field}` links to \
+                                 `{class_tn}.{class_field}`, which has no runtime slot",
+                            );
+                            slot.map(|s| u32::try_from(s).expect("class field count fits u32"))
+                        })
+                        .collect()
+                }
+            };
+            let Some(field_links) = field_links else {
+                continue;
+            };
             program_packages
                 .entry(pkg_info.package.clone())
                 .or_default()
@@ -941,217 +997,8 @@ fn build_packages(
                     interface_args,
                     interface_assoc,
                     methods,
-                    // An out-of-body impl of a field-bearing interface is E0126, so a
-                    // rule built here never has fields to link — its `for` target need
-                    // not even be a class.
-                    field_links: {
-                        debug_assert!(
-                            !iface_field_decls.contains_key(&iface_tn),
-                            "out-of-body impl of field-bearing interface `{iface_tn}` should be \
-                             rejected by E0126",
-                        );
-                        Box::default()
-                    },
+                    field_links,
                 });
-        }
-
-        // (b) In-body `class C { implements I { ... } }` and folded non-generic
-        // out-of-body `implement I for C` impls. Drive off the impl *blocks* so a
-        // field-only (method-less) impl is still registered (membership matters
-        // for reflection and bound checks even when there's nothing to dispatch);
-        // attach any folded methods, grouped by their interface target.
-        for &class_loc in file_classes(db, *file) {
-            let class = class_data(db, class_loc);
-            if class.implements.is_empty() {
-                continue;
-            }
-            let store = &class.type_refs;
-            let class_tn = qualify_def(db, Definition::Class(class_loc), &class.name);
-            let generics = baml_compiler2_hir_ty::lower::class_generic_frame(db, class_loc);
-            let class_bounds = baml_compiler2_hir_ty::lower::class_generic_bounds(db, class_loc);
-
-            // Each folded method tagged with the full interface instantiation it
-            // implements (name + args). A class may implement the same interface
-            // at several instantiations (e.g. `Converter<int>` + `Converter<float>`),
-            // each with its own methods; keying only by interface name would let
-            // one block's method overwrite the other's, so methods are matched to
-            // their block by the full instantiation below.
-            let class_method_impls: Vec<(
-                baml_type::TypeName,
-                Vec<bex_vm_types::TyTemplate>,
-                Name,
-                String,
-            )> = class
-                .methods
-                .iter()
-                .filter_map(|&m| {
-                    let target = method_interface_target(db, m).as_ref()?;
-                    // A constraint head, like the block's own target below — the
-                    // two lowerings must agree for the instantiation key match.
-                    let (m_iface_tn, m_args, _m_assoc) = split_interface(
-                        &lower_constraint_head(
-                            &target.type_refs,
-                            target.target,
-                            &generics,
-                            &class_bounds,
-                        ),
-                        resolved,
-                        &generics,
-                    )?;
-                    Some((
-                        m_iface_tn,
-                        m_args,
-                        function_data(db, m).name.clone(),
-                        def_to_item_ref(db, Definition::Function(m)).to_string(),
-                    ))
-                })
-                .collect();
-
-            // The implementor pattern is the class at its own parameters; bounds
-            // come from the class's generic parameters. Shared by all its blocks.
-            let for_ty_pattern = if generics.is_empty() {
-                bex_vm_types::TyTemplate::from(bex_vm_types::RealizedTy::Class(
-                    bex_vm_types::TypeHead::of_name(&class_tn),
-                    Vec::new(),
-                    TyAttr::default(),
-                ))
-            } else {
-                bex_vm_types::TyTemplate::Class(
-                    bex_vm_types::TypeHead::of_name(&class_tn),
-                    (0..u32::try_from(generics.len()).expect("generic arity fits u32"))
-                        .map(bex_vm_types::TyTemplate::TypeArgRef)
-                        .collect(),
-                    TyAttr::default(),
-                )
-            };
-            let Some(generic_param_bounds) =
-                bound_sets(store, &class.generic_params, &generics, &class_bounds)
-            else {
-                continue;
-            };
-            // An impl block's own methods are compiled against the class's generics.
-            let impl_frame: Vec<bex_vm_types::TyTemplate> = (0..u32::try_from(generics.len())
-                .expect("generic arity fits u32"))
-                .map(bex_vm_types::TyTemplate::TypeArgRef)
-                .collect();
-
-            // The receiver type `Self` denotes for this class's blocks, in
-            // `Ty` space for default-binding completion (structural sugar for
-            // the builtin containers, matching TIR's receiver typing).
-            let class_receiver_ty =
-                baml_compiler2_hir_ty::lower::class_self_ty(db, class_loc).to_plain();
-            for block in &class.implements {
-                // Constraint position: written inline pins only (see the
-                // free-impl site above).
-                let iface_ty = lower_constraint_head(store, block.target, &generics, &class_bounds);
-                let Some((iface_tn, interface_args, mut interface_assoc)) =
-                    split_interface(&iface_ty, resolved, &generics)
-                else {
-                    continue;
-                };
-                interface_assoc.extend(lower_assoc(
-                    store,
-                    &block.associated_type_bindings,
-                    &generics,
-                    &class_bounds,
-                ));
-                let iface_arg_tys = match &iface_ty {
-                    ty::Ty::Interface(_, args, _, _) => args.clone(),
-                    _ => unreachable!("split_interface matched an interface"),
-                };
-                complete_interface_assoc(
-                    &mut interface_assoc,
-                    &iface_tn,
-                    &iface_arg_tys,
-                    &class_receiver_ty,
-                    &generics,
-                    resolved,
-                );
-                // Match folded methods to THIS block by the full interface
-                // instantiation (name + args), not name alone — coherence makes a
-                // given `(type, Iface<Args>)` unique, so this picks exactly this
-                // block's methods even when the class implements the same
-                // interface at another instantiation.
-                let Some(interface_head) = interface_indices
-                    .get(&iface_tn)
-                    .copied()
-                    .map(ObjectIndex::from_raw)
-                else {
-                    continue;
-                };
-                let mut methods: indexmap::IndexMap<Name, ProgramMethodImpl> = class_method_impls
-                    .iter()
-                    .filter(|(m_iface_tn, m_args, _, _)| {
-                        *m_iface_tn == iface_tn && *m_args == interface_args
-                    })
-                    .filter_map(|(_, _, name, fqn)| {
-                        Some((
-                            name.clone(),
-                            ProgramMethodImpl {
-                                fqn: resolve_fqn(fqn)?,
-                                frame: impl_frame.clone(),
-                            },
-                        ))
-                    })
-                    .collect();
-                let iface_frame = interface_frame(&for_ty_pattern, &interface_args);
-                merge_defaults(&mut methods, &iface_tn, &iface_frame);
-                // The field table for this block, positional over the interface's own
-                // declared fields. Each entry is the class slot the interface field
-                // reads: the block's explicit `field as class_field` link, else the
-                // same-named class field (the default that
-                // `concrete_interface_field_sources` applies in TIR).
-                //
-                // A name that resolves to no class slot means the class does not cover
-                // the interface field — already E0124, so this program has diagnostics
-                // and cannot reach a runnable artifact. Drop the whole rule rather than
-                // bake a partial table: losing a dispatch is recoverable, a table whose
-                // positions no longer line up with the interface silently reads the
-                // wrong field. Matches the `resolve_fqn` convention above.
-                let field_links: Option<Box<[u32]>> = match iface_field_decls.get(&iface_tn) {
-                    None => Some(Box::default()),
-                    Some(declared) => {
-                        let class_slots = class_field_indices.get(&class_tn.to_string());
-                        declared
-                            .iter()
-                            .map(|iface_field| {
-                                let class_field = block
-                                    .field_links
-                                    .iter()
-                                    .find(|link| link.interface_field == *iface_field)
-                                    .map_or(iface_field, |link| &link.class_field);
-                                let slot = class_slots
-                                    .and_then(|slots| slots.get(class_field.as_str()))
-                                    .copied();
-                                debug_assert!(
-                                    slot.is_some(),
-                                    "interface `{iface_tn}` field `{iface_field}` links to \
-                                     `{class_tn}.{class_field}`, which has no runtime slot",
-                                );
-                                slot.map(|s| u32::try_from(s).expect("class field count fits u32"))
-                            })
-                            .collect()
-                    }
-                };
-                let Some(field_links) = field_links else {
-                    continue;
-                };
-                program_packages
-                    .entry(pkg_info.package.clone())
-                    .or_default()
-                    .impl_rules
-                    .entry(interface_head)
-                    .or_default()
-                    .push(ProgramImplRule {
-                        interface_head,
-                        for_ty_pattern: for_ty_pattern.clone(),
-                        generic_param_bounds: generic_param_bounds.clone(),
-                        interface_args,
-                        interface_assoc,
-                        methods,
-                        field_links,
-                    });
-            }
         }
     }
 
@@ -3529,13 +3376,11 @@ fn emit_file_group(
             // HIR `Function`. The `throws` part reuses the shared helper; the rest
             // is mirrored (the two share field types but not the struct).
             //
-            // Only DIRECT class methods count. `class.methods` is flattened to
-            // include `implements`-block methods (which have a
-            // `method_interface_target`), but those are interface members: the AST
-            // guard injector and the `{class_fqn}.cleanup` GC resolution only
-            // cover direct methods, so an `implements`-block `cleanup` must NOT
-            // mark the class finalizable (it would set the flag for a method the
-            // GC can neither guard nor resolve).
+            // Only DIRECT class methods count — which is exactly what
+            // `class.methods` holds (an `implements`-block method is
+            // Impl-owned and never lands here): the AST guard injector and
+            // the `{class_fqn}.cleanup` GC resolution only cover direct
+            // methods.
             //
             // The shape mirrors `cleanup_guard::has_cleanup_shape` over the
             // span-free `FunctionData`: `throws` is effectively-none when absent or
@@ -3543,9 +3388,6 @@ fn emit_file_group(
             // `TypeRefStore`.
             let has_cleanup = class.methods.iter().any(|&method| {
                 use baml_compiler2_hir::type_ref::TypeRefKind;
-                if method_interface_target(db, method).is_some() {
-                    return false;
-                }
                 let func = function_data(db, method);
                 let throws_effectively_none = func
                     .throws
@@ -4270,7 +4112,7 @@ fn compute_function_metadata<'db>(
 ) -> baml_compiler2_mir::RuntimeSignature {
     use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
-    use baml_compiler2_ppir::item_data::{ImplSubjectData, MethodOwner, method_owner};
+    use baml_compiler2_ppir::item_data::{MethodOwner, method_owner};
     use baml_type::{Ty, unify::substitute_ty};
 
     /// One in-scope type variable's declared bound conjunction, as `(store, id)`
@@ -4315,14 +4157,6 @@ fn compute_function_metadata<'db>(
     // lookups; replaces the removed `method_owners`/`implements_for` flat fields).
     // Each `*_data` result carries its own `TypeRefStore` for the refs read below.
     let owner = method_owner(db, func_loc);
-    let enclosing_free_impl = match owner {
-        Some(MethodOwner::FreeImpl(impl_loc)) => Some(impl_block_data(db, impl_loc)),
-        _ => None,
-    };
-    let enclosing_class = match owner {
-        Some(MethodOwner::Class(class_loc)) => Some(class_data(db, class_loc)),
-        _ => None,
-    };
     let enclosing_interface_loc = match owner {
         Some(MethodOwner::Interface(iface_loc)) => Some(iface_loc),
         _ => None,
@@ -4332,21 +4166,25 @@ fn compute_function_metadata<'db>(
     // For methods on generic classes/interfaces/impls, the enclosing generic
     // params are in scope inside the method signature. Mirror
     // `MirLowerer::enclosing_generic_params`: enclosing params come first, then
-    // function-level params.
+    // function-level params. Impl-owned methods go through the uniform
+    // `impl_declared_generics` surface (the in-body-vs-free split is HIR's
+    // business, not emit's).
     let (scoped_generic_param_names, scoped_generic_bound_refs): (Vec<Name>, Vec<BoundRef>) = {
-        let (mut names, mut bounds) = if let Some(block) = enclosing_free_impl {
-            match &block.subject {
-                ImplSubjectData::Free { generics, .. } => {
-                    split_declared(generics, &block.type_refs)
-                }
-                ImplSubjectData::InClass { .. } => (Vec::new(), Vec::new()),
+        let (mut names, mut bounds) = match owner {
+            Some(MethodOwner::Impl(impl_loc)) => {
+                let (params, store) =
+                    baml_compiler2_ppir::item_data::impl_declared_generics(db, impl_loc);
+                split_declared(params, store)
             }
-        } else if let Some(iface) = enclosing_interface {
-            split_declared(&iface.generic_params, &iface.type_refs)
-        } else {
-            enclosing_class
-                .map(|c| split_declared(&c.generic_params, &c.type_refs))
-                .unwrap_or_default()
+            Some(MethodOwner::Interface(_)) => {
+                let iface = enclosing_interface.expect("interface owner resolved above");
+                split_declared(&iface.generic_params, &iface.type_refs)
+            }
+            Some(MethodOwner::Class(class_loc)) => {
+                let class = class_data(db, class_loc);
+                split_declared(&class.generic_params, &class.type_refs)
+            }
+            None => (Vec::new(), Vec::new()),
         };
         let (own_names, own_bounds) = split_declared(&func.generic_params, func_store);
         names.extend(own_names);
@@ -4428,8 +4266,7 @@ fn compute_function_metadata<'db>(
     } else {
         // `owner_self_ty` resolves both the class receiver (with the
         // builtin-container sugar) and a free impl's `for` target.
-        baml_compiler2_hir_ty::lower::owner_self_ty(db, func_loc, &enclosing_generics)
-            .map(|ty| ty.to_plain())
+        baml_compiler2_hir_ty::lower::owner_self_ty(db, func_loc).map(|ty| ty.to_plain())
     };
 
     // Lower a signature type ref (in `store`) against this method's scope. For an
@@ -5146,7 +4983,12 @@ fn emit_functions_serial(
                     f
                 }
                 MirFunctionKind::Builtin(kind) => {
-                    match builtin_emit_function(*kind, &fq_name, mir.arity) {
+                    match builtin_emit_function(
+                        *kind,
+                        &fq_name,
+                        &native_key_for(db, func_loc),
+                        mir.arity,
+                    ) {
                         Some(f) => f,
                         // Intrinsics and `__await_any` have no callable body —
                         // call sites lower to `StatementKind::Intrinsic` /
@@ -5461,6 +5303,7 @@ fn emit_functions_parallel(
         }
     }
     for (item, slot) in work.into_iter().zip(compiled) {
+        let func_loc = FunctionLoc::new(db, item.file, item.local_id);
         let mut compiled_fn = match slot {
             Some((function, fragment)) => {
                 merge_function_fragment(program, watermark, fragment, function, &mut intern)
@@ -5469,7 +5312,12 @@ fn emit_functions_parallel(
                 let MirFunctionKind::Builtin(kind) = &item.mir.kind else {
                     unreachable!("Stage B compiles every bytecode function")
                 };
-                match builtin_emit_function(*kind, &item.fq_name, item.mir.arity) {
+                match builtin_emit_function(
+                    *kind,
+                    &item.fq_name,
+                    &native_key_for(db, func_loc),
+                    item.mir.arity,
+                ) {
                     Some(f) => f,
                     // Intrinsics and `__await_any` never become callable
                     // objects (mirrors the serial pass).
@@ -5478,7 +5326,6 @@ fn emit_functions_parallel(
             }
         };
 
-        let func_loc = FunctionLoc::new(db, item.file, item.local_id);
         let pkg_info = file_package(db, item.file);
         let cache = &alias_caches[&pkg_info.package];
         attach_function_metadata(
@@ -5604,20 +5451,25 @@ fn merge_function_fragment(
 /// kinds that never become callable objects: intrinsics (call sites lower to
 /// `StatementKind::Intrinsic`) and BEP-034 `__await_any` (call sites lower to
 /// a `Terminator::AwaitAny` suspend point).
-fn builtin_emit_function(kind: BuiltinKind, fq_name: &str, arity: usize) -> Option<Function> {
+fn builtin_emit_function(
+    kind: BuiltinKind,
+    fq_name: &str,
+    native_path: &str,
+    arity: usize,
+) -> Option<Function> {
     let kind = match kind {
         BuiltinKind::Intrinsic | BuiltinKind::AwaitAny => return None,
         BuiltinKind::Io => {
-            let sys_op = bex_vm_types::sys_op_for_path(fq_name)
-                .unwrap_or_else(|| panic!("unknown sys_op path: {fq_name}"));
+            let sys_op = bex_vm_types::sys_op_for_path(native_path)
+                .unwrap_or_else(|| panic!("unknown sys_op path: {native_path}"));
             FunctionKind::SysOp(sys_op)
         }
         BuiltinKind::Vm => FunctionKind::NativeUnresolved,
     };
     // `$rust_function` bodies dispatch through the codegen-produced native
-    // tables; the key is minted here, once, alongside the display name it
-    // must (for now) coincide with. `Function.name` itself is display-only.
-    let native_key = matches!(kind, FunctionKind::NativeUnresolved).then(|| fq_name.into());
+    // tables, KEYED on `native_path` (`native_key_for`'s codegen-lockstep
+    // spelling); `fq_name` is the display name and need not coincide.
+    let native_key = matches!(kind, FunctionKind::NativeUnresolved).then(|| native_path.into());
     Some(Function {
         name: fq_name.to_string(),
         source_file: String::new(), // builtins have no source file

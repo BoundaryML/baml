@@ -5648,6 +5648,14 @@ impl BexVm {
     /// class generics). Captured at `MakeBoundMethod` time so the value is fully
     /// realized; installed as the callee's `frame.type_args` at `CallIndirect`
     /// (see the `Object::BoundMethod` arm of `execute_call_from_locals_offset`).
+    ///
+    /// This is EXACT, not an approximation: `MakeBoundMethod`'s only callees
+    /// are class-inherent methods, whose owner frame IS the class frame. An
+    /// implements-block method referenced in value position binds through
+    /// `MakeVirtualBoundMethod` (or a shim's `shim_rule_method`) instead,
+    /// where the impl rule's `realize_frame` supplies the owner frame a
+    /// receiver's class args cannot express (blanket impls, inherited
+    /// defaults).
     pub(crate) fn bound_method_curried_type_args(
         &self,
         receiver: Value,

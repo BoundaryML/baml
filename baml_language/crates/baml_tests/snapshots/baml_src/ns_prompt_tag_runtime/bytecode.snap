@@ -125,13 +125,18 @@ function prompt_tag_runtime.$init_test_ns_prompt_tag_runtime_prompt_tag_runtime(
     return
 }
 
-function prompt_tag_runtime.Labeled.baml.ToString.to_string(self: prompt_tag_runtime.Labeled) -> string {
+function prompt_tag_runtime.<(user.prompt_tag_runtime.Labeled as baml.ToString)>.to_string(self: prompt_tag_runtime.Labeled) -> string {
     load_const "LBL<"
     load_var self
     load_field .tag
     bin_op +
     load_const ">"
     bin_op +
+    return
+}
+
+function prompt_tag_runtime.<(user.prompt_tag_runtime.RedactedMedia as baml.ToString)>.to_string(self: prompt_tag_runtime.RedactedMedia) -> string {
+    load_const "REDACTED"
     return
 }
 
@@ -539,11 +544,6 @@ function prompt_tag_runtime.PtStructuredImage$stream(photo: image, client: ai.st
     load_var2 4 2
     load_var on_event
     call ai.stream.from_spec
-    return
-}
-
-function prompt_tag_runtime.RedactedMedia.baml.ToString.to_string(self: prompt_tag_runtime.RedactedMedia) -> string {
-    load_const "REDACTED"
     return
 }
 

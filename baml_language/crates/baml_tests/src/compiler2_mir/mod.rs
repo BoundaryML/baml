@@ -271,7 +271,9 @@ class Dog {
 }
 
 class Cat {
-  function speak(self) -> int { 2 }
+  implements Speaker {
+    function speak(self) -> int { 2 }
+  }
 }
 
 function indirect(callback: (int) -> int throws never, id: boundary.LocalId) -> int {
@@ -333,34 +335,31 @@ function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
         display_function(&virtual_mir)
     );
 
+    // A union receiver dispatches ONLY through the members' shared interface
+    // (inherent methods never participate), so the call is a virtual one —
+    // and it must still carry the runtime ID.
     let union_mir = lower_named("union_dispatch");
     let MirFunctionKind::Bytecode(union_body) = &union_mir.kind else {
         panic!("union_dispatch must lower to bytecode")
     };
-    let union_calls = union_body
+    let union_virtual_calls = union_body
         .blocks
         .iter()
         .filter_map(|block| match block.terminator.as_ref() {
-            Some(Terminator::Call { runtime_id, .. }) => Some(runtime_id),
+            Some(Terminator::VirtualCall { runtime_id, .. }) => Some(runtime_id),
             _ => None,
         })
         .collect::<Vec<_>>();
     assert!(
-        union_calls.len() >= 2,
-        "expected one direct call per heterogeneous union member: {}",
+        !union_virtual_calls.is_empty(),
+        "union dispatch lowers through the shared interface's virtual call: {}",
         display_function(&union_mir)
     );
     assert!(
-        !union_body
-            .blocks
+        union_virtual_calls
             .iter()
-            .any(|block| matches!(block.terminator, Some(Terminator::VirtualCall { .. }))),
-        "heterogeneous union dispatch must not use the first member's interface: {}",
-        display_function(&union_mir)
-    );
-    assert!(
-        union_calls.iter().all(|runtime_id| runtime_id.is_some()),
-        "a union dispatch branch dropped its runtime ID: {}",
+            .all(|runtime_id| runtime_id.is_some()),
+        "the union dispatch dropped its runtime ID: {}",
         display_function(&union_mir)
     );
 }

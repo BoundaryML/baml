@@ -27,20 +27,20 @@ function dispatch_frames.$init_test_ns_dispatch_frames_dispatch_frames(registry:
     return
 }
 
+function dispatch_frames.<(user.dispatch_frames.Box<#0> as user.dispatch_frames.Tagged)>.tag(self: dispatch_frames.Box<#0>) -> string {
+    load_type #0
+    call baml.<(reflect.Type as baml.ToString)>.to_string
+    return
+}
+
 function dispatch_frames.Conv.describe(self: dispatch_frames.Conv<#1>) -> string {
     load_type #1
-    call baml.root.ToString$for$reflect.Type.to_string
+    call baml.<(reflect.Type as baml.ToString)>.to_string
     return
 }
 
 function dispatch_frames.Greeter.greet(self: dispatch_frames.Greeter) -> string {
     load_const "default"
-    return
-}
-
-function dispatch_frames.Tagged$for$Box<T>.tag(self: dispatch_frames.Box<#0>) -> string {
-    load_type #0
-    call baml.root.ToString$for$reflect.Type.to_string
     return
 }
 

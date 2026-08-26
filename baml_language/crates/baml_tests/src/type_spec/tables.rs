@@ -146,15 +146,13 @@ function mr_concrete(d: Dog) -> string throws never {
         resolutions.contains(&("n.describe".into(), "InterfaceVirtualMethod".into())),
         "existential method call is a virtual slot: {resolutions:?}"
     );
-    // The item tree hoists implements-block methods into the class's
-    // method list, so the class-inherent road resolves the concrete
-    // call and the record is BoundMethod carrying the impl method's
-    // FunctionLoc (the callable MIR must emit). TIR spells this
-    // InterfaceConcreteMethod with the impl block; whether MIR needs
-    // that distinction surfaces at the differential gate.
+    // An implements-block method is Impl-owned (never a class-inherent
+    // method), so a concrete receiver resolves through the impl tier and
+    // the record is InterfaceConcreteMethod carrying the impl block, the
+    // resolved body, and the carried owner frame.
     assert!(
-        resolutions.contains(&("d.describe".into(), "BoundMethod".into())),
-        "concrete receiver resolves through the hoisted class method: {resolutions:?}"
+        resolutions.contains(&("d.describe".into(), "InterfaceConcreteMethod".into())),
+        "concrete receiver resolves through the matched impl: {resolutions:?}"
     );
 }
 

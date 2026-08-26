@@ -6845,6 +6845,37 @@ fn union_fuzz_class_only_union_method_is_rejected() {
     );
 }
 
+/// The MIXED shape is rejected the same way (ruling): one arm provides
+/// `speak` through an interface, the other only as an inherent method. The
+/// methods available on a union-typed receiver are the interface methods of
+/// interfaces implemented by ALL members, nothing else — inherent methods
+/// never participate, so no per-arm join rescues this.
+#[test]
+fn union_ruling_mixed_inherent_and_impl_arm_is_rejected() {
+    assert_compile_error_contains(
+        r#"
+        interface HudSpeaker {
+            function speak(self) -> string throws never
+        }
+        class HudA {
+            implements HudSpeaker {
+                function speak(self) -> string { return "interface" }
+            }
+        }
+        class HudB {
+            function speak(self) -> string { return "inherent" }
+        }
+        function hud_speak(x: HudA | HudB) -> string {
+            return x.speak()
+        }
+        function main() -> string {
+            return hud_speak(HudB {})
+        }
+        "#,
+        "no common interface that declares",
+    );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PR #3638 review follow-ups: extra union cases surfaced by CodeRabbit/Cursor on
 // the F1–F17 fix branch. Each reproduced a real bug before the follow-up fix.

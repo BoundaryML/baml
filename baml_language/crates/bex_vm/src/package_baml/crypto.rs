@@ -48,9 +48,11 @@ use bex_vm_types::types::Value;
 use sha2::Digest;
 
 use super::{
+    BamlClassCryptoAead_for_Aes128GcmSiv, BamlClassCryptoAead_for_Aes256GcmSiv,
+    BamlClassCryptoAead_for_ChaCha20Poly1305, BamlClassCryptoAead_for_XChaCha20Poly1305,
     BamlClassCryptoAes128GcmSiv, BamlClassCryptoAes256GcmSiv, BamlClassCryptoChaCha20Poly1305,
-    BamlClassCryptoSha256, BamlClassCryptoXChaCha20Poly1305, BamlNamespaceCrypto, PackageBamlImpl,
-    copy, view,
+    BamlClassCryptoHasher_for_Sha256, BamlClassCryptoSha256, BamlClassCryptoXChaCha20Poly1305,
+    BamlNamespaceCrypto, PackageBamlImpl, copy, view,
 };
 use crate::{
     BexVm,
@@ -265,23 +267,27 @@ fn open_error(vm: &mut BexVm, algorithm: &str, err: OpenError) -> VmRustFnError 
 /// Implement one BAML AEAD class over its backing cipher type.
 ///
 /// Every cipher's `new` / `encrypt` / `decrypt` bodies are identical; only the
-/// generated trait, the class shell, the cipher type, and the [`Algorithm`]
-/// descriptor differ. Codegen emits a separate trait per class, so a blanket
-/// impl cannot express this and a macro is what keeps the four from drifting
-/// apart the way four hand-written copies would.
+/// generated traits, the class shell, the cipher type, and the [`Algorithm`]
+/// descriptor differ. Codegen emits a class trait (`new`) plus a per-impl
+/// `Aead_for_*` trait (`encrypt` / `decrypt` — the `implements crypto.Aead`
+/// block's methods), so a blanket impl cannot express this and a macro is
+/// what keeps the four from drifting apart the way four hand-written copies
+/// would.
 macro_rules! impl_aead_class {
-    ($trait_name:ident, $class:ident, $cipher:ty, $algorithm:expr) => {
-        #[expect(
-            clippy::used_underscore_items,
-            reason = "the `_cipher` view accessor is generated from the private BAML field"
-        )]
-        impl $trait_name for PackageBamlImpl {
+    ($class_trait:ident, $aead_trait:ident, $class:ident, $cipher:ty, $algorithm:expr) => {
+        impl $class_trait for PackageBamlImpl {
             fn new(vm: &mut BexVm, key: &[u8]) -> Result<Value, VmRustFnError> {
                 let cipher: $cipher = build_cipher(&$algorithm, key)?;
                 let state: Arc<dyn Any + Send + Sync> = Arc::new(cipher);
                 Ok(copy::crypto::$class { _cipher: state }.to_value(vm))
             }
+        }
 
+        #[expect(
+            clippy::used_underscore_items,
+            reason = "the `_cipher` view accessor is generated from the private BAML field"
+        )]
+        impl $aead_trait for PackageBamlImpl {
             fn encrypt(
                 vm: &BexVm,
                 cipher: &view::crypto::$class<'_>,
@@ -329,24 +335,28 @@ macro_rules! impl_aead_class {
 
 impl_aead_class!(
     BamlClassCryptoAes128GcmSiv,
+    BamlClassCryptoAead_for_Aes128GcmSiv,
     Aes128GcmSiv,
     aes_gcm_siv::Aes128GcmSiv,
     AES_128_GCM_SIV
 );
 impl_aead_class!(
     BamlClassCryptoAes256GcmSiv,
+    BamlClassCryptoAead_for_Aes256GcmSiv,
     Aes256GcmSiv,
     aes_gcm_siv::Aes256GcmSiv,
     AES_256_GCM_SIV
 );
 impl_aead_class!(
     BamlClassCryptoChaCha20Poly1305,
+    BamlClassCryptoAead_for_ChaCha20Poly1305,
     ChaCha20Poly1305,
     chacha20poly1305::ChaCha20Poly1305,
     CHACHA20_POLY1305
 );
 impl_aead_class!(
     BamlClassCryptoXChaCha20Poly1305,
+    BamlClassCryptoAead_for_XChaCha20Poly1305,
     XChaCha20Poly1305,
     chacha20poly1305::XChaCha20Poly1305,
     XCHACHA20_POLY1305
@@ -382,7 +392,9 @@ impl BamlClassCryptoSha256 for PackageBamlImpl {
         let state: Arc<dyn Any + Send + Sync> = Arc::new(Mutex::new(sha2::Sha256::new()));
         copy::crypto::Sha256 { _state: state }.to_value(vm)
     }
+}
 
+impl BamlClassCryptoHasher_for_Sha256 for PackageBamlImpl {
     fn update(vm: &BexVm, hasher: &view::crypto::Sha256<'_>, data: &[u8]) {
         lock_hasher(hasher, vm).update(data);
     }

@@ -492,7 +492,7 @@ fn function_display_name(
             let iface = baml_compiler2_ppir::item_data::interface_data(db, iface_loc);
             format!("{}.{}", iface.name, data.name)
         }
-        Some(MethodOwner::FreeImpl(_)) | None => {
+        Some(MethodOwner::Impl(_)) | None => {
             crate::symbols::playground_function_name_for_file(db, func_loc.file(db), &data.name)
         }
     }

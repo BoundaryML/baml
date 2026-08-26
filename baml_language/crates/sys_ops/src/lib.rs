@@ -2701,16 +2701,18 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceRandom + Send + Sync + 'static>,
     ) -> Self {
-        self.inner.baml_random_systemrandom_rng_random = {
+        self.inner.baml_random_rng_for_systemrandom_random = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_random_systemrandom_rng_random(heap, permit, args, ctx, call_id)
+                t.__glue_baml_random_rng_for_systemrandom_random(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_random_systemrandom_rng_random_int = {
+        self.inner.baml_random_rng_for_systemrandom_random_int = {
             let t = instance;
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_random_systemrandom_rng_random_int(heap, permit, args, ctx, call_id)
+                t.__glue_baml_random_rng_for_systemrandom_random_int(
+                    heap, permit, args, ctx, call_id,
+                )
             })
         };
         self

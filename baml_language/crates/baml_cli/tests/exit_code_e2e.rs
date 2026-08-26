@@ -1921,10 +1921,12 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
         );
     }
     // Interface-machinery bodies (impl-block methods, interface defaults) are
-    // anonymous at runtime: they are not runnable entries, so the listing
-    // must not offer them.
+    // anonymous at runtime: they are not runnable entries, so the listing must
+    // not offer them. Asserted on the bare `find(` fragment so the pin holds
+    // whatever display spelling a leaked body would carry (`find` names
+    // nothing else in this fixture).
     assert!(
-        !stdout.contains("UserRepository.Repository.find"),
+        !stdout.contains("find("),
         "Impl-block method bodies must not be listed as runnable entries:\n{stdout}"
     );
     assert!(

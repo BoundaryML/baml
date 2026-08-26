@@ -267,10 +267,10 @@ fn extract_from_class(
     // Builtin methods may be declared directly on the class or inside an
     // `implements I { ... }` block (BEP-044) — e.g. the `random.Rng`
     // implementors put their `$rust_function` / `$rust_io_function` methods in
-    // an `implements Rng { ... }` block. A method inside `implements I` is named
-    // `{ns}.{Class}.{I}.{method}` at runtime (matching MIR's
-    // `scoped_implements_method_name`), so it carries the interface qualifier; a
-    // direct method is just `{ns}.{Class}.{method}`.
+    // an `implements Rng { ... }` block. A method inside `implements I` is an
+    // impl-block method like any other and is named `{ns}.{I}$for${Class}.{method}`
+    // at runtime (matching MIR's `def_to_item_ref` — the ONE spelling for
+    // every impl form); a direct method is just `{ns}.{Class}.{method}`.
     let direct = class_def.methods.iter().map(|m| (m, None));
     let in_impl = class_def.implements.iter().flat_map(|b| {
         // The interface `TypeExpr`'s `Display` is the exact form MIR uses to
@@ -299,7 +299,7 @@ fn extract_from_class(
         let path = match &iface_qualifier {
             Some(iface) => {
                 format!(
-                    "{namespace_prefix}.{class_name}.{iface}.{}",
+                    "{namespace_prefix}.{iface}$for${class_name}.{}",
                     method.name.as_str()
                 )
             }
@@ -828,7 +828,9 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
 /// - `"baml.sys.argv"` → `"baml_sys_argv"`
 /// - `"baml.media.Pdf.url"` → `"baml_media_pdf_url"`
 fn path_to_fn_name(path: &str) -> String {
-    path.replace('.', "_").to_lowercase()
+    // `$` appears in impl-block method paths (`{iface}$for${Class}.method`)
+    // and is not a valid identifier character.
+    path.replace(['.', '$'], "_").to_lowercase()
 }
 
 /// Extract parameters from a method, skipping the first `self` parameter.

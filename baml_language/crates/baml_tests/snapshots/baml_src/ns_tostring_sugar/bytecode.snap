@@ -104,7 +104,7 @@ function tostring_sugar.$init_test_ns_tostring_sugar_tostring_sugar(registry: te
     return
 }
 
-function tostring_sugar.PointShow.baml.ToString.to_string(self: tostring_sugar.PointShow) -> string {
+function tostring_sugar.<(user.tostring_sugar.PointShow as baml.ToString)>.to_string(self: tostring_sugar.PointShow) -> string {
     load_type int
     load_var self
     load_field .x
@@ -127,7 +127,7 @@ function tostring_sugar.PointShow.baml.ToString.to_string(self: tostring_sugar.P
     return
 }
 
-function tostring_sugar.Widget.MyShow.to_string(self: tostring_sugar.Widget) -> string {
+function tostring_sugar.<(user.tostring_sugar.Widget as user.tostring_sugar.MyShow)>.to_string(self: tostring_sugar.Widget) -> string {
     load_const "widget!"
     return
 }

@@ -847,7 +847,7 @@ fn method_owner_path(
                 baml_compiler2_hir_ty::lower::qualify_def(db, Definition::Interface(iface), name);
             Some(qtn.to_string())
         }
-        MethodOwner::FreeImpl(block) => {
+        MethodOwner::Impl(block) => {
             // `impl_facts` is `None` when the block's header does not resolve
             // to an interface — honest absence beats a wrong owner.
             let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).as_ref()?;
@@ -929,7 +929,7 @@ fn generic_type_parameter_info_at(
                     item_data::interface_data(db, iface).name.as_str(),
                     data.name.as_str()
                 ),
-                Some(item_data::MethodOwner::FreeImpl(block)) => {
+                Some(item_data::MethodOwner::Impl(block)) => {
                     let subject = baml_compiler2_hir_ty::impls::impl_facts(db, block)
                         .as_ref()
                         .map(|facts| render::display_owner_ty(&facts.for_ty_pattern.to_plain()));

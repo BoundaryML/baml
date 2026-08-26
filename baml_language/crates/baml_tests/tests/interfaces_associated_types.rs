@@ -501,7 +501,7 @@ fn vm_metadata_resolves_self_associated_type_return_in_implements_method() {
             }
         }
         "#,
-        "UserRepository.Repository.find",
+        "<(user.UserRepository as user.Repository)>.find",
     );
 
     assert_eq!(return_type, "UserRecord");

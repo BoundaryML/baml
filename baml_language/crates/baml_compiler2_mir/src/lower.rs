@@ -1048,9 +1048,8 @@ use baml_compiler2_hir::{
 
 pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> ItemRef {
     use baml_compiler2_ppir::item_data::{
-        ImplSubjectData, MethodOwner, class_data, client_data, enum_data, function_data,
-        impl_block_data, interface_data, let_data, method_owner, retry_policy_data,
-        template_string_data, test_data, type_alias_data,
+        MethodOwner, class_data, client_data, enum_data, function_data, interface_data, let_data,
+        method_owner, retry_policy_data, template_string_data, test_data, type_alias_data,
     };
     let pkg_info = file_package(db, def.file(db));
 
@@ -1083,20 +1082,26 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                     name,
                 };
             }
-            Some(MethodOwner::FreeImpl(impl_loc)) => {
-                let block = impl_block_data(db, impl_loc);
-                if let ImplSubjectData::Free { for_target, .. } = &block.subject {
-                    return ItemRef::Method {
-                        package: pkg_info.package.clone(),
-                        namespace: pkg_info.namespace_path,
-                        class: Name::new(format!(
-                            "{}$for${}",
-                            block.type_refs.display(block.interface_target),
-                            block.type_refs.display(*for_target)
-                        )),
-                        name,
-                    };
-                }
+            Some(MethodOwner::Impl(impl_loc)) => {
+                // One spelling for every impl-block method — in-class and
+                // out-of-body blocks are the same construct. Impl blocks are
+                // anonymous, so the segment is SYNTHESIZED (the lambda
+                // convention) from the impl's coherence identity, spelled
+                // with the language's own qualification syntax:
+                // `<(target as iface)>`. Both halves are canonically
+                // resolved and fully qualified (never the written
+                // spellings, which may be namespace-relative or ride a
+                // `root.` alias); generic and interface arguments are part
+                // of the identity, associated-type pins are NOT (they are
+                // members of the impl, outputs of the match); the impl's
+                // own type variables render as frame indices (`#0`), not
+                // their declared names.
+                return ItemRef::Method {
+                    package: pkg_info.package.clone(),
+                    namespace: pkg_info.namespace_path,
+                    class: Name::new(impl_display_segment(db, impl_loc)),
+                    name,
+                };
             }
             None => {}
         }
@@ -1107,6 +1112,119 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
         namespace: pkg_info.namespace_path,
         name,
     }
+}
+
+/// The synthesized `<(target as iface)>` display segment for an anonymous
+/// impl block — see the `MethodOwner::Impl` arm of [`def_to_item_ref`].
+fn impl_display_segment<'db>(
+    db: &'db dyn crate::Db,
+    impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
+) -> String {
+    use baml_compiler2_ppir::item_data::impl_block_data;
+    let block = impl_block_data(db, impl_loc);
+    let impl_params = baml_compiler2_hir_ty::lower::impl_frame(db, impl_loc);
+    let impl_bounds = baml_compiler2_hir_ty::lower::impl_generic_bounds(db, impl_loc);
+    let ctx = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, impl_loc.file(db))
+        .with_frame(impl_params.clone())
+        .with_bounds(impl_bounds);
+    let iface_ty = ctx.lower_type_ref_at(
+        &block.type_refs,
+        block.interface_target,
+        baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
+    );
+    // Associated-type pins are excluded from the rendered identity.
+    let iface_ty = match iface_ty.kind() {
+        baml_type::interned::TyKind::Interface(qtn, args, _pins, attr) => {
+            baml_type::interned::Ty::intern(baml_type::interned::TyKind::Interface(
+                qtn.clone(),
+                args.clone(),
+                Box::default(),
+                attr.clone(),
+            ))
+        }
+        _ => iface_ty,
+    };
+    let target_ty = baml_compiler2_hir_ty::lower::impl_self_ty(db, impl_loc);
+    format!(
+        "<({} as {})>",
+        render_with_frame_indices(&target_ty, &impl_params),
+        render_with_frame_indices(&iface_ty, &impl_params),
+    )
+}
+
+/// Render `ty` canonically with the impl frame's type variables spelled as
+/// their frame indices (`#0`) instead of their declared names — the declared
+/// names are the block's private spelling, not part of its identity.
+fn render_with_frame_indices(ty: &baml_type::interned::Ty, frame: &[baml_type::ParamTy]) -> String {
+    use baml_type::interned::{Ty, TyKind};
+    fn rewrite(ty: &Ty, frame: &[baml_type::ParamTy]) -> Ty {
+        if let TyKind::TypeVar(param, attr) = ty.kind()
+            && let Some(position) = frame.iter().position(|candidate| candidate == param)
+        {
+            return Ty::intern(TyKind::TypeVar(
+                baml_type::ParamTy::new(
+                    u32::try_from(position).expect("impl generic arity fits u32"),
+                    baml_type::Name::new(format!("#{position}")),
+                ),
+                attr.clone(),
+            ));
+        }
+        Ty::intern(ty.kind().map_children(|child| rewrite(child, frame)))
+    }
+    rewrite(ty, frame).to_plain().render_canonical()
+}
+
+/// The codegen-lockstep NATIVE KEY for a builtin body: the dot-free
+/// `{iface as written}$for${target as written}` scheme that
+/// `baml_builtins2_codegen::extract` produces byte-for-byte for its dispatch
+/// tables and sys-op paths. This is a KEY, not a name — `Function.name`
+/// renders the canonical `<(target as iface)>` display form
+/// ([`def_to_item_ref`]) — so the written-form dependence here is confined
+/// to the attach boundary the codegen already owns.
+pub fn native_key_for<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> String {
+    use baml_compiler2_ppir::item_data::{
+        ImplSubjectData, MethodOwner, class_data, function_data, impl_block_data, interface_data,
+        method_owner,
+    };
+    let pkg_info = file_package(db, func_loc.file(db));
+    let name = function_data(db, func_loc).name.clone();
+    let item = match method_owner(db, func_loc) {
+        Some(MethodOwner::Class(class_loc)) => {
+            return method_item_ref(db, class_loc, func_loc).to_string();
+        }
+        Some(MethodOwner::Interface(iface_loc)) => interface_data(db, iface_loc).name.clone(),
+        Some(MethodOwner::Impl(impl_loc)) => {
+            let block = impl_block_data(db, impl_loc);
+            let for_display = match &block.subject {
+                ImplSubjectData::Free { for_target, .. } => {
+                    block.type_refs.display(*for_target).to_string()
+                }
+                ImplSubjectData::InClass { class, .. } => class_data(db, *class).name.to_string(),
+            };
+            Name::new(format!(
+                "{}$for${for_display}",
+                block.type_refs.display(block.interface_target),
+            ))
+        }
+        None => {
+            return ItemRef::Free {
+                package: pkg_info.package.clone(),
+                namespace: pkg_info.namespace_path,
+                name,
+            }
+            .to_string();
+        }
+    };
+    ItemRef::Method {
+        package: pkg_info.package.clone(),
+        namespace: pkg_info.namespace_path,
+        class: item,
+        name,
+    }
+    .to_string()
 }
 
 /// True if `func_loc` is an interface-machinery *body*: an impl-block method
@@ -1127,30 +1245,14 @@ pub fn function_is_interface_body<'db>(
     db: &'db dyn crate::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> bool {
-    use baml_compiler2_ppir::item_data::{MethodOwner, method_interface_target, method_owner};
+    use baml_compiler2_ppir::item_data::{MethodOwner, method_owner};
     match method_owner(db, func_loc) {
-        Some(MethodOwner::Interface(_) | MethodOwner::FreeImpl(_)) => true,
-        // A class-owned method is a body iff it sits inside an in-class
-        // `implements` block; a plain class method is a real logical item.
-        Some(MethodOwner::Class(_)) => method_interface_target(db, func_loc).is_some(),
-        None => false,
+        // Impl blocks own their methods regardless of spelling (in-class
+        // blocks are pure syntax), so class-owned methods are always real
+        // logical items.
+        Some(MethodOwner::Interface(_) | MethodOwner::Impl(_)) => true,
+        Some(MethodOwner::Class(_)) | None => false,
     }
-}
-
-fn scoped_implements_method_name<'db>(
-    db: &'db dyn crate::Db,
-    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
-    method_name: &Name,
-) -> Name {
-    baml_compiler2_ppir::item_data::method_interface_target(db, func_loc)
-        .as_ref()
-        .map(|target| {
-            Name::new(format!(
-                "{}.{method_name}",
-                target.type_refs.display(target.target)
-            ))
-        })
-        .unwrap_or_else(|| method_name.clone())
 }
 
 fn method_item_ref<'db>(
@@ -1161,12 +1263,14 @@ fn method_item_ref<'db>(
     use baml_compiler2_ppir::item_data::{class_data, function_data};
     let pkg_info = file_package(db, class_loc.file(db));
     let class = class_data(db, class_loc).name.clone();
+    // Class-inherent methods only: an implements-block method is Impl-owned
+    // and reaches its `{iface}$for${target}` spelling via `def_to_item_ref`.
     let method_name = function_data(db, func_loc).name.clone();
     ItemRef::Method {
         package: pkg_info.package,
         namespace: pkg_info.namespace_path,
         class,
-        name: scoped_implements_method_name(db, func_loc, &method_name),
+        name: method_name,
     }
 }
 
@@ -1675,14 +1779,6 @@ fn package_lowering_data<'db>(
         resolved_aliases,
         interface_method_names,
     }
-}
-
-#[derive(Clone, Copy)]
-struct DispatchCallLowering<'a> {
-    expr_id: AstExprId,
-    args: &'a [AstExprId],
-    runtime_id: Option<AstExprId>,
-    dest: &'a Place,
 }
 
 type PatMetadataKey = (MetadataScope, AstPatId);
@@ -2980,7 +3076,7 @@ impl<'db> LoweringContext<'db> {
         let generic_param_bounds = self.enclosing_generic_param_bounds();
         let (self_ty, impl_target) = match self.func_loc {
             Some(func_loc) => (
-                baml_compiler2_hir_ty::lower::owner_self_ty(self.db, func_loc, &generic_params),
+                baml_compiler2_hir_ty::lower::owner_self_ty(self.db, func_loc),
                 baml_compiler2_hir_ty::lower::owner_impl_target(self.db, func_loc, &generic_params),
             ),
             None => (None, None),
@@ -4237,7 +4333,7 @@ impl<'db> LoweringContext<'db> {
             }),
         };
         let enclosing_impl = match method_owner {
-            Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc)) => Some(
+            Some(baml_compiler2_ppir::item_data::MethodOwner::Impl(impl_loc)) => Some(
                 baml_compiler2_ppir::item_data::impl_block_data(self.db, impl_loc),
             ),
             _ => None,
@@ -8557,22 +8653,11 @@ impl<'db> LoweringContext<'db> {
             ) {
                 return;
             }
-            // Receiver may be a union of concrete classes sharing the method
-            // (e.g. `(if c { Dog {} } else { Cat {} }).speak()`).
-            if self.try_lower_union_dispatch(
-                expr_id,
-                callee,
-                base_id,
-                &member_name,
-                args,
-                runtime_id,
-                &dest,
-            ) {
-                return;
-            }
-            // Receiver may be a union containing an interface member
-            // (e.g. `Animal | Vehicle`), where every member declares the
-            // method — dispatch on the runtime class across all implementors.
+            // Receiver may be a union (`Animal | Vehicle`, `Dog | Cat`):
+            // the members' shared interface is the ONLY member surface a
+            // union receiver has (inherent methods never participate), so
+            // dispatch open-world on the declaring interface — the runtime
+            // value is one concrete member.
             if self.try_lower_union_iface_dispatch(
                 expr_id,
                 callee,
@@ -8662,7 +8747,7 @@ impl<'db> LoweringContext<'db> {
                     let self_subject = self.implements_subject_tir_ty().unwrap_or_else(|| {
                         // `implements_block_iface_target` gated entry to this
                         // branch, and a recorded target pairs with a Class /
-                        // FreeImpl owner by construction (both are written by
+                        // Impl owner by construction (both are written by
                         // the same HIR builder call).
                         unreachable!(
                             "`default.<method>()` bypass outside an implements-block method"
@@ -8855,9 +8940,12 @@ impl<'db> LoweringContext<'db> {
                     }
                 }
                 // Parallel to the interface case: the receiver may instead be a
-                // union of concrete classes (a local or field chain bound to a
-                // `match`/`if` whose arms are different classes). Same receiver
-                // type slot, same field-chain lowering.
+                // union (a local or field chain bound to a `match`/`if` whose
+                // arms are different classes). Same receiver type slot, same
+                // field-chain lowering. The members' shared interface is the
+                // ONLY member surface a union receiver has (inherent methods
+                // never participate): the runtime value is one concrete
+                // member, so dispatch open-world on the declaring interface.
                 else if let Some(members) = self
                     .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
                     .and_then(Self::tir_union_members)
@@ -8868,22 +8956,6 @@ impl<'db> LoweringContext<'db> {
                         receiver_segments,
                         recv_root_local,
                     );
-                    if self.emit_union_class_dispatch(
-                        recv_local,
-                        &members,
-                        &method_name,
-                        DispatchCallLowering {
-                            expr_id,
-                            args,
-                            runtime_id,
-                            dest: &dest,
-                        },
-                    ) {
-                        return;
-                    }
-                    // Union whose members share the method through an interface:
-                    // the runtime value is one concrete member, so dispatch
-                    // open-world on the shared interface.
                     if let Some((decl_tn, decl_args, decl_assoc)) =
                         self.union_virtual_dispatch_view(&members, &method_name)
                         && self.emit_virtual_call(
@@ -11816,57 +11888,6 @@ impl<'db> LoweringContext<'db> {
         local
     }
 
-    /// Resolve `class.method` to a callable `ItemRef` by simple name.
-    fn class_method_item_ref_by_name(&self, class_tn: &TypeName, method: &Name) -> Option<ItemRef> {
-        use baml_compiler2_ppir::item_data::{class_data, function_data};
-        let class_loc = self.resolve_class_loc_by_type_name(class_tn)?;
-        let func_loc = class_data(self.db, class_loc)
-            .methods
-            .iter()
-            .copied()
-            .find(|&fl| function_data(self.db, fl).name == *method)?;
-        Some(method_item_ref(self.db, class_loc, func_loc))
-    }
-
-    /// A method call whose receiver is a *union of concrete classes* (e.g. the
-    /// `Dog | Cat` produced by `if`/`match` arms) — dispatch by runtime class.
-    /// Each member must declare `method`; otherwise this isn't a uniform call we
-    /// can lower and we fall through (the caller reports the real error).
-    #[expect(clippy::too_many_arguments)]
-    fn try_lower_union_dispatch(
-        &mut self,
-        expr_id: AstExprId,
-        callee: AstExprId,
-        base: AstExprId,
-        method: &Name,
-        args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
-        dest: &Place,
-    ) -> bool {
-        let Some(members) = self
-            .call_receiver_tir_ty(callee, base)
-            .as_ref()
-            .and_then(Self::tir_union_members)
-        else {
-            return false;
-        };
-        // Lower the receiver once; copy it into every arm.
-        let receiver_op = self.lower_to_operand(base);
-        let receiver_ty = self.expr_ty(base);
-        let recv_local = self.operand_to_local(receiver_op, receiver_ty);
-        self.emit_union_class_dispatch(
-            recv_local,
-            &members,
-            method,
-            DispatchCallLowering {
-                expr_id,
-                args,
-                runtime_id,
-                dest,
-            },
-        )
-    }
-
     /// A method call whose receiver is a union that contains at least one
     /// *interface* member (e.g. `Animal | Vehicle`, where every member declares
     /// `method`). BEP-044: a method every union member provides through a shared
@@ -11932,73 +11953,6 @@ impl<'db> LoweringContext<'db> {
             .skip(1)
             .all(|member| declaring_view(member).as_ref() == Some(&first))
             .then_some(first)
-    }
-
-    /// Emit a class-tag dispatch switch for a method call whose receiver
-    /// (`recv_local`) has the union type `members`. Returns false (lowering
-    /// nothing) unless every member is a class declaring `method`.
-    fn emit_union_class_dispatch(
-        &mut self,
-        recv_local: Local,
-        members: &[Tir2Ty],
-        method: &Name,
-        call: DispatchCallLowering<'_>,
-    ) -> bool {
-        let mut arms: Vec<(TypeName, ItemRef)> = Vec::new();
-        for member in members {
-            let Tir2Ty::Class(qtn, _, _) = member else {
-                return false;
-            };
-            let class_tn = qtn.clone();
-            let Some(item_ref) = self.class_method_item_ref_by_name(&class_tn, method) else {
-                return false;
-            };
-            arms.push((class_tn, item_ref));
-        }
-        if arms.is_empty() {
-            return false;
-        }
-
-        let arg_ops = self.lower_call_arg_operands(call.expr_id, call.args);
-        let runtime_id_operand = self.lower_runtime_id_operand(call.runtime_id);
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-
-        let bb_join = self.builder.create_block();
-        let bb_otherwise = self.builder.create_block();
-        let mut next_check = self.builder.current_block();
-        for (idx, (class_tn, item_ref)) in arms.iter().enumerate() {
-            let bb_body = self.builder.create_block();
-            let bb_next = if idx + 1 == arms.len() {
-                bb_otherwise
-            } else {
-                self.builder.create_block()
-            };
-            self.builder.set_current_block(next_check);
-            self.emit_is_type_branch(
-                recv_local,
-                RuntimeTy::Class(class_tn.clone(), Vec::new(), TyAttr::default()),
-                bb_body,
-                bb_next,
-            );
-            self.builder.set_current_block(bb_body);
-            let callee_op = Operand::Constant(Constant::Function(item_ref.clone()));
-            let mut all_args = vec![Operand::Copy(Place::Local(recv_local))];
-            all_args.extend(arg_ops.iter().cloned());
-            self.builder.call_with_type_args_and_runtime_id(
-                callee_op,
-                all_args,
-                0,
-                runtime_id_operand.clone(),
-                call.dest.clone(),
-                bb_join,
-                unwind,
-            );
-            next_check = bb_next;
-        }
-        self.builder.set_current_block(bb_otherwise);
-        self.builder.unreachable();
-        self.builder.set_current_block(bb_join);
-        true
     }
 
     /// The frame shape of a SOURCE interface's method: whether it takes a
@@ -12524,49 +12478,22 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// The enclosing implements-block's subject type — what `Self` denotes in
-    /// this impl method's body: the class at its own generic params for an
-    /// in-body block (structural for the builtin containers, matching TIR's
-    /// receiver typing), or the free impl's `for` pattern lowered over the
-    /// impl's generics. `None` when the enclosing function is not an impl
-    /// method.
+    /// this impl method's body, off the uniform
+    /// [`impl_self_ty`](baml_compiler2_hir_ty::lower::impl_self_ty) surface
+    /// (the in-body-vs-free distinction is HIR's business, not MIR's).
+    /// `None` when the enclosing function is not an impl method.
     fn implements_subject_tir_ty(&self) -> Option<Tir2Ty> {
-        use baml_compiler2_ppir::item_data::{
-            ImplSubjectData, MethodOwner, impl_block_data, method_owner,
-        };
+        use baml_compiler2_ppir::item_data::{MethodOwner, method_owner};
         let fl = self.func_loc?;
         match method_owner(self.db, fl)? {
-            MethodOwner::Class(class_loc) => {
-                // The declared receiver at the class's own frame, through
-                // the builtin-container bridge (`Array` self IS `T[]`).
-                Some(baml_compiler2_hir_ty::lower::class_self_ty(self.db, class_loc).to_plain())
+            MethodOwner::Impl(impl_loc) => {
+                Some(baml_compiler2_hir_ty::lower::impl_self_ty(self.db, impl_loc).to_plain())
             }
-            MethodOwner::FreeImpl(impl_loc) => {
-                let block = impl_block_data(self.db, impl_loc);
-                let ImplSubjectData::Free { for_target, .. } = &block.subject else {
-                    // A `FreeImpl` owner is recorded only for out-of-body
-                    // blocks, whose subject is always `Free`.
-                    return None;
-                };
-                let pkg_info = file_package(self.db, self.file);
-                let pkg_id = PackageId::new(self.db, pkg_info.package.clone());
-                let pkg_items = package_items(self.db, pkg_id);
-                let generic_params = self.enclosing_generic_params();
-                let bounds = self.enclosing_generic_param_bounds();
-                Some(lower_ref_in_scope(
-                    self.db,
-                    &block.type_refs,
-                    *for_target,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                    &generic_params,
-                    &bounds,
-                    None,
-                ))
-            }
-            // Interface default methods have no implements-block target
-            // (`method_interface_target` is `None` for them), so callers
-            // gated on that never reach this arm with an `Interface` owner.
-            MethodOwner::Interface(_) => None,
+            // A class-owned method has no enclosing implements block —
+            // impl-block methods are Impl-owned — and interface default
+            // methods have no implements-block target either
+            // (`method_interface_target` is `None` for them).
+            MethodOwner::Class(_) | MethodOwner::Interface(_) => None,
         }
     }
 
@@ -12589,11 +12516,14 @@ impl<'db> LoweringContext<'db> {
                     .expect("interface frame starts with Self");
                 Some(Tir2Ty::TypeVar(self_param, baml_type::TyAttr::default()))
             }
-            MethodOwner::Class(_) => method_interface_target(self.db, fl)
-                .is_some()
-                .then(|| self.implements_subject_tir_ty())
-                .flatten(),
-            MethodOwner::FreeImpl(_) => self.implements_subject_tir_ty(),
+            MethodOwner::Class(_) => {
+                debug_assert!(
+                    method_interface_target(self.db, fl).is_none(),
+                    "interface targets are recorded on impl-block methods, which are Impl-owned"
+                );
+                None
+            }
+            MethodOwner::Impl(_) => self.implements_subject_tir_ty(),
         }
     }
 

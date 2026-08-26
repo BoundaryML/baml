@@ -1383,17 +1383,20 @@ fn infer_body_impl<'db>(
         BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
             // BODY-position `Self` is a PLAIN-class-method error (the
             // ratified rule: signatures resolve it, bodies do not);
-            // implements-block bodies (Self substitutes to the subject),
-            // interface default bodies (frame slot 0), and free-impl
-            // bodies keep theirs.
+            // implements-block bodies (`Self` substitutes to the subject,
+            // and they are Impl-owned — in-class and out-of-body alike)
+            // and interface default bodies (frame slot 0) keep theirs.
             match baml_compiler2_ppir::item_data::method_owner(db, function) {
-                Some(baml_compiler2_ppir::item_data::MethodOwner::Class(_))
-                    if baml_compiler2_ppir::item_data::method_interface_target(db, function)
-                        .is_none() =>
-                {
+                Some(baml_compiler2_ppir::item_data::MethodOwner::Class(_)) => {
+                    debug_assert!(
+                        baml_compiler2_ppir::item_data::method_interface_target(db, function)
+                            .is_none(),
+                        "interface targets are recorded on impl-block methods, which are \
+                         Impl-owned",
+                    );
                     None
                 }
-                _ => crate::lower::owner_self_ty(db, function, &frame),
+                _ => crate::lower::owner_self_ty(db, function),
             }
         }
         BodyOwnerId::Let(_) => None,
@@ -5793,61 +5796,6 @@ impl<'db> InferenceContext<'db> {
         (self.infer_expr(body, callee, &Expectation::None), false)
     }
 
-    fn heterogeneous_union_class_method_callee(
-        &self,
-        members: &[Ty],
-        member: &baml_type::Name,
-    ) -> Option<Ty> {
-        let mut has_interface_provider = false;
-        let mut joined: Option<Ty> = None;
-        for arm in members {
-            let TyKind::Class(qtn, _, _) = arm.kind() else {
-                return None;
-            };
-            if matches!(
-                crate::method_resolution::lookup_interface_member(
-                    self.db,
-                    &self.facts,
-                    arm,
-                    member,
-                ),
-                crate::method_resolution::InterfaceMemberLookup::Found(_)
-            ) {
-                has_interface_provider = true;
-            }
-            let Definition::Class(expected_class) = self.facts.definition_of(qtn)? else {
-                return None;
-            };
-            let candidate =
-                crate::method_resolution::lookup_method(self.db, &self.facts, arm, member)?;
-            let crate::method_resolution::MethodCandidateSource::Source { method, class } =
-                candidate.source
-            else {
-                return None;
-            };
-            if class != expected_class
-                || !baml_compiler2_ppir::item_data::class_data(self.db, class)
-                    .methods
-                    .contains(&method)
-            {
-                return None;
-            }
-            let signature = function_signature(self.db, method);
-            if signature.generic_params.len() != candidate.class_args.len() {
-                return None;
-            }
-            let ty = bind_receiver(function_value_ty(signature, &candidate.class_args));
-            if joined
-                .as_ref()
-                .is_some_and(|current| !self.cached_equivalent(current, &ty))
-            {
-                return None;
-            }
-            joined = Some(ty);
-        }
-        if has_interface_provider { joined } else { None }
-    }
-
     /// `receiver.member` in callee position: a method (instantiated - the
     /// receiver pins the class generics, the call site's turbofish or
     /// fresh variables fill the method's own; bound iff it takes `self`),
@@ -5924,16 +5872,12 @@ impl<'db> InferenceContext<'db> {
                     return (field_ty, false, None, false);
                 }
                 crate::method_resolution::UnionMemberLookup::NoCommonInterface => {
-                    // One arm may provide an owned method through an
-                    // interface while another owns an equivalent inherent
-                    // method. MIR retains that heterogeneous case as a
-                    // guarded class-tag switch; class-only unions continue
-                    // to require a common interface.
-                    if let Some(ty) =
-                        self.heterogeneous_union_class_method_callee(&union_members, member)
-                    {
-                        return (ty, true, None, false);
-                    }
+                    // RULING: a union-typed receiver exposes ONLY the
+                    // interface methods of interfaces every member
+                    // implements — inherent methods never participate, so
+                    // there is no per-arm fallback. Fall through to the
+                    // total operator-style sugars; a full miss reports
+                    // "no common interface".
                 }
             }
         }
@@ -6204,7 +6148,7 @@ impl<'db> InferenceContext<'db> {
             Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class)) => {
                 crate::lower::class_self_ty(self.db, class)
             }
-            Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc)) => {
+            Some(baml_compiler2_ppir::item_data::MethodOwner::Impl(impl_loc)) => {
                 let data = baml_compiler2_ppir::item_data::impl_block_data(self.db, impl_loc);
                 match &data.subject {
                     baml_compiler2_ppir::item_data::ImplSubjectData::Free {
@@ -7225,7 +7169,139 @@ impl<'db> InferenceContext<'db> {
                 return Some(fn_ty);
             }
         }
-        None
+        // TIER: a type-qualified implements-block member on a SOURCE class -
+        // the bare spelling of the `(C as I).item` projection with the
+        // interface INFERRED.
+        self.class_impl_static_value(prefix, member, own, anchor, record_at)
+    }
+
+    /// The impl tier of [`Self::class_static_value`]: `C.item` /
+    /// `C<args>.item` where `item` lives in an implements block (in-class or
+    /// free alike - the block spelling is metadata, not semantics). Mirrors
+    /// [`Self::qualified_path_value`] with the qualifier inferred: the
+    /// determination must be UNIQUE - two declaring interfaces need the
+    /// `(C as I).item` spelling (E0121's rule) - and the resolved member
+    /// types exactly as the qualified spelling would, so self-less statics
+    /// dispatch type-keyed and UFCS methods keep `self` as the written
+    /// first argument.
+    ///
+    /// The receiver must be GROUND before determination runs (the impl
+    /// matcher admits no inference variables), so the class arguments come
+    /// only from the spelling: an alias expansion's pinned args, the hoisted
+    /// receiver args (`Bin<int>.build(2)` - BEP-039 moves `<int>` onto the
+    /// call channel), or an empty frame. A generic class with no written
+    /// arguments does not reach this tier - which interface declares the
+    /// member could depend on the very arguments inference has not solved.
+    fn class_impl_static_value(
+        &mut self,
+        prefix: &[baml_type::Name],
+        member: &baml_type::Name,
+        own: OwnArgs,
+        anchor: ExprId,
+        record_at: Option<ExprId>,
+    ) -> Option<Ty> {
+        let (class, pinned) = self.static_class_for(prefix)?;
+        let frame = crate::lower::class_generic_frame(self.db, class);
+        // The class arguments and whether the call's written type-arg channel
+        // was consumed for them (the hoisted-receiver-args spelling).
+        let (args, channel_consumed) = match pinned {
+            Some(args) => (args, false),
+            None if frame.is_empty() => (Vec::new(), false),
+            None => {
+                let OwnArgs::Call(call) = own else {
+                    return None;
+                };
+                let written = self.type_refs.expr_type_args.get(&call)?.clone();
+                // The whole prefix must be written and static: a partial or
+                // runtime instantiation cannot ground the receiver here.
+                if written.len() != frame.len()
+                    || written
+                        .iter()
+                        .any(|slot| matches!(slot, BodyTypeArgRef::Runtime { .. }))
+                {
+                    return None;
+                }
+                // Lowered WITHOUT call-plan slot recording: these args live
+                // inside the `Self` template, and the interface-item road
+                // reads recorded slots as the method's OWN suffix.
+                let args: Vec<Ty> = written
+                    .iter()
+                    .map(|slot| {
+                        let BodyTypeArgRef::Static(type_ref) = slot else {
+                            unreachable!("runtime slots were rejected above");
+                        };
+                        let (lowered, diagnostics) = self.lower_body_type_ref_at(
+                            *type_ref,
+                            crate::lower::TypePosition::Existential,
+                        );
+                        self.queue_body_lowering_diagnostics(diagnostics);
+                        self.reject_expr_position_holes(&lowered, anchor)
+                    })
+                    .collect();
+                (args, true)
+            }
+        };
+        let qself =
+            crate::lower::class_ty(crate::lower::class_qualified_name(self.db, class), args);
+        if qself.has_infer() || qself.has_error() {
+            return None;
+        }
+        let (determination, _) = crate::interfaces::determine_member_interface_with_facts(
+            self.db,
+            &self.facts,
+            &qself.to_plain(),
+            None,
+            member,
+            crate::interfaces::MemberNamespace::Value,
+        );
+        let realized = match determination {
+            crate::interfaces::Determination::Determined(realized) => realized,
+            crate::interfaces::Determination::Ambiguous(candidates) => {
+                if self.member_probe_depth == 0 {
+                    self.pending_diags.push(PendingDiag::AmbiguousMember {
+                        expr: anchor,
+                        base: qself,
+                        member: member.clone(),
+                        sources: candidates
+                            .iter()
+                            .map(|iface| {
+                                InterfaceRef::new(
+                                    iface.name.clone(),
+                                    iface.generics.iter().map(Ty::from_plain).collect(),
+                                    iface
+                                        .associated_types
+                                        .iter()
+                                        .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
+                                        .collect(),
+                                )
+                            })
+                            .collect(),
+                        is_field: false,
+                    });
+                }
+                return Some(Ty::error());
+            }
+            _ => return None,
+        };
+        let interface_loc = self.interface_loc_for(&realized.name)?;
+        // A consumed channel holds the CLASS args, so the member's own
+        // generics (if any) instantiate fresh instead of re-reading it.
+        let own = if channel_consumed {
+            OwnArgs::Fresh
+        } else {
+            own
+        };
+        self.item_projection_value(
+            interface_loc,
+            Some(&WrittenQualifier {
+                qself,
+                realized: &realized,
+            }),
+            member,
+            own,
+            anchor,
+            record_at,
+        )
     }
 
     fn source_class_static_value(

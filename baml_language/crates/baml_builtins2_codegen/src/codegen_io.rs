@@ -93,12 +93,16 @@ fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
         .path
         .split_once('.')
         .map_or(builtin.path.as_str(), |(_, rest)| rest);
-    if let Some(receiver) = &builtin.receiver {
-        // The namespace is everything before the receiver class segment; a
-        // top-level class (`ai.Context`) has an empty namespace.
-        after_package
-            .split_once(&format!("{}.", receiver.class_name))
-            .map_or("", |(before, _)| before.trim_end_matches('.'))
+    if builtin.receiver.is_some() {
+        // The namespace is everything before the class segment (the
+        // second-to-last path segment — for an impl-block method that segment
+        // is the synthetic `{iface}$for${Class}`, so it cannot be found by
+        // searching for the receiver's class name); a top-level class
+        // (`ai.Context`) has an empty namespace.
+        let mut parts = after_package.rsplitn(3, '.');
+        let _method = parts.next();
+        let _class_segment = parts.next();
+        parts.next().unwrap_or("")
     } else {
         after_package.split('.').next().unwrap_or("")
     }
@@ -130,22 +134,25 @@ fn io_method_name(builtin: &NativeBuiltin) -> &str {
     builtin.path.rsplit('.').next().unwrap_or("")
 }
 
-/// The class-dispatch match key for an IO method: the path portion after
-/// `...{ClassName}.`.
+/// The class-dispatch match key for an IO method: the final path segment.
 ///
-/// A method declared inside an `implements I { ... }` block keeps the interface
-/// segment in its runtime path (`...{Class}.I.method`), so the key is
-/// `I.method`; a direct method is just `method`. The clean trait method name
-/// and glue still use the final segment (`io_method_name`).
+/// A method declared inside an `implements I { ... }` block carries its
+/// interface in the class segment (`...{I}$for${Class}.method`), so the
+/// method name alone keys the dispatch — same as a direct method.
 fn io_class_dispatch_key(builtin: &NativeBuiltin) -> String {
-    builtin
-        .receiver
-        .as_ref()
-        .and_then(|r| builtin.path.split_once(&format!(".{}.", r.class_name)))
-        .map_or_else(
-            || io_method_name(builtin).to_string(),
-            |(_, rest)| rest.to_string(),
-        )
+    io_method_name(builtin).to_string()
+}
+
+/// The class segment of an IO method path (the second-to-last segment): the
+/// receiver's class name for a direct method (`baml.fs.File.read` → `"File"`),
+/// the synthetic `{Iface}$for${Class}` for an implements-block method
+/// (`baml.random.Rng$for$SystemRandom.random` → `"Rng$for$SystemRandom"`).
+/// The namespace router matches the routed path segment against these, so a
+/// class reached through both spellings needs every one as an arm key.
+fn io_class_segment(builtin: &NativeBuiltin) -> &str {
+    let mut parts = builtin.path.rsplitn(3, '.');
+    let _method = parts.next();
+    parts.next().unwrap_or("")
 }
 
 fn build_io_namespace_tree<'a>(
@@ -1796,14 +1803,18 @@ fn emit_one_namespace_trait(
             }
         }
     } else {
-        // Mix of classes and free functions — use split_once to route
+        // Mix of classes and free functions — use split_once to route. A
+        // class's arm matches every class-segment spelling its methods carry:
+        // the bare class name for direct methods, `{Iface}$for${Class}` for
+        // implements-block methods.
         let class_arms: Vec<TokenStream> = node
             .classes
-            .keys()
-            .map(|cn| {
-                let cn_str = cn.as_str();
+            .iter()
+            .map(|(cn, methods)| {
+                let segments: BTreeSet<&str> = methods.iter().map(|m| io_class_segment(m)).collect();
+                let seg_strs = segments.iter();
                 let dispatch = format_ident!("__dispatch_{}_{}", ns_key, cn.to_lowercase());
-                quote! { Some((#cn_str, method)) => self.#dispatch(method, heap, permit, args, ctx, call_id) }
+                quote! { Some((#(#seg_strs)|*, method)) => self.#dispatch(method, heap, permit, args, ctx, call_id) }
             })
             .collect();
 
@@ -2213,8 +2224,10 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
 /// package keeps it (`"ai.internal._gcp_access_token"` ->
 /// `"ai_internal__gcp_access_token"`) and can never collide with a `baml` one.
 fn runtime_io_method_name(builtin: &NativeBuiltin) -> String {
+    // `$` appears in impl-block method paths (`{iface}$for${Class}.method`)
+    // and is not a valid identifier character.
     let after_baml = builtin.path.strip_prefix("baml.").unwrap_or(&builtin.path);
-    after_baml.replace('.', "_").to_lowercase()
+    after_baml.replace(['.', '$'], "_").to_lowercase()
 }
 
 /// Derive the handle type name for a class (e.g. `"Response"` in namespace `"http"` -> `"HttpResponseHandle"`).

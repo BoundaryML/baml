@@ -109,7 +109,7 @@ impl ItemTree {
         match self.method_owners.get(&method) {
             Some(MethodOwner::Class(id)) => &self[*id].generic_params,
             Some(MethodOwner::Interface(id)) => &self[*id].generic_params,
-            Some(MethodOwner::FreeImpl(_)) | None => &[],
+            Some(MethodOwner::Impl(_)) | None => &[],
         }
     }
 }

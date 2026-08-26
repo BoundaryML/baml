@@ -1544,16 +1544,11 @@ pub fn function_generic_frame<'db>(
             extend_frame(&mut frame, &[Name::new("Self")]);
             extend_frame(&mut frame, data.generic_params.iter().map(|g| &g.name));
         }
-        // Free impls (`implements<T extends I> J for T[]`): the impl's own
-        // generics are the owner prefix, mirroring the class arm.
-        Some(MethodOwner::FreeImpl(impl_loc)) => {
-            let data = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
-            if let baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } =
-                &data.subject
-            {
-                let names: Vec<Name> = generics.iter().map(|param| param.name.clone()).collect();
-                extend_frame(&mut frame, &names);
-            }
+        // Impl blocks (in-class and free alike): the block's root frame is
+        // the owner prefix — the class's generics for an in-class block, the
+        // block's own declared generics for a free one (`impl_frame`).
+        Some(MethodOwner::Impl(impl_loc)) => {
+            frame = impl_frame(db, impl_loc);
         }
         None => {}
     }
@@ -1596,6 +1591,24 @@ pub fn class_ty(qtn: TypeName, mut args: Vec<Ty>) -> Ty {
                     value,
                     attr: attr(),
                 });
+            }
+            // The dedicated-variant scalar builtins bridge the same way: a
+            // value of `class baml.Int` IS an `int` at runtime (S11's
+            // receiver-class correspondence, applied in reverse), so the
+            // class spelling — `class_self_ty` inside the class's own
+            // methods and implements blocks included — denotes the
+            // structural type. Without this, an in-class impl's for-target
+            // would be a nominal type no runtime value ever inhabits.
+            if args.is_empty() {
+                match qtn.name().as_str() {
+                    "Int" => return Ty::intern(TyKind::Int { attr: attr() }),
+                    "Bigint" => return Ty::intern(TyKind::Bigint { attr: attr() }),
+                    "Float" => return Ty::intern(TyKind::Float { attr: attr() }),
+                    "Bool" => return Ty::intern(TyKind::Bool { attr: attr() }),
+                    "String" => return Ty::intern(TyKind::String { attr: attr() }),
+                    "Uint8Array" => return Ty::intern(TyKind::Uint8Array { attr: attr() }),
+                    _ => {}
+                }
             }
         }
     }
@@ -1692,6 +1705,30 @@ pub fn impl_frame<'db>(
                     .collect::<Vec<_>>(),
             );
             frame
+        }
+    }
+}
+
+/// The type an impl block is FOR — what `Self` denotes inside it: the
+/// enclosing class's self type for an in-body block, the lowered for-target
+/// for a free one. Together with [`impl_frame`] and [`impl_generic_bounds`]
+/// this is the UNIFORM impl surface: the in-body-vs-free distinction is
+/// HIR's business, and downstream consumers (emit's rule baking, MIR's
+/// display names) see only the type.
+pub fn impl_self_ty<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    block: baml_compiler2_hir::loc::ImplLoc<'db>,
+) -> Ty {
+    let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
+    match &data.subject {
+        baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
+            class_self_ty(db, *class)
+        }
+        baml_compiler2_ppir::item_data::ImplSubjectData::Free { for_target, .. } => {
+            lower_ctx_for_file(db, block.file(db))
+                .with_frame(impl_frame(db, block))
+                .with_bounds(impl_generic_bounds(db, block))
+                .lower_type_ref(&data.type_refs, *for_target)
         }
     }
 }
@@ -1865,25 +1902,12 @@ pub fn function_generic_bounds<'db>(
     let mut frame_iter = frame.iter();
     match baml_compiler2_ppir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => {
+            // The class's declared bounds, keyed by the same frame-prefix
+            // identities this function's frame starts with.
             let class_data = baml_compiler2_ppir::item_data::class_data(db, class);
-            for declared in &class_data.generic_params {
-                let Some(param) = frame_iter.next() else {
-                    break;
-                };
-                let refs: Vec<_> = declared
-                    .bounds
-                    .iter()
-                    .filter_map(|&type_ref| {
-                        as_ref(&ctx.lower_type_ref_at(
-                            &class_data.type_refs,
-                            type_ref,
-                            TypePosition::ConstraintHead,
-                        ))
-                    })
-                    .collect();
-                if !refs.is_empty() {
-                    out.insert(param.clone(), refs);
-                }
+            out.extend(class_generic_bounds(db, class));
+            for _ in 0..class_data.generic_params.len() {
+                frame_iter.next();
             }
         }
         Some(MethodOwner::Interface(interface)) => {
@@ -1896,31 +1920,41 @@ pub fn function_generic_bounds<'db>(
                 frame_iter.next();
             }
         }
-        Some(MethodOwner::FreeImpl(impl_loc)) => {
-            // The impl's declared bounds (`implements<T extends I> ...`),
-            // conjunctive per param, keyed by the frame-prefix identities
-            // this function's frame starts with.
+        Some(MethodOwner::Impl(impl_loc)) => {
+            // The owner prefix's declared bounds, conjunctive per param,
+            // keyed by the frame-prefix identities this function's frame
+            // starts with: the block's own generics for a free impl
+            // (`implements<T extends I> ...`), the enclosing CLASS's
+            // generics for an in-class block (`impl_frame` is the class
+            // frame there, so the identities coincide).
             let impl_data = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
-            if let baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } =
-                &impl_data.subject
-            {
-                for param_data in generics {
-                    let Some(param) = frame_iter.next() else {
-                        break;
-                    };
-                    let bounds: Vec<_> = param_data
-                        .bounds
-                        .iter()
-                        .filter_map(|&type_ref| {
-                            as_ref(&ctx.lower_type_ref_at(
-                                &impl_data.type_refs,
-                                type_ref,
-                                TypePosition::ConstraintHead,
-                            ))
-                        })
-                        .collect();
-                    if !bounds.is_empty() {
-                        out.insert(param.clone(), bounds);
+            match &impl_data.subject {
+                baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
+                    let class_data = baml_compiler2_ppir::item_data::class_data(db, *class);
+                    out.extend(class_generic_bounds(db, *class));
+                    for _ in 0..class_data.generic_params.len() {
+                        frame_iter.next();
+                    }
+                }
+                baml_compiler2_ppir::item_data::ImplSubjectData::Free { generics, .. } => {
+                    for param_data in generics {
+                        let Some(param) = frame_iter.next() else {
+                            break;
+                        };
+                        let bounds: Vec<_> = param_data
+                            .bounds
+                            .iter()
+                            .filter_map(|&type_ref| {
+                                as_ref(&ctx.lower_type_ref_at(
+                                    &impl_data.type_refs,
+                                    type_ref,
+                                    TypePosition::ConstraintHead,
+                                ))
+                            })
+                            .collect();
+                        if !bounds.is_empty() {
+                            out.insert(param.clone(), bounds);
+                        }
                     }
                 }
             }
@@ -2099,22 +2133,10 @@ fn function_signature_cycle_initial<'db>(
 pub fn owner_self_ty<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
-    frame: &[baml_type::ParamTy],
 ) -> Option<Ty> {
     match baml_compiler2_ppir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => Some(class_self_ty(db, class)),
-        Some(MethodOwner::FreeImpl(impl_loc)) => {
-            let data = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
-            match &data.subject {
-                baml_compiler2_ppir::item_data::ImplSubjectData::Free { for_target, .. } => {
-                    let ctx = lower_ctx_for_file(db, impl_loc.file(db)).with_frame(frame.to_vec());
-                    Some(ctx.lower_type_ref(&data.type_refs, *for_target))
-                }
-                baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
-                    Some(class_self_ty(db, *class))
-                }
-            }
-        }
+        Some(MethodOwner::Impl(impl_loc)) => Some(impl_self_ty(db, impl_loc)),
         _ => None,
     }
 }
@@ -2256,7 +2278,7 @@ pub fn signature_lowering_diagnostics<'db>(
     let data = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let frame = function_generic_frame(db, function);
     let bounds = function_generic_bounds(db, function);
-    let concrete_self = owner_self_ty(db, function, &frame);
+    let concrete_self = owner_self_ty(db, function);
     let impl_target = owner_impl_target(db, function, &frame);
     let ctx = lower_ctx_for_file(db, function.file(db))
         .with_frame(frame)
@@ -2762,7 +2784,7 @@ pub fn function_signature<'db>(
     // receiver (elaboration leaves its slot `Missing`) takes it
     // directly. Interface owners provide none - their `Self` is the
     // frame's universal slot 0, resolved as a param.
-    let concrete_self = owner_self_ty(db, function, &frame);
+    let concrete_self = owner_self_ty(db, function);
     let impl_target = owner_impl_target(db, function, &frame);
     let ctx = lower_ctx_for_file(db, function.file(db))
         .with_frame(frame.clone())

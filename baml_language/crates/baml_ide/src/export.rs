@@ -285,9 +285,8 @@ impl SymbolId {
     /// (or its contributing impl block) rather than the namespace.
     fn of_definition(db: &Db, def: Definition<'_>) -> Option<Self> {
         if let Definition::Function(func) = def {
-            // An impl-contributed method is addressed through its block, even
-            // when the block is written in the class body and the method is
-            // therefore also a class method: `Duration` implementing both
+            // An impl-contributed method is addressed through its block
+            // (wherever the block is written): `Duration` implementing both
             // `Multiply<int>` and `Multiply<bigint>` contributes two methods
             // named `mul`, and `M:baml.time.Duration.mul` cannot name both.
             if let Some(imp) = contributing_impl(db, func) {
@@ -316,7 +315,8 @@ impl SymbolId {
                         &function_name(db, func),
                     ));
                 }
-                Some(item_data::MethodOwner::FreeImpl(_)) | None => {}
+                // Impl-owned methods took the `contributing_impl` road above.
+                Some(item_data::MethodOwner::Impl(_)) | None => {}
             }
         }
 
@@ -386,20 +386,13 @@ impl SymbolId {
     }
 }
 
-/// The impl block that contributes `function`, if any: the block itself for
-/// free-impl methods, or the class's (in-body/merged) block that lists it.
+/// The impl block that contributes `function`, if any. Impl-block methods
+/// are Impl-owned (in-body and free alike), so the compiler's owner record
+/// answers directly — a class-owned method is never an impl member.
 fn contributing_impl<'db>(db: &'db Db, function: FunctionLoc<'db>) -> Option<ImplLoc<'db>> {
     match item_data::method_owner(db, function)? {
-        item_data::MethodOwner::FreeImpl(imp) => Some(imp),
-        item_data::MethodOwner::Class(class) => item_data::class_impls(db, class)
-            .iter()
-            .copied()
-            .find(|&imp| {
-                item_data::impl_block_data(db, imp)
-                    .methods
-                    .contains(&function)
-            }),
-        item_data::MethodOwner::Interface(_) => None,
+        item_data::MethodOwner::Impl(imp) => Some(imp),
+        item_data::MethodOwner::Class(_) | item_data::MethodOwner::Interface(_) => None,
     }
 }
 

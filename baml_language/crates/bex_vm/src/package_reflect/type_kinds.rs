@@ -14,12 +14,21 @@ use bex_vm_types::types::{
 use indexmap::IndexMap;
 
 use super::{
-    BamlClassArrayType, BamlClassClassType, BamlClassEnumType, BamlClassFunctionType,
-    BamlClassInterfaceImplementation, BamlClassInterfaceType, BamlClassLiteralType,
-    BamlClassMapType, BamlClassPrimitiveType, BamlClassType, BamlClassUnionType,
-    BamlNamespaceArray, BamlNamespaceClass, BamlNamespaceEnum, BamlNamespaceFunction,
-    BamlNamespaceInterface, BamlNamespaceLiteral, BamlNamespaceMap, BamlNamespacePrimitive,
-    BamlNamespaceUnion, PackageReflectImpl, copy,
+    BamlClassArrayReflectTypeView_for_Type, BamlClassArrayType,
+    BamlClassClassReflectTypeView_for_Type, BamlClassClassType,
+    BamlClassEnumReflectTypeView_for_Type, BamlClassEnumType,
+    BamlClassFunctionReflectTypeView_for_Type, BamlClassFunctionType,
+    BamlClassInterfaceImplementation, BamlClassInterfaceReflectTypeView_for_Type,
+    BamlClassInterfaceType, BamlClassLiteralReflectTypeView_for_Type,
+    BamlClassMapReflectTypeView_for_Type, BamlClassMapType,
+    BamlClassPrimitiveReflectTypeView_for_Type, BamlClassType,
+    BamlClassUnionReflectTypeView_for_Type, BamlClassUnionType, BamlNamespaceArray,
+    BamlNamespaceArrayReflect, BamlNamespaceClass, BamlNamespaceClassReflect, BamlNamespaceEnum,
+    BamlNamespaceEnumReflect, BamlNamespaceFunction, BamlNamespaceFunctionReflect,
+    BamlNamespaceInterface, BamlNamespaceInterfaceReflect, BamlNamespaceLiteral,
+    BamlNamespaceLiteralReflect, BamlNamespaceMap, BamlNamespaceMapReflect, BamlNamespacePrimitive,
+    BamlNamespacePrimitiveReflect, BamlNamespaceUnion, BamlNamespaceUnionReflect,
+    PackageReflectImpl, copy,
 };
 use crate::BexVm;
 
@@ -1563,8 +1572,6 @@ macro_rules! impl_as_type {
 }
 
 impl BamlClassClassType for PackageReflectImpl {
-    impl_as_type!(Class, class);
-
     fn fields(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
         let (class, args) = reflected_class(vm, *r#type)?;
         Ok(class
@@ -1614,8 +1621,6 @@ impl BamlClassClassType for PackageReflectImpl {
 }
 
 impl BamlClassEnumType for PackageReflectImpl {
-    impl_as_type!(Enum, r#enum);
-
     fn values(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
         let enm = reflected_enum(vm, *r#type)?;
         Ok(enm
@@ -1648,8 +1653,6 @@ impl BamlClassEnumType for PackageReflectImpl {
 }
 
 impl BamlClassUnionType for PackageReflectImpl {
-    impl_as_type!(Union, union);
-
     fn member_types(
         vm: &mut BexVm,
         r#type: &Value,
@@ -1666,8 +1669,6 @@ impl BamlClassUnionType for PackageReflectImpl {
 }
 
 impl BamlClassArrayType for PackageReflectImpl {
-    impl_as_type!(Array, array);
-
     fn element_type(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Array)?;
         let bex_vm_types::RealizedTy::List(element, _) = ty else {
@@ -1680,8 +1681,6 @@ impl BamlClassArrayType for PackageReflectImpl {
 }
 
 impl BamlClassMapType for PackageReflectImpl {
-    impl_as_type!(Map, map);
-
     fn key_type(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Map)?;
         let bex_vm_types::RealizedTy::Map { key, .. } = ty else {
@@ -1704,8 +1703,6 @@ impl BamlClassMapType for PackageReflectImpl {
 }
 
 impl BamlClassFunctionType for PackageReflectImpl {
-    impl_as_type!(Function, function);
-
     fn params(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Function)?;
         let bex_vm_types::RealizedTy::Function { params, .. } = ty else {
@@ -1740,8 +1737,6 @@ impl BamlClassFunctionType for PackageReflectImpl {
 }
 
 impl BamlClassInterfaceType for PackageReflectImpl {
-    impl_as_type!(Interface, interface);
-
     #[expect(
         clippy::used_underscore_items,
         reason = "the generated view accessor is named for the `_ty` field it reads"
@@ -1759,10 +1754,60 @@ impl BamlClassInterfaceType for PackageReflectImpl {
     }
 }
 
-impl BamlClassLiteralType for PackageReflectImpl {
+// The `implements reflect.TypeView` blocks' `as_type` bodies — impl-block
+// methods, so codegen emits one `…ReflectTypeView_for_Type` trait per view
+// class (plus the aggregating `BamlNamespace…Reflect` supertraits).
+
+impl BamlClassArrayReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Array, array);
+}
+
+impl BamlClassClassReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Class, class);
+}
+
+impl BamlClassEnumReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Enum, r#enum);
+}
+
+impl BamlClassFunctionReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Function, function);
+}
+
+impl BamlClassInterfaceReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Interface, interface);
+}
+
+impl BamlClassLiteralReflectTypeView_for_Type for PackageReflectImpl {
     impl_as_type!(Literal, literal);
 }
 
-impl BamlClassPrimitiveType for PackageReflectImpl {
+impl BamlClassMapReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Map, map);
+}
+
+impl BamlClassPrimitiveReflectTypeView_for_Type for PackageReflectImpl {
     impl_as_type!(Primitive, primitive);
 }
+
+impl BamlClassUnionReflectTypeView_for_Type for PackageReflectImpl {
+    impl_as_type!(Union, union);
+}
+
+impl BamlNamespaceArrayReflect for PackageReflectImpl {}
+
+impl BamlNamespaceClassReflect for PackageReflectImpl {}
+
+impl BamlNamespaceEnumReflect for PackageReflectImpl {}
+
+impl BamlNamespaceFunctionReflect for PackageReflectImpl {}
+
+impl BamlNamespaceInterfaceReflect for PackageReflectImpl {}
+
+impl BamlNamespaceLiteralReflect for PackageReflectImpl {}
+
+impl BamlNamespaceMapReflect for PackageReflectImpl {}
+
+impl BamlNamespacePrimitiveReflect for PackageReflectImpl {}
+
+impl BamlNamespaceUnionReflect for PackageReflectImpl {}

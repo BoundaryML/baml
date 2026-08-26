@@ -462,7 +462,7 @@ fn external_target<'db>(
             interface: crate::lower::interface_qualified_name(db, interface),
             method: name,
         },
-        Some(MethodOwner::FreeImpl(_)) => crate::lower::owner_impl_target(db, function, frame)
+        Some(MethodOwner::Impl(_)) => crate::lower::owner_impl_target(db, function, frame)
             .map(|target| ExternalCallTarget::Interface {
                 interface: target.name,
                 method: name.clone(),

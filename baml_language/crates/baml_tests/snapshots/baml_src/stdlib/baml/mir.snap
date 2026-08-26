@@ -168,7 +168,7 @@ fn baml.Comparable.compare(_1: void, _2: void) -> void {
     }
 }
 
-fn baml.Comparable$for$int.compare(self: int, other: int) -> int {
+fn baml.<(int as baml.Comparable)>.compare(self: int, other: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // self // param
@@ -206,7 +206,7 @@ fn baml.Comparable$for$int.compare(self: int, other: int) -> int {
     }
 }
 
-fn baml.Comparable$for$bigint.compare(self: bigint, other: bigint) -> int {
+fn baml.<(bigint as baml.Comparable)>.compare(self: bigint, other: bigint) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: bigint // self // param
@@ -244,7 +244,7 @@ fn baml.Comparable$for$bigint.compare(self: bigint, other: bigint) -> int {
     }
 }
 
-fn baml.Comparable$for$string.compare(self: string, other: string) -> int {
+fn baml.<(string as baml.Comparable)>.compare(self: string, other: string) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: string // self // param
@@ -292,7 +292,7 @@ fn baml.Sortable.sort(_1: void) -> void {
     }
 }
 
-fn baml.Sortable$for$T[].sort(self: T[]) -> T[] {
+fn baml.<(#0[] as baml.Sortable)>.sort(self: T[]) -> T[] {
     // Locals:
     let _0: T[] // _0 // return
     let _1: T[] // self // param
@@ -349,7 +349,7 @@ fn .<lambda(sort, 0)>(a: T, b: T) -> int {
 
 fn baml._compare_shim = builtin(vm)
 
-fn baml.Comparable$for$float.compare(self: float, other: float) -> int {
+fn baml.<(float as baml.Comparable)>.compare(self: float, other: float) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: float // self // param
@@ -1036,7 +1036,7 @@ fn baml.Summable.sum(_1: void) -> void {
     }
 }
 
-fn baml.Summable$for$int[].sum(self: int[]) -> int {
+fn baml.<(int[] as baml.Summable)>.sum(self: int[]) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int[] // self // param
@@ -1050,7 +1050,7 @@ fn baml.Summable$for$int[].sum(self: int[]) -> int {
     }
 }
 
-fn baml.Summable$for$float[].sum(self: float[]) -> float {
+fn baml.<(float[] as baml.Summable)>.sum(self: float[]) -> float {
     // Locals:
     let _0: float // _0 // return
     let _1: float[] // self // param
@@ -1084,7 +1084,7 @@ fn baml.FloatStats.median(_1: void) -> void {
     }
 }
 
-fn baml.FloatStats$for$float[].mean(self: float[]) -> float {
+fn baml.<(float[] as baml.FloatStats)>.mean(self: float[]) -> float {
     // Locals:
     let _0: float // _0 // return
     let _1: float[] // self // param
@@ -1098,7 +1098,7 @@ fn baml.FloatStats$for$float[].mean(self: float[]) -> float {
     }
 }
 
-fn baml.FloatStats$for$float[].median(self: float[]) -> float {
+fn baml.<(float[] as baml.FloatStats)>.median(self: float[]) -> float {
     // Locals:
     let _0: float // _0 // return
     let _1: float[] // self // param
@@ -1136,7 +1136,7 @@ fn baml.ToString.to_string(self: baml.ToString) -> string {
     }
 }
 
-fn baml.root.ToString$for$reflect.Type.to_string(self: reflect.Type) -> string {
+fn baml.<(reflect.Type as baml.ToString)>.to_string(self: reflect.Type) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: reflect.Type // self // param
@@ -1522,11 +1522,11 @@ fn baml.Int.min_value() -> int {
 
 fn baml.crypto.Aes256GcmSiv.new = builtin(vm)
 
-fn baml.crypto.Aes256GcmSiv.Aead.encrypt = builtin(vm)
+fn baml.crypto.<(baml.crypto.Aes256GcmSiv as baml.crypto.Aead)>.encrypt = builtin(vm)
 
-fn baml.crypto.Aes256GcmSiv.Aead.decrypt = builtin(vm)
+fn baml.crypto.<(baml.crypto.Aes256GcmSiv as baml.crypto.Aead)>.decrypt = builtin(vm)
 
-fn baml.crypto.Aes256GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+fn baml.crypto.<(baml.crypto.Aes256GcmSiv as baml.crypto.GenerateKey)>.random_key(rng: baml.random.Rng) -> uint8array {
     // Locals:
     let _0: uint8array // _0 // return
     let _1: baml.random.Rng // rng // param
@@ -1542,11 +1542,11 @@ fn baml.crypto.Aes256GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -> uint
 
 fn baml.crypto.Aes128GcmSiv.new = builtin(vm)
 
-fn baml.crypto.Aes128GcmSiv.Aead.encrypt = builtin(vm)
+fn baml.crypto.<(baml.crypto.Aes128GcmSiv as baml.crypto.Aead)>.encrypt = builtin(vm)
 
-fn baml.crypto.Aes128GcmSiv.Aead.decrypt = builtin(vm)
+fn baml.crypto.<(baml.crypto.Aes128GcmSiv as baml.crypto.Aead)>.decrypt = builtin(vm)
 
-fn baml.crypto.Aes128GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+fn baml.crypto.<(baml.crypto.Aes128GcmSiv as baml.crypto.GenerateKey)>.random_key(rng: baml.random.Rng) -> uint8array {
     // Locals:
     let _0: uint8array // _0 // return
     let _1: baml.random.Rng // rng // param
@@ -1562,11 +1562,11 @@ fn baml.crypto.Aes128GcmSiv.GenerateKey.random_key(rng: baml.random.Rng) -> uint
 
 fn baml.crypto.ChaCha20Poly1305.new = builtin(vm)
 
-fn baml.crypto.ChaCha20Poly1305.Aead.encrypt = builtin(vm)
+fn baml.crypto.<(baml.crypto.ChaCha20Poly1305 as baml.crypto.Aead)>.encrypt = builtin(vm)
 
-fn baml.crypto.ChaCha20Poly1305.Aead.decrypt = builtin(vm)
+fn baml.crypto.<(baml.crypto.ChaCha20Poly1305 as baml.crypto.Aead)>.decrypt = builtin(vm)
 
-fn baml.crypto.ChaCha20Poly1305.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+fn baml.crypto.<(baml.crypto.ChaCha20Poly1305 as baml.crypto.GenerateKey)>.random_key(rng: baml.random.Rng) -> uint8array {
     // Locals:
     let _0: uint8array // _0 // return
     let _1: baml.random.Rng // rng // param
@@ -1582,11 +1582,11 @@ fn baml.crypto.ChaCha20Poly1305.GenerateKey.random_key(rng: baml.random.Rng) -> 
 
 fn baml.crypto.XChaCha20Poly1305.new = builtin(vm)
 
-fn baml.crypto.XChaCha20Poly1305.Aead.encrypt = builtin(vm)
+fn baml.crypto.<(baml.crypto.XChaCha20Poly1305 as baml.crypto.Aead)>.encrypt = builtin(vm)
 
-fn baml.crypto.XChaCha20Poly1305.Aead.decrypt = builtin(vm)
+fn baml.crypto.<(baml.crypto.XChaCha20Poly1305 as baml.crypto.Aead)>.decrypt = builtin(vm)
 
-fn baml.crypto.XChaCha20Poly1305.GenerateKey.random_key(rng: baml.random.Rng) -> uint8array {
+fn baml.crypto.<(baml.crypto.XChaCha20Poly1305 as baml.crypto.GenerateKey)>.random_key(rng: baml.random.Rng) -> uint8array {
     // Locals:
     let _0: uint8array // _0 // return
     let _1: baml.random.Rng // rng // param
@@ -1659,9 +1659,9 @@ fn baml.crypto.GenerateKey.random_key(_1: void) -> void {
 
 fn baml.crypto.Sha256.new = builtin(vm)
 
-fn baml.crypto.Sha256.Hasher.update = builtin(vm)
+fn baml.crypto.<(baml.crypto.Sha256 as baml.crypto.Hasher)>.update = builtin(vm)
 
-fn baml.crypto.Sha256.Hasher.finish = builtin(vm)
+fn baml.crypto.<(baml.crypto.Sha256 as baml.crypto.Hasher)>.finish = builtin(vm)
 
 fn baml.csv.CsvRecord.get(self: baml.csv.CsvRecord, column: string) -> null | T {
     // Locals:
@@ -1721,7 +1721,7 @@ fn baml.csv.CsvRecord.decode(self: baml.csv.CsvRecord) -> T {
 
 fn baml.csv.CsvRecord.to_map = builtin(vm)
 
-fn baml.csv.CsvReader.root.iter.Iterable.iter(self: baml.csv.CsvReader) -> baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord> {
+fn baml.csv.<(baml.csv.CsvReader as baml.iter.Iterable)>.iter(self: baml.csv.CsvReader) -> baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord> {
     // Locals:
     let _0: baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = baml.csv.CsvRecord> // _0 // return
     let _1: baml.csv.CsvReader // self // param
@@ -1736,7 +1736,7 @@ fn baml.csv.CsvReader.root.iter.Iterable.iter(self: baml.csv.CsvReader) -> baml.
     }
 }
 
-fn baml.csv.CsvReader.root.iter.Iterator.next(self: baml.csv.CsvReader) -> baml.csv.CsvRecord | baml.iter.Done {
+fn baml.csv.<(baml.csv.CsvReader as baml.iter.Iterator)>.next(self: baml.csv.CsvReader) -> baml.csv.CsvRecord | baml.iter.Done {
     // Locals:
     let _0: baml.csv.CsvRecord | baml.iter.Done // _0 // return
     let _1: baml.csv.CsvReader // self // param
@@ -2085,7 +2085,7 @@ fn baml.csv.CsvReader._read_chunk(self: baml.csv.CsvReader) -> null {
     }
 }
 
-fn baml.csv.CsvRows.root.iter.Iterable.iter(self: baml.csv.CsvRows) -> baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = T> {
+fn baml.csv.<(baml.csv.CsvRows<#0> as baml.iter.Iterable)>.iter(self: baml.csv.CsvRows) -> baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = T> {
     // Locals:
     let _0: baml.iter.Iterator<Error = baml.csv.CsvError | baml.errors.Io, Item = T> // _0 // return
     let _1: baml.csv.CsvRows // self // param
@@ -2100,7 +2100,7 @@ fn baml.csv.CsvRows.root.iter.Iterable.iter(self: baml.csv.CsvRows) -> baml.iter
     }
 }
 
-fn baml.csv.CsvRows.root.iter.Iterator.next(self: baml.csv.CsvRows) -> baml.iter.Done | T {
+fn baml.csv.<(baml.csv.CsvRows<#0> as baml.iter.Iterator)>.next(self: baml.csv.CsvRows) -> baml.iter.Done | T {
     // Locals:
     let _0: baml.iter.Done | T // _0 // return
     let _1: baml.csv.CsvRows // self // param
@@ -3488,7 +3488,7 @@ fn baml.errors.ErrorContext.root_cause(self: baml.errors.ErrorContext) -> baml.e
     }
 }
 
-fn baml.errors.ErrorContext.baml.ToString.to_string(self: baml.errors.ErrorContext) -> string {
+fn baml.errors.<(baml.errors.ErrorContext as baml.ToString)>.to_string(self: baml.errors.ErrorContext) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.errors.ErrorContext // self // param
@@ -3504,7 +3504,7 @@ fn baml.errors.ErrorContext.baml.ToString.to_string(self: baml.errors.ErrorConte
 
 fn baml.errors.ErrorContext._to_string_impl = builtin(vm)
 
-fn baml.errors.StackTrace.baml.ToString.to_string(self: baml.errors.StackTrace) -> string {
+fn baml.errors.<(baml.errors.StackTrace as baml.ToString)>.to_string(self: baml.errors.StackTrace) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.errors.StackTrace // self // param
@@ -3727,7 +3727,7 @@ fn baml.errors.UnknownError.with_message(data: unknown, message: string) -> baml
 
 fn baml.errors.UnknownError._preserve_context = builtin(vm)
 
-fn baml.errors.UnknownError.baml.ToString.to_string(self: baml.errors.UnknownError) -> string {
+fn baml.errors.<(baml.errors.UnknownError as baml.ToString)>.to_string(self: baml.errors.UnknownError) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.errors.UnknownError // self // param
@@ -5374,7 +5374,7 @@ fn baml.iter.ArrayIterator.new(arr: T[]) -> baml.iter.ArrayIterator<T> {
     }
 }
 
-fn baml.iter.ArrayIterator.Iterable.iter(self: baml.iter.ArrayIterator) -> baml.iter.Iterator<Error = never, Item = T> {
+fn baml.iter.<(baml.iter.ArrayIterator<#0> as baml.iter.Iterable)>.iter(self: baml.iter.ArrayIterator) -> baml.iter.Iterator<Error = never, Item = T> {
     // Locals:
     let _0: baml.iter.Iterator<Error = never, Item = T> // _0 // return
     let _1: baml.iter.ArrayIterator // self // param
@@ -5389,7 +5389,7 @@ fn baml.iter.ArrayIterator.Iterable.iter(self: baml.iter.ArrayIterator) -> baml.
     }
 }
 
-fn baml.iter.ArrayIterator.Iterator.next(self: baml.iter.ArrayIterator) -> baml.iter.Done | T {
+fn baml.iter.<(baml.iter.ArrayIterator<#0> as baml.iter.Iterator)>.next(self: baml.iter.ArrayIterator) -> baml.iter.Done | T {
     // Locals:
     let _0: baml.iter.Done | T // _0 // return
     let _1: baml.iter.ArrayIterator // self // param
@@ -5460,7 +5460,7 @@ fn baml.iter.Range.new(min: int, max: int, step: int) -> baml.iter.Range {
     }
 }
 
-fn baml.iter.Range.Iterable.iter(self: baml.iter.Range) -> baml.iter.Iterator<Error = never, Item = int> {
+fn baml.iter.<(baml.iter.Range as baml.iter.Iterable)>.iter(self: baml.iter.Range) -> baml.iter.Iterator<Error = never, Item = int> {
     // Locals:
     let _0: baml.iter.Iterator<Error = never, Item = int> // _0 // return
     let _1: baml.iter.Range // self // param
@@ -5475,7 +5475,7 @@ fn baml.iter.Range.Iterable.iter(self: baml.iter.Range) -> baml.iter.Iterator<Er
     }
 }
 
-fn baml.iter.Range.Iterator.next(self: baml.iter.Range) -> int | baml.iter.Done {
+fn baml.iter.<(baml.iter.Range as baml.iter.Iterator)>.next(self: baml.iter.Range) -> int | baml.iter.Done {
     // Locals:
     let _0: int | baml.iter.Done // _0 // return
     let _1: baml.iter.Range // self // param
@@ -5537,7 +5537,7 @@ fn baml.iter.Repeat.new(value: T, count: int) -> baml.iter.Repeat<T> {
     }
 }
 
-fn baml.iter.Repeat.Iterable.iter(self: baml.iter.Repeat) -> baml.iter.Iterator<Error = never, Item = T> {
+fn baml.iter.<(baml.iter.Repeat<#0> as baml.iter.Iterable)>.iter(self: baml.iter.Repeat) -> baml.iter.Iterator<Error = never, Item = T> {
     // Locals:
     let _0: baml.iter.Iterator<Error = never, Item = T> // _0 // return
     let _1: baml.iter.Repeat // self // param
@@ -5552,7 +5552,7 @@ fn baml.iter.Repeat.Iterable.iter(self: baml.iter.Repeat) -> baml.iter.Iterator<
     }
 }
 
-fn baml.iter.Repeat.Iterator.next(self: baml.iter.Repeat) -> baml.iter.Done | T {
+fn baml.iter.<(baml.iter.Repeat<#0> as baml.iter.Iterator)>.next(self: baml.iter.Repeat) -> baml.iter.Done | T {
     // Locals:
     let _0: baml.iter.Done | T // _0 // return
     let _1: baml.iter.Repeat // self // param
@@ -5594,7 +5594,7 @@ fn baml.iter.Repeat.Iterator.next(self: baml.iter.Repeat) -> baml.iter.Done | T 
     }
 }
 
-fn baml.iter.Map.Iterable.iter(self: baml.iter.Map) -> baml.iter.Iterator<Error = E | E2, Item = R> {
+fn baml.iter.<(baml.iter.Map<#0, #1, #2, #3> as baml.iter.Iterable)>.iter(self: baml.iter.Map) -> baml.iter.Iterator<Error = E | E2, Item = R> {
     // Locals:
     let _0: baml.iter.Iterator<Error = E | E2, Item = R> // _0 // return
     let _1: baml.iter.Map // self // param
@@ -5609,7 +5609,7 @@ fn baml.iter.Map.Iterable.iter(self: baml.iter.Map) -> baml.iter.Iterator<Error 
     }
 }
 
-fn baml.iter.Map.Iterator.next(self: baml.iter.Map) -> baml.iter.Done | R {
+fn baml.iter.<(baml.iter.Map<#0, #1, #2, #3> as baml.iter.Iterator)>.next(self: baml.iter.Map) -> baml.iter.Done | R {
     // Locals:
     let _0: baml.iter.Done | R // _0 // return
     let _1: baml.iter.Map // self // param
@@ -5647,7 +5647,7 @@ fn baml.iter.Map.Iterator.next(self: baml.iter.Map) -> baml.iter.Done | R {
     }
 }
 
-fn baml.iter.Filter.Iterable.iter(self: baml.iter.Filter) -> baml.iter.Iterator<Error = E | E2, Item = T> {
+fn baml.iter.<(baml.iter.Filter<#0, #1, #2> as baml.iter.Iterable)>.iter(self: baml.iter.Filter) -> baml.iter.Iterator<Error = E | E2, Item = T> {
     // Locals:
     let _0: baml.iter.Iterator<Error = E | E2, Item = T> // _0 // return
     let _1: baml.iter.Filter // self // param
@@ -5662,7 +5662,7 @@ fn baml.iter.Filter.Iterable.iter(self: baml.iter.Filter) -> baml.iter.Iterator<
     }
 }
 
-fn baml.iter.Filter.Iterator.next(self: baml.iter.Filter) -> baml.iter.Done | T {
+fn baml.iter.<(baml.iter.Filter<#0, #1, #2> as baml.iter.Iterator)>.next(self: baml.iter.Filter) -> baml.iter.Done | T {
     // Locals:
     let _0: baml.iter.Done | T // _0 // return
     let _1: baml.iter.Filter // self // param
@@ -5723,7 +5723,7 @@ fn baml.iter.Filter.Iterator.next(self: baml.iter.Filter) -> baml.iter.Done | T 
     }
 }
 
-fn baml.iter.FilterMap.Iterable.iter(self: baml.iter.FilterMap) -> baml.iter.Iterator<Error = E | E2, Item = R> {
+fn baml.iter.<(baml.iter.FilterMap<#0, #1, #2, #3> as baml.iter.Iterable)>.iter(self: baml.iter.FilterMap) -> baml.iter.Iterator<Error = E | E2, Item = R> {
     // Locals:
     let _0: baml.iter.Iterator<Error = E | E2, Item = R> // _0 // return
     let _1: baml.iter.FilterMap // self // param
@@ -5738,7 +5738,7 @@ fn baml.iter.FilterMap.Iterable.iter(self: baml.iter.FilterMap) -> baml.iter.Ite
     }
 }
 
-fn baml.iter.FilterMap.Iterator.next(self: baml.iter.FilterMap) -> baml.iter.Done | R {
+fn baml.iter.<(baml.iter.FilterMap<#0, #1, #2, #3> as baml.iter.Iterator)>.next(self: baml.iter.FilterMap) -> baml.iter.Done | R {
     // Locals:
     let _0: baml.iter.Done | R // _0 // return
     let _1: baml.iter.FilterMap // self // param
@@ -5803,7 +5803,7 @@ fn baml.iter.FilterMap.Iterator.next(self: baml.iter.FilterMap) -> baml.iter.Don
     }
 }
 
-fn baml.iter.FlatMap.Iterable.iter(self: baml.iter.FlatMap) -> baml.iter.Iterator<Error = E | E2 | E3, Item = R> {
+fn baml.iter.<(baml.iter.FlatMap<#0, #1, #2, #3, #4> as baml.iter.Iterable)>.iter(self: baml.iter.FlatMap) -> baml.iter.Iterator<Error = E | E2 | E3, Item = R> {
     // Locals:
     let _0: baml.iter.Iterator<Error = E | E2 | E3, Item = R> // _0 // return
     let _1: baml.iter.FlatMap // self // param
@@ -5818,7 +5818,7 @@ fn baml.iter.FlatMap.Iterable.iter(self: baml.iter.FlatMap) -> baml.iter.Iterato
     }
 }
 
-fn baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap) -> baml.iter.Done | R {
+fn baml.iter.<(baml.iter.FlatMap<#0, #1, #2, #3, #4> as baml.iter.Iterator)>.next(self: baml.iter.FlatMap) -> baml.iter.Done | R {
     // Locals:
     let _0: baml.iter.Done | R // _0 // return
     let _1: baml.iter.FlatMap // self // param
@@ -5923,7 +5923,7 @@ fn baml.iter.FlatMap.Iterator.next(self: baml.iter.FlatMap) -> baml.iter.Done | 
     }
 }
 
-fn baml.iter.Flatten.Iterable.iter(self: baml.iter.Flatten) -> baml.iter.Iterator<Error = E | E3, Item = R> {
+fn baml.iter.<(baml.iter.Flatten<#0, #1, #2, #3> as baml.iter.Iterable)>.iter(self: baml.iter.Flatten) -> baml.iter.Iterator<Error = E | E3, Item = R> {
     // Locals:
     let _0: baml.iter.Iterator<Error = E | E3, Item = R> // _0 // return
     let _1: baml.iter.Flatten // self // param
@@ -5938,7 +5938,7 @@ fn baml.iter.Flatten.Iterable.iter(self: baml.iter.Flatten) -> baml.iter.Iterato
     }
 }
 
-fn baml.iter.Flatten.Iterator.next(self: baml.iter.Flatten) -> baml.iter.Done | R {
+fn baml.iter.<(baml.iter.Flatten<#0, #1, #2, #3> as baml.iter.Iterator)>.next(self: baml.iter.Flatten) -> baml.iter.Done | R {
     // Locals:
     let _0: baml.iter.Done | R // _0 // return
     let _1: baml.iter.Flatten // self // param
@@ -6069,7 +6069,7 @@ fn baml.iter.Peekable.peek(self: baml.iter.Peekable) -> baml.iter.Done | T {
     }
 }
 
-fn baml.iter.Peekable.Iterable.iter(self: baml.iter.Peekable) -> baml.iter.Iterator<Error = E, Item = T> {
+fn baml.iter.<(baml.iter.Peekable<#0, #1> as baml.iter.Iterable)>.iter(self: baml.iter.Peekable) -> baml.iter.Iterator<Error = E, Item = T> {
     // Locals:
     let _0: baml.iter.Iterator<Error = E, Item = T> // _0 // return
     let _1: baml.iter.Peekable // self // param
@@ -6084,7 +6084,7 @@ fn baml.iter.Peekable.Iterable.iter(self: baml.iter.Peekable) -> baml.iter.Itera
     }
 }
 
-fn baml.iter.Peekable.Iterator.next(self: baml.iter.Peekable) -> baml.iter.Done | T {
+fn baml.iter.<(baml.iter.Peekable<#0, #1> as baml.iter.Iterator)>.next(self: baml.iter.Peekable) -> baml.iter.Done | T {
     // Locals:
     let _0: baml.iter.Done | T // _0 // return
     let _1: baml.iter.Peekable // self // param
@@ -6115,7 +6115,7 @@ fn baml.iter.Peekable.Iterator.next(self: baml.iter.Peekable) -> baml.iter.Done 
     }
 }
 
-fn baml.iter.StepBy.Iterable.iter(self: baml.iter.StepBy) -> baml.iter.Iterator<Error = E, Item = T> {
+fn baml.iter.<(baml.iter.StepBy<#0, #1> as baml.iter.Iterable)>.iter(self: baml.iter.StepBy) -> baml.iter.Iterator<Error = E, Item = T> {
     // Locals:
     let _0: baml.iter.Iterator<Error = E, Item = T> // _0 // return
     let _1: baml.iter.StepBy // self // param
@@ -6130,7 +6130,7 @@ fn baml.iter.StepBy.Iterable.iter(self: baml.iter.StepBy) -> baml.iter.Iterator<
     }
 }
 
-fn baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy) -> baml.iter.Done | T {
+fn baml.iter.<(baml.iter.StepBy<#0, #1> as baml.iter.Iterator)>.next(self: baml.iter.StepBy) -> baml.iter.Done | T {
     // Locals:
     let _0: baml.iter.Done | T // _0 // return
     let _1: baml.iter.StepBy // self // param
@@ -6200,7 +6200,7 @@ fn baml.iter.StepBy.Iterator.next(self: baml.iter.StepBy) -> baml.iter.Done | T 
     }
 }
 
-fn baml.iter.Chain.Iterable.iter(self: baml.iter.Chain) -> baml.iter.Iterator<Error = E | E2, Item = T> {
+fn baml.iter.<(baml.iter.Chain<#0, #1, #2> as baml.iter.Iterable)>.iter(self: baml.iter.Chain) -> baml.iter.Iterator<Error = E | E2, Item = T> {
     // Locals:
     let _0: baml.iter.Iterator<Error = E | E2, Item = T> // _0 // return
     let _1: baml.iter.Chain // self // param
@@ -6215,7 +6215,7 @@ fn baml.iter.Chain.Iterable.iter(self: baml.iter.Chain) -> baml.iter.Iterator<Er
     }
 }
 
-fn baml.iter.Chain.Iterator.next(self: baml.iter.Chain) -> baml.iter.Done | T {
+fn baml.iter.<(baml.iter.Chain<#0, #1, #2> as baml.iter.Iterator)>.next(self: baml.iter.Chain) -> baml.iter.Done | T {
     // Locals:
     let _0: baml.iter.Done | T // _0 // return
     let _1: baml.iter.Chain // self // param
@@ -6264,7 +6264,7 @@ fn baml.iter.Chain.Iterator.next(self: baml.iter.Chain) -> baml.iter.Done | T {
     }
 }
 
-fn baml.iter.Take.Iterable.iter(self: baml.iter.Take) -> baml.iter.Iterator<Error = E, Item = T> {
+fn baml.iter.<(baml.iter.Take<#0, #1> as baml.iter.Iterable)>.iter(self: baml.iter.Take) -> baml.iter.Iterator<Error = E, Item = T> {
     // Locals:
     let _0: baml.iter.Iterator<Error = E, Item = T> // _0 // return
     let _1: baml.iter.Take // self // param
@@ -6279,7 +6279,7 @@ fn baml.iter.Take.Iterable.iter(self: baml.iter.Take) -> baml.iter.Iterator<Erro
     }
 }
 
-fn baml.iter.Take.Iterator.next(self: baml.iter.Take) -> baml.iter.Done | T {
+fn baml.iter.<(baml.iter.Take<#0, #1> as baml.iter.Iterator)>.next(self: baml.iter.Take) -> baml.iter.Done | T {
     // Locals:
     let _0: baml.iter.Done | T // _0 // return
     let _1: baml.iter.Take // self // param
@@ -6333,7 +6333,7 @@ fn baml.iter.Take.Iterator.next(self: baml.iter.Take) -> baml.iter.Done | T {
     }
 }
 
-fn baml.iter.Skip.Iterable.iter(self: baml.iter.Skip) -> baml.iter.Iterator<Error = E, Item = T> {
+fn baml.iter.<(baml.iter.Skip<#0, #1> as baml.iter.Iterable)>.iter(self: baml.iter.Skip) -> baml.iter.Iterator<Error = E, Item = T> {
     // Locals:
     let _0: baml.iter.Iterator<Error = E, Item = T> // _0 // return
     let _1: baml.iter.Skip // self // param
@@ -6348,7 +6348,7 @@ fn baml.iter.Skip.Iterable.iter(self: baml.iter.Skip) -> baml.iter.Iterator<Erro
     }
 }
 
-fn baml.iter.Skip.Iterator.next(self: baml.iter.Skip) -> baml.iter.Done | T {
+fn baml.iter.<(baml.iter.Skip<#0, #1> as baml.iter.Iterator)>.next(self: baml.iter.Skip) -> baml.iter.Done | T {
     // Locals:
     let _0: baml.iter.Done | T // _0 // return
     let _1: baml.iter.Skip // self // param
@@ -6400,7 +6400,7 @@ fn baml.iter.Skip.Iterator.next(self: baml.iter.Skip) -> baml.iter.Done | T {
     }
 }
 
-fn baml.iter.TakeWhile.Iterable.iter(self: baml.iter.TakeWhile) -> baml.iter.Iterator<Error = E | E2, Item = T> {
+fn baml.iter.<(baml.iter.TakeWhile<#0, #1, #2> as baml.iter.Iterable)>.iter(self: baml.iter.TakeWhile) -> baml.iter.Iterator<Error = E | E2, Item = T> {
     // Locals:
     let _0: baml.iter.Iterator<Error = E | E2, Item = T> // _0 // return
     let _1: baml.iter.TakeWhile // self // param
@@ -6415,7 +6415,7 @@ fn baml.iter.TakeWhile.Iterable.iter(self: baml.iter.TakeWhile) -> baml.iter.Ite
     }
 }
 
-fn baml.iter.TakeWhile.Iterator.next(self: baml.iter.TakeWhile) -> baml.iter.Done | T {
+fn baml.iter.<(baml.iter.TakeWhile<#0, #1, #2> as baml.iter.Iterator)>.next(self: baml.iter.TakeWhile) -> baml.iter.Done | T {
     // Locals:
     let _0: baml.iter.Done | T // _0 // return
     let _1: baml.iter.TakeWhile // self // param
@@ -6484,7 +6484,7 @@ fn baml.iter.TakeWhile.Iterator.next(self: baml.iter.TakeWhile) -> baml.iter.Don
     }
 }
 
-fn baml.iter.SkipWhile.Iterable.iter(self: baml.iter.SkipWhile) -> baml.iter.Iterator<Error = E | E2, Item = T> {
+fn baml.iter.<(baml.iter.SkipWhile<#0, #1, #2> as baml.iter.Iterable)>.iter(self: baml.iter.SkipWhile) -> baml.iter.Iterator<Error = E | E2, Item = T> {
     // Locals:
     let _0: baml.iter.Iterator<Error = E | E2, Item = T> // _0 // return
     let _1: baml.iter.SkipWhile // self // param
@@ -6499,7 +6499,7 @@ fn baml.iter.SkipWhile.Iterable.iter(self: baml.iter.SkipWhile) -> baml.iter.Ite
     }
 }
 
-fn baml.iter.SkipWhile.Iterator.next(self: baml.iter.SkipWhile) -> baml.iter.Done | T {
+fn baml.iter.<(baml.iter.SkipWhile<#0, #1, #2> as baml.iter.Iterator)>.next(self: baml.iter.SkipWhile) -> baml.iter.Done | T {
     // Locals:
     let _0: baml.iter.Done | T // _0 // return
     let _1: baml.iter.SkipWhile // self // param
@@ -6567,7 +6567,7 @@ fn baml.iter.SkipWhile.Iterator.next(self: baml.iter.SkipWhile) -> baml.iter.Don
     }
 }
 
-fn baml.iter.Iterable$for$T[].iter(self: T[]) -> baml.iter.Iterator<Error = never, Item = T> {
+fn baml.iter.<(#0[] as baml.iter.Iterable)>.iter(self: T[]) -> baml.iter.Iterator<Error = never, Item = T> {
     // Locals:
     let _0: baml.iter.Iterator<Error = never, Item = T> // _0 // return
     let _1: T[] // self // param
@@ -6583,7 +6583,7 @@ fn baml.iter.Iterable$for$T[].iter(self: T[]) -> baml.iter.Iterator<Error = neve
     }
 }
 
-fn baml.iter.Iterable$for$string.iter(self: string) -> baml.iter.Iterator<Error = never, Item = string> {
+fn baml.iter.<(string as baml.iter.Iterable)>.iter(self: string) -> baml.iter.Iterator<Error = never, Item = string> {
     // Locals:
     let _0: baml.iter.Iterator<Error = never, Item = string> // _0 // return
     let _1: string // self // param
@@ -7774,45 +7774,45 @@ fn baml.ops.ShiftRight.shr(_1: void, _2: void) -> void {
     }
 }
 
-fn baml.ops.BitAnd<int>$for$int.bit_and = builtin(vm)
+fn baml.ops.<(int as baml.ops.BitAnd<int>)>.bit_and = builtin(vm)
 
-fn baml.ops.BitOr<int>$for$int.bit_or = builtin(vm)
+fn baml.ops.<(int as baml.ops.BitOr<int>)>.bit_or = builtin(vm)
 
-fn baml.ops.BitXor<int>$for$int.bit_xor = builtin(vm)
+fn baml.ops.<(int as baml.ops.BitXor<int>)>.bit_xor = builtin(vm)
 
-fn baml.ops.ShiftLeft<int>$for$int.shl = builtin(vm)
+fn baml.ops.<(int as baml.ops.ShiftLeft<int>)>.shl = builtin(vm)
 
-fn baml.ops.ShiftRight<int>$for$int.shr = builtin(vm)
+fn baml.ops.<(int as baml.ops.ShiftRight<int>)>.shr = builtin(vm)
 
-fn baml.ops.BitAnd<bigint>$for$int.bit_and = builtin(vm)
+fn baml.ops.<(int as baml.ops.BitAnd<bigint>)>.bit_and = builtin(vm)
 
-fn baml.ops.BitOr<bigint>$for$int.bit_or = builtin(vm)
+fn baml.ops.<(int as baml.ops.BitOr<bigint>)>.bit_or = builtin(vm)
 
-fn baml.ops.BitXor<bigint>$for$int.bit_xor = builtin(vm)
+fn baml.ops.<(int as baml.ops.BitXor<bigint>)>.bit_xor = builtin(vm)
 
-fn baml.ops.ShiftLeft<bigint>$for$int.shl = builtin(vm)
+fn baml.ops.<(int as baml.ops.ShiftLeft<bigint>)>.shl = builtin(vm)
 
-fn baml.ops.ShiftRight<bigint>$for$int.shr = builtin(vm)
+fn baml.ops.<(int as baml.ops.ShiftRight<bigint>)>.shr = builtin(vm)
 
-fn baml.ops.BitAnd<int>$for$bigint.bit_and = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.BitAnd<int>)>.bit_and = builtin(vm)
 
-fn baml.ops.BitOr<int>$for$bigint.bit_or = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.BitOr<int>)>.bit_or = builtin(vm)
 
-fn baml.ops.BitXor<int>$for$bigint.bit_xor = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.BitXor<int>)>.bit_xor = builtin(vm)
 
-fn baml.ops.ShiftLeft<int>$for$bigint.shl = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.ShiftLeft<int>)>.shl = builtin(vm)
 
-fn baml.ops.ShiftRight<int>$for$bigint.shr = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.ShiftRight<int>)>.shr = builtin(vm)
 
-fn baml.ops.BitAnd<bigint>$for$bigint.bit_and = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.BitAnd<bigint>)>.bit_and = builtin(vm)
 
-fn baml.ops.BitOr<bigint>$for$bigint.bit_or = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.BitOr<bigint>)>.bit_or = builtin(vm)
 
-fn baml.ops.BitXor<bigint>$for$bigint.bit_xor = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.BitXor<bigint>)>.bit_xor = builtin(vm)
 
-fn baml.ops.ShiftLeft<bigint>$for$bigint.shl = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.ShiftLeft<bigint>)>.shl = builtin(vm)
 
-fn baml.ops.ShiftRight<bigint>$for$bigint.shr = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.ShiftRight<bigint>)>.shr = builtin(vm)
 
 fn baml.ops.Equals.eq(_1: void, _2: void) -> void {
     // Locals:
@@ -7925,27 +7925,27 @@ fn baml.ops.Compare.ge(self: baml.ops.Compare, other: Self) -> bool {
 
 fn baml.ops.equals_equals = builtin(vm)
 
-fn baml.ops.Equals$for$int.eq = builtin(vm)
+fn baml.ops.<(int as baml.ops.Equals)>.eq = builtin(vm)
 
-fn baml.ops.Compare$for$int.lt = builtin(vm)
+fn baml.ops.<(int as baml.ops.Compare)>.lt = builtin(vm)
 
-fn baml.ops.Equals$for$bigint.eq = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.Equals)>.eq = builtin(vm)
 
-fn baml.ops.Compare$for$bigint.lt = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.Compare)>.lt = builtin(vm)
 
-fn baml.ops.Equals$for$float.eq = builtin(vm)
+fn baml.ops.<(float as baml.ops.Equals)>.eq = builtin(vm)
 
-fn baml.ops.Compare$for$float.lt = builtin(vm)
+fn baml.ops.<(float as baml.ops.Compare)>.lt = builtin(vm)
 
-fn baml.ops.Compare$for$float.gt = builtin(vm)
+fn baml.ops.<(float as baml.ops.Compare)>.gt = builtin(vm)
 
-fn baml.ops.Compare$for$float.ge = builtin(vm)
+fn baml.ops.<(float as baml.ops.Compare)>.ge = builtin(vm)
 
-fn baml.ops.Compare$for$float.le = builtin(vm)
+fn baml.ops.<(float as baml.ops.Compare)>.le = builtin(vm)
 
-fn baml.ops.Equals$for$bool.eq = builtin(vm)
+fn baml.ops.<(bool as baml.ops.Equals)>.eq = builtin(vm)
 
-fn baml.ops.Compare$for$bool.lt(self: bool, other: bool) -> bool {
+fn baml.ops.<(bool as baml.ops.Compare)>.lt(self: bool, other: bool) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: bool // self // param
@@ -7967,7 +7967,7 @@ fn baml.ops.Compare$for$bool.lt(self: bool, other: bool) -> bool {
     }
 }
 
-fn baml.ops.Compare$for$bool.gt(self: bool, other: bool) -> bool {
+fn baml.ops.<(bool as baml.ops.Compare)>.gt(self: bool, other: bool) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: bool // self // param
@@ -7987,7 +7987,7 @@ fn baml.ops.Compare$for$bool.gt(self: bool, other: bool) -> bool {
     }
 }
 
-fn baml.ops.Equals$for$null.eq(self: null, other: null) -> bool {
+fn baml.ops.<(null as baml.ops.Equals)>.eq(self: null, other: null) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: null // self // param
@@ -8003,7 +8003,7 @@ fn baml.ops.Equals$for$null.eq(self: null, other: null) -> bool {
     }
 }
 
-fn baml.ops.Equals$for$null.neq(self: null, other: null) -> bool {
+fn baml.ops.<(null as baml.ops.Equals)>.neq(self: null, other: null) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: null // self // param
@@ -8019,19 +8019,19 @@ fn baml.ops.Equals$for$null.neq(self: null, other: null) -> bool {
     }
 }
 
-fn baml.ops.Equals$for$string.eq = builtin(vm)
+fn baml.ops.<(string as baml.ops.Equals)>.eq = builtin(vm)
 
-fn baml.ops.Compare$for$string.lt = builtin(vm)
+fn baml.ops.<(string as baml.ops.Compare)>.lt = builtin(vm)
 
-fn baml.ops.Compare$for$string.gt = builtin(vm)
+fn baml.ops.<(string as baml.ops.Compare)>.gt = builtin(vm)
 
-fn baml.ops.Compare$for$string.ge = builtin(vm)
+fn baml.ops.<(string as baml.ops.Compare)>.ge = builtin(vm)
 
-fn baml.ops.Compare$for$string.le = builtin(vm)
+fn baml.ops.<(string as baml.ops.Compare)>.le = builtin(vm)
 
-fn baml.ops.Equals$for$uint8array.eq = builtin(vm)
+fn baml.ops.<(uint8array as baml.ops.Equals)>.eq = builtin(vm)
 
-fn baml.ops.Equals$for$T[].eq(self: T[], other: T[]) -> bool {
+fn baml.ops.<(#0[] as baml.ops.Equals)>.eq(self: T[], other: T[]) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: T[] // self // param
@@ -8046,7 +8046,7 @@ fn baml.ops.Equals$for$T[].eq(self: T[], other: T[]) -> bool {
     }
 }
 
-fn baml.ops.Equals$for$map<string, V>.eq(self: map<string, V>, other: map<string, V>) -> bool {
+fn baml.ops.<(map<string, #0> as baml.ops.Equals)>.eq(self: map<string, V>, other: map<string, V>) -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: map<string, V> // self // param
@@ -8072,7 +8072,7 @@ fn baml.ops.Index.index(_1: void, _2: void) -> void {
     }
 }
 
-fn baml.ops.Index<int>$for$T[].index(self: T[], idx: int) -> T {
+fn baml.ops.<(#0[] as baml.ops.Index<int>)>.index(self: T[], idx: int) -> T {
     // Locals:
     let _0: T // _0 // return
     let _1: T[] // self // param
@@ -8092,7 +8092,7 @@ fn baml.ops.Index<int>$for$T[].index(self: T[], idx: int) -> T {
     }
 }
 
-fn baml.ops.Index<string>$for$map<string, V>.index(self: map<string, V>, idx: string) -> V {
+fn baml.ops.<(map<string, #0> as baml.ops.Index<string>)>.index(self: map<string, V>, idx: string) -> V {
     // Locals:
     let _0: V // _0 // return
     let _1: map<string, V> // self // param
@@ -8112,7 +8112,7 @@ fn baml.ops.Index<string>$for$map<string, V>.index(self: map<string, V>, idx: st
     }
 }
 
-fn baml.ops.Index<int>$for$uint8array.index(self: uint8array, idx: int) -> int {
+fn baml.ops.<(uint8array as baml.ops.Index<int>)>.index(self: uint8array, idx: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: uint8array // self // param
@@ -8197,81 +8197,81 @@ fn baml.ops.Negate.neg(_1: void) -> void {
     }
 }
 
-fn baml.ops.Add<int>$for$int.add = builtin(vm)
+fn baml.ops.<(int as baml.ops.Add<int>)>.add = builtin(vm)
 
-fn baml.ops.Subtract<int>$for$int.sub = builtin(vm)
+fn baml.ops.<(int as baml.ops.Subtract<int>)>.sub = builtin(vm)
 
-fn baml.ops.Multiply<int>$for$int.mul = builtin(vm)
+fn baml.ops.<(int as baml.ops.Multiply<int>)>.mul = builtin(vm)
 
-fn baml.ops.Divide<int>$for$int.div = builtin(vm)
+fn baml.ops.<(int as baml.ops.Divide<int>)>.div = builtin(vm)
 
-fn baml.ops.Remainder<int>$for$int.rem = builtin(vm)
+fn baml.ops.<(int as baml.ops.Remainder<int>)>.rem = builtin(vm)
 
-fn baml.ops.Negate$for$int.neg = builtin(vm)
+fn baml.ops.<(int as baml.ops.Negate)>.neg = builtin(vm)
 
-fn baml.ops.Add<float>$for$float.add = builtin(vm)
+fn baml.ops.<(float as baml.ops.Add<float>)>.add = builtin(vm)
 
-fn baml.ops.Subtract<float>$for$float.sub = builtin(vm)
+fn baml.ops.<(float as baml.ops.Subtract<float>)>.sub = builtin(vm)
 
-fn baml.ops.Multiply<float>$for$float.mul = builtin(vm)
+fn baml.ops.<(float as baml.ops.Multiply<float>)>.mul = builtin(vm)
 
-fn baml.ops.Divide<float>$for$float.div = builtin(vm)
+fn baml.ops.<(float as baml.ops.Divide<float>)>.div = builtin(vm)
 
-fn baml.ops.Remainder<float>$for$float.rem = builtin(vm)
+fn baml.ops.<(float as baml.ops.Remainder<float>)>.rem = builtin(vm)
 
-fn baml.ops.Negate$for$float.neg = builtin(vm)
+fn baml.ops.<(float as baml.ops.Negate)>.neg = builtin(vm)
 
-fn baml.ops.Add<int>$for$float.add = builtin(vm)
+fn baml.ops.<(float as baml.ops.Add<int>)>.add = builtin(vm)
 
-fn baml.ops.Subtract<int>$for$float.sub = builtin(vm)
+fn baml.ops.<(float as baml.ops.Subtract<int>)>.sub = builtin(vm)
 
-fn baml.ops.Multiply<int>$for$float.mul = builtin(vm)
+fn baml.ops.<(float as baml.ops.Multiply<int>)>.mul = builtin(vm)
 
-fn baml.ops.Divide<int>$for$float.div = builtin(vm)
+fn baml.ops.<(float as baml.ops.Divide<int>)>.div = builtin(vm)
 
-fn baml.ops.Remainder<int>$for$float.rem = builtin(vm)
+fn baml.ops.<(float as baml.ops.Remainder<int>)>.rem = builtin(vm)
 
-fn baml.ops.Add<float>$for$int.add = builtin(vm)
+fn baml.ops.<(int as baml.ops.Add<float>)>.add = builtin(vm)
 
-fn baml.ops.Subtract<float>$for$int.sub = builtin(vm)
+fn baml.ops.<(int as baml.ops.Subtract<float>)>.sub = builtin(vm)
 
-fn baml.ops.Multiply<float>$for$int.mul = builtin(vm)
+fn baml.ops.<(int as baml.ops.Multiply<float>)>.mul = builtin(vm)
 
-fn baml.ops.Divide<float>$for$int.div = builtin(vm)
+fn baml.ops.<(int as baml.ops.Divide<float>)>.div = builtin(vm)
 
-fn baml.ops.Remainder<float>$for$int.rem = builtin(vm)
+fn baml.ops.<(int as baml.ops.Remainder<float>)>.rem = builtin(vm)
 
-fn baml.ops.Add<bigint>$for$bigint.add = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.Add<bigint>)>.add = builtin(vm)
 
-fn baml.ops.Subtract<bigint>$for$bigint.sub = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.Subtract<bigint>)>.sub = builtin(vm)
 
-fn baml.ops.Multiply<bigint>$for$bigint.mul = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.Multiply<bigint>)>.mul = builtin(vm)
 
-fn baml.ops.Divide<bigint>$for$bigint.div = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.Divide<bigint>)>.div = builtin(vm)
 
-fn baml.ops.Remainder<bigint>$for$bigint.rem = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.Remainder<bigint>)>.rem = builtin(vm)
 
-fn baml.ops.Negate$for$bigint.neg = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.Negate)>.neg = builtin(vm)
 
-fn baml.ops.Add<int>$for$bigint.add = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.Add<int>)>.add = builtin(vm)
 
-fn baml.ops.Subtract<int>$for$bigint.sub = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.Subtract<int>)>.sub = builtin(vm)
 
-fn baml.ops.Multiply<int>$for$bigint.mul = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.Multiply<int>)>.mul = builtin(vm)
 
-fn baml.ops.Divide<int>$for$bigint.div = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.Divide<int>)>.div = builtin(vm)
 
-fn baml.ops.Remainder<int>$for$bigint.rem = builtin(vm)
+fn baml.ops.<(bigint as baml.ops.Remainder<int>)>.rem = builtin(vm)
 
-fn baml.ops.Add<bigint>$for$int.add = builtin(vm)
+fn baml.ops.<(int as baml.ops.Add<bigint>)>.add = builtin(vm)
 
-fn baml.ops.Subtract<bigint>$for$int.sub = builtin(vm)
+fn baml.ops.<(int as baml.ops.Subtract<bigint>)>.sub = builtin(vm)
 
-fn baml.ops.Multiply<bigint>$for$int.mul = builtin(vm)
+fn baml.ops.<(int as baml.ops.Multiply<bigint>)>.mul = builtin(vm)
 
-fn baml.ops.Divide<bigint>$for$int.div = builtin(vm)
+fn baml.ops.<(int as baml.ops.Divide<bigint>)>.div = builtin(vm)
 
-fn baml.ops.Remainder<bigint>$for$int.rem = builtin(vm)
+fn baml.ops.<(int as baml.ops.Remainder<bigint>)>.rem = builtin(vm)
 
 fn baml.ops.__union_add = builtin(vm)
 
@@ -8404,9 +8404,9 @@ fn baml.random.SystemRandom.get() -> baml.random.SystemRandom {
     }
 }
 
-fn baml.random.SystemRandom.Rng.random = builtin(io)
+fn baml.random.<(baml.random.SystemRandom as baml.random.Rng)>.random = builtin(io)
 
-fn baml.random.SystemRandom.Rng.random_int = builtin(io)
+fn baml.random.<(baml.random.SystemRandom as baml.random.Rng)>.random_int = builtin(io)
 
 fn baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xoshiro256PlusPlus {
     // Locals:
@@ -8439,9 +8439,9 @@ fn baml.random.Xoshiro256PlusPlus.new(seed: uint8array) -> baml.random.Xoshiro25
 
 fn baml.random.Xoshiro256PlusPlus._new = builtin(vm)
 
-fn baml.random.Xoshiro256PlusPlus.Rng.random = builtin(vm)
+fn baml.random.<(baml.random.Xoshiro256PlusPlus as baml.random.Rng)>.random = builtin(vm)
 
-fn baml.random.Xoshiro256PlusPlus.Rng.random_int = builtin(vm)
+fn baml.random.<(baml.random.Xoshiro256PlusPlus as baml.random.Rng)>.random_int = builtin(vm)
 
 fn baml.random.ChaCha20.new(seed: uint8array) -> baml.random.ChaCha20 {
     // Locals:
@@ -8474,9 +8474,9 @@ fn baml.random.ChaCha20.new(seed: uint8array) -> baml.random.ChaCha20 {
 
 fn baml.random.ChaCha20._new = builtin(vm)
 
-fn baml.random.ChaCha20.Rng.random = builtin(vm)
+fn baml.random.<(baml.random.ChaCha20 as baml.random.Rng)>.random = builtin(vm)
 
-fn baml.random.ChaCha20.Rng.random_int = builtin(vm)
+fn baml.random.<(baml.random.ChaCha20 as baml.random.Rng)>.random_int = builtin(vm)
 
 fn baml.sap.ParseCache.new = builtin(io)
 
@@ -8747,7 +8747,7 @@ fn baml.sys.ProcessExit.ok(self: baml.sys.ProcessExit) -> bool {
     }
 }
 
-fn baml.sys.ProcessLineStream.root.iter.Iterable.iter(self: baml.sys.ProcessLineStream) -> baml.iter.Iterator<Error = baml.errors.Io | baml.errors.Timeout, Item = string> {
+fn baml.sys.<(baml.sys.ProcessLineStream as baml.iter.Iterable)>.iter(self: baml.sys.ProcessLineStream) -> baml.iter.Iterator<Error = baml.errors.Io | baml.errors.Timeout, Item = string> {
     // Locals:
     let _0: baml.iter.Iterator<Error = baml.errors.Io | baml.errors.Timeout, Item = string> // _0 // return
     let _1: baml.sys.ProcessLineStream // self // param
@@ -8762,7 +8762,7 @@ fn baml.sys.ProcessLineStream.root.iter.Iterable.iter(self: baml.sys.ProcessLine
     }
 }
 
-fn baml.sys.ProcessLineStream.root.iter.Iterator.next(self: baml.sys.ProcessLineStream) -> string | baml.iter.Done {
+fn baml.sys.<(baml.sys.ProcessLineStream as baml.iter.Iterator)>.next(self: baml.sys.ProcessLineStream) -> string | baml.iter.Done {
     // Locals:
     let _0: string | baml.iter.Done // _0 // return
     let _1: baml.sys.ProcessLineStream // self // param
@@ -8832,7 +8832,7 @@ fn baml.time.Duration.abs(self: baml.time.Duration) -> baml.time.Duration {
     let _0: baml.time.Duration // _0 // return
     let _1: baml.time.Duration // self // param
     let _2: bigint
-    let _3: (baml.Bigint) -> bigint throws never
+    let _3: (bigint) -> bigint throws never
 
     bb0: {
         _3 = copy _1.0;
@@ -9187,7 +9187,7 @@ fn baml.time.Duration.to_hours(self: baml.time.Duration) -> bigint {
     }
 }
 
-fn baml.time.Duration.root.ops.Add<Duration>.add(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration {
+fn baml.time.<(baml.time.Duration as baml.ops.Add<baml.time.Duration>)>.add(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration {
     // Locals:
     let _0: baml.time.Duration // _0 // return
     let _1: baml.time.Duration // self // param
@@ -9209,7 +9209,7 @@ fn baml.time.Duration.root.ops.Add<Duration>.add(self: baml.time.Duration, other
     }
 }
 
-fn baml.time.Duration.root.ops.Subtract<Duration>.sub(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration {
+fn baml.time.<(baml.time.Duration as baml.ops.Subtract<baml.time.Duration>)>.sub(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration {
     // Locals:
     let _0: baml.time.Duration // _0 // return
     let _1: baml.time.Duration // self // param
@@ -9231,7 +9231,7 @@ fn baml.time.Duration.root.ops.Subtract<Duration>.sub(self: baml.time.Duration, 
     }
 }
 
-fn baml.time.Duration.root.ops.Multiply<int>.mul(self: baml.time.Duration, other: int) -> baml.time.Duration {
+fn baml.time.<(baml.time.Duration as baml.ops.Multiply<int>)>.mul(self: baml.time.Duration, other: int) -> baml.time.Duration {
     // Locals:
     let _0: baml.time.Duration // _0 // return
     let _1: baml.time.Duration // self // param
@@ -9251,7 +9251,7 @@ fn baml.time.Duration.root.ops.Multiply<int>.mul(self: baml.time.Duration, other
     }
 }
 
-fn baml.time.Duration.root.ops.Multiply<bigint>.mul(self: baml.time.Duration, other: bigint) -> baml.time.Duration {
+fn baml.time.<(baml.time.Duration as baml.ops.Multiply<bigint>)>.mul(self: baml.time.Duration, other: bigint) -> baml.time.Duration {
     // Locals:
     let _0: baml.time.Duration // _0 // return
     let _1: baml.time.Duration // self // param
@@ -9271,7 +9271,7 @@ fn baml.time.Duration.root.ops.Multiply<bigint>.mul(self: baml.time.Duration, ot
     }
 }
 
-fn baml.time.Duration.root.ops.Divide<int>.div(self: baml.time.Duration, other: int) -> baml.time.Duration {
+fn baml.time.<(baml.time.Duration as baml.ops.Divide<int>)>.div(self: baml.time.Duration, other: int) -> baml.time.Duration {
     // Locals:
     let _0: baml.time.Duration // _0 // return
     let _1: baml.time.Duration // self // param
@@ -9291,7 +9291,7 @@ fn baml.time.Duration.root.ops.Divide<int>.div(self: baml.time.Duration, other: 
     }
 }
 
-fn baml.time.Duration.root.ops.Divide<bigint>.div(self: baml.time.Duration, other: bigint) -> baml.time.Duration {
+fn baml.time.<(baml.time.Duration as baml.ops.Divide<bigint>)>.div(self: baml.time.Duration, other: bigint) -> baml.time.Duration {
     // Locals:
     let _0: baml.time.Duration // _0 // return
     let _1: baml.time.Duration // self // param
@@ -9311,7 +9311,7 @@ fn baml.time.Duration.root.ops.Divide<bigint>.div(self: baml.time.Duration, othe
     }
 }
 
-fn baml.time.Duration.root.ops.Remainder<Duration>.rem(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration {
+fn baml.time.<(baml.time.Duration as baml.ops.Remainder<baml.time.Duration>)>.rem(self: baml.time.Duration, other: baml.time.Duration) -> baml.time.Duration {
     // Locals:
     let _0: baml.time.Duration // _0 // return
     let _1: baml.time.Duration // self // param
@@ -9333,7 +9333,7 @@ fn baml.time.Duration.root.ops.Remainder<Duration>.rem(self: baml.time.Duration,
     }
 }
 
-fn baml.time.Duration.root.ops.Negate.neg(self: baml.time.Duration) -> baml.time.Duration {
+fn baml.time.<(baml.time.Duration as baml.ops.Negate)>.neg(self: baml.time.Duration) -> baml.time.Duration {
     // Locals:
     let _0: baml.time.Duration // _0 // return
     let _1: baml.time.Duration // self // param
@@ -9382,7 +9382,7 @@ fn baml.time.Instant.elapsed(self: baml.time.Instant) -> baml.time.Duration {
 
 fn baml.time.Instant.parse = builtin(vm)
 
-fn baml.time.Instant.baml.ToString.to_string(self: baml.time.Instant) -> string {
+fn baml.time.<(baml.time.Instant as baml.ToString)>.to_string(self: baml.time.Instant) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.time.Instant // self // param
@@ -9421,7 +9421,7 @@ fn baml.time.Instant.baml.ToString.to_string(self: baml.time.Instant) -> string 
 
 fn baml.time.Instant._to_string_impl = builtin(vm)
 
-fn baml.time.Instant.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.Instant {
+fn baml.time.<(baml.time.Instant as baml.FromJson)>.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.Instant {
     // Locals:
     let _0: baml.time.Instant // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
@@ -9470,7 +9470,7 @@ fn baml.time.Instant.baml.FromJson.from_json(j: int | float | string | bool | nu
     }
 }
 
-fn baml.time.Instant.baml.ToJson.to_json(self: baml.time.Instant) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+fn baml.time.<(baml.time.Instant as baml.ToJson)>.to_json(self: baml.time.Instant) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: baml.time.Instant // self // param
@@ -9742,7 +9742,7 @@ fn baml.time.Instant.epoch() -> baml.time.Instant {
     }
 }
 
-fn baml.time.Instant.root.ops.Add<Duration>.add(self: baml.time.Instant, other: baml.time.Duration) -> baml.time.Instant {
+fn baml.time.<(baml.time.Instant as baml.ops.Add<baml.time.Duration>)>.add(self: baml.time.Instant, other: baml.time.Duration) -> baml.time.Instant {
     // Locals:
     let _0: baml.time.Instant // _0 // return
     let _1: baml.time.Instant // self // param
@@ -9764,7 +9764,7 @@ fn baml.time.Instant.root.ops.Add<Duration>.add(self: baml.time.Instant, other: 
     }
 }
 
-fn baml.time.Instant.root.ops.Subtract<Duration>.sub(self: baml.time.Instant, other: baml.time.Duration) -> baml.time.Instant {
+fn baml.time.<(baml.time.Instant as baml.ops.Subtract<baml.time.Duration>)>.sub(self: baml.time.Instant, other: baml.time.Duration) -> baml.time.Instant {
     // Locals:
     let _0: baml.time.Instant // _0 // return
     let _1: baml.time.Instant // self // param
@@ -9786,7 +9786,7 @@ fn baml.time.Instant.root.ops.Subtract<Duration>.sub(self: baml.time.Instant, ot
     }
 }
 
-fn baml.time.Instant.root.ops.Subtract<Instant>.sub(self: baml.time.Instant, other: baml.time.Instant) -> baml.time.Duration {
+fn baml.time.<(baml.time.Instant as baml.ops.Subtract<baml.time.Instant>)>.sub(self: baml.time.Instant, other: baml.time.Instant) -> baml.time.Duration {
     // Locals:
     let _0: baml.time.Duration // _0 // return
     let _1: baml.time.Instant // self // param
@@ -9812,7 +9812,7 @@ fn baml.time.PlainDate.from_components = builtin(vm)
 
 fn baml.time.PlainDate.parse = builtin(vm)
 
-fn baml.time.PlainDate.baml.ToString.to_string(self: baml.time.PlainDate) -> string {
+fn baml.time.<(baml.time.PlainDate as baml.ToString)>.to_string(self: baml.time.PlainDate) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.time.PlainDate // self // param
@@ -9885,7 +9885,7 @@ fn baml.time.PlainDate.month = builtin(vm)
 
 fn baml.time.PlainDate.day = builtin(vm)
 
-fn baml.time.PlainDate.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.PlainDate {
+fn baml.time.<(baml.time.PlainDate as baml.FromJson)>.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.PlainDate {
     // Locals:
     let _0: baml.time.PlainDate // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
@@ -9934,7 +9934,7 @@ fn baml.time.PlainDate.baml.FromJson.from_json(j: int | float | string | bool | 
     }
 }
 
-fn baml.time.PlainDate.baml.ToJson.to_json(self: baml.time.PlainDate) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+fn baml.time.<(baml.time.PlainDate as baml.ToJson)>.to_json(self: baml.time.PlainDate) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: baml.time.PlainDate // self // param
@@ -10063,7 +10063,7 @@ fn baml.time.PlainDateTime._from_components = builtin(vm)
 
 fn baml.time.PlainDateTime.parse = builtin(vm)
 
-fn baml.time.PlainDateTime.baml.ToString.to_string(self: baml.time.PlainDateTime) -> string {
+fn baml.time.<(baml.time.PlainDateTime as baml.ToString)>.to_string(self: baml.time.PlainDateTime) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.time.PlainDateTime // self // param
@@ -10361,7 +10361,7 @@ fn baml.time.PlainDateTime.second = builtin(vm)
 
 fn baml.time.PlainDateTime.millisecond = builtin(vm)
 
-fn baml.time.PlainDateTime.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.PlainDateTime {
+fn baml.time.<(baml.time.PlainDateTime as baml.FromJson)>.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.PlainDateTime {
     // Locals:
     let _0: baml.time.PlainDateTime // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
@@ -10410,7 +10410,7 @@ fn baml.time.PlainDateTime.baml.FromJson.from_json(j: int | float | string | boo
     }
 }
 
-fn baml.time.PlainDateTime.baml.ToJson.to_json(self: baml.time.PlainDateTime) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+fn baml.time.<(baml.time.PlainDateTime as baml.ToJson)>.to_json(self: baml.time.PlainDateTime) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: baml.time.PlainDateTime // self // param
@@ -10447,7 +10447,7 @@ fn baml.time.PlainDateTime.baml.ToJson.to_json(self: baml.time.PlainDateTime) ->
     }
 }
 
-fn baml.time.PlainDateTime.root.ops.Add<Duration>.add(self: baml.time.PlainDateTime, other: baml.time.Duration) -> baml.time.PlainDateTime {
+fn baml.time.<(baml.time.PlainDateTime as baml.ops.Add<baml.time.Duration>)>.add(self: baml.time.PlainDateTime, other: baml.time.Duration) -> baml.time.PlainDateTime {
     // Locals:
     let _0: baml.time.PlainDateTime // _0 // return
     let _1: baml.time.PlainDateTime // self // param
@@ -10469,7 +10469,7 @@ fn baml.time.PlainDateTime.root.ops.Add<Duration>.add(self: baml.time.PlainDateT
     }
 }
 
-fn baml.time.PlainDateTime.root.ops.Subtract<Duration>.sub(self: baml.time.PlainDateTime, other: baml.time.Duration) -> baml.time.PlainDateTime {
+fn baml.time.<(baml.time.PlainDateTime as baml.ops.Subtract<baml.time.Duration>)>.sub(self: baml.time.PlainDateTime, other: baml.time.Duration) -> baml.time.PlainDateTime {
     // Locals:
     let _0: baml.time.PlainDateTime // _0 // return
     let _1: baml.time.PlainDateTime // self // param
@@ -10491,7 +10491,7 @@ fn baml.time.PlainDateTime.root.ops.Subtract<Duration>.sub(self: baml.time.Plain
     }
 }
 
-fn baml.time.PlainDateTime.root.ops.Subtract<PlainDateTime>.sub(self: baml.time.PlainDateTime, other: baml.time.PlainDateTime) -> baml.time.Duration {
+fn baml.time.<(baml.time.PlainDateTime as baml.ops.Subtract<baml.time.PlainDateTime>)>.sub(self: baml.time.PlainDateTime, other: baml.time.PlainDateTime) -> baml.time.Duration {
     // Locals:
     let _0: baml.time.Duration // _0 // return
     let _1: baml.time.PlainDateTime // self // param
@@ -10591,7 +10591,7 @@ fn baml.time.PlainTime._from_components = builtin(vm)
 
 fn baml.time.PlainTime.parse = builtin(vm)
 
-fn baml.time.PlainTime.baml.ToString.to_string(self: baml.time.PlainTime) -> string {
+fn baml.time.<(baml.time.PlainTime as baml.ToString)>.to_string(self: baml.time.PlainTime) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.time.PlainTime // self // param
@@ -10696,7 +10696,7 @@ fn baml.time.PlainTime.millisecond(self: baml.time.PlainTime) -> int {
     }
 }
 
-fn baml.time.PlainTime.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.PlainTime {
+fn baml.time.<(baml.time.PlainTime as baml.FromJson)>.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.PlainTime {
     // Locals:
     let _0: baml.time.PlainTime // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
@@ -10745,7 +10745,7 @@ fn baml.time.PlainTime.baml.FromJson.from_json(j: int | float | string | bool | 
     }
 }
 
-fn baml.time.PlainTime.baml.ToJson.to_json(self: baml.time.PlainTime) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+fn baml.time.<(baml.time.PlainTime as baml.ToJson)>.to_json(self: baml.time.PlainTime) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: baml.time.PlainTime // self // param
@@ -10766,7 +10766,7 @@ fn baml.time.PlainTime.baml.ToJson.to_json(self: baml.time.PlainTime) -> int | f
     }
 }
 
-fn baml.time.PlainTime.root.ops.Add<Duration>.add(self: baml.time.PlainTime, other: baml.time.Duration) -> baml.time.PlainTime {
+fn baml.time.<(baml.time.PlainTime as baml.ops.Add<baml.time.Duration>)>.add(self: baml.time.PlainTime, other: baml.time.Duration) -> baml.time.PlainTime {
     // Locals:
     let _0: baml.time.PlainTime // _0 // return
     let _1: baml.time.PlainTime // self // param
@@ -10793,7 +10793,7 @@ fn baml.time.PlainTime.root.ops.Add<Duration>.add(self: baml.time.PlainTime, oth
     }
 }
 
-fn baml.time.PlainTime.root.ops.Subtract<Duration>.sub(self: baml.time.PlainTime, other: baml.time.Duration) -> baml.time.PlainTime {
+fn baml.time.<(baml.time.PlainTime as baml.ops.Subtract<baml.time.Duration>)>.sub(self: baml.time.PlainTime, other: baml.time.Duration) -> baml.time.PlainTime {
     // Locals:
     let _0: baml.time.PlainTime // _0 // return
     let _1: baml.time.PlainTime // self // param
@@ -10820,7 +10820,7 @@ fn baml.time.PlainTime.root.ops.Subtract<Duration>.sub(self: baml.time.PlainTime
     }
 }
 
-fn baml.time.PlainTime.root.ops.Subtract<PlainTime>.sub(self: baml.time.PlainTime, other: baml.time.PlainTime) -> baml.time.Duration {
+fn baml.time.<(baml.time.PlainTime as baml.ops.Subtract<baml.time.PlainTime>)>.sub(self: baml.time.PlainTime, other: baml.time.PlainTime) -> baml.time.Duration {
     // Locals:
     let _0: baml.time.Duration // _0 // return
     let _1: baml.time.PlainTime // self // param
@@ -11331,7 +11331,7 @@ fn baml.time.ZonedDateTime.from_components(timezone: string | baml.time.TimeZone
 
 fn baml.time.ZonedDateTime.parse = builtin(vm)
 
-fn baml.time.ZonedDateTime.baml.ToString.to_string(self: baml.time.ZonedDateTime) -> string {
+fn baml.time.<(baml.time.ZonedDateTime as baml.ToString)>.to_string(self: baml.time.ZonedDateTime) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.time.ZonedDateTime // self // param
@@ -11801,7 +11801,7 @@ fn baml.time.ZonedDateTime.millisecond(self: baml.time.ZonedDateTime) -> int {
     }
 }
 
-fn baml.time.ZonedDateTime.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.ZonedDateTime {
+fn baml.time.<(baml.time.ZonedDateTime as baml.FromJson)>.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.time.ZonedDateTime {
     // Locals:
     let _0: baml.time.ZonedDateTime // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
@@ -11850,7 +11850,7 @@ fn baml.time.ZonedDateTime.baml.FromJson.from_json(j: int | float | string | boo
     }
 }
 
-fn baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTime) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+fn baml.time.<(baml.time.ZonedDateTime as baml.ToJson)>.to_json(self: baml.time.ZonedDateTime) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: baml.time.ZonedDateTime // self // param
@@ -11927,7 +11927,7 @@ fn baml.time.ZonedDateTime.baml.ToJson.to_json(self: baml.time.ZonedDateTime) ->
 
 fn baml.time._format_zoned = builtin(vm)
 
-fn baml.time.ZonedDateTime.root.ops.Add<Duration>.add(self: baml.time.ZonedDateTime, other: baml.time.Duration) -> baml.time.ZonedDateTime {
+fn baml.time.<(baml.time.ZonedDateTime as baml.ops.Add<baml.time.Duration>)>.add(self: baml.time.ZonedDateTime, other: baml.time.Duration) -> baml.time.ZonedDateTime {
     // Locals:
     let _0: baml.time.ZonedDateTime // _0 // return
     let _1: baml.time.ZonedDateTime // self // param
@@ -11953,7 +11953,7 @@ fn baml.time.ZonedDateTime.root.ops.Add<Duration>.add(self: baml.time.ZonedDateT
     }
 }
 
-fn baml.time.ZonedDateTime.root.ops.Subtract<Duration>.sub(self: baml.time.ZonedDateTime, other: baml.time.Duration) -> baml.time.ZonedDateTime {
+fn baml.time.<(baml.time.ZonedDateTime as baml.ops.Subtract<baml.time.Duration>)>.sub(self: baml.time.ZonedDateTime, other: baml.time.Duration) -> baml.time.ZonedDateTime {
     // Locals:
     let _0: baml.time.ZonedDateTime // _0 // return
     let _1: baml.time.ZonedDateTime // self // param
@@ -11979,7 +11979,7 @@ fn baml.time.ZonedDateTime.root.ops.Subtract<Duration>.sub(self: baml.time.Zoned
     }
 }
 
-fn baml.time.ZonedDateTime.root.ops.Subtract<ZonedDateTime>.sub(self: baml.time.ZonedDateTime, other: baml.time.ZonedDateTime) -> baml.time.Duration {
+fn baml.time.<(baml.time.ZonedDateTime as baml.ops.Subtract<baml.time.ZonedDateTime>)>.sub(self: baml.time.ZonedDateTime, other: baml.time.ZonedDateTime) -> baml.time.Duration {
     // Locals:
     let _0: baml.time.Duration // _0 // return
     let _1: baml.time.ZonedDateTime // self // param
@@ -12001,7 +12001,7 @@ fn baml.time.ZonedDateTime.root.ops.Subtract<ZonedDateTime>.sub(self: baml.time.
     }
 }
 
-fn baml.toml.Table.baml.ToJson.to_json(self: baml.toml.Table) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
+fn baml.toml.<(baml.toml.Table as baml.ToJson)>.to_json(self: baml.toml.Table) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {
     // Locals:
     let _0: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // _0 // return
     let _1: baml.toml.Table // self // param
@@ -12019,7 +12019,7 @@ fn baml.toml.Table.baml.ToJson.to_json(self: baml.toml.Table) -> int | float | s
     }
 }
 
-fn baml.toml.Table.baml.FromJson.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.toml.Table {
+fn baml.toml.<(baml.toml.Table as baml.FromJson)>.from_json(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> baml.toml.Table {
     // Locals:
     let _0: baml.toml.Table // _0 // return
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
@@ -12185,9 +12185,10 @@ fn baml.toml.item_from_json(json: int | float | string | bool | null | baml.json
     let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // json // param
     let _2: int
     let _3: baml.json.JsonDecodeError
-    let _4: reflect.Type
+    let _4: unknown
     let _5: reflect.Type
     let _6: reflect.Type
+    let _7: reflect.Type
 
     bb0: {
         _2 = type_tag(_1);
@@ -12199,14 +12200,15 @@ fn baml.toml.item_from_json(json: int | float | string | bool | null | baml.json
     }
 
     bb2: {
-        _4 = load_type(baml.toml.Item);
-        _5 = load_type(baml.json.JsonDecodeError);
-        _6 = load_type(baml.json.json);
-        _0 = call const fn baml.Array.map<copy _6, copy _4, copy _5>(copy _1, const fn baml.toml.item_from_json) -> [bb6];
+        _5 = load_type(baml.toml.Item);
+        _6 = load_type(baml.json.JsonDecodeError);
+        _7 = load_type(baml.json.json);
+        _0 = call const fn baml.Array.map<copy _7, copy _5, copy _6>(copy _1, const fn baml.toml.item_from_json) -> [bb6];
     }
 
     bb3: {
-        _0 = call const fn baml.toml.Table.baml.FromJson.from_json(copy _1) -> [bb6];
+        _4 = make_virtual_function (baml.toml.Table as TyTemplateInterface { name: QualifiedTypeName { pkg: Dep("baml"), namespace: [], name: "FromJson" }, generics: [], associated_types: [] }).from_json;
+        _0 = call copy _4(copy _1) -> [bb6];
     }
 
     bb4: {
@@ -12410,7 +12412,7 @@ fn baml.String.to_code_points = builtin(vm)
 
 fn baml.String.from_code_points = builtin(vm)
 
-fn baml.root.ops.Add<string>$for$string.add(self: string, rhs: string) -> string {
+fn baml.<(string as baml.ops.Add<string>)>.add(self: string, rhs: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // self // param
@@ -12470,7 +12472,7 @@ fn baml.Uint8Array.from_base64 = builtin(vm)
 
 fn baml.Uint8Array.to_base64 = builtin(vm)
 
-fn baml.Uint8Array.baml.ToString.to_string(self: baml.Uint8Array) -> string {
+fn baml.<(uint8array as baml.ToString)>.to_string(self: baml.Uint8Array) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.Uint8Array // self // param
