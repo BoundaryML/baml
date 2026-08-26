@@ -240,12 +240,12 @@ fn normalize_union(members: Vec<Ty>, attr: TyAttr, enum_variants: EnumVariants) 
     for member in members {
         match member {
             Ty::Never { .. } => {}
-            Ty::BuiltinUnknown { .. } => return Ty::BuiltinUnknown { attr },
+            Ty::Unknown { .. } => return Ty::Unknown { attr },
             Ty::Union(inner, _) => {
                 for inner_member in inner {
                     match inner_member {
                         Ty::Never { .. } => {}
-                        Ty::BuiltinUnknown { .. } => return Ty::BuiltinUnknown { attr },
+                        Ty::Unknown { .. } => return Ty::Unknown { attr },
                         other if !flat.contains(&other) => flat.push(other),
                         _ => {}
                     }
@@ -451,7 +451,7 @@ fn unify_into_at(
     // Error sentinels never unify: an unresolved or errored subject
     // carries its own diagnostic; admitting it as a common instance would
     // stack a spurious overlap. The inhabited top type `unknown`
-    // (BuiltinUnknown) is deliberately NOT bailed: it binds an opposing
+    // (Unknown) is deliberately NOT bailed: it binds an opposing
     // variable and is otherwise a distinct atomic type under invariance.
     if matches!(x, Ty::Error { .. }) || matches!(y, Ty::Error { .. }) {
         return Overlap::No;
@@ -1989,7 +1989,7 @@ mod tests {
     }
 
     #[test]
-    fn variable_binds_to_builtin_unknown() {
+    fn variable_binds_to_unknown() {
         // `unknown` is the inhabited top type: a blanket `Box<T>` overlaps
         // `Box<unknown>` at `T = unknown`.
         let vars = vec![param("T")];
@@ -2008,7 +2008,7 @@ mod tests {
     }
 
     #[test]
-    fn builtin_unknown_is_disjoint_from_distinct_concrete() {
+    fn unknown_is_disjoint_from_distinct_concrete() {
         let aliases = FxHashMap::default();
         let mut bindings = TypeBindings::default();
         assert_eq!(

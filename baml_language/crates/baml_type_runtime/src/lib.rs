@@ -750,7 +750,7 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&ParamTy) -> bool
     }
 
     match ty {
-        Ty::TypeVar(name, attr) if should_erase(name) => Ty::BuiltinUnknown { attr: attr.clone() },
+        Ty::TypeVar(name, attr) if should_erase(name) => Ty::Unknown { attr: attr.clone() },
         Ty::Class(qtn, args, attr) => Ty::Class(
             qtn.clone(),
             args.iter()

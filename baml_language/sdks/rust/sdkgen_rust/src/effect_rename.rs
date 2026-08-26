@@ -219,7 +219,7 @@ fn rename_typevars(ty: &Ty, renames: &HashMap<String, String>) -> Ty {
         | Ty::EnumVariant(..)
         | Ty::TypeAlias(..)
         | Ty::Media(..)
-        | Ty::BuiltinUnknown { .. }
+        | Ty::Unknown { .. }
         | Ty::Type { .. }
         | Ty::Resource { .. }
         | Ty::PromptAst { .. }

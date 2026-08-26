@@ -34,7 +34,7 @@
 //! `bex_engine::conversion`). This module is the first, schema-free line of
 //! defense; the engine adds the schema-aware second line.
 //!
-//! `RuntimeTy::TypeVar`-style opaque positions and [`RuntimeTy::BuiltinUnknown`] accept any
+//! `RuntimeTy::TypeVar`-style opaque positions and [`RuntimeTy::Unknown`] accept any
 //! value: at the FFI boundary the declared return type handed to a host call
 //! is always concrete (generic functions are not host entry points), so these
 //! arms are defensive rather than load-bearing.
@@ -158,7 +158,7 @@ fn inbound_annotation_satisfies_ty(actual: &RuntimeTy, expected: &RuntimeTy) -> 
 ///
 /// Unlike a conservative "reject only the obviously-wrong" check, this returns
 /// `false` whenever the value's runtime shape is not a member of `ty`. It
-/// stops short only where the type is genuinely "any" (`BuiltinUnknown`) or
+/// stops short only where the type is genuinely "any" (`Unknown`) or
 /// where the necessary schema (class field types) is unavailable in this
 /// crate — class checking is limited to name identity here and completed
 /// engine-side.
@@ -166,7 +166,7 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
     match ty {
         // `unknown` / `any`: accept anything. At the FFI boundary the declared
         // return type is concrete, so this is defensive.
-        RuntimeTy::BuiltinUnknown { .. } => true,
+        RuntimeTy::Unknown { .. } => true,
 
         // Union: matches at least one member. A `Union`-wrapped value is
         // unwrapped and checked against the arms.
@@ -821,7 +821,7 @@ mod tests {
     }
 
     #[test]
-    fn builtin_unknown_accepts_anything() {
+    fn unknown_accepts_anything() {
         assert!(
             validate_host_return(
                 &BexExternalValue::String("anything".into()),

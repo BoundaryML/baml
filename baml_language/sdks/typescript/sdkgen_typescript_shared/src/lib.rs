@@ -89,7 +89,7 @@ fn collect_interface_tys(ty: &Ty, out: &mut BTreeSet<Name>) {
         | Ty::Resource { .. }
         | Ty::PromptAst { .. }
         | Ty::Void { .. }
-        | Ty::BuiltinUnknown { .. }
+        | Ty::Unknown { .. }
         | Ty::Never { .. } => {}
     }
 }

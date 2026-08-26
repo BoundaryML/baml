@@ -693,7 +693,7 @@ impl<H: Head> NormalTy<H> {
             | NormalTy::TypeVar(_)
             | NormalTy::OpaqueAlias(_)
             | NormalTy::Never
-            | NormalTy::BuiltinUnknown
+            | NormalTy::Unknown
             | NormalTy::Error => false,
         }
     }
@@ -770,7 +770,7 @@ impl<H: Head> NormalTy<H> {
             | NormalTy::TypeVar(_)
             | NormalTy::OpaqueAlias(_)
             | NormalTy::Never
-            | NormalTy::BuiltinUnknown
+            | NormalTy::Unknown
             | NormalTy::Error => return None,
         })
     }
@@ -782,7 +782,7 @@ impl<H: Head> NormalTy<H> {
     /// The non-ground cases are the error-recovery sentinels (`Unknown`, `Error`)
     /// and the not-yet-resolved variables (a generic `TypeVar`, an unresolved
     /// `AssociatedTypeProjection`, an `OpaqueAlias`) — each could later stand for
-    /// the same type as the other side. The `unknown` top type (`BuiltinUnknown`)
+    /// the same type as the other side. The `unknown` top type (`Unknown`)
     /// is *not* one of these: it is user-written and fully determined, so
     /// `Box<unknown>` is a distinct invariant instantiation from `Box<int>`.
     fn is_ground(&self) -> bool {
@@ -808,7 +808,7 @@ impl<H: Head> NormalTy<H> {
             | NormalTy::Enum(_)
             | NormalTy::EnumVariant(..)
             // The `unknown` top type is a determined, user-written type.
-            | NormalTy::BuiltinUnknown
+            | NormalTy::Unknown
             // `never` is a determined (empty) type, not an inference hole.
             | NormalTy::Never
             // A μ-bound recursion variable refers to its enclosing (ground) μ-type.
@@ -1079,7 +1079,7 @@ enum NormalTy<H: Head = QualifiedTypeName, P: MuPhase<H> = Canonical> {
     /// Bottom — a subtype of every type.
     Never,
     /// The explicit `unknown` keyword — top, a supertype of every type.
-    BuiltinUnknown,
+    Unknown,
     /// Error-recovery sentinel — bidirectionally compatible to suppress cascades.
     Error,
 }
@@ -1174,7 +1174,7 @@ impl<H: Head> NormalTy<H, Named> {
             Ty::Type { .. } => NormalTy::Type,
             Ty::Resource { .. } => NormalTy::Resource,
             Ty::PromptAst { .. } => NormalTy::PromptAst,
-            Ty::BuiltinUnknown { .. } => NormalTy::BuiltinUnknown,
+            Ty::Unknown { .. } => NormalTy::Unknown,
             Ty::Never { .. } => NormalTy::Never,
             // INVARIANT: every `_` inference hole is filled — or replaced with
             // `Ty::Error` — during inference, BEFORE any normalization /
@@ -1355,7 +1355,7 @@ impl<H: Head> NormalTy<H, Named> {
             | NormalTy::TypeVar(_)
             | NormalTy::OpaqueAlias(_)
             | NormalTy::Never
-            | NormalTy::BuiltinUnknown
+            | NormalTy::Unknown
             | NormalTy::Error => false,
         }
     }
@@ -1384,7 +1384,7 @@ impl<H: Head> NormalTy<H, Named> {
             NormalTy::Type => Ty::Type { attr },
             NormalTy::Resource => Ty::Resource { attr },
             NormalTy::PromptAst => Ty::PromptAst { attr },
-            NormalTy::BuiltinUnknown => Ty::BuiltinUnknown { attr },
+            NormalTy::Unknown => Ty::Unknown { attr },
             NormalTy::Never => Ty::Never { attr },
             NormalTy::Error => Ty::Error { attr },
             NormalTy::Literal(lit) => Ty::Literal(lit.clone(), crate::Freshness::Regular, attr),
@@ -1588,7 +1588,7 @@ impl<H: Head> NormalTy<H, Named> {
             NormalTy::TypeVar(name) => NormalTy::TypeVar(name),
             NormalTy::OpaqueAlias(qn) => NormalTy::OpaqueAlias(qn),
             NormalTy::Never => NormalTy::Never,
-            NormalTy::BuiltinUnknown => NormalTy::BuiltinUnknown,
+            NormalTy::Unknown => NormalTy::Unknown,
             NormalTy::Error => NormalTy::Error,
         }
     }
@@ -1777,11 +1777,11 @@ impl<H: Head> NormalTy<H> {
         if matches!(self, NormalTy::Never) {
             return true;
         }
-        if matches!(sup, NormalTy::BuiltinUnknown) {
+        if matches!(sup, NormalTy::Unknown) {
             return true;
         }
         // `unknown` (top) is a subtype of nothing else (reflexivity handled above).
-        if matches!(self, NormalTy::BuiltinUnknown) {
+        if matches!(self, NormalTy::Unknown) {
             return false;
         }
         // Error-recovery sentinels are bidirectionally compatible to suppress
@@ -1974,7 +1974,7 @@ impl<H: Head> NormalTy<H> {
                 sup_bindings.iter().all(|(name, sup_pin)| {
                     match sub_bindings.iter().find(|(n, _)| n == name) {
                         Some((_, sub_pin)) => sub_pin.is_subtype_of(sup_pin, ctx, assumptions),
-                        None => NormalTy::BuiltinUnknown.is_subtype_of(sup_pin, ctx, assumptions),
+                        None => NormalTy::Unknown.is_subtype_of(sup_pin, ctx, assumptions),
                     }
                 })
             }
@@ -2078,7 +2078,7 @@ impl<H: Head> NormalTy<H> {
             NormalTy::Type => Ty::Type { attr },
             NormalTy::Resource => Ty::Resource { attr },
             NormalTy::PromptAst => Ty::PromptAst { attr },
-            NormalTy::BuiltinUnknown => Ty::BuiltinUnknown { attr },
+            NormalTy::Unknown => Ty::Unknown { attr },
             NormalTy::Never => Ty::Never { attr },
             NormalTy::Error => Ty::Error { attr },
             NormalTy::Literal(lit) => Ty::Literal(lit, crate::Freshness::Regular, attr),
@@ -2253,8 +2253,8 @@ impl<H: Head> NormalTy<H> {
         }
 
         // `unknown` (top) absorbs everything.
-        if flat.iter().any(|m| matches!(m, NormalTy::BuiltinUnknown)) {
-            return NormalTy::BuiltinUnknown;
+        if flat.iter().any(|m| matches!(m, NormalTy::Unknown)) {
+            return NormalTy::Unknown;
         }
 
         flat.sort();
@@ -2372,7 +2372,7 @@ impl<H: Head> NormalTy<H> {
             | NormalTy::TypeVar(_)
             | NormalTy::OpaqueAlias(_)
             | NormalTy::Never
-            | NormalTy::BuiltinUnknown
+            | NormalTy::Unknown
             | NormalTy::Error => false,
         }
     }
@@ -2534,7 +2534,7 @@ impl<H: Head> NormalTy<H> {
             | NormalTy::TypeVar(_)
             | NormalTy::OpaqueAlias(_)
             | NormalTy::Never
-            | NormalTy::BuiltinUnknown
+            | NormalTy::Unknown
             | NormalTy::Error => false,
         }
     }
@@ -2767,7 +2767,7 @@ impl NormalTy {
 impl NormalTy<QualifiedTypeName, Named> {
     /// [`NormalTy::from_ty`], mirrored over `interned::TyKind`. The one
     /// naming trap: the interned `Unknown` is the TOP type (the plain enum's
-    /// `BuiltinUnknown`); TIR's `Unknown` recovery sentinel is
+    /// `Unknown`); TIR's `Unknown` recovery sentinel is
     /// unrepresentable in the interned form by design.
     fn from_interned<C: TypeContext>(
         ty: &interned::Ty,
@@ -2790,7 +2790,7 @@ impl NormalTy<QualifiedTypeName, Named> {
             K::Type { .. } => NormalTy::Type,
             K::Resource { .. } => NormalTy::Resource,
             K::PromptAst { .. } => NormalTy::PromptAst,
-            K::Unknown { .. } => NormalTy::BuiltinUnknown,
+            K::Unknown { .. } => NormalTy::Unknown,
             K::Never { .. } => NormalTy::Never,
             K::Error { .. } => NormalTy::Error,
             // Same invariant as the plain arm: holes are filled (or made

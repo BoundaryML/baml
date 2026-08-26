@@ -331,13 +331,10 @@ fn process_body(
 ///
 /// We suppress:
 /// - `Ty::Error` — type-check error, nothing useful to show
-/// - `Ty::BuiltinUnknown` — no useful info
+/// - `Ty::Unknown` — no useful info
 /// - `Ty::Never` — unreachable / error types
 fn should_suppress_type(ty: &Ty) -> bool {
-    matches!(
-        ty,
-        Ty::Error { .. } | Ty::BuiltinUnknown { .. } | Ty::Never { .. }
-    )
+    matches!(ty, Ty::Error { .. } | Ty::Unknown { .. } | Ty::Never { .. })
 }
 
 /// True if `callee` names a test/testset registration method

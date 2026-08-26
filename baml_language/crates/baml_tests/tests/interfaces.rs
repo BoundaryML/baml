@@ -3930,7 +3930,7 @@ fn impl_generic_bound_must_be_an_interface() {
 fn implements_for_unknown_target_is_rejected() {
     // The user-facing top type `unknown` denotes "any type" — it has no single
     // concrete implementor for dispatch to recover, so it is rejected like a
-    // union/optional/interface (E0138). `unknown` lowers to `Ty::BuiltinUnknown`,
+    // union/optional/interface (E0138). `unknown` lowers to `Ty::Unknown`,
     // which is distinct from the `Ty::Error` error-recovery sentinel, so the
     // gate must list it explicitly.
     assert_compile_error_code(

@@ -9,7 +9,7 @@ class RunReport {
     duration_ms: int,
     message: string?,
     // TODO: extras map<string, unknown>
-    // Commented out: Ty::BuiltinUnknown is not handled by ty_to_field_type in
+    // Commented out: Ty::Unknown is not handled by ty_to_field_type in
     // value_encode.rs, so deep-copying a TestReport for FFI panics when it
     // encounters the map's declared value type. Re-enable once the encoder
     // supports unknown (or we replace it with a concrete type like string).

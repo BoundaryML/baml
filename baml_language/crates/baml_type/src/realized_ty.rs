@@ -39,7 +39,7 @@ impl<N: Clone> RealizedTy<N> {
 
     /// `unknown` (the top type) with default attributes.
     pub fn unknown() -> Self {
-        RealizedTy::BuiltinUnknown {
+        RealizedTy::Unknown {
             attr: TyAttr::default(),
         }
     }

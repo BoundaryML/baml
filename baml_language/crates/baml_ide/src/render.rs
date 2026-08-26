@@ -315,13 +315,13 @@ pub fn display_type_ref(store: &TypeRefStore, id: TypeRefId) -> String {
                 throws
             )
         }
-        K::BuiltinUnknown => "unknown".to_string(),
+        K::Unknown => "unknown".to_string(),
         K::Never => "never".to_string(),
         K::Void => "void".to_string(),
         K::Type => "type".to_string(),
         K::Rust => "$rust_type".to_string(),
         K::Infer => "_".to_string(),
-        K::Error | K::Unknown => "unknown".to_string(),
+        K::Error | K::Missing => "unknown".to_string(),
     };
     humanize_type_string(&rendered)
 }

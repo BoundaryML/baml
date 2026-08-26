@@ -748,14 +748,14 @@ fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
         TirTy::PromptAst { .. } => cg::Ty::PromptAst { attr: attr() },
         TirTy::Void { .. } => cg::Ty::Void { attr: attr() },
         TirTy::TypeVar(name, _) => cg::Ty::TypeVar(name.clone(), attr()),
-        TirTy::BuiltinUnknown { .. } => cg::Ty::BuiltinUnknown { attr: attr() },
+        TirTy::Unknown { .. } => cg::Ty::Unknown { attr: attr() },
         TirTy::Never { .. } => cg::Ty::Never { attr: attr() },
 
         // These are compiler recovery/inference states, not public API types.
         // Diagnostics have already been emitted; retain the historical opaque
         // fallback so code generation remains total in error-tolerant flows.
         TirTy::AssociatedTypeProjection { .. } | TirTy::Error { .. } => {
-            cg::Ty::BuiltinUnknown { attr: attr() }
+            cg::Ty::Unknown { attr: attr() }
         }
         TirTy::Infer { .. } => cg::Ty::Void { attr: attr() },
     }

@@ -316,7 +316,7 @@ pub fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
             | Ty::PromptAst { .. }
             | Ty::Void { .. }
             | Ty::TypeAlias(..)
-            | Ty::BuiltinUnknown { .. }
+            | Ty::Unknown { .. }
             | Ty::Never { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. } => false,
@@ -407,12 +407,12 @@ fn normalize_union(members: Vec<Ty>, attr: TyAttr, enum_variants: EnumVariants) 
     for member in members {
         match member {
             Ty::Never { .. } => {}
-            Ty::BuiltinUnknown { .. } => return Ty::BuiltinUnknown { attr },
+            Ty::Unknown { .. } => return Ty::Unknown { attr },
             Ty::Union(inner, _) => {
                 for inner_member in inner {
                     match inner_member {
                         Ty::Never { .. } => {}
-                        Ty::BuiltinUnknown { .. } => return Ty::BuiltinUnknown { attr },
+                        Ty::Unknown { .. } => return Ty::Unknown { attr },
                         other if !flat.contains(&other) => flat.push(other),
                         _ => {}
                     }
@@ -565,7 +565,7 @@ fn unify_into_at(
     // treating it as a common instance would stack a spurious overlap — and
     // `Error` is "compatible with anything" downstream, which would *admit* a
     // bogus overlap (the dangerous direction). The *inhabited* top type `unknown`
-    // (`BuiltinUnknown`) is deliberately not bailed here: it binds an opposing
+    // (`Unknown`) is deliberately not bailed here: it binds an opposing
     // variable (below), and is otherwise a distinct atomic type compared by
     // equality — `Box<unknown>` is disjoint from `Box<int>`, exactly how the
     // runtime resolver matches it.
@@ -744,7 +744,7 @@ fn unify_into_at(
             | Ty::Void { .. }
             | Ty::TypeAlias(..)
             | Ty::TypeVar(..)
-            | Ty::BuiltinUnknown { .. }
+            | Ty::Unknown { .. }
             | Ty::Never { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. },
@@ -1343,7 +1343,7 @@ fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> 
         | Ty::PromptAst { .. }
         | Ty::Void { .. }
         | Ty::TypeAlias(..)
-        | Ty::BuiltinUnknown { .. }
+        | Ty::Unknown { .. }
         | Ty::Never { .. }
         | Ty::Error { .. }
         | Ty::Infer { .. } => false,
@@ -1977,10 +1977,10 @@ mod tests {
     }
 
     #[test]
-    fn variable_binds_to_builtin_unknown() {
+    fn variable_binds_to_unknown() {
         // `unknown` is the inhabited top type, so a unification variable binds to it: a
         // blanket `Box<T>` overlaps `Box<unknown>` at `T = unknown`. The old bail that
-        // lumped `BuiltinUnknown` in with the error sentinel wrongly rejected this.
+        // lumped `Unknown` in with the error sentinel wrongly rejected this.
         let vars = vec![param("T")];
         let aliases = std::collections::HashMap::default();
         let mut bindings = TypeBindings::default();
@@ -1997,7 +1997,7 @@ mod tests {
     }
 
     #[test]
-    fn builtin_unknown_is_disjoint_from_distinct_concrete() {
+    fn unknown_is_disjoint_from_distinct_concrete() {
         // `unknown` is a distinct atomic type under invariance, compared by equality:
         // `Box<unknown>` and `Box<int>` do not overlap, matching how the runtime
         // resolver matches `unknown` (only an `unknown` value inhabits `Box<unknown>`).

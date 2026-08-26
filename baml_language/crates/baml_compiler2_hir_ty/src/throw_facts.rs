@@ -410,11 +410,11 @@ fn throw_fact_from_expr<'db>(
     // This lightweight, cycle-avoiding pass can't statically name every thrown
     // value: a call/binary/array/conditional result, or an unresolved path, has
     // no name to give. Over-approximate to the top type `unknown`
-    // (`BuiltinUnknown`): it is sound (a `catch` must handle the top type) and
+    // (`Unknown`): it is sound (a `catch` must handle the top type) and
     // has a runtime representation. Full inference types these precisely for
     // diagnostics; this set only feeds runtime throws metadata, where a
     // conservative bound is correct.
-    fact.unwrap_or(Ty::BuiltinUnknown {
+    fact.unwrap_or(Ty::Unknown {
         attr: TyAttr::default(),
     })
 }

@@ -1543,7 +1543,7 @@ async fn root_return_selects_implemented_interface_arm_in_union() {
 // ============================================================================
 // Undeclared callback ⇒ `throws unknown` contract accepts a native throw as
 //         opaque. The FFI entry boundary normalizes the synthesized effect
-//         param (post-MIR `RuntimeTy::Void`) to `RuntimeTy::BuiltinUnknown` so the contract
+//         param (post-MIR `RuntimeTy::Void`) to `RuntimeTy::Unknown` so the contract
 //         check at `materialize_host_throw` treats any thrown value as
 //         on-contract — including the opaque `baml.errors.HostCallable`
 //         Instance the bridge synthesizes for a native host exception. The
@@ -1569,7 +1569,7 @@ async fn host_callable_undeclared_callback_accepts_native_throw_as_opaque() {
     // Behaviour: throw a generic native exception. With no declared throws
     // on `f`, the synthesized effect param normalizes to `unknown` at the
     // FFI boundary — `validate_host_return` accepts any value against
-    // `BuiltinUnknown`, so the throw propagates as the catchable
+    // `Unknown`, so the throw propagates as the catchable
     // `HostCallable` instance the fake dispatch builds.
     let arc = register_host_callable(|_items| FakeReturn::Err {
         class_name: "ValueError".to_string(),

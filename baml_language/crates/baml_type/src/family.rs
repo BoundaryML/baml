@@ -275,7 +275,7 @@ ty_family! {
         /// The top type - may have any concrete value.
         ///
         /// Similar to TypeScript's `unknown` - any value can be passed where
-        /// `BuiltinUnknown` is expected, but `BuiltinUnknown` cannot be used
+        /// `Unknown` is expected, but `Unknown` cannot be used
         /// where a specific type is required.
         ///
         /// Used in llm.baml for functions like:
@@ -283,7 +283,7 @@ ty_family! {
         /// function render_prompt(function_name: string, args: map<string, unknown>) -> PromptAst
         /// ```
         #[axis(abstract)]
-        BuiltinUnknown {
+        Unknown {
             attr: TyAttr,
         } = 27,
         /// The bottom type — an expression that never produces a value (`return`,
@@ -693,10 +693,7 @@ mod tests {
         );
         // Filtered family members use the same master tags rather than local
         // declaration-order indices.
-        assert_eq!(
-            tag::<RealizedTy>(RealizedTy::BuiltinUnknown { attr: a() }),
-            27
-        );
+        assert_eq!(tag::<RealizedTy>(RealizedTy::Unknown { attr: a() }), 27);
         assert_eq!(
             tag::<TyTemplate>(TyTemplate::TypeAlias(qtn("Alias"), a())),
             24
@@ -717,19 +714,19 @@ mod tests {
 
     #[test]
     fn in_memory_discriminants_are_consistent_across_members() {
-        // `BuiltinUnknown` is master variant #27; `RealizedTy` drops the
+        // `Unknown` is master variant #27; `RealizedTy` drops the
         // `typevar` and `projection` variants before it, yet its tag stays 27.
-        assert_eq!(in_memory_tag::<Ty>(&Ty::BuiltinUnknown { attr: a() }), 27);
+        assert_eq!(in_memory_tag::<Ty>(&Ty::Unknown { attr: a() }), 27);
         assert_eq!(
-            in_memory_tag::<RuntimeTy>(&RuntimeTy::BuiltinUnknown { attr: a() }),
+            in_memory_tag::<RuntimeTy>(&RuntimeTy::Unknown { attr: a() }),
             27
         );
         assert_eq!(
-            in_memory_tag::<CodegenTy>(&CodegenTy::BuiltinUnknown { attr: a() }),
+            in_memory_tag::<CodegenTy>(&CodegenTy::Unknown { attr: a() }),
             27
         );
         assert_eq!(
-            in_memory_tag::<RealizedTy>(&RealizedTy::BuiltinUnknown { attr: a() }),
+            in_memory_tag::<RealizedTy>(&RealizedTy::Unknown { attr: a() }),
             27
         );
         // `Never` (#28) is shared and tag-stable across the deep members.

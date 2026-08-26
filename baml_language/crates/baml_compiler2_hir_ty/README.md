@@ -238,7 +238,7 @@ cutover. "Tested by" is the merge gate for the slice.
 | I7  | DONE - overlap engine + walk lifted (location-keyed queries), orphan rule; unit corpus carried + differential suite vs TIR | `coherence.rs` tests; `type_spec/coherence.rs` differential |
 | S15 | Parity: stdlib corpus (`__baml_std__`) + full differential sweep     | every fixture diffed; divergence list = spec fixes only|
 | S16 | Cutover: `ScopeInference` facade, dep inversion, delete TIR paths    | full CI matrix; snapshot diffs reviewed per feature    |
-| S17 | Diagnostics: split `Unknown`/`Error`/`BuiltinUnknown`; mismatch map  | diagnostic_errors-tier snapshots                       |
+| S17 | Diagnostics: split `Unknown`/`Error`/`Unknown`; mismatch map  | diagnostic_errors-tier snapshots                       |
 
 Ordering notes:
 
@@ -288,9 +288,7 @@ pointed at the error channel:
    `Unknown` (the new engine has exactly one error sentinel, `Error`,
    rust-analyzer style; TIR's other two uses of `Unknown` become
    `Expectation::None` and fresh
-   infer vars); and the top type takes its spec name `Unknown` (the plain
-   enum's `BuiltinUnknown`, so prefixed only because the sentinel had
-   claimed the shorter name). The plain enum and
+   infer vars); the top type is `Unknown` in both. The plain enum and
    all downstream consumers are untouched; TIR is never migrated (it is
    deleted at cutover); MIR/emit/runtime and the family axes migrate to
    this representation at cutover. Until S4b lands, subtype checks

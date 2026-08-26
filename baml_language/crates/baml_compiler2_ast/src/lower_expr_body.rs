@@ -1236,7 +1236,7 @@ impl LoweringContext {
         let ty = binding
             .default_or_binding()
             .map(|ty| self.lower_body_type_expr(&ty))
-            .unwrap_or_else(|| TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
+            .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default()));
         Some(AssociatedTypeBinding {
             name: Name::new(name.text()),
             ty: Box::new(ty),
@@ -3593,7 +3593,7 @@ impl LoweringContext {
             })
             .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| self.lower_body_type_expr(&te))
-            .unwrap_or_else(|| TypeExprKind::Unknown { attrs: Vec::new() }.at(node.span_range()));
+            .unwrap_or_else(|| TypeExprKind::Missing { attrs: Vec::new() }.at(node.span_range()));
 
         let id = self.alloc_expr(Expr::Upcast { base, target }, node.span_range());
         if self.needs_chain_wrap.remove(&base) {
@@ -3607,8 +3607,8 @@ impl LoweringContext {
     /// `lower_type_expr`'s qualified projection reads, since the two
     /// spellings share a parse.
     ///
-    /// A missing half stays `TypeExprKind::Unknown` rather than collapsing
-    /// the node to `Missing`: the parser only builds this node when it saw
+    /// A missing half stays `TypeExprKind::Missing` rather than collapsing
+    /// the whole node to `Expr::Missing`: the parser only builds this node when it saw
     /// the full token shape, so a hole here means a malformed type inside
     /// the parens, which the type lowerer reports precisely.
     fn lower_qualified_path_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -3617,9 +3617,9 @@ impl LoweringContext {
             .children()
             .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
             .map(|te| self.lower_body_type_expr(&te));
-        let unknown = || TypeExprKind::Unknown { attrs: Vec::new() }.at(span);
-        let qself = types.next().unwrap_or_else(unknown);
-        let interface = types.next().unwrap_or_else(unknown);
+        let missing = || TypeExprKind::Missing { attrs: Vec::new() }.at(span);
+        let qself = types.next().unwrap_or_else(missing);
+        let interface = types.next().unwrap_or_else(missing);
 
         // The member is the WORD after the last `.` — the projection's own
         // separator, which the parser guarantees is the final one.
@@ -4396,7 +4396,7 @@ impl LoweringContext {
         // let __tt_values: unknown[] = [];
         stmts.push(self.tt_let_typed_empty_list(
             &values,
-            TypeExprKind::BuiltinUnknown { attrs: Vec::new() }.at(span),
+            TypeExprKind::Unknown { attrs: Vec::new() }.at(span),
             span,
         ));
         // let __tt_cur = "";

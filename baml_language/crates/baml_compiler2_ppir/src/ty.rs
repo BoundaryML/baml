@@ -292,14 +292,14 @@ impl PpirTy {
                 origin: CannotBeStreamedOrigin::Error,
                 attrs,
             },
-            TypeExprKind::BuiltinUnknown { .. }
+            TypeExprKind::Unknown { .. }
             | TypeExprKind::Unreflect { .. }
             | TypeExprKind::AssociatedTypeProjection { .. }
             | TypeExprKind::Type { .. }
             | TypeExprKind::Function { .. }
             // A `_` inference hole is opaque to streaming analysis.
             | TypeExprKind::Infer { .. }
-            | TypeExprKind::Unknown { .. } => PpirTy::CannotBeStreamed {
+            | TypeExprKind::Missing { .. } => PpirTy::CannotBeStreamed {
                 origin: CannotBeStreamedOrigin::Unknown,
                 attrs,
             },
@@ -372,7 +372,7 @@ impl PpirTy {
                 // type rather than the error-recovery `Error` sentinel, which
                 // would trip the runtime lowering boundary (`Ty::Error` has no
                 // `RuntimeTy`).
-                CannotBeStreamedOrigin::Unknown => TypeExprKind::BuiltinUnknown { attrs: vec![] },
+                CannotBeStreamedOrigin::Unknown => TypeExprKind::Unknown { attrs: vec![] },
             },
         };
         kind.at(text_size::TextRange::default())

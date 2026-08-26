@@ -143,7 +143,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> String {
                 )
             }
         }
-        Ty::BuiltinUnknown { .. }
+        Ty::Unknown { .. }
         | Ty::Interface(..)
         | Ty::Type { .. }
         | Ty::Resource { .. }
@@ -421,7 +421,7 @@ mod tests {
             | Ty::List(..)
             | Ty::Map { .. }
             | Ty::Union(..)
-            | Ty::BuiltinUnknown { .. }
+            | Ty::Unknown { .. }
             | Ty::Function { .. }
             | Ty::Future(..)
             | Ty::Void { .. }
@@ -485,8 +485,8 @@ mod tests {
                 expected: "bytes",
             },
             Case {
-                label: "builtin unknown",
-                ty: Ty::BuiltinUnknown {
+                label: "unknown",
+                ty: Ty::Unknown {
                     attr: baml_base::TyAttr::EMPTY,
                 },
                 ctx: ctx(&["lorem"]),

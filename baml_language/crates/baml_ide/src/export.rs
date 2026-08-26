@@ -158,7 +158,7 @@ fn ty_head(ty: &Ty) -> Option<TyHead> {
         | Ty::Resource { .. }
         | Ty::PromptAst { .. }
         | Ty::Void { .. } => None,
-        Ty::BuiltinUnknown { .. } | Ty::Never { .. } | Ty::Error { .. } | Ty::Infer { .. } => None,
+        Ty::Unknown { .. } | Ty::Never { .. } | Ty::Error { .. } | Ty::Infer { .. } => None,
     }
 }
 

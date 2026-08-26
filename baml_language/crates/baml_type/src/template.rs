@@ -257,7 +257,7 @@ fn walk_template<N: Clone>(
         | TyTemplate::PromptAst { .. }
         | TyTemplate::Void { .. }
         | TyTemplate::TypeAlias(..)
-        | TyTemplate::BuiltinUnknown { .. }
+        | TyTemplate::Unknown { .. }
         | TyTemplate::Never { .. } => {}
     }
 }

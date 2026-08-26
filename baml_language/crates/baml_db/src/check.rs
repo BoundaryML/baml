@@ -1497,7 +1497,7 @@ fn tir_rendered_to_diagnostic_with_message(
 ) -> Diagnostic {
     let unknown_member_access_member = match &rendered.error {
         TirTypeError::UnresolvedMember {
-            base_type: Ty::BuiltinUnknown { .. },
+            base_type: Ty::Unknown { .. },
             member,
         } => Some(member.clone()),
         _ => None,
@@ -1670,7 +1670,7 @@ fn source_aware_tir_type_error_message(
             format!("type mismatch: expected {}, got {}", ty(expected), ty(got))
         }
         TirTypeError::UnresolvedMember {
-            base_type: Ty::BuiltinUnknown { .. },
+            base_type: Ty::Unknown { .. },
             member,
         } => {
             format!("cannot access field `{member}` on `unknown`")

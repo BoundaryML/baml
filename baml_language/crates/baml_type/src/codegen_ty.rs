@@ -76,7 +76,7 @@ impl CodegenTy {
             Self::Void { attr } => Self::Void { attr },
             Self::TypeAlias(name, attr) => Self::TypeAlias(name, attr),
             Self::TypeVar(name, attr) => Self::TypeVar(name, attr),
-            Self::BuiltinUnknown { attr } => Self::BuiltinUnknown { attr },
+            Self::Unknown { attr } => Self::Unknown { attr },
             Self::Never { attr } => Self::Never { attr },
         }
     }

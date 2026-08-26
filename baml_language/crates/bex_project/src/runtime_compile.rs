@@ -165,7 +165,7 @@ impl StubViewpoint<'_> {
             | Ty::PromptAst { .. }
             | Ty::Void { .. }
             | Ty::TypeVar(..)
-            | Ty::BuiltinUnknown { .. }
+            | Ty::Unknown { .. }
             | Ty::Never { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. } => false,
@@ -2035,9 +2035,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         if let Some(session) = &session
             && !matches!(
                 session.expected,
-                bex_vm_types::SessionContract::Checkable(
-                    baml_type::RuntimeTy::BuiltinUnknown { .. }
-                )
+                bex_vm_types::SessionContract::Checkable(baml_type::RuntimeTy::Unknown { .. })
             )
         {
             let file = session.artifact.submission_name.as_str();

@@ -27,9 +27,7 @@
 //! drift is a compile error), with deliberate spec-driven deltas: `Infer`
 //! carries an optional [`InferVar`] so inference-table variables are native
 //! (`None` is the syntactic `_` hole, exactly what the plain enum's `Infer`
-//! means today); and the top type takes its spec name `Unknown` here (the
-//! plain enum calls it `BuiltinUnknown` only because the TIR-era
-//! error-recovery sentinel used to claim the shorter name).
+//! means today).
 
 use std::{
     cmp::Ordering,
@@ -306,9 +304,7 @@ pub enum TyKind {
         attr: TyAttr,
     },
     // = 27; the spec's top type (the user-denotable `unknown` keyword,
-    // `T <: unknown` for all `T`). NAMING: the plain enum still calls this
-    // `BuiltinUnknown`, a holdover from when plain `Unknown` was the TIR
-    // error-recovery sentinel. This representation uses the spec name.
+    // `T <: unknown` for all `T`).
     Unknown {
         attr: TyAttr,
     },
@@ -696,7 +692,7 @@ impl Ty {
                 member: member.clone(),
                 attr: attr.clone(),
             },
-            crate::Ty::BuiltinUnknown { attr } => TyKind::Unknown { attr: attr.clone() },
+            crate::Ty::Unknown { attr } => TyKind::Unknown { attr: attr.clone() },
             crate::Ty::Never { attr } => TyKind::Never { attr: attr.clone() },
             crate::Ty::Error { attr } => TyKind::Error { attr: attr.clone() },
             crate::Ty::Infer { attr } => TyKind::Infer {
@@ -797,7 +793,7 @@ impl Ty {
                 member: member.clone(),
                 attr: attr.clone(),
             },
-            TyKind::Unknown { attr } => crate::Ty::BuiltinUnknown { attr: attr.clone() },
+            TyKind::Unknown { attr } => crate::Ty::Unknown { attr: attr.clone() },
             TyKind::Never { attr } => crate::Ty::Never { attr: attr.clone() },
             TyKind::Error { attr } => crate::Ty::Error { attr: attr.clone() },
             TyKind::Infer { var: _, attr } => crate::Ty::Infer { attr: attr.clone() },
@@ -949,7 +945,7 @@ mod tests {
                 member: Name::new("Item"),
                 attr: a(),
             },
-            P::BuiltinUnknown { attr: a() },
+            P::Unknown { attr: a() },
             P::Never { attr: a() },
             P::Error { attr: a() },
             P::Infer { attr: a() },

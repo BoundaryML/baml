@@ -333,7 +333,7 @@ mod schema {
                 SapTy::Enum(name, _) => Self::enum_schema(name, self.ctx),
                 SapTy::Class(name, _, _) => self.class_ref(name),
                 SapTy::TypeAlias(name, _) => self.type_alias_ref(name),
-                SapTy::BuiltinUnknown { .. } => Ok(json!({})),
+                SapTy::Unknown { .. } => Ok(json!({})),
                 other => Err(format!(
                     "json_schema: no JSON Schema representation for `{other}`"
                 )),

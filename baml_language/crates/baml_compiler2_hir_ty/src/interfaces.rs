@@ -1812,10 +1812,7 @@ pub enum Determination {
 /// Whether `ty` already carries an upstream error, so a projection over it
 /// must not emit a fresh diagnostic.
 fn projection_poisoned(ty: &Ty) -> bool {
-    matches!(
-        ty,
-        Ty::Error { .. } | Ty::BuiltinUnknown { .. } | Ty::Infer { .. }
-    )
+    matches!(ty, Ty::Error { .. } | Ty::Unknown { .. } | Ty::Infer { .. })
 }
 
 /// Determine which interface declares `member` for `base`, in `ns` - the
@@ -2064,7 +2061,7 @@ fn determine_interface<'db>(
                 },
             }
         }
-        Ty::Error { .. } | Ty::BuiltinUnknown { .. } | Ty::Infer { .. } => Determination::Poisoned,
+        Ty::Error { .. } | Ty::Unknown { .. } | Ty::Infer { .. } => Determination::Poisoned,
         Ty::TypeAlias(..) => Determination::Poisoned,
         _ => match explicit {
             Some(qualifier) => Determination::SubjectDoesNotImplementQualifier {

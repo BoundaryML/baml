@@ -140,7 +140,7 @@ pub mod baml_ty {
         Literal(super::BamlTyLiteral),
         #[prost(message, tag = "9")]
         TypeAlias(super::BamlTyTypeAlias),
-        /// `unknown` decodes to `RuntimeTy::BuiltinUnknown` — the top type.
+        /// `unknown` decodes to `RuntimeTy::Unknown` — the top type.
         #[prost(message, tag = "10")]
         Unknown(super::BamlTyUnknown),
         #[prost(message, tag = "11")]

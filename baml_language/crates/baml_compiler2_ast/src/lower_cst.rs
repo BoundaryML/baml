@@ -3,7 +3,7 @@
 //! One function per item kind. Type expressions are fully lowered to recursive
 //! `TypeExpr`. Expression bodies are fully lowered to `ExprBody` arenas with a
 //! parallel `AstSourceMap`. Missing names skip the item (`return None`), missing
-//! types produce `TypeExprKind::Unknown`.
+//! types produce `TypeExprKind::Missing`.
 //!
 //! No LLM function expansion, no attribute validation, no duplicate detection —
 //! all of that moves downstream.
@@ -305,15 +305,15 @@ fn lower_file_with_path_and_test_owner_impl(
     (items, diags, env_var_refs)
 }
 
-/// Check if a just-lowered type expression contains `TypeExprKind::Unknown` at the root.
+/// Check if a just-lowered type expression contains `TypeExprKind::Missing` at the root.
 /// If so, emit an `UnparseableType` diagnostic.
-fn check_unknown_type(
+fn check_missing_type(
     type_expr: &crate::ast::TypeExpr,
     context: String,
     span: text_size::TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    if matches!(type_expr.kind, crate::ast::TypeExprKind::Unknown { .. }) {
+    if matches!(type_expr.kind, crate::ast::TypeExprKind::Missing { .. }) {
         diags.push(LoweringDiagnostic::UnparseableType { context, span });
     }
 }
@@ -363,7 +363,7 @@ fn lower_function(
     let return_type = func.return_type().map(|te| {
         let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let te_span = te.syntax().span_range();
-        check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
+        check_missing_type(&expr, format!("return type of `{name}`"), te_span, diags);
         // void is allowed as a bare return type, but not wrapped (void?, void[], etc.).
         lower_type_expr::check_void_type(
             &expr,
@@ -656,7 +656,7 @@ pub(crate) fn lower_param(
         type_expr: param.ty().map(|te| {
             let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
-            check_unknown_type(
+            check_missing_type(
                 &expr,
                 format!("parameter `{param_name_str}` in `{function_name}`"),
                 te_span,
@@ -1068,7 +1068,7 @@ fn lower_class(
                 |te| {
                     let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
                     let te_span = te.syntax().span_range();
-                    check_unknown_type(
+                    check_missing_type(
                         &expr,
                         format!("field `{class_name}.{field_name_str}`"),
                         te_span,
@@ -1290,7 +1290,7 @@ fn lower_interface(
         .map(|te| {
             let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
-            check_unknown_type(
+            check_missing_type(
                 &expr,
                 format!("requires clause of interface `{iface_name}`"),
                 te_span,
@@ -1324,7 +1324,7 @@ fn lower_interface(
                 |te| {
                     let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
                     let te_span = te.syntax().span_range();
-                    check_unknown_type(
+                    check_missing_type(
                         &expr,
                         format!("interface field `{iface_name}.{field_name_str}`"),
                         te_span,
@@ -1402,7 +1402,7 @@ fn lower_associated_type_def(
     let bound = decl.bound().map(|te| {
         let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
-        check_unknown_type(
+        check_missing_type(
             &expr,
             format!("bound of associated type `{name}`"),
             span,
@@ -1413,7 +1413,7 @@ fn lower_associated_type_def(
     let default = decl.default_or_binding().map(|te| {
         let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
-        check_unknown_type(
+        check_missing_type(
             &expr,
             format!("default of associated type `{name}`"),
             span,
@@ -1445,7 +1445,7 @@ fn lower_associated_type_binding_def(
     let type_expr = decl.default_or_binding().map(|te| {
         let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
-        check_unknown_type(
+        check_missing_type(
             &expr,
             format!("binding of associated type `{name}`"),
             span,
@@ -1486,7 +1486,7 @@ fn lower_method_sig(
     let return_type = sig.return_type().map(|te| {
         let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let te_span = te.syntax().span_range();
-        check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
+        check_missing_type(&expr, format!("return type of `{name}`"), te_span, diags);
         lower_type_expr::check_void_type(
             &expr,
             format!("return type of `{name}`"),
@@ -1537,7 +1537,7 @@ fn lower_implements_block(
     let target_te = target_node.type_expr()?;
     let target_span = target_te.syntax().span_range();
     let target = lower_type_expr::lower_type_expr_node(&target_te, diags).with_span(target_span);
-    check_unknown_type(
+    check_missing_type(
         &target,
         "interface name in `implements`".to_string(),
         target_span,
@@ -1606,7 +1606,7 @@ fn lower_implements_for(
     let target_span = target_te.syntax().span_range();
     let interface_target =
         lower_type_expr::lower_type_expr_node(&target_te, diags).with_span(target_span);
-    check_unknown_type(
+    check_missing_type(
         &interface_target,
         "interface name in `implements ... for`".to_string(),
         target_span,
@@ -1618,7 +1618,7 @@ fn lower_implements_for(
     let for_te = for_node.type_expr()?;
     let for_span = for_te.syntax().span_range();
     let for_target = lower_type_expr::lower_type_expr_node(&for_te, diags).with_span(for_span);
-    check_unknown_type(
+    check_missing_type(
         &for_target,
         "target type in `implements ... for`".to_string(),
         for_span,
@@ -1720,7 +1720,7 @@ fn lower_type_alias(
         type_expr: alias.ty().map(|te| {
             let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
-            check_unknown_type(&expr, format!("type alias `{alias_name}`"), te_span, diags);
+            check_missing_type(&expr, format!("type alias `{alias_name}`"), te_span, diags);
             lower_type_expr::check_void_type(
                 &expr,
                 "a type alias".to_string(),

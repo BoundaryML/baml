@@ -261,7 +261,7 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTy: @unchecked Sendable {
     set {_uniqueStorage()._ty = .typeAlias(newValue)}
   }
 
-  /// `unknown` decodes to `RuntimeTy::BuiltinUnknown` — the top type.
+  /// `unknown` decodes to `RuntimeTy::Unknown` — the top type.
   var unknown: BamlBridge_Cffi_V1_BamlTyUnknown {
     get {
       if case .unknown(let v)? = _storage._ty {return v}
@@ -390,7 +390,7 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTy: @unchecked Sendable {
     case union(BamlBridge_Cffi_V1_BamlTyUnion)
     case literal(BamlBridge_Cffi_V1_BamlTyLiteral)
     case typeAlias(BamlBridge_Cffi_V1_BamlTyTypeAlias)
-    /// `unknown` decodes to `RuntimeTy::BuiltinUnknown` — the top type.
+    /// `unknown` decodes to `RuntimeTy::Unknown` — the top type.
     case unknown(BamlBridge_Cffi_V1_BamlTyUnknown)
     case media(BamlBridge_Cffi_V1_BamlTyMedia)
     case interface(BamlBridge_Cffi_V1_BamlTyInterface)

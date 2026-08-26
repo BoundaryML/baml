@@ -286,11 +286,11 @@ fn never_is_removed_unknown_absorbs() {
     assert!(equivalent(
         &union(vec![
             Ty::int(),
-            Ty::BuiltinUnknown {
+            Ty::Unknown {
                 attr: TyAttr::default()
             }
         ]),
-        &Ty::BuiltinUnknown {
+        &Ty::Unknown {
             attr: TyAttr::default()
         },
         &ctx,
@@ -541,7 +541,7 @@ fn subtype_basics() {
     let never = Ty::Never {
         attr: TyAttr::default(),
     };
-    let unknown = Ty::BuiltinUnknown {
+    let unknown = Ty::Unknown {
         attr: TyAttr::default(),
     };
 
@@ -584,13 +584,13 @@ fn subtype_basics() {
 fn invariant_arg_distinguishes_top_from_recovery_sentinel() {
     // The exact divergence the subtyping migration relies on. Generics are
     // invariant (TYPE_SYSTEM.md §Variance), so the genuine top type `unknown`
-    // (`BuiltinUnknown`) is invariant-distinct: `Box<unknown>` is NOT `Box<int>`.
+    // (`Unknown`) is invariant-distinct: `Box<unknown>` is NOT `Box<int>`.
     // The error-recovery sentinel (`Error`) is different — it stays
     // bidirectionally compatible, so a recovered `Box<Error>` never cascades a
     // subtype error. Keeping the two apart is what lets error recovery use the
     // sentinel while `unknown` keeps its sound invariant identity.
     let ctx = Ctx::default();
-    let top = Ty::BuiltinUnknown {
+    let top = Ty::Unknown {
         attr: TyAttr::default(),
     };
     let sentinel = Ty::Error {
@@ -1133,7 +1133,7 @@ fn disjoint_invariant_generic_classes() {
     ));
     // `unknown` is the determined top type, so `Box<unknown>` is a distinct
     // invariant instantiation from `Box<int>` → disjoint.
-    let unknown = Ty::BuiltinUnknown {
+    let unknown = Ty::Unknown {
         attr: TyAttr::default(),
     };
     assert!(definitely_disjoint(
@@ -1227,7 +1227,7 @@ fn disjoint_containers_are_invariant() {
         &ctx
     ));
     // `unknown` element is determined → `list<unknown>` is disjoint from `list<int>`.
-    let list_unknown = Ty::list(Ty::BuiltinUnknown {
+    let list_unknown = Ty::list(Ty::Unknown {
         attr: TyAttr::default(),
     });
     assert!(definitely_disjoint(
@@ -1280,7 +1280,7 @@ fn same_enum_variants_are_not_disjoint() {
 #[test]
 fn non_ground_types_are_never_disjoint() {
     let ctx = Ctx::default();
-    let unknown = Ty::BuiltinUnknown {
+    let unknown = Ty::Unknown {
         attr: TyAttr::default(),
     };
     assert!(!definitely_disjoint(&Ty::int(), &unknown, &ctx));
@@ -1600,7 +1600,7 @@ mod interned_entry {
             ),
             (
                 class("Box"),
-                Ty::BuiltinUnknown {
+                Ty::Unknown {
                     attr: TyAttr::default(),
                 },
             ),

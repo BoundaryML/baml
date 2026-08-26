@@ -178,7 +178,7 @@ impl Ty {
     ///     their own;
     ///   - `Interface` (existential) and `Union` — no single concrete implementor;
     ///   - `Function` (an arrow type) and `RustType` (an opaque native leaf);
-    ///   - `Void`, the top type `BuiltinUnknown`, and the compiler-only sentinels
+    ///   - `Void`, the top type `Unknown`, and the compiler-only sentinels
     ///     `Unknown` / `Error`;
     ///   - `TypeAlias` — callers resolve aliases first, so a surviving alias here
     ///     is unresolved (recursive or missing), i.e. not a valid bare target.
@@ -214,7 +214,7 @@ impl Ty {
             | Ty::RustType { .. }
             | Ty::TypeAlias(..)
             | Ty::Void { .. }
-            | Ty::BuiltinUnknown { .. }
+            | Ty::Unknown { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. } => false,
         }
@@ -230,7 +230,7 @@ impl Ty {
     /// NOT concrete — the doc's *abstract* and *literal* categories, plus `never`:
     ///   - `Union` and `Interface` (existential) — the union of several concrete
     ///     types, so no single run-time representation;
-    ///   - the top type `BuiltinUnknown` (`unknown`) — the union of all types;
+    ///   - the top type `Unknown` (`unknown`) — the union of all types;
     ///   - `Literal` / `EnumVariant` — literal types, subsets of a concrete base that
     ///     dispatch through it rather than being a concrete type of their own;
     ///   - `Never` — the empty type (no values);
@@ -272,7 +272,7 @@ impl Ty {
             | Ty::RustType { .. } => true,
             Ty::Union(..)
             | Ty::Interface(..)
-            | Ty::BuiltinUnknown { .. }
+            | Ty::Unknown { .. }
             | Ty::Literal(..)
             | Ty::EnumVariant(..)
             | Ty::Never { .. }
@@ -483,7 +483,7 @@ impl Ty {
 
     /// `unknown` with default attributes.
     pub fn unknown() -> Self {
-        Ty::BuiltinUnknown {
+        Ty::Unknown {
             attr: TyAttr::default(),
         }
     }
@@ -542,7 +542,7 @@ impl Ty {
             // for output format rendering (cycle detection needs the alias name).
             Ty::TypeAlias(_, _) => Ok(()),
             Ty::Void { .. } => Err("Void type should not reach runtime".to_string()),
-            Ty::BuiltinUnknown { .. } => Ok(()),
+            Ty::Unknown { .. } => Ok(()),
             // Recurse into containers
             Ty::List(inner, _) => inner.validate_runtime(),
             Ty::Map { key, value, .. } => {
@@ -850,7 +850,7 @@ impl<N: Clone> Ty<N> {
             }
             Ty::Never { .. } => "never".to_string(),
             Ty::Void { .. } => "void".to_string(),
-            Ty::BuiltinUnknown { .. } => "unknown".to_string(),
+            Ty::Unknown { .. } => "unknown".to_string(),
             // The wildcard hole renders as the `_` the user wrote.
             Ty::Infer { .. } => "_".to_string(),
             Ty::RustType { .. } => "$rust_type".to_string(),
@@ -1056,7 +1056,7 @@ impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
                 write!(f, " throws {}", throws_display)
             }
             Ty::Void { .. } => write!(f, "void"),
-            Ty::BuiltinUnknown { .. } => write!(f, "unknown"),
+            Ty::Unknown { .. } => write!(f, "unknown"),
             Ty::Future(value, error, _) => {
                 // The writable spelling — lowercase `future<…>` resolves
                 // nowhere, and a diagnostic must not teach it.
@@ -1189,7 +1189,7 @@ mod tests {
             Ty::Void {
                 attr: TyAttr::default(),
             },
-            Ty::BuiltinUnknown {
+            Ty::Unknown {
                 attr: TyAttr::default(),
             },
             Ty::unknown(),
@@ -1258,7 +1258,7 @@ mod tests {
         let not_concrete = [
             Ty::union([ty_int(), ty_string()]),
             Ty::Interface(qtn("I"), vec![], vec![], TyAttr::default()),
-            Ty::BuiltinUnknown {
+            Ty::Unknown {
                 attr: TyAttr::default(),
             },
             Ty::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default()),

@@ -28,7 +28,7 @@
 //!
 //! Deliberately NOT replicated from TIR (survey-recorded defects): the
 //! single-bound conjunction asymmetry (bounds are `Vec` end to end
-//! here), and `get_method`'s silent `BuiltinUnknown` fill for unbound
+//! here), and `get_method`'s silent `Unknown` fill for unbound
 //! params (resolution here leaves methods to I3).
 
 use baml_compiler2_hir::{loc::ImplLoc, package::PackageId};

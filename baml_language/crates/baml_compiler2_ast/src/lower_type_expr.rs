@@ -211,14 +211,14 @@ fn lower_base_terminal(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnost
                 let ty = p
                     .ty()
                     .map(|t| lower_type_expr_inner(&t, false, diags))
-                    .unwrap_or_else(|| TypeExprKind::Unknown { attrs: vec![] }.at(span));
+                    .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(span));
                 AstFunctionTypeParam { name, optional, ty }
             })
             .collect();
         let ret = type_expr
             .function_return_type()
             .map(|t| lower_type_expr_inner(&t, false, diags))
-            .unwrap_or_else(|| TypeExprKind::Unknown { attrs: vec![] }.at(span));
+            .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(span));
         let throws = type_expr
             .function_throws_type()
             .map(|t| Box::new(lower_type_expr_inner(&t, false, diags)));
@@ -338,7 +338,7 @@ fn lower_base_type(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>)
         );
     }
 
-    TypeExprKind::Unknown { attrs: vec![] }.at(span)
+    TypeExprKind::Missing { attrs: vec![] }.at(span)
 }
 
 /// Parse a union member from its structured parts.
@@ -494,7 +494,7 @@ fn lower_union_member_base(
         };
     }
 
-    TypeExprKind::Unknown { attrs: vec![] }.at(span)
+    TypeExprKind::Missing { attrs: vec![] }.at(span)
 }
 
 /// Create a `TypeExpr` from a type name string with optional generic arguments.
@@ -509,7 +509,7 @@ pub(crate) fn lower_associated_type_binding(
     let ty = binding
         .default_or_binding()
         .map(|ty| lower_type_expr_inner(&ty, false, diags))
-        .unwrap_or_else(|| TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
+        .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default()));
     Some(AssociatedTypeBinding {
         name: Name::new(name.text()),
         ty: Box::new(ty),
@@ -531,7 +531,7 @@ fn lower_from_type_name_with_generic_args(
         "null" => TypeExprKind::Null { attrs: vec![] },
         "never" => TypeExprKind::Never { attrs: vec![] },
         "void" => TypeExprKind::Void { attrs: vec![] },
-        "unknown" => TypeExprKind::BuiltinUnknown { attrs: vec![] },
+        "unknown" => TypeExprKind::Unknown { attrs: vec![] },
         // The wildcard `_` is an inference hole, not a named type. Any stray
         // generic args on it (`_<...>`, nonsensical) are dropped.
         "_" => TypeExprKind::Infer { attrs: vec![] },

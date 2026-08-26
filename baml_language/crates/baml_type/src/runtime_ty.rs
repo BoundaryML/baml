@@ -116,7 +116,7 @@ impl<N: Clone> RuntimeTy<N> {
 
     /// `unknown` (the top type) with default attributes.
     pub fn unknown() -> Self {
-        RuntimeTy::BuiltinUnknown {
+        RuntimeTy::Unknown {
             attr: TyAttr::default(),
         }
     }
@@ -373,7 +373,7 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
         // Bottom, opaque-leaf, and reflection types map faithfully.
         Ty::Never { attr } => RuntimeTy::Never { attr: attr.clone() },
         Ty::Void { attr } => RuntimeTy::Void { attr: attr.clone() },
-        Ty::BuiltinUnknown { attr } => RuntimeTy::BuiltinUnknown { attr: attr.clone() },
+        Ty::Unknown { attr } => RuntimeTy::Unknown { attr: attr.clone() },
         Ty::RustType { attr } => RuntimeTy::RustType { attr: attr.clone() },
         Ty::Type { attr } => RuntimeTy::Type { attr: attr.clone() },
         Ty::Resource { attr } => RuntimeTy::Resource { attr: attr.clone() },

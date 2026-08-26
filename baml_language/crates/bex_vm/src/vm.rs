@@ -1623,7 +1623,7 @@ fn nominal_identity(
         // Structural, abstract, and literal types name no declaration. An
         // enum *variant* names one but is a proper subset of it, so it is not
         // that declaration's identity.
-        T::BuiltinUnknown { .. }
+        T::Unknown { .. }
         | T::Never { .. }
         | T::Null { .. }
         | T::Bool { .. }

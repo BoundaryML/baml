@@ -182,7 +182,7 @@ nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wi
 | `Ty::List(T, …)` | `Ty::List(T)` | `tags string[]` | `java.util.List<T>` (T boxed) | (same) | `BamlType.list(D)` | :136–139 |
 | `Ty::Map(K, V, …)` | `Ty::Map { key, value }` | `metadata map<string,int>` | `java.util.Map<java.lang.String, V>` (key forced to String) | (same) | `BamlType.map(BamlType.STRING, Dval)` | :142–145 |
 | `Ty::Union(types, …)` | `Ty::Union(types)` | `result string \| int` | `baml_bridge.Union2<…>` … `Union10<…>`; arity>10 → `java.lang.Object`; same-base literal union → base | (same) | `BamlType.union(a, b, …)` ordered | :146, :198–233 |
-| `Ty::BuiltinUnknown { … }` | `Ty::BuiltinUnknown` | `unknown` keyword | `java.lang.Object` | (same) | `null` (wire-driven) | :147 |
+| `Ty::Unknown { … }` | `Ty::Unknown` | `unknown` keyword | `java.lang.Object` | (same) | `null` (wire-driven) | :147 |
 | `Ty::Function { params, ret, throws, … }` | `Ty::Function { params, ret }` | callable type | `java.util.function.*` by arity; optional/arity>2 → generated `@FunctionalInterface` (`IntOptCallback` shape, landed `202883518`) | (same) | `null` (wire-driven) | :148, :407–435 |
 | `Ty::Void { … }` | `Ty::Void` (Python calls it `Ty::Unit`) | `-> void` | `void` | `java.lang.Void` | `null` (wire-driven) | :149–152 |
 | no direct TIR variant | `Ty::BamlOptions` (Python-only) | generated function options plumbing | — no CodegenTy variant; options ride the trailing configurator overload | — | — | n/a |
@@ -221,7 +221,7 @@ Per-row deviation flags:
 > (`BamlType.map(BamlType.STRING, …)`), since `descriptor_expr` recurses on the real key (in
 > practice `String`) — a map union arm matches on it.
 
-> ⚠ **Deviation from Python (unknown / unmodeled types):** `Ty::BuiltinUnknown`, and the
+> ⚠ **Deviation from Python (unknown / unmodeled types):** `Ty::Unknown`, and the
 > not-yet-modeled `Ty::Type` / `Ty::Never` / `Ty::Future` / `Ty::Interface` / `Ty::Resource` /
 > `Ty::PromptAst`, all fall back to `java.lang.Object` (translate_ty.rs:147, :157–162; descriptor
 > `unknown`, lib.rs:401–407). Python drops `Type`/`Never`/`Future` as **unreachable / n/a** for a

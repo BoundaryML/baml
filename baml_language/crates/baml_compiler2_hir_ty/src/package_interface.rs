@@ -624,7 +624,7 @@ fn exported_function<'db>(
             if sig.throws_declared {
                 sig.throws.to_plain()
             } else {
-                Ty::BuiltinUnknown {
+                Ty::Unknown {
                     attr: TyAttr::default(),
                 }
             }
@@ -1287,7 +1287,7 @@ pub fn function_throw_sets<'db>(
                     return None;
                 }
                 Some(if baml_type_runtime::contains_error_recovery(&fact) {
-                    Ty::BuiltinUnknown {
+                    Ty::Unknown {
                         attr: TyAttr::default(),
                     }
                 } else {
