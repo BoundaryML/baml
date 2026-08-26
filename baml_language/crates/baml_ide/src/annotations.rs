@@ -334,7 +334,7 @@ fn process_body(
 /// - `Ty::Unknown` — no useful info
 /// - `Ty::Never` — unreachable / error types
 fn should_suppress_type(ty: &Ty) -> bool {
-    baml_type_runtime::contains_error_recovery(ty)
+    baml_type::contains_error_recovery(ty)
         || matches!(ty, Ty::Unknown { .. } | Ty::Never { .. })
 }
 

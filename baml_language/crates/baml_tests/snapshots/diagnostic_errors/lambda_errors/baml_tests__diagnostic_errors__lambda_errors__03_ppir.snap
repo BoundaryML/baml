@@ -5,6 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.test_arity_mismatch() -> int[]  [expr] {
   { let items: int[] = [1, 2, 3] } items.map((x, y) -> { {  } x })
 }
+function user.test_conflicting_later_constraints() -> int  [expr] {
+  { let f = (x) -> { {  } x }; let int_identity: (int) -> int throws never = f; let string_identity: (string) -> string throws never = f } int_identity(0)
+}
 function user.test_no_annotation_no_context() -> int  [expr] {
   { let bad = (x) -> { {  } x Mul 2 } } 0
 }
