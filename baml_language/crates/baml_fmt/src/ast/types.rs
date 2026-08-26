@@ -15,6 +15,7 @@ use crate::{
 /// Corresponds to a [`SyntaxKind::TYPE_EXPR`] node.
 #[derive(Debug)]
 pub enum Type {
+    Unreflect(UnreflectType),
     Paren(ParenType),
     Path(PathType),
     /// Generally only string literals are used in normal types,
@@ -42,6 +43,7 @@ impl Type {
     #[must_use]
     pub const fn multi_line_is_indented(&self) -> bool {
         match self {
+            Type::Unreflect(_) => false,
             Type::Paren(_) => false,
             Type::Path(_) => true,
             Type::Literal(_) => false,
@@ -115,6 +117,7 @@ impl KnownKind for Type {
 impl Printable for Type {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
+            Type::Unreflect(unreflect) => unreflect.print(shape, printer),
             Type::Paren(paren) => paren.print(shape, printer),
             Type::Path(path) => path.print(shape, printer),
             Type::Literal(literal) => literal.print(shape, printer),
@@ -136,6 +139,7 @@ impl Printable for Type {
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
+            Type::Unreflect(unreflect) => unreflect.leftmost_token(),
             Type::Paren(paren) => paren.leftmost_token(),
             Type::Path(path) => path.leftmost_token(),
             Type::Literal(literal) => literal.leftmost_token(),
@@ -152,6 +156,7 @@ impl Printable for Type {
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
+            Type::Unreflect(unreflect) => unreflect.rightmost_token(),
             Type::Paren(paren) => paren.rightmost_token(),
             Type::Path(path) => path.rightmost_token(),
             Type::Literal(literal) => literal.rightmost_token(),
@@ -165,6 +170,62 @@ impl Printable for Type {
             Type::Constrained(constrained) => constrained.rightmost_token(),
             Type::Unknown(range) => *range,
         }
+    }
+}
+
+/// `unreflect(expr)` runtime type atom.
+#[derive(Debug)]
+pub struct UnreflectType {
+    pub keyword: t::Word,
+    pub open_paren: t::LParen,
+    pub operand: Option<Box<crate::ast::Expression>>,
+    pub close_paren: t::RParen,
+}
+
+impl FromCST for UnreflectType {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::UNREFLECT_TYPE)?;
+        let mut it = SyntaxNodeIter::new(&node);
+        let keyword = it.expect_parse()?;
+        let open_paren = it.expect_parse()?;
+        let operand = if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::R_PAREN) {
+            None
+        } else {
+            Some(Box::new(crate::ast::Expression::from_cst(
+                it.expect_next("unreflect operand")?,
+            )?))
+        };
+        let close_paren = it.expect_parse()?;
+        it.expect_end()?;
+        Ok(Self {
+            keyword,
+            open_paren,
+            operand,
+            close_paren,
+        })
+    }
+}
+
+impl Printable for UnreflectType {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_raw_token(&self.open_paren);
+        let info = self
+            .operand
+            .as_deref()
+            .map(|operand| printer.print(operand, shape))
+            .unwrap_or_else(PrintInfo::default_single_line);
+        printer.print_raw_token(&self.close_paren);
+        info
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+
+    fn rightmost_token(&self) -> TextRange {
+        self.close_paren.span()
     }
 }
 
@@ -436,6 +497,7 @@ impl Printable for UnionType {
 
 #[derive(Debug)]
 pub enum UnionTypeMember {
+    Unreflect(UnreflectType),
     Paren(ParenType),
     Path(PathType),
     Literal(Literal),
@@ -458,6 +520,9 @@ impl UnionTypeMember {
     fn take_base_type(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
         let first = it.expect_next("a type")?;
         match first.kind() {
+            SyntaxKind::UNREFLECT_TYPE => {
+                UnreflectType::from_cst(first).map(UnionTypeMember::Unreflect)
+            }
             SyntaxKind::MINUS => {
                 let minus = t::Minus::from_cst(first)?;
                 let literal = it.expect_next("numeric literal after '-'")?;
@@ -681,6 +746,7 @@ impl UnionTypeMember {
 impl From<UnionTypeMember> for Type {
     fn from(member: UnionTypeMember) -> Self {
         match member {
+            UnionTypeMember::Unreflect(unreflect) => Type::Unreflect(unreflect),
             UnionTypeMember::Paren(paren) => Type::Paren(paren),
             UnionTypeMember::Path(path) => Type::Path(path),
             UnionTypeMember::Literal(literal) => Type::Literal(literal),
@@ -701,6 +767,7 @@ impl From<UnionTypeMember> for Type {
 impl Printable for UnionTypeMember {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
+            UnionTypeMember::Unreflect(unreflect) => unreflect.print(shape, printer),
             UnionTypeMember::Paren(paren) => paren.print(shape, printer),
             UnionTypeMember::Path(path) => path.print(shape, printer),
             UnionTypeMember::Literal(literal) => literal.print(shape, printer),
@@ -719,6 +786,7 @@ impl Printable for UnionTypeMember {
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
+            UnionTypeMember::Unreflect(unreflect) => unreflect.leftmost_token(),
             UnionTypeMember::Paren(paren) => paren.leftmost_token(),
             UnionTypeMember::Path(path) => path.leftmost_token(),
             UnionTypeMember::Literal(lit) => lit.leftmost_token(),
@@ -734,6 +802,7 @@ impl Printable for UnionTypeMember {
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
+            UnionTypeMember::Unreflect(unreflect) => unreflect.rightmost_token(),
             UnionTypeMember::Paren(paren) => paren.rightmost_token(),
             UnionTypeMember::Path(path) => path.rightmost_token(),
             UnionTypeMember::Literal(lit) => lit.rightmost_token(),
@@ -1494,13 +1563,11 @@ mod tests {
         baml_compiler_parser::parse_green,
         baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode},
     };
-    use baml_project::ProjectDatabase;
 
     use super::*;
 
     fn function_type_param(source: &str, index: usize) -> FunctionTypeParam {
-        let mut db = ProjectDatabase::new();
-        let file = db.add_file("test.baml", source);
+        let (db, file) = crate::single_file_db("test.baml", source);
         let parsed = parse_green(&db, file);
         let syntax_tree = SyntaxNode::new_root(parsed);
         let node = syntax_tree

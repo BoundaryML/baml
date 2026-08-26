@@ -367,7 +367,7 @@ async fn witness_inherits_interface_default_methods() {
         r##"
         interface Greeter {
             name: string
-            function greet(self) -> string {
+            function greet(self) -> string throws never {
                 "hello, " + self.name
             }
         }
@@ -420,7 +420,7 @@ async fn witness_still_rejects_interfaces_with_required_methods() {
         r#"
         interface Named {
             name: string
-            function describe(self) -> string
+            function describe(self) -> string throws never
         }
 
         function main() -> string {
@@ -457,7 +457,7 @@ async fn session_interface_default_methods_are_bound_and_inherited() {
         r#####"
         function main() -> string throws unknown {
             let s = reflect.Session.new()
-            s.eval(`interface Greeter { who: string  function greet(self) -> string { "hello" } }`)
+            s.eval(`interface Greeter { who: string  function greet(self) -> string throws never { "hello" } }`)
             // BUG (session hygiene, pre-existing): a top-level session `let`
             // whose initializer combines an inline map literal with a keyword
             // argument (`reflect.class.new("P", { "f": t }, implementations = [w])`)

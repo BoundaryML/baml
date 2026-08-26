@@ -19,8 +19,7 @@ use crate::{
     BexVm,
     errors::VmRustFnError,
     package_baml::{
-        Continuation, ImplResolver, NativeCallResult, NativeFunction, NativeFunctionResult,
-        PassThroughContinuation, resolve,
+        Continuation, ImplResolver, NativeCallResult, NativeFunction, NativeFunctionResult, resolve,
     },
 };
 

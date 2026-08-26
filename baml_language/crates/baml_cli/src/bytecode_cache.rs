@@ -39,7 +39,7 @@ use std::{
 };
 
 use baml_db::{
-    SourceFile,
+    ProjectDatabase, SourceFile,
     baml_compiler2_emit::{
         CompileOptions, LoweringError, OptLevel, decompose_units, generate_project_bytecode,
         generate_project_bytecode_with_reuse_artifacts, generate_project_bytecode_with_stdlib,
@@ -47,7 +47,6 @@ use baml_db::{
     },
     baml_compiler2_hir, baml_compiler2_ppir,
 };
-use baml_project::ProjectDatabase;
 use bex_cache::{
     BytecodeCache, CacheKey, KeyInputs, ManifestFile, ProjectManifest, compiler_fingerprint,
     compute_key, content_hash, env_flag, manifest_key, rel_path, stdlib_diagnostics_key,
@@ -727,7 +726,7 @@ pub(crate) fn prepare_reuse_plan(
     // which fold every file's semantic index. Prime the per-file indexes
     // across workers first so that derivation is a cheap fold instead of a
     // serial parse of the whole project under one salsa memo claim.
-    baml_project::prime_file_indexes_parallel(db);
+    baml_db::prime_file_indexes_parallel(db);
     let mismatches = reuse_throws_mismatches(db, &plan.prev_units, &plan.clean_files);
     if mismatches.is_empty() {
         db.set_seeded_callable_throws(callable_seeds);
@@ -738,7 +737,7 @@ pub(crate) fn prepare_reuse_plan(
     // but make every inference query honest for this invocation.
     db.set_seeded_throw_facts(std::collections::BTreeMap::new());
     db.set_seeded_callable_throws(std::collections::BTreeMap::new());
-    let root = db.get_project().map(|project| project.root(db).clone());
+    let root = workspace_root_path(db);
     for (rel, detail) in mismatches {
         cache_debug(format_args!("reuse demoted `{rel}`: {detail}"));
         if !plan.clean_files.remove(&rel) {
@@ -1088,8 +1087,8 @@ fn referenced_names_by_file(program: &Program) -> HashMap<String, Vec<String>> {
         .collect()
 }
 
-/// Root-relative display path for a user `SourceFile`, or `None` for the legacy
-/// `<builtin>/` entries the v1 compiler still surfaces.
+/// Root-relative display path for a user `SourceFile`, or `None` for a stdlib
+/// (`<builtin>/`) file.
 fn user_rel_path(db: &ProjectDatabase, root: &std::path::Path, sf: SourceFile) -> Option<String> {
     let path = sf.path(db);
     if path.to_string_lossy().starts_with("<builtin>/") {
@@ -1098,14 +1097,18 @@ fn user_rel_path(db: &ProjectDatabase, root: &std::path::Path, sf: SourceFile) -
     Some(rel_path(root, &path))
 }
 
-/// User source files with their root-relative paths (skipping legacy
-/// `<builtin>/` entries the v1 compiler still sees).
+/// The workspace root's directory — the project root every cache rel-path is
+/// keyed against — or `None` for a database with no workspace root.
+fn workspace_root_path(db: &ProjectDatabase) -> Option<PathBuf> {
+    db.workspace_root().map(|root| root.path(db).clone())
+}
+
+/// User source files with their root-relative paths.
 fn user_files_with_rel_paths(db: &ProjectDatabase) -> Vec<(SourceFile, String)> {
-    let Some(project) = db.get_project() else {
+    let Some(root) = workspace_root_path(db) else {
         return Vec::new();
     };
-    let root = project.root(db);
-    db.get_source_files()
+    db.workspace_files()
         .into_iter()
         .filter_map(|sf| user_rel_path(db, &root, sf).map(|rel| (sf, rel)))
         .collect()
@@ -1548,7 +1551,7 @@ impl CacheContext {
         // downstream `file_throw_facts` demand hit the seed rather than re-walking
         // each body a second time (the seed-after-query invalidation the taint
         // closure would otherwise cause). Every value is the honest one.
-        let root = db.get_project().map(|p| p.root(db));
+        let root = workspace_root_path(db);
         let mut seeded_throw_facts: std::collections::BTreeMap<
             String,
             Vec<baml_type::throw_facts::FunctionThrowFacts>,
@@ -1888,11 +1891,11 @@ impl CacheContext {
         plan: Option<DiagnosticsServePlan<'_>>,
         persist_fresh: bool,
     ) -> IncrementalDiagnostics {
-        let Some(root) = db.get_project().map(|p| p.root(db).clone()) else {
+        let Some(root) = workspace_root_path(db) else {
             // No project context: fall back to the honest full check with no
             // cacheable output (there are no user files to key by).
             return IncrementalDiagnostics {
-                merged: baml_project::collect_compiler2_diagnostics(db),
+                merged: baml_db::collect_compiler2_diagnostics(db),
                 fresh_by_file: std::collections::BTreeMap::new(),
             };
         };
@@ -1945,7 +1948,7 @@ impl CacheContext {
         };
 
         let narrowed =
-            baml_project::collect_compiler2_diagnostics_narrowed(db, &should_check, precomputed);
+            baml_db::collect_compiler2_diagnostics_narrowed(db, &should_check, precomputed);
 
         let mut fresh_by_file = if persist_fresh {
             crate::diagnostics_cache::fresh_blobs_by_file(db, &root, &narrowed.fresh)
@@ -1996,7 +1999,7 @@ impl CacheContext {
         let Some(manifest) = self.load_prev_manifest_for_verify() else {
             return Ok(());
         };
-        let Some(root) = db.get_project().map(|p| p.root(db).clone()) else {
+        let Some(root) = workspace_root_path(db) else {
             return Ok(());
         };
         // Exactly the files a served warm compile would serve from cache — the
@@ -2092,7 +2095,7 @@ impl CacheContext {
         let Some(manifest) = self.load_prev_manifest_for_verify() else {
             return Ok(());
         };
-        let Some(root) = db.get_project().map(|p| p.root(db).clone()) else {
+        let Some(root) = workspace_root_path(db) else {
             return Ok(());
         };
         // Exactly the files a served warm compile would have seeded. The
@@ -2220,7 +2223,7 @@ impl CacheContext {
         plan: &ReusePlan,
         rel: &str,
     ) -> anyhow::Result<()> {
-        let Some(root) = honest_db.get_project().map(|p| p.root(honest_db).clone()) else {
+        let Some(root) = workspace_root_path(honest_db) else {
             return Ok(());
         };
         let full = root.join(rel);
@@ -2461,16 +2464,16 @@ mod tests {
     }
 
     fn build_db(files: &[(&str, &str)]) -> ProjectDatabase {
-        let mut db = ProjectDatabase::new();
-        db.set_project_root(Path::new("/bc-test"));
+        let root = Path::new("/bc-test");
+        let (mut db, workspace) = crate::project_load::workspace_db(root);
         for (name, content) in files {
-            db.add_or_update_file(&Path::new("/bc-test").join(name), content);
+            db.add_or_update_file_in(workspace, &root.join(name), content);
         }
         db
     }
 
     fn file_named(db: &ProjectDatabase, name: &str) -> SourceFile {
-        db.get_source_files()
+        db.workspace_files()
             .into_iter()
             .find(|sf| sf.path(db).to_string_lossy().ends_with(name))
             .expect("source file present")
@@ -2614,7 +2617,7 @@ mod tests {
             .collect_diagnostics_incremental(&db2, Some(&plan))
             .merged;
         let db_honest = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let honest = baml_project::collect_compiler2_diagnostics(&db_honest);
+        let honest = baml_db::collect_compiler2_diagnostics(&db_honest);
         let diags_match = diagnostic_sets_equal(&served, &honest);
 
         let relinked =
@@ -4093,7 +4096,7 @@ mod tests {
         let db = crate::project_load::build_db_from_sources(&r, |_| {});
         let ctx = CacheContext::open(&r, false).expect("cache opens");
 
-        let honest = baml_project::collect_compiler2_diagnostics(&db);
+        let honest = baml_db::collect_compiler2_diagnostics(&db);
 
         // No blob yet: the honest builtin check runs; merged equals honest.
         assert!(

@@ -12,7 +12,7 @@
 
 use std::sync::{Arc, atomic::AtomicBool};
 
-use baml_project::testing::compile_source;
+use baml_db::testing::compile_source;
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
     ConstValue, FunctionCaptureProps, GlobalIndex, Instruction, Object, ObjectIndex, RealizedTy,

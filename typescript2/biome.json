@@ -22,6 +22,8 @@
       "!**/.react-email/**",
       "!**/baml_client/**",
       "!app-website/lib/baml-docs/stdlib.json",
+      "!pkg-grammar/baml.tmLanguage.json",
+      "!app-vscode-ext/syntaxes/baml.tmLanguage.json",
       "!app-beps/**",
       "!**/.turbo/**",
       "!**/*.min.*",
@@ -107,7 +109,7 @@
           }
         }
       },
-      "includes": ["pkg-editor/package.json"]
+      "includes": ["pkg-editor/package.json", "pkg-grammar/src/baml.ts"]
     }
   ],
   "vcs": {

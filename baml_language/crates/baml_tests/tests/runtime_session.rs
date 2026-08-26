@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use baml_tests::baml_test;
-use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
+use baml_tests::{baml_test, engine::TestOutput};
+use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
 use bex_heap::{CollectionLevel, HeapPermit};
 use bex_vm_types::Object;
 use sys_native::SysOpsExt;
@@ -15,6 +15,154 @@ function main() -> int throws unknown {
   s.eval<int>(`x + 1`)
 }
 "####;
+
+fn evaluation_error_value(output: TestOutput) -> BexExternalValue {
+    match output.result.unwrap_err() {
+        EngineError::UnhandledThrow { value, .. } => {
+            let value = *value;
+            match &value {
+                BexExternalValue::Instance { class_name, .. }
+                    if class_name == "reflect.errors.EvaluationError" =>
+                {
+                    value
+                }
+                _ => panic!("expected EvaluationError, got {value:?}"),
+            }
+        }
+        other => panic!("expected an unhandled EvaluationError, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn session_evaluation_error_preserves_structured_cause_for_host() {
+    let output = baml_test!(
+        r####"
+class AppError {
+  code string
+}
+
+function fail_cell() -> null throws AppError {
+  throw AppError { code: "E42" }
+}
+
+function main() -> null throws unknown {
+  let session = reflect.Session.new(packages = { "app": reflect.Package.current() })
+  session.eval<null>(`app.fail_cell()`)
+}
+"####
+    );
+    let error = evaluation_error_value(output);
+    let BexExternalValue::Instance { fields, .. } = error else {
+        unreachable!()
+    };
+
+    assert!(
+        fields
+            .get("message")
+            .and_then(BexExternalValue::as_string)
+            .is_some_and(|message| message.contains("AppError") && message.contains("E42")),
+        "EvaluationError message did not describe its cause: {fields:?}"
+    );
+    let Some(BexExternalValue::Instance {
+        class_name,
+        fields: cause_fields,
+        ..
+    }) = fields.get("cause")
+    else {
+        panic!("EvaluationError did not carry the structured cause: {fields:?}")
+    };
+    assert_eq!(class_name, "user.AppError");
+    assert_eq!(
+        cause_fields
+            .get("code")
+            .and_then(BexExternalValue::as_string),
+        Some("E42".into())
+    );
+}
+
+#[tokio::test]
+async fn session_evaluation_error_preserves_string_cause_for_host() {
+    let output = baml_test!(
+        r####"
+function main() -> unknown throws unknown {
+  let session = reflect.Session.new()
+  session.eval<unknown>(`throw "cell failed"`)
+}
+"####
+    );
+    let error = evaluation_error_value(output);
+    let BexExternalValue::Instance { fields, .. } = error else {
+        unreachable!()
+    };
+
+    assert_eq!(
+        fields.get("cause").and_then(BexExternalValue::as_string),
+        Some("cell failed".into())
+    );
+    assert!(
+        fields
+            .get("message")
+            .and_then(BexExternalValue::as_string)
+            .is_some_and(|message| message.contains("cell failed")),
+        "EvaluationError message did not describe its string cause: {fields:?}"
+    );
+}
+
+#[tokio::test]
+async fn session_compile_artifact_is_consumed_once() {
+    let output = baml_test!(
+        r####"
+function main() -> bool throws unknown {
+  let session = reflect.Session.new()
+  let artifact = session._compile<int>(`1`)
+  let first = session._finish<int>(artifact)
+  let rejected = false
+  let _ = session._finish<int>(artifact) catch (_) {
+    _ => { rejected = true },
+  }
+  first == 1 && rejected
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn session_finish_refuses_package_compile_artifact() {
+    let output = baml_test!(
+        r####"
+function main() -> bool throws unknown {
+  let session = reflect.Session.new()
+  let artifact = reflect.Package._compile(
+    { "main.baml": "function ready() -> bool { true }" },
+    {},
+  )
+  let rejected = false
+  let _ = session._finish<unknown>(artifact) catch (_) {
+    _ => { rejected = true },
+  }
+  rejected
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn session_synthetic_step_names_do_not_collide_with_user_bindings() {
+    let output = baml_test!(
+        r####"
+function main() -> int throws unknown {
+  let session = reflect.Session.new()
+  session.eval(`let result = 5`)
+  session.eval(`let stmt_1 = 7
+log.info("keep the second generated step")`)
+  session.eval<int>(`result + stmt_1`)
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(12)));
+}
 
 const S11_LIVENESS_PROBE: &str = r#####"
 function escape_one_session_value() -> reflect.Type throws unknown {
@@ -327,6 +475,86 @@ async fn session_reimports_instance_fields_without_changing_the_value() {
 }
 
 #[tokio::test]
+async fn session_reads_fields_from_mounted_return_types_inline_and_after_binding() {
+    let output = baml_test!(
+        r####"
+class Ticket {
+  subject string
+}
+
+class Envelope {
+  ticket Ticket
+}
+
+function GetTicket() -> Ticket {
+  Ticket { subject: "hello" }
+}
+
+function GetEnvelope() -> Envelope {
+  Envelope { ticket: GetTicket() }
+}
+
+function main() -> string throws unknown {
+  let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
+  let inline = s.eval(`app.GetTicket().subject`)
+  s.eval(`let ticket = app.GetTicket()`)
+  let rebound = s.eval(`ticket.subject`)
+  let nested = s.eval(`app.GetEnvelope().ticket.subject`)
+  `${inline}|${rebound}|${nested}`
+}
+"####
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hello|hello|hello".into()))
+    );
+}
+
+#[tokio::test]
+async fn session_compiler_sees_with_types_exports_from_dependencies() {
+    let output = baml_test!(
+        r####"
+function main() -> bool throws unknown {
+  let mounted = reflect.class.new("MountedTicket", {
+    "subject": reflect.Type.of<string>(),
+  })
+  let app = reflect.Package.current().with_types({ "MountedTicket": mounted })
+  let s = reflect.Session.new(packages = { "app": app })
+  s.eval(`let ticket = app.MountedTicket { subject: "visible" }
+ticket.subject`) == "visible"
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn session_export_alias_preserves_nested_mounted_field_types() {
+    let output = baml_test!(
+        r####"
+function main() -> string throws unknown {
+  let inner = reflect.class.new("MountedInner", {
+    "value": reflect.Type.of<string>(),
+  })
+  let outer = reflect.class.new("MountedOuter", {
+    "inner": inner.as_type(),
+  })
+  let app = reflect.Package.current().with_types({ "OuterAlias": outer })
+  let s = reflect.Session.new(packages = { "app": app })
+  s.eval<string>(`let outer = app.OuterAlias {
+  inner: app.MountedInner { value: "visible" },
+}
+outer.inner.value`)
+}
+"####
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("visible".into()))
+    );
+}
+
+#[tokio::test]
 async fn scenario_7_verbatim_semantics_and_containment() {
     let output = baml_test!(baml: SCENARIO_7, entry: "scenario_7");
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
@@ -448,7 +676,7 @@ function main() -> bool throws unknown {
 
 #[tokio::test]
 async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
-    let program = baml_project::testing::compile_source(S11_LIVENESS_PROBE);
+    let program = baml_db::testing::compile_source(S11_LIVENESS_PROBE);
     let engine = Arc::new(
         BexEngine::new_with_runtime_compiler(
             program,
@@ -511,12 +739,9 @@ async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
         let Object::Package(owner) = (unsafe { owner_ptr.get() }) else {
             panic!("escaped definition owner should be a Package")
         };
-        owner_is_session = owner.session.is_some();
-        session_history = owner
-            .session
-            .as_ref()
-            .map_or(0, |state| state.history.len());
-        let runtime = owner.runtime.as_ref().expect("runtime owner image");
+        owner_is_session = owner.session().is_some();
+        session_history = owner.session().map_or(0, |state| state.history.len());
+        let runtime = owner.runtime().expect("runtime owner image");
         retained_globals = runtime.globals.len();
         retained_objects = runtime.objects.len();
         retained_dependencies = runtime.dependencies.len();
@@ -524,10 +749,9 @@ async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
             .dependencies
             .iter()
             .map(|dependency| match unsafe { dependency.get() } {
-                Object::Package(package) => package
-                    .runtime
-                    .as_ref()
-                    .map_or(0, |runtime| runtime.objects.len()),
+                Object::Package(package) => {
+                    package.runtime().map_or(0, |runtime| runtime.objects.len())
+                }
                 _ => 0,
             })
             .sum::<usize>();
@@ -605,7 +829,7 @@ fn trim_allocator() {}
 
 #[tokio::test]
 async fn five_hundred_evals_have_flat_latency_and_bounded_artifacts() {
-    let program = baml_project::testing::compile_source(SCENARIO_7);
+    let program = baml_db::testing::compile_source(SCENARIO_7);
     let engine = Arc::new(
         BexEngine::new_with_runtime_compiler(
             program,

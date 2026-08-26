@@ -1382,7 +1382,6 @@ function baml.json._path_index(current: baml.json.json, idx: int, selector: stri
 function baml.json.deserialize(s: string) -> T  [expr] {
   {  } from_json(parse(s))
 }
-function baml.json.encode(v: T) -> string  [builtin]
 function baml.json.field(j: baml.json.json, key: string) -> baml.json.json  [builtin]
 function baml.json.from(value: T) -> baml.json.json  [expr] {
   {  } root._to_json_shim(value)
@@ -1398,15 +1397,17 @@ function baml.json.path_or(j: baml.json.json, selector: string, default: T) -> T
 }
 function baml.json.schema(t: reflect.Type) -> baml.json.json  [builtin]
 function baml.json.serialize(v: T) -> string  [expr] {
-  {  } stringify(to_json(v))
+  {  } to_string(v)
 }
 function baml.json.stringify(j: baml.json.json) -> string  [builtin]
 function baml.json.stringify_pretty(j: baml.json.json) -> string  [builtin]
 function baml.json.to(j: baml.json.json) -> T  [expr] {
   {  } root._from_json_shim(j)
 }
-function baml.json.to_json(v: T) -> baml.json.json  [builtin]
-function baml.json.to_string(v: T) -> string  [builtin]
+function baml.json.to_json(value: unknown) -> baml.json.json  [builtin]
+function baml.json.to_string(value: unknown) -> string  [expr] {
+  {  } stringify(to_json(value))
+}
 
 --- <builtin>/baml/ns_media/media.baml ---
 class baml.media.Audio {

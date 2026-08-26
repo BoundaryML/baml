@@ -17,21 +17,19 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_artifact = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_codegen_types = { workspace = true }
 baml_db = { workspace = true }
 baml_exec = { workspace = true }
 baml_fmt = { workspace = true }
-baml_lsp2_actions = { workspace = true }
+baml_ide = { workspace = true }
 baml_lsp_server = { workspace = true }
-baml_project = { workspace = true }
 baml_query = { workspace = true }
 baml_query_profiles = { workspace = true }
 baml_release = { workspace = true }
-baml_surface = { workspace = true }
 baml_type = { workspace = true }
 baml_version = { workspace = true }
-baml_workspace = { workspace = true }
 bex_cache = { workspace = true }
 bex_engine = { workspace = true }
 bex_events = { workspace = true }
@@ -77,10 +75,10 @@ webbrowser = { workspace = true }
 
 [features]
 default = [ "aws-crypto" ]
-aws-crypto = [ "baml_lsp_server/aws-crypto", "bex_engine/aws-crypto", "sys_native/aws-crypto" ]
-ring-crypto = [ "baml_lsp_server/ring-crypto", "bex_engine/ring-crypto", "sys_native/ring-crypto" ]
-native-tls = [ "baml_lsp_server/native-tls" ]
-rustls = [ "baml_lsp_server/rustls" ]
+aws-crypto = [ "bex_engine/aws-crypto", "sys_native/aws-crypto" ]
+ring-crypto = [ "bex_engine/ring-crypto", "sys_native/ring-crypto" ]
+native-tls = [ "sys_native/native-tls" ]
+rustls = [ "aws-crypto" ]
 defaults = [  ]
 internal = [  ]
 skip-integ-tests = [  ]

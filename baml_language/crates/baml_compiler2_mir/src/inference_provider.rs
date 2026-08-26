@@ -119,6 +119,7 @@ pub(crate) enum CallTypeArgPlan {
     Static {
         ty: Tir2Ty,
         emission_ty: Tir2Ty,
+        runtime_bindings: Box<[ScopedTypeBinding]>,
     },
     Runtime {
         operand: AstExprId,
@@ -143,7 +144,8 @@ pub(crate) enum RuntimeCheck {
 pub(crate) struct ScopedTypeBinding {
     pub(crate) name: Name,
     pub(crate) parameter: baml_type::ParamTy,
-    pub(crate) operand: AstExprId,
+    pub(crate) operand: Option<AstExprId>,
+    pub(crate) template_ty: Option<Tir2Ty>,
     pub(crate) occurrence_ty: Tir2Ty,
 }
 
@@ -236,6 +238,8 @@ pub(crate) struct ConvertedTables<'db> {
     path_member_resolutions: FxHashMap<AstExprId, Vec<MemberResolution<'db>>>,
     call_plans: FxHashMap<AstExprId, CallPlan>,
     type_bindings: FxHashMap<AstStmtId, ScopedTypeBinding>,
+    runtime_type_bindings: FxHashMap<AstExprId, ScopedTypeBinding>,
+    runtime_type_params: Vec<baml_type::ParamTy>,
     runtime_checks: Vec<RuntimeCheck>,
     function_coercions: FxHashMap<AstExprId, FunctionCoercion>,
     /// Condition expressions the checker marked for truthiness coercion
@@ -297,6 +301,12 @@ impl<'db> ConvertedTables<'db> {
     }
     pub(crate) fn type_binding(&self, stmt: AstStmtId) -> Option<&ScopedTypeBinding> {
         self.type_bindings.get(&stmt)
+    }
+    pub(crate) fn runtime_type_binding(&self, operand: AstExprId) -> Option<&ScopedTypeBinding> {
+        self.runtime_type_bindings.get(&operand)
+    }
+    pub(crate) fn runtime_type_params(&self) -> &[baml_type::ParamTy] {
+        &self.runtime_type_params
     }
     #[allow(dead_code)]
     pub(crate) fn runtime_checks(&self) -> &[RuntimeCheck] {
@@ -391,12 +401,18 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
                     .slots
                     .iter()
                     .map(|slot| match slot {
-                        hir_infer::CallTypeArgPlan::Static { ty, emission_ty } => {
-                            CallTypeArgPlan::Static {
-                                ty: ty.to_plain(),
-                                emission_ty: emission_ty.to_plain(),
-                            }
-                        }
+                        hir_infer::CallTypeArgPlan::Static {
+                            ty,
+                            emission_ty,
+                            runtime_bindings,
+                        } => CallTypeArgPlan::Static {
+                            ty: ty.to_plain(),
+                            emission_ty: emission_ty.to_plain(),
+                            runtime_bindings: runtime_bindings
+                                .iter()
+                                .map(convert_scoped_type_binding)
+                                .collect(),
+                        },
                         hir_infer::CallTypeArgPlan::Runtime {
                             operand,
                             occurrence_ty,
@@ -423,18 +439,28 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
     out.type_bindings = result
         .type_bindings
         .iter()
-        .map(|(&stmt, binding)| {
-            (
-                stmt,
-                ScopedTypeBinding {
-                    name: binding.name.clone(),
-                    parameter: binding.parameter.clone(),
-                    operand: binding.operand,
-                    occurrence_ty: binding.occurrence_ty.to_plain(),
-                },
-            )
-        })
+        .map(|(&stmt, binding)| (stmt, convert_scoped_type_binding(binding)))
         .collect();
+    for bindings in result.type_ref_bindings.values() {
+        for binding in bindings {
+            let Some(operand) = binding.operand else {
+                continue;
+            };
+            out.runtime_type_bindings
+                .entry(operand)
+                .or_insert_with(|| convert_scoped_type_binding(binding));
+        }
+    }
+    out.runtime_type_params = out
+        .runtime_type_bindings
+        .values()
+        .map(|binding| binding.parameter.clone())
+        .collect();
+    out.runtime_type_params.sort_by(|left, right| {
+        left.index()
+            .cmp(&right.index())
+            .then_with(|| left.name().cmp(right.name()))
+    });
     out.runtime_checks = result
         .runtime_checks
         .iter()
@@ -483,6 +509,19 @@ fn convert<'db>(result: &hir_infer::InferenceResult<'db>) -> ConvertedTables<'db
         result.non_exhaustive_matches.iter().copied().collect(),
     );
     out
+}
+
+fn convert_scoped_type_binding(binding: &hir_infer::ScopedTypeBinding) -> ScopedTypeBinding {
+    ScopedTypeBinding {
+        name: binding.name.clone(),
+        parameter: binding.parameter.clone(),
+        operand: binding.operand,
+        template_ty: binding
+            .template_ty
+            .as_ref()
+            .map(baml_type::interned::Ty::to_plain),
+        occurrence_ty: binding.occurrence_ty.to_plain(),
+    }
 }
 
 fn convert_runtime_check(check: &hir_infer::RuntimeCheck) -> RuntimeCheck {

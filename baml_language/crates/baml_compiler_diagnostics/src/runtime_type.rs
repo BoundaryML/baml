@@ -237,6 +237,15 @@ pub fn runtime_type_must_be_named() -> Diagnostic {
     )
 }
 
+/// E0168 — a runtime type atom was written in an item signature, where no
+/// executable body can own its frame slot.
+pub fn runtime_type_has_no_scope() -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::RuntimeTypeMustBeNamed,
+        "a runtime type has no scope here; bind it inside a function body: `type T = unreflect(…)`",
+    )
+}
+
 /// E0168 — the suggested rewrite, written with the user's own carrier
 /// expression whenever the reporting site could print it.
 pub fn runtime_type_must_be_named_help(rewrite: &RuntimeTypeNameRewrite) -> String {

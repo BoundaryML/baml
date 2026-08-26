@@ -9,7 +9,35 @@
 //! not the resolved arguments. Divergence from inference is therefore observed via the
 //! resulting expression *type*, not the call-site syntax.
 
-use super::support::{make_db, render_tir};
+use super::support::{make_db, render_ppir, render_tir};
+use crate::engine::TestDbExt;
+
+#[test]
+fn nested_runtime_type_binding_render_preserves_operand_name() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Wrapper<T> { value T }
+
+function caller(t: reflect.Type) -> bool {
+    type T = Wrapper<unreflect(t)>
+    true
+}
+"#,
+    );
+
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("type T = Wrapper<unreflect(t)> : type"),
+        "typed rendering lost the nested operand:\n{tir}"
+    );
+    let ppir = render_ppir(&db, file);
+    assert!(
+        ppir.contains("type T = user.Wrapper<unreflect(t)>"),
+        "HIR rendering lost the nested operand:\n{ppir}"
+    );
+}
 
 /// Explicit type args bind T directly, distinct from what inference would produce.
 ///
@@ -19,7 +47,7 @@ use super::support::{make_db, render_tir};
 #[test]
 fn explicit_type_arg_binds_directly() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function identity<T>(x: T) -> T { x }
@@ -50,7 +78,7 @@ function caller() -> string {
 #[test]
 fn bare_inference_picks_literal_type() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function identity<T>(x: T) -> T { x }
@@ -80,7 +108,7 @@ function caller() -> string {
 #[test]
 fn wrong_type_arg_arity_nongeneric() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function no_generics(x: int) -> int { x }
@@ -112,7 +140,7 @@ function caller() -> int {
 #[test]
 fn wrong_type_arg_arity_too_many() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function identity<T>(x: T) -> T { x }
@@ -141,7 +169,7 @@ function caller() -> int {
 #[test]
 fn generic_apply_value_is_specialized() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function identity<T>(x: T) -> T { x }
@@ -173,7 +201,7 @@ function caller() -> string {
 #[test]
 fn generic_apply_value_rejects_wrong_arg() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function identity<T>(x: T) -> T { x }
@@ -203,7 +231,7 @@ function caller() -> int {
 #[test]
 fn generic_apply_value_accepts_right_arg() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function identity<T>(x: T) -> T { x }
@@ -233,7 +261,7 @@ function caller() -> int {
 #[test]
 fn generic_apply_value_arity_mismatch() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function identity<T>(x: T) -> T { x }
@@ -266,7 +294,7 @@ function caller() -> string {
 #[test]
 fn bare_generic_function_ref_rejected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function identity<T>(x: T) -> T { x }
@@ -296,7 +324,7 @@ function caller() -> string {
 #[test]
 fn generic_apply_two_type_args_specialized() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function pair<A, B>(a: A, b: B) -> string { "ok" }
@@ -327,7 +355,7 @@ function caller() -> string {
 #[test]
 fn generic_apply_two_type_args_rejects_wrong_arg() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function pair<A, B>(a: A, b: B) -> string { "ok" }
@@ -363,7 +391,7 @@ function caller() -> string {
 #[test]
 fn generic_apply_through_parenthesized_receiver() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function identity<T>(x: T) -> T { x }
@@ -392,7 +420,7 @@ function caller() -> string {
 #[test]
 fn explicit_two_type_args() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function pair<A, B>(a: A, b: B) -> string { "ok" }
@@ -423,7 +451,7 @@ function caller() -> string {
 #[test]
 fn instantiation_value_call_keeps_ambient_typevar_rigid() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function identity<T>(x: T) -> T { x }
@@ -457,7 +485,7 @@ function pd<T>(y: T) -> int {
 #[test]
 fn instantiation_value_call_preserves_valid_inference() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function identity<T>(x: T) -> T { x }
@@ -499,7 +527,7 @@ function uses() -> int {
 #[test]
 fn paren_generic_lambda_instantiation() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function caller() -> int {

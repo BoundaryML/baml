@@ -325,7 +325,10 @@ pub(super) fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Ve
 /// order (pass 2, one `YieldToCall` per override via [`ToStringWalkContinuation`]),
 /// then renders structurally splicing in the override results (pass 3). When the
 /// value tree contains no overrides at all, renders fully structurally inline.
-fn render_to_string_honoring_overrides(vm: &mut BexVm, value: Value) -> NativeCallResult {
+pub(crate) fn render_to_string_honoring_overrides(
+    vm: &mut BexVm,
+    value: Value,
+) -> NativeCallResult {
     let mut pending: Vec<HeapPtr> = Vec::new();
     collect_to_string_overrides(vm, value, &mut pending);
 

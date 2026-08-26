@@ -127,12 +127,12 @@ jobs:
           # scaffolding for pyo3-stub-gen. [tool.maturin] manifest-path in
           # pyproject.toml already points at the right Cargo.toml.
           #
-          # `--profile release-bridge-python` (not `--release`): the engine is
-          # embedded in the user's process, so it must be built `panic = "unwind"`
-          # for the bridge's catch_unwind boundary to turn an engine panic into a
-          # catchable BamlPanic instead of SIGABRT'ing the host. See the profile
-          # comment in baml_language/Cargo.toml.
-          args: --profile release-bridge-python --strip --out dist
+          # `--release` is `panic = "unwind"` workspace-wide: the engine is
+          # embedded in the user's process, so the bridge's catch_unwind boundary
+          # must be able to turn an engine panic into a catchable BamlPanic
+          # instead of SIGABRT'ing the host. See the profile comment in
+          # baml_language/Cargo.toml.
+          args: --release --strip --out dist
           manylinux: ${{ matrix._.manylinux }}
           before-script-linux: |
             if command -v yum &> /dev/null; then

@@ -67,6 +67,29 @@ impl IdeArgs {
 
 impl IdeInstallArgs {
     pub fn run(&self) -> Result<ExitCode> {
+        // Editor-independent toolchain asset: a real on-disk copy of the
+        // stdlib stubs, so goto-definition into the stdlib opens a file the
+        // editor can display. The language server finds it next to the
+        // binary (`resolve_stdlib_dir`); a failure here (read-only toolchain
+        // dir) degrades to declined stdlib navigation, not a broken install.
+        match materialize_stdlib() {
+            Ok(dir) => {
+                #[allow(clippy::print_stdout)]
+                {
+                    println!("materialized BAML stdlib sources to {}", dir.display());
+                }
+            }
+            Err(error) => {
+                #[allow(clippy::print_stderr)]
+                {
+                    eprintln!(
+                        "warning: could not materialize the stdlib sources \
+                         (stdlib navigation stays off): {error:#}"
+                    );
+                }
+            }
+        }
+
         let vsix = active_toolchain_vsix()?;
         if let Some(dir) = &self.dir {
             fs::create_dir_all(dir)
@@ -130,6 +153,41 @@ impl IdeInstallArgs {
             )),
         }
     }
+}
+
+/// Write the embedded stdlib stubs next to the running binary
+/// (`<bin>/../stdlib/<package>/<relative_path>`), where the language
+/// server's `resolve_stdlib_dir` looks for them.
+///
+/// Idempotent full overwrite: the copy is an artifact of this binary's
+/// embedded sources, so rerunning `baml ide install` after a toolchain
+/// update refreshes it. (Nothing semantic reads these files — the database
+/// serves the embedded text under `<builtin>/…` virtual paths; this copy
+/// only gives goto-definition a real file to open, so drift shows up as
+/// stale-looking jumps, never wrong analysis.)
+fn materialize_stdlib() -> Result<PathBuf> {
+    let exe = env::current_exe().context("failed to locate the running binary")?;
+    let bin_dir = exe
+        .parent()
+        .ok_or_else(|| anyhow!("the binary path has no parent directory"))?;
+    let stdlib_dir = bin_dir.join("..").join("stdlib");
+    materialize_stdlib_into(&stdlib_dir)?;
+    Ok(std::fs::canonicalize(&stdlib_dir).unwrap_or(stdlib_dir))
+}
+
+/// Write every embedded stdlib file under `dir`, mirroring the
+/// `<package>/<relative_path>` layout of the `<builtin>/…` virtual paths.
+fn materialize_stdlib_into(dir: &Path) -> Result<()> {
+    for file in baml_builtins2::ALL {
+        let dest = dir.join(file.package).join(file.relative_path);
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create {}", parent.display()))?;
+        }
+        fs::write(&dest, file.contents)
+            .with_context(|| format!("failed to write {}", dest.display()))?;
+    }
+    Ok(())
 }
 
 /// The IDE is often installed without its CLI shim (on macOS the `code`
@@ -258,6 +316,30 @@ mod tests {
     fn install_dir_flag_binds() {
         let parsed = Wrapper::try_parse_from(["install", "--output-dir", "out"]).unwrap();
         assert_eq!(parsed.args.dir, Some(PathBuf::from("out")));
+    }
+
+    /// The materialized layout mirrors the `<builtin>/…` virtual paths (the
+    /// language server maps `<stdlib_dir>/<pkg>/<path>` ↔
+    /// `<builtin>/<pkg>/<path>` byte for byte), and rerunning refreshes
+    /// stale content in place.
+    #[test]
+    fn materialize_stdlib_mirrors_the_embedded_layout() {
+        let temp = tempfile::tempdir().unwrap();
+        materialize_stdlib_into(temp.path()).unwrap();
+
+        assert!(!baml_builtins2::ALL.is_empty());
+        for file in baml_builtins2::ALL {
+            let dest = temp.path().join(file.package).join(file.relative_path);
+            let on_disk = fs::read_to_string(&dest)
+                .unwrap_or_else(|e| panic!("{} must exist: {e}", dest.display()));
+            assert_eq!(on_disk, file.contents, "{}", dest.display());
+        }
+
+        // Idempotent refresh: a stale copy is overwritten.
+        let stale = temp.path().join("baml").join("containers.baml");
+        fs::write(&stale, "// stale\n").unwrap();
+        materialize_stdlib_into(temp.path()).unwrap();
+        assert_ne!(fs::read_to_string(&stale).unwrap(), "// stale\n");
     }
 
     /// Pin the missing-CLI error verbatim so any wording change is a

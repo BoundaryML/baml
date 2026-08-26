@@ -42,7 +42,9 @@ pub(crate) mod support {
         body::FunctionBody, contributions::Definition, item_tree::DefaultExprRef, scope::ScopeKind,
     };
     use baml_compiler2_hir_ty::infer::InferenceResult;
-    use baml_project::ProjectDatabase;
+    use baml_db::ProjectDatabase;
+
+    use crate::engine::TestDbExt;
 
     // ── Rendering helpers ────────────────────────────────────────────────────
 
@@ -130,6 +132,20 @@ pub(crate) mod support {
                 .collect::<Vec<_>>()
                 .join(" | "),
         }
+    }
+
+    fn type_expr_desc(type_expr: &baml_compiler2_ast::TypeExpr, body: &ExprBody) -> String {
+        let mut rendered = type_expr.to_string();
+        let mut operands = Vec::new();
+        type_expr.unreflect_operands(&mut operands);
+        for operand in operands {
+            rendered = rendered.replacen(
+                "unreflect(…)",
+                &format!("unreflect({})", expr_desc(operand, body)),
+                1,
+            );
+        }
+        rendered
     }
 
     fn expr_desc(expr_id: ExprId, body: &ExprBody) -> String {
@@ -255,12 +271,7 @@ pub(crate) mod support {
                 } else {
                     let tys: Vec<_> = type_args
                         .iter()
-                        .map(|arg| match arg {
-                            baml_compiler2_ast::TypeArg::Static(ty) => ty.to_string(),
-                            baml_compiler2_ast::TypeArg::Unreflect(operand) => {
-                                format!("unreflect({})", expr_desc(*operand, body))
-                            }
-                        })
+                        .map(|arg| type_expr_desc(arg, body))
                         .collect();
                     format!("<{}>", tys.join(", "))
                 };
@@ -662,8 +673,8 @@ pub(crate) mod support {
         let stmt = &body.stmts[stmt_id];
         match stmt {
             Stmt::TypeBinding { name, value } => {
-                let operand = expr_desc(*value, body);
-                writeln!(output, "{pad}type {name} = unreflect({operand})").ok();
+                let value = type_expr_desc(value, body);
+                writeln!(output, "{pad}type {name} = {value}").ok();
             }
             Stmt::Let {
                 pattern,
@@ -810,13 +821,17 @@ pub(crate) mod support {
         let stmt = &body.stmts[stmt_id];
         match stmt {
             Stmt::TypeBinding { name, value } => {
-                let operand = expr_desc_rich(*value, body, inference);
-                let operand_ty = expr_ty(inference, *value);
-                writeln!(
-                    output,
-                    "{pad}type {name} = unreflect({operand}) : {operand_ty}"
-                )
-                .ok();
+                let (value_desc, value_ty) = match &value.kind {
+                    baml_compiler2_ast::TypeExprKind::Unreflect {
+                        operand: Some(operand),
+                        ..
+                    } => (
+                        format!("unreflect({})", expr_desc_rich(*operand, body, inference)),
+                        expr_ty(inference, *operand).to_string(),
+                    ),
+                    _ => (type_expr_desc(value, body), "type".to_string()),
+                };
+                writeln!(output, "{pad}type {name} = {value_desc} : {value_ty}").ok();
             }
             Stmt::Let {
                 pattern,
@@ -1350,6 +1365,7 @@ pub(crate) mod support {
             }
 
             match &ty.kind {
+                baml_compiler2_ast::TypeExprKind::Unreflect { .. } => "unreflect(…)".into(),
                 baml_compiler2_ast::TypeExprKind::Path {
                     segments,
                     generic_args,
@@ -1508,6 +1524,7 @@ pub(crate) mod support {
             }
 
             match &store[id].kind {
+                K::Unreflect { .. } => "unreflect(…)".into(),
                 K::Path {
                     segments,
                     generic_args,
@@ -2038,12 +2055,34 @@ pub(crate) mod support {
             prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
+            fn type_expr_desc_hir(
+                type_expr: &baml_compiler2_ast::TypeExpr,
+                body: &ExprBody,
+                prefix: &str,
+                local_type_names: &std::collections::HashSet<&str>,
+            ) -> String {
+                let mut rendered = type_expr_to_string_hir(type_expr, prefix, local_type_names);
+                let mut operands = Vec::new();
+                type_expr.unreflect_operands(&mut operands);
+                for operand in operands {
+                    rendered = rendered.replacen(
+                        "unreflect(…)",
+                        &format!(
+                            "unreflect({})",
+                            expr_desc_hir(operand, body, prefix, local_type_names)
+                        ),
+                        1,
+                    );
+                }
+                rendered
+            }
+
             use baml_compiler2_ast::Stmt;
             let stmt = &body.stmts[stmt_id];
             match stmt {
                 Stmt::TypeBinding { name, value } => format!(
-                    "type {name} = unreflect({})",
-                    expr_desc_hir(*value, body, prefix, local_type_names)
+                    "type {name} = {}",
+                    type_expr_desc_hir(value, body, prefix, local_type_names)
                 ),
                 Stmt::Let {
                     pattern,
@@ -2354,7 +2393,7 @@ pub(crate) mod support {
 
     pub fn make_db() -> ProjectDatabase {
         let mut db = ProjectDatabase::new();
-        db.set_project_root(std::path::Path::new("."));
+        db.workspace(std::path::Path::new("."));
         db
     }
 }

@@ -548,6 +548,7 @@ mod schema {
                 field_type,
                 field_template: None,
                 description: None,
+                docstring: None,
                 alias: None,
                 skip: false,
             }
@@ -557,6 +558,7 @@ mod schema {
             ClassDefinition {
                 name: name.display_name().to_string(),
                 description: None,
+                docstring: None,
                 alias: None,
                 fields,
             }
@@ -650,16 +652,19 @@ mod schema {
                 EnumDefinition {
                     name: "Status".to_string(),
                     description: None,
+                    docstring: None,
                     alias: None,
                     variants: vec![
                         EnumVariantDefinition {
                             name: "Ready".to_string(),
                             description: None,
+                            docstring: None,
                             alias: Some("ready-now".to_string()),
                         },
                         EnumVariantDefinition {
                             name: "Done".to_string(),
                             description: None,
+                            docstring: None,
                             alias: None,
                         },
                     ],
@@ -985,7 +990,7 @@ impl io::IoClassReflectPackage for DefaultIoOps {
         _files: indexmap::IndexMap<String, String>,
         _packages: indexmap::IndexMap<String, io::owned::reflect::Package>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::reflect::Package> {
+    ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
         // BexEngine intercepts this operation and delegates to its injected
         // RuntimeCompiler before the provider table is consulted.
         SysOpOutput::err(VmBamlError::Unsupported {
@@ -1003,7 +1008,7 @@ impl io::IoClassReflectSession for DefaultIoOps {
         _source: String,
         _type_arg_0: ::sys_types::SapTy,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::reflect::Package> {
+    ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
         // BexEngine intercepts Session compilation for the same reason as
         // Package.compile: the concrete compiler is injected above sys_ops.
         SysOpOutput::err(VmBamlError::Unsupported {
@@ -2145,10 +2150,29 @@ pub struct IoSysOpsBuilder {
 impl IoSysOpsBuilder {
     /// Create a new builder with all operations defaulting to `Unsupported`,
     /// except LLM ops which use the real blanket implementation.
+    ///
+    /// Every operation not overridden afterwards throws — including ones a
+    /// host may never think about (`baml.time.Instant.now`, `random`, the
+    /// per-class `fs::File`/`http::Response` readers). A host that wants a
+    /// working platform with a few operations *intercepted* wants
+    /// [`IoSysOpsBuilder::from_ops`] instead.
     pub fn new() -> Self {
         Self {
             inner: io::SysOps::from_impl(DefaultIoOps),
         }
+    }
+
+    /// Start from an existing table — typically `SysOps::native()` — and
+    /// override individual namespaces on top of it.
+    ///
+    /// This is the right base for an *interposing* host (the playground
+    /// intercepts HTTP, env and IO to route them through its UI, and wants
+    /// the platform's real behavior for everything else): the set of
+    /// operations it must not break is open-ended and grows with the
+    /// standard library, so it cannot be enumerated at the call site.
+    #[must_use]
+    pub fn from_ops(ops: io::SysOps) -> Self {
+        Self { inner: ops }
     }
 
     /// Consume the builder and return the composed [`io::SysOps`] table.

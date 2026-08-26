@@ -5,13 +5,14 @@
 //! substitution applied.
 
 use super::support::{expr_type_in_function, make_db, render_tir};
+use crate::engine::TestDbExt;
 
 // ── Array method resolution ───────────────────────────────────────────────────
 
 #[test]
 fn array_length_returns_int() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(arr: int[]) -> int { return arr.length(); }",
     );
@@ -27,7 +28,7 @@ fn array_length_returns_int() {
 #[test]
 fn array_at_returns_element_type_int() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(arr: int[]) -> int? { return arr.at(0); }",
     );
@@ -43,7 +44,7 @@ fn array_at_returns_element_type_int() {
 #[test]
 fn array_at_returns_element_type_string() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(arr: string[]) -> string? { return arr.at(0); }",
     );
@@ -59,7 +60,7 @@ fn array_at_returns_element_type_string() {
 #[test]
 fn array_join_returns_string() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(arr: string[]) -> string { return arr.join(","); }"#,
     );
@@ -75,7 +76,7 @@ fn array_join_returns_string() {
 #[test]
 fn user_defined_array_does_not_bridge_like_builtin_array() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Array<T> {}
@@ -102,7 +103,7 @@ function f(xs: int[]) -> int {
 #[test]
 fn map_keys_returns_key_type_array() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(m: map<string, int>) -> string[] { return m.keys(); }",
     );
@@ -118,7 +119,7 @@ fn map_keys_returns_key_type_array() {
 #[test]
 fn map_values_returns_value_type_array() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(m: map<string, int>) -> int[] { return m.values(); }",
     );
@@ -134,7 +135,7 @@ fn map_values_returns_value_type_array() {
 #[test]
 fn map_has_returns_bool() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(m: map<string, int>) -> bool { return m.has("x"); }"#,
     );
@@ -150,7 +151,7 @@ fn map_has_returns_bool() {
 #[test]
 fn map_length_returns_int() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(m: map<string, int>) -> int { return m.length(); }",
     );
@@ -168,7 +169,7 @@ fn map_length_returns_int() {
 #[test]
 fn string_length_returns_int() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(s: string) -> int { return s.length(); }"#,
     );
@@ -184,7 +185,7 @@ fn string_length_returns_int() {
 #[test]
 fn string_split_returns_string_array() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(s: string) -> string[] { return s.split(","); }"#,
     );
@@ -200,7 +201,7 @@ fn string_split_returns_string_array() {
 #[test]
 fn string_includes_returns_bool() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(s: string) -> bool { return s.includes("ell"); }"#,
     );
@@ -216,7 +217,7 @@ fn string_includes_returns_bool() {
 #[test]
 fn string_to_lower_case_returns_string() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(s: string) -> string { return s.to_lower_case(); }",
     );
@@ -234,7 +235,7 @@ fn string_to_lower_case_returns_string() {
 #[test]
 fn let_inferred_from_array_length() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(arr: int[]) -> int { let len = arr.length(); return len; }",
     );
@@ -251,7 +252,7 @@ fn let_inferred_from_array_length() {
 #[test]
 fn let_inferred_from_array_at() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(arr: int[]) -> int? { let x = arr.at(0); return x; }",
     );
@@ -268,7 +269,7 @@ fn let_inferred_from_array_at() {
 #[test]
 fn let_inferred_from_map_keys() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(m: map<string, int>) -> string[] { let k = m.keys(); return k; }",
     );
@@ -287,7 +288,7 @@ fn let_inferred_from_map_keys() {
 #[test]
 fn image_url_returns_optional_string() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(img: image) -> string? { return img.url(); }",
     );
@@ -303,7 +304,7 @@ fn image_url_returns_optional_string() {
 #[test]
 fn image_base64_returns_string() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(img: image) -> string { return img.base64(); }",
     );
@@ -319,7 +320,7 @@ fn image_base64_returns_string() {
 #[test]
 fn image_mime_type_returns_optional_string() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(img: image) -> string? { return img.mime_type(); }",
     );
@@ -335,7 +336,7 @@ fn image_mime_type_returns_optional_string() {
 #[test]
 fn pdf_url_returns_optional_string() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(doc: pdf) -> string? { return doc.url(); }",
     );
@@ -351,7 +352,7 @@ fn pdf_url_returns_optional_string() {
 #[test]
 fn audio_base64_returns_string() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(a: audio) -> string { return a.base64(); }",
     );
@@ -367,7 +368,7 @@ fn audio_base64_returns_string() {
 #[test]
 fn video_file_returns_optional_string() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(v: video) -> string? { return v.file(); }",
     );
@@ -383,7 +384,7 @@ fn video_file_returns_optional_string() {
 #[test]
 fn image_missing_method_produces_unresolved_member() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(img: image) -> int { return img.nonexistent(); }",
     );
@@ -399,7 +400,7 @@ fn image_missing_method_produces_unresolved_member() {
 #[test]
 fn image_static_from_url() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> image { return image.from_url("example.com/img.png", null); }"#,
     );
@@ -415,7 +416,7 @@ fn image_static_from_url() {
 #[test]
 fn pdf_static_from_base64() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> pdf { return pdf.from_base64("base64data", null); }"#,
     );
@@ -431,7 +432,7 @@ fn pdf_static_from_base64() {
 #[test]
 fn audio_static_from_file() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> audio { return audio.from_file("song.mp3", null); }"#,
     );
@@ -447,7 +448,7 @@ fn audio_static_from_file() {
 #[test]
 fn video_static_from_url() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> video { return video.from_url("example.com/v.mp4", null); }"#,
     );
@@ -465,7 +466,7 @@ fn video_static_from_url() {
 #[test]
 fn array_missing_method_produces_unresolved_member() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(arr: int[]) -> int { return arr.nonexistent(); }",
     );
@@ -480,7 +481,7 @@ fn array_missing_method_produces_unresolved_member() {
 #[test]
 fn map_missing_method_produces_unresolved_member() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(m: map<string, int>) -> int { return m.bogus(); }",
     );
@@ -494,7 +495,7 @@ fn map_missing_method_produces_unresolved_member() {
 #[test]
 fn string_missing_method_produces_unresolved_member() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(s: string) -> int { return s.doesNotExist(); }",
     );
@@ -510,7 +511,7 @@ fn string_missing_method_produces_unresolved_member() {
 #[test]
 fn snapshot_builtin_method_calls() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(arr: string[], m: map<string, int>, s: string) -> int {
   let len = arr.length();
@@ -527,7 +528,7 @@ fn snapshot_builtin_method_calls() {
 #[test]
 fn optional_call_basic() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(callback: ((x: int) -> int throws never)?) -> int? {
@@ -547,7 +548,7 @@ function f(callback: ((x: int) -> int throws never)?) -> int? {
 #[test]
 fn optional_call_generic_map() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(arr: int[]?) -> int[]? {
@@ -569,7 +570,7 @@ function f(arr: int[]?) -> int[]? {
 #[test]
 fn direct_optional_method_call_generic_map() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(arr: int[]?) -> int[]? {
@@ -591,7 +592,7 @@ function f(arr: int[]?) -> int[]? {
 #[test]
 fn optional_call_arg_type_checking() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(callback: ((x: int) -> int throws never)?) -> int? {
@@ -612,7 +613,7 @@ function f(callback: ((x: int) -> int throws never)?) -> int? {
 #[test]
 fn optional_call_checks_higher_order_function_arguments() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function demo(cb: (((x: int) -> int throws never) -> int throws never)?) -> int? throws never {
@@ -644,7 +645,7 @@ function demo(cb: (((x: int) -> int throws never) -> int throws never)?) -> int?
 #[test]
 fn optional_call_through_type_alias() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 type MaybeFn = ((x: int) -> int throws never)?
@@ -668,7 +669,7 @@ function f(callback: MaybeFn) -> int? {
 #[test]
 fn optional_field_access_through_type_alias() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class User { name string }
@@ -699,7 +700,7 @@ function f(u: MaybeUser) -> string? {
 #[test]
 fn optional_index_through_type_alias() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 type MaybeInts = int[]?
@@ -722,7 +723,7 @@ function f(xs: MaybeInts) -> int? {
 #[test]
 fn optional_call_expected_nonoptional_still_mismatches() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(cb: ((x: int) -> int throws never)?) -> int {
@@ -743,7 +744,7 @@ function f(cb: ((x: int) -> int throws never)?) -> int {
 #[test]
 fn optional_call_nullable_return_preserves_phase0() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(cb: ((x: int) -> string? throws never)?) -> string? {
@@ -763,7 +764,7 @@ function f(cb: ((x: int) -> string? throws never)?) -> string? {
 #[test]
 fn optional_call_null_short_circuit_still_checks_args() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> null {
@@ -782,7 +783,7 @@ function f() -> null {
 #[test]
 fn optional_call_null_short_circuit_does_not_emit_call_diagnostics() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> null {
@@ -801,7 +802,7 @@ function f() -> null {
 #[test]
 fn optional_call_null_short_circuit_respects_expected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> int {
@@ -824,7 +825,7 @@ function f() -> int {
 #[test]
 fn optional_push_establishes_element_type() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> null {
@@ -855,7 +856,7 @@ fn empty_array_reassignment_keeps_declared_element_type() {
     // later `push` would establish a wrong element type under the declared one
     // (unsound). `push("hello")` must be rejected against the retained `int[]`.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> null {
@@ -883,7 +884,7 @@ fn generic_construction_cannot_infer_param_from_empty_field() {
     // variable and trip `tir2_to_template`'s `unreachable!`; the diagnostic keeps
     // the program out of lowering (which only runs error-free).
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Box<T> {
@@ -908,7 +909,7 @@ fn container_param_default_element_error_reported_once() {
     // element must report the element error exactly once. The default was
     // previously typed twice (infer then check), duplicating the diagnostic.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Money { cents: bigint }
@@ -929,7 +930,7 @@ fn generic_construction_does_not_report_phantom_param() {
     // construction cannot determine — it must NOT be reported as
     // `CannotInferTypeParameter` (only a field-constrained param is).
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Pair<T, U> {
@@ -958,7 +959,7 @@ fn assignment_nested_empty_container_adopts_declared_type() {
     // nested-container local adopts the declared element types *recursively* —
     // the inner `[]` must not leak `EvolvingList(Never)` under `int[][]`.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> null {
@@ -983,7 +984,7 @@ fn catch_handler_empty_array_adopts_expected_type() {
     // expected type — an empty `[]` handler becomes the declared element type,
     // not `unknown`/`EvolvingList(Never)`.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 enum Err { Boom }
@@ -1008,7 +1009,7 @@ function f() -> int[] {
 #[test]
 fn direct_optional_push_establishes_element_type() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> null {
@@ -1035,7 +1036,7 @@ function f() -> null {
 #[test]
 fn optional_push_returns_optional_int() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]?) -> int? {
@@ -1055,7 +1056,7 @@ function f(xs: int[]?) -> int? {
 #[test]
 fn push_establishment_updates_let_binding_type_for_function_values() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function cb() -> int {
@@ -1088,7 +1089,7 @@ function f() -> null {
 #[test]
 fn optional_push_inner_callee_stays_optional_callable() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]?) -> int? {
@@ -1107,7 +1108,7 @@ function f(xs: int[]?) -> int? {
 #[test]
 fn named_wrapper_value_preserves_effect_param() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function wrap(cb: (x: int) -> string) -> string {
@@ -1133,7 +1134,7 @@ function f() -> null {
 #[test]
 fn named_wrapper_value_that_catches_callback_has_never_callable_throws() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function wrap(cb: (x: int) -> string) -> string {
@@ -1157,7 +1158,7 @@ function f() -> null {
 #[test]
 fn returned_wrapper_value_preserves_explicit_callback_throws() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function forward(cb: (x: int) -> int throws string) -> int {
@@ -1184,7 +1185,7 @@ function f() -> null {
 #[test]
 fn catch_wrapped_wrapper_value_preserves_callable_throws() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function wrap(cb: () -> int throws string) -> int {
@@ -1211,7 +1212,7 @@ function f() -> null {
 #[test]
 fn bound_method_value_preserves_declared_throws() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Worker {
@@ -1239,7 +1240,7 @@ function f(worker: Worker) -> null {
 #[test]
 fn builtin_member_value_preserves_declared_throws() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(file: baml.fs.File) -> null {
@@ -1263,7 +1264,7 @@ function f(file: baml.fs.File) -> null {
 #[test]
 fn builtin_map_method_value_preserves_callback_surface() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]) -> null {
@@ -1285,7 +1286,7 @@ function f(xs: int[]) -> null {
 #[test]
 fn wrapper_value_around_builtin_map_preserves_callback_surface() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function builtin_map(cb: (value: int) -> int, values: int[]) -> int[] {
@@ -1309,7 +1310,7 @@ function f() -> null {
 #[test]
 fn lambda_value_preserves_explicit_throws() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> null {
@@ -1336,7 +1337,7 @@ fn stored_lambda_with_omitted_throws_infers_throws_in_expr_type() {
     // enclosing fn's generic `E`). The stored value's type carries the
     // inferred, concrete surface instead of a blanket `never`.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> null {
@@ -1360,7 +1361,7 @@ function f() -> null {
 #[test]
 fn returned_triple_nested_lambda_reads_cleanly() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> null {
@@ -1414,7 +1415,7 @@ function f() -> null {
 #[test]
 fn returned_quadruple_nested_lambda_reads_cleanly() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> null {
@@ -1478,7 +1479,7 @@ function f() -> null {
 #[test]
 fn plain_push_fast_path_still_checked_against_expected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]) -> string {
@@ -1499,7 +1500,7 @@ function f(xs: int[]) -> string {
 #[test]
 fn optional_push_fast_path_still_checked_against_expected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]?) -> string {
@@ -1520,7 +1521,7 @@ function f(xs: int[]?) -> string {
 #[test]
 fn optional_call_lambda_contextual_typing() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(arr: int[]?) -> int[]? {
@@ -1542,7 +1543,7 @@ function f(arr: int[]?) -> int[]? {
 #[test]
 fn optional_call_lambda_with_explicit_types() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(arr: int[]?) -> int[]? {
@@ -1564,7 +1565,7 @@ function f(arr: int[]?) -> int[]? {
 #[test]
 fn optional_call_builtin_string_method() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(s: string?) -> string[]? {
@@ -1584,7 +1585,7 @@ function f(s: string?) -> string[]? {
 #[test]
 fn optional_call_builtin_map_method() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(m: map<string, int>?) -> string[]? {
@@ -1604,7 +1605,7 @@ function f(m: map<string, int>?) -> string[]? {
 #[test]
 fn optional_call_unnecessary_chaining_diagnostic() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(callback: (x: int) -> int) -> int? {
@@ -1625,7 +1626,7 @@ function f(callback: (x: int) -> int) -> int? {
 #[test]
 fn parenthesized_optional_method_call_breaks_chain() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class User {
@@ -1654,7 +1655,7 @@ function f(u: User?) -> string {
 #[test]
 fn optional_call_arity_mismatch() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(callback: ((x: int) -> int throws never)?) -> int? {
@@ -1675,7 +1676,7 @@ function f(callback: ((x: int) -> int throws never)?) -> int? {
 #[test]
 fn index_assignment_establishment_updates_let_binding_type() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> int {
@@ -1702,7 +1703,7 @@ function f() -> int {
 #[test]
 fn lambda_body_container_establishment_does_not_leak_to_parent_scope() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> int {
@@ -1733,7 +1734,7 @@ function f() -> int {
 #[test]
 fn for_body_container_assignment_establishes_outer_type() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> int {
@@ -1763,7 +1764,7 @@ function f() -> int {
 #[test]
 fn refutable_array_pattern_is_rejected_in_for_binding() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(rows: int[][]) -> int {
@@ -1786,7 +1787,7 @@ function f(rows: int[][]) -> int {
 #[test]
 fn or_pattern_same_binding_with_conflicting_types_is_rejected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class A {
@@ -1815,7 +1816,7 @@ function f(value: A | B) -> int {
 #[test]
 fn class_destructure_unknown_field_in_let_reports_field_error() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Point {
@@ -1848,7 +1849,7 @@ function f() -> int {
 #[test]
 fn class_destructure_unknown_field_in_match_does_not_make_next_arm_unreachable() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Point {
@@ -1880,7 +1881,7 @@ function f(p: Point) -> string {
 #[test]
 fn class_destructure_unknown_field_arm_does_not_emit_non_exhaustive_match() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class A {
@@ -1914,7 +1915,7 @@ function f(v: A | B) -> string {
 #[test]
 fn class_destructure_unknown_field_in_for_binding_reports_field_error() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Item {
@@ -1948,7 +1949,7 @@ function f(items: Item[]) -> int {
 #[test]
 fn mixed_or_pattern_preserves_partial_expected_type_for_generic_return() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class A {

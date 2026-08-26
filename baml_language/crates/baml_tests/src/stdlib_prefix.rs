@@ -11,7 +11,7 @@
 //!
 //! # What it does not change
 //!
-//! Output is **byte-identical** to `baml_project::testing`'s honest helpers, at
+//! Output is **byte-identical** to `baml_db::testing`'s honest helpers, at
 //! every optimization level. The stdlib sources stay in the database; only its
 //! interface derivation and bytecode lowering are served from the prefix, and
 //! both are pure functions of those same sources.
@@ -27,7 +27,7 @@
 //!
 //! # Layering
 //!
-//! The derivation itself lives in `baml_project::stdlib_prefix`, shared with
+//! The derivation itself lives in `baml_db::stdlib_prefix`, shared with
 //! `bex_project`'s build script. Each consumer embeds its own artifact because
 //! their requirements differ: `bex_project` ships one optimization level inside
 //! production binaries where size matters, this crate carries every level for
@@ -35,8 +35,8 @@
 
 use std::{collections::BTreeMap, sync::LazyLock};
 
-use baml_project::{ProjectDatabase, stdlib_prefix::decode_artifact, testing};
-pub use baml_project::{
+use baml_db::{ProjectDatabase, stdlib_prefix::decode_artifact, testing};
+pub use baml_db::{
     stdlib_prefix::{OptLevel, StdlibPrefix},
     testing::{assert_no_diagnostic_errors, assert_no_user_diagnostic_errors, check_user_files},
 };

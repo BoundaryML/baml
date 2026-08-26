@@ -17,9 +17,10 @@ use baml_compiler2_tir::{
     },
     ty::Ty,
 };
-use baml_project::{ProjectDatabase, testing::assert_no_diagnostic_errors};
+use baml_db::{ProjectDatabase, testing::assert_no_diagnostic_errors};
 
 use super::support::make_db;
+use crate::engine::TestDbExt;
 
 const FIXTURE: &str = r#"
 interface Anchor {
@@ -127,15 +128,15 @@ implement<T> Tagged for T {
 
 fn fixture_db() -> ProjectDatabase {
     let mut db = make_db();
-    db.add_file("main.baml", FIXTURE);
-    db.add_file(
+    db.file("main.baml", FIXTURE);
+    db.file(
         "ns_util/helpers.baml",
         "function helper() -> int throws never {\n    1\n}\n",
     );
     // A namespace whose ONLY item is an interface: before interface export its
     // namespace was invisible in the interface (interfaces were dropped and
     // nothing else exported from it).
-    db.add_file("ns_shapes/only_iface.baml", "interface Marker {\n}\n");
+    db.file("ns_shapes/only_iface.baml", "interface Marker {\n}\n");
     db
 }
 
@@ -579,7 +580,7 @@ fn self_in_requirement_generic_args_and_bounds_stays_symbolic() {
     // `f<U extends Parent<Self>>`) already resolved symbolically — pinned
     // here so they cannot regress.
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "self_shapes.baml",
         r#"
 interface Parent<P> {
@@ -839,7 +840,7 @@ fn dep_interface_rows_resolve_only_for_mounted_packages() {
     use baml_compiler2_tir::package_interface::package_resolution_context;
 
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "main.baml",
         "function f() -> int throws never {\n    1\n}\n",
     );
@@ -852,7 +853,8 @@ fn dep_interface_rows_resolve_only_for_mounted_packages() {
             )]),
         )]
         .into(),
-    );
+    )
+    .unwrap();
     let res_ctx = package_resolution_context(&db, PackageId::new(&db, Name::new("user")));
 
     let path = |parts: &[&str]| -> Vec<Name> { parts.iter().map(|p| Name::new(*p)).collect() };
@@ -1041,23 +1043,23 @@ pub(super) mod mounted {
     use baml_base::Name;
     use baml_compiler2_hir::package::PackageId;
     use baml_compiler2_tir::package_interface::package_interface;
-    use baml_project::{ProjectDatabase, testing::assert_no_diagnostic_errors};
+    use baml_db::{ProjectDatabase, testing::assert_no_diagnostic_errors};
 
     use super::super::support::make_db;
 
     /// Compile `files` as the source of a library package named `app` and
-    /// capture its `borsh(PackageInterface)` blob. The files ride under
-    /// `<builtin>/app/…` so `file_package` assigns them the `app` package —
-    /// the blob's qualified names therefore read `app.…`, matching the mount
-    /// alias exactly (re-aliasing a blob under a different name is out of
-    /// scope for this PR).
+    /// capture its `ArtifactKind::PackageInterface` envelope. The files ride
+    /// under `<builtin>/app/…` so `file_package` assigns them the `app`
+    /// package — the blob's qualified names therefore read `app.…`, matching
+    /// the mount alias exactly (re-aliasing a blob under a different name is
+    /// out of scope for this PR).
     pub(crate) fn app_blob(files: &[(&str, &str)]) -> Vec<u8> {
         let mut db = make_db();
+        db.dependency("app");
         for (path, src) in files {
-            // The extra-files channel: `compiler2_all_files` filters ordinary
-            // project files with `<builtin>/` paths, so library fixtures ride
-            // the same input the stdlib stubs do.
-            db.add_compiler2_virtual_file(format!("<builtin>/app/{path}"), src);
+            // A source-bearing `Dependency` root at `<builtin>/app`: library
+            // fixtures ride the same `<builtin>/` emit group the stdlib does.
+            db.file(format!("<builtin>/app/{path}"), src);
         }
         assert_no_diagnostic_errors(&db);
         let iface = package_interface(&db, PackageId::new(&db, Name::new("app")));
@@ -1065,23 +1067,25 @@ pub(super) mod mounted {
             iface.types.values().any(|ns| !ns.is_empty()),
             "the library fixture must export at least one type"
         );
-        borsh::to_vec(iface).expect("serialize app interface")
+        baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, iface)
+            .expect("serialize app interface")
     }
 
     /// A fresh consumer database with `blob` mounted as `app` and NO `app`
     /// source anywhere.
     fn consumer_db(blob: Vec<u8>, files: &[(&str, &str)]) -> ProjectDatabase {
         let mut db = make_db();
-        db.set_mounted_packages([("app".to_string(), blob)].into());
+        db.set_mounted_packages([("app".to_string(), blob)].into())
+            .unwrap();
         for (path, src) in files {
-            db.add_file(path, src);
+            db.file(path, src);
         }
         db
     }
 
     /// The check-level error messages (with codes) for user files of `db`.
     fn error_messages(db: &ProjectDatabase) -> Vec<String> {
-        baml_project::collect_diagnostics(db)
+        baml_db::collect_diagnostics(db)
             .iter()
             .filter(|d| matches!(d.severity, baml_compiler_diagnostics::Severity::Error))
             .map(|d| format!("[{}] {}", d.code(), d.message))

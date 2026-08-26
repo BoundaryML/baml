@@ -41,7 +41,7 @@ mod prompt;
 mod random;
 pub(crate) mod resolve;
 pub(crate) use resolve::ImplResolver;
-mod root;
+pub(crate) mod root;
 mod spawn;
 mod stack_trace;
 mod string;
@@ -123,9 +123,8 @@ pub trait Continuation: Send {
 }
 
 /// Returns the dispatched callee's result unchanged. Shared by the single-call
-/// shims (`_compare_shim`, `string.to<T>`'s `from_string` dispatch,
-/// `reflect.call_any`) whose only job is to dispatch one call and surface its
-/// value.
+/// shims (`_compare_shim` and `string.to<T>`'s `from_string` dispatch) whose
+/// only job is to dispatch one call and surface its value.
 pub(crate) struct PassThroughContinuation;
 
 impl Continuation for PassThroughContinuation {

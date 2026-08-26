@@ -7,6 +7,7 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+baml_artifact = { workspace = true }
 baml_base = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_compiler2_ast = { workspace = true }
@@ -17,6 +18,7 @@ baml_type = { workspace = true }
 baml_type_runtime = { workspace = true }
 borsh = { workspace = true }
 ena = { workspace = true }
+indexmap = { workspace = true }
 num-bigint = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }

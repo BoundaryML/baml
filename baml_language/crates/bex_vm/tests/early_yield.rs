@@ -20,7 +20,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use baml_project::testing::compile_source;
+use baml_db::testing::compile_source;
 use bex_vm::{BexVm, VmExecState};
 
 const LOOP_ITERATIONS: i64 = 10_000;

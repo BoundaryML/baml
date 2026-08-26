@@ -2,8 +2,7 @@
 
 use std::{env, fs, path::PathBuf};
 
-use baml_db::baml_compiler_diagnostics::Severity;
-use baml_project::ProjectDatabase;
+use baml_db::{ProjectDatabase, SourceRootSpec, baml_compiler_diagnostics::Severity};
 
 use crate::{emit_cargo_line, watch_dir};
 
@@ -90,8 +89,15 @@ fn generate_fixture(
         .unwrap_or_else(|error| panic!("failed to locate {}: {error}", baml_src.display()));
 
     let mut db = ProjectDatabase::new();
-    db.set_project_root(&canonical);
-    let baml_files = baml_workspace::discover_baml_files(&canonical);
+    db.ensure_stdlib_sources();
+    let root = db
+        .add_source_root(SourceRootSpec {
+            path: canonical.clone(),
+            package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: baml_db::SourceRootKind::Workspace,
+        })
+        .unwrap_or_else(|error| panic!("C# {fixture_name}: cannot add workspace root: {error}"));
+    let baml_files = baml_db::discover_baml_files(&canonical);
     assert!(
         !baml_files.is_empty(),
         "C# {fixture_name} fixture has no BAML files"
@@ -99,10 +105,10 @@ fn generate_fixture(
     for path in &baml_files {
         let source = fs::read_to_string(path)
             .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-        db.add_or_update_file(path, &source);
+        db.add_or_update_file_in(root, path, &source);
     }
 
-    let diagnostics = baml_project::collect_diagnostics(&db);
+    let diagnostics = baml_db::collect_diagnostics(&db);
     let errors = diagnostics
         .iter()
         .filter(|diagnostic| diagnostic.severity == Severity::Error)
@@ -112,8 +118,9 @@ fn generate_fixture(
         "C# {fixture_name} fixture diagnostics: {errors:#?}"
     );
 
-    let symbols = baml_project::build_symbol_pool(&db);
-    let bytecode = borsh::to_vec(
+    let symbols = baml_ide::build_symbol_pool(&db);
+    let bytecode = baml_artifact::encode(
+        baml_artifact::ArtifactKind::Program,
         &db.get_bytecode()
             .unwrap_or_else(|error| panic!("C# bytecode compilation failed: {error:?}")),
     )

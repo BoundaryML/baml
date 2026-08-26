@@ -293,6 +293,7 @@ impl PpirTy {
                 attrs,
             },
             TypeExprKind::BuiltinUnknown { .. }
+            | TypeExprKind::Unreflect { .. }
             | TypeExprKind::AssociatedTypeProjection { .. }
             | TypeExprKind::Type { .. }
             | TypeExprKind::Function { .. }

@@ -40,7 +40,7 @@
 use std::collections::HashSet;
 
 use baml_compiler_diagnostics::Severity;
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
 use baml_tests::{
     baml_test,
     stdlib_prefix::{check_user_files, setup_multi_file_db, setup_test_db},
@@ -64,7 +64,7 @@ fn collect_compile_errors_multi(files: &[(&str, &str)]) -> Vec<String> {
 }
 
 fn collect_compile_errors_from_db(db: &ProjectDatabase) -> Vec<String> {
-    let all_files = db.get_source_files();
+    let all_files = db.workspace_files();
     let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(db)).collect();
 
     check_user_files(db)
@@ -1677,7 +1677,7 @@ fn generic_class_unannotated_self_is_parameterized() {
     // An unannotated `self` in a generic class must be typed `Wrap<T>`, not bare
     // `Wrap`, so it satisfies a parameterized expected type. Regression for the
     // ParseCache builtin failure: the auto-derived `to_json` passed a bare
-    // `self` to `baml.json.to_string<ParseCache<TStream, TFinal>>`. Because the
+    // `self` to `baml.json.to_string`. Because the
     // callee's generic is differently named, the class params stay rigid and the
     // argument is *checked* (not deferred), which surfaced the bare `self`.
     assert_zero_compile_errors(

@@ -12,13 +12,15 @@ use baml_compiler2_mir::{
     MirFunctionKind, OptLevel, StatementKind, Terminator, lower_function, pretty::display_function,
 };
 use baml_compiler2_ppir::item_data::{file_functions, function_data, function_source_map};
-use baml_project::{ProjectDatabase, testing::assert_no_diagnostic_errors};
+use baml_db::{ProjectDatabase, testing::assert_no_diagnostic_errors};
+
+use crate::engine::TestDbExt;
 
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_mir");
 
 fn make_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("."));
+    db.workspace(std::path::Path::new("."));
     db
 }
 
@@ -41,7 +43,7 @@ fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
 #[test]
 fn explicit_local_id_reaches_direct_and_sysop_mir_terminators() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function leaf(n: int) -> int { n }
@@ -81,7 +83,8 @@ function main(call_id: boundary.LocalId, sysop_id: boundary.LocalId) -> int thro
 #[test]
 fn mounted_await_any_kind_is_trusted_only_for_precompiled_packages() {
     let mut dependency = make_db();
-    dependency.add_compiler2_virtual_file(
+    dependency.dependency("dependency");
+    dependency.file(
         "<builtin>/dependency/native.baml",
         r#"
 function untrusted_await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
@@ -107,9 +110,15 @@ function untrusted_await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int t
 
     let mut db = make_db();
     db.set_mounted_packages(
-        [("dependency".to_string(), borsh::to_vec(&interface).unwrap())].into(),
-    );
-    let file = db.add_file(
+        [(
+            "dependency".to_string(),
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
+                .unwrap(),
+        )]
+        .into(),
+    )
+    .unwrap();
+    let file = db.file(
         "test.baml",
         r#"
 function main<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
@@ -148,7 +157,8 @@ fn mounted_intrinsic_kinds_are_trusted_only_for_precompiled_packages() {
     use baml_compiler2_hir_ty::callable::ExternalCallTarget;
 
     let mut dependency = make_db();
-    dependency.add_compiler2_virtual_file(
+    dependency.dependency("dependency");
+    dependency.file(
         "<builtin>/dependency/native.baml",
         r#"
 function forged_log(data: unknown) -> void {
@@ -196,9 +206,15 @@ function forged_type_of<T>() -> reflect.Type {
 
     let mut db = make_db();
     db.set_mounted_packages(
-        [("dependency".to_string(), borsh::to_vec(&interface).unwrap())].into(),
-    );
-    let file = db.add_file(
+        [(
+            "dependency".to_string(),
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
+                .unwrap(),
+        )]
+        .into(),
+    )
+    .unwrap();
+    let file = db.file(
         "test.baml",
         r#"
 function main() -> reflect.Type {
@@ -241,7 +257,7 @@ function main() -> reflect.Type {
 #[test]
 fn explicit_local_id_reaches_indirect_optional_virtual_and_union_calls() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 interface Speaker {
@@ -358,14 +374,14 @@ macro_rules! mir_snapshot {
 #[test]
 fn literal_return() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> int { return 42; }");
+    let file = db.file("test.baml", "function f() -> int { return 42; }");
     mir_snapshot!("literal_return", render_mir(&db, file));
 }
 
 #[test]
 fn binary_add() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(x: int, y: int) -> int { return x + y; }",
     );
@@ -375,7 +391,7 @@ fn binary_add() {
 #[test]
 fn if_else() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(x: int) -> string {
             if x > 0 {
@@ -391,7 +407,7 @@ fn if_else() {
 #[test]
 fn let_binding() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(x: int) -> int { let y = x + 1; return y; }",
     );
@@ -401,7 +417,7 @@ fn let_binding() {
 #[test]
 fn function_call() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         function add(a: int, b: int) -> int { return a + b; }
@@ -414,7 +430,7 @@ fn function_call() {
 #[test]
 fn optional_default_prologue_and_source_omission() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         function add(base: int, amount: int = base + 2) -> int {
@@ -435,7 +451,7 @@ fn optional_default_prologue_and_source_omission() {
 #[test]
 fn optional_named_gap_and_explicit_null() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         function score(query: string, max_results: int = 10, filter: string? = null) -> int {
@@ -468,7 +484,7 @@ fn optional_named_gap_and_explicit_null() {
 #[test]
 fn optional_named_reordered_args_evaluate_in_source_order() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         function text(value: string) -> string {
@@ -497,7 +513,7 @@ fn optional_named_reordered_args_evaluate_in_source_order() {
 #[test]
 fn optional_dropping_adapter() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         function combine(x: int, a: int = 10, b: int = 100) -> int {
@@ -516,7 +532,7 @@ fn optional_dropping_adapter() {
 #[test]
 fn while_loop() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(n: int) -> int {
             let sum = 0;
@@ -534,7 +550,7 @@ fn while_loop() {
 #[test]
 fn match_expr() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(x: int) -> string {
             return match (x) {
@@ -550,7 +566,7 @@ fn match_expr() {
 #[test]
 fn object_construction() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         class Point { x int  y int }
@@ -563,7 +579,7 @@ fn object_construction() {
 #[test]
 fn generic_class_destructure_field_projection_uses_instantiated_type() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         class Box<T> {
@@ -596,7 +612,7 @@ fn generic_class_destructure_field_projection_uses_instantiated_type() {
 #[test]
 fn match_or_mixed_array_class_binding_uses_branch_local_rest_type() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         class NumberBag {
@@ -620,7 +636,7 @@ fn match_or_mixed_array_class_binding_uses_branch_local_rest_type() {
 #[test]
 fn match_or_class_union_field_access_uses_runtime_dispatch() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         class A { field int }
@@ -646,7 +662,7 @@ fn match_or_class_union_field_access_uses_runtime_dispatch() {
 #[test]
 fn source_param_interface_dispatch_respects_shadowed_local_binding() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         class Shadow {
@@ -683,7 +699,7 @@ fn source_param_interface_dispatch_respects_shadowed_local_binding() {
 #[test]
 fn reflect_type_of_class() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         class User { name string }
@@ -699,7 +715,7 @@ fn reflect_type_of_class() {
 #[test]
 fn reflect_type_of_array() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         function f() -> reflect.Type {
@@ -717,7 +733,7 @@ fn reflect_type_of_array() {
 #[test]
 fn reflect_type_of_bare_typevar() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         function f<T>() -> reflect.Type {
@@ -733,7 +749,7 @@ fn reflect_type_of_bare_typevar() {
 #[test]
 fn reflect_type_of_array_of_typevar() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         function f<T>() -> reflect.Type {
@@ -750,7 +766,7 @@ fn reflect_type_of_array_of_typevar() {
 #[test]
 fn runtime_type_plan_operations_are_explicit() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function accept<T>(value: T) -> T { value }
@@ -762,9 +778,39 @@ function f(t: reflect.Type, value: unknown) -> bool {
 }
 "#,
     );
-    baml_project::testing::assert_no_diagnostic_errors(&db);
+    baml_db::testing::assert_no_diagnostic_errors(&db);
     mir_snapshot!(
         "runtime_type_plan_operations_are_explicit",
+        render_mir(&db, file)
+    );
+}
+
+#[test]
+fn nested_runtime_type_atoms_bind_slots_before_loading_templates() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Wrapper<T> { value T }
+
+function erase<T>() -> string { "ok" }
+
+function f(t: reflect.Type, value: unknown) -> bool {
+    type Bound = Wrapper<unreflect(t)>
+    let annotated: Wrapper<unreflect(t)>? = null
+    erase<Wrapper<unreflect(t)>>() == "ok"
+        && annotated == null
+        && value is Wrapper<unreflect(t)>
+        && match value {
+            Wrapper<unreflect(t)> => true,
+            _ => false,
+        }
+}
+"#,
+    );
+    baml_db::testing::assert_no_diagnostic_errors(&db);
+    mir_snapshot!(
+        "nested_runtime_type_atoms_bind_slots_before_loading_templates",
         render_mir(&db, file)
     );
 }
@@ -775,20 +821,23 @@ function f(t: reflect.Type, value: unknown) -> bool {
 #[test]
 fn mounted_loc_free_runtime_call_target_is_explicit() {
     let mut library = make_db();
-    library.add_compiler2_virtual_file(
+    library.dependency("app");
+    library.file(
         "<builtin>/app/lib.baml",
         "function accept<T>(value: T) -> T { value }",
     );
-    baml_project::testing::assert_no_diagnostic_errors(&library);
+    baml_db::testing::assert_no_diagnostic_errors(&library);
     let interface = baml_compiler2_hir_ty::package_interface::package_interface(
         &library,
         baml_compiler2_hir::package::PackageId::new(&library, baml_base::Name::new("app")),
     );
-    let blob = borsh::to_vec(interface).expect("serialize mounted interface");
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
+        .expect("serialize mounted interface");
 
     let mut db = make_db();
-    db.set_mounted_packages([("app".to_string(), blob)].into());
-    let file = db.add_file(
+    db.set_mounted_packages([("app".to_string(), blob)].into())
+        .unwrap();
+    let file = db.file(
         "test.baml",
         r#"
 function f(t: reflect.Type, value: unknown) -> unknown {
@@ -796,7 +845,7 @@ function f(t: reflect.Type, value: unknown) -> unknown {
 }
 "#,
     );
-    baml_project::testing::assert_no_diagnostic_errors(&db);
+    baml_db::testing::assert_no_diagnostic_errors(&db);
     mir_snapshot!(
         "mounted_loc_free_runtime_call_target_is_explicit",
         render_mir(&db, file)
@@ -808,7 +857,7 @@ function f(t: reflect.Type, value: unknown) -> unknown {
 #[test]
 fn runtime_id_read_lowers_to_baml_id_current() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         function f() -> string {
@@ -827,7 +876,7 @@ fn runtime_id_read_lowers_to_baml_id_current() {
 #[test]
 fn runtime_id_assignment_lowers_to_baml_id_set() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         function f() -> string {
@@ -853,7 +902,7 @@ fn runtime_id_assignment_lowers_to_baml_id_set() {
 #[test]
 fn array_rest_binding_with_suffix_slices_middle() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         function f(xs: int[]) -> int {
@@ -874,7 +923,7 @@ fn array_rest_binding_with_suffix_slices_middle() {
 #[test]
 fn array_rest_binding_no_suffix_slices_to_len() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         function f(xs: int[]) -> int {
@@ -897,7 +946,7 @@ fn array_rest_binding_no_suffix_slices_to_len() {
 #[test]
 fn array_rest_wildcard_skips_slice_projection() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
         function f(xs: int[]) -> int {

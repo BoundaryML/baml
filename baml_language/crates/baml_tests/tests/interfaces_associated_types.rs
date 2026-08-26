@@ -14,8 +14,8 @@
 use std::collections::HashSet;
 
 use baml_compiler_diagnostics::Severity;
+use baml_db::ProjectDatabase;
 use baml_fmt::FormatOptions;
-use baml_project::ProjectDatabase;
 use baml_tests::{
     baml_test,
     engine::{OptLevel, compile_source_with_opt},
@@ -35,7 +35,7 @@ fn collect_compile_errors_multi(files: &[(&str, &str)]) -> Vec<String> {
 }
 
 fn collect_compile_errors_from_db(db: &ProjectDatabase) -> Vec<String> {
-    let all_files = db.get_source_files();
+    let all_files = db.workspace_files();
     let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(db)).collect();
 
     check_user_files(db)

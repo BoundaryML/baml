@@ -10,7 +10,7 @@ use baml_tests::stdlib_prefix::{check_user_files, setup_test_db};
 
 fn collect_compile_errors(source: &str) -> Vec<String> {
     let db = setup_test_db(source);
-    let all_files = db.get_source_files();
+    let all_files = db.workspace_files();
     let user_file_ids: HashSet<_> = all_files.iter().map(|f| f.file_id(&db)).collect();
 
     check_user_files(&db)

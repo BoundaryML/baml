@@ -6,12 +6,14 @@
 
 use baml_compiler2_hir_ty::infer::{CallTypeArgPlan, MemberResolution, RuntimeCheck, infer_body};
 
+use crate::engine::TestDbExt;
+
 /// Every recorded member resolution in `source`, as sorted
 /// `(snippet, kind)` pairs - the snippet is the recorded expression's
 /// exact text, so assertions read as the language they pin.
 fn member_resolutions(source: &str) -> Vec<(String, String)> {
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let mut out = Vec::new();
     for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
         let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
@@ -196,7 +198,7 @@ function mr_chain(p: Person) -> string throws never {
 }
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let mut ladders = Vec::new();
     for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
         let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
@@ -254,7 +256,7 @@ function cp_use() -> int throws never {
 }
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let mut plans = Vec::new();
     for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
         let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
@@ -320,7 +322,7 @@ function rt_owner_use() -> RtBox<int> throws never {
 }
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let mut seen = false;
     for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
         let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
@@ -372,7 +374,7 @@ function rt_use(runtime_t: reflect.Type, good: RtGood) -> RtAnchor throws never 
 }
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let mut seen = false;
     for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
         let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
@@ -473,7 +475,7 @@ function sc_companion() -> baml.Map<string, int> throws never {
 }
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let mut errors = Vec::new();
     let mut extraction_throws = None;
     let mut session_args = None;
@@ -585,7 +587,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
 }
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let mut saw_inner = false;
     let mut saw_outer = false;
     let mut saw_branch = false;
@@ -603,15 +605,18 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
         diagnostics.extend(result.diagnostics.iter().map(|diag| diag.error.clone()));
         runtime_checks += result.runtime_checks.len();
         for check in &result.runtime_checks {
-            assert!(matches!(
-                check,
-                baml_compiler2_hir_ty::infer::RuntimeCheck::Argument { expected, .. }
-                    if matches!(
-                        expected.kind(),
-                        baml_type::interned::TyKind::TypeVar(param, _)
-                            if param.index() & 0x8000_0000 != 0
-                    )
-            ));
+            assert!(
+                matches!(
+                    check,
+                    baml_compiler2_hir_ty::infer::RuntimeCheck::Argument { expected, .. }
+                        if matches!(
+                            expected.kind(),
+                            baml_type::interned::TyKind::TypeVar(param, _)
+                                if param.index() & 0x8000_0000 != 0
+                        )
+                ),
+                "unexpected runtime check: {check:?}"
+            );
         }
         saw_bad_operand |= result.diagnostics.iter().any(|diag| {
             matches!(
@@ -749,7 +754,7 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
 }
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let mut non_exhaustive = 0;
     let mut unreachable = 0;
     let mut pattern_types = 0;
@@ -874,7 +879,7 @@ function ea_use() -> int throws never {
 }
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let mut adjustments = Vec::new();
     for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
         let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
@@ -902,7 +907,7 @@ function pd_take(a: int, tag: string = "t", n: int = 1 + 2, bad: int = "x") -> i
 }
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let functions = baml_compiler2_ppir::item_data::file_functions(&db, file);
     let function = *functions.first().expect("one function");
     let owner = baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(function);
@@ -961,7 +966,7 @@ function de_probe() -> bool throws never {
 }
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let mut plans = Vec::new();
     for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
         let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
@@ -1006,7 +1011,7 @@ function ir_probe() -> int throws unknown {
 }
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let mut plans = Vec::new();
     for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
         let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {
@@ -1107,7 +1112,7 @@ function pa_probe() -> int {
 }
 "#;
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", source);
+    let file = db.file("test.baml", source);
     let mut renders = Vec::new();
     for owner in baml_compiler2_ppir::file_body_owners(&db, file) {
         let Some(source_map) = baml_compiler2_ppir::body_source_map(&db, owner) else {

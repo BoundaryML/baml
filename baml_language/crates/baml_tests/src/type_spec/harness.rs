@@ -67,8 +67,10 @@ use baml_compiler2_hir::{
     semantic_index::FileSemanticIndex,
 };
 use baml_compiler2_hir_ty::infer::{InferenceResult, infer_body};
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
 use text_size::{TextRange, TextSize};
+
+use crate::engine::TestDbExt;
 
 /// One caret annotation: the source range it selects, the expectation, and
 /// the 1-based line of the annotated code (for error messages).
@@ -113,7 +115,7 @@ pub(crate) fn run_differential(fixture: &str) -> DifferentialOutcome {
     );
 
     let mut db = crate::compiler2_tir::support::make_db();
-    let file = db.add_file("test.baml", fixture);
+    let file = db.file("test.baml", fixture);
 
     let hir_ty_nodes = collect_hir_ty_nodes(&db, file, fixture);
     let channel = collect_hir_ty_error_channel(&db, file);

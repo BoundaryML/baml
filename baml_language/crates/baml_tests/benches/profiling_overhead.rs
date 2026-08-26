@@ -13,7 +13,8 @@
 use std::{path::Path, sync::Arc, time::Duration};
 
 use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
+use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, FunctionCallContextBuilder, logger::TraceLogger};
 use bex_events::prof::backend::{DiskBudget, ProfilerConfig, ProfilerSession, list_executions};
 use divan::{Bencher, black_box};
@@ -51,8 +52,8 @@ fn compile_source(
     mode: BenchMode,
 ) -> (ProjectDatabase, BexEngine, tempfile::TempDir) {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(Path::new("."));
-    db.add_file("bench.baml", source);
+    db.workspace(Path::new("."));
+    db.file("bench.baml", source);
     let bytecode = generate_project_bytecode(
         &db,
         &CompileOptions {

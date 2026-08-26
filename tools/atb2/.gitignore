@@ -1,0 +1,6 @@
+eval/
+eval-synthetic/
+out/
+examples/
+README.md
+baml_src/evalgen.baml

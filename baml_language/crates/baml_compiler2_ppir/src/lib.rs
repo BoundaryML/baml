@@ -25,6 +25,7 @@ use baml_compiler2_hir::{
     semantic_index::FileSemanticIndex,
 };
 pub use expand::{ExpandCtx, SapAttrs, expand_partial, stream_expand};
+use indexmap::{IndexMap, IndexSet};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smol_str::SmolStr;
 use text_size::TextRange;
@@ -47,16 +48,38 @@ pub struct PpirExpansionItems<'db> {
 
 // -- Block attributes ---------------------------------------------------------
 
-/// Collect all @@ block attributes per type across all files.
+/// The files the expansion-map collectors scan: every file of every
+/// non-`Stdlib` source root, in table order.
+///
+/// The stdlib exclusion preserves the pre-source-root behavior, where the
+/// collectors scanned the project's user files and the embedded stdlib stubs
+/// were held in a separate input they never saw.
+fn expansion_map_files(
+    db: &dyn crate::Db,
+    roots: baml_base::SourceRootTable,
+) -> impl Iterator<Item = SourceFile> {
+    roots
+        .roots(db)
+        .iter()
+        .filter(|root| match root.kind(db) {
+            baml_base::SourceRootKind::Stdlib => false,
+            baml_base::SourceRootKind::Dependency
+            | baml_base::SourceRootKind::Workspace
+            | baml_base::SourceRootKind::Dynamic => true,
+        })
+        .flat_map(|root| root.files(db).iter().copied())
+}
+
+/// Collect all @@ block attributes per type across all non-stdlib files.
 pub fn collect_block_attrs(
     db: &dyn crate::Db,
-    project: baml_workspace::Project,
+    roots: baml_base::SourceRootTable,
 ) -> FxHashMap<Vec<Name>, Vec<Name>> {
     let mut result = FxHashMap::default();
-    for file in project.files(db) {
-        let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
+    for file in expansion_map_files(db, roots) {
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         // Reuse the memoized CST → AST lowering instead of re-lowering here.
-        let items = &baml_compiler2_hir::file_ast(db, *file).items;
+        let items = &baml_compiler2_hir::file_ast(db, file).items;
         for item in items {
             let (name, item_attrs) = match item {
                 ast::Item::Class(c) => (&c.name, &c.attributes),
@@ -78,16 +101,17 @@ pub fn collect_block_attrs(
     result
 }
 
-/// Collect type alias bodies (qualified path → `PpirTy`) across all files.
+/// Collect type alias bodies (qualified path → `PpirTy`) across all
+/// non-stdlib files.
 pub fn collect_alias_bodies(
     db: &dyn crate::Db,
-    project: baml_workspace::Project,
+    roots: baml_base::SourceRootTable,
 ) -> FxHashMap<Vec<Name>, PpirTy> {
     let mut result = FxHashMap::default();
-    for file in project.files(db) {
-        let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
+    for file in expansion_map_files(db, roots) {
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         // Reuse the memoized CST → AST lowering instead of re-lowering here.
-        let items = &baml_compiler2_hir::file_ast(db, *file).items;
+        let items = &baml_compiler2_hir::file_ast(db, file).items;
         for item in items {
             if let ast::Item::TypeAlias(a) = item {
                 let ty = a.type_expr.as_ref().map(PpirTy::from_type_expr).unwrap_or(
@@ -111,12 +135,12 @@ pub fn collect_alias_bodies(
 /// The whole-project maps consumed by [`ppir_expansion_items`] when building a
 /// file's `*$stream` companions.
 ///
-/// Both maps are derived by scanning **every** file in the project (see
+/// Both maps are derived by scanning **every** non-stdlib file (see
 /// [`collect_block_attrs`] / [`collect_alias_bodies`]). `ppir_expansion_items`
 /// is a per-file query, so computing these inline made expansion `O(files²)`:
 /// each of N files re-lowered all N files. Wrapping them in a single
-/// project-keyed [`salsa::tracked`] query ([`project_expansion_maps`]) computes
-/// them once and shares the result across every file's expansion.
+/// root-table-keyed [`salsa::tracked`] query ([`project_expansion_maps`])
+/// computes them once and shares the result across every file's expansion.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ProjectExpansionMaps {
     /// `@@` block attributes per type, keyed by fully-qualified path.
@@ -150,14 +174,18 @@ unsafe impl salsa::Update for ProjectExpansionMaps {
 }
 
 /// Compute the project-wide [`ProjectExpansionMaps`] once, memoized by Salsa.
+///
+/// `roots` (the database's one [`baml_base::SourceRootTable`]) is only the
+/// memo key; the body's per-root/per-file reads are tracked as dependencies
+/// through `db` as usual.
 #[salsa::tracked(returns(ref))]
 pub fn project_expansion_maps(
     db: &dyn crate::Db,
-    project: baml_workspace::Project,
+    roots: baml_base::SourceRootTable,
 ) -> ProjectExpansionMaps {
     ProjectExpansionMaps {
-        block_attrs: collect_block_attrs(db, project),
-        alias_bodies: collect_alias_bodies(db, project),
+        block_attrs: collect_block_attrs(db, roots),
+        alias_bodies: collect_alias_bodies(db, roots),
     }
 }
 
@@ -303,11 +331,10 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
     // Build cross-package items map for resolving foreign type references
     let all_package_items = build_all_package_items(db);
 
-    // Get @@ block attributes and alias bodies. Memoized once per project so
-    // this per-file query doesn't re-scan (and re-lower) every file on every
-    // file — which made expansion O(files²).
-    let project = db.project();
-    let expansion_maps = project_expansion_maps(db, project);
+    // Get @@ block attributes and alias bodies. Memoized once per root table
+    // so this per-file query doesn't re-scan (and re-lower) every file on
+    // every file — which made expansion O(files²).
+    let expansion_maps = project_expansion_maps(db, db.source_roots());
     let block_attrs = &expansion_maps.block_attrs;
     let alias_bodies = &expansion_maps.alias_bodies;
 
@@ -965,18 +992,24 @@ pub fn namespace_items<'db>(
     let package = namespace_id.package(db);
     let ns_path = namespace_id.path(db);
 
-    let mut matching_files: Vec<SourceFile> = baml_compiler2_hir::compiler2_all_files(db)
-        .into_iter()
-        .filter(|file| {
-            let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
-            pkg_info.package == *package && pkg_info.namespace_path == *ns_path
-        })
-        .collect();
+    // Collect matching files from the package's own roots (`package_files`),
+    // then sort alphabetically by path — so edits to another package's file
+    // set never invalidate this namespace.
+    let package_id = PackageId::new(db, package);
+    let mut matching_files: Vec<SourceFile> =
+        baml_compiler2_hir::package::package_files(db, package_id)
+            .iter()
+            .copied()
+            .filter(|file| {
+                let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
+                pkg_info.namespace_path == *ns_path
+            })
+            .collect();
     matching_files.sort_by_key(|a| a.path(db));
 
     // Uses PPIR's file_symbol_contributions (canonical, includes *$stream types).
-    let mut type_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();
-    let mut value_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();
+    let mut type_defs: IndexMap<Name, Vec<Contribution<'db>>> = IndexMap::new();
+    let mut value_defs: IndexMap<Name, Vec<Contribution<'db>>> = IndexMap::new();
 
     for file in &matching_files {
         let contributions = file_symbol_contributions(db, *file);
@@ -988,8 +1021,8 @@ pub fn namespace_items<'db>(
         }
     }
 
-    let mut types: FxHashMap<Name, Definition<'db>> = FxHashMap::default();
-    let mut values: FxHashMap<Name, Definition<'db>> = FxHashMap::default();
+    let mut types: IndexMap<Name, Definition<'db>> = IndexMap::new();
+    let mut values: IndexMap<Name, Definition<'db>> = IndexMap::new();
     let mut conflicts: Vec<NameConflict<'db>> = Vec::new();
 
     for (name, contribs) in type_defs {
@@ -1045,17 +1078,15 @@ pub fn package_items<'db>(db: &'db dyn Db, package_id: PackageId<'db>) -> Packag
 
     // Consumers observe the insertion order of `namespaces`, so namespace
     // discovery must not inherit `HashSet`'s per-process randomized order.
-    let mut ns_paths: Vec<Vec<Name>> = Vec::new();
-    for file in baml_compiler2_hir::compiler2_all_files(db) {
-        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-        if pkg_info.package == *package_name {
-            ns_paths.push(pkg_info.namespace_path.clone());
-        }
+    // Discovery reads only the package's own roots ([`package_files`]), so
+    // edits to another root's file set never invalidate this fold.
+    let mut ns_paths: IndexSet<Vec<Name>> = IndexSet::new();
+    for file in baml_compiler2_hir::package::package_files(db, package_id) {
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
+        debug_assert_eq!(pkg_info.package, *package_name);
+        ns_paths.insert(pkg_info.namespace_path.clone());
     }
-    ns_paths.sort();
-    ns_paths.dedup();
-
-    let mut namespaces: FxHashMap<Vec<Name>, NamespaceItems<'db>> = FxHashMap::default();
+    let mut namespaces: IndexMap<Vec<Name>, NamespaceItems<'db>> = IndexMap::new();
     let mut all_conflicts: Vec<NameConflict<'db>> = Vec::new();
     for ns_path in ns_paths {
         let ns_id = NamespaceId::new(db, package_name.clone(), ns_path.clone());

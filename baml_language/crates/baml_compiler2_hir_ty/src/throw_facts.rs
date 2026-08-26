@@ -57,7 +57,7 @@ unsafe impl salsa::Update for FileThrowFacts {
 /// This is the expensive half of throw inference (PPIR bodies + signature
 /// lowering), isolated per file so it can be (a) memoized at file
 /// granularity and (b) seeded from a previous compile: when the database
-/// carries [`baml_workspace::SeededThrowFacts`] for this file, the seeds are
+/// carries [`baml_compiler2_hir::inputs::SeededThrowFacts`] for this file, the seeds are
 /// returned verbatim and the body is never walked. Facts are a pure
 /// function of file content + name resolution; the bytecode cache only
 /// seeds files whose content is unchanged and whose resolution-relevant
@@ -606,7 +606,8 @@ fn collect_widened_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_ast::{Pattern, Stmt, TypeArg};
+    use baml_compiler2_ast::{Pattern, Stmt, TypeExprKind};
+    use text_size::TextRange;
 
     use super::*;
 
@@ -624,7 +625,13 @@ mod tests {
         let call_throw = throwing_expr(&mut body, "call");
         let call = body.exprs.alloc(Expr::Call {
             callee,
-            type_args: vec![TypeArg::Unreflect(call_throw)],
+            type_args: vec![
+                TypeExprKind::Unreflect {
+                    operand: Some(call_throw),
+                    attrs: Vec::new(),
+                }
+                .at(TextRange::default()),
+            ],
             args: Vec::new(),
         });
         let call_stmt = body.stmts.alloc(Stmt::Expr(call));
@@ -632,7 +639,11 @@ mod tests {
         let binding_throw = throwing_expr(&mut body, "binding");
         let binding = body.stmts.alloc(Stmt::TypeBinding {
             name: Name::new("T"),
-            value: binding_throw,
+            value: TypeExprKind::Unreflect {
+                operand: Some(binding_throw),
+                attrs: Vec::new(),
+            }
+            .at(TextRange::default()),
         });
 
         let scrutinee = body.exprs.alloc(Expr::Literal(Literal::Int(1)));

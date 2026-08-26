@@ -16,7 +16,7 @@ use sys_glob::GlobPattern;
 use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, owned};
 use sys_types::BexHeap;
 
-use crate::{send_wrapper::SendWrapper, wasm_fs::WasmVfs};
+use crate::{send_wrapper::SendWrapper, wasm_vfs::WasmVfs};
 
 /// WASM implementation of `baml.glob` namespace + `Glob` class.
 pub(crate) struct WasmIoGlob {
@@ -229,7 +229,7 @@ fn collect_scan_paths(
     // legacy readDir + per-entry metadata loop.
     if let Ok(entries) = vfs.vfs_read_dir_entries(path) {
         for v in entries.iter() {
-            let entry: crate::wasm_fs::WasmVfsDirEntry = serde_wasm_bindgen::from_value(v)
+            let entry: crate::wasm_vfs::WasmVfsDirEntry = serde_wasm_bindgen::from_value(v)
                 .map_err(|e| format!("readDirEntries returned invalid entry: {e}"))?;
             if !dot && entry.name.starts_with('.') {
                 continue;

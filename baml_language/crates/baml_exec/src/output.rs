@@ -29,7 +29,7 @@ pub enum OutputFormat {
 
 /// Write the target's return value to stdout per the selected format.
 ///
-/// `json` mode dispatches to `baml.json.to_string<T>` so the spec's
+/// `json` mode dispatches to the stdlib JSON serializer so the spec's
 /// "no wrapping" rule is enforced by the stdlib serializer (which also
 /// honors user `to_json` overrides). `debug` mode uses [`format_value`].
 pub async fn write_output(
@@ -68,7 +68,7 @@ pub async fn write_output_with_context(
             // TODO: route debug mode through a stdlib `baml.debug.format<T>`
             // (or auto-derived `to_string` on user classes) so user-defined
             // display overrides are honored, mirroring how `json` mode goes
-            // through `baml.json.to_string<T>`. The stdlib doesn't expose a
+            // through the stdlib JSON serializer. The stdlib doesn't expose a
             // general value-to-debug-string today — adding it is a separate
             // BEP. Until then, the structural pretty-printer below is what
             // the spec calls "human-readable with type annotations".
@@ -87,12 +87,8 @@ pub async fn write_output_with_context(
 
 /// Serialize a value via the BAML stdlib's `baml.json.serialize<T>`.
 ///
-/// `serialize<T>` composes `stringify(to_json<T>(v))` in BAML so the
-/// dynamic-dispatch path through `<Class>.to_json()` honors user
-/// overrides. The alternative, `baml.json.to_string<T>`, is the Rust
-/// structural walker and bypasses overrides — appropriate when override
-/// behavior would corrupt downstream consumers, but the wrong default
-/// for `baml run` / `baml pack` output.
+/// `serialize<T>` delegates to `baml.json.to_string(v)` in BAML, whose
+/// runtime-value dispatch honors user `baml.ToJson` overrides at every depth.
 async fn serialize_via_baml_json(
     engine: &Arc<BexEngine>,
     value: BexExternalValue,

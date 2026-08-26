@@ -83,6 +83,33 @@ function Items() -> Item[] { [Item { value: "bound" }] }
 "####;
 
 #[tokio::test]
+async fn with_types_carries_runtime_witnesses_into_consumer_compilation() {
+    let output = baml_test!(
+        r####"
+interface Labelled {
+  label string
+}
+
+function main() -> bool throws unknown {
+  let witness = reflect.interface.implementation<Labelled>()
+    .field("label", class_field = "display_name")
+  let person = reflect.class.new("InternalPerson", {
+    "display_name": reflect.Type.of<string>(),
+  }, implementations = [witness])
+  let app = reflect.Package.current().with_types({ "PersonAlias": person })
+  let compiled = reflect.Package.compile({ "consumer.baml": `
+function as_label(value: app.PersonAlias) -> app.Labelled {
+  value
+}
+` }, packages = { "app": app })
+  compiled.functions().get("root.as_label") != null
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
 async fn scenario_four_pattern_two_mounts_a_runtime_type_as_a_static_name() {
     let output = baml_test!(PATTERN_TWO_SOURCE);
     assert_eq!(
@@ -94,6 +121,107 @@ async fn scenario_four_pattern_two_mounts_a_runtime_type_as_a_static_name() {
 #[tokio::test]
 async fn scoped_type_binding_evaluates_once_types_contracts_and_widens_on_escape() {
     let output = baml_test!(TYPE_BINDING_SOURCE);
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn structural_let_or_pattern_evaluates_each_unreflect_operand_once() {
+    let output = baml_test!(
+        r#"
+class First<T> { value unknown }
+class Counter {
+    evaluations int
+
+    function operand(self) -> reflect.Type {
+        self.evaluations += 1
+        reflect.Type.of<string>()
+    }
+}
+
+function main() -> bool {
+    let counter = Counter { evaluations: 0 }
+    let candidate: unknown = First<string> { value: "ok" }
+    let First<unreflect(counter.operand())> { value: let bound }
+        | let bound = candidate
+    counter.evaluations == 1 && bound == "ok"
+}
+"#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn nested_unreflect_annotations_and_patterns_use_realized_templates() {
+    let output = baml_test!(
+        r#"
+class Wrapper<T> { value T }
+
+function main() -> bool {
+    let t = reflect.Type.of<string>()
+    let value = Wrapper<string> { value: "ok" }
+    let annotated: Wrapper<unreflect(t)> = value
+    annotated is Wrapper<unreflect(t)>
+        && match annotated {
+            Wrapper<unreflect(t)> => true,
+            _ => false,
+        }
+}
+"#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn type_of_materializes_nested_unreflect_bindings_before_loading_the_template() {
+    let output = baml_test!(
+        r#"
+class Wrapper<T> { value T }
+
+function main() -> bool {
+    let t = reflect.Type.of<string>()
+    reflect.Type.of<Wrapper<unreflect(t)>>() == reflect.Type.of<Wrapper<string>>()
+}
+"#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn runtime_generic_apply_values_preserve_their_type_argument_slot() {
+    let output = baml_test!(
+        r#"
+function has_types<A, B>(first: A, second: B) -> bool {
+    reflect.Type.of<A>() == reflect.Type.of_value(first)
+        && reflect.Type.of<B>() == reflect.Type.of_value(second)
+}
+
+function main() -> bool {
+    let first = reflect.Type.of<string>()
+    let second = reflect.Type.of<int>()
+    let check = has_types<unreflect(first), unreflect(second)>
+    check("ok", 42)
+}
+"#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn match_scrutinee_runtime_annotation_binds_before_pattern_dispatch() {
+    let output = baml_test!(
+        r#"
+class Wrapper<T> { value T }
+
+function main() -> bool {
+    let t = reflect.Type.of<string>()
+    let wrapped = Wrapper<string> { value: "ok" }
+    match (wrapped : Wrapper<unreflect(t)>) {
+        Wrapper<string> { value } => value == "ok",
+        _ => false,
+    }
+}
+"#
+    );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
@@ -161,7 +289,7 @@ function main() -> bool {
 }
 
 #[tokio::test]
-#[should_panic(expected = "runtime type bindings are only allowed inside")]
+#[should_panic(expected = "a runtime type has no scope here")]
 async fn top_level_runtime_type_binding_is_rejected() {
     let _ = baml_test!(
         r#"
@@ -239,8 +367,9 @@ function main() -> string throws unknown {
     assert_eq!(output.result, Ok(BexExternalValue::String("E0010".into())));
 }
 
-/// A scripted `ai.Client` that answers with a fixed payload, so the Agent loop
-/// runs end to end without a network or an API key.
+/// A scripted `ai.Client` that answers with a fixed payload and records the
+/// rendered prompts, so the Agent loop can be observed end to end without a
+/// network or an API key.
 const PROBE_CLIENT: &str = r##"
 client DefaultClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
@@ -250,6 +379,7 @@ client DefaultClient = openai.ResponsesClient.new(
 
 class ProbeClient {
     reply: string,
+    requests: string[],
 
     implements ai.Client {
         function id(self) -> string {
@@ -257,12 +387,13 @@ class ProbeClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            let _ = input;
-            baml.http.Request { method: "POST", url: "https://probe.invalid", headers: {}, body: "{}" }
+            let prompt = input.prompt(ai.internal.build_output_format(input.output_type)).text();
+            let _ = self.requests.push(prompt);
+            baml.http.Request { method: "POST", url: "https://probe.invalid", headers: {}, body: prompt }
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
-            let _ = input;
+            let _ = self.render(input);
             ai.ModelTurn {
                 calls: [],
                 content: [ai.content.Text { text: self.reply }],
@@ -345,7 +476,7 @@ async fn agent_run_parses_a_reflected_output_type() {
             let direct = baml.sap.parse<Out>(`{{"name":"Pixel"}}`)
 
             let run = ai.Agent.new(
-                client = ProbeClient {{ reply: `{{"name":"Pixel"}}` }},
+                client = ProbeClient {{ reply: `{{"name":"Pixel"}}`, requests: [] }},
             ).run(DynamicOutput@spec<Out>())
 
             let direct_name = reflect.class.get_field<string>(direct, "name")
@@ -359,6 +490,99 @@ async fn agent_run_parses_a_reflected_output_type() {
         output.result,
         Ok(BexExternalValue::String("Pixel|Pixel".into()))
     );
+}
+
+/// The Agent runner must hand the runtime output definition to the client
+/// renderer. Parsing alone can pass while the model receives no schema, so
+/// exercise every reflected declaration origin through `ai.Agent.run` and
+/// inspect the request built by the client.
+#[tokio::test]
+async fn agent_runner_renders_reflected_output_schemas_on_the_wire() {
+    let source = format!(
+        r####"
+        {PROBE_CLIENT}
+
+        function DynamicOutput<T>() -> T {{
+            client: DefaultClient
+            prompt: `${{ctx.output_format()}}`
+        }}
+
+        function main() -> string throws unknown {{
+            let minted_class = reflect.class.new("MintedRecord", {{
+                "minted_field": reflect.Type.of<string>().meta(
+                    docstring = "Minted runner field docs",
+                ),
+            }}).as_type()
+            type MintedRecord = unreflect(minted_class)
+            let class_client = ProbeClient {{ reply: `{{"minted_field":"ok"}}`, requests: [] }}
+            let _ = ai.Agent.new(
+                client = class_client,
+            ).run(DynamicOutput@spec<MintedRecord>())
+
+            let minted_enum = reflect.enum.new(
+                "MintedChoice",
+                ["PENDING", "RUNNING"],
+            ).as_type()
+            type MintedChoice = unreflect(minted_enum)
+            let enum_client = ProbeClient {{ reply: `"RUNNING"`, requests: [] }}
+            let _ = ai.Agent.new(
+                client = enum_client,
+            ).run(DynamicOutput@spec<MintedChoice>())
+
+            let alpha = reflect.class.new("AlphaShape", {{
+                "alpha_only": reflect.Type.of<string>(),
+            }}).as_type()
+            let beta = reflect.class.new("BetaShape", {{
+                "beta_only": reflect.Type.of<int>(),
+            }}).as_type()
+            let union = reflect.union.new([alpha, beta]).as_type()
+            type MintedUnion = unreflect(union)
+            let union_client = ProbeClient {{ reply: `{{"alpha_only":"ok"}}`, requests: [] }}
+            let _ = ai.Agent.new(
+                client = union_client,
+            ).run(DynamicOutput@spec<MintedUnion>())
+
+            let package = reflect.Package.compile({{ "compiled.baml": `
+class CompiledRecord {{ compiled_field string }}
+` }})
+            let compiled = (package.get_class("root.CompiledRecord")
+                ?? throw "missing CompiledRecord").as_type()
+            type CompiledRecord = unreflect(compiled)
+            let compiled_client = ProbeClient {{ reply: `{{"compiled_field":"ok"}}`, requests: [] }}
+            let _ = ai.Agent.new(
+                client = compiled_client,
+            ).run(DynamicOutput@spec<CompiledRecord>())
+
+            let class_prompt = class_client.requests.at(0) ?? throw "missing class request"
+            let enum_prompt = enum_client.requests.at(0) ?? throw "missing enum request"
+            let union_prompt = union_client.requests.at(0) ?? throw "missing union request"
+            let compiled_prompt = compiled_client.requests.at(0) ?? throw "missing compiled request"
+            `${{class_prompt}}~~${{enum_prompt}}~~${{union_prompt}}~~${{compiled_prompt}}`
+        }}
+        "####
+    );
+    let output = baml_test!(&source);
+    let BexExternalValue::String(rendered) = output.result.expect("main must return") else {
+        panic!("main returns a string");
+    };
+    let prompts = rendered.split("~~").collect::<Vec<_>>();
+    assert_eq!(prompts.len(), 4, "{rendered}");
+    assert!(
+        prompts[0].contains("minted_field") && prompts[0].contains("Minted runner field docs"),
+        "{}",
+        prompts[0]
+    );
+    assert!(
+        prompts[1].contains("PENDING") && prompts[1].contains("RUNNING"),
+        "{}",
+        prompts[1]
+    );
+    assert!(
+        prompts[2].contains("alpha_only") && prompts[2].contains("beta_only"),
+        "{}",
+        prompts[2]
+    );
+    assert!(prompts[3].contains("compiled_field"), "{}", prompts[3]);
 }
 
 /// B-1582 follow-up: definitions crossed dispatch, but *identity* did not.
@@ -838,6 +1062,96 @@ function Items() -> Item[] { [Item { value: "bound", next: null }] }
         diagnostic.contains("Item"),
         "the diagnostic must name the package class by its source name: {diagnostic}"
     );
+}
+
+#[tokio::test]
+async fn docstrings_render_for_static_minted_and_mounted_types() {
+    let output = baml_test!(
+        r####"
+/// Static class docs
+class StaticDoc {
+  /// Static field docs
+  value string @description("Static field description")
+}
+
+enum StaticState {
+  /// Static enum value docs
+  READY
+}
+
+interface DocAnchor {
+  value string
+}
+
+function main() -> string throws unknown {
+  let anchor = reflect.interface.implementation<DocAnchor>().field("value")
+  let minted = reflect.class.new("Minted", {
+    "value": reflect.Type.of<string>().meta(
+      description = "Minted field description",
+      docstring = "Minted field docs",
+    ),
+  }, implementations = [anchor])
+  let app = reflect.Package.current().with_types({ "Minted": minted })
+  let compiled = reflect.Package.compile({ "wrapper.baml": `
+function make_mounted() -> app.Minted {
+  app.Minted { value: "ok" }
+}
+` }, packages = { "app": app })
+  let make_mounted = compiled.get_function<() -> DocAnchor>("root.make_mounted")
+    ?? throw "missing make_mounted"
+  let mounted = reflect.Type.of_value(make_mounted())
+
+  `${reflect.Type.of<StaticDoc>().to_baml()}~~${reflect.Type.of<StaticState>().to_baml()}~~${ai.wire.render_output_format(reflect.Type.of<StaticDoc>())}~~${ai.wire.render_output_format(reflect.Type.of<StaticState>())}~~${minted.as_type().to_baml()}~~${ai.wire.render_output_format(minted.as_type())}~~${mounted.to_baml()}~~${ai.wire.render_output_format(mounted)}`
+}
+"####
+    );
+    let BexExternalValue::String(rendered) = output.result.expect("main must return") else {
+        panic!("main returns a string");
+    };
+    let parts = rendered.splitn(8, "~~").collect::<Vec<_>>();
+    assert_eq!(parts.len(), 8, "{rendered}");
+
+    assert!(
+        parts[0].starts_with("/// Static class docs\nclass StaticDoc"),
+        "{}",
+        parts[0]
+    );
+    assert!(
+        parts[0].contains("  /// Static field docs\n  value string"),
+        "{}",
+        parts[0]
+    );
+    assert!(
+        parts[1].contains("  /// Static enum value docs\n  READY"),
+        "{}",
+        parts[1]
+    );
+
+    let static_description = parts[2]
+        .find("/// Static field description")
+        .expect("static description renders");
+    let static_docstring = parts[2]
+        .find("/// Static field docs")
+        .expect("static docstring renders");
+    assert!(static_description < static_docstring, "{}", parts[2]);
+    assert!(parts[2].contains("/// Static class docs"), "{}", parts[2]);
+    assert!(
+        parts[3].contains("READY: Static enum value docs"),
+        "{}",
+        parts[3]
+    );
+
+    assert!(parts[4].contains("  /// Minted field docs\n  value string"));
+    let minted_description = parts[5]
+        .find("/// Minted field description")
+        .expect("minted description renders");
+    let minted_docstring = parts[5]
+        .find("/// Minted field docs")
+        .expect("minted docstring renders");
+    assert!(minted_description < minted_docstring, "{}", parts[5]);
+
+    assert!(parts[6].contains("/// Minted field docs"), "{}", parts[6]);
+    assert!(parts[7].contains("/// Minted field docs"), "{}", parts[7]);
 }
 
 /// Binds `item_type` to a class named `Item`, compiled into a runtime package.

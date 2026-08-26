@@ -11,7 +11,7 @@
 
 use std::sync::Arc;
 
-use baml_project::testing::compile_multi_file;
+use baml_db::testing::compile_multi_file;
 use bex_engine::{BexEngine, CallId, EngineError, FunctionCallContextBuilder};
 use bex_heap::BexExternalValue;
 use sys_native::SysOpsExt;
@@ -178,13 +178,13 @@ async fn native_argv_callable_as_entry_point() {
 /// Generic `$rust_function` entries must still expose host-provided type args
 /// to the native through `current_call_type_args()`.
 #[tokio::test]
-async fn generic_native_json_to_string_callable_as_entry_point() {
+async fn generic_native_json_from_string_callable_as_entry_point() {
     let eng = engine(&[("main.baml", "function main() -> int { 1 }")]);
 
     let result = eng
         .call_function(
-            "baml.json.to_string",
-            vec![BexExternalValue::Int(7)],
+            "baml.json.from_string",
+            vec![BexExternalValue::String("7".into())],
             FunctionCallContextBuilder::new(CallId::next())
                 .with_type_args(indexmap::IndexMap::from([(
                     "T".to_string(),
@@ -196,7 +196,7 @@ async fn generic_native_json_to_string_callable_as_entry_point() {
         .await;
 
     match result {
-        Ok(BexExternalValue::String(s)) => assert_eq!(s.as_str(), "7"),
-        other => panic!("expected Ok(String(\"7\")) from baml.json.to_string<int>, got {other:?}"),
+        Ok(BexExternalValue::Int(value)) => assert_eq!(value, 7),
+        other => panic!("expected Ok(Int(7)) from baml.json.from_string<int>, got {other:?}"),
     }
 }

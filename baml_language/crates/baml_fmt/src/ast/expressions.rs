@@ -4920,54 +4920,6 @@ pub struct GenericArgs {
 #[derive(Debug)]
 pub enum GenericArg {
     Type(crate::ast::Type),
-    Unreflect(UnreflectArg),
-}
-
-#[derive(Debug)]
-pub struct UnreflectArg {
-    pub keyword: t::Word,
-    pub open_paren: t::LParen,
-    pub expr: Box<Expression>,
-    pub close_paren: t::RParen,
-}
-
-impl FromCST for UnreflectArg {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::UNREFLECT_ARG)?;
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = it.expect_parse()?;
-        let open_paren = it.expect_parse()?;
-        let expr = Box::new(Expression::from_cst(it.next().ok_or_else(|| {
-            StrongAstError::missing(SyntaxKind::PATH_EXPR, it.parent)
-        })?)?);
-        let close_paren = it.expect_parse()?;
-        it.expect_end()?;
-        Ok(Self {
-            keyword,
-            open_paren,
-            expr,
-            close_paren,
-        })
-    }
-}
-
-impl Printable for UnreflectArg {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
-        printer.print_raw_token(&self.open_paren);
-        printer.print(self.expr.as_ref(), shape);
-        printer.print_raw_token(&self.close_paren);
-        PrintInfo::default_single_line()
-    }
-
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-
-    fn rightmost_token(&self) -> TextRange {
-        self.close_paren.span()
-    }
 }
 
 impl FromCST for GenericArgs {
@@ -4990,14 +4942,6 @@ impl FromCST for GenericArgs {
                 }
                 SyntaxKind::TYPE_EXPR => {
                     let arg = GenericArg::Type(crate::ast::Type::from_cst(elem)?);
-                    let comma = it
-                        .next_if_kind(SyntaxKind::COMMA)
-                        .map(t::Comma::from_cst)
-                        .transpose()?;
-                    args.push((arg, comma));
-                }
-                SyntaxKind::UNREFLECT_ARG => {
-                    let arg = GenericArg::Unreflect(UnreflectArg::from_cst(elem)?);
                     let comma = it
                         .next_if_kind(SyntaxKind::COMMA)
                         .map(t::Comma::from_cst)
@@ -5037,7 +4981,6 @@ impl GenericArgs {
         for (i, (arg, _)) in self.args.iter().enumerate() {
             let (left, right) = match arg {
                 GenericArg::Type(ty) => (ty.leftmost_token(), ty.rightmost_token()),
-                GenericArg::Unreflect(arg) => (arg.leftmost_token(), arg.rightmost_token()),
             };
             let arg_span = right.end() - left.start();
             len += usize::from(arg_span);
@@ -5061,7 +5004,6 @@ impl Printable for GenericArgs {
         for (i, (arg, _comma)) in self.args.iter().enumerate() {
             match arg {
                 GenericArg::Type(ty) => printer.print(ty, shape.clone()),
-                GenericArg::Unreflect(arg) => printer.print(arg, shape.clone()),
             };
             if i + 1 < self.args.len() {
                 printer.print_str(", ");

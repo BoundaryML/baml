@@ -10,7 +10,6 @@
 //!                | DESTRUCTURE_PATTERN
 //!                | ARRAY_PATTERN
 //!                | TYPE_PATTERN
-//!                | UNREFLECT_PATTERN
 //!                | PAREN_PATTERN
 //!                | WILDCARD_PATTERN
 //! ```
@@ -105,7 +104,6 @@ pub enum MatchPattern {
     Destructure(DestructurePattern),
     Array(ArrayPattern),
     Type(TypePattern),
-    Unreflect(UnreflectPattern),
     Paren(ParenPattern),
     Union(UnionPattern),
     Chain(ChainPattern),
@@ -136,9 +134,6 @@ impl MatchPattern {
                 BindingPattern::from_node(&node).map(MatchPattern::Binding)
             }
             SyntaxKind::TYPE_PATTERN => TypePattern::from_node(&node).map(MatchPattern::Type),
-            SyntaxKind::UNREFLECT_PATTERN => {
-                UnreflectPattern::from_node(&node).map(MatchPattern::Unreflect)
-            }
             SyntaxKind::ARRAY_PATTERN => ArrayPattern::from_node(&node).map(MatchPattern::Array),
             SyntaxKind::PAREN_PATTERN => ParenPattern::from_node(&node).map(MatchPattern::Paren),
             SyntaxKind::UNION_PATTERN => UnionPattern::from_node(&node).map(MatchPattern::Union),
@@ -169,7 +164,6 @@ impl Printable for MatchPattern {
             MatchPattern::Destructure(p) => p.print(shape, printer),
             MatchPattern::Array(p) => p.print(shape, printer),
             MatchPattern::Type(p) => p.print(shape, printer),
-            MatchPattern::Unreflect(p) => p.print(shape, printer),
             MatchPattern::Paren(p) => p.print(shape, printer),
             MatchPattern::Union(p) => p.print(shape, printer),
             MatchPattern::Chain(p) => p.print(shape, printer),
@@ -182,7 +176,6 @@ impl Printable for MatchPattern {
             MatchPattern::Destructure(p) => p.leftmost_token(),
             MatchPattern::Array(p) => p.leftmost_token(),
             MatchPattern::Type(p) => p.leftmost_token(),
-            MatchPattern::Unreflect(p) => p.leftmost_token(),
             MatchPattern::Paren(p) => p.leftmost_token(),
             MatchPattern::Union(p) => p.leftmost_token(),
             MatchPattern::Chain(p) => p.leftmost_token(),
@@ -195,7 +188,6 @@ impl Printable for MatchPattern {
             MatchPattern::Destructure(p) => p.rightmost_token(),
             MatchPattern::Array(p) => p.rightmost_token(),
             MatchPattern::Type(p) => p.rightmost_token(),
-            MatchPattern::Unreflect(p) => p.rightmost_token(),
             MatchPattern::Paren(p) => p.rightmost_token(),
             MatchPattern::Union(p) => p.rightmost_token(),
             MatchPattern::Chain(p) => p.rightmost_token(),
@@ -864,52 +856,6 @@ impl Printable for TypePattern {
     }
     fn rightmost_token(&self) -> TextRange {
         self.ty.rightmost_token()
-    }
-}
-
-/// `unreflect(expr)` runtime identity pattern.
-#[derive(Debug)]
-pub struct UnreflectPattern {
-    pub marker: t::Word,
-    pub open_paren: t::LParen,
-    pub operand: Box<crate::ast::Expression>,
-    pub close_paren: t::RParen,
-}
-
-impl UnreflectPattern {
-    fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
-        let mut it = SyntaxNodeIter::new(node);
-        let marker = it.expect_parse()?;
-        let open_paren = it.expect_parse()?;
-        let operand = Box::new(crate::ast::Expression::from_cst(
-            it.expect_next("unreflect operand")?,
-        )?);
-        let close_paren = it.expect_parse()?;
-        it.expect_end()?;
-        Ok(Self {
-            marker,
-            open_paren,
-            operand,
-            close_paren,
-        })
-    }
-}
-
-impl Printable for UnreflectPattern {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.marker);
-        printer.print_raw_token(&self.open_paren);
-        let info = printer.print(&*self.operand, shape);
-        printer.print_raw_token(&self.close_paren);
-        info
-    }
-
-    fn leftmost_token(&self) -> TextRange {
-        self.marker.span()
-    }
-
-    fn rightmost_token(&self) -> TextRange {
-        self.close_paren.span()
     }
 }
 

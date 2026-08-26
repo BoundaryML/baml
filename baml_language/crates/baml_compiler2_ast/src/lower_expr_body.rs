@@ -13,11 +13,11 @@ use text_size::TextRange;
 use crate::{
     LoweringDiagnostic,
     ast::{
-        ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
-        CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionDefaults,
-        LambdaDef, LambdaKind, LetDef, LetOrigin, Literal, LoopOrigin, MapExprEntry, MatchArm,
-        MatchArmId, ObjectExprField, Param, PatId, Pattern, SpreadField, Stmt, StmtId,
-        TemplateIfBranch, TemplateSegment, TemplateTag, TypeAnnotId, TypeArg, TypeExpr,
+        ArrayRestPat, AssignOp, AssociatedTypeBinding, AstSourceMap, BinaryOp, CallArg, CatchArm,
+        CatchArmId, CatchClause, CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat,
+        FunctionDefaults, LambdaDef, LambdaKind, LetDef, LetOrigin, Literal, LoopOrigin,
+        MapExprEntry, MatchArm, MatchArmId, ObjectExprField, Param, PatId, Pattern, SpreadField,
+        Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag, TypeAnnotId, TypeExpr,
         TypeExprKind, UnaryOp,
     },
 };
@@ -100,33 +100,6 @@ fn find_callee_generic_args(callee_node: &SyntaxNode) -> Option<SyntaxNode> {
         }
         _ => None,
     }
-}
-
-/// Read back what the author wrote around an `unreflect(...)` type-argument
-/// slot, so an E0167 report can spell the fix in their own source rather than
-/// a reconstruction. `expr` must contain `slot`; anything else degrades to the
-/// generic suggestion.
-fn unreflect_rewrite(
-    expr: &SyntaxNode,
-    slot: &SyntaxNode,
-) -> baml_compiler_diagnostics::runtime_type::RuntimeTypeNameRewrite {
-    use baml_compiler_diagnostics::runtime_type::RuntimeTypeNameRewrite;
-
-    let expr_range = expr.span_range();
-    let slot_range = slot.span_range();
-    if !expr_range.contains_range(slot_range) {
-        return RuntimeTypeNameRewrite::default();
-    }
-    let node_text = expr.text().to_string();
-    let base = usize::from(expr.text_range().start());
-    let Some(written) =
-        node_text.get(usize::from(expr_range.start()) - base..usize::from(expr_range.end()) - base)
-    else {
-        return RuntimeTypeNameRewrite::default();
-    };
-    let start = usize::from(slot_range.start() - expr_range.start());
-    let end = usize::from(slot_range.end() - expr_range.start());
-    RuntimeTypeNameRewrite::from_source(written, start..end)
 }
 
 /// Lower a CST `ExprFunctionBody` to an owned `ExprBody` + parallel `AstSourceMap`.
@@ -915,7 +888,7 @@ pub(crate) fn synthesize_spec_parse_body(
     let call = ctx.alloc_expr(
         Expr::Call {
             callee,
-            type_args: out_type.map(|t| vec![t.into()]).unwrap_or_default(),
+            type_args: out_type.map(|t| vec![t]).unwrap_or_default(),
             args: vec![CallArg::positional(json_ref)],
         },
         span,
@@ -1061,7 +1034,7 @@ pub fn synthesize_spec_stream_body(
     let call = ctx.alloc_expr(
         Expr::Call {
             callee: stream_spec_callee,
-            type_args: type_args.into_iter().map(Into::into).collect(),
+            type_args,
             args: vec![
                 CallArg::positional(spec_call),
                 CallArg::named("client", client_ref),
@@ -1078,7 +1051,7 @@ pub fn synthesize_spec_stream_body(
 /// Re-apply a companion's enclosing generic parameters when it calls another
 /// companion. Some LLM type parameters occur only in the return type, so
 /// ordinary argument inference has no value-position evidence for them.
-fn static_type_args(names: &[Name], span: TextRange) -> Vec<TypeArg> {
+fn static_type_args(names: &[Name], span: TextRange) -> Vec<TypeExpr> {
     names
         .iter()
         .map(|name| {
@@ -1089,7 +1062,6 @@ fn static_type_args(names: &[Name], span: TextRange) -> Vec<TypeArg> {
                 attrs: vec![],
             }
             .at(span)
-            .into()
         })
         .collect()
 }
@@ -1178,6 +1150,149 @@ impl LoweringContext {
             consumed_generic_args: std::collections::HashSet::new(),
             synthesizing: false,
         }
+    }
+
+    fn lower_unreflect_operand(&mut self, node: &SyntaxNode) -> ExprId {
+        node.children()
+            .next()
+            .map(|expr| self.lower_expr(&expr))
+            .or_else(|| {
+                let mut skipped_marker = false;
+                node.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find(|token| {
+                        if token.kind().is_trivia()
+                            || matches!(token.kind(), SyntaxKind::L_PAREN | SyntaxKind::R_PAREN)
+                        {
+                            return false;
+                        }
+                        if !skipped_marker && token.text() == "unreflect" {
+                            skipped_marker = true;
+                            return false;
+                        }
+                        true
+                    })
+                    .map(|token| {
+                        let expr = lower_bare_token_expr(self, &token);
+                        self.alloc_expr(expr, token.text_range())
+                    })
+            })
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()))
+    }
+
+    fn attach_unreflect_operands(
+        ty: &mut TypeExpr,
+        operands: &std::collections::HashMap<TextRange, ExprId>,
+    ) {
+        match &mut ty.kind {
+            TypeExprKind::Unreflect { operand, .. } => {
+                *operand = operands.get(&ty.span).copied();
+            }
+            TypeExprKind::Path {
+                generic_args,
+                associated_type_bindings,
+                ..
+            } => {
+                for arg in generic_args {
+                    Self::attach_unreflect_operands(arg, operands);
+                }
+                for binding in associated_type_bindings {
+                    Self::attach_unreflect_operands(&mut binding.ty, operands);
+                }
+            }
+            TypeExprKind::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                Self::attach_unreflect_operands(base, operands);
+                if let Some(interface) = interface {
+                    Self::attach_unreflect_operands(interface, operands);
+                }
+            }
+            TypeExprKind::Optional { inner, .. } | TypeExprKind::List { inner, .. } => {
+                Self::attach_unreflect_operands(inner, operands);
+            }
+            TypeExprKind::Map { key, value, .. } => {
+                Self::attach_unreflect_operands(key, operands);
+                Self::attach_unreflect_operands(value, operands);
+            }
+            TypeExprKind::Union { variants, .. } => {
+                for variant in variants {
+                    Self::attach_unreflect_operands(variant, operands);
+                }
+            }
+            TypeExprKind::Function {
+                params,
+                ret,
+                throws,
+                ..
+            } => {
+                for param in params {
+                    Self::attach_unreflect_operands(&mut param.ty, operands);
+                }
+                Self::attach_unreflect_operands(ret, operands);
+                if let Some(throws) = throws {
+                    Self::attach_unreflect_operands(throws, operands);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Allocate each runtime carrier in `type_expr` into this body's expression
+    /// arena, then attach those expression ids to the already-lowered type.
+    fn attach_body_type_operands(
+        &mut self,
+        type_expr: &baml_compiler_syntax::ast::TypeExpr,
+        ty: &mut TypeExpr,
+    ) {
+        let mut operands = std::collections::HashMap::new();
+        let mut preorder = type_expr.syntax().preorder();
+        while let Some(event) = preorder.next() {
+            let rowan::WalkEvent::Enter(node) = event else {
+                continue;
+            };
+            if node.kind() != SyntaxKind::UNREFLECT_TYPE {
+                continue;
+            }
+            let operand = self.lower_unreflect_operand(&node);
+            self.source_map
+                .unreflect_arg_spans
+                .insert(operand, node.span_range());
+            operands.insert(node.span_range(), operand);
+            // Lowering this outer operand recursively lowers any unreflect type
+            // arguments inside it. Do not allocate those nested carriers again.
+            preorder.skip_subtree();
+        }
+        Self::attach_unreflect_operands(ty, &operands);
+    }
+
+    /// Lower a type written inside this body, allocating each runtime carrier
+    /// into the body's expression arena before attaching it to the type atom.
+    fn lower_body_type_expr(
+        &mut self,
+        type_expr: &baml_compiler_syntax::ast::TypeExpr,
+    ) -> TypeExpr {
+        let mut ty = crate::lower_type_expr::lower_type_expr_node(type_expr, &mut self.diags);
+        self.attach_body_type_operands(type_expr, &mut ty);
+        ty
+    }
+
+    /// Lower an associated binding written in this body through the same
+    /// body-aware road as every other type expression. The item-level helper
+    /// cannot allocate `unreflect(...)` carriers into this expression arena.
+    fn lower_body_associated_type_binding(
+        &mut self,
+        binding: &baml_compiler_syntax::ast::AssociatedTypeDecl,
+    ) -> Option<AssociatedTypeBinding> {
+        let name = binding.name()?;
+        let ty = binding
+            .default_or_binding()
+            .map(|ty| self.lower_body_type_expr(&ty))
+            .unwrap_or_else(|| TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
+        Some(AssociatedTypeBinding {
+            name: Name::new(name.text()),
+            ty: Box::new(ty),
+        })
     }
 
     fn warn_const_introducer(&mut self, span: TextRange) {
@@ -2354,10 +2469,7 @@ impl LoweringContext {
                             baml_compiler_syntax::ast::TypeExpr::cast(child.clone())
                         {
                             let span = child.span_range();
-                            let ty = crate::lower_type_expr::lower_type_expr_node(
-                                &type_expr,
-                                &mut self.diags,
-                            );
+                            let ty = self.lower_body_type_expr(&type_expr);
                             scrutinee_type = Some(self.alloc_type_annot(ty, span));
                         }
                     }
@@ -2574,7 +2686,6 @@ impl LoweringContext {
             SyntaxKind::DESTRUCTURE_PATTERN => self.lower_destructure_pattern(node),
             SyntaxKind::ARRAY_PATTERN => self.lower_array_pattern(node),
             SyntaxKind::TYPE_PATTERN => self.lower_type_pattern(node),
-            SyntaxKind::UNREFLECT_PATTERN => self.lower_unreflect_pattern(node),
             SyntaxKind::PAREN_PATTERN => {
                 match node.children().find(|n| n.kind() == SyntaxKind::PATTERN) {
                     Some(inner) => self.lower_pattern(&inner),
@@ -2716,27 +2827,16 @@ impl LoweringContext {
         else {
             return self.alloc_pattern(Pattern::Wildcard, node.span_range());
         };
-        let ty = crate::lower_type_expr::lower_type_expr_node(&type_expr, &mut self.diags);
-        self.alloc_pattern(Pattern::Type(ty), node.span_range())
-    }
-
-    fn lower_unreflect_pattern(&mut self, node: &SyntaxNode) -> PatId {
-        let operand = node
-            .children()
-            .next()
-            .map(|expr| self.lower_expr(&expr))
-            .or_else(|| {
-                node.children_with_tokens()
-                    .filter_map(rowan::NodeOrToken::into_token)
-                    .find(|token| {
-                        !token.kind().is_trivia()
-                            && !matches!(token.kind(), SyntaxKind::L_PAREN | SyntaxKind::R_PAREN)
-                            && token.text() != "unreflect"
-                    })
-                    .and_then(|token| self.try_lower_bare_token(&token))
-            })
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
-        self.alloc_pattern(Pattern::Unreflect(operand), node.span_range())
+        let ty = self.lower_body_type_expr(&type_expr);
+        if let TypeExprKind::Unreflect {
+            operand: Some(operand),
+            ..
+        } = ty.kind
+        {
+            self.alloc_pattern(Pattern::Unreflect(operand), node.span_range())
+        } else {
+            self.alloc_pattern(Pattern::Type(ty), node.span_range())
+        }
     }
 
     /// Lower a `DESTRUCTURE_PATTERN` (`(let|const)? PATH ('<' types '>')? '{' field_list '}'`).
@@ -2774,7 +2874,7 @@ impl LoweringContext {
             .flat_map(rowan::SyntaxNode::children)
             .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
             .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
-            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te, &mut self.diags))
+            .map(|te| self.lower_body_type_expr(&te))
             .collect();
 
         let associated_type_bindings = args_node
@@ -2782,9 +2882,7 @@ impl LoweringContext {
             .filter(|args_node| args_node.kind() == SyntaxKind::TYPE_ARGS)
             .flat_map(|args_node| args_node.children())
             .filter_map(baml_compiler_syntax::ast::AssociatedTypeDecl::cast)
-            .filter_map(|binding| {
-                crate::lower_type_expr::lower_associated_type_binding(&binding, &mut self.diags)
-            })
+            .filter_map(|binding| self.lower_body_associated_type_binding(&binding))
             .collect();
 
         let fields: Vec<FieldPat> = node
@@ -2894,9 +2992,7 @@ impl LoweringContext {
         let ascription = node
             .children()
             .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
-            .map(|type_expr| {
-                crate::lower_type_expr::lower_type_expr_node(&type_expr, &mut self.diags)
-            });
+            .map(|type_expr| self.lower_body_type_expr(&type_expr));
 
         self.alloc_pattern(
             Pattern::Array {
@@ -3210,7 +3306,7 @@ impl LoweringContext {
         //      method's frame correctly (e.g. `Box.from_json` sees
         //      `T = Secret`).
         let callee_generic_args = callee_node.as_ref().and_then(find_callee_generic_args);
-        let type_args: Vec<TypeArg> = callee_generic_args
+        let type_args: Vec<TypeExpr> = callee_generic_args
             .as_ref()
             .map(|ga| self.lower_call_generic_args_node(ga))
             .unwrap_or_default();
@@ -3347,70 +3443,19 @@ impl LoweringContext {
     }
 
     /// Lower the `TYPE_EXPR` children of a `GENERIC_ARGS` node to `TypeExpr`s.
-    fn lower_generic_args_node(
-        ga: &SyntaxNode,
-        diags: &mut Vec<LoweringDiagnostic>,
-    ) -> Vec<TypeExpr> {
+    fn lower_generic_args_node(&mut self, ga: &SyntaxNode) -> Vec<TypeExpr> {
         ga.children()
             .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
             .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
-            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te, diags))
+            .map(|te| self.lower_body_type_expr(&te))
             .collect()
     }
 
     /// Lower a call's generic arguments. Unlike type constructors and
     /// value-position generic application, calls may contain the contextual
     /// whole-slot `unreflect(expr)` form.
-    fn lower_call_generic_args_node(&mut self, ga: &SyntaxNode) -> Vec<TypeArg> {
-        let mut args = Vec::new();
-        for node in ga.children() {
-            match node.kind() {
-                SyntaxKind::TYPE_EXPR => {
-                    if let Some(te) = baml_compiler_syntax::ast::TypeExpr::cast(node) {
-                        args.push(TypeArg::Static(
-                            crate::lower_type_expr::lower_type_expr_node(&te, &mut self.diags),
-                        ));
-                    }
-                }
-                SyntaxKind::UNREFLECT_ARG => {
-                    let operand = node
-                        .children()
-                        .next()
-                        .map(|expr| self.lower_expr(&expr))
-                        .or_else(|| {
-                            let mut skipped_marker = false;
-                            node.children_with_tokens()
-                                .filter_map(rowan::NodeOrToken::into_token)
-                                .find(|token| {
-                                    if token.kind().is_trivia()
-                                        || matches!(
-                                            token.kind(),
-                                            SyntaxKind::L_PAREN | SyntaxKind::R_PAREN
-                                        )
-                                    {
-                                        return false;
-                                    }
-                                    if !skipped_marker && token.text() == "unreflect" {
-                                        skipped_marker = true;
-                                        return false;
-                                    }
-                                    true
-                                })
-                                .map(|token| {
-                                    let expr = lower_bare_token_expr(self, &token);
-                                    self.alloc_expr(expr, token.text_range())
-                                })
-                        })
-                        .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
-                    self.source_map
-                        .unreflect_arg_spans
-                        .insert(operand, node.span_range());
-                    args.push(TypeArg::Unreflect(operand));
-                }
-                _ => {}
-            }
-        }
-        args
+    fn lower_call_generic_args_node(&mut self, ga: &SyntaxNode) -> Vec<TypeExpr> {
+        self.lower_generic_args_node(ga)
     }
 
     /// If `node` has a direct, unconsumed `GENERIC_ARGS` child, wrap `base` in an
@@ -3426,7 +3471,7 @@ impl LoweringContext {
         if self.consumed_generic_args.contains(&ga.text_range()) {
             return base;
         }
-        let type_args = Self::lower_generic_args_node(&ga, &mut self.diags);
+        let type_args = self.lower_generic_args_node(&ga);
         if type_args.is_empty() {
             return base;
         }
@@ -3633,7 +3678,7 @@ impl LoweringContext {
                     .find(|child| child.kind() == SyntaxKind::TYPE_EXPR)
             })
             .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
-            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te, &mut self.diags))
+            .map(|te| self.lower_body_type_expr(&te))
             .unwrap_or_else(|| TypeExprKind::Unknown { attrs: Vec::new() }.at(node.span_range()));
 
         let id = self.alloc_expr(Expr::Upcast { base, target }, node.span_range());
@@ -3657,7 +3702,7 @@ impl LoweringContext {
         let mut types = node
             .children()
             .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
-            .map(|te| crate::lower_type_expr::lower_type_expr_node(&te, &mut self.diags));
+            .map(|te| self.lower_body_type_expr(&te));
         let unknown = || TypeExprKind::Unknown { attrs: Vec::new() }.at(span);
         let qself = types.next().unwrap_or_else(unknown);
         let interface = types.next().unwrap_or_else(unknown);
@@ -4958,9 +5003,7 @@ impl LoweringContext {
         fn collect_constructor_path(
             node: &SyntaxNode,
             path_segments: &mut Vec<Name>,
-            type_args: &mut Vec<TypeExpr>,
-            unreflect_slots: &mut Vec<SyntaxNode>,
-            diags: &mut Vec<LoweringDiagnostic>,
+            generic_args: &mut Option<SyntaxNode>,
         ) {
             for elem in node.children_with_tokens() {
                 match elem {
@@ -4970,36 +5013,10 @@ impl LoweringContext {
                     rowan::NodeOrToken::Node(args_node)
                         if args_node.kind() == SyntaxKind::GENERIC_ARGS =>
                     {
-                        // A class literal cannot carry a runtime type
-                        // argument (see the E0167 report below), but the slot
-                        // still holds its place: dropping it would leave the
-                        // turbofish short and inference would report a
-                        // missing type parameter on top of the real finding.
-                        *type_args = args_node
-                            .children()
-                            .filter_map(|arg| match arg.kind() {
-                                SyntaxKind::TYPE_EXPR => {
-                                    baml_compiler_syntax::ast::TypeExpr::cast(arg).map(|te| {
-                                        crate::lower_type_expr::lower_type_expr_node(&te, diags)
-                                    })
-                                }
-                                SyntaxKind::UNREFLECT_ARG => {
-                                    let span = arg.span_range();
-                                    unreflect_slots.push(arg);
-                                    Some(TypeExprKind::Error { attrs: Vec::new() }.at(span))
-                                }
-                                _ => None,
-                            })
-                            .collect();
+                        *generic_args = Some(args_node);
                     }
                     rowan::NodeOrToken::Node(child_node) => {
-                        collect_constructor_path(
-                            &child_node,
-                            path_segments,
-                            type_args,
-                            unreflect_slots,
-                            diags,
-                        );
+                        collect_constructor_path(&child_node, path_segments, generic_args);
                     }
                     rowan::NodeOrToken::Token(_) => {}
                 }
@@ -5010,9 +5027,8 @@ impl LoweringContext {
         let mut field_name_spans = Vec::new();
         let mut spreads = Vec::new();
         let mut position = 0;
-        let mut type_args: Vec<TypeExpr> = vec![];
+        let mut generic_args = None;
         let mut type_path_segments: Vec<Name> = vec![];
-        let mut unreflect_slots: Vec<SyntaxNode> = vec![];
 
         // Look for the optional type name (first WORD or path before the brace):
         //   - A simple WORD token: `MyClass { ... }` → `TypePath::bare`.
@@ -5034,21 +5050,15 @@ impl LoweringContext {
                     collect_constructor_path(
                         &child_node,
                         &mut type_path_segments,
-                        &mut type_args,
-                        &mut unreflect_slots,
-                        &mut self.diags,
+                        &mut generic_args,
                     );
                 }
             }
         }
-        for slot in &unreflect_slots {
-            let rewrite = unreflect_rewrite(node, slot);
-            self.diags.push(LoweringDiagnostic::RuntimeTypeMustBeNamed {
-                carrier: rewrite.carrier,
-                named: rewrite.named,
-                span: slot.span_range(),
-            });
-        }
+        let type_args = generic_args
+            .as_ref()
+            .map(|args| self.lower_generic_args_node(args))
+            .unwrap_or_default();
         // Malformed parser-recovery shapes can still manufacture a PATH_EXPR
         // with no constructor identifier (for example `(1)<int> { x: 2 }`).
         // Invalid source must remain diagnostic-only: do not construct an
@@ -5238,7 +5248,7 @@ impl LoweringContext {
         // recovery and ignored here — `LambdaDef` has nowhere to put them.
 
         // Lower parameter list — gives us Vec<Param>
-        let (params, defaults) = node
+        let (mut params, defaults) = node
             .children()
             .find(|n| n.kind() == SyntaxKind::PARAMETER_LIST)
             .and_then(ast::ParameterList::cast)
@@ -5253,6 +5263,24 @@ impl LoweringContext {
                 )
             })
             .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
+
+        if let Some(parameter_list) = node
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PARAMETER_LIST)
+            .and_then(ast::ParameterList::cast)
+        {
+            for parameter in parameter_list.params() {
+                let Some(type_expr) = parameter.ty() else {
+                    continue;
+                };
+                let span = parameter.syntax().span_range();
+                if let Some(lowered) = params.iter_mut().find(|param| param.span == span)
+                    && let Some(lowered_ty) = &mut lowered.type_expr
+                {
+                    self.attach_body_type_operands(&type_expr, lowered_ty);
+                }
+            }
+        }
 
         // Lower optional return type: the TYPE_EXPR that is a direct child of the
         // lambda node, appearing after PARAMETER_LIST but before THROWS_CLAUSE/BLOCK_EXPR.
@@ -5270,10 +5298,8 @@ impl LoweringContext {
                     }
                     SyntaxKind::TYPE_EXPR if after_params && found.is_none() => {
                         if let Some(te) = ast::TypeExpr::cast(child.clone()) {
-                            found = Some(
-                                crate::lower_type_expr::lower_type_expr_node(&te, &mut self.diags)
-                                    .with_span(child.span_range()),
-                            );
+                            found =
+                                Some(self.lower_body_type_expr(&te).with_span(child.span_range()));
                         }
                     }
                     _ => {}
@@ -5289,7 +5315,7 @@ impl LoweringContext {
             .and_then(ast::ThrowsClause::cast)
             .and_then(|tc| tc.type_expr())
             .map(|te| {
-                crate::lower_type_expr::lower_type_expr_node(&te, &mut self.diags)
+                self.lower_body_type_expr(&te)
                     .with_span(te.syntax().span_range())
             });
 
@@ -5462,69 +5488,11 @@ impl LoweringContext {
             .find(|token| token.kind() == SyntaxKind::WORD)
             .map(|token| Name::new(token.text()))
             .unwrap_or_else(|| Name::new("<missing>"));
-        // The operand may have direct-token path heads and structural postfix
-        // children (`reflect.Type.of<T>()` has a GENERIC_ARGS sibling before its call),
-        // so selecting the first arbitrary child is not expression-safe.
         let value = node
             .children()
-            .find(|child| {
-                matches!(
-                    child.kind(),
-                    SyntaxKind::BINARY_EXPR
-                        | SyntaxKind::IS_EXPR
-                        | SyntaxKind::UNARY_EXPR
-                        | SyntaxKind::CALL_EXPR
-                        | SyntaxKind::IF_EXPR
-                        | SyntaxKind::IF_LET_EXPR
-                        | SyntaxKind::MATCH_EXPR
-                        | SyntaxKind::CATCH_EXPR
-                        | SyntaxKind::THROW_EXPR
-                        | SyntaxKind::RETURN_EXPR
-                        | SyntaxKind::BLOCK_EXPR
-                        | SyntaxKind::PATH_EXPR
-                        | SyntaxKind::FIELD_ACCESS_EXPR
-                        | SyntaxKind::UPCAST_EXPR
-                        | SyntaxKind::QUALIFIED_PATH_EXPR
-                        | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
-                        | SyntaxKind::ENV_ACCESS_EXPR
-                        | SyntaxKind::INDEX_EXPR
-                        | SyntaxKind::OPTIONAL_INDEX_EXPR
-                        | SyntaxKind::OPTIONAL_CALL_EXPR
-                        | SyntaxKind::TAGGED_TEMPLATE_EXPR
-                        | SyntaxKind::PAREN_EXPR
-                        | SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::BACKTICK_STRING_LITERAL
-                        | SyntaxKind::BYTE_STRING_LITERAL
-                        | SyntaxKind::ARRAY_LITERAL
-                        | SyntaxKind::OBJECT_LITERAL
-                        | SyntaxKind::MAP_LITERAL
-                        | SyntaxKind::LAMBDA_EXPR
-                        | SyntaxKind::SPAWN_EXPR
-                        | SyntaxKind::AWAIT_EXPR
-                )
-            })
-            .map(|child| self.lower_expr(&child))
-            .or_else(|| {
-                let mut inside_operand = false;
-                node.children_with_tokens()
-                    .filter_map(rowan::NodeOrToken::into_token)
-                    .find_map(|token| {
-                        if !inside_operand {
-                            inside_operand = token.text() == "unreflect";
-                            return None;
-                        }
-                        if token.kind().is_trivia()
-                            || matches!(
-                                token.kind(),
-                                SyntaxKind::L_PAREN | SyntaxKind::R_PAREN | SyntaxKind::SEMICOLON
-                            )
-                        {
-                            return None;
-                        }
-                        self.try_lower_bare_token(&token)
-                    })
-            })
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+            .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
+            .map(|ty| self.lower_body_type_expr(&ty))
+            .unwrap_or_else(|| TypeExprKind::Error { attrs: Vec::new() }.at(node.span_range()));
         self.alloc_stmt(Stmt::TypeBinding { name, value }, node.span_range())
     }
 

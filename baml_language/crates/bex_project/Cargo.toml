@@ -19,6 +19,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_artifact = { workspace = true }
 baml_base = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_compiler2_emit = { workspace = true }
@@ -32,12 +33,9 @@ baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
 baml_db = { workspace = true }
 baml_fmt = { workspace = true }
-baml_lsp2_actions = { workspace = true }
 baml_path = { workspace = true }
-baml_project = { workspace = true }
 baml_type = { workspace = true }
 baml_version = { workspace = true }
-baml_workspace = { workspace = true }
 bex_engine = { workspace = true }
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
@@ -48,8 +46,6 @@ async-trait = { workspace = true }
 borsh = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
-lsp-server = { workspace = true }
-lsp-types = { workspace = true }
 paste = { workspace = true }
 percent-encoding = { workspace = true }
 regex = { workspace = true }
@@ -64,7 +60,7 @@ vfs = { workspace = true }
 
 [build-dependencies]
 baml_compiler2_emit = { workspace = true }
-baml_project = { workspace = true }
+baml_db = { workspace = true }
 baml_version = { workspace = true }
 borsh = { workspace = true }
 
@@ -77,6 +73,7 @@ ignore = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "rt", "rt-multi-thread", "time" ] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+baml_artifact = { workspace = true, features = [ "test-support" ] }
 sys_native = { workspace = true }
 walkdir = { workspace = true }
 

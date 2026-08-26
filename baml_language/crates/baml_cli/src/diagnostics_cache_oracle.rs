@@ -14,7 +14,7 @@
 
 use std::{collections::HashSet, path::PathBuf};
 
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
 
 use crate::{
     bytecode_cache::{CacheContext, prepare_reuse_plan},
@@ -86,7 +86,7 @@ fn run_scenario_with(
 
     // v2 honest path: an independent fresh database, no cache, no seed.
     let db_honest = project_load::build_db_from_sources(&r2, |_| {});
-    let honest = baml_project::collect_compiler2_diagnostics(&db_honest);
+    let honest = baml_db::collect_compiler2_diagnostics(&db_honest);
     let honest_render = render_project_diagnostics(&db_honest, &honest);
 
     let _ = std::fs::remove_dir_all(&root);
@@ -367,7 +367,7 @@ fn check_corrupt_clean_blob_degrades_to_honest_file_check() {
         let pending_plan = ctx.plan_reuse(db);
         let plan = prepare_reuse_plan(db, pending_plan);
         let served = ctx.collect_diagnostics_for_check(db, plan.as_ref());
-        let honest = baml_project::collect_compiler2_diagnostics(db);
+        let honest = baml_db::collect_compiler2_diagnostics(db);
         assert_eq!(
             render_project_diagnostics(db, &served),
             render_project_diagnostics(db, &honest),

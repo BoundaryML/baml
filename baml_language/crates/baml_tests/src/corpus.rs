@@ -36,9 +36,11 @@ use std::{
 use baml_base::SourceFile;
 use baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function};
 use baml_compiler2_ppir::item_data::{file_functions, function_source_map};
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
 use bex_vm::debug::{BytecodeFormat, display_program};
 use bex_vm_types::{Function, FunctionOrigin};
+
+use crate::engine::TestDbExt;
 
 const SNAPSHOT_BASE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/baml_src");
 
@@ -191,15 +193,15 @@ fn corpus_snapshots() {
     assert!(!files.is_empty(), "no .baml files found in baml_src/");
 
     let mut db = ProjectDatabase::new();
-    db.set_project_root(Path::new("."));
+    db.workspace(Path::new("."));
     let mut source_files: Vec<(String, SourceFile)> = Vec::with_capacity(files.len());
     for (rel, content) in &files {
-        let sf = db.add_file(rel, content);
+        let sf = db.file(rel, content);
         source_files.push((rel.clone(), sf));
     }
 
     // ---- Diagnostics: distributed per namespace + the zero-error invariant ----
-    let diagnostics = baml_project::collect_compiler2_diagnostics(&db);
+    let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
 
     let all_files = baml_compiler2_hir::compiler2_all_files(&db);
     let mut sources: HashMap<baml_db::FileId, String> = HashMap::new();

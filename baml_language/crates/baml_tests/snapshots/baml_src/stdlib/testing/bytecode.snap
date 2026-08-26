@@ -2945,7 +2945,7 @@ function testing.run_children_parallel(children: testing.TestSetChild[], pool: t
     load_var ?6
     make_cell
     store_var ?6
-    load_type future<testing.NamedChildReport, never>
+    load_type baml.future.Future<testing.NamedChildReport, never>
     alloc_array 0
     store_var futures
     load_var children
@@ -2988,7 +2988,7 @@ function testing.run_children_parallel(children: testing.TestSetChild[], pool: t
     load_type never
     spawn
     store_var _18
-    load_type future<testing.NamedChildReport, never>
+    load_type baml.future.Future<testing.NamedChildReport, never>
     load_var2 3 8
     call baml.Array.push
     pop 1
@@ -3003,7 +3003,7 @@ function testing.run_children_parallel(children: testing.TestSetChild[], pool: t
     load_type never
     spawn
     store_var _13
-    load_type future<testing.NamedChildReport, never>
+    load_type baml.future.Future<testing.NamedChildReport, never>
     load_var2 3 7
     call baml.Array.push
     pop 1

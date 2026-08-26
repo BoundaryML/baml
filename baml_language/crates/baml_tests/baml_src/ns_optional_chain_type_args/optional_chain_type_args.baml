@@ -53,7 +53,7 @@ class Boxed<T> {
 }
 
 interface Speaker {
-    function speak<T>(self) -> string
+    function speak<T>(self) -> string throws never
 }
 
 class Dog {
@@ -79,7 +79,7 @@ class Cat {
 /// Same class, two specializations: a union receiver whose arms differ only in
 /// their class type args, reached through `?.`.
 interface Tagged {
-    function tag<U>(self) -> string
+    function tag<U>(self) -> string throws never
 }
 
 class Pair<T> {

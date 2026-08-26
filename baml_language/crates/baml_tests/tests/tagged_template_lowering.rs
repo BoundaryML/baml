@@ -13,15 +13,16 @@
 
 use baml_compiler_diagnostics::Severity;
 use baml_compiler2_hir::compiler2_all_files;
-use baml_project::{ProjectDatabase, collect_compiler2_diagnostics};
+use baml_db::{ProjectDatabase, collect_compiler2_diagnostics};
+use baml_tests::engine::TestDbExt;
 
 /// Run the compiler2 front end over `source` and return every error-severity
 /// diagnostic message. A panic here would surface a front-end crash on the
 /// tagged-template path.
 fn front_end_errors(source: &str) -> Vec<String> {
     let mut db = ProjectDatabase::new();
-    let _root = db.set_project_root(std::path::Path::new("."));
-    let _file = db.add_file("main.baml", source);
+    let _root = db.workspace(std::path::Path::new("."));
+    let _file = db.file("main.baml", source);
     // Force the salsa front end to run (parse → AST → HIR → TIR).
     let _all = compiler2_all_files(&db);
     collect_compiler2_diagnostics(&db)

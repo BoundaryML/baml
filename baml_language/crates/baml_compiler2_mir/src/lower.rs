@@ -1313,8 +1313,8 @@ fn resolution_external_callable<'a>(
 use baml_compiler2_ast::{
     AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, CallArg, Expr as AstExpr,
     ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, PatId as AstPatId,
-    Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, TypeArg as AstTypeArg,
-    TypeExpr as AstTypeExpr, TypeExprKind as AstTypeExprKind, UnaryOp as AstUnaryOp,
+    Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, TypeExpr as AstTypeExpr,
+    TypeExprKind as AstTypeExprKind, UnaryOp as AstUnaryOp,
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
@@ -1496,12 +1496,13 @@ unsafe impl salsa::Update for ProjectClassTypeTags {
 /// `LoweringContext` construction — i.e. the whole project's item trees were
 /// walked, and every class name re-rendered and re-hashed, once per lowered
 /// function/let (see `crates/tools_compile_profile/README.md`, July 2026
-/// audit, item #4). `project` is only the memo key; the body's file/item
-/// reads are tracked as dependencies through `db` as usual.
+/// audit, item #4). `_roots` (the database's one source-root table) is only
+/// the memo key; the body's file/item reads are tracked as dependencies
+/// through `db` as usual.
 #[salsa::tracked(returns(ref))]
 fn class_type_tags_for_project(
     db: &dyn crate::Db,
-    _project: baml_workspace::Project,
+    _roots: baml_base::SourceRootTable,
 ) -> ProjectClassTypeTags {
     use baml_compiler2_ppir::item_data::{class_data, file_classes};
     let all_files = compiler2_all_files(db);
@@ -1753,6 +1754,11 @@ struct LoweringContext<'db> {
     /// captured cells or object fields after a successful test.
     tested_pattern_values: HashMap<PatMetadataKey, Local>,
     atomic_pattern_test: bool,
+    /// Runtime type operands already lowered in this lexical frame. Pattern
+    /// lowering can visit the same scoped binding during both structural-let
+    /// pre-emission and an or-alternative's runtime test; its expression must
+    /// still execute only once.
+    emitted_runtime_type_binding_operands: HashSet<ExprMetadataKey>,
 
     // The FileScopeId of the expression body currently being lowered.
     // Updated when descending into lambda bodies (Phase 3+).
@@ -2115,6 +2121,7 @@ impl<'db> LoweringContext<'db> {
             Place::local(elem_local),
             Rvalue::Use(Operand::Copy(Place::Local(next_local))),
         );
+        self.emit_pattern_runtime_bindings_recursive(binding);
         self.bind_pattern_with_fresh_cells(elem_local, binding);
         let names: Vec<Name> = self.body.patterns[binding]
             .bound_names(&self.body.patterns)
@@ -2335,7 +2342,7 @@ impl<'db> LoweringContext<'db> {
         // Tags are content-addressed over each class's fully-qualified name,
         // so they match the emitter's `class.type_tag` values by construction.
         // Memoized project-wide (was rebuilt here per lowered function).
-        let class_type_tags = &class_type_tags_for_project(db, db.project()).tags;
+        let class_type_tags = &class_type_tags_for_project(db, db.source_roots()).tags;
 
         // --- Determine arity from function signature ---
         let sig = baml_compiler2_ppir::function_signature(db, func_loc);
@@ -2378,6 +2385,7 @@ impl<'db> LoweringContext<'db> {
             match_scrutinee: None,
             tested_pattern_values: HashMap::new(),
             atomic_pattern_test: false,
+            emitted_runtime_type_binding_operands: HashSet::new(),
             current_scope: func_scope_id,
             current_metadata_scope: MetadataScope::Body(func_scope_id),
             body: expr_body,
@@ -2443,7 +2451,7 @@ impl<'db> LoweringContext<'db> {
         // Tags are content-addressed over each class's fully-qualified name,
         // so they match the emitter's `class.type_tag` values by construction.
         // Memoized project-wide (was rebuilt here per lowered function).
-        let class_type_tags = &class_type_tags_for_project(db, db.project()).tags;
+        let class_type_tags = &class_type_tags_for_project(db, db.source_roots()).tags;
 
         LoweringContext {
             db,
@@ -2460,6 +2468,7 @@ impl<'db> LoweringContext<'db> {
             match_scrutinee: None,
             tested_pattern_values: HashMap::new(),
             atomic_pattern_test: false,
+            emitted_runtime_type_binding_operands: HashSet::new(),
             current_scope: let_scope_id,
             current_metadata_scope: MetadataScope::Body(let_scope_id),
             body: expr_body,
@@ -2827,6 +2836,21 @@ impl<'db> LoweringContext<'db> {
         self.tables
             .for_scope(self.current_metadata_scope)
             .type_binding(stmt)
+    }
+
+    fn tir_runtime_type_binding(
+        &self,
+        operand: AstExprId,
+    ) -> Option<&crate::inference_provider::ScopedTypeBinding> {
+        self.tables
+            .for_scope(self.current_metadata_scope)
+            .runtime_type_binding(operand)
+    }
+
+    fn tir_runtime_type_params(&self) -> &[ParamTy] {
+        self.tables
+            .for_scope(self.current_metadata_scope)
+            .runtime_type_params()
     }
 
     fn tir_function_coercion(
@@ -3962,10 +3986,32 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn object_class_type_arg_templates(
-        &self,
+        &mut self,
         expr_id: AstExprId,
         explicit_type_args: &[AstTypeExpr],
     ) -> Vec<TyTemplate> {
+        if let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned()
+            && !plan.slots.is_empty()
+        {
+            let generic_params = self.enclosing_generic_params();
+            return plan
+                .slots
+                .iter()
+                .filter_map(|slot| match slot {
+                    crate::inference_provider::CallTypeArgPlan::Static {
+                        emission_ty,
+                        runtime_bindings,
+                        ..
+                    } => {
+                        for binding in runtime_bindings {
+                            self.emit_scoped_type_binding(binding);
+                        }
+                        Some(self.ty_to_template(emission_ty, &generic_params))
+                    }
+                    crate::inference_provider::CallTypeArgPlan::Runtime { .. } => None,
+                })
+                .collect();
+        }
         // Empty (`Box { … }`) or unlowerable (`Box<_> { … }` — a compile error
         // whose arg lowers to an error sentinel) type args: use the class type
         // TIR inferred/solved for this expression rather than re-lowering the
@@ -5918,19 +5964,25 @@ impl LoweringContext<'_> {
                 self.lower_member_access(expr_id, base, &member, dest);
             }
 
-            AstExpr::Upcast { base, .. } => {
+            AstExpr::Upcast { base, target } => {
                 // `.as<I>` is a static type projection. Runtime representation
                 // is the original value.
                 self.lower_expr(base, dest);
+                self.emit_type_expr_runtime_bindings(&target);
             }
 
-            AstExpr::QualifiedPath { .. } => {
+            AstExpr::QualifiedPath {
+                qself, interface, ..
+            } => {
+                use crate::inference_provider::MemberResolution;
+
+                self.emit_type_expr_runtime_bindings(&qself);
+                self.emit_type_expr_runtime_bindings(&interface);
                 // `(Base as I).m` as a VALUE: an unbound callable resolved
                 // from the recorded frame — the same type-keyed road every
                 // other spelling takes (the frame realizes associated types
                 // the written qualifier omits). `self`, if the method takes
                 // one, stays an ordinary first parameter.
-                use crate::inference_provider::MemberResolution;
                 if let Some(MemberResolution::InterfaceVirtualMethod { iface_loc, method }) = self
                     .tir_resolution(self.expr_metadata_key(expr_id))
                     .cloned()
@@ -5950,7 +6002,7 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::GenericApply { base, type_args } => {
-                self.lower_generic_apply(base, &type_args, dest);
+                self.lower_generic_apply(expr_id, base, &type_args, dest);
             }
 
             AstExpr::OptionalMemberAccess { base, member } => {
@@ -5975,8 +6027,14 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Match {
-                scrutinee, arms, ..
+                scrutinee,
+                scrutinee_type,
+                arms,
             } => {
+                if let Some(type_id) = scrutinee_type {
+                    let annotation = self.body.type_annotations[type_id].clone();
+                    self.emit_type_expr_runtime_bindings(&annotation);
+                }
                 let arms_owned = arms;
                 self.lower_match(expr_id, scrutinee, &arms_owned, dest);
             }
@@ -6815,6 +6873,10 @@ impl<'db> LoweringContext<'db> {
             if let Some((tn, class_type_args)) =
                 self.class_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty)
             {
+                debug_assert!(
+                    self.is_interface_type_name(&tn) || self.class_fields.contains_key(&tn),
+                    "MIR field-access lowering has no class_fields row for `{tn}`"
+                );
                 if let Some(fields) = self.class_fields.get(&tn) {
                     if let Some(&idx) = fields.get(seg.as_str()) {
                         // Substitute the receiver's class type-args into the
@@ -9980,7 +10042,7 @@ impl LoweringContext<'_> {
     /// `TyTemplate::TypeArgRef` leaves; attempting it here would emit a broken
     /// `LoadType` instruction.
     fn check_type_of_intrinsic(
-        &self,
+        &mut self,
         callee: AstExprId,
         call_expr_id: AstExprId,
     ) -> Option<TyTemplate> {
@@ -10070,9 +10132,10 @@ impl LoweringContext<'_> {
             return None;
         };
         let type_arg = type_args.into_iter().next()?;
-        let AstTypeArg::Static(type_arg) = type_arg else {
+        if matches!(type_arg.kind, AstTypeExprKind::Unreflect { .. }) {
             return None;
-        };
+        }
+        self.emit_type_expr_runtime_bindings(&type_arg);
 
         // Include the enclosing class + function generic params so that `T`
         // in `reflect.Type.of<T>()` resolves to `Tir2Ty::TypeVar("T")` rather
@@ -10081,6 +10144,22 @@ impl LoweringContext<'_> {
         // then function params) mirrors TIR's `enclosing_class_generic_params
         // ++ user_generic_params` convention used in `callable.rs`.
         let generic_params = self.enclosing_generic_params();
+
+        // Nested runtime atoms have already been replaced by synthesized
+        // rigid parameters in TIR. Use that authoritative emission type so
+        // the template loads the slots bound just above instead of trying to
+        // lower the raw `unreflect(...)` syntax as a static type.
+        if let Some(crate::inference_provider::CallTypeArgPlan::Static {
+            emission_ty,
+            runtime_bindings,
+            ..
+        }) = self
+            .tir_call_plan(self.expr_metadata_key(call_expr_id))
+            .and_then(|plan| plan.slots.first())
+            && !runtime_bindings.is_empty()
+        {
+            return Some(self.ty_to_template(emission_ty, &generic_params));
+        }
 
         // ── 4. Build TyTemplate — TypeVar → TypeArgRef(N) ─────────────────────
         let template = self.type_expr_to_template(&type_arg, &generic_params);
@@ -10226,6 +10305,7 @@ impl LoweringContext<'_> {
             .map(|fl| baml_compiler2_hir_ty::lower::function_generic_frame(self.db, fl))
             .unwrap_or_default();
         params.extend(self.lambda_generic_params.iter().cloned());
+        params.extend(self.tir_runtime_type_params().iter().cloned());
         params.extend(self.runtime_type_binding_params.iter().cloned());
         params
     }
@@ -10277,6 +10357,103 @@ impl LoweringContext<'_> {
             .collect()
     }
 
+    fn emit_scoped_type_binding(&mut self, binding: &crate::inference_provider::ScopedTypeBinding) {
+        let value = if let Some(operand) = binding.operand {
+            let key = self.expr_metadata_key(operand);
+            if !self.emitted_runtime_type_binding_operands.insert(key) {
+                return;
+            }
+            self.lower_to_operand(operand)
+        } else if let Some(template_ty) = &binding.template_ty {
+            let generic_params = self.enclosing_generic_params();
+            let template = self.ty_to_template(template_ty, &generic_params);
+            let temp = self.builder.temp(RuntimeTy::type_type());
+            self.builder
+                .assign(Place::local(temp), Rvalue::LoadType(template));
+            Operand::Copy(Place::local(temp))
+        } else {
+            return;
+        };
+        let slot = RuntimeGenericLayout::new(&self.enclosing_generic_params())
+            .slot(&binding.parameter)
+            .expect("a synthesized runtime type parameter has a frame slot");
+        self.builder.push_statement(
+            StatementKind::Intrinsic {
+                op: IntrinsicOp::BindType(slot as usize),
+                args: vec![value],
+            },
+            self.builder.current_source_span,
+        );
+    }
+
+    fn emit_type_expr_runtime_bindings(&mut self, ty: &AstTypeExpr) {
+        let mut operands = Vec::new();
+        ty.unreflect_operands(&mut operands);
+        for operand in operands {
+            if let Some(binding) = self.tir_runtime_type_binding(operand).cloned() {
+                self.emit_scoped_type_binding(&binding);
+            }
+        }
+    }
+
+    fn emit_pattern_runtime_bindings_direct(&mut self, pattern: &AstPattern) {
+        match pattern {
+            AstPattern::Type(ty) => self.emit_type_expr_runtime_bindings(ty),
+            AstPattern::Array {
+                ascription: Some(ty),
+                ..
+            } => self.emit_type_expr_runtime_bindings(ty),
+            AstPattern::Class {
+                generic_args,
+                associated_type_bindings,
+                ..
+            } => {
+                for ty in generic_args {
+                    self.emit_type_expr_runtime_bindings(ty);
+                }
+                for binding in associated_type_bindings {
+                    self.emit_type_expr_runtime_bindings(&binding.ty);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn emit_pattern_runtime_bindings_recursive(&mut self, pat_id: AstPatId) {
+        let pattern = self.body.patterns[pat_id].clone();
+        self.emit_pattern_runtime_bindings_direct(&pattern);
+        match pattern {
+            AstPattern::Bind {
+                subpat: Some(subpat),
+                ..
+            } => self.emit_pattern_runtime_bindings_recursive(subpat),
+            AstPattern::Or(parts) => {
+                for part in parts {
+                    self.emit_pattern_runtime_bindings_recursive(part);
+                }
+            }
+            AstPattern::Class { fields, .. } => {
+                for field in fields {
+                    self.emit_pattern_runtime_bindings_recursive(field.pat);
+                }
+            }
+            AstPattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ..
+            } => {
+                for part in prefix.into_iter().chain(suffix) {
+                    self.emit_pattern_runtime_bindings_recursive(part);
+                }
+                if let Some(rest) = rest.and_then(|rest| rest.pat) {
+                    self.emit_pattern_runtime_bindings_recursive(rest);
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn lower_call_type_args(
         &mut self,
         call_expr_id: AstExprId,
@@ -10303,7 +10480,14 @@ impl LoweringContext<'_> {
             let mut operands = Vec::with_capacity(plan.slots.len().min(limit));
             for slot in plan.slots.iter().take(limit) {
                 match slot {
-                    crate::inference_provider::CallTypeArgPlan::Static { emission_ty, .. } => {
+                    crate::inference_provider::CallTypeArgPlan::Static {
+                        emission_ty,
+                        runtime_bindings,
+                        ..
+                    } => {
+                        for binding in runtime_bindings {
+                            self.emit_scoped_type_binding(binding);
+                        }
                         let template = self.ty_to_template(emission_ty, &generic_params);
                         let temp = self.builder.temp(RuntimeTy::type_type());
                         self.builder
@@ -10366,11 +10550,12 @@ impl LoweringContext<'_> {
         let Some(plan) = scope.call_plan(call_expr_id) else {
             return false;
         };
-        if plan
-            .slots
-            .iter()
-            .any(|slot| matches!(slot, CallTypeArgPlan::Runtime { .. }))
-            || !plan.deferred_checks.is_empty()
+        if plan.slots.iter().any(|slot| match slot {
+            CallTypeArgPlan::Runtime { .. } => true,
+            CallTypeArgPlan::Static {
+                runtime_bindings, ..
+            } => !runtime_bindings.is_empty(),
+        }) || !plan.deferred_checks.is_empty()
         {
             return true;
         }
@@ -10391,14 +10576,21 @@ impl LoweringContext<'_> {
     /// `frame.type_args` when called). Otherwise fall back to lowering the base
     /// value with type args erased — for exotic bases (bound methods, lambdas)
     /// or param-dependent args (`foo<T>` inside a generic function).
-    fn lower_generic_apply(&mut self, base: AstExprId, type_args: &[AstTypeExpr], dest: Place) {
+    fn lower_generic_apply(
+        &mut self,
+        expr_id: AstExprId,
+        base: AstExprId,
+        type_args: &[AstTypeExpr],
+        dest: Place,
+    ) {
         let Some(item) = self.try_resolve_generic_apply_base(base) else {
             // Non-`ItemRef` base (a local/captured generic function value):
             // there is no function global to pool, so specialize the *runtime
             // value* — evaluate it and wrap it in a closure carrying the
             // (frame-resolved) type args — instead of silently erasing them.
             let value = self.lower_to_operand(base);
-            let type_arg_templates = self.generic_apply_type_arg_templates(type_args);
+            let type_arg_templates =
+                self.planned_generic_apply_type_arg_templates(expr_id, type_args);
             self.builder.assign(
                 dest,
                 Rvalue::MakeGenericFunctionFromValue {
@@ -10408,7 +10600,7 @@ impl LoweringContext<'_> {
             );
             return;
         };
-        let templates = self.generic_apply_type_arg_templates(type_args);
+        let templates = self.planned_generic_apply_type_arg_templates(expr_id, type_args);
         if templates.iter().all(TyTemplate::is_fully_concrete) {
             // Concrete args → pooled, interned compile-time constant
             // (pointer-stable identity). Each template is fully concrete, so it
@@ -10508,6 +10700,81 @@ impl LoweringContext<'_> {
             .iter()
             .map(|type_arg| self.type_expr_to_template(type_arg, &generic_params))
             .collect()
+    }
+
+    fn planned_generic_apply_type_arg_templates(
+        &mut self,
+        expr_id: AstExprId,
+        type_args: &[AstTypeExpr],
+    ) -> Vec<TyTemplate> {
+        if let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned()
+            && !plan.slots.is_empty()
+        {
+            let binding_scope_start = self.runtime_type_binding_params.len();
+            let runtime_params: Vec<Option<ParamTy>> = plan
+                .slots
+                .iter()
+                .map(|slot| match slot {
+                    crate::inference_provider::CallTypeArgPlan::Runtime { .. } => {
+                        let count = self
+                            .synthetic_name_counts
+                            .entry("__generic_apply_runtime_type".to_string())
+                            .or_insert(0);
+                        let identity = u32::try_from(*count)
+                            .expect("runtime generic-apply slot count fits in u32");
+                        *count += 1;
+                        let name = Name::new(format!("$generic_apply${identity:08x}"));
+                        Some(ParamTy::new(0xb000_0000 | (identity & 0x0fff_ffff), name))
+                    }
+                    crate::inference_provider::CallTypeArgPlan::Static { .. } => None,
+                })
+                .collect();
+            self.runtime_type_binding_params
+                .extend(runtime_params.iter().flatten().cloned());
+            let generic_params = self.enclosing_generic_params();
+            let templates = plan
+                .slots
+                .iter()
+                .zip(&runtime_params)
+                .map(|(slot, runtime_param)| match slot {
+                    crate::inference_provider::CallTypeArgPlan::Static {
+                        emission_ty,
+                        runtime_bindings,
+                        ..
+                    } => {
+                        for binding in runtime_bindings {
+                            self.emit_scoped_type_binding(binding);
+                        }
+                        self.ty_to_template(emission_ty, &generic_params)
+                    }
+                    crate::inference_provider::CallTypeArgPlan::Runtime {
+                        operand,
+                        occurrence_ty,
+                        ..
+                    } => {
+                        let parameter = runtime_param
+                            .as_ref()
+                            .expect("runtime slots have synthesized frame parameters");
+                        let binding = crate::inference_provider::ScopedTypeBinding {
+                            name: parameter.name().clone(),
+                            parameter: parameter.clone(),
+                            operand: Some(*operand),
+                            template_ty: None,
+                            occurrence_ty: occurrence_ty.clone(),
+                        };
+                        self.emit_scoped_type_binding(&binding);
+                        let slot = RuntimeGenericLayout::new(&generic_params)
+                            .slot(parameter)
+                            .expect("runtime generic-apply parameter has a frame slot");
+                        TyTemplate::TypeArgRef(slot)
+                    }
+                })
+                .collect();
+            self.runtime_type_binding_params
+                .truncate(binding_scope_start);
+            return templates;
+        }
+        self.generic_apply_type_arg_templates(type_args)
     }
 }
 
@@ -10710,6 +10977,7 @@ impl<'db> LoweringContext<'db> {
         spreads: &[baml_compiler2_ast::SpreadField],
         dest: Place,
     ) {
+        let type_arg_templates = self.object_class_type_arg_templates(expr_id, type_args);
         // Prefer the explicitly written type name. If absent (e.g., when the
         // type is a qualified path like `baml.errors.DevOther`), fall back to
         // the TIR-inferred type to get the short class name.
@@ -10775,7 +11043,6 @@ impl<'db> LoweringContext<'db> {
                     .map(|field| self.lower_to_operand(field.value))
                     .collect()
             };
-            let type_arg_templates = self.object_class_type_arg_templates(expr_id, type_args);
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
@@ -10849,8 +11116,6 @@ impl<'db> LoweringContext<'db> {
                         .iter()
                         .map(|field| self.lower_to_operand(field.value))
                         .collect();
-                    let type_arg_templates =
-                        self.object_class_type_arg_templates(expr_id, type_args);
                     self.builder.assign(
                         dest,
                         Rvalue::Aggregate {
@@ -10899,7 +11164,6 @@ impl<'db> LoweringContext<'db> {
                 }
             }
 
-            let type_arg_templates = self.object_class_type_arg_templates(expr_id, type_args);
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
@@ -11094,6 +11358,10 @@ impl<'db> LoweringContext<'db> {
 
         // Look up field index from class_fields
         let field_idx = if let RuntimeTy::Class(tn, _, _) = &unwrapped_ty {
+            debug_assert!(
+                self.is_interface_type_name(tn) || self.class_fields.contains_key(tn),
+                "MIR field-access lowering has no class_fields row for `{tn}`"
+            );
             self.class_fields
                 .get(tn)
                 .and_then(|fields| fields.get(&field_str))
@@ -12565,20 +12833,10 @@ impl LoweringContext<'_> {
                     .cloned()
                     .expect("a typed TypeBinding statement has a durable binding plan");
                 debug_assert_eq!(binding.name, name);
-                debug_assert_eq!(binding.operand, value);
-                let value = self.lower_to_operand(binding.operand);
+                self.emit_type_expr_runtime_bindings(&value);
                 self.runtime_type_binding_params
                     .push(binding.parameter.clone());
-                let slot = RuntimeGenericLayout::new(&self.enclosing_generic_params())
-                    .slot(&binding.parameter)
-                    .expect("a just-bound runtime type parameter has a frame slot");
-                self.builder.push_statement(
-                    StatementKind::Intrinsic {
-                        op: IntrinsicOp::BindType(slot as usize),
-                        args: vec![value],
-                    },
-                    self.builder.current_source_span,
-                );
+                self.emit_scoped_type_binding(&binding);
             }
 
             // `let PATTERN = init else { … };` — refutable binding lowered
@@ -12656,6 +12914,7 @@ impl LoweringContext<'_> {
                 initializer,
                 ..
             } if self.pattern_contains_structural(pattern) => {
+                self.emit_pattern_runtime_bindings_recursive(pattern);
                 let local_ty = self.pat_ty(pattern);
                 let scrutinee = self.builder.temp(local_ty);
 
@@ -12690,6 +12949,7 @@ impl LoweringContext<'_> {
                 initializer,
                 ..
             } => {
+                self.emit_pattern_runtime_bindings_recursive(pattern);
                 // Extract binding names from pattern. A simple `let x` has
                 // one name; a chain `let x: let y: let z` has three. The
                 // first name owns the declared slot (the init writes into
@@ -13099,6 +13359,10 @@ impl LoweringContext<'_> {
                     if let Some((tn, class_type_args)) =
                         self.class_receiver_for_path_prefix(expr_id, seg_idx - 1, &current_ty)
                     {
+                        debug_assert!(
+                            self.is_interface_type_name(&tn) || self.class_fields.contains_key(&tn),
+                            "MIR field-access lowering has no class_fields row for `{tn}`"
+                        );
                         if let Some(fields) = self.class_fields.get(&tn) {
                             if let Some(&idx) = fields.get(seg.as_str()) {
                                 let next_ty = self.class_field_ty(&tn, seg, &class_type_args);
@@ -13234,6 +13498,10 @@ impl LoweringContext<'_> {
                 // Unwrap Optional — we've already null-checked, so use the inner type.
                 let unwrapped_ty = base_ty.strip_null();
                 if let RuntimeTy::Class(tn, _, _) = &unwrapped_ty {
+                    debug_assert!(
+                        self.is_interface_type_name(tn) || self.class_fields.contains_key(tn),
+                        "MIR field-access lowering has no class_fields row for `{tn}`"
+                    );
                     if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(member_name.as_str()) {
                             return Place::Field {
@@ -14648,6 +14916,7 @@ impl LoweringContext<'_> {
             scrutinee
         };
         let pat = self.body.patterns[pat_id].clone();
+        self.emit_pattern_runtime_bindings_direct(&pat);
 
         // Bind sub-pattern: `let x: <pattern>` defers to the sub-
         // pattern's runtime test (recursively). The bind itself doesn't
@@ -15393,10 +15662,7 @@ impl LoweringContext<'_> {
         if let Some(ty_expr) = ascription_ty {
             if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)) {
                 let resolved = self.resolved_aliases.convert(tir_ty);
-                if let Some(tags) = self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty)
-                {
-                    return Some(tags);
-                }
+                return self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty);
             }
             let resolved = self.resolve_type_annotation(&ty_expr);
             return self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty);
@@ -15411,11 +15677,7 @@ impl LoweringContext<'_> {
             AstPattern::Type(_) => {
                 if let Some(tir_ty) = self.tir_pat_type(self.pat_metadata_key(pat_id)) {
                     let resolved = self.resolved_aliases.convert(tir_ty);
-                    if let Some(tags) =
-                        self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty)
-                    {
-                        return Some(tags);
-                    }
+                    return self.ty_to_type_tags_for_switch(&resolved, scrutinee_static_ty);
                 }
                 if let AstPattern::Type(ty_expr) = pat {
                     let resolved = self.resolve_type_annotation(ty_expr);

@@ -1234,7 +1234,6 @@ function ai.Agent.run(self: ai.Agent, spec: ai.FunctionSpec<#0>) -> ai.RunResult
     store_var value
 
   L8:
-    load_type #0
     load_var value
     call baml.json.to_json
     jump L9
@@ -1248,9 +1247,9 @@ function ai.Agent.run(self: ai.Agent, spec: ai.FunctionSpec<#0>) -> ai.RunResult
 
   L9:
     call baml.json.stringify
-    store_var _126
+    store_var _125
     load_deref ?6
-    load_var _126
+    load_var _125
     init_instance ai.events.FinalProduced .value_json
     load_type ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced
     alloc_array 1
@@ -1274,7 +1273,7 @@ function ai.Agent.run(self: ai.Agent, spec: ai.FunctionSpec<#0>) -> ai.RunResult
     container_len
     store_var before
     load_type ai.content.ToolUse
-    load_type future<void, ai.errors.ToolFailedError>
+    load_type baml.future.Future<void, ai.errors.ToolFailedError>
     load_type never
     load_var calls
     load_type #0
@@ -3546,7 +3545,6 @@ function ai.content.Media.new(value: image | audio | video | pdf, provider_id: s
     store_var revised_prompt
 
   L1:
-    load_type image | audio | video | pdf
     load_var value
     call baml.json.to_json
     store_var envelope
@@ -3556,13 +3554,13 @@ function ai.content.Media.new(value: image | audio | video | pdf, provider_id: s
     load_type baml.json.JsonSerializationError
     load_var e
     call baml.String.from
-    store_var _12
-    load_type string
-    load_var _12
-    call baml.String.from
     store_var _11
-    load_const "media output could not be encoded: "
+    load_type string
     load_var _11
+    call baml.String.from
+    store_var _10
+    load_const "media output could not be encoded: "
+    load_var _10
     bin_op +
     init_instance baml.errors.InvalidArgument .message
     throw
@@ -3578,13 +3576,13 @@ function ai.content.Media.new(value: image | audio | video | pdf, provider_id: s
     load_type baml.json.JsonDecodeError
     load_var e
     call baml.String.from
-    store_var _22
-    load_type string
-    load_var _22
-    call baml.String.from
     store_var _21
-    load_const "media output could not be decoded: "
+    load_type string
     load_var _21
+    call baml.String.from
+    store_var _20
+    load_const "media output could not be decoded: "
+    load_var _20
     bin_op +
     init_instance baml.errors.InvalidArgument .message
     throw
@@ -4632,7 +4630,6 @@ function ai.internal._media_all_text(items: baml.json.json[]) -> bool {
 }
 
 function ai.internal._media_envelope(m: ai.content.Media) -> baml.json.json {
-    load_type baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf
     load_var m
     load_field .media
     call baml.json.to_json
@@ -4642,7 +4639,7 @@ function ai.internal._media_envelope(m: ai.content.Media) -> baml.json.json {
     load_type baml.json.JsonSerializationError
     load_var e
     call baml.String.from
-    store_var _8
+    store_var _7
     load_var2 2 3
     load_type string
     alloc_array 1
@@ -7082,7 +7079,6 @@ function ai.mcp.rpc_line(id: int | null, method: string, params: map<string, unk
     pop 1
 
   L1:
-    load_type map<string, unknown>
     load_var m
     call baml.json.to_json
     call baml.json.stringify
@@ -8156,9 +8152,9 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
     load_var self
     load_field .name
     call baml.String.from
-    store_var _34
+    store_var _33
     load_const "tool "
-    load_var _34
+    load_var _33
     bin_op +
     load_const " has no handler"
     bin_op +
@@ -8170,12 +8166,11 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
     load_type unknown
     load_var2 4 2
     call reflect.call_any
-    store_var value
     jump L5
     load_var e
     store_var _15
     load_var _15
-    narrow_bind reflect.InvalidArgumentError, slot=7
+    narrow_bind reflect.InvalidArgumentError, slot=6
     pop_jump_if_false L3
     jump L4
 
@@ -8210,8 +8205,6 @@ function ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> 
     throw
 
   L5:
-    load_type unknown
-    load_var value
     call baml.json.to_json
     call baml.json.stringify
     jump L7

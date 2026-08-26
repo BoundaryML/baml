@@ -88,14 +88,14 @@ function to_json_interface.$init_test_ns_to_json_interface_to_json_interface(reg
     pop 1
     load_var registry
     load_const "root.to_json_interface"
-    load_const "optional_enum_field_serializes_via_typed_to_string"
+    load_const "optional_enum_field_serializes_via_to_string"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 12)>, 0
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
     load_var registry
     load_const "root.to_json_interface"
-    load_const "enum_union_field_serializes_via_typed_to_string"
+    load_const "enum_union_field_serializes_via_to_string"
     make_closure .<lambda($init_test_ns_to_json_interface_to_json_interface, 13)>, 0
     load_const null
     call testing.TestCollector.register_test_at

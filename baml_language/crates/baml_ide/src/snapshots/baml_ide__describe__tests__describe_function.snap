@@ -1,0 +1,9 @@
+---
+source: crates/baml_ide/src/describe.rs
+assertion_line: 2020
+expression: "project.format_description(&descs[0])"
+---
+function extract_point  funcs.baml:3
+/// Extract a point from text.
+shape: function extract_point(text: string) -> Point throws never
+deps: Point

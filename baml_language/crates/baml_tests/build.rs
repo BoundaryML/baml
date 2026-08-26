@@ -28,7 +28,7 @@ mod stdlib_prefix_config;
 /// `src/stdlib_prefix.rs` can splice it in instead of re-deriving it per test.
 /// See that module for why this cannot be an in-process cache.
 fn generate_stdlib_prefix() {
-    use baml_project::stdlib_prefix::{OptLevel, build_stdlib_prefix};
+    use baml_db::stdlib_prefix::{OptLevel, build_stdlib_prefix};
 
     println!("cargo:rerun-if-changed=build_stdlib_prefix_config.rs");
 
@@ -44,10 +44,8 @@ fn generate_stdlib_prefix() {
             build_stdlib_prefix(opt)
         })
         .collect();
-    let bytes = baml_project::stdlib_prefix::encode_artifact(
-        &stdlib_prefix_config::artifact_key(),
-        prefixes,
-    );
+    let bytes =
+        baml_db::stdlib_prefix::encode_artifact(&stdlib_prefix_config::artifact_key(), prefixes);
 
     let out_dir = env::var_os("OUT_DIR").expect("Cargo sets OUT_DIR for build scripts");
     fs::write(PathBuf::from(out_dir).join("stdlib_prefix.borsh"), bytes)
@@ -530,7 +528,6 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     quote! {
         mod #module_name {
             use baml_db::*;
-            use baml_project::ProjectDatabase;
             use std::collections::HashMap;
             use insta::{assert_snapshot, with_settings};
             use std::fmt::Write;
@@ -559,7 +556,7 @@ fn generate_hir_test(project: &TestProject) -> TokenStream {
                 {
                     let content = #include_content;
                     let content = content.replace("\r\n", "\n");
-                    let sf = db.add_file(
+                    let sf = db.file(
                         #relative_path,
                         &content,
                     );
@@ -575,7 +572,7 @@ fn generate_hir_test(project: &TestProject) -> TokenStream {
             use crate::compiler2_tir::support::render_ppir;
 
             let mut db = ProjectDatabase::new();
-            let _root = db.set_project_root(std::path::Path::new("."));
+            let _root = db.workspace(std::path::Path::new("."));
             // The stdlib is identical across every one of these projects, so its
             // interface is served from the build-time slice instead of being
             // re-derived per project. The stdlib *sources* stay in the database,
@@ -616,7 +613,7 @@ fn generate_diagnostics_test(project: &TestProject, tier: Tier) -> TokenStream {
                 {
                     let content = #include_content;
                     let content = content.replace("\r\n", "\n");
-                    let source_file = db.add_file(
+                    let source_file = db.file(
                         #relative_path,
                         &content,
                     );
@@ -714,7 +711,7 @@ fn generate_diagnostics_test(project: &TestProject, tier: Tier) -> TokenStream {
             use std::path::PathBuf;
 
             let mut db = ProjectDatabase::new();
-            let _root = db.set_project_root(std::path::Path::new("."));
+            let _root = db.workspace(std::path::Path::new("."));
             // The stdlib is identical across every one of these projects, so its
             // interface is served from the build-time slice instead of being
             // re-derived per project. The stdlib *sources* stay in the database,
@@ -791,12 +788,13 @@ fn generate_incremental_parsing_test(baml_file: &BamlFile) -> TokenStream {
 
             // Test single character edits maintain correctness
             let mut db = ProjectDatabase::new();
-            let source_file = db.add_file(#relative_path, &content);
+            db.workspace(std::path::Path::new("."));
+            let source_file = db.file(#relative_path, &content);
             let original_tree = baml_compiler_parser::syntax_tree(&db, source_file);
 
             // Test adding a character
             let modified = insert_char(&content, content.len() / 2, 'x');
-            let modified_file = db.add_file("modified.baml", &modified);
+            let modified_file = db.file("modified.baml", &modified);
             let modified_tree = baml_compiler_parser::syntax_tree(&db, modified_file);
 
             // Verify the trees are valid
@@ -820,12 +818,13 @@ fn generate_node_reuse_test(baml_file: &BamlFile) -> TokenStream {
 
             // Measure node reuse for single character edit
             let mut db = ProjectDatabase::new();
-            let source_file = db.add_file(#relative_path, &content);
+            db.workspace(std::path::Path::new("."));
+            let source_file = db.file(#relative_path, &content);
             let original_tree = baml_compiler_parser::syntax_tree(&db, source_file);
 
             // Make a small edit
             let modified = insert_char(&content, content.len() / 2, 'a');
-            let modified_file = db.add_file("modified.baml", &modified);
+            let modified_file = db.file("modified.baml", &modified);
             let modified_tree = baml_compiler_parser::syntax_tree(&db, modified_file);
 
             // Measure reuse (this is a simplified check)
@@ -850,7 +849,8 @@ fn generate_tree_lossless_test(project: &TestProject) -> TokenStream {
                     let content = #include_content;
                     let content = content.replace("\r\n", "\n");
                     let mut db = ProjectDatabase::new();
-                    let source_file = db.add_file(#relative_path, &content);
+                    db.workspace(std::path::Path::new("."));
+                    let source_file = db.file(#relative_path, &content);
                     let tree = baml_compiler_parser::syntax_tree(&db, source_file);
                     assert_tree_is_lossless(&tree, &content);
                 }

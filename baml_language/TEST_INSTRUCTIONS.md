@@ -89,17 +89,18 @@ go silent. Speed there would mean testing a different artifact than we ship.
 | Suite | Location | Purpose |
 |-------|----------|---------|
 | `baml_tests` | `crates/baml_tests/` | Snapshot tests with detailed compiler IR output |
-| `baml_lsp2_actions_tests` | `crates/baml_lsp2_actions_tests/` | LSP integration tests with inline expectations |
+| `baml_ide` | `crates/baml_ide/` | Editor/agent query surface: hover, definition, references, tokens, describe |
+| `baml_lsp` / `baml_lsp_server` | `crates/baml_lsp*/` | Protocol layer and transport, including the stdio end-to-end transcript |
 
 ## Workflow: Debugging a Failing Test
 
-### 1. Identify the issue in baml_lsp2_actions_tests
+### 1. Identify the issue in the editor surface
 
 ```bash
-cargo test --package baml_lsp2_actions_tests
+cargo nextest run -p baml_ide -p baml_lsp -p baml_lsp_server
 ```
 
-Look for errors in `crates/baml_lsp2_actions_tests/test_files/syntax/`.
+Cursor-position fixtures live inline in each `baml_ide` feature module.
 
 ### 2. Create a minimal repro in baml_tests
 
@@ -147,8 +148,8 @@ Edit the relevant crate (`baml_compiler_parser`, `baml_compiler_syntax`, `baml_c
 # Update baml_tests snapshots
 cargo insta test --test-runner=nextest --accept -p baml_tests
 
-# Update baml_lsp2_actions_tests inline expectations
-UPDATE_EXPECT=1 cargo test --package baml_lsp2_actions_tests
+# Update baml_ide snapshots
+cargo insta test --test-runner=nextest --accept -p baml_ide
 ```
 
 ### 7. Verify all tests pass
@@ -159,7 +160,7 @@ cargo test --lib
 
 # Run all tests
 cargo nextest run -p baml_tests
-cargo test --package baml_lsp2_actions_tests
+cargo nextest run -p baml_ide -p baml_lsp -p baml_lsp_server
 ```
 
 ## Quick Commands
@@ -177,8 +178,8 @@ cargo nextest run -p baml_tests --lib -E 'test(/corpus_/)'
 # Execute the BAML corpus the way CI does
 target/debug/baml-cli test --from crates/baml_tests/baml_src
 
-# Run LSP tests and auto-update expectations
-UPDATE_EXPECT=1 cargo test --package baml_lsp2_actions_tests
+# Run the editor-surface tests
+cargo nextest run -p baml_ide -p baml_lsp -p baml_lsp_server
 
 # Accept all pending snapshots
 cargo insta test --test-runner=nextest --accept -p baml_tests
@@ -197,7 +198,7 @@ cargo insta review
 - **Type checking**: `crates/baml_compiler2_tir/src/builder.rs`
 
 
-DO NOT EDIT the diagnostics manually in baml_lsp2_actions_tests. Use UPDATE_EXPECT=1
+DO NOT EDIT the diagnostics manually in the corpus fixtures. Use `cargo insta … --accept`
 
 Find the base-case that makes syntax fail and add that to baml_test with a good name and good folder organization.
 

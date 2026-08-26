@@ -37,34 +37,21 @@ function stringify_pretty(j: json) -> string throws never {
     $rust_function
 }
 
-/// Serialize any BAML value `v` of type `T` to its canonical JSON string.
-///
-/// The type argument `T` is delivered to the native handler at runtime via
-/// the BEP-039 type-arg channel, so the walker can produce a tagged JSON
-/// document for media values, the variant name for enums, and the natural
-/// JSON shape for primitives / lists / maps / classes.
+/// Serialize any BAML value to its canonical JSON string, dispatching on the
+/// value's runtime type and honoring `baml.ToJson` overrides at every depth.
 ///
 /// Throws `JsonSerializationError` for non-representable types
 /// (`uint8array` without explicit encoding, function values, etc.).
-//baml:mut_vm
-function to_string<T>(v: T) -> string throws JsonSerializationError {
-    $rust_function
-}
-
-/// Encode a value using its concrete runtime shape. Unlike `to_string<T>`,
-/// this discovers runtime-created classes through the instance's authoritative
-/// class pointer, so it also works when `T` is statically `unknown` (for
-/// example a value parsed from `unreflect(...)`).
-//baml:mut_vm
-function encode<T>(v: T) -> string throws JsonSerializationError {
-  $rust_function
+function to_string(value: unknown) -> string throws JsonSerializationError {
+    stringify(to_json(value))
 }
 
 /// Serialize any BAML value to its `json` representation by dispatching on
 /// the value's runtime type.
 ///
-/// Equivalent to `v.to_json()` when `T` is concrete, but works through generic
-/// boundaries: a synthesized `to_json` body on `class Box<T> { value T }` can
+/// Equivalent to `v.to_json()` when its type is concrete, but works through
+/// generic boundaries: a synthesized `to_json` body on
+/// `class Box<T> { value T }` can
 /// call `baml.json.to_json(self.value)` to get override-honoring dispatch
 /// without knowing `T` at synthesis time. The auto-derive synthesizer
 /// (`baml_compiler2_ast::auto_derive_json`) uses this for `TypeVar`-typed
@@ -76,7 +63,7 @@ function encode<T>(v: T) -> string throws JsonSerializationError {
 /// `Array<T>.to_json`, etc.
 //baml:mut_vm
 //baml:may_yield
-function to_json<T>(v: T) -> json throws JsonSerializationError {
+function to_json(value: unknown) -> json throws JsonSerializationError {
     $rust_function
 }
 
@@ -335,23 +322,21 @@ function schema(t: reflect.Type) -> json throws root.errors.Unsupported {
 }
 
 /// Serialize `v` to JSON text, honoring user-defined `to_json` overrides on
-/// classes (via [`to_json<T>`]). Equivalent to `stringify(to_json<T>(v))`.
+/// classes (via [`to_json`]). Equivalent to [`to_string(v)`].
 ///
 /// Use this from a host that wants to print a target's return value as JSON
-/// while still respecting class-level `to_json` overrides. The structural
-/// path is [`to_string<T>`], which walks fields directly and bypasses
-/// overrides — appropriate when override behavior would be a problem.
+/// while still respecting class-level `to_json` overrides.
 ///
 /// HACK: this is a thin shim that only exists so `baml_exec::dispatch`
 /// has a stable named entry point to call from Rust (via
 /// `engine.call_function("baml.json.serialize", ...)`). The composition
-/// `stringify(to_json<T>(v))` is what callers would write inline anyway;
+/// `to_string(v)` is what callers would write inline anyway;
 /// owning a wrapper function gives us one engine-side symbol to look up
 /// instead of two, and a place to evolve the override semantics if they
 /// drift. Remove this if the host gains a direct way to invoke generic
 /// compositions without a named landing pad.
 function serialize<T>(v: T) -> string throws JsonSerializationError {
-    stringify(to_json<T>(v))
+    to_string(v)
 }
 
 /// Parse JSON text into a value of type `T`, honoring user-defined

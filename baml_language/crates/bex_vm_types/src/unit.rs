@@ -140,7 +140,8 @@ pub struct ProgramPackageFrag {
     /// the emitted `Object::TypeAlias`. Non-recursive aliases are expanded at
     /// lowering and never appear.
     pub type_aliases: Vec<(LocalName, String)>,
-    /// Whole-package enriched interface. Exactly one unit is its carrier.
+    /// Versioned artifact containing the whole-package enriched interface.
+    /// Exactly one unit is its carrier.
     pub interface_blob: Vec<u8>,
     /// Fully-qualified synthesized `$init_test` symbol, when present.
     pub test_init: Option<String>,

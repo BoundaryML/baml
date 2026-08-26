@@ -15,7 +15,8 @@
 use std::{path::Path, sync::Arc};
 
 use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
+use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, FunctionCallContextBuilder};
 use divan::{Bencher, black_box};
 use sys_native::{CallId, SysOpsExt};
@@ -60,8 +61,8 @@ fn main() {
 /// Compile BAML source into a ready-to-run engine.
 fn compile_source(source: &str) -> (ProjectDatabase, BexEngine) {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(Path::new("."));
-    db.add_file("bench.baml", source);
+    db.workspace(Path::new("."));
+    db.file("bench.baml", source);
     let bytecode = generate_project_bytecode(
         &db,
         &CompileOptions {
