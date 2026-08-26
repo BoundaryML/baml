@@ -786,7 +786,9 @@ function csv.csv_caller_owned_handles_stay_open() -> string {
     pop 1
     load_var wf
     load_const "tail\n"
-    sys_op baml.fs.File.write
+    load_type baml.io.Write
+    load_const "write"
+    virtual_call nargs=2 ntypeargs=0
     store_var appended
     load_var wf
     sys_op baml.fs.File.close

@@ -196,7 +196,7 @@ test "fs_remove_dir_all_on_file_errors" {
 }
 
 // ============================================================================
-// file.read with a negative length errors (InvalidArgument)
+// file.read with a negative length errors (Io)
 // ============================================================================
 
 function fs_file_read_negative_n_errors_fn() -> bool {
@@ -207,7 +207,7 @@ function fs_file_read_negative_n_errors_fn() -> bool {
         f.read(-1);
         false
     } catch (e) {
-        baml.errors.InvalidArgument => true
+        baml.errors.Io => true
     };
     baml.fs.remove(path);
     threw
@@ -215,6 +215,24 @@ function fs_file_read_negative_n_errors_fn() -> bool {
 
 test "fs_file_read_negative_n_errors" {
     assert.is_true(fs_file_read_negative_n_errors_fn())
+}
+
+function fs_file_read_zero_errors_fn() -> bool {
+    let path = fs_tmp("read_zero.txt");
+    baml.fs.write(path, "abc");
+    let f = baml.fs.open(path, "r");
+    let threw = {
+        f.read(0);
+        false
+    } catch (e) {
+        baml.errors.Io => true
+    };
+    baml.fs.remove(path);
+    threw
+}
+
+test "fs_file_read_zero_errors" {
+    assert.is_true(fs_file_read_zero_errors_fn())
 }
 
 // ============================================================================
@@ -230,7 +248,7 @@ function fs_file_close_invalidates_handle_fn() -> bool {
         f.text();
         false
     } catch (e) {
-        baml.errors.InvalidArgument => true
+        baml.errors.Io => true
     };
     baml.fs.remove(path);
     threw

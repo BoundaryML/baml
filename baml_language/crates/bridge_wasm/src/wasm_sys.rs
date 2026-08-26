@@ -90,12 +90,8 @@ fn options_to_js(options: Option<&io::owned::sys::ProcessOptions>) -> JsValue {
             if let Some(ref stdin) = opts.stdin {
                 let _ = Reflect::set(&obj, &"stdin".into(), &stdin.into());
             }
-            if let Some(keep_stdin_open) = opts.keep_stdin_open {
-                let _ = Reflect::set(
-                    &obj,
-                    &"keep_stdin_open".into(),
-                    &JsValue::from_bool(keep_stdin_open),
-                );
+            if let Some(BexExternalValue::Variant { variant_name, .. }) = opts.stderr.as_ref() {
+                let _ = Reflect::set(&obj, &"stderr".into(), &variant_name.into());
             }
             js_sys::JSON::stringify(&obj)
                 .map(JsValue::from)
@@ -104,32 +100,73 @@ fn options_to_js(options: Option<&io::owned::sys::ProcessOptions>) -> JsValue {
     }
 }
 
+impl io::IoClassSysReadPipe for WasmSys {
+    fn read(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _readpipe: io::owned::sys::ReadPipe,
+        _limit: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<Vec<u8>>> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _readpipe: io::owned::sys::ReadPipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoClassSysWritePipe for WasmSys {
+    fn write_some(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn flush(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+}
+
 impl io::IoClassSysProcess for WasmSys {
-    fn write_stdin(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _process: io::owned::sys::Process,
-        _data: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Live processes are not supported on this platform".to_string(),
-        })
-    }
-
-    fn close_stdin(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _process: io::owned::sys::Process,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Live processes are not supported on this platform".to_string(),
-        })
-    }
-
     fn wait(
         &self,
         _heap: &Arc<BexHeap>,
@@ -159,30 +196,6 @@ impl io::IoClassSysProcess for WasmSys {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _process: io::owned::sys::Process,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::ok(())
-    }
-}
-
-impl io::IoClassSysProcessLineStream for WasmSys {
-    fn _next(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _processlinestream: io::owned::sys::ProcessLineStream,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Live processes are not supported on this platform".to_string(),
-        })
-    }
-
-    fn close(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _processlinestream: io::owned::sys::ProcessLineStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::ok(())

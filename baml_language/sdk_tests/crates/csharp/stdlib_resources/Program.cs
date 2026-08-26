@@ -29,12 +29,10 @@ try
         () => Baml.Fs.Functions.Open(tempPath, "invalid-mode"));
 
     using Baml.Fs.File reader = Baml.Fs.Functions.Open(tempPath, "r");
-    // Load-bearing parity assertion: separate managed-to-native calls must
-    // operate on the same native File object and advance one shared cursor.
-    Require(reader.Read(3) == "012", "first native File.read changed");
-    Require(await reader.ReadAsync(3) == "345", "native File cursor did not persist across calls");
+    Require(reader.SeekFrom("current", 3) == 3, "first relative seek changed");
+    Require(await reader.SeekFromAsync("current", 3) == 6, "file cursor did not persist across calls");
     Require(reader.SeekFrom("start", 0) == 0, "native File.seek_from did not rewind");
-    Require(reader.Read(2) == "01", "native File.read after seek changed");
+    Require(reader.SeekFrom("current", 2) == 2, "relative seek after rewind changed");
     Require(reader.Text() == "23456789", "native File.text ignored the current cursor");
     _ = reader.Close();
 
@@ -45,18 +43,16 @@ try
         "baml.fs.write_bytes returned the wrong byte count");
     using (Baml.Fs.File binary = await Baml.Fs.Functions.OpenAsync(binaryPath, "r+"))
     {
-        Require(
-            binary.ReadBytes(2).Span.SequenceEqual(new byte[] { 0, 1 }),
-            "File.read_bytes changed");
-        Require(binary.Write("AZ") == 2, "File.write changed");
-        Require(binary.SeekFrom("start", 0) == 0, "binary File.seek_from changed");
+        Require(binary.SeekFrom("start", 2) == 2, "binary File.seek_from changed");
+        Require(binary.Write("AZ") == 2, "File.write over text changed");
+        Require(binary.SeekFrom("start", 0) == 0, "binary File.seek_from did not rewind");
         Require(
             (await binary.BytesAsync()).Span.SequenceEqual(new byte[] { 0, 1, (byte)'A', (byte)'Z' }),
             "File.bytes did not preserve raw data and cursor state");
         Require(binary.SeekFrom("end", 0) == 4, "binary File end seek changed");
         Require(
-            await binary.WriteBytesAsync(new byte[] { 5, 6 }) == 2,
-            "File.write_bytes changed");
+            await binary.WriteAsync(new ReadOnlyMemory<byte>(new byte[] { 5, 6 })) == 2,
+            "File.write over raw bytes changed");
         _ = await binary.CloseAsync();
     }
 

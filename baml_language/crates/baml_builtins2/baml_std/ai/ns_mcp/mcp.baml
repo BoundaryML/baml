@@ -24,6 +24,8 @@ function rpc_line(id: int?, method: string, params: map<string, unknown>?) -> st
 class McpConnection {
     server_name: string,
     p: baml.sys.Process,
+    out: baml.sys.ReadPipeLines,
+    timeout_ms: int,
     next_id: int,
 
     // Spawn the server and perform the initialize handshake. The connection
@@ -37,13 +39,7 @@ class McpConnection {
         let p = baml.sys.start_process(
             command,
             args,
-            baml.sys.ProcessOptions {
-                cwd: null,
-                env: null,
-                timeout_ms: timeout_ms,
-                stdin: null,
-                keep_stdin_open: true,
-            },
+            baml.sys.ProcessOptions { cwd: null, env: null, timeout_ms: timeout_ms, stdin: null },
         ) catch_all (e) {
             _ => {
                 throw root.errors.NetworkFailure { status_code: null,
@@ -53,7 +49,13 @@ class McpConnection {
                 }
             },
         };
-        let conn = McpConnection { server_name: name, p: p, next_id: 1 };
+        let conn = McpConnection {
+            server_name: name,
+            p: p,
+            out: p.stdout.lines(),
+            timeout_ms: timeout_ms,
+            next_id: 1,
+        };
         let init: map<string, unknown> = {
             "protocolVersion": "2025-06-18",
             "capabilities": {},
@@ -69,7 +71,7 @@ class McpConnection {
         // lose the newline the protocol frames on; the newline is a quoted
         // string, appended before the single write.
         let framed = [line, "\n"].join("");
-        let _ = self.p.write_stdin(framed) catch_all (e) {
+        let _ = self.p.stdin.write(framed) catch_all (e) {
             _ => {
                 throw root.errors.NetworkFailure { status_code: null,
                     provider: `mcp/${self.server_name}`,
@@ -87,7 +89,9 @@ class McpConnection {
         self.next_id += 1;
         self._send(rpc_line(id, method, params));
         while (true) {
-            let next = self.p.stdout.next() catch_all (e) {
+            let next = baml.future.with_timeout(baml.time.Duration.from_milliseconds(self.timeout_ms), () -> {
+                self.out.next()
+            }) catch_all (e) {
                 _ => {
                     throw root.errors.NetworkFailure { status_code: null,
                         provider: `mcp/${self.server_name}`,

@@ -1020,28 +1020,6 @@ impl io::IoClassReflectSession for DefaultIoOps {
 impl io::IoNamespaceReflect for DefaultIoOps {}
 
 impl io::IoClassFsFile for DefaultIoOps {
-    fn text(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
     fn read(
         &self,
         _h: &Arc<BexHeap>,
@@ -1049,19 +1027,7 @@ impl io::IoClassFsFile for DefaultIoOps {
         _f: io::owned::fs::File,
         _n: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn read_bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _n: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
@@ -1090,19 +1056,7 @@ impl io::IoClassFsFile for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn write(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _data: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn write_bytes(
+    fn write_some(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
@@ -1110,6 +1064,17 @@ impl io::IoClassFsFile for DefaultIoOps {
         _data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn flush(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
@@ -1541,27 +1506,26 @@ impl io::IoClassNetTcpStream for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn _read(
+    fn read(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _s: io::owned::net::TcpStream,
-        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _limit: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn _write(
+    fn write_some(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _s: io::owned::net::TcpStream,
         _data: Vec<u8>,
-        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
+    ) -> SysOpOutput<i64> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
@@ -1741,31 +1705,6 @@ impl io::IoNamespaceIo for DefaultIoOps {
 }
 
 impl io::IoClassSysProcess for DefaultIoOps {
-    fn write_stdin(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _process: io::owned::sys::Process,
-        _data: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn close_stdin(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _process: io::owned::sys::Process,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
     fn wait(
         &self,
         _h: &Arc<BexHeap>,
@@ -1801,14 +1740,15 @@ impl io::IoClassSysProcess for DefaultIoOps {
     }
 }
 
-impl io::IoClassSysProcessLineStream for DefaultIoOps {
-    fn _next(
+impl io::IoClassSysReadPipe for DefaultIoOps {
+    fn read(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _processlinestream: io::owned::sys::ProcessLineStream,
+        _readpipe: io::owned::sys::ReadPipe,
+        _limit: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "Operation not supported on this platform".to_string(),
         })
@@ -1818,10 +1758,51 @@ impl io::IoClassSysProcessLineStream for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _processlinestream: io::owned::sys::ProcessLineStream,
+        _readpipe: io::owned::sys::ReadPipe,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::ok(())
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoClassSysWritePipe for DefaultIoOps {
+    fn write_some(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn flush(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmBamlError::Unsupported {
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -2282,28 +2263,10 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_fs_write_bytes(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_file_text = {
+        self.inner.baml_fs_file_root_io_read_read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_text(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_file_bytes = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_bytes(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_file_read = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_read(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_file_read_bytes = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_read_bytes(heap, permit, args, ctx, call_id)
+                t.__glue_baml_fs_file_root_io_read_read(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_close = {
@@ -2318,16 +2281,16 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_fs_file_seek_from(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_file_write = {
+        self.inner.baml_fs_file_root_io_write_write_some = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_write(heap, permit, args, ctx, call_id)
+                t.__glue_baml_fs_file_root_io_write_write_some(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_file_write_bytes = {
+        self.inner.baml_fs_file_root_io_write_flush = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_write_bytes(heap, permit, args, ctx, call_id)
+                t.__glue_baml_fs_file_root_io_write_flush(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_read_dir = {
@@ -2547,16 +2510,18 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_net_tcpstream__connect(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_tcpstream__read = {
+        self.inner.baml_net_tcpstream_root_io_read_read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcpstream__read(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream_root_io_read_read(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_tcpstream__write = {
+        self.inner.baml_net_tcpstream_root_io_write_write_some = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcpstream__write(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_tcpstream_root_io_write_write_some(
+                    heap, permit, args, ctx, call_id,
+                )
             })
         };
         self.inner.baml_net_tcpstream_close = {
@@ -2623,10 +2588,66 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceSys + Send + Sync + 'static>,
     ) -> Self {
+        self.inner.baml_sys_process_wait = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_process_wait(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_process_kill = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_process_kill(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_process_close = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_process_close(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_readpipe_close = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_readpipe_close(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_readpipe_root_io_read_read = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_readpipe_root_io_read_read(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_writepipe_close = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_writepipe_close(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_writepipe_root_io_write_write_some = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_writepipe_root_io_write_write_some(
+                    heap, permit, args, ctx, call_id,
+                )
+            })
+        };
+        self.inner.baml_sys_writepipe_root_io_write_flush = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_writepipe_root_io_write_flush(heap, permit, args, ctx, call_id)
+            })
+        };
         self.inner.baml_sys_exec = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_sys_exec(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_start_process = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_start_process(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_sys_shell = {
@@ -2639,6 +2660,12 @@ impl IoSysOpsBuilder {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_sys_sleep(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_collect_garbage = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_collect_garbage(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_sys_pid = {
