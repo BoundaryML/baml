@@ -1514,7 +1514,47 @@ impl BexEngine {
                 });
             }
             BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
-                Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
+                // A bare rust_data is only correct when the destination slot
+                // IS the wrapper's `_data: $rust_type` field. Anywhere else
+                // (a declared `image`/`audio`/... parameter, a media slot in
+                // a container, or no context at all) the usable value is the
+                // stdlib wrapper class instance — methods and the prompt
+                // renderer dispatch on that instance, so a bare rust_data
+                // panics `mime_type()` and silently drops media parts from
+                // rendered requests.
+                if matches!(expected_ty, Some(RuntimeTy::RustType { .. })) {
+                    Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
+                } else {
+                    let class_name = match arc.kind {
+                        baml_type::MediaKind::Image => "baml.media.Image",
+                        baml_type::MediaKind::Audio => "baml.media.Audio",
+                        baml_type::MediaKind::Video => "baml.media.Video",
+                        baml_type::MediaKind::Pdf => "baml.media.Pdf",
+                        baml_type::MediaKind::Generic => {
+                            return Err(EngineError::TypeMismatch {
+                                message: "cannot materialize a generic media value as a wrapper instance"
+                                    .to_string(),
+                            });
+                        }
+                    };
+                    let mut fields = indexmap::IndexMap::new();
+                    fields.insert(
+                        bex_external_types::MEDIA_WRAPPER_DATA_FIELD.to_string(),
+                        BexExternalValue::Adt(BexExternalAdt::Media(arc)),
+                    );
+                    return self.convert_external_to_vm_value_with_ty_and_runtime(
+                        holder,
+                        BexExternalValue::Instance {
+                            class_name: class_name.to_string(),
+                            type_args: vec![],
+                            fields,
+                        },
+                        None,
+                        dynamic_classes,
+                        dynamic_enums,
+                        runtime_named_objects,
+                    );
+                }
             }
             BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { heap_handle, .. }) => {
                 Value::object(self.resolve_handle(holder.proof(), &heap_handle).expect(
@@ -2992,6 +3032,25 @@ fn value_matches_type_with_definitions(
             if is_canonical_json_alias(name) =>
         {
             value_satisfies_json(union_value)
+        }
+        // A media value crosses the FFI as a class-shaped `{_data: handle}`
+        // wrap carrying a sparse `Media(kind)` annotation. The annotation is
+        // the value's identity — the payload shape never matches `Media`
+        // structurally — so honor it before unwrapping (otherwise media
+        // items inside union-typed containers, e.g. `image[]?`, are
+        // rejected while the direct-typed path accepts them).
+        (
+            BexExternalValue::Union { metadata, .. },
+            RuntimeTy::Media(expected_kind, _),
+        ) if metadata.is_inbound_type_annotation
+            && matches!(
+                &metadata.selected_option,
+                RuntimeTy::Media(kind, _)
+                    if *expected_kind == baml_type::MediaKind::Generic
+                        || kind == expected_kind
+            ) =>
+        {
+            true
         }
         (BexExternalValue::Union { value, .. }, ty) => {
             value_matches_type_with_definitions(value, ty, aliases, classes)
