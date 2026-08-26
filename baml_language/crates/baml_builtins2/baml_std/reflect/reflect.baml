@@ -297,8 +297,13 @@ class Session {
 
   function eval<T>(self, source: string) -> T throws reflect.errors.CompilationError | reflect.errors.EvaluationError | reflect.errors.SessionBusy {
     let artifact = self._compile<T>(source)
-    self._finish<T>(artifact) catch (_) {
-      _ => throw reflect.errors.EvaluationError { message: "session evaluation failed" }
+    self._finish<T>(artifact) catch (cause) {
+      _ => {
+        throw reflect.errors.EvaluationError {
+          message: _render_cause(cause),
+          cause: cause,
+        }
+      }
     }
   }
 
@@ -316,6 +321,15 @@ class Session {
   function diagnostics(self) -> Diagnostic[] throws never {
     $rust_function
   }
+}
+
+/// Structural error rendering for `Session.eval` that keeps `reflect` a root
+/// package. This is the dependency-free counterpart of `string.from`: its VM
+/// implementation shares the same renderer without importing `baml`.
+//baml:mut_vm
+//baml:may_yield
+function _render_cause(value: unknown) -> string throws never {
+  $rust_function
 }
 
 /// Returns the runtime signature of `f`.

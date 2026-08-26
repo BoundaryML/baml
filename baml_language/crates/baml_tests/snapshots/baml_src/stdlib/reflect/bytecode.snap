@@ -327,10 +327,12 @@ function reflect.Session.eval(self: reflect.Session, source: string) -> #0 {
     load_var2 1 3
     call reflect.Session._finish
     jump L0
-    load_var _
+    load_var cause
     throw_if_panic
-    load_const "session evaluation failed"
-    init_instance reflect.errors.EvaluationError .message
+    load_var cause
+    call reflect._render_cause
+    load_var cause
+    init_instance reflect.errors.EvaluationError .message, .cause
     throw
 
   L0:
@@ -408,6 +410,9 @@ function reflect.Type.optional(self: reflect.Type) -> reflect.union.Type {
 }
 
 function reflect.Type.to_baml(self: reflect.Type) -> string {
+}
+
+function reflect._render_cause(value: unknown) -> string {
 }
 
 function reflect.array.Type.element_type(self: reflect.array.Type) -> reflect.Type {

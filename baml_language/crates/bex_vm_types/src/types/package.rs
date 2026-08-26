@@ -185,10 +185,9 @@ pub struct ProgramPackage {
 }
 
 impl ProgramPackage {
-    /// Sort every per-kind map and each impl-rule list into the content-determined
-    /// order the serialized `Program` requires, so the bytes are reproducible
-    /// regardless of the source maps' iteration order (`type_aliases` in
-    /// particular is sourced from a per-process-seeded `std::HashMap`).
+    /// Canonicalize implementation rules, whose source tables do not carry a
+    /// user-observable declaration order. Declaration maps deliberately keep
+    /// the deterministic source order established by the compiler pipeline.
     ///
     /// Impl rules key on their rendered `for_ty_pattern`; that `Display` drops
     /// module paths, so `{:?}` (module-qualified identity) breaks ties, and the
@@ -198,14 +197,7 @@ impl ProgramPackage {
     ///
     /// The full-compile emit and the incremental linker both apply this so their
     /// `Program`s stay byte-identical.
-    pub fn sort_maps(&mut self) {
-        self.exported_names.sort();
-        self.exported_names.dedup();
-        self.classes.sort_keys();
-        self.enums.sort_keys();
-        self.type_aliases.sort_keys();
-        self.interfaces.sort_keys();
-        self.functions.sort_keys();
+    pub fn canonicalize_impl_rules(&mut self) {
         self.impl_rules.sort_keys();
         for rules in self.impl_rules.values_mut() {
             rules.sort_by_cached_key(|rule| {
@@ -232,7 +224,7 @@ pub struct ProgramImplRule {
     pub methods: IndexMap<Name, ProgramMethodImpl>,
     /// See [`RuntimeImplRule::field_links`](super::RuntimeImplRule::field_links).
     /// Positional, so — unlike the name-keyed maps — it needs no canonical ordering
-    /// pass in [`ProgramPackage::sort_maps`].
+    /// pass in [`ProgramPackage::canonicalize_impl_rules`].
     pub field_links: Box<[u32]>,
 }
 

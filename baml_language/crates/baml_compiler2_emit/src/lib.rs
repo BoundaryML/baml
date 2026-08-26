@@ -379,7 +379,7 @@ fn capture_package_exports(
                     baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
                         .expect("PackageInterface artifact serialization into Vec is infallible")
                 };
-            let mut functions = interface
+            let functions = interface
                 .functions
                 .iter()
                 .flat_map(|(namespace, functions)| {
@@ -394,8 +394,7 @@ fn capture_package_exports(
                     })
                 })
                 .collect::<Vec<_>>();
-            functions.sort_by(|(left, _), (right, _)| left.cmp(right));
-            let mut exported_names = interface
+            let exported_names = interface
                 .types
                 .iter()
                 .flat_map(|(namespace, types)| {
@@ -405,9 +404,9 @@ fn capture_package_exports(
                     })
                 })
                 .chain(functions.iter().map(|(name, _)| name.clone()))
+                .collect::<indexmap::IndexSet<_>>()
+                .into_iter()
                 .collect::<Vec<_>>();
-            exported_names.sort();
-            exported_names.dedup();
             (
                 package_name,
                 PackageExportArtifact {
@@ -1201,21 +1200,20 @@ fn build_packages(
             .map(ObjectIndex::from_raw);
     }
 
-    // Deterministic order: files/classes iterate from unordered maps. Impl rules
-    // are keyed by their interface's object index (assigned in deterministic
-    // emission order); within one interface a `for_ty_pattern` is unique (overlap
-    // is a coherence error). The primary rule key is the rendered pattern; its
-    // `Display` drops module paths, so two distinct same-short-name for-types tie.
-    // `{:?}` carries the module-qualified identity and breaks the tie (rather than
-    // falling back to unordered-map insertion order). The interface instantiation
-    // (args + associated bindings) is folded in last so the same for-type
-    // implementing one interface at several instantiations (e.g. `Converter<int>`
-    // + `Converter<float>`) orders by content rather than declaration order.
-    // Package-level ordering is finalized by the caller once every map is built.
+    // Impl rules are keyed by their interface's object index (assigned in
+    // deterministic emission order); within one interface a `for_ty_pattern` is
+    // unique (overlap is a coherence error). The primary rule key is the rendered
+    // pattern; its `Display` drops module paths, so two distinct same-short-name
+    // for-types tie. `{:?}` carries the module-qualified identity and breaks the
+    // tie. The interface instantiation (args + associated bindings) is folded in
+    // last so the same for-type implementing one interface at several
+    // instantiations (e.g. `Converter<int>` + `Converter<float>`) orders by
+    // content rather than declaration order. Package-level ordering is finalized
+    // by the caller once every map is built.
     for pkg in program_packages.values_mut() {
-        // Sort each package's maps into the byte-reproducible order; shared with
-        // the incremental linker so the two paths stay byte-identical.
-        pkg.sort_maps();
+        // Impl rules are not a declaration-order surface; canonicalize them so
+        // full and incremental compilation stay byte-identical.
+        pkg.canonicalize_impl_rules();
     }
     interface_default_backfill
 }

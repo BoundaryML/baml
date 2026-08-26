@@ -36,6 +36,12 @@ use rowan::ast::AstNode;
 type RuntimeLinkStub = (Vec<Name>, Name, String);
 type EnrichedRuntimeMount = (Vec<u8>, Vec<RuntimeLinkStub>);
 
+#[derive(Default)]
+struct MountedDeclarationDocs {
+    declaration: Option<String>,
+    members: IndexMap<Name, Option<String>>,
+}
+
 const RUNTIME_VIRTUAL_ROOT: &str = "<runtime>";
 const BUILTIN_VIRTUAL_ROOT: &str = "<builtin>";
 
@@ -214,6 +220,15 @@ fn enrich_runtime_mount(
     fn relocate_bounds(bounds: &mut [Vec<baml_type::Interface>], alias: &Name) {
         for interface in bounds.iter_mut().flatten() {
             relocate_interface(interface, alias);
+        }
+    }
+
+    fn write_docstring(source: &mut String, docstring: Option<&str>, indent: &str) {
+        let Some(docstring) = docstring.map(str::trim).filter(|docs| !docs.is_empty()) else {
+            return;
+        };
+        for line in docstring.lines() {
+            writeln!(source, "{indent}/// {line}").expect("writing to String is infallible");
         }
     }
 
@@ -402,7 +417,7 @@ fn enrich_runtime_mount(
                             format!("<{}>", generics.join(", "))
                         };
                         let mut source = format!("class {export_name}{generic_suffix} {{\n");
-                        for (field, ty, _) in fields.iter() {
+                        for (field, ty, attrs) in fields.iter() {
                             // Source-backed lookup wins before the mounted
                             // interface in HIR. Preserve every spellable field
                             // type here so nested projections see the same ABI;
@@ -413,6 +428,7 @@ fn enrich_runtime_mount(
                             } else {
                                 ty.to_string()
                             };
+                            write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
                             writeln!(&mut source, "  {field} {ty}")
                                 .expect("writing to String is infallible");
                         }
@@ -473,7 +489,7 @@ fn enrich_runtime_mount(
                         writeln!(&mut source, "  type {}", associated.name)
                             .expect("writing to String is infallible");
                     }
-                    for (field, ty, _) in fields {
+                    for (field, ty, attrs) in fields {
                         // Keep ordinary source-spellable ABI intact, but avoid
                         // spelling a package this world cannot resolve from any
                         // nested type.
@@ -482,6 +498,7 @@ fn enrich_runtime_mount(
                         } else {
                             ty.to_string()
                         };
+                        write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
                         writeln!(&mut source, "  {field}: {ty}")
                             .expect("writing to String is infallible");
                     }
@@ -533,6 +550,7 @@ fn enrich_runtime_mount(
     // live tag, carried for exactly this check, tells them apart).
     let mut minted_tags: IndexMap<Name, baml_type::typetag::TypeTag> = IndexMap::new();
     let mut minted_rows: IndexMap<Name, ExportedType> = IndexMap::new();
+    let mut minted_docs: IndexMap<Name, MountedDeclarationDocs> = IndexMap::new();
     let duplicate_minted = |name: &Name| RuntimeCompileDiagnostic {
         code: "E0011".to_string(),
         message: format!(
@@ -550,6 +568,13 @@ fn enrich_runtime_mount(
                 continue;
             }
             minted_tags.insert(class.name.clone(), class.tag);
+            minted_docs.insert(
+                class.name.clone(),
+                MountedDeclarationDocs {
+                    declaration: class.docstring.clone(),
+                    members: IndexMap::new(),
+                },
+            );
             minted_rows.insert(
                 class.name.clone(),
                 ExportedType::Class {
@@ -568,6 +593,7 @@ fn enrich_runtime_mount(
                                 ExportedFieldAttrs {
                                     alias: attrs.alias.clone(),
                                     description: attrs.description.clone(),
+                                    docstring: attrs.docstring.clone(),
                                 },
                             )
                         })
@@ -586,6 +612,17 @@ fn enrich_runtime_mount(
                 continue;
             }
             minted_tags.insert(enm.name.clone(), enm.tag);
+            minted_docs.insert(
+                enm.name.clone(),
+                MountedDeclarationDocs {
+                    declaration: enm.docstring.clone(),
+                    members: enm
+                        .variants
+                        .iter()
+                        .map(|(name, attrs)| (name.clone(), attrs.docstring.clone()))
+                        .collect(),
+                },
+            );
             minted_rows.insert(
                 enm.name.clone(),
                 ExportedType::Enum {
@@ -594,7 +631,7 @@ fn enrich_runtime_mount(
                         Vec::new(),
                         enm.name.clone(),
                     ),
-                    variants: enm.variants.clone(),
+                    variants: enm.variants.iter().map(|(name, _)| name.clone()).collect(),
                 },
             );
         }
@@ -622,13 +659,22 @@ fn enrich_runtime_mount(
                 if source_identifier(name)
                     && fields.iter().all(|(field, ..)| source_identifier(field)) =>
             {
-                let mut source = format!("class {name} {{\n");
-                for (field, ty, _) in fields {
+                let mut source = String::new();
+                write_docstring(
+                    &mut source,
+                    minted_docs
+                        .get(name)
+                        .and_then(|docs| docs.declaration.as_deref()),
+                    "",
+                );
+                writeln!(&mut source, "class {name} {{").expect("writing to String is infallible");
+                for (field, ty, attrs) in fields {
                     let ty = if viewpoint.hides_type(ty) {
                         "unknown".to_string()
                     } else {
                         ty.to_string()
                     };
+                    write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
                     writeln!(&mut source, "  {field} {ty}")
                         .expect("writing to String is infallible");
                 }
@@ -638,8 +684,21 @@ fn enrich_runtime_mount(
             ExportedType::Enum { variants, .. }
                 if source_identifier(name) && variants.iter().all(source_identifier) =>
             {
-                let mut source = format!("enum {name} {{\n");
+                let mut source = String::new();
+                let docs = minted_docs.get(name);
+                write_docstring(
+                    &mut source,
+                    docs.and_then(|docs| docs.declaration.as_deref()),
+                    "",
+                );
+                writeln!(&mut source, "enum {name} {{").expect("writing to String is infallible");
                 for variant in variants {
+                    write_docstring(
+                        &mut source,
+                        docs.and_then(|docs| docs.members.get(variant))
+                            .and_then(|docs| docs.as_deref()),
+                        "  ",
+                    );
                     writeln!(&mut source, "  {variant}").expect("writing to String is infallible");
                 }
                 source.push_str("}\n");
@@ -698,12 +757,22 @@ fn enrich_runtime_mount(
             }
             None => {
                 match &exported {
-                    ExportedType::Class { fields, .. }
+                    ExportedType::Class { qtn, fields, .. }
                         if source_identifier(&mount.export_name)
                             && fields.iter().all(|(name, ..)| source_identifier(name)) =>
                     {
-                        let mut source = format!("class {} {{\n", mount.export_name);
-                        for (field, ty, _) in fields {
+                        let mut source = String::new();
+                        write_docstring(
+                            &mut source,
+                            minted_docs
+                                .get(qtn.name())
+                                .and_then(|docs| docs.declaration.as_deref()),
+                            "",
+                        );
+                        writeln!(&mut source, "class {} {{", mount.export_name)
+                            .expect("writing to String is infallible");
+                        for (field, ty, attrs) in fields {
+                            write_docstring(&mut source, attrs.docstring.as_deref(), "  ");
                             let ty = if viewpoint.hides_type(ty) {
                                 "unknown".to_string()
                             } else {
@@ -715,12 +784,26 @@ fn enrich_runtime_mount(
                         source.push_str("}\n");
                         stubs.push((Vec::new(), mount.export_name.clone(), source));
                     }
-                    ExportedType::Enum { variants, .. }
+                    ExportedType::Enum { qtn, variants }
                         if source_identifier(&mount.export_name)
                             && variants.iter().all(source_identifier) =>
                     {
-                        let mut source = format!("enum {} {{\n", mount.export_name);
+                        let mut source = String::new();
+                        let docs = minted_docs.get(qtn.name());
+                        write_docstring(
+                            &mut source,
+                            docs.and_then(|docs| docs.declaration.as_deref()),
+                            "",
+                        );
+                        writeln!(&mut source, "enum {} {{", mount.export_name)
+                            .expect("writing to String is infallible");
                         for variant in variants {
+                            write_docstring(
+                                &mut source,
+                                docs.and_then(|docs| docs.members.get(variant))
+                                    .and_then(|docs| docs.as_deref()),
+                                "  ",
+                            );
                             writeln!(&mut source, "  {variant}")
                                 .expect("writing to String is infallible");
                         }
@@ -2089,6 +2172,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
 #[cfg(test)]
 mod tests {
     use baml_compiler2_hir::file_package::file_package;
+    use baml_compiler2_hir_ty::package_interface::{FunctionThrowSets, PackageInterface};
 
     use super::*;
 
@@ -2206,5 +2290,94 @@ mod tests {
             runtime_relative_virtual_path(Path::new(RUNTIME_VIRTUAL_ROOT)),
             ""
         );
+    }
+
+    #[test]
+    fn runtime_mount_stubs_preserve_declaration_and_variant_docstrings() {
+        let interface = PackageInterface {
+            types: IndexMap::new(),
+            functions: IndexMap::new(),
+            throw_sets: FunctionThrowSets::default(),
+            namespaces: std::collections::BTreeSet::default(),
+            impls: Vec::new(),
+        };
+        let interface_blob =
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
+                .expect("empty package interface encodes");
+        let class_name = Name::new("RuntimeClass");
+        let enum_name = Name::new("RuntimeState");
+        let class_qtn =
+            baml_type::QualifiedTypeName::new(Name::new("app"), Vec::new(), class_name.clone());
+        let enum_qtn =
+            baml_type::QualifiedTypeName::new(Name::new("app"), Vec::new(), enum_name.clone());
+        let package = RuntimePackageMount {
+            interface_blob,
+            types: vec![
+                bex_vm_types::RuntimeTypeMount {
+                    export_name: Name::new("ClassAlias"),
+                    ty: baml_type::RealizedTy::Class(
+                        class_qtn,
+                        Vec::new(),
+                        baml_type::TyAttr::default(),
+                    ),
+                    classes: vec![bex_vm_types::RuntimeMountedClass {
+                        name: class_name,
+                        tag: baml_type::typetag::TypeTag::of_head("runtime.RuntimeClass"),
+                        docstring: Some("Runtime class docs".to_string()),
+                        fields: vec![(
+                            Name::new("value"),
+                            baml_type::Ty::string(),
+                            bex_vm_types::RuntimeMountedFieldAttrs {
+                                docstring: Some("Runtime field docs".to_string()),
+                                ..Default::default()
+                            },
+                        )],
+                    }],
+                    enums: Vec::new(),
+                    witnesses: Vec::new(),
+                },
+                bex_vm_types::RuntimeTypeMount {
+                    export_name: Name::new("StateAlias"),
+                    ty: baml_type::RealizedTy::Enum(enum_qtn, baml_type::TyAttr::default()),
+                    classes: Vec::new(),
+                    enums: vec![bex_vm_types::RuntimeMountedEnum {
+                        name: enum_name,
+                        tag: baml_type::typetag::TypeTag::of_head("runtime.RuntimeState"),
+                        docstring: Some("Runtime enum docs".to_string()),
+                        variants: vec![(
+                            Name::new("READY"),
+                            bex_vm_types::RuntimeMountedVariantAttrs {
+                                docstring: Some("Runtime variant docs".to_string()),
+                            },
+                        )],
+                    }],
+                    witnesses: Vec::new(),
+                },
+            ],
+        };
+
+        let (_, stubs) = enrich_runtime_mount("app", &[Name::new("app")], package)
+            .expect("runtime mount enriches");
+        let sources = stubs
+            .into_iter()
+            .map(|(_, _, source)| source)
+            .collect::<Vec<_>>();
+
+        assert!(sources.iter().any(|source| {
+            source.starts_with("/// Runtime class docs\nclass RuntimeClass {")
+                && source.contains("  /// Runtime field docs\n  value string")
+        }));
+        assert!(sources.iter().any(|source| {
+            source.starts_with("/// Runtime class docs\nclass ClassAlias {")
+                && source.contains("  /// Runtime field docs\n  value string")
+        }));
+        assert!(sources.iter().any(|source| {
+            source.starts_with("/// Runtime enum docs\nenum RuntimeState {")
+                && source.contains("  /// Runtime variant docs\n  READY")
+        }));
+        assert!(sources.iter().any(|source| {
+            source.starts_with("/// Runtime enum docs\nenum StateAlias {")
+                && source.contains("  /// Runtime variant docs\n  READY")
+        }));
     }
 }

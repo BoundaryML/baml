@@ -548,6 +548,7 @@ mod schema {
                 field_type,
                 field_template: None,
                 description: None,
+                docstring: None,
                 alias: None,
                 skip: false,
             }
@@ -557,6 +558,7 @@ mod schema {
             ClassDefinition {
                 name: name.display_name().to_string(),
                 description: None,
+                docstring: None,
                 alias: None,
                 fields,
             }
@@ -650,16 +652,19 @@ mod schema {
                 EnumDefinition {
                     name: "Status".to_string(),
                     description: None,
+                    docstring: None,
                     alias: None,
                     variants: vec![
                         EnumVariantDefinition {
                             name: "Ready".to_string(),
                             description: None,
+                            docstring: None,
                             alias: Some("ready-now".to_string()),
                         },
                         EnumVariantDefinition {
                             name: "Done".to_string(),
                             description: None,
+                            docstring: None,
                             alias: None,
                         },
                     ],

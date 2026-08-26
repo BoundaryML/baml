@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use baml_tests::baml_test;
-use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
+use baml_tests::{baml_test, engine::TestOutput};
+use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
 use bex_heap::{CollectionLevel, HeapPermit};
 use bex_vm_types::Object;
 use sys_native::SysOpsExt;
@@ -15,6 +15,98 @@ function main() -> int throws unknown {
   s.eval<int>(`x + 1`)
 }
 "####;
+
+fn evaluation_error_value(output: TestOutput) -> BexExternalValue {
+    match output.result.unwrap_err() {
+        EngineError::UnhandledThrow { value, .. } => {
+            let value = *value;
+            match &value {
+                BexExternalValue::Instance { class_name, .. }
+                    if class_name == "reflect.errors.EvaluationError" =>
+                {
+                    value
+                }
+                _ => panic!("expected EvaluationError, got {value:?}"),
+            }
+        }
+        other => panic!("expected an unhandled EvaluationError, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn session_evaluation_error_preserves_structured_cause_for_host() {
+    let output = baml_test!(
+        r####"
+class AppError {
+  code string
+}
+
+function fail_cell() -> null throws AppError {
+  throw AppError { code: "E42" }
+}
+
+function main() -> null throws unknown {
+  let session = reflect.Session.new(packages = { "app": reflect.Package.current() })
+  session.eval<null>(`app.fail_cell()`)
+}
+"####
+    );
+    let error = evaluation_error_value(output);
+    let BexExternalValue::Instance { fields, .. } = error else {
+        unreachable!()
+    };
+
+    assert!(
+        fields
+            .get("message")
+            .and_then(BexExternalValue::as_string)
+            .is_some_and(|message| message.contains("AppError") && message.contains("E42")),
+        "EvaluationError message did not describe its cause: {fields:?}"
+    );
+    let Some(BexExternalValue::Instance {
+        class_name,
+        fields: cause_fields,
+        ..
+    }) = fields.get("cause")
+    else {
+        panic!("EvaluationError did not carry the structured cause: {fields:?}")
+    };
+    assert_eq!(class_name, "user.AppError");
+    assert_eq!(
+        cause_fields
+            .get("code")
+            .and_then(BexExternalValue::as_string),
+        Some("E42".into())
+    );
+}
+
+#[tokio::test]
+async fn session_evaluation_error_preserves_string_cause_for_host() {
+    let output = baml_test!(
+        r####"
+function main() -> unknown throws unknown {
+  let session = reflect.Session.new()
+  session.eval<unknown>(`throw "cell failed"`)
+}
+"####
+    );
+    let error = evaluation_error_value(output);
+    let BexExternalValue::Instance { fields, .. } = error else {
+        unreachable!()
+    };
+
+    assert_eq!(
+        fields.get("cause").and_then(BexExternalValue::as_string),
+        Some("cell failed".into())
+    );
+    assert!(
+        fields
+            .get("message")
+            .and_then(BexExternalValue::as_string)
+            .is_some_and(|message| message.contains("cell failed")),
+        "EvaluationError message did not describe its string cause: {fields:?}"
+    );
+}
 
 #[tokio::test]
 async fn session_compile_artifact_is_consumed_once() {

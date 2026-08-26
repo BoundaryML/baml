@@ -7,6 +7,7 @@ class CompilationError {
 /// Runtime evaluation failed after successful construction/compilation.
 class EvaluationError {
   message string
+  cause unknown
 }
 
 /// A reflective typed read did not fit the requested type: `Field.value<T>()`

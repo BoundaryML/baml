@@ -54,6 +54,7 @@ pub struct EnumValue {
     pub name: String,
     pub alias: Option<String>,
     pub description: Option<String>,
+    pub docstring: Option<String>,
 }
 
 /// An enum definition for output format rendering.
@@ -62,6 +63,7 @@ pub struct Enum {
     pub name: String,
     pub alias: Option<String>,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub values: Vec<EnumValue>,
 }
 
@@ -72,6 +74,7 @@ pub struct ClassField {
     pub alias: Option<String>,
     pub field_type: SapTy,
     pub description: Option<String>,
+    pub docstring: Option<String>,
 }
 
 /// A class definition for output format rendering.
@@ -80,6 +83,7 @@ pub struct Class {
     pub name: String,
     pub alias: Option<String>,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub fields: Vec<ClassField>,
 }
 
@@ -232,12 +236,14 @@ impl OutputFormatContent {
 
                 // Render class description above the name for hoisted classes
                 let mut def = String::new();
-                if let Some(ref desc) = cls.description {
-                    let desc = desc.trim();
-                    if !desc.is_empty() {
-                        for line in desc.lines() {
-                            let _ = writeln!(def, "/// {line}");
-                        }
+                for docs in [&cls.description, &cls.docstring]
+                    .into_iter()
+                    .flatten()
+                    .map(|docs| docs.trim())
+                    .filter(|docs| !docs.is_empty())
+                {
+                    for line in docs.lines() {
+                        let _ = writeln!(def, "/// {line}");
                     }
                 }
                 let _ = write!(def, "{hoisted_prefix}{display_name} {body}");
@@ -339,10 +345,16 @@ impl OutputFormatContent {
     /// Compute which enums should be hoisted (rendered as top-level definitions).
     fn compute_hoisted_enums(&self, options: &RenderOptions) -> indexmap::IndexSet<String> {
         let mut hoisted = indexmap::IndexSet::new();
+        let has_docs =
+            |docs: &Option<String>| docs.as_deref().is_some_and(|docs| !docs.trim().is_empty());
         for (name, enm) in &self.enums {
             if enm.values.len() > Self::INLINE_RENDER_ENUM_MAX_VALUES
-                || enm.description.is_some()
-                || enm.values.iter().any(|v| v.description.is_some())
+                || has_docs(&enm.description)
+                || has_docs(&enm.docstring)
+                || enm
+                    .values
+                    .iter()
+                    .any(|v| has_docs(&v.description) || has_docs(&v.docstring))
                 || matches!(options.always_hoist_enums, RenderSetting::Always(true))
             {
                 hoisted.insert(name.clone());
@@ -695,13 +707,15 @@ impl OutputFormatContent {
         let display_name = rendered_name(&enm.name, enm.alias.as_ref());
 
         let mut result = String::new();
-        // Enum-level description as /// comments above the name
-        if let Some(ref d) = enm.description {
-            let d = d.trim();
-            if !d.is_empty() {
-                for line in d.lines() {
-                    let _ = writeln!(result, "/// {line}");
-                }
+        // Enum-level description and source docs as /// comments above the name.
+        for docs in [&enm.description, &enm.docstring]
+            .into_iter()
+            .flatten()
+            .map(|docs| docs.trim())
+            .filter(|docs| !docs.is_empty())
+        {
+            for line in docs.lines() {
+                let _ = writeln!(result, "/// {line}");
             }
         }
 
@@ -716,9 +730,18 @@ impl OutputFormatContent {
                 RenderSetting::Always(p) => p.as_str(),
                 RenderSetting::Never => "",
             };
-            let line = match &v.description {
-                Some(d) => format!("{prefix}{value_name}: {d}"),
-                None => format!("{prefix}{value_name}"),
+            let docs = [&v.description, &v.docstring]
+                .into_iter()
+                .flatten()
+                .map(|docs| docs.trim())
+                .filter(|docs| !docs.is_empty())
+                .map(|docs| docs.lines().map(str::trim).collect::<Vec<_>>().join(" "))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let line = if docs.is_empty() {
+                format!("{prefix}{value_name}")
+            } else {
+                format!("{prefix}{value_name}: {docs}")
             };
             result.push('\n');
             result.push_str(&line);
@@ -759,9 +782,14 @@ impl OutputFormatContent {
             } else {
                 display_name.to_string()
             };
-            // Field description as /// comment above the field
-            if let Some(d) = &field.description {
-                fields_str.push(format!("  /// {}", d.replace('\n', "\n  /// ")));
+            // Field description and source docs render in that order.
+            for docs in [&field.description, &field.docstring]
+                .into_iter()
+                .flatten()
+                .map(|docs| docs.trim())
+                .filter(|docs| !docs.is_empty())
+            {
+                fields_str.push(format!("  /// {}", docs.replace('\n', "\n  /// ")));
             }
             fields_str.push(format!("  {field_name}: {ty_str},"));
         }
@@ -769,14 +797,20 @@ impl OutputFormatContent {
         let mut output = String::new();
         output.push_str("{\n");
         if !skip_class_description {
-            if let Some(ref d) = cls.description {
-                let d = d.trim();
-                if !d.is_empty() {
-                    for line in d.lines() {
-                        let _ = writeln!(output, "  /// {line}");
-                    }
-                    output.push('\n');
+            let mut wrote_docs = false;
+            for docs in [&cls.description, &cls.docstring]
+                .into_iter()
+                .flatten()
+                .map(|docs| docs.trim())
+                .filter(|docs| !docs.is_empty())
+            {
+                wrote_docs = true;
+                for line in docs.lines() {
+                    let _ = writeln!(output, "  /// {line}");
                 }
+            }
+            if wrote_docs {
+                output.push('\n');
             }
         }
         output.push_str(&fields_str.join("\n"));
@@ -1172,6 +1206,7 @@ fn walk_ty(
                         alias: field.alias.clone(),
                         field_type: field_type.clone(),
                         description: field.description.clone(),
+                        docstring: field.docstring.clone(),
                     })
                     .collect();
 
@@ -1181,6 +1216,7 @@ fn walk_ty(
                         name: output_name,
                         alias: class_def.alias.clone(),
                         description: class_def.description.clone(),
+                        docstring: class_def.docstring.clone(),
                         fields,
                     },
                 );
@@ -1223,6 +1259,7 @@ fn walk_ty(
                         name: v.name.clone(),
                         alias: v.alias.clone(),
                         description: v.description.clone(),
+                        docstring: v.docstring.clone(),
                     })
                     .collect();
 
@@ -1232,6 +1269,7 @@ fn walk_ty(
                         name: output_name,
                         alias: enum_def.alias.clone(),
                         description: enum_def.description.clone(),
+                        docstring: enum_def.docstring.clone(),
                         values,
                     },
                 );
@@ -1331,10 +1369,12 @@ mod tests {
         );
         let definition = |name: &str| sys_types::EnumDefinition {
             name: name.to_string(),
+            docstring: None,
             description: None,
             alias: Some("SharedChoice".to_string()),
             variants: vec![sys_types::EnumVariantDefinition {
                 name: "Value".to_string(),
+                docstring: None,
                 description: None,
                 alias: None,
             }],
@@ -1385,10 +1425,12 @@ mod tests {
             enum_key,
             sys_types::EnumDefinition {
                 name: "Choice_2".to_string(),
+                docstring: None,
                 description: None,
                 alias: Some("SharedChoice".to_string()),
                 variants: vec![sys_types::EnumVariantDefinition {
                     name: "Value".to_string(),
+                    docstring: None,
                     description: None,
                     alias: None,
                 }],
@@ -1802,6 +1844,7 @@ mod tests {
             name: "Person".to_string(),
             alias: None,
             description: Some("A person".to_string()),
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "name".to_string(),
@@ -1810,6 +1853,7 @@ mod tests {
                         attr: TyAttr::default(),
                     },
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "age".to_string(),
@@ -1818,6 +1862,7 @@ mod tests {
                         attr: TyAttr::default(),
                     },
                     description: Some("Age in years".to_string()),
+                    docstring: None,
                 },
             ],
         };
@@ -1852,6 +1897,7 @@ mod tests {
             name: "Point".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "x".to_string(),
@@ -1860,6 +1906,7 @@ mod tests {
                         attr: TyAttr::default(),
                     },
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "y".to_string(),
@@ -1868,6 +1915,7 @@ mod tests {
                         attr: TyAttr::default(),
                     },
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -1899,21 +1947,25 @@ mod tests {
             name: "Color".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             values: vec![
                 EnumValue {
                     name: "Red".to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 },
                 EnumValue {
                     name: "Green".to_string(),
                     alias: None,
                     description: Some("Like grass".to_string()),
+                    docstring: None,
                 },
                 EnumValue {
                     name: "Blue".to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -1936,6 +1988,55 @@ mod tests {
                  - Blue"
                     .to_string()
             )
+        );
+    }
+
+    #[test]
+    fn blank_enum_docs_do_not_change_hoisting() {
+        let clean = OutputFormatContent::new(ty_enum("Color"))
+            .with_enum(mk_enum("Color", vec!["Red", "Blue"]));
+        let mut blank_enum = mk_enum("Color", vec!["Red", "Blue"]);
+        blank_enum.description = Some(" \n ".to_string());
+        blank_enum.docstring = Some("\t".to_string());
+        blank_enum.values[0].description = Some("  ".to_string());
+        blank_enum.values[1].docstring = Some("\n".to_string());
+        let blank = OutputFormatContent::new(ty_enum("Color")).with_enum(blank_enum);
+
+        assert_eq!(
+            blank.render(&RenderOptions::default()).unwrap(),
+            clean.render(&RenderOptions::default()).unwrap()
+        );
+    }
+
+    #[test]
+    fn enum_value_docs_stay_on_one_line() {
+        let mut enm = mk_enum("Color", vec!["Red"]);
+        enm.values[0].description = Some(" first line\n second line ".to_string());
+        enm.values[0].docstring = Some("third line\r\nfourth line".to_string());
+        let content = OutputFormatContent::new(ty_enum("Color")).with_enum(enm);
+
+        let rendered = content
+            .render(&RenderOptions::default())
+            .unwrap()
+            .expect("an enum renders");
+        assert!(
+            rendered.contains("- Red: first line second line third line fourth line"),
+            "{rendered}"
+        );
+    }
+
+    #[test]
+    fn blank_field_docs_are_not_rendered() {
+        let clean = OutputFormatContent::new(ty_class("Point"))
+            .with_class(mk_class("Point", vec![("x", ty_int())]));
+        let mut blank_class = mk_class("Point", vec![("x", ty_int())]);
+        blank_class.fields[0].description = Some(" \n ".to_string());
+        blank_class.fields[0].docstring = Some("\t".to_string());
+        let blank = OutputFormatContent::new(ty_class("Point")).with_class(blank_class);
+
+        assert_eq!(
+            blank.render(&RenderOptions::default()).unwrap(),
+            clean.render(&RenderOptions::default()).unwrap()
         );
     }
 
@@ -2111,6 +2212,7 @@ mod tests {
             name: name.to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: fields
                 .into_iter()
                 .map(|(n, t)| ClassField {
@@ -2118,6 +2220,7 @@ mod tests {
                     alias: None,
                     field_type: t,
                     description: None,
+                    docstring: None,
                 })
                 .collect(),
         }
@@ -2128,6 +2231,7 @@ mod tests {
             name: name.to_string(),
             alias: None,
             description: Some(desc.to_string()),
+            docstring: None,
             fields: fields
                 .into_iter()
                 .map(|(n, t)| ClassField {
@@ -2135,6 +2239,7 @@ mod tests {
                     alias: None,
                     field_type: t,
                     description: None,
+                    docstring: None,
                 })
                 .collect(),
         }
@@ -2145,12 +2250,14 @@ mod tests {
             name: name.to_string(),
             alias: None,
             description: None,
+            docstring: None,
             values: values
                 .into_iter()
                 .map(|v| EnumValue {
                     name: v.to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 })
                 .collect(),
         }
@@ -2170,6 +2277,7 @@ mod tests {
             field_type,
             field_template,
             description: None,
+            docstring: None,
             alias: None,
             skip: false,
         }
@@ -2182,6 +2290,7 @@ mod tests {
         sys_types::ClassDefinition {
             name: name.display_name().to_string(),
             description: None,
+            docstring: None,
             alias: None,
             fields,
         }
@@ -3115,10 +3224,12 @@ Answer in JSON using this schema: Ret"#
             name: "Foo".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             values: vec![EnumValue {
                 name: "Bar".to_string(),
                 alias: None,
                 description: None,
+                docstring: None,
             }],
             // Baz is already filtered out by the extraction layer
         };
@@ -3145,11 +3256,13 @@ Answer in JSON using this schema: Ret"#
             name: "MyClass".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![ClassField {
                 name: "keep".to_string(),
                 alias: None,
                 field_type: ty_string(),
                 description: None,
+                docstring: None,
             }],
             // hidden field is already filtered out by the extraction layer
         };
@@ -3196,24 +3309,28 @@ Answer in JSON using this schema: Ret"#
             name: "Date".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "day".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "month".to_string(),
                     alias: None,
                     field_type: ty_enum("Month"),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "year".to_string(),
                     alias: None,
                     field_type: ty_optional(ty_class("Date")),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3222,12 +3339,14 @@ Answer in JSON using this schema: Ret"#
             name: "Education".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "from_date".to_string(),
                     alias: None,
                     field_type: ty_class("Date"),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "to_date".to_string(),
@@ -3241,18 +3360,21 @@ Answer in JSON using this schema: Ret"#
                         ),
                     ]),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "school".to_string(),
                     alias: None,
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "description".to_string(),
                     alias: None,
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3261,11 +3383,13 @@ Answer in JSON using this schema: Ret"#
             name: "Resume".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![ClassField {
                 name: "education".to_string(),
                 alias: None,
                 field_type: ty_list(ty_class("Education")),
                 description: None,
+                docstring: None,
             }],
         };
 
@@ -3319,24 +3443,28 @@ Answer in JSON using this schema: Ret"#
             name: "Date".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "day".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "month".to_string(),
                     alias: None,
                     field_type: ty_enum("Month"),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "year".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3345,12 +3473,14 @@ Answer in JSON using this schema: Ret"#
             name: "Education".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "from_date".to_string(),
                     alias: None,
                     field_type: ty_class("Date"),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "to_date".to_string(),
@@ -3364,18 +3494,21 @@ Answer in JSON using this schema: Ret"#
                         ),
                     ]),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "school".to_string(),
                     alias: None,
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "description".to_string(),
                     alias: None,
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3384,11 +3517,13 @@ Answer in JSON using this schema: Ret"#
             name: "Resume".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![ClassField {
                 name: "education".to_string(),
                 alias: None,
                 field_type: ty_list(ty_class("Education")),
                 description: None,
+                docstring: None,
             }],
         };
 
@@ -3418,11 +3553,13 @@ Answer in JSON using this schema: Ret"#
             name: "MyClass".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![ClassField {
                 name: "Name".to_string(),
                 alias: Some("a".to_string()),
                 field_type: ty_string(),
                 description: Some("d".to_string()),
+                docstring: None,
             }],
         };
 
@@ -3448,18 +3585,21 @@ Answer in JSON using this schema: Ret"#
             name: "MyClass".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "my_field".to_string(),
                     alias: Some("myField".to_string()),
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "other".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3486,21 +3626,25 @@ Answer in JSON using this schema: Ret"#
             name: "Color".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             values: vec![
                 EnumValue {
                     name: "Red".to_string(),
                     alias: Some("r".to_string()),
                     description: None,
+                    docstring: None,
                 },
                 EnumValue {
                     name: "Green".to_string(),
                     alias: Some("g".to_string()),
                     description: Some("Like grass".to_string()),
+                    docstring: None,
                 },
                 EnumValue {
                     name: "Blue".to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3528,16 +3672,19 @@ Answer in JSON using this schema: Ret"#
             name: "TestEnum".to_string(),
             alias: Some("Category".to_string()),
             description: None,
+            docstring: None,
             values: vec![
                 EnumValue {
                     name: "A".to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 },
                 EnumValue {
                     name: "B".to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3564,18 +3711,21 @@ Answer in JSON using this schema: Ret"#
             name: "Node".to_string(),
             alias: Some("GraphNode".to_string()),
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "data".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "next".to_string(),
                     alias: None,
                     field_type: ty_optional(ty_class("Node")),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3609,11 +3759,13 @@ Answer in JSON using this schema: Ret"#
                 name: "Box".to_string(),
                 alias: None,
                 description: None,
+                docstring: None,
                 fields: vec![ClassField {
                     name: "value".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: None,
+                    docstring: None,
                 }],
             });
         content.classes.swap_remove("Box");
@@ -3623,11 +3775,13 @@ Answer in JSON using this schema: Ret"#
                 name: "Box".to_string(),
                 alias: Some("Container".to_string()),
                 description: None,
+                docstring: None,
                 fields: vec![ClassField {
                     name: "value".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: None,
+                    docstring: None,
                 }],
             },
         );
@@ -3656,11 +3810,13 @@ Answer in JSON using this schema: Ret"#
                     name: name.to_string(),
                     alias: Some("Container".to_string()),
                     description: None,
+                    docstring: None,
                     fields: vec![ClassField {
                         name: "value".to_string(),
                         alias: None,
                         field_type: ty_int(),
                         description: None,
+                        docstring: None,
                     }],
                 },
             );
@@ -3691,18 +3847,21 @@ Answer in JSON using this schema: Ret"#
             name: "Foo".to_string(),
             alias: None,
             description: Some("A foo object".to_string()),
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "bar".to_string(),
                     alias: None,
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "baz".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: Some("A baz field".to_string()),
+                    docstring: None,
                 },
             ],
         };
@@ -4073,11 +4232,13 @@ Answer in JSON using this type: A"#
             name: "BigEnum".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             values: (0..8)
                 .map(|i| EnumValue {
                     name: format!("V{i}"),
                     alias: None,
                     description: None,
+                    docstring: None,
                 })
                 .collect(),
         };
@@ -4105,16 +4266,19 @@ Answer in JSON using this type: A"#
             name: "Status".to_string(),
             alias: None,
             description: Some("The status of an order".to_string()),
+            docstring: None,
             values: vec![
                 EnumValue {
                     name: "Pending".to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 },
                 EnumValue {
                     name: "Done".to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -4141,18 +4305,21 @@ Answer in JSON using this type: A"#
             name: "User".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "user_name".to_string(),
                     alias: Some("username".to_string()),
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "email_addr".to_string(),
                     alias: Some("email".to_string()),
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -4179,16 +4346,19 @@ Answer in JSON using this type: A"#
             name: "Color".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             values: vec![
                 EnumValue {
                     name: "Red".to_string(),
                     alias: Some("r".to_string()),
                     description: None,
+                    docstring: None,
                 },
                 EnumValue {
                     name: "Green".to_string(),
                     alias: Some("g".to_string()),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -4234,18 +4404,21 @@ Answer in JSON using this type: A"#
             name: "User".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "name".to_string(),
                     alias: None,
                     field_type: ty_string(),
                     description: Some("The user's full name".to_string()),
+                    docstring: None,
                 },
                 ClassField {
                     name: "age".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: None,
+                    docstring: None,
                 },
             ],
         };

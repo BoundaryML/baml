@@ -2654,6 +2654,7 @@ impl BexEngine {
                     sys_types::ClassDefinition {
                         name: cls.name.display_name().to_string(),
                         description: cls.description.clone(),
+                        docstring: cls.docstring.clone(),
                         alias: cls.alias.clone(),
                         fields: cls
                             .fields
@@ -2678,6 +2679,7 @@ impl BexEngine {
                                         }),
                                 ),
                                 description: f.description.clone(),
+                                docstring: f.docstring.clone(),
                                 alias: f.alias.clone(),
                                 skip: f.skip,
                             })
@@ -2703,6 +2705,7 @@ impl BexEngine {
                     sys_types::EnumDefinition {
                         name: enm.name.display_name().to_string(),
                         description: enm.description.clone(),
+                        docstring: enm.docstring.clone(),
                         alias: enm.alias.clone(),
                         variants: enm
                             .variants
@@ -2711,6 +2714,7 @@ impl BexEngine {
                             .map(|v| sys_types::EnumVariantDefinition {
                                 name: v.name.clone(),
                                 description: v.description.clone(),
+                                docstring: v.docstring.clone(),
                                 alias: v.alias.clone(),
                             })
                             .collect(),
@@ -2746,6 +2750,7 @@ impl BexEngine {
         sys_types::EnumDefinition {
             name: enm.name.display_name().to_string(),
             description: enm.description.clone(),
+            docstring: enm.docstring.clone(),
             alias: enm.alias.clone(),
             variants: enm
                 .variants
@@ -2754,6 +2759,7 @@ impl BexEngine {
                 .map(|variant| sys_types::EnumVariantDefinition {
                     name: variant.name.clone(),
                     description: variant.description.clone(),
+                    docstring: variant.docstring.clone(),
                     alias: variant.alias.clone(),
                 })
                 .collect(),
@@ -2767,6 +2773,7 @@ impl BexEngine {
         sys_types::ClassDefinition {
             name: class.name.display_name().to_string(),
             description: class.description.clone(),
+            docstring: class.docstring.clone(),
             alias: class.alias.clone(),
             fields: class
                 .fields
@@ -2777,6 +2784,7 @@ impl BexEngine {
                     field_type: Self::lane_ty(&field.field_type),
                     field_template: Some(Self::lane_template(&field.field_template)),
                     description: field.description.clone(),
+                    docstring: field.docstring.clone(),
                     alias: field.alias.clone(),
                     skip: field.skip,
                 })
@@ -2890,6 +2898,7 @@ impl BexEngine {
                     sys_types::ClassDefinition {
                         name: class.name.display_name().to_string(),
                         description: class.description.clone(),
+                        docstring: class.docstring.clone(),
                         alias: class.alias.clone(),
                         fields: class
                             .fields
@@ -2899,6 +2908,7 @@ impl BexEngine {
                                 field_type: Self::lane_ty(&field.field_type),
                                 field_template: Some(Self::lane_template(&field.field_template)),
                                 description: field.description.clone(),
+                                docstring: field.docstring.clone(),
                                 alias: field.alias.clone(),
                                 skip: field.skip,
                             })
@@ -2916,6 +2926,7 @@ impl BexEngine {
                     sys_types::EnumDefinition {
                         name: enm.name.display_name().to_string(),
                         description: enm.description.clone(),
+                        docstring: enm.docstring.clone(),
                         alias: enm.alias.clone(),
                         variants: enm
                             .variants
@@ -2924,6 +2935,7 @@ impl BexEngine {
                             .map(|variant| sys_types::EnumVariantDefinition {
                                 name: variant.name.clone(),
                                 description: variant.description.clone(),
+                                docstring: variant.docstring.clone(),
                                 alias: variant.alias.clone(),
                             })
                             .collect(),
@@ -7019,6 +7031,7 @@ impl BexEngine {
                 Ok(bex_vm_types::RuntimeMountedClass {
                     name: class.name.item_name().clone(),
                     tag: class.type_tag,
+                    docstring: class.docstring.clone(),
                     fields: class
                         .fields
                         .iter()
@@ -7029,6 +7042,7 @@ impl BexEngine {
                                 bex_vm_types::RuntimeMountedFieldAttrs {
                                     alias: field.alias.clone(),
                                     description: field.description.clone(),
+                                    docstring: field.docstring.clone(),
                                 },
                             ))
                         })
@@ -7045,10 +7059,18 @@ impl BexEngine {
                 Ok(bex_vm_types::RuntimeMountedEnum {
                     name: enm.name.item_name().clone(),
                     tag: enm.type_tag,
+                    docstring: enm.docstring.clone(),
                     variants: enm
                         .variants
                         .iter()
-                        .map(|variant| baml_type::Name::new(&variant.name))
+                        .map(|variant| {
+                            (
+                                baml_type::Name::new(&variant.name),
+                                bex_vm_types::RuntimeMountedVariantAttrs {
+                                    docstring: variant.docstring.clone(),
+                                },
+                            )
+                        })
                         .collect(),
                 })
             })
