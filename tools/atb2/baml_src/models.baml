@@ -62,6 +62,9 @@ enum Subsystem {
     Runtime,
     StdLibrary,
     Tooling,
+    /// None of the above fits (or the defect spans several); routed to the
+    /// default shepherds.
+    Unknown,
 }
 
 // Status is a tagged union so each state carries exactly the payload the

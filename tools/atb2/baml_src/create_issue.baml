@@ -311,7 +311,8 @@ function write_issue(fb: Feedback, repro: Repro, run: ReproRun) -> IssueDraft {
           syntax = parsing/grammar; compiler = type checking, MIR, diagnostics,
           ICEs; runtime = the VM, serde, SDK runtime behavior; std_library =
           builtin functions/types; tooling = CLI, code generators for host
-          languages (sdkgen/codegen), IDE/playground, packaging, CI.
+          languages (sdkgen/codegen), IDE/playground, packaging, CI;
+          unknown = none of these fits or the defect spans several.
         - resolution_plan: a short outline of a plausible fix (files/phases to
           look at, suggested approach), or null if you cannot say anything
           non-obvious.

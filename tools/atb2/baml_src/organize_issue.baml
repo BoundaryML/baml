@@ -16,28 +16,32 @@
 //
 // PR counts miss the founders, who touch everything and own nothing by
 // that measure (hellovai: 21 tooling / 6 runtime / 6 compiler / 3 syntax
-// PRs in the window, top-3 nowhere). They are listed last on every
-// subsystem as the catch-all.
+// PRs in the window, top-3 nowhere). The defaults are listed last on
+// every subsystem, and are the only owners of Subsystem.Unknown.
 //
 // Rerun the ranking when the team shifts; the table below is the only
 // thing that changes.
 
-/// Listed last on every subsystem: takes whatever the owners cannot.
-function catch_all_shepherds() -> string[] {
-    ["hellovai"]
+/// Where an issue goes when no subsystem owner fits: the founders. Also
+/// listed last on every subsystem.
+function default_shepherds() -> string[] {
+    ["hellovai", "aaronvg"]
 }
 
 /// GitHub logins of the engineers who own a subsystem, most active first,
-/// then the catch-all.
+/// then the defaults.
 function shepherds_for(subsystem: Subsystem) -> string[] {
-    let owners = match (subsystem) {
+    // annotated: an empty-array arm next to string[] arms crashes the 0.17.0
+    // checker when the binding's type is inferred (#4468-style ICE)
+    let owners: string[] = match (subsystem) {
         Subsystem.Syntax => ["aaronvg", "codeshaunted", "2kai2kai2"],
         Subsystem.Compiler => ["codeshaunted", "antoniosarosi", "2kai2kai2"],
         Subsystem.Runtime => ["antoniosarosi", "2kai2kai2", "sxlijin"],
         Subsystem.StdLibrary => ["2kai2kai2", "antoniosarosi", "codeshaunted"],
         Subsystem.Tooling => ["sxlijin", "codeshaunted", "2kai2kai2"],
+        Subsystem.Unknown => [],
     };
-    owners.concat(catch_all_shepherds())
+    owners.concat(default_shepherds())
 }
 
 /// The shepherd an issue in this subsystem goes to: the most active owner.
@@ -104,7 +108,7 @@ testset "organize_issue" {
         }
     }
 
-    test "the founders back every subsystem" {
+    test "the defaults back every subsystem" {
         for (
             let s in [
                 Subsystem.Syntax,
@@ -115,8 +119,14 @@ testset "organize_issue" {
             ]
         ) {
             let owners = shepherds_for(s);
-            assert.equal(owners.at(owners.length() - 1) ?? "", "hellovai");
+            assert.equal(owners.at(owners.length() - 2) ?? "", "hellovai");
+            assert.equal(owners.at(owners.length() - 1) ?? "", "aaronvg");
         }
+    }
+
+    test "no matching subsystem goes to the defaults" {
+        assert.equal(organize_issue(issue_in(Subsystem.Unknown, null)).shepherd ?? "", "hellovai");
+        assert.equal(shepherds_for(Subsystem.Unknown).length(), 2);
     }
 
     test "known routes" {
