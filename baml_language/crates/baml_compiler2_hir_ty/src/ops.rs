@@ -132,7 +132,7 @@ fn operator_goal(interface: &str, rhs: Option<&Ty>) -> InterfaceRef {
 /// reader: the method the matching source impl provides when the receiver
 /// resolves to one, else the `baml.ops` interface's own method declaration
 /// (the static truth when dispatch is dynamic — union/existential/unbound
-/// receivers — or when the impl inherits the default). Operand literals
+/// receivers — or when the impl adopts the default). Operand literals
 /// widen here (`1 + 2` navigates like `int + int`); `None` only when the
 /// interface itself is not in the database.
 pub fn operator_method<'db>(

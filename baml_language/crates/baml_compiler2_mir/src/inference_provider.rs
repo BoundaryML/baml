@@ -73,7 +73,7 @@ pub(crate) enum MemberResolution<'db> {
         func_loc: FunctionLoc<'db>,
         /// The callee's OWNER frame, carried from resolution: the impl's
         /// generic bindings (declaration order) for an override,
-        /// `[Self = receiver, iface args..]` for an inherited default. The
+        /// `[Self = receiver, iface args..]` for an adopted default. The
         /// call site emits these ahead of the method's own type args per the
         /// `[owner ++ own]` frame invariant — never re-derived by name.
         frame_type_args: Vec<Tir2Ty>,

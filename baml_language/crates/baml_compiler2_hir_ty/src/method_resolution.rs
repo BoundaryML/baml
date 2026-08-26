@@ -282,7 +282,7 @@ pub enum MemberDeclarer<'db> {
         /// The callee's OWNER frame, realized by the impl match — the frame
         /// the resolution CARRIES so the call site never re-derives it: the
         /// impl's generic bindings (declaration order) for a provided
-        /// method, `[Self = receiver, iface args..]` for an inherited
+        /// method, `[Self = receiver, iface args..]` for an adopted
         /// default.
         frame_type_args: Vec<Ty>,
         /// `true` when `func` is the interface's default body (which expects

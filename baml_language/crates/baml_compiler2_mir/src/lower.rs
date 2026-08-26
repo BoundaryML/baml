@@ -2043,7 +2043,7 @@ impl<'db> LoweringContext<'db> {
 
     /// The realized view of the `target_tn` interface a receiver of type `actual_ty`
     /// provides — through its own `requires` closure for an interface-existential
-    /// receiver, or through one of its impls (own or `requires`-inherited views) for
+    /// receiver, or through one of its impls (own or `requires`-elaborated views) for
     /// a concrete-headed receiver, enumerated via the canonical L1 substrate.
     fn realized_interface_view_for(
         &self,
@@ -8732,7 +8732,7 @@ impl<'db> LoweringContext<'db> {
                     return;
                 };
                 // Seed the default method's frame exactly as the runtime seeds
-                // an inherited default: `[Self ++ interface generics]` (see
+                // an adopted default: `[Self ++ interface generics]` (see
                 // `interface_frame` in `baml_compiler2_emit` and
                 // `enclosing_generic_params`), expressed over the enclosing
                 // impl's generic params. `Self` is the enclosing
@@ -8999,7 +8999,7 @@ impl<'db> LoweringContext<'db> {
         let mut receiver_path_tir_ty: Option<Tir2Ty> = None;
         // The owner frame a statically-resolved impl-method callee expects,
         // carried by the resolution (impl generic bindings for an override,
-        // `[Self, iface args..]` for an inherited default). When present, the
+        // `[Self, iface args..]` for an adopted default). When present, the
         // shared type-arg prepend below emits it as the owner prefix INSTEAD
         // of the receiver's class args — the callee is an impl body, not a
         // class method, and the two conventions only coincide for in-class

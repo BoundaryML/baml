@@ -379,9 +379,10 @@ pub struct BoundMethod {
     /// `MakeBoundMethod` curries `[class generics (→ Self), method fn generics]`
     /// — the exact vector a direct `receiver.method<…>(…)` call would seed.
     /// `MakeVirtualBoundMethod` instead curries the resolved impl's realized
-    /// frame — the impl's own generics, or the interface's args + associated
-    /// types for an inherited default (which the receiver's class args cannot
-    /// express, e.g. a blanket `implement<T> I for T[]` bound at `int[]`) —
+    /// frame — the impl's own generics for a provided method,
+    /// `[Self, interface args..]` for an adopted default (which the receiver's
+    /// class args cannot express, e.g. a blanket `implement<T> I for T[]`
+    /// bound at `int[]`) —
     /// followed by any method-level type args from the reference site.
     ///
     /// `RuntimeTy` (not `RealizedTy`) mirrors [`Closure::captured_type_args`]

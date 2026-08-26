@@ -1,0 +1,362 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function dispatch_matrix.$init_test_ns_dispatch_matrix_dispatch_matrix(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.dispatch_matrix"
+    load_const "row1 static call reaches a provided method"
+    make_closure .<lambda($init_test_ns_dispatch_matrix_dispatch_matrix, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dispatch_matrix"
+    load_const "row2 static call carries a generic impl's bindings"
+    make_closure .<lambda($init_test_ns_dispatch_matrix_dispatch_matrix, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dispatch_matrix"
+    load_const "row3 static call reaches an adopted default"
+    make_closure .<lambda($init_test_ns_dispatch_matrix_dispatch_matrix, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dispatch_matrix"
+    load_const "row4 static call reaches a primitive-target impl"
+    make_closure .<lambda($init_test_ns_dispatch_matrix_dispatch_matrix, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dispatch_matrix"
+    load_const "row5 virtual dispatch realizes every rule kind's frame"
+    make_closure .<lambda($init_test_ns_dispatch_matrix_dispatch_matrix, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dispatch_matrix"
+    load_const "row6 virtual bound reference dispatches like the call"
+    make_closure .<lambda($init_test_ns_dispatch_matrix_dispatch_matrix, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dispatch_matrix"
+    load_const "row7 static bound references curry the realized frame"
+    make_closure .<lambda($init_test_ns_dispatch_matrix_dispatch_matrix, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dispatch_matrix"
+    load_const "row8 default bypass reaches the interface body"
+    make_closure .<lambda($init_test_ns_dispatch_matrix_dispatch_matrix, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dispatch_matrix"
+    load_const "row9 same-interface union dispatches on the shared interface"
+    make_closure .<lambda($init_test_ns_dispatch_matrix_dispatch_matrix, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dispatch_matrix"
+    load_const "row10 bare type-qualified members resolve through the impl"
+    make_closure .<lambda($init_test_ns_dispatch_matrix_dispatch_matrix, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dispatch_matrix"
+    load_const "row11 written qualifier resolves the same member"
+    make_closure .<lambda($init_test_ns_dispatch_matrix_dispatch_matrix, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dispatch_matrix"
+    load_const "row12 interface-qualified calls infer Self from the argument"
+    make_closure .<lambda($init_test_ns_dispatch_matrix_dispatch_matrix, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.dispatch_matrix"
+    load_const "row13 interpolation renders through the provided to_string"
+    make_closure .<lambda($init_test_ns_dispatch_matrix_dispatch_matrix, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function dispatch_matrix.<(int as user.dispatch_matrix.Speaker)>.speak(self: int) -> string {
+    load_const "int"
+    return
+}
+
+function dispatch_matrix.<(user.dispatch_matrix.Fancy as baml.ToString)>.to_string(self: dispatch_matrix.Fancy) -> string {
+    load_const "<fancy>"
+    return
+}
+
+function dispatch_matrix.<(user.dispatch_matrix.Loud as user.dispatch_matrix.Speaker)>.speak(self: dispatch_matrix.Loud) -> string {
+    load_const "loud"
+    return
+}
+
+function dispatch_matrix.<(user.dispatch_matrix.Pack<#0> as user.dispatch_matrix.Speaker)>.speak(self: dispatch_matrix.Pack<#0>) -> string {
+    load_type #0
+    call baml.<(reflect.Type as baml.ToString)>.to_string
+    store_var _2
+    load_const "pack of "
+    load_var _2
+    bin_op +
+    return
+}
+
+function dispatch_matrix.<(user.dispatch_matrix.Tally as user.dispatch_matrix.Counter)>.start() -> int {
+    load_const 10
+    return
+}
+
+function dispatch_matrix.<(user.dispatch_matrix.Wrapping as user.dispatch_matrix.Speaker)>.speak(self: dispatch_matrix.Wrapping) -> string {
+    load_type dispatch_matrix.Wrapping
+    load_var self
+    call user.dispatch_matrix.Speaker.speak
+    store_var _2
+    load_const "wrapped "
+    load_var _2
+    bin_op +
+    return
+}
+
+function dispatch_matrix.Counter.start() -> int {
+    load_const 0
+    return
+}
+
+function dispatch_matrix.Speaker.speak(self: dispatch_matrix.Speaker) -> string {
+    load_const "default"
+    return
+}
+
+function dispatch_matrix.pick_speaker(loud: bool) -> dispatch_matrix.Loud | dispatch_matrix.Quiet {
+    load_var loud
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    alloc_instance user.dispatch_matrix.Quiet
+    jump L2
+
+  L1:
+    alloc_instance user.dispatch_matrix.Loud
+
+  L2:
+    return
+}
+
+function dispatch_matrix.row10_type_qualified() -> int {
+    load_type dispatch_matrix.Tally
+    load_type dispatch_matrix.Counter
+    load_const "start"
+    make_virtual_function ntypeargs=0
+    call_indirect
+    store_var _1
+    load_type dispatch_matrix.FreshCount
+    load_type dispatch_matrix.Counter
+    load_const "start"
+    make_virtual_function ntypeargs=0
+    call_indirect
+    load_var _1
+    add_int
+    return
+}
+
+function dispatch_matrix.row11_written_qualifier() -> int {
+    load_type dispatch_matrix.Tally
+    load_type dispatch_matrix.Counter
+    load_const "start"
+    make_virtual_function ntypeargs=0
+    call_indirect
+    return
+}
+
+function dispatch_matrix.row12_interface_qualified() -> string {
+    alloc_instance user.dispatch_matrix.Loud
+    load_type dispatch_matrix.Speaker
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function dispatch_matrix.row12_interface_qualified_dynamic(s: dispatch_matrix.Speaker) -> string {
+    load_var s
+    load_type dispatch_matrix.Speaker
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function dispatch_matrix.row13_shim_to_string() -> string {
+    load_type dispatch_matrix.Fancy
+    alloc_instance user.dispatch_matrix.Fancy
+    call baml.String.from
+    return
+}
+
+function dispatch_matrix.row1_static_provided() -> string {
+    alloc_instance user.dispatch_matrix.Loud
+    load_type dispatch_matrix.Speaker
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function dispatch_matrix.row2_static_generic_bindings() -> string {
+    load_const 1
+    load_type int
+    init_instance<1> user.dispatch_matrix.Pack .leader
+    load_type dispatch_matrix.Speaker
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function dispatch_matrix.row3_static_adopted_default() -> string {
+    alloc_instance user.dispatch_matrix.Quiet
+    load_type dispatch_matrix.Speaker
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function dispatch_matrix.row4_static_primitive_target() -> string {
+    load_const 3
+    load_type dispatch_matrix.Speaker
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function dispatch_matrix.row5_virtual() -> string {
+    alloc_instance user.dispatch_matrix.Loud
+    call user.dispatch_matrix.through_interface
+    store_var _6
+    alloc_instance user.dispatch_matrix.Quiet
+    call user.dispatch_matrix.through_interface
+    store_var _8
+    load_const 3
+    call user.dispatch_matrix.through_interface
+    store_var _10
+    load_const true
+    load_type bool
+    init_instance<1> user.dispatch_matrix.Pack .leader
+    call user.dispatch_matrix.through_interface
+    store_var _11
+    load_var _6
+    load_const "|"
+    bin_op +
+    load_var _8
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _10
+    bin_op +
+    load_const "|"
+    bin_op +
+    load_var _11
+    bin_op +
+    return
+}
+
+function dispatch_matrix.row6_virtual_bound_ref(s: dispatch_matrix.Speaker) -> string {
+    load_var s
+    load_type dispatch_matrix.Speaker
+    load_const "speak"
+    make_virtual_bound_method ntypeargs=0
+    call_indirect
+    return
+}
+
+function dispatch_matrix.row7_static_bound_refs() -> string {
+    alloc_instance user.dispatch_matrix.Loud
+    load_type dispatch_matrix.Speaker
+    load_const "speak"
+    make_virtual_bound_method ntypeargs=0
+    call_indirect
+    store_var _6
+    alloc_instance user.dispatch_matrix.Quiet
+    load_type dispatch_matrix.Speaker
+    load_const "speak"
+    make_virtual_bound_method ntypeargs=0
+    call_indirect
+    store_var _8
+    load_var _6
+    load_const "|"
+    bin_op +
+    load_var _8
+    bin_op +
+    return
+}
+
+function dispatch_matrix.row8_default_bypass() -> string {
+    alloc_instance user.dispatch_matrix.Wrapping
+    load_type dispatch_matrix.Speaker
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function dispatch_matrix.row9_union() -> string {
+    load_const true
+    call user.dispatch_matrix.pick_speaker
+    load_type dispatch_matrix.Speaker
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _2
+    load_const false
+    call user.dispatch_matrix.pick_speaker
+    load_type dispatch_matrix.Speaker
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _4
+    load_var _2
+    load_const "|"
+    bin_op +
+    load_var _4
+    bin_op +
+    return
+}
+
+function dispatch_matrix.through_interface(s: dispatch_matrix.Speaker) -> string {
+    load_var s
+    load_type dispatch_matrix.Speaker
+    load_const "speak"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}

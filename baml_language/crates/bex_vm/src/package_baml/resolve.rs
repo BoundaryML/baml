@@ -273,8 +273,10 @@ impl<'vm> ImplResolver<'vm> {
     /// Realize a [`MethodImpl`](bex_vm_types::types::MethodImpl) frame template (De
     /// Bruijn over the impl's generic params) against the impl's bound type args
     /// (from [`Self::resolve_implements_rule`]). The result is the `frame.type_args`
-    /// to seed the resolved callee with: the impl's own generics for an impl method,
-    /// or `Self` + the interface's args + associated types for an inherited default.
+    /// to seed the resolved callee with — the owner half of the frame convention
+    /// (see `MethodImpl`): the impl's own generics for a provided method,
+    /// `[Self, interface args..]` for an adopted default (associated types are
+    /// not frame slots — a default body's `Self.Assoc` reduces as a projection).
     pub(crate) fn realize_frame(
         self,
         template: &[TyTemplate],

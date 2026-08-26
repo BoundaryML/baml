@@ -1,8 +1,8 @@
 // Statically-resolved interface-method calls carry the callee's OWNER frame
-// on the resolution (`[owner ++ own]`): the impl's generic bindings for an
-// override, `[Self, iface args..]` for an inherited default. These pin the
-// shapes that previously routed through the interface's method ref and ran
-// the default body with an empty frame (a runtime trap).
+// on the resolution (`[owner ++ own]`): the impl's generic bindings for a
+// provided method, `[Self, iface args..]` for an adopted default. These pin
+// the shapes that previously routed through the interface's method ref and
+// ran the default body with an empty frame (a runtime trap).
 //
 // Test bodies live in top-level helper functions (test-block local-boxing VM
 // bug — locals holding instances misbehave inside test blocks).

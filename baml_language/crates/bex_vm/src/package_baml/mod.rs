@@ -249,7 +249,7 @@ pub(super) struct ShimRuleMethod {
     /// default.
     callee: HeapPtr,
     /// The callee's realized owner frame (`[impl bindings..]` for a
-    /// provided method, `[Self, iface args..]` for an inherited default).
+    /// provided method, `[Self, iface args..]` for an adopted default).
     type_args: Vec<bex_vm_types::RealizedTy>,
     /// `true` when `callee` IS the interface's default body — the shims'
     /// no-provided-method case (their structural fallback renders exactly
@@ -326,7 +326,7 @@ fn rule_bound_method(vm: &mut BexVm, v: Value, resolved: ShimRuleMethod) -> Heap
 /// For a value `v` whose impl of `baml.ToString` provides its own
 /// `to_string`, resolve it through the impl rules and return a
 /// `BoundMethod { to_string, receiver: v }`. `Ok(None)` when `v`'s type has no
-/// rule or its rule inherits the structural default body — the caller then
+/// rule or its rule adopts the structural default body — the caller then
 /// renders `v` with the structural default. Used by the native
 /// `baml._to_string_shim` (`root.rs`) backing `string.from`.
 pub(super) fn make_to_string_callee(
@@ -342,7 +342,7 @@ pub(super) fn make_to_string_callee(
 /// For a value `v` whose impl of `baml.ToJson` provides its own `to_json`,
 /// resolve it through the impl rules and return a
 /// `BoundMethod { to_json, receiver: v }`. `Ok(None)` when `v`'s type has no
-/// rule or its rule inherits the structural default body — the caller then
+/// rule or its rule adopts the structural default body — the caller then
 /// renders `v` with the structural default. The json analog of
 /// [`make_to_string_callee`].
 pub(super) fn make_to_json_callee(

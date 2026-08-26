@@ -581,7 +581,7 @@ pub struct ImplExport {
     pub generics: Vec<GenericExport>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub assoc_bindings: Vec<AssocBindingExport>,
-    /// Overrides plus inherited defaults, sorted by name.
+    /// Provided methods plus adopted defaults, sorted by name.
     pub methods: Vec<FunctionExport>,
     pub source: SourceExport,
 }
@@ -1004,7 +1004,7 @@ fn source_export(db: &Db, file: SourceFile, span: TextRange) -> SourceExport {
 /// when it is listed under one.
 ///
 /// An impl entry is addressed under its block rather than by the declaring
-/// symbol's id: an inherited default is re-listed by every implementor, and
+/// symbol's id: an adopted default is re-listed by every implementor, and
 /// a method declared in a free impl has no symbol id at all. The declaring
 /// id is kept in `declared_by`, which is what a consumer dedupes on when it
 /// wants to treat one declaration as one thing.
@@ -1034,7 +1034,7 @@ fn function_export(
                 })
                 .unwrap_or_default();
             // `declared_by` is only worth stating when it differs — an
-            // inherited default lives on the interface, while a method the
+            // adopted default lives on the interface, while a method the
             // block writes itself is already named by `id`.
             let declared_by = declared.filter(|declared| declared != &qualified);
             (qualified, declared_by)
@@ -1382,7 +1382,7 @@ mod tests {
     /// Consumers key on ids — a report diffs on them, a cache blesses on
     /// them — so a collision is not a cosmetic flaw but a wrong answer about
     /// a different symbol. The pressure is entirely on impl blocks: an
-    /// inherited default is re-listed by every implementor, which is why an
+    /// adopted default is re-listed by every implementor, which is why an
     /// impl entry is addressed through its block and keeps the declaration
     /// in `declared_by`.
     ///

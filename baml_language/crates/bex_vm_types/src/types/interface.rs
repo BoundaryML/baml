@@ -89,16 +89,30 @@ pub struct InterfaceBound {
 }
 
 /// A resolved interface-method implementation in a [`RuntimeImplRule`]: the
-/// callee's fully-qualified name plus the `frame` it must be invoked with.
+/// callee's body pointer plus the `frame` it must be invoked with.
 ///
-/// `frame` is the callee's type-argument layout as templates (De Bruijn over the
-/// impl's generic params), realized against the impl's bound type args at
-/// dispatch. For an impl's **own** method this is the impl's own generics; for an
-/// **inherited default** it is `Self`, the interface's generic args, then its
-/// associated types in *declared* order. The default was compiled against the
-/// interface's frame, not the implementor's generics. Realizing this frame is
-/// what lets a default like `Iterator.collect` resolve `Self`, `Item`, and
-/// `Error` under an open-world virtual call.
+/// THE FRAME CONVENTION. Every interface-machinery body expects the frame
+/// `[owner ++ own generics]`, and there are exactly two owner shapes:
+///
+/// - a **provided method** (the impl block declares it) was compiled against
+///   the impl's generic params — owner = the impl's generics, in declaration
+///   order;
+/// - an **adopted default** (the impl declares nothing; the interface's
+///   default body serves — Rust-trait adoption, not inheritance) was compiled
+///   against the interface's frame — owner = `[Self, interface generic
+///   args..]`. Associated types are NOT frame slots: an assoc is determined
+///   by the `(Self, interface, member)` triple, so a default body's
+///   `Self.Assoc` is a projection template that reduces through the rule's
+///   `interface_assoc` bindings at realization.
+///
+/// `frame` here is the owner half as templates (De Bruijn over the impl's
+/// generic params), realized against the impl's bound type args at dispatch;
+/// the call site appends the method's own type args after it. The supplier is
+/// determined by HOW the callee was selected — through a rule, these
+/// templates realized against the match; statically, the frame the compile-
+/// time resolution carried — never re-derived from a name. Realizing this
+/// frame is what lets a default like `Iterator.collect` resolve `Self` and
+/// its projections under an open-world virtual call.
 // No `PartialEq`/`Eq`: `fqn` is a `HeapPtr`, so a derived `Eq` would be pointer
 // identity rather than structural equality — a footgun with no current caller.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
@@ -141,9 +155,9 @@ pub struct RuntimeImplRule {
     pub interface_assoc: Vec<(baml_type::Name, crate::TyTemplate)>,
     /// Method name → its [`MethodImpl`] (the callee's `Object::Function` pointer +
     /// invocation frame), resolved at dispatch time. Complete: the methods this
-    /// impl overrides *plus* the interface's inherited default methods (the bake
-    /// merges them in, an override winning over the default), so a lookup resolves
-    /// any interface method.
+    /// impl provides *plus* the interface's default methods it adopts (the bake
+    /// merges them in, a provided method winning over the default), so a lookup
+    /// resolves any interface method.
     pub methods: IndexMap<baml_type::Name, MethodImpl>,
     /// Interface field index → the implementor's physical slot in
     /// [`Instance::fields`](super::Instance::fields). Indexed by position in the

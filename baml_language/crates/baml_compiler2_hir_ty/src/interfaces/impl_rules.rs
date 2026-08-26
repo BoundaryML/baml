@@ -450,7 +450,7 @@ pub fn impl_data<'db>(
             .iter()
             .map(|loc| &function_data(db, *loc).name)
             .collect();
-        // E0113: a required method with no override and no inherited default.
+        // E0113: a required method the impl neither provides nor the interface defaults.
         for required in &iface_data.required_methods {
             let provided = override_names.iter().any(|n| **n == required.name)
                 || default_names.iter().any(|n| **n == required.name);

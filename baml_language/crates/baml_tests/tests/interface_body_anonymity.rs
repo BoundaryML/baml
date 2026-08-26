@@ -109,7 +109,7 @@ fn bodies_live_in_body_indices_not_the_runtime_name_maps() {
 #[tokio::test]
 async fn bodies_dispatch_through_every_road_but_resolve_by_no_name() {
     // All three call forms still reach their bodies: virtual dispatch to the
-    // inherited default, the in-class override, and the free-impl override.
+    // adopted default, the in-class provided method, and the free-impl one.
     let output = baml_test!(SOURCE);
     match output.result.expect("main should run") {
         BexExternalValue::String(s) => {

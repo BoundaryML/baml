@@ -582,7 +582,7 @@ impl<'db> ResolvedImpl<'db> {
     /// What this impl PROVIDES for method `name` — the function that runs
     /// when the impl matches. `None` means the block leaves the method to
     /// the interface's default body (Rust-trait semantics: an impl provides
-    /// a method or inherits the default; there is no override relation).
+    /// a method or adopts the default; there is no override relation).
     pub fn provided_method(
         &self,
         db: &'db dyn baml_compiler2_ppir::Db,

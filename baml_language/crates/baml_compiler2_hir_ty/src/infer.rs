@@ -9383,7 +9383,7 @@ impl<'db> InferenceContext<'db> {
     /// The interface a resolved member was declared by, for the diagnostic
     /// that names it. Both METHOD declarers can answer: a symbolic receiver
     /// carries the interface directly, and a concrete one carries the impl's
-    /// method, whose interface target is recorded (an inherited default body
+    /// method, whose interface target is recorded (an adopted default body
     /// is owned by the interface itself). The FIELD declarers cannot occur
     /// here — the only caller has already required `member.is_method`.
     fn member_declaring_interface(

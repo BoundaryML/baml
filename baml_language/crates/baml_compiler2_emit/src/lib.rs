@@ -518,7 +518,7 @@ fn build_packages(
     };
 
     // Per interface, its default methods (`name → fn FQN`). An implementing rule
-    // inherits these for any method it doesn't override, so each baked rule's
+    // adopts these for any method it doesn't provide, so each baked rule's
     // method table is complete (the resolver needs no separate default lookup; a
     // default body is generic over `Self`, so calling it on the concrete value
     // dispatches its inner `self.m()` calls back to the impl). Built across all
@@ -533,7 +533,7 @@ fn build_packages(
     // with symbolic `Self` by the shared query) where one is declared. Rule
     // construction bakes the default into every impl that leaves the member
     // unpinned, so the registry answers every declared member identically —
-    // pinned or defaulted — and an inherited default's frame layout
+    // pinned or defaulted — and an adopted default's frame layout
     // (`[Self ++ interface generic args ++ associated types]`, matching MIR's
     // `enclosing_generic_params` for interface-owned bodies) carries a real
     // binding in every slot.
@@ -602,7 +602,7 @@ fn build_packages(
     // exactly the same runtime tables.  Seed their declaration facts from the
     // mounted artifact before walking the consumer's source blocks: otherwise
     // `class Local { implements dep.I {} }` would prove membership at check
-    // time but emit neither inherited defaults nor virtual-field links.
+    // time but emit neither adopted defaults nor virtual-field links.
     for package in baml_compiler2_hir::package::external_package_names(db) {
         let Some(interface) =
             baml_compiler2_hir_ty::package_interface::mounted_interface(db, &package)
@@ -653,7 +653,7 @@ fn build_packages(
             }
         }
     }
-    // The frame an inherited default of `iface_tn` is invoked with, for a rule
+    // The frame an adopted default of `iface_tn` is invoked with, for a rule
     // implementing it at `for_ty_pattern` / `interface_args`: the implementor
     // type (`Self`) at slot 0, then the interface's generic args (all
     // templates over the impl's generics). Associated types are NOT frame
