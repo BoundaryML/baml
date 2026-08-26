@@ -46,6 +46,131 @@ async fn call_any_dispatches_named_args() {
 }
 
 #[tokio::test]
+async fn json_serializes_unknown_call_any_results_by_runtime_value() {
+    let output = baml_test!(
+        r#"
+        class Record {
+            name string
+        }
+
+        class Wrapped {
+            value int
+            implements baml.ToJson {
+                function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+                    { "overridden": baml.json.from(self.value) }
+                }
+            }
+        }
+
+        enum State {
+            Ready
+        }
+
+        function make_record() -> Record throws never {
+            Record { name: "Ada" }
+        }
+
+        function make_wrapped_list() -> Wrapped[] throws never {
+            [Wrapped { value: 1 }]
+        }
+
+        function make_state() -> State throws never {
+            State.Ready
+        }
+
+        function make_bigint() -> bigint throws never {
+            99999999999999999999n
+        }
+
+        function make_map() -> map<string, int> throws never {
+            { "x": 1 }
+        }
+
+        function make_image() -> image throws never {
+            image.from_url("https://example.com/a.png", "image/png")
+        }
+
+        function serialize_unknown(f: reflect.AnyFunction) -> string throws unknown {
+            let value: unknown = reflect.call_any(f, {})
+            baml.json.to_string(value) + "|" + baml.json.stringify(baml.json.to_json(value))
+        }
+
+        function main() -> string throws unknown {
+            serialize_unknown(make_record)
+                + "\n" + serialize_unknown(make_wrapped_list)
+                + "\n" + serialize_unknown(make_state)
+                + "\n" + serialize_unknown(make_bigint)
+                + "\n" + serialize_unknown(make_map)
+                + "\n" + serialize_unknown(make_image)
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            concat!(
+                r#"{"name":"Ada"}|{"name":"Ada"}"#,
+                "\n",
+                r#"[{"overridden":1}]|[{"overridden":1}]"#,
+                "\n",
+                r#""Ready"|"Ready""#,
+                "\n",
+                r#""99999999999999999999"|"99999999999999999999""#,
+                "\n",
+                r#"{"x":1}|{"x":1}"#,
+                "\n",
+                r#"{"kind":"image","source":"url","value":"https://example.com/a.png","mime":"image/png"}|{"kind":"image","source":"url","value":"https://example.com/a.png","mime":"image/png"}"#,
+            )
+            .into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn json_rejects_unknown_uint8array_call_any_results() {
+    let output = baml_test!(
+        r#"
+        function make_bytes() -> uint8array throws unknown {
+            baml.Uint8Array.from_hex("00ff")
+        }
+
+        function to_string_error(value: unknown) -> string throws unknown {
+            {
+                let _ = baml.json.to_string(value)
+                "unexpected success"
+            } catch (e) {
+                let err: baml.json.JsonSerializationError => err.message,
+            }
+        }
+
+        function to_json_error(value: unknown) -> string throws unknown {
+            {
+                let _ = baml.json.to_json(value)
+                "unexpected success"
+            } catch (e) {
+                let err: baml.json.JsonSerializationError => err.message,
+            }
+        }
+
+        function main() -> string throws unknown {
+            let f: reflect.AnyFunction = make_bytes
+            let value: unknown = reflect.call_any(f, {})
+            to_string_error(value) + "|" + to_json_error(value)
+        }
+        "#
+    );
+
+    let message = "uint8array requires explicit encoding (use to_base64() or to_hex())";
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            format!("{message}|{message}").into()
+        ))
+    );
+}
+
+#[tokio::test]
 async fn call_any_absent_optional_fires_callee_default() {
     let output = baml_test!(
         r#"

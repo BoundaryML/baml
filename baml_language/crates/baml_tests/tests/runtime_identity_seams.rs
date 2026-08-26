@@ -23,7 +23,7 @@ function Check<T>(expected: reflect.Type, document: string) -> bool throws unkno
   let companion = Extract$parse<T>(document)
   reflect.Type.of_value(direct) == expected
     && reflect.Type.of_value(companion) == expected
-    && baml.json.encode(direct) == baml.json.encode(companion)
+    && baml.json.to_string(direct) == baml.json.to_string(companion)
 }
 
 class StaticInner {

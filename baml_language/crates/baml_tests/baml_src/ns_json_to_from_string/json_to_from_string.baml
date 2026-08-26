@@ -1,4 +1,4 @@
-// Tests for baml.json.to_string<T> / from_string<T>.
+// Tests for baml.json.to_string / from_string<T>.
 //
 // Converted from crates/baml_tests/tests/json_to_from_string.rs.
 //
@@ -15,7 +15,7 @@ class User { name string  age int }
 
 test "to_string_simple_class" {
     assert.equal(
-        baml.json.to_string<User>(User { name: "Ada", age: 30 }),
+        baml.json.to_string(User { name: "Ada", age: 30 }),
         "{\"name\":\"Ada\",\"age\":30}",
     )
 }
@@ -48,7 +48,7 @@ test "to_string_infers_simple_class" {
 
 function roundtrip_simple_age() -> int {
     let u: User = User { name: "Ada", age: 30 };
-    let s: string = baml.json.to_string<User>(u);
+    let s: string = baml.json.to_string(u);
     let v: User = baml.json.from_string<User>(s);
     v.age
 }
@@ -63,7 +63,7 @@ class Container<T> { item T }
 
 function composite_generic_roundtrip_name() -> string {
     let c: Container<User> = Container<User> { item: User { name: "Ada", age: 30 } };
-    let s: string = baml.json.to_string<Container<User>>(c);
+    let s: string = baml.json.to_string(c);
     let d: Container<User> = baml.json.from_string<Container<User>>(s);
     d.item.name
 }
@@ -140,7 +140,7 @@ test "closure_captures_type_arg" {
 enum Color { Red Blue }
 
 test "enum_variant_to_string" {
-    assert.equal(baml.json.to_string<Color>(Color.Red), "\"Red\"")
+    assert.equal(baml.json.to_string(Color.Red), "\"Red\"")
 }
 
 function enum_variant_from_string_name() -> string {
@@ -161,13 +161,13 @@ class Profile { nickname string? }
 
 test "optional_field_present" {
     assert.equal(
-        baml.json.to_string<Profile>(Profile { nickname: "ada" }),
+        baml.json.to_string(Profile { nickname: "ada" }),
         "{\"nickname\":\"ada\"}",
     )
 }
 
 test "optional_field_null" {
-    assert.equal(baml.json.to_string<Profile>(Profile { nickname: null }), "{\"nickname\":null}")
+    assert.equal(baml.json.to_string(Profile { nickname: null }), "{\"nickname\":null}")
 }
 
 function optional_field_decode_missing_is_null() -> bool {
@@ -191,7 +191,7 @@ function recursive_class_roundtrip_value() -> int {
             Tree { value: 3, children: [Tree { value: 4, children: [] }] },
         ]
     };
-    let s: string = baml.json.to_string<Tree>(t);
+    let s: string = baml.json.to_string(t);
     let d: Tree = baml.json.from_string<Tree>(s);
     d.children[1].children[0].value
 }
@@ -223,7 +223,7 @@ test "decode_throws_on_missing_field" {
 test "serialize_throws_uint8array" {
     {
         let b: Bad = Bad { x: baml.Uint8Array.from_hex("00ff") };
-        baml.json.to_string<Bad>(b);
+        baml.json.to_string(b);
         baml.sys.panic("expected to_string to throw")
     } catch (e) {
         baml.json.JsonSerializationError => null
@@ -258,7 +258,7 @@ test "decode_error_path_points_at_missing_field" {
 
 function enum_variant_roundtrip_eq() -> bool {
     let c: Color = Color.Blue;
-    let s: string = baml.json.to_string<Color>(c);
+    let s: string = baml.json.to_string(c);
     let d: Color = baml.json.from_string<Color>(s);
     d == Color.Blue
 }
@@ -273,16 +273,16 @@ class ProfileMedia { avatar image }
 
 test "media_field_to_string" {
     assert.equal(
-        baml.json.to_string<ProfileMedia>(ProfileMedia { avatar: image.from_url("https://example.com/a.png", "image/png") }),
+        baml.json.to_string(ProfileMedia { avatar: image.from_url("https://example.com/a.png", "image/png") }),
         "{\"avatar\":{\"kind\":\"image\",\"source\":\"url\",\"value\":\"https://example.com/a.png\",\"mime\":\"image/png\"}}",
     )
 }
 
 function media_field_roundtrip_str() -> string {
     let p: ProfileMedia = ProfileMedia { avatar: image.from_url("https://example.com/a.png", "image/png") };
-    let s: string = baml.json.to_string<ProfileMedia>(p);
+    let s: string = baml.json.to_string(p);
     let d: ProfileMedia = baml.json.from_string<ProfileMedia>(s);
-    baml.json.to_string<ProfileMedia>(d)
+    baml.json.to_string(d)
 }
 
 test "media_field_roundtrip" {
@@ -298,7 +298,7 @@ class ProfileAlias { display_name string @alias("displayName") }
 
 test "alias_field_uses_raw_name_in_json" {
     assert.equal(
-        baml.json.to_string<ProfileAlias>(ProfileAlias { display_name: "Ada" }),
+        baml.json.to_string(ProfileAlias { display_name: "Ada" }),
         "{\"display_name\":\"Ada\"}",
     )
 }
@@ -321,7 +321,7 @@ class Bad { x uint8array }
 
 test "skip_field_still_emitted_in_json" {
     assert.equal(
-        baml.json.to_string<ProfileSkip>(ProfileSkip { name: "Ada", internal_id: "secret" }),
+        baml.json.to_string(ProfileSkip { name: "Ada", internal_id: "secret" }),
         "{\"name\":\"Ada\",\"internal_id\":\"secret\"}",
     )
 }
@@ -354,7 +354,7 @@ test "from_string_json_passthrough_object" {
 
 function to_string_json_passthrough_str() -> string {
     let j: json = baml.json.parse("[1,2,3]");
-    baml.json.to_string<json>(j)
+    baml.json.to_string(j)
 }
 
 test "to_string_json_passthrough" {

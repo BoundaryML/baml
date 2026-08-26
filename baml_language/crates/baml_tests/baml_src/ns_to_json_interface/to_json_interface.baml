@@ -172,8 +172,8 @@ test "enum_renders_as_variant_name" {
 //
 // A class field of `enum` type or a string-literal union (`"X" | "Y"`) must
 // serialize to a plain JSON string — the variant name / the string — through
-// both the structural `baml.json.from` / `.to_json()` path and the typed
-// `baml.json.to_string<T>` path. The regression these lock in: a field whose
+// both the structural `baml.json.from` / `.to_json()` path and
+// `baml.json.to_string`. The regression these lock in: a field whose
 // declared type is a *union containing an enum* (including the optional enum
 // `E?` == `E | null`) serialized as `null` through the typed walker, whose
 // `RuntimeTy::Union` arm delegates to the untyped `value_to_serde`, which
@@ -204,10 +204,8 @@ test "string_literal_union_field_serializes_as_string" {
 
 class OptEnum { e E? }
 
-test "optional_enum_field_serializes_via_typed_to_string" {
-    // Regression: `E?` == `E | null` is a union, so the typed `to_string<T>`
-    // walker rendered it via the untyped converter, which produced `null` for
-    // the enum variant. It must be the variant name.
+test "optional_enum_field_serializes_via_to_string" {
+    // Regression: `E?` == `E | null` must preserve the held variant name.
     assert.equal(baml.json.to_string(OptEnum { e: E.A }), "{\"e\":\"A\"}")
 }
 
@@ -215,8 +213,8 @@ enum F { X  Y }
 
 class EnumUnion { v E | F }
 
-test "enum_union_field_serializes_via_typed_to_string" {
-    // Regression: a field typed as a union of two enums (`E | F`) serialized
-    // the held variant as `null` through the typed walker. It must be the name.
+test "enum_union_field_serializes_via_to_string" {
+    // Regression: a field typed as a union of two enums (`E | F`) must
+    // serialize the held variant as its name.
     assert.equal(baml.json.to_string(EnumUnion { v: F.Y }), "{\"v\":\"Y\"}")
 }

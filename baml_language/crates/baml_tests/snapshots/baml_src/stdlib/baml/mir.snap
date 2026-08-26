@@ -6608,9 +6608,24 @@ fn baml.json.stringify = builtin(vm)
 
 fn baml.json.stringify_pretty = builtin(vm)
 
-fn baml.json.to_string = builtin(vm)
+fn baml.json.to_string(value: unknown) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: unknown // value // param
+    let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
 
-fn baml.json.encode = builtin(vm)
+    bb0: {
+        _2 = call const fn baml.json.to_json(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.json.stringify(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
 
 fn baml.json.to_json = builtin(vm)
 
@@ -7410,19 +7425,12 @@ fn baml.json.serialize(v: T) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: T // v // param
-    let _2: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _3: reflect.Type
 
     bb0: {
-        _3 = load_type(#0);
-        _2 = call const fn baml.json.to_json<copy _3>(copy _1) -> [bb1];
+        _0 = call const fn baml.json.to_string(copy _1) -> [bb1];
     }
 
     bb1: {
-        _0 = call const fn baml.json.stringify(copy _2) -> [bb2];
-    }
-
-    bb2: {
         return;
     }
 }
