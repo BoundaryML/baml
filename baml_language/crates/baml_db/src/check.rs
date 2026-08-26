@@ -2332,6 +2332,59 @@ interface Pair<A, B> {
     }
 
     #[test]
+    fn every_interface_bound_position_reports_an_unresolved_head() {
+        // The three constraint positions an interface declares. Each used to
+        // leave the unresolved head as a silent `Ty::Error`: the generic
+        // parameter had no diagnostic walk at all, the associated-type bound
+        // lowered through a sink-less context, and the default's diagnostics
+        // were computed and dropped by every caller. Each is fail-open (a
+        // typo'd bound constrains nothing) and each reaches emit, where a
+        // non-runtime type is `unreachable!`.
+        let cases = [
+            (
+                "generic parameter",
+                "interface Named<T> { function n(self) -> T throws never }\ninterface Box<T extends Named<NoSuchType>> {\n    function get(self) -> int throws never\n}\n",
+            ),
+            (
+                "associated-type bound",
+                "interface Named<T> { function n(self) -> T throws never }\ninterface Box {\n    type A extends Named<NoSuchType>\n    function get(self) -> int throws never\n}\n",
+            ),
+            (
+                "associated-type default",
+                "interface Box {\n    type Item = NoSuchType\n    function get(self) -> int throws never\n}\n",
+            ),
+        ];
+        for (position, source) in cases {
+            let (db, file) = single_file(source);
+            let unresolved: Vec<_> = check_file(&db, file)
+                .into_iter()
+                .filter(|diag| diag.id == DiagnosticId::UnknownType)
+                .collect();
+            assert_eq!(unresolved.len(), 1, "{position}: {unresolved:?}");
+            let span = unresolved[0].annotations[0].span.range;
+            assert_eq!(
+                &source[span], "NoSuchType",
+                "{position}: the report underlines the unresolved head"
+            );
+        }
+    }
+
+    #[test]
+    fn an_interface_generic_bound_obeys_the_rules_a_class_bound_does() {
+        // Bound shape is judged by one helper for every position, so these
+        // must match what the byte-identical `class` form reports — they
+        // previously produced nothing at all on an interface.
+        let (db, file) = single_file(
+            "class Plain { f: int }\ninterface I<T extends Plain> { function g(self) -> T throws never }\n",
+        );
+        let ids: Vec<_> = check_file(&db, file).into_iter().map(|d| d.id).collect();
+        assert!(
+            ids.contains(&DiagnosticId::GenericBoundNotInterface),
+            "{ids:?}"
+        );
+    }
+
+    #[test]
     fn self_referential_associated_bound_checks_clean() {
         // `type Assoc extends Iface` on `Iface` itself is valid (a bound is
         // a constraint head — it never demands the target's associated
