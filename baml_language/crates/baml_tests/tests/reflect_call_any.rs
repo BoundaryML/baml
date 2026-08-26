@@ -4,9 +4,11 @@
 
 use baml_tests::{
     baml_test,
+    engine::{IndexMap, OptLevel, compile_source_with_opt, run_compiled},
     stdlib_prefix::{check_user_files, setup_test_db},
 };
 use bex_engine::BexExternalValue;
+use bex_vm_types::{ConstValue, Instruction, Object};
 
 #[tokio::test]
 async fn call_any_infers_pins_from_function_value() {
@@ -27,6 +29,229 @@ async fn call_any_infers_pins_from_function_value() {
 }
 
 #[tokio::test]
+async fn call_any_inferred_and_explicit_class_returns_match() {
+    let output = baml_test!(
+        r#"
+        class Result {
+            value string
+        }
+
+        function make_result() -> Result throws never {
+            Result { value: "hello" }
+        }
+
+        function inferred() -> Result throws never {
+            reflect.call_any(make_result, {}) catch (e) {
+                _ => Result { value: "inferred error" }
+            }
+        }
+
+        function explicit() -> Result throws never {
+            reflect.call_any<Result, never>(make_result, {}) catch (e) {
+                _ => Result { value: "explicit error" }
+            }
+        }
+
+        function main() -> string throws never {
+            inferred().value + "|" + explicit().value
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hello|hello".into()))
+    );
+}
+
+#[tokio::test]
+async fn call_any_inferred_and_explicit_list_returns_match() {
+    let output = baml_test!(
+        r#"
+        function make_list() -> string[] throws never {
+            ["alpha", "beta"]
+        }
+
+        function main() -> string throws never {
+            let inferred = reflect.call_any(make_list, {}) catch (e) {
+                _ => ["inferred error"]
+            }
+            let explicit = reflect.call_any<string[], never>(make_list, {}) catch (e) {
+                _ => ["explicit error"]
+            }
+            inferred[0] + ":" + inferred[1] + "|" + explicit[0] + ":" + explicit[1]
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("alpha:beta|alpha:beta".into()))
+    );
+}
+
+#[tokio::test]
+async fn call_any_inferred_and_explicit_map_returns_match() {
+    let output = baml_test!(
+        r#"
+        function make_map() -> map<string, int> throws never {
+            let result: map<string, int> = { "alpha": 1, "beta": 2 }
+            result
+        }
+
+        function inferred_fallback() -> map<string, int> throws never {
+            let result: map<string, int> = { "alpha": -10, "beta": -20 }
+            result
+        }
+
+        function explicit_fallback() -> map<string, int> throws never {
+            let result: map<string, int> = { "alpha": -100, "beta": -200 }
+            result
+        }
+
+        function inferred() -> map<string, int> throws never {
+            reflect.call_any(make_map, {}) catch (e) {
+                _ => inferred_fallback()
+            }
+        }
+
+        function explicit() -> map<string, int> throws never {
+            reflect.call_any<map<string, int>, never>(make_map, {}) catch (e) {
+                _ => explicit_fallback()
+            }
+        }
+
+        function main() -> map<string, int>[] throws never {
+            [inferred(), explicit()]
+        }
+        "#
+    );
+    let Ok(BexExternalValue::Array { items, .. }) = output.result else {
+        panic!("expected inferred and explicit maps");
+    };
+    assert_eq!(items.len(), 2);
+    for item in items {
+        let BexExternalValue::Map { entries, .. } = item else {
+            panic!("expected map result");
+        };
+        assert_eq!(entries.get("alpha"), Some(&BexExternalValue::Int(1)));
+        assert_eq!(entries.get("beta"), Some(&BexExternalValue::Int(2)));
+    }
+}
+
+#[tokio::test]
+async fn call_any_inferred_and_explicit_throws_match() {
+    let output = baml_test!(
+        r#"
+        class CallError {
+            message string
+        }
+
+        function fail() -> string throws CallError {
+            throw CallError { message: "boom" }
+        }
+
+        function inferred() -> string throws never {
+            reflect.call_any(fail, {}) catch (e) {
+                CallError => "inferred:" + e.message,
+                reflect.InvalidArgumentError => "inferred argument error",
+                reflect.errors.CompilationError => "inferred compilation error",
+            }
+        }
+
+        function explicit() -> string throws never {
+            reflect.call_any<string, CallError>(fail, {}) catch (e) {
+                CallError => "explicit:" + e.message,
+                reflect.InvalidArgumentError => "explicit argument error",
+                reflect.errors.CompilationError => "explicit compilation error",
+            }
+        }
+
+        function main() -> string throws never {
+            inferred() + "|" + explicit()
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "inferred:boom|explicit:boom".into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn call_any_inferred_class_return_crosses_sys_op_and_host_boundaries() {
+    let output = baml_test!(
+        r#"
+        class Result {
+            value string
+        }
+
+        function main() -> Result throws never {
+            reflect.call_any(baml.sap.parse<Result>, { "text": `{"value":"hello"}` }) catch (e) {
+                _ => Result { value: "error" }
+            }
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::instance(
+            "user.Result",
+            [("value", BexExternalValue::String("hello".into()))]
+                .into_iter()
+                .collect(),
+        ))
+    );
+}
+
+#[tokio::test]
+async fn call_any_rejects_a_return_outside_inferred_r() {
+    let mut program = compile_source_with_opt(
+        r#"
+        function lie() -> string throws never {
+            "declared string"
+        }
+
+        function main() -> string throws never {
+            reflect.call_any(lie, {}) catch_all (e) {
+                reflect.InvalidArgumentError => {
+                    return e.argument + "|" + e.expected.to_string() + "|" + e.got.to_string()
+                },
+                _ => return "unexpected error",
+            }
+            "mismatch was accepted"
+        }
+        "#,
+        OptLevel::One,
+    );
+
+    // Preserve `lie`'s declared `string` signature while deliberately making
+    // its bytecode return an `int`. This models a faulty dynamic/host callee
+    // without allowing another boundary to reject the value first.
+    let lie_idx = program
+        .function_index("user.lie")
+        .expect("user.lie should exist");
+    let Object::Function(lie) = program
+        .objects
+        .get_mut(lie_idx)
+        .expect("user.lie object should exist")
+    else {
+        panic!("user.lie should be a function");
+    };
+    lie.bytecode.instructions = vec![Instruction::LoadConst(0), Instruction::Return];
+    lie.bytecode.constants = vec![ConstValue::Int(42)];
+    lie.bytecode.compact = None;
+
+    let output = run_compiled(program, "main", IndexMap::new(), false).await;
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "reflect.call_any return value|string|int".into()
+        ))
+    );
+}
+
+#[tokio::test]
 async fn call_any_dispatches_named_args() {
     let output = baml_test!(
         r#"
@@ -43,6 +268,131 @@ async fn call_any_dispatches_named_args() {
         "#
     );
     assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+#[tokio::test]
+async fn json_serializes_unknown_call_any_results_by_runtime_value() {
+    let output = baml_test!(
+        r#"
+        class Record {
+            name string
+        }
+
+        class Wrapped {
+            value int
+            implements baml.ToJson {
+                function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+                    { "overridden": baml.json.from(self.value) }
+                }
+            }
+        }
+
+        enum State {
+            Ready
+        }
+
+        function make_record() -> Record throws never {
+            Record { name: "Ada" }
+        }
+
+        function make_wrapped_list() -> Wrapped[] throws never {
+            [Wrapped { value: 1 }]
+        }
+
+        function make_state() -> State throws never {
+            State.Ready
+        }
+
+        function make_bigint() -> bigint throws never {
+            99999999999999999999n
+        }
+
+        function make_map() -> map<string, int> throws never {
+            { "x": 1 }
+        }
+
+        function make_image() -> image throws never {
+            image.from_url("https://example.com/a.png", "image/png")
+        }
+
+        function serialize_unknown(f: reflect.AnyFunction) -> string throws unknown {
+            let value: unknown = reflect.call_any(f, {})
+            baml.json.to_string(value) + "|" + baml.json.stringify(baml.json.to_json(value))
+        }
+
+        function main() -> string throws unknown {
+            serialize_unknown(make_record)
+                + "\n" + serialize_unknown(make_wrapped_list)
+                + "\n" + serialize_unknown(make_state)
+                + "\n" + serialize_unknown(make_bigint)
+                + "\n" + serialize_unknown(make_map)
+                + "\n" + serialize_unknown(make_image)
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            concat!(
+                r#"{"name":"Ada"}|{"name":"Ada"}"#,
+                "\n",
+                r#"[{"overridden":1}]|[{"overridden":1}]"#,
+                "\n",
+                r#""Ready"|"Ready""#,
+                "\n",
+                r#""99999999999999999999"|"99999999999999999999""#,
+                "\n",
+                r#"{"x":1}|{"x":1}"#,
+                "\n",
+                r#"{"kind":"image","source":"url","value":"https://example.com/a.png","mime":"image/png"}|{"kind":"image","source":"url","value":"https://example.com/a.png","mime":"image/png"}"#,
+            )
+            .into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn json_rejects_unknown_uint8array_call_any_results() {
+    let output = baml_test!(
+        r#"
+        function make_bytes() -> uint8array throws unknown {
+            baml.Uint8Array.from_hex("00ff")
+        }
+
+        function to_string_error(value: unknown) -> string throws unknown {
+            {
+                let _ = baml.json.to_string(value)
+                "unexpected success"
+            } catch (e) {
+                let err: baml.json.JsonSerializationError => err.message,
+            }
+        }
+
+        function to_json_error(value: unknown) -> string throws unknown {
+            {
+                let _ = baml.json.to_json(value)
+                "unexpected success"
+            } catch (e) {
+                let err: baml.json.JsonSerializationError => err.message,
+            }
+        }
+
+        function main() -> string throws unknown {
+            let f: reflect.AnyFunction = make_bytes
+            let value: unknown = reflect.call_any(f, {})
+            to_string_error(value) + "|" + to_json_error(value)
+        }
+        "#
+    );
+
+    let message = "uint8array requires explicit encoding (use to_base64() or to_hex())";
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            format!("{message}|{message}").into()
+        ))
+    );
 }
 
 #[tokio::test]
@@ -642,6 +992,47 @@ async fn runtime_enum_renders_and_alias_round_trips_through_sap() {
     assert!(
         result.ends_with("<PARSED>RED"),
         "alias must parse back to the source value name: {result}"
+    );
+}
+
+#[tokio::test]
+async fn nested_unreflect_runtime_type_renders_through_a_generic_wrapper() {
+    let output = baml_test!(
+        r##"
+client TestClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+)
+
+class Wrapper<T> {
+    value T
+}
+
+function Extract<T>(input: string) -> T {
+    client: TestClient
+    prompt: `Extract ${input}.\n${ctx.output_format()}`
+}
+
+function main() -> string {
+    let runtime_class = reflect.class.new("RuntimeTranscript", {
+        "speaker": reflect.Type.of<string>(),
+        "words": reflect.Type.of<string[]>(),
+    })
+    Extract$render_prompt<Wrapper<unreflect(runtime_class.as_type())>>("sample").text()
+}
+"##
+    );
+
+    let BexExternalValue::String(prompt) = output
+        .result
+        .expect("nested runtime type should render without executing a model call")
+    else {
+        panic!("expected rendered prompt text")
+    };
+    assert!(
+        prompt.contains("value:") && prompt.contains("speaker") && prompt.contains("words"),
+        "missing static wrapper or nested runtime class schema: {prompt}",
     );
 }
 

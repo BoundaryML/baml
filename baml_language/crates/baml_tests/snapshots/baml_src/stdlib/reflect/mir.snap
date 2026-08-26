@@ -590,8 +590,8 @@ fn reflect.Package.compile(files: map<string, string>, packages: map<string, ref
     let _1: map<string, string> // files // param
     let _2: map<string, reflect.Package> // packages // param
     let _3: bool
-    let _4: reflect.Package // artifact
-    let _5: reflect.Package
+    let _4: reflect.CompileArtifact // artifact
+    let _5: reflect.CompileArtifact
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -675,12 +675,15 @@ fn reflect.Session.eval(self: reflect.Session, source: string) -> T {
     let _0: T // _0 // return
     let _1: reflect.Session // self // param
     let _2: string // source // param
-    let _3: reflect.Package // artifact
+    let _3: reflect.CompileArtifact // artifact
     let _4: reflect.Type
-    let _5: unknown // _
-    let _6: reflect.Package
+    let _5: unknown // cause
+    let _6: reflect.CompileArtifact
     let _7: reflect.Type
     let _8: reflect.errors.EvaluationError
+    let _9: string
+    let _10: unknown
+    let _11: unknown
 
     bb0: {
         _4 = load_type(#0);
@@ -702,7 +705,13 @@ fn reflect.Session.eval(self: reflect.Session, source: string) -> T {
     }
 
     bb4: {
-        _8 = reflect.errors.EvaluationError { const "session evaluation failed" };
+        _10 = copy _5;
+        _9 = call const fn reflect._render_cause(copy _10) -> [bb5];
+    }
+
+    bb5: {
+        _11 = copy _5;
+        _8 = reflect.errors.EvaluationError { copy _9, copy _11 };
         throw copy _8;
     }
 }
@@ -712,6 +721,8 @@ fn reflect.Session._compile = builtin(io)
 fn reflect.Session._finish = builtin(vm)
 
 fn reflect.Session.diagnostics = builtin(vm)
+
+fn reflect._render_cause = builtin(vm)
 
 fn reflect.signature = builtin(vm)
 

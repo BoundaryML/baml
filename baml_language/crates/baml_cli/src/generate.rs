@@ -343,7 +343,7 @@ impl GenerateArgs {
         let program = db
             .get_bytecode()
             .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
-        let baml_bytecode = borsh::to_vec(&program)
+        let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)
             .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
         let source_root = from.join("baml_src");
         let user_baml_files = source_files

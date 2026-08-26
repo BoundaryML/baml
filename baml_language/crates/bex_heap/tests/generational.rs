@@ -13,7 +13,7 @@ use bex_heap::{BexHeap, CollectionLevel, Generation, Tlab};
 use bex_vm_types::{
     Class, ClassField, GenericFunction, GlobalIndex, Object, RealizedTy,
     types::{
-        InterfaceDef, LocalName, MethodImpl, Package, RuntimeImplRule, RuntimePackage,
+        InterfaceDef, LocalName, MethodImpl, Package, PackageKind, RuntimeImplRule, RuntimePackage,
         TypeAliasDef, TypeValue,
     },
 };
@@ -118,7 +118,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             interface_blob: Vec::new(),
             test_init: None,
             mounted_types: IndexMap::new(),
-            runtime: Some(Box::new(RuntimePackage {
+            kind: PackageKind::Runtime(Box::new(RuntimePackage {
                 objects: Box::new([]),
                 object_names: IndexMap::new(),
                 globals: Box::new([]),
@@ -130,7 +130,6 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
                 init: None,
                 initialized: true,
             })),
-            session: None,
         };
         let package_ptr = tlab.alloc(Object::Package(Box::new(package)));
         let class_name = QualifiedTypeName::local(Name::new("RuntimeClass"));
@@ -171,7 +170,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
             },
             class_ptr,
         );
-        let runtime = package.runtime.as_mut().expect("runtime image");
+        let runtime = package.runtime_mut().expect("runtime image");
         runtime.objects = vec![type_ptr, function_ptr, class_ptr].into_boxed_slice();
         runtime.type_values.insert(class_ptr, type_ptr);
         (tlab, package_ptr, function_ptr)
@@ -193,7 +192,7 @@ fn runtime_package_mint_cycle_survives_when_rooted_and_collects_when_dropped() {
         panic!("root ceased to be a package")
     };
     let moved_class = package.classes.values().next().copied().unwrap();
-    let moved_type = package.runtime.as_ref().unwrap().type_values[&moved_class];
+    let moved_type = package.runtime().unwrap().type_values[&moved_class];
     let Object::Type(type_value) = (unsafe { moved_type.get() }) else {
         panic!("package type value ceased to be a type")
     };
@@ -1048,8 +1047,7 @@ fn empty_package() -> Package {
         interface_blob: Vec::new(),
         test_init: None,
         mounted_types: IndexMap::new(),
-        runtime: None,
-        session: None,
+        kind: PackageKind::Static,
     }
 }
 

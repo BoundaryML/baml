@@ -169,7 +169,7 @@ enum RawArg {
 ///
 /// Complex-typed parameters are coerced through `baml.json.deserialize<T>`
 /// so user `from_json` overrides on classes are honored — same model as
-/// the output side using `baml.json.serialize<T>`. Primitive parameters
+/// the output side using the stdlib JSON serializer. Primitive parameters
 /// skip the engine and bind directly.
 pub async fn build_args_from_signature(
     engine: &Arc<BexEngine>,

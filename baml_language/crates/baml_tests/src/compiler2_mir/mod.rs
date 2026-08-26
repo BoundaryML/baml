@@ -110,8 +110,14 @@ function untrusted_await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int t
 
     let mut db = make_db();
     db.set_mounted_packages(
-        [("dependency".to_string(), borsh::to_vec(&interface).unwrap())].into(),
-    );
+        [(
+            "dependency".to_string(),
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
+                .unwrap(),
+        )]
+        .into(),
+    )
+    .unwrap();
     let file = db.file(
         "test.baml",
         r#"
@@ -200,8 +206,14 @@ function forged_type_of<T>() -> reflect.Type {
 
     let mut db = make_db();
     db.set_mounted_packages(
-        [("dependency".to_string(), borsh::to_vec(&interface).unwrap())].into(),
-    );
+        [(
+            "dependency".to_string(),
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
+                .unwrap(),
+        )]
+        .into(),
+    )
+    .unwrap();
     let file = db.file(
         "test.baml",
         r#"
@@ -773,6 +785,36 @@ function f(t: reflect.Type, value: unknown) -> bool {
     );
 }
 
+#[test]
+fn nested_runtime_type_atoms_bind_slots_before_loading_templates() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Wrapper<T> { value T }
+
+function erase<T>() -> string { "ok" }
+
+function f(t: reflect.Type, value: unknown) -> bool {
+    type Bound = Wrapper<unreflect(t)>
+    let annotated: Wrapper<unreflect(t)>? = null
+    erase<Wrapper<unreflect(t)>>() == "ok"
+        && annotated == null
+        && value is Wrapper<unreflect(t)>
+        && match value {
+            Wrapper<unreflect(t)> => true,
+            _ => false,
+        }
+}
+"#,
+    );
+    baml_db::testing::assert_no_diagnostic_errors(&db);
+    mir_snapshot!(
+        "nested_runtime_type_atoms_bind_slots_before_loading_templates",
+        render_mir(&db, file)
+    );
+}
+
 /// A source-less callable keeps its symbolic package target all the way into
 /// MIR while runtime generic operands still come exclusively from the solved
 /// call plan.
@@ -789,10 +831,12 @@ fn mounted_loc_free_runtime_call_target_is_explicit() {
         &library,
         baml_compiler2_hir::package::PackageId::new(&library, baml_base::Name::new("app")),
     );
-    let blob = borsh::to_vec(interface).expect("serialize mounted interface");
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
+        .expect("serialize mounted interface");
 
     let mut db = make_db();
-    db.set_mounted_packages([("app".to_string(), blob)].into());
+    db.set_mounted_packages([("app".to_string(), blob)].into())
+        .unwrap();
     let file = db.file(
         "test.baml",
         r#"

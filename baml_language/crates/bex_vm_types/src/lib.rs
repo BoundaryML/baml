@@ -35,10 +35,11 @@ pub use indexable::{
 pub use link::LinkError;
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{
-    RuntimeCompileArtifact, RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
-    RuntimeDiagnosticSeverity, RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs,
-    RuntimePackageMount, RuntimeSessionCompileArtifact, RuntimeSessionCompileRequest,
-    RuntimeSessionInitializer, RuntimeSessionStep, RuntimeSourceSpan, RuntimeTypeMount,
+    ArtifactKind, RuntimeCompileArtifact, RuntimeCompileArtifactSlot, RuntimeCompileDiagnostic,
+    RuntimeCompileMode, RuntimeCompileRequest, RuntimeDiagnosticSeverity, RuntimeMountedClass,
+    RuntimeMountedEnum, RuntimeMountedFieldAttrs, RuntimeMountedVariantAttrs, RuntimePackageMount,
+    RuntimeSessionCompileArtifact, RuntimeSessionCompileRequest, RuntimeSessionInitializer,
+    RuntimeSessionStep, RuntimeSessionStepKind, RuntimeSourceSpan, RuntimeTypeMount,
     SessionContract, SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
 };
 pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};

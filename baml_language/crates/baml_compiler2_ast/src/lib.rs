@@ -281,6 +281,10 @@ mod tests {
         }
 
         let __stripped = match &expr.kind {
+            TypeExprKind::Unreflect { operand, attrs } => TypeExprKind::Unreflect {
+                operand: *operand,
+                attrs: strip_attrs(attrs),
+            },
             TypeExprKind::Int { attrs } => TypeExprKind::Int {
                 attrs: strip_attrs(attrs),
             },
@@ -470,9 +474,16 @@ mod tests {
             .exprs
             .iter()
             .find_map(|(_, expr)| match expr {
-                Expr::Call { type_args, .. } => type_args.iter().find_map(|arg| match arg {
-                    crate::ast::TypeArg::Unreflect(operand) => Some(*operand),
-                    crate::ast::TypeArg::Static(_) => None,
+                Expr::Call { type_args, .. } => type_args.iter().find_map(|arg| {
+                    if let TypeExprKind::Unreflect {
+                        operand: Some(operand),
+                        ..
+                    } = &arg.kind
+                    {
+                        Some(*operand)
+                    } else {
+                        None
+                    }
                 }),
                 _ => None,
             })
@@ -481,6 +492,21 @@ mod tests {
             matches!(&body.exprs[operand], Expr::Path(path) if path.len() == 1 && path[0].as_str() == "t"),
             "unreflect operand lowered as {:?}",
             body.exprs[operand]
+        );
+    }
+
+    #[test]
+    fn nested_unreflect_type_arguments_allocate_each_carrier_once() {
+        let function = first_function(parse_and_lower(
+            "function main(t: reflect.Type) -> reflect.Type { return reflect.Type.of<unreflect(make<unreflect(t)>())>() }",
+        ));
+        let Some(crate::ast::FunctionBodyDef::Expr(_, source_map)) = function.body else {
+            panic!("expected expression body")
+        };
+        assert_eq!(
+            source_map.unreflect_arg_spans.len(),
+            2,
+            "the outer call operand and nested type operand must each be lowered exactly once"
         );
     }
 

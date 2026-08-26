@@ -43,7 +43,7 @@ function pick(flag: bool) -> float { if (flag) { 1.5 } else { 2.5 } }
 // A direct sysop call: lowers to `sys_op`, but only while the compiler can see
 // the stdlib body behind `baml.io.println`.
 function shout(line: string) -> null { baml.io.println(line) }
-function encoded(xs: int[]) -> string { json.encode(xs) }
+function encoded(xs: int[]) -> string { json.to_string(xs) }
 "#,
     ),
     (

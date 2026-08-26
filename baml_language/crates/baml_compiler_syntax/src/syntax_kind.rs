@@ -353,8 +353,6 @@ pub enum SyntaxKind {
     /// Bare type expression as a pattern (literals, paths, generics, arrays, …).
     /// Does NOT consume `|` — that belongs to `UNION_PATTERN` at the pattern level.
     TYPE_PATTERN,
-    /// Contextual runtime identity pattern: `unreflect(expr)`.
-    UNREFLECT_PATTERN,
     /// `'(' PATTERN ')'` — explicit grouping.
     PAREN_PATTERN,
     /// `'_'` (bare) or `'let' '_'` — wildcard / discard. Distinct from
@@ -416,9 +414,8 @@ pub enum SyntaxKind {
     CALL_ARGS,
     CALL_ARG,
     GENERIC_ARGS,
-    /// Contextual runtime type argument: `unreflect(expr)`. This is deliberately
-    /// a whole generic-argument node rather than a type-expression atom.
-    UNREFLECT_ARG,
+    /// Contextual runtime type atom: `unreflect(expr)`.
+    UNREFLECT_TYPE,
     /// Declaration-site generic type parameter list: `<T>` or `<K, V>` on class/function defs.
     GENERIC_PARAM_LIST,
     /// A single type parameter name inside a `GENERIC_PARAM_LIST`.

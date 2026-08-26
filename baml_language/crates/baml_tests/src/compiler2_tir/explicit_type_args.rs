@@ -9,8 +9,35 @@
 //! not the resolved arguments. Divergence from inference is therefore observed via the
 //! resulting expression *type*, not the call-site syntax.
 
-use super::support::{make_db, render_tir};
+use super::support::{make_db, render_ppir, render_tir};
 use crate::engine::TestDbExt;
+
+#[test]
+fn nested_runtime_type_binding_render_preserves_operand_name() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Wrapper<T> { value T }
+
+function caller(t: reflect.Type) -> bool {
+    type T = Wrapper<unreflect(t)>
+    true
+}
+"#,
+    );
+
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("type T = Wrapper<unreflect(t)> : type"),
+        "typed rendering lost the nested operand:\n{tir}"
+    );
+    let ppir = render_ppir(&db, file);
+    assert!(
+        ppir.contains("type T = user.Wrapper<unreflect(t)>"),
+        "HIR rendering lost the nested operand:\n{ppir}"
+    );
+}
 
 /// Explicit type args bind T directly, distinct from what inference would produce.
 ///

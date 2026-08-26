@@ -119,7 +119,7 @@ async fn scenario_2_saved_form_class_renders_parses_and_assert_reads() {
                 + "\n<RESULT>" + height.to_string()
                 + "|" + complaint
                 + "|" + bullets[1]
-                + "|" + baml.json.encode(note)
+                + "|" + baml.json.to_string(note)
         }
         "##
     );
@@ -206,7 +206,7 @@ async fn scenario_3_tool_union_dispatches_by_runtime_class() {
                 + "|" + (reflect.Type.of_value(action) == read_t.as_type()).to_string()
                 + "|" + tool
                 + "|" + path
-                + "|" + baml.json.encode(action)
+                + "|" + baml.json.to_string(action)
         }
         "##
     );
@@ -362,7 +362,7 @@ async fn constructed_type_to_baml_compiles_to_equivalent_new_identity() {
                 && source == compiled.as_type().to_baml()
                 && RoundTrip$render_prompt<unreflect(original.as_type())>().text()
                     == RoundTrip$render_prompt<unreflect(compiled.as_type())>().text()
-                && baml.json.encode(original_value) == baml.json.encode(compiled_value)
+                && baml.json.to_string(original_value) == baml.json.to_string(compiled_value)
                 && reflect.Type.of_value(original_value) == original.as_type()
                 && reflect.Type.of_value(compiled_value) == compiled.as_type()
         }

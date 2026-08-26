@@ -87,7 +87,7 @@ name = "baml"
 approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query"]
 # The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
 # the same shape), not a prefix + word.
-approved_suffixes = ["compiler2_hir_ty"]
+approved_suffixes = ["artifact", "compiler2_hir_ty"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["bex_project"]
 # The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring

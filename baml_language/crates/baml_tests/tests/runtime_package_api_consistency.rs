@@ -98,7 +98,33 @@ function F() -> null { null }
     && enum_t.as_type() != second_enum.as_type()
     && interface_t.as_type() != second_interface.as_type()
 }
+
 "###
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn package_class_enumeration_preserves_declaration_order() {
+    let output = baml_test!(
+        r###"
+class PurchaseOrder { id string }
+class OrderedItem { sku string }
+
+function main() -> string throws unknown {
+  let current = reflect.Package.current().classes().keys().join("|")
+  let compiled = reflect.Package.compile({ "types.baml": `
+class PurchaseOrder { id string }
+class OrderedItem { sku string }
+` }).classes().keys().join("|")
+  `${current}~~${compiled}`
+}
+"###
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "root.PurchaseOrder|root.OrderedItem~~root.PurchaseOrder|root.OrderedItem".into()
+        ))
+    );
 }

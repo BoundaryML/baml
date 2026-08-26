@@ -182,8 +182,9 @@ impl PackArgs {
                 .collect(),
             output_format: self.output_format,
         };
-        let serialized = borsh::to_vec(&envelope)
-            .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
+        let serialized =
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope)
+                .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
 
         let target_triple = self.resolved_target_triple()?;
         let host_bytes = read_host_binary(target_triple, reporter)?;
@@ -1175,9 +1176,9 @@ mod tests {
 
     // ── Envelope roundtrip ────────────────────────────────────────────
 
-    /// The PackEnvelope borsh roundtrip is the wire contract between
-    /// pack and the host. A regression here breaks every packaged binary,
-    /// so it gets its own test.
+    /// The versioned `PackedProgram` artifact envelope is the wire contract
+    /// between `baml pack` and the pack host. A regression here breaks every
+    /// packaged binary, so it gets its own roundtrip test.
     #[test]
     fn test_pack_envelope_roundtrip() {
         let snapshot = baml_tests::engine::compile_source("function main() -> int { 1 }");
@@ -1191,8 +1192,10 @@ mod tests {
             }],
             output_format: OutputFormat::Json,
         };
-        let bytes = borsh::to_vec(&envelope).unwrap();
-        let decoded: PackEnvelope = borsh::from_slice(&bytes).unwrap();
+        let bytes =
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope).unwrap();
+        let decoded: PackEnvelope =
+            baml_artifact::decode(baml_artifact::ArtifactKind::PackedProgram, &bytes).unwrap();
         assert!(matches!(decoded.mode, baml_exec::PackMode::Single));
         assert_eq!(decoded.targets.len(), 1);
         assert_eq!(decoded.targets[0].qualified_name, "user.main");

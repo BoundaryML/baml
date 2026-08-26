@@ -4548,9 +4548,6 @@ function baml.json.deserialize(s: string) -> #0 {
     return
 }
 
-function baml.json.encode(v: #0) -> string {
-}
-
 function baml.json.field(j: baml.json.json, key: string) -> baml.json.json {
 }
 
@@ -5038,10 +5035,8 @@ function baml.json.schema(t: reflect.Type) -> baml.json.json {
 }
 
 function baml.json.serialize(v: #0) -> string {
-    load_type #0
     load_var v
-    call baml.json.to_json
-    call baml.json.stringify
+    call baml.json.to_string
     return
 }
 
@@ -5058,10 +5053,14 @@ function baml.json.to(j: baml.json.json) -> #0 {
     return
 }
 
-function baml.json.to_json(v: #0) -> baml.json.json {
+function baml.json.to_json(value: unknown) -> baml.json.json {
 }
 
-function baml.json.to_string(v: #0) -> string {
+function baml.json.to_string(value: unknown) -> string {
+    load_var value
+    call baml.json.to_json
+    call baml.json.stringify
+    return
 }
 
 function baml.media.Audio.base64(self: baml.media.Audio) -> string {

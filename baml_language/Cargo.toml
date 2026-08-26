@@ -76,6 +76,7 @@ version = "0.0.0-beta"
 #  Internal dependencies (baml_*)
 bex_str = { path = "crates/bex_str" }
 baml_base = { path = "crates/baml_base" }
+baml_artifact = { path = "crates/baml_artifact" }
 baml_type = { path = "crates/baml_type" }
 baml_type_runtime = { path = "crates/baml_type_runtime" }
 baml_type_macros = { path = "crates/baml_type_macros" }
