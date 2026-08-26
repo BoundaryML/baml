@@ -31,7 +31,7 @@ class ExtractedRecord {
   let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
   let document_text = `{"account":"AC-1","amount":42}`
   let record = Extract$parse<unreflect(record_t.as_type())>(document_text)
-  json.encode(record)
+  json.to_string(record)
 }
 
 function rendered_schema() -> string throws unknown {

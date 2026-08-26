@@ -1,9 +1,9 @@
 //! Native handlers for `baml.json` namespace:
-//! `parse`, `stringify`, `stringify_pretty`, `to_string<T>`, `from_string<T>`.
+//! `parse`, `stringify`, `stringify_pretty`, `to_json`, `from_string<T>`.
 //!
-//! `to_string<T>` and `from_string<T>` read their type-arg `T` from
-//! `vm.current_call_type_args()`, populated by the call-instruction handler
-//! from the leading `LoadType` operand.  See `BexVm::pending_call_type_args`.
+//! `from_string<T>` reads its type-arg `T` from `vm.current_call_type_args()`,
+//! populated by the call-instruction handler from the leading `LoadType`
+//! operand. See `BexVm::pending_call_type_args`.
 
 // `path: &mut String` callees need ownership for `truncate` and `write!`.
 // Match arms that throw via the VM error helpers read clearer than
@@ -448,35 +448,6 @@ impl BamlNamespaceJson for PackageBamlImpl {
         bex_str::BexStr::from(s)
     }
 
-    fn encode(vm: &mut BexVm, v: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
-        let mut counter = 0;
-        let mut path = String::new();
-        let json = render_to_serde(vm, *v, &[], &[], &mut counter, &mut path)?;
-        serde_json::to_string(&json)
-            .map(bex_str::BexStr::from)
-            .map_err(|error| {
-                raise_serialize(
-                    vm,
-                    format!("serde_json::to_string failed: {error}"),
-                    &path,
-                    "serde_json",
-                )
-            })
-    }
-
-    fn to_string(vm: &mut BexVm, v: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
-        let ty = vm
-            .current_call_type_args()
-            .first()
-            .cloned()
-            .ok_or_else(|| {
-                VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
-                    name: "baml.json.to_string: missing type argument".to_string(),
-                })
-            })?;
-        json_to_string_typed(vm, *v, &ty).map(bex_str::BexStr::from)
-    }
-
     fn from_string(vm: &mut BexVm, s: &bex_str::BexStr) -> Result<Value, VmRustFnError> {
         let ty = vm
             .current_call_type_args()
@@ -491,7 +462,7 @@ impl BamlNamespaceJson for PackageBamlImpl {
     }
 
     fn to_json(vm: &mut BexVm, v: &Value) -> NativeCallResult {
-        // `baml.json.to_json<T>` is now a thin alias for the override-honoring
+        // `baml.json.to_json` is a thin alias for the override-honoring
         // structural walker that backs `baml.json.from<T>`. Kept as a stable named
         // entry point for `baml.json.serialize` and host callers; the magic
         // per-class `to_json` method it used to dispatch to is gone.

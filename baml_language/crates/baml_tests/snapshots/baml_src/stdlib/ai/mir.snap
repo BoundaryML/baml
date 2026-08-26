@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/corpus.rs
-assertion_line: 162
 ---
 === MIR2 (package ai) ===
 fn ai.OutputFormat._render = builtin(io)
@@ -2675,24 +2674,23 @@ fn ai.content.Media.new(value: image | audio | video | pdf, provider_id: string 
     let _5: bool
     let _6: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // envelope
     let _7: unknown // e
-    let _8: reflect.Type
-    let _9: baml.errors.InvalidArgument
+    let _8: baml.errors.InvalidArgument
+    let _9: string
     let _10: string
     let _11: string
-    let _12: string
+    let _12: reflect.Type
     let _13: reflect.Type
-    let _14: reflect.Type
-    let _15: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video // part
-    let _16: unknown // e
-    let _17: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _18: reflect.Type
-    let _19: baml.errors.InvalidArgument
+    let _14: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video // part
+    let _15: unknown // e
+    let _16: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _17: reflect.Type
+    let _18: baml.errors.InvalidArgument
+    let _19: string
     let _20: string
     let _21: string
-    let _22: string
+    let _22: reflect.Type
     let _23: reflect.Type
-    let _24: reflect.Type
-    let _25: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
+    let _24: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
 
     bb0: {
         _4 = copy _2 == const <omitted>;
@@ -2715,19 +2713,18 @@ fn ai.content.Media.new(value: image | audio | video | pdf, provider_id: string 
     }
 
     bb4: {
-        _8 = load_type(image | audio | video | pdf);
-        _6 = call const fn baml.json.to_json<copy _8>(copy _1) -> [bb5, unwind: bb8];
+        _6 = call const fn baml.json.to_json(copy _1) -> [bb5, unwind: bb8];
     }
 
     bb5: {
-        _17 = copy _6;
-        _18 = load_type(baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf);
-        _15 = call const fn baml.json.from_json<copy _18>(copy _17) -> [bb6, unwind: bb12];
+        _16 = copy _6;
+        _17 = load_type(baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf);
+        _14 = call const fn baml.json.from_json<copy _17>(copy _16) -> [bb6, unwind: bb12];
     }
 
     bb6: {
-        _25 = copy _15;
-        _0 = ai.content.Media { copy _25, copy _2, copy _3 };
+        _24 = copy _14;
+        _0 = ai.content.Media { copy _24, copy _2, copy _3 };
         goto -> bb7;
     }
 
@@ -2740,39 +2737,39 @@ fn ai.content.Media.new(value: image | audio | video | pdf, provider_id: string 
     }
 
     bb9: {
-        _13 = load_type(baml.json.JsonSerializationError);
-        _12 = call const fn baml.String.from<copy _13>(copy _7) -> [bb10];
+        _12 = load_type(baml.json.JsonSerializationError);
+        _11 = call const fn baml.String.from<copy _12>(copy _7) -> [bb10];
     }
 
     bb10: {
-        _14 = load_type(string);
-        _11 = call const fn baml.String.from<copy _14>(copy _12) -> [bb11];
+        _13 = load_type(string);
+        _10 = call const fn baml.String.from<copy _13>(copy _11) -> [bb11];
     }
 
     bb11: {
-        _10 = const "media output could not be encoded: " + copy _11;
-        _9 = baml.errors.InvalidArgument { copy _10 };
-        throw copy _9;
+        _9 = const "media output could not be encoded: " + copy _10;
+        _8 = baml.errors.InvalidArgument { copy _9 };
+        throw copy _8;
     }
 
     bb12: {
-        throw_if_panic copy _16 -> bb13;
+        throw_if_panic copy _15 -> bb13;
     }
 
     bb13: {
-        _23 = load_type(baml.json.JsonDecodeError);
-        _22 = call const fn baml.String.from<copy _23>(copy _16) -> [bb14];
+        _22 = load_type(baml.json.JsonDecodeError);
+        _21 = call const fn baml.String.from<copy _22>(copy _15) -> [bb14];
     }
 
     bb14: {
-        _24 = load_type(string);
-        _21 = call const fn baml.String.from<copy _24>(copy _22) -> [bb15];
+        _23 = load_type(string);
+        _20 = call const fn baml.String.from<copy _23>(copy _21) -> [bb15];
     }
 
     bb15: {
-        _20 = const "media output could not be decoded: " + copy _21;
-        _19 = baml.errors.InvalidArgument { copy _20 };
-        throw copy _19;
+        _19 = const "media output could not be decoded: " + copy _20;
+        _18 = baml.errors.InvalidArgument { copy _19 };
+        throw copy _18;
     }
 }
 
@@ -4521,17 +4518,15 @@ fn ai.internal._media_envelope(m: ai.content.Media) -> int | float | string | bo
     let _1: ai.content.Media // m // param
     let _2: unknown // e
     let _3: baml.media.Audio | baml.media.Image | baml.media.Pdf | baml.media.Video
-    let _4: reflect.Type
-    let _5: baml.errors.UnknownError
-    let _6: baml.json.JsonSerializationError
-    let _7: string[]
-    let _8: string
-    let _9: reflect.Type
+    let _4: baml.errors.UnknownError
+    let _5: baml.json.JsonSerializationError
+    let _6: string[]
+    let _7: string
+    let _8: reflect.Type
 
     bb0: {
         _3 = copy _1.0;
-        _4 = load_type(baml.media.Image | baml.media.Audio | baml.media.Video | baml.media.Pdf);
-        _0 = call const fn baml.json.to_json<copy _4>(copy _3) -> [bb1, unwind: bb2];
+        _0 = call const fn baml.json.to_json(copy _3) -> [bb1, unwind: bb2];
     }
 
     bb1: {
@@ -4543,15 +4538,15 @@ fn ai.internal._media_envelope(m: ai.content.Media) -> int | float | string | bo
     }
 
     bb3: {
-        _6 = copy _2;
-        _9 = load_type(baml.json.JsonSerializationError);
-        _8 = call const fn baml.String.from<copy _9>(copy _2) -> [bb4];
+        _5 = copy _2;
+        _8 = load_type(baml.json.JsonSerializationError);
+        _7 = call const fn baml.String.from<copy _8>(copy _2) -> [bb4];
     }
 
     bb4: {
-        _7 = [copy _8]: string[];
-        _5 = baml.errors.UnknownError { copy _6, copy _7 };
-        throw copy _5;
+        _6 = [copy _7]: string[];
+        _4 = baml.errors.UnknownError { copy _5, copy _6 };
+        throw copy _4;
     }
 }
 
@@ -6645,7 +6640,6 @@ fn ai.mcp.rpc_line(id: int | null, method: string, params: null | map<string, un
     let _16: reflect.Type
     let _17: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _18: map<string, unknown>
-    let _19: reflect.Type
 
     bb0: {
         _4 = { const "jsonrpc": const "2.0", const "method": copy _2 }: map<string, unknown>;
@@ -6676,8 +6670,7 @@ fn ai.mcp.rpc_line(id: int | null, method: string, params: null | map<string, un
 
     bb4: {
         _18 = copy _4;
-        _19 = load_type(map<string, unknown>);
-        _17 = call const fn baml.json.to_json<copy _19>(copy _18) -> [bb5];
+        _17 = call const fn baml.json.to_json(copy _18) -> [bb5];
     }
 
     bb5: {
@@ -8925,13 +8918,12 @@ fn ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> string
     let _27: reflect.Type
     let _28: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
     let _29: unknown
-    let _30: reflect.Type
-    let _31: baml.errors.InvalidArgument
+    let _30: baml.errors.InvalidArgument
+    let _31: string
     let _32: string
     let _33: string
     let _34: string
-    let _35: string
-    let _36: reflect.Type
+    let _35: reflect.Type
 
     bb0: {
         _3 = copy _1.4;
@@ -8946,16 +8938,16 @@ fn ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> string
     }
 
     bb2: {
-        _35 = copy _1.0;
-        _36 = load_type(string);
-        _34 = call const fn baml.String.from<copy _36>(copy _35) -> [bb3];
+        _34 = copy _1.0;
+        _35 = load_type(string);
+        _33 = call const fn baml.String.from<copy _35>(copy _34) -> [bb3];
     }
 
     bb3: {
-        _33 = const "tool " + copy _34;
-        _32 = copy _33 + const " has no handler";
-        _31 = baml.errors.InvalidArgument { copy _32 };
-        throw copy _31;
+        _32 = const "tool " + copy _33;
+        _31 = copy _32 + const " has no handler";
+        _30 = baml.errors.InvalidArgument { copy _31 };
+        throw copy _30;
     }
 
     bb4: {
@@ -8968,8 +8960,7 @@ fn ai.tools.Tool.call(self: ai.tools.Tool, args: map<string, unknown>) -> string
 
     bb5: {
         _29 = copy _10;
-        _30 = load_type(unknown);
-        _28 = call const fn baml.json.to_json<copy _30>(copy _29) -> [bb6];
+        _28 = call const fn baml.json.to_json(copy _29) -> [bb6];
     }
 
     bb6: {
@@ -12684,22 +12675,21 @@ fn ai.Agent.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.RunResult<Out>
     let _116: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // value_json
     let _117: unknown // e
     let _118: Out
-    let _119: reflect.Type
-    let _120: baml.errors.UnknownError
-    let _121: baml.json.JsonSerializationError
-    let _122: reflect.Type
-    let _123: void
-    let _124: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
-    let _125: ai.events.FinalProduced
-    let _126: string
-    let _127: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
-    let _128: ai.Journal
-    let _129: int
-    let _130: Out
-    let _131: ai.Journal
-    let _132: ai.events.Usage
-    let _133: ai.errors.StepBudgetExceeded
-    let _134: int
+    let _119: baml.errors.UnknownError
+    let _120: baml.json.JsonSerializationError
+    let _121: reflect.Type
+    let _122: void
+    let _123: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage)[]
+    let _124: ai.events.FinalProduced
+    let _125: string
+    let _126: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>
+    let _127: ai.Journal
+    let _128: int
+    let _129: Out
+    let _130: ai.Journal
+    let _131: ai.events.Usage
+    let _132: ai.errors.StepBudgetExceeded
+    let _133: int
 
     bb0: {
         _3 = call const fn ai.Agent._validated_schema_attempts(copy _1) -> [bb1];
@@ -12743,9 +12733,9 @@ fn ai.Agent.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.RunResult<Out>
     }
 
     bb7: {
-        _134 = copy _12;
-        _133 = ai.errors.StepBudgetExceeded { copy _134 };
-        throw copy _133;
+        _133 = copy _12;
+        _132 = ai.errors.StepBudgetExceeded { copy _133 };
+        throw copy _132;
     }
 
     bb8: {
@@ -12823,32 +12813,31 @@ fn ai.Agent.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.RunResult<Out>
 
     bb21: {
         _118 = copy _103;
-        _119 = load_type(#0);
-        _116 = call const fn baml.json.to_json<copy _119>(copy _118) -> [bb22, unwind: bb58];
+        _116 = call const fn baml.json.to_json(copy _118) -> [bb22, unwind: bb58];
     }
 
     bb22: {
-        _127 = copy _116;
-        _126 = call const fn baml.json.stringify(copy _127) -> [bb23];
+        _126 = copy _116;
+        _125 = call const fn baml.json.stringify(copy _126) -> [bb23];
     }
 
     bb23: {
-        _125 = ai.events.FinalProduced { copy _126 };
-        _124 = [copy _125]: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
-        _123 = call const fn ai.Journal.append_all(copy _8, copy _124) -> [bb24];
+        _124 = ai.events.FinalProduced { copy _125 };
+        _123 = [copy _124]: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.Usage | ai.events.LLMCall | ai.events.FinalProduced[];
+        _122 = call const fn ai.Journal.append_all(copy _8, copy _123) -> [bb24];
     }
 
     bb24: {
-        _128 = copy _8;
-        _129 = copy _10;
-        _10 = call const fn ai.Agent._emit_from(copy _1, copy _128, copy _129) -> [bb25];
+        _127 = copy _8;
+        _128 = copy _10;
+        _10 = call const fn ai.Agent._emit_from(copy _1, copy _127, copy _128) -> [bb25];
     }
 
     bb25: {
-        _130 = copy _103;
-        _131 = copy _8;
-        _132 = copy _13;
-        _0 = ai.RunResult<#0> { copy _130, copy _131, copy _132 };
+        _129 = copy _103;
+        _130 = copy _8;
+        _131 = copy _13;
+        _0 = ai.RunResult<#0> { copy _129, copy _130, copy _131 };
         goto -> bb26;
     }
 
@@ -13044,13 +13033,13 @@ fn ai.Agent.run(self: ai.Agent, spec: ai.FunctionSpec<Out>) -> ai.RunResult<Out>
     }
 
     bb59: {
-        _121 = copy _117;
-        _122 = load_type(never);
-        _120 = call const fn baml.errors.UnknownError.with_message<copy _122>(copy _121, const "final value serialization failed") -> [bb60];
+        _120 = copy _117;
+        _121 = load_type(never);
+        _119 = call const fn baml.errors.UnknownError.with_message<copy _121>(copy _120, const "final value serialization failed") -> [bb60];
     }
 
     bb60: {
-        throw copy _120;
+        throw copy _119;
     }
 }
 

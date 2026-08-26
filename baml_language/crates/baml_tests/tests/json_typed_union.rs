@@ -1,4 +1,4 @@
-//! Runtime regressions for typed JSON serialization of structural union values.
+//! Runtime regressions for JSON serialization of structural union values.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -18,7 +18,7 @@ enum Phase {
 type Payload = Record | Phase | image
 
 function serialize(value: Payload) -> string {
-  baml.json.to_string<Payload>(value)
+  baml.json.to_string(value)
 }
 
 function main() -> string {
@@ -62,8 +62,8 @@ function main() -> string {
     name: "Ada",
     detail: Detail { label: "nested" },
   }
-  baml.json.to_string<Record>(record)
-    + "|" + baml.json.to_string<Payload>(record)
+  baml.json.to_string(record)
+    + "|" + baml.json.to_string(record)
 }
 "#
     );
@@ -88,7 +88,7 @@ type Payload = uint8array | string
 
 function main() -> string {
   {
-    let _ = baml.json.to_string<Payload>(baml.Uint8Array.from_hex("00ff"))
+    let _ = baml.json.to_string(baml.Uint8Array.from_hex("00ff"))
     "unexpected success"
   } catch (e) {
     baml.json.JsonSerializationError => "serialization error"
