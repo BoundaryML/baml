@@ -4343,13 +4343,14 @@ impl<'db> InferenceContext<'db> {
                 // (literal -> base, variant -> enum) and must be the SAME
                 // type - subtyping is not enough - and that type must
                 // implement `baml.ops.Compare`. Open/error operands skip
-                // (cascades; a var may still solve either way).
+                // (cascades; a var may still solve either way) - but the
+                // `unknown` top type does NOT skip: it is a type the reader
+                // wrote, not a cascade, and it orders against nothing, so it
+                // reports here like any other non-comparable operand.
                 if !lhs_ty.has_infer()
                     && !rhs_ty.has_infer()
                     && !lhs_ty.has_error()
                     && !rhs_ty.has_error()
-                    && !matches!(lhs_ty.kind(), TyKind::Unknown { .. })
-                    && !matches!(rhs_ty.kind(), TyKind::Unknown { .. })
                 {
                     let widen = |this: &mut Self, ty: &Ty| -> baml_type::Ty {
                         use baml_base::Literal as Lit;
@@ -4834,7 +4835,7 @@ impl<'db> InferenceContext<'db> {
     }
 
     /// A ground operator dispatch found NO impl for clean operands - the
-    /// committed E0004 (an error/unknown/var operand is a cascade and
+    /// committed E0004 (an error or inference-var operand is a cascade and
     /// stays silent, the same `tainted_by_errors` rule everywhere).
     pub(super) fn report_operator_failure(
         &mut self,
@@ -4843,13 +4844,17 @@ impl<'db> InferenceContext<'db> {
         lhs: &Ty,
         rhs: Option<&Ty>,
     ) {
-        // SHALLOW error/unknown screening (TIR's gate): a nested error slot
-        // (an incomplete existential's recovered pin) does not silence the
+        // SHALLOW error screening (TIR's gate): a nested error slot (an
+        // incomplete existential's recovered pin) does not silence the
         // operator report - the operand as written still has no impl, and
         // that is this diagnostic's claim.
-        let dirty = |ty: &Ty| {
-            matches!(ty.kind(), TyKind::Error { .. } | TyKind::Unknown { .. }) || ty.has_infer()
-        };
+        //
+        // The `unknown` top type is NOT screened: it is a type the reader
+        // wrote, not a cascade from an earlier failure, and it implements
+        // no operator - so `a + 1` on an `unknown` is a real E0004 rather
+        // than something to stay quiet about. Only the error sentinel and
+        // an unresolved inference var are cascades.
+        let dirty = |ty: &Ty| matches!(ty.kind(), TyKind::Error { .. }) || ty.has_infer();
         if dirty(lhs) || rhs.is_some_and(dirty) {
             return;
         }
@@ -5481,10 +5486,11 @@ impl<'db> InferenceContext<'db> {
                 }
                 _ => None,
             };
-            if !callee_fn_ty.has_error()
-                && !callee_fn_ty.has_infer()
-                && !matches!(callee_fn_ty.kind(), TyKind::Unknown { .. })
-            {
+            // A value typed `unknown` is not callable, and saying so is
+            // this diagnostic's whole job - the top type is not a cascade.
+            // Only a genuine one (an errored callee, or one still carrying
+            // inference vars) stays quiet.
+            if !callee_fn_ty.has_error() && !callee_fn_ty.has_infer() {
                 self.pending_diags.push(PendingDiag::NotCallable {
                     expr: callee,
                     ty: callee_fn_ty.clone(),

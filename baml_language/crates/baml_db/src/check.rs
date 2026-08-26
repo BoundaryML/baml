@@ -2332,6 +2332,51 @@ interface Pair<A, B> {
     }
 
     #[test]
+    fn unknown_is_not_operator_permissive_but_error_cascades_stay_quiet() {
+        // `unknown` is the user-visible top type, and it implements no
+        // operator and is not callable — so using it as one is a real
+        // diagnostic, not silence.
+        //
+        // Inference used to screen the top type as if it were the error
+        // sentinel, so every use of `unknown` type-checked vacuously.
+        let (db, file) = single_file(
+            "function op(a: unknown) -> int throws never { return a + 1 }\nfunction call(g: unknown) -> int throws never { return g(1) }\n",
+        );
+        let ids: Vec<_> = check_file(&db, file).into_iter().map(|d| d.id).collect();
+        assert!(ids.contains(&DiagnosticId::InvalidOperator), "{ids:?}");
+        assert!(ids.contains(&DiagnosticId::NotCallable), "{ids:?}");
+
+        // Ordering is a third operator road with its own screen, so it needs
+        // its own case: against another type it is a different-types report,
+        // and against itself it fails the `baml.ops.Compare` requirement.
+        for source in [
+            "function ord(a: unknown) -> bool throws never { return a < 1 }\n",
+            "function ord(a: unknown, b: unknown) -> bool throws never { return a < b }\n",
+        ] {
+            let (db, file) = single_file(source);
+            let ids: Vec<_> = check_file(&db, file).into_iter().map(|d| d.id).collect();
+            assert!(
+                ids.contains(&DiagnosticId::InvalidOperator),
+                "ordering on `unknown` must report: {source} gave {ids:?}"
+            );
+        }
+
+        // The other half of the rule: a GENUINE cascade still stays quiet.
+        // The operand here is the error sentinel (its annotation did not
+        // resolve), so the unresolved type is reported once and no operator
+        // complaint piles on top of it.
+        let (db, file) = single_file(
+            "function f() -> int throws never {\n  let a: NoSuchType = 1\n  return a + 1\n}\n",
+        );
+        let ids: Vec<_> = check_file(&db, file).into_iter().map(|d| d.id).collect();
+        assert!(ids.contains(&DiagnosticId::UnknownType), "{ids:?}");
+        assert!(
+            !ids.contains(&DiagnosticId::InvalidOperator),
+            "an errored operand must not cascade an operator report: {ids:?}"
+        );
+    }
+
+    #[test]
     fn every_interface_bound_position_reports_an_unresolved_head() {
         // The three constraint positions an interface declares. Each used to
         // leave the unresolved head as a silent `Ty::Error`: the generic
