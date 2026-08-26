@@ -9,8 +9,8 @@
 //!
 //! Conversions:
 //! - [`RuntimeTy::try_from`] (`&Ty`/`Ty`) is fallible: it rejects the
-//!   compiler-only variants (`Unknown`, `Error`, `Infer`) even when nested,
-//!   returning [`NotRuntimeTy`].
+//!   compiler-only variants (`Error`, `Infer`) even when nested, returning
+//!   [`NotRuntimeTy`].
 //! - [`Ty::from`] (`RuntimeTy`/`&RuntimeTy`) is infallible.
 
 use std::collections::{HashMap, HashSet};
@@ -271,8 +271,8 @@ impl ResolvedAliases {
 /// for reflection and dynamic dispatch, and erasing them would violate the
 /// type contract.
 ///
-/// Fails with [`NotRuntimeTy`] on the error-recovery sentinels `Unknown` and
-/// `Error`: those exist only during compilation, so a type-checked program can
+/// Fails with [`NotRuntimeTy`] on the error-recovery sentinel `Error` and on an
+/// unfilled `Infer` hole: those exist only during compilation, so a type-checked program can
 /// never contain one. Reaching this boundary with one is a compiler bug — we
 /// surface it instead of erasing it to a degraded runtime type.
 pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy, NotRuntimeTy> {
@@ -399,7 +399,6 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
             attr.clone(),
         ),
         // Error-recovery sentinels cannot exist in a type-checked program.
-        Ty::Unknown { .. } => return Err(NotRuntimeTy { variant: "Unknown" }),
         Ty::Error { .. } => return Err(NotRuntimeTy { variant: "Error" }),
         // An inference hole must have been filled during type checking.
         Ty::Infer { .. } => return Err(NotRuntimeTy { variant: "Infer" }),
@@ -626,11 +625,11 @@ mod tests {
     }
 
     #[test]
-    fn nested_unknown_in_list_blocks_conversion() {
-        let ty: Ty = Ty::List(Box::new(Ty::Unknown { attr: def() }), def());
+    fn nested_infer_in_list_blocks_conversion() {
+        let ty: Ty = Ty::List(Box::new(Ty::Infer { attr: def() }), def());
         assert_eq!(
             RuntimeTy::try_from(&ty),
-            Err(NotRuntimeTy { variant: "Unknown" })
+            Err(NotRuntimeTy { variant: "Infer" })
         );
     }
 

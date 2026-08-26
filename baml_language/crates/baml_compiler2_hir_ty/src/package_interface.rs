@@ -1387,8 +1387,7 @@ impl<'db> PackageResolutionContext<'db> {
         if path.len() >= 2 {
             if path[0].as_str() == "root" {
                 if let Some(def) = self.own_items.lookup_type(&path[1..path.len() - 1], item) {
-                    let ty = def_to_ty(db, def);
-                    return Some((ResolvedSource::Item, ty));
+                    return def_to_ty(db, def).map(|ty| (ResolvedSource::Item, ty));
                 }
             }
             for (dep_name, dep_iface) in &self.dep_interfaces {
@@ -1410,8 +1409,7 @@ impl<'db> PackageResolutionContext<'db> {
         item: &Name,
     ) -> Option<(ResolvedSource, Ty)> {
         if let Some(def) = self.own_items.lookup_type(namespace, item) {
-            let ty = def_to_ty(db, def);
-            return Some((ResolvedSource::Item, ty));
+            return def_to_ty(db, def).map(|ty| (ResolvedSource::Item, ty));
         }
         for (_dep_name, dep_iface) in &self.dep_interfaces {
             if let Some(exported) = dep_iface.lookup_type(namespace, item) {
@@ -1558,8 +1556,11 @@ impl<'db> PackageResolutionContext<'db> {
     }
 }
 
-/// Convert a Definition to Ty (own-package path).
-fn def_to_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, def: Definition<'db>) -> Ty {
+/// Convert a Definition to Ty (own-package path), or `None` when `def` is not
+/// a type definition — `lookup_type` searches the type namespace, so the
+/// non-type arms are unreachable for its results, but a caller that resolved
+/// `def` some other way gets a resolution failure rather than a stand-in type.
+fn def_to_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, def: Definition<'db>) -> Option<Ty> {
     let name = match def {
         Definition::Class(loc) => baml_compiler2_ppir::item_data::class_data(db, loc)
             .name
@@ -1573,11 +1574,12 @@ fn def_to_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, def: Definition<'db>) ->
         Definition::TypeAlias(loc) => baml_compiler2_ppir::item_data::type_alias_data(db, loc)
             .name
             .clone(),
-        _ => {
-            return Ty::Unknown {
-                attr: TyAttr::default(),
-            };
-        }
+        Definition::Function(_)
+        | Definition::TemplateString(_)
+        | Definition::Client(_)
+        | Definition::Test(_)
+        | Definition::RetryPolicy(_)
+        | Definition::Let(_) => return None,
     };
     match def {
         Definition::Class(loc) => {
@@ -1588,18 +1590,29 @@ fn def_to_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, def: Definition<'db>) ->
                 .iter()
                 .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
                 .collect();
-            Ty::Class(qualify_def(db, def, &name), args, TyAttr::default())
+            Some(Ty::Class(
+                qualify_def(db, def, &name),
+                args,
+                TyAttr::default(),
+            ))
         }
-        Definition::Interface(_) => Ty::Interface(
+        Definition::Interface(_) => Some(Ty::Interface(
             qualify_def(db, def, &name),
             vec![],
             vec![],
             TyAttr::default(),
-        ),
-        Definition::Enum(_) => Ty::Enum(qualify_def(db, def, &name), TyAttr::default()),
-        Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, &name), TyAttr::default()),
-        _ => Ty::Unknown {
-            attr: TyAttr::default(),
-        },
+        )),
+        Definition::Enum(_) => Some(Ty::Enum(qualify_def(db, def, &name), TyAttr::default())),
+        Definition::TypeAlias(_) => Some(Ty::TypeAlias(
+            qualify_def(db, def, &name),
+            TyAttr::default(),
+        )),
+        // The non-type definitions returned above, before `name` was bound.
+        Definition::Function(_)
+        | Definition::TemplateString(_)
+        | Definition::Client(_)
+        | Definition::Test(_)
+        | Definition::RetryPolicy(_)
+        | Definition::Let(_) => None,
     }
 }

@@ -3432,7 +3432,7 @@ fn emit_file_group(
                         // Pass `class_generic_params` as the binding context so
                         // `T`-references inside `class Container<T> { item: T }`
                         // lower to `Tir2Ty::TypeVar("T")` rather than
-                        // `Tir2Ty::Unknown`.  This is the input both to the
+                        // `Tir2Ty::Error`.  This is the input both to the
                         // erased-`Ty` (TypeVar→BuiltinUnknown) used by codegen and to
                         // the `TyTemplate` (TypeVar→TypeArgRef(N)) used by
                         // typed runtime walking.

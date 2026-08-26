@@ -4185,9 +4185,7 @@ impl<'db> InferenceContext<'db> {
                         );
                         let comparable = !matches!(
                             lhs_base,
-                            baml_type::Ty::Union(..)
-                                | baml_type::Ty::Interface(..)
-                                | baml_type::Ty::Unknown { .. }
+                            baml_type::Ty::Union(..) | baml_type::Ty::Interface(..)
                         ) && baml_type::normalize::is_subtype(
                             &lhs_base,
                             &compare_existential,

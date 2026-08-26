@@ -215,7 +215,6 @@ impl Ty {
             | Ty::TypeAlias(..)
             | Ty::Void { .. }
             | Ty::BuiltinUnknown { .. }
-            | Ty::Unknown { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. } => false,
         }
@@ -281,7 +280,6 @@ impl Ty {
             | Ty::TypeVar(..)
             | Ty::AssociatedTypeProjection { .. }
             | Ty::TypeAlias(..)
-            | Ty::Unknown { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. } => false,
         }
@@ -597,7 +595,6 @@ impl Ty {
             Ty::TypeVar(..)
             | Ty::AssociatedTypeProjection { .. }
             | Ty::Never { .. }
-            | Ty::Unknown { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. } => Err("compiler-only type should not reach runtime".to_string()),
             Ty::Int { .. }
@@ -853,7 +850,7 @@ impl<N: Clone> Ty<N> {
             }
             Ty::Never { .. } => "never".to_string(),
             Ty::Void { .. } => "void".to_string(),
-            Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } => "unknown".to_string(),
+            Ty::BuiltinUnknown { .. } => "unknown".to_string(),
             // The wildcard hole renders as the `_` the user wrote.
             Ty::Infer { .. } => "_".to_string(),
             Ty::RustType { .. } => "$rust_type".to_string(),
@@ -1073,7 +1070,6 @@ impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
                 ..
             } => write!(f, "({base} as {}).{member}", interface.to_ty()),
             Ty::Never { .. } => write!(f, "never"),
-            Ty::Unknown { .. } => write!(f, "unknown"),
             Ty::Error { .. } => write!(f, "<error>"),
             Ty::Infer { .. } => write!(f, "_"),
             // Opaque leaf types: render identically to `render_with` so the two
@@ -1281,9 +1277,6 @@ mod tests {
                 attr: TyAttr::default(),
             },
             Ty::TypeAlias(qtn("A"), TyAttr::default()),
-            Ty::Unknown {
-                attr: TyAttr::default(),
-            },
             Ty::Error {
                 attr: TyAttr::default(),
             },

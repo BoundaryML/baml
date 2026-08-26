@@ -581,19 +581,19 @@ fn subtype_basics() {
 // ── subtyping: variance, holes, unions (flip de-risk) ─────────────────────--
 
 #[test]
-fn invariant_arg_distinguishes_top_from_recovery_hole() {
+fn invariant_arg_distinguishes_top_from_recovery_sentinel() {
     // The exact divergence the subtyping migration relies on. Generics are
     // invariant (TYPE_SYSTEM.md §Variance), so the genuine top type `unknown`
     // (`BuiltinUnknown`) is invariant-distinct: `Box<unknown>` is NOT `Box<int>`.
-    // The error-recovery sentinel (`Unknown`) is different — it stays
-    // bidirectionally compatible, so a recovered `Box<Unknown>` never cascades a
+    // The error-recovery sentinel (`Error`) is different — it stays
+    // bidirectionally compatible, so a recovered `Box<Error>` never cascades a
     // subtype error. Keeping the two apart is what lets error recovery use the
-    // recovery sentinel while `unknown` keeps its sound invariant identity.
+    // sentinel while `unknown` keeps its sound invariant identity.
     let ctx = Ctx::default();
     let top = Ty::BuiltinUnknown {
         attr: TyAttr::default(),
     };
-    let hole = Ty::Unknown {
+    let sentinel = Ty::Error {
         attr: TyAttr::default(),
     };
 
@@ -609,13 +609,13 @@ fn invariant_arg_distinguishes_top_from_recovery_hole() {
     ));
 
     assert!(is_subtype(
-        &class1("Box", hole.clone()),
+        &class1("Box", sentinel.clone()),
         &class1("Box", Ty::int()),
         &ctx
     ));
     assert!(is_subtype(
         &class1("Box", Ty::int()),
-        &class1("Box", hole),
+        &class1("Box", sentinel),
         &ctx
     ));
 }

@@ -648,7 +648,7 @@ fn resolve_type_ref(
 /// declared clause wins over inference inside that query, and a function that
 /// throws *without* a written clause still surfaces its inferred escaping
 /// throws. `None` when the function throws nothing (`Ty::Never`) or the
-/// contract can't be resolved (`Ty::Unknown`). Used for the `Raises:`
+/// contract can't be resolved. Used for the `Raises:`
 /// docstring block (32d).
 fn resolve_throws<'db>(
     db: &'db ProjectDatabase,
@@ -657,7 +657,7 @@ fn resolve_throws<'db>(
     recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
 ) -> Option<cg::Ty> {
     match &baml_compiler2_hir_ty::callable::callable_throws(db, func_loc).0 {
-        TirTy::Never { .. } | TirTy::Unknown { .. } => None,
+        TirTy::Never { .. } => None,
         ty => Some(convert_tir_to_codegen_ty(ty, alias_map, recursive_aliases)),
     }
 }
@@ -754,7 +754,7 @@ fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
         // These are compiler recovery/inference states, not public API types.
         // Diagnostics have already been emitted; retain the historical opaque
         // fallback so code generation remains total in error-tolerant flows.
-        TirTy::AssociatedTypeProjection { .. } | TirTy::Unknown { .. } | TirTy::Error { .. } => {
+        TirTy::AssociatedTypeProjection { .. } | TirTy::Error { .. } => {
             cg::Ty::BuiltinUnknown { attr: attr() }
         }
         TirTy::Infer { .. } => cg::Ty::Void { attr: attr() },

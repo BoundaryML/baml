@@ -687,7 +687,7 @@ pub(crate) fn check_throws_wildcard(
 /// is applied to (a signature parameter/return, a field, an alias, a generic
 /// bound): there is nothing local to infer a hole from there, so every
 /// occurrence is reported AND rewritten to [`TypeExprKind::Error`]. It then
-/// lowers to the error-recovery `Ty::Unknown` sentinel rather than a `Ty::Infer`
+/// lowers to the error-recovery `Ty::Error` sentinel rather than a `Ty::Infer`
 /// — which would otherwise reach type normalization, where an inference hole has
 /// no sound form (see `baml_type::normalize`).
 ///

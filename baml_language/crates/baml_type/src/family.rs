@@ -295,12 +295,10 @@ ty_family! {
 
         // --- TIR-only: present during type checking, erased at the runtime
         // boundary (`lower_to_runtime`). Carried only by `Ty` (the `tir` axis).
-        /// Error-recovery sentinel: the type is structurally unknown (e.g. an
-        /// unresolved name). Distinct from `BuiltinUnknown` (a well-formed top type).
-        #[axis(tir)]
-        Unknown {
-            attr: TyAttr,
-        } = 29,
+        // reserved: 29 was `Unknown`, the TIR-era second error-recovery
+        // sentinel. The inference engine has exactly one (`Error`); TIR's other
+        // uses of `Unknown` are an absent expectation and a fresh inference
+        // variable, neither of which is a type.
         /// Error sentinel: a hard type error was emitted for this expression.
         #[axis(tir)]
         Error {
@@ -433,10 +431,10 @@ mod tests {
         assert_eq!(Ty::from(&ct), t);
 
         // Narrowing still rejects by name at a nested depth.
-        let bad: Interned = Ty::List(Box::new(Ty::Unknown { attr: a() }), a());
+        let bad: Interned = Ty::List(Box::new(Ty::Error { attr: a() }), a());
         assert_eq!(
             RuntimeTy::<u32>::try_from(&bad),
-            Err(NotRuntimeTy { variant: "Unknown" })
+            Err(NotRuntimeTy { variant: "Error" })
         );
 
         // And the wire format round-trips over the substituted head.
@@ -829,27 +827,27 @@ mod tests {
             Err(NotRealizedTy { variant: "TypeVar" })
         );
 
-        // A `tir`-only `Unknown` buried in a map value: not even a `RuntimeTy`.
+        // A `tir`-only `Error` buried in a map value: not even a `RuntimeTy`.
         let bad = Ty::Map {
             key: Box::new(Ty::String { attr: a() }),
-            value: Box::new(Ty::List(Box::new(Ty::Unknown { attr: a() }), a())),
+            value: Box::new(Ty::List(Box::new(Ty::Error { attr: a() }), a())),
             attr: a(),
         };
         assert_eq!(
             <&RuntimeTy>::try_from(&bad),
-            Err(NotRuntimeTy { variant: "Unknown" })
+            Err(NotRuntimeTy { variant: "Error" })
         );
         assert_eq!(
             <&CodegenTy>::try_from(&bad),
-            Err(NotCodegenTy { variant: "Unknown" })
+            Err(NotCodegenTy { variant: "Error" })
         );
         assert_eq!(
             <&RealizedTy>::try_from(&bad),
-            Err(NotRealizedTy { variant: "Unknown" })
+            Err(NotRealizedTy { variant: "Error" })
         );
         assert_eq!(
             RuntimeTy::try_from(bad),
-            Err(NotRuntimeTy { variant: "Unknown" })
+            Err(NotRuntimeTy { variant: "Error" })
         );
     }
 }

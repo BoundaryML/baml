@@ -2050,12 +2050,22 @@ impl<'db> LoweringContext<'db> {
         self.lower_expr(collection, Place::local(coll_local));
 
         let (iterable_tn, iterable_args, iterable_assoc) = iterable_view;
-        let item_tir_ty =
-            Self::associated_binding_ty(&iterable_assoc, "Item").unwrap_or_else(|| {
-                Tir2Ty::Unknown {
-                    attr: TyAttr::default(),
-                }
-            });
+        // A bare `Iterable` view pins nothing — iterating a `T extends Iterable`
+        // or an unpinned existential reaches here with an empty binding list.
+        // The top type is a sound supertype for the element, and it is what this
+        // path already produced (the old `Unknown` sentinel was laundered to
+        // `BuiltinUnknown` by `erase_compiler_only_ty`), so spelling it directly
+        // keeps behavior identical while removing the sentinel.
+        //
+        // BUG: the faithful element type is the symbolic projection
+        // `(collection as Iterable).Item`, which `RuntimeTy` carries and the
+        // runtime can resolve from the receiver. Erasing to `unknown` throws
+        // that away; fix alongside the `erase_compiler_only_ty` cleanup.
+        let item_tir_ty = Self::associated_binding_ty(&iterable_assoc, "Item").unwrap_or(
+            Tir2Ty::BuiltinUnknown {
+                attr: TyAttr::default(),
+            },
+        );
         let elem_ty = self.convert_tir_ty_for_runtime(&item_tir_ty);
 
         let iterator_tn = Self::baml_iter_type_name("Iterator");
@@ -2879,7 +2889,7 @@ impl<'db> LoweringContext<'db> {
 
     fn erase_compiler_only_ty(ty: Tir2Ty) -> Tir2Ty {
         match ty {
-            Tir2Ty::Unknown { attr } | Tir2Ty::Error { attr } => Tir2Ty::BuiltinUnknown { attr },
+            Tir2Ty::Error { attr } => Tir2Ty::BuiltinUnknown { attr },
             Tir2Ty::TypeVar(param, attr) if baml_type::is_synthetic_effect_param(param.name()) => {
                 Tir2Ty::BuiltinUnknown { attr }
             }
@@ -2963,7 +2973,7 @@ impl<'db> LoweringContext<'db> {
     /// a runtime type. In a method signature `Self` is the receiver type
     /// variable and `Self.Assoc` is an associated-type projection onto it. A bare
     /// `lower_type_expr_in_ns` has neither in scope and would erase both to
-    /// `Ty::Unknown`, tripping the runtime lowering boundary — so bind `Self` to
+    /// `Ty::Error`, tripping the runtime lowering boundary — so bind `Self` to
     /// its rigid type variable through the `self_ty` channel, which roots both a
     /// bare `Self` and each `Self.Assoc` projection at it.
     fn lower_signature_runtime_ty(
@@ -8104,22 +8114,17 @@ impl<'db> LoweringContext<'db> {
         if !is_sugar_callee(&callee_expr, "to_string") {
             return false;
         }
-        // Fires only when TIR left the callee *untyped* (`Unknown`/`Error`) — no
+        // Fires only when the checker left the callee *untyped* (`Error`) — no
         // real `to_string` method resolved. A real implementor (any `baml.ToString`
         // / interface impl) types the callee as a method and is dispatched by the
         // normal paths. Key on the callee's TIR type, not on resolution presence: a
         // generic typevar receiver records a placeholder resolution yet still has an
         // untyped callee, and must take the fallback rather than ICE on it.
-        // A nullable receiver types the missing member as `Unknown | null`, so test
+        // A nullable receiver types the missing member as `Error | null`, so test
         // the non-null part (matches the TIR fallback gate).
         let callee_untyped = self
             .tir_expr_type(self.expr_metadata_key(callee))
-            .is_none_or(|t| {
-                matches!(
-                    t.remove_null(),
-                    Tir2Ty::Unknown { .. } | Tir2Ty::Error { .. }
-                )
-            });
+            .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
         if !callee_untyped {
             return false;
         }
@@ -8135,7 +8140,7 @@ impl<'db> LoweringContext<'db> {
                 // handling: a single-segment root may be a local OR a closure
                 // capture; a multi-segment receiver is a field chain off either.
                 // (Can't reuse `lower_path_receiver_to_local`: it assumes a local
-                // root and `expr_ty(callee)` would ICE on the Unknown callee.)
+                // root and `expr_ty(callee)` would ICE on the untyped callee.)
                 let recv_op = if receiver_segments.len() == 1 {
                     let Some(place) = self.place_for_path(callee, &receiver_segments[0]) else {
                         return false;
@@ -8179,18 +8184,18 @@ impl<'db> LoweringContext<'db> {
         let caller_generic_params = self.enclosing_generic_params();
         let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
             Some(t)
-                if !matches!(t, Tir2Ty::Unknown { .. })
-                    && !baml_type_runtime::contains_typevar_where(t, &|name| {
-                        !caller_generic_params.iter().any(|p| p == name)
-                    }) =>
+                if !baml_type_runtime::contains_typevar_where(t, &|name| {
+                    !caller_generic_params.iter().any(|p| p == name)
+                }) =>
             {
-                // An `Unknown`/`Error` sentinel ANYWHERE in the receiver type is
+                // An `Error` sentinel ANYWHERE in the receiver type is
                 // not lowerable — `ty_to_template` ICEs on it rather than
                 // degrading — so erase the whole type to `unknown`, its only
                 // sound static erasure. A `catch`/`catch_all` binder reaches here
                 // that way: its type is the union of the base expression's throw
-                // facts, and an unaccounted callee contributes an `Unknown` fact
-                // by design, so `e` is legitimately typed `SomeError | Unknown`.
+                // facts, and an unaccounted callee contributes the top type
+                // `unknown` by design, so `e` is legitimately typed
+                // `SomeError | unknown`.
                 // Erase rather than drop to ntypeargs=0 — these generic shims
                 // bind `T` in a frame slot their own bodies read, so a
                 // zero-type-arg call traps in the VM.
@@ -8275,12 +8280,7 @@ impl<'db> LoweringContext<'db> {
         // Fires only when TIR left the callee untyped (no real `to_json` method).
         let callee_untyped = self
             .tir_expr_type(self.expr_metadata_key(callee))
-            .is_none_or(|t| {
-                matches!(
-                    t.remove_null(),
-                    Tir2Ty::Unknown { .. } | Tir2Ty::Error { .. }
-                )
-            });
+            .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
         if !callee_untyped {
             return false;
         }
@@ -8333,18 +8333,18 @@ impl<'db> LoweringContext<'db> {
         let caller_generic_params = self.enclosing_generic_params();
         let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
             Some(t)
-                if !matches!(t, Tir2Ty::Unknown { .. })
-                    && !baml_type_runtime::contains_typevar_where(t, &|name| {
-                        !caller_generic_params.iter().any(|p| p == name)
-                    }) =>
+                if !baml_type_runtime::contains_typevar_where(t, &|name| {
+                    !caller_generic_params.iter().any(|p| p == name)
+                }) =>
             {
-                // An `Unknown`/`Error` sentinel ANYWHERE in the receiver type is
+                // An `Error` sentinel ANYWHERE in the receiver type is
                 // not lowerable — `ty_to_template` ICEs on it rather than
                 // degrading — so erase the whole type to `unknown`, its only
                 // sound static erasure. A `catch`/`catch_all` binder reaches here
                 // that way: its type is the union of the base expression's throw
-                // facts, and an unaccounted callee contributes an `Unknown` fact
-                // by design, so `e` is legitimately typed `SomeError | Unknown`.
+                // facts, and an unaccounted callee contributes the top type
+                // `unknown` by design, so `e` is legitimately typed
+                // `SomeError | unknown`.
                 // Erase rather than drop to ntypeargs=0 — these generic shims
                 // bind `T` in a frame slot their own bodies read, so a
                 // zero-type-arg call traps in the VM.
@@ -8439,12 +8439,7 @@ impl<'db> LoweringContext<'db> {
         }
         let callee_untyped = self
             .tir_expr_type(self.expr_metadata_key(callee))
-            .is_none_or(|t| {
-                matches!(
-                    t.remove_null(),
-                    Tir2Ty::Unknown { .. } | Tir2Ty::Error { .. }
-                )
-            });
+            .is_none_or(|t| matches!(t.remove_null(), Tir2Ty::Error { .. }));
         if !callee_untyped {
             return false;
         }
@@ -8458,18 +8453,18 @@ impl<'db> LoweringContext<'db> {
         let caller_generic_params = self.enclosing_generic_params();
         let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
             Some(t)
-                if !matches!(t, Tir2Ty::Unknown { .. })
-                    && !baml_type_runtime::contains_typevar_where(t, &|name| {
-                        !caller_generic_params.iter().any(|p| p == name)
-                    }) =>
+                if !baml_type_runtime::contains_typevar_where(t, &|name| {
+                    !caller_generic_params.iter().any(|p| p == name)
+                }) =>
             {
-                // An `Unknown`/`Error` sentinel ANYWHERE in the receiver type is
+                // An `Error` sentinel ANYWHERE in the receiver type is
                 // not lowerable — `ty_to_template` ICEs on it rather than
                 // degrading — so erase the whole type to `unknown`, its only
                 // sound static erasure. A `catch`/`catch_all` binder reaches here
                 // that way: its type is the union of the base expression's throw
-                // facts, and an unaccounted callee contributes an `Unknown` fact
-                // by design, so `e` is legitimately typed `SomeError | Unknown`.
+                // facts, and an unaccounted callee contributes the top type
+                // `unknown` by design, so `e` is legitimately typed
+                // `SomeError | unknown`.
                 // Erase rather than drop to ntypeargs=0 — these generic shims
                 // bind `T` in a frame slot their own bodies read, so a
                 // zero-type-arg call traps in the VM.
@@ -9158,10 +9153,7 @@ impl<'db> LoweringContext<'db> {
                         self.binding_id_for_path(*base, &segments[0]).is_some()
                             || self.path_root_is_top_level_let(*base, &segments[0])
                     }
-                    _ => self
-                        .tir_expr_type(self.expr_metadata_key(*base))
-                        .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
-                        .unwrap_or(false),
+                    _ => self.tir_expr_type(self.expr_metadata_key(*base)).is_some(),
                 };
                 // Check if the resolved method expects a `self` receiver.
                 // Static methods (e.g. ParseCache.new) have no `self` param
@@ -11318,26 +11310,6 @@ impl<'db> LoweringContext<'db> {
             return;
         }
 
-        // Check if this is a package path intermediate (e.g. `baml.HttpMethod` in
-        // `baml.HttpMethod.Get`). TIR marks these as RuntimeTy::Unknown. Emit null placeholder.
-        // CRITICAL: only treat the expression as a namespace intermediate if the BASE
-        // is also Unknown (i.e. `baml` in `baml.HttpMethod`). If the base has a
-        // concrete type, this is a real field access whose field type happens to be
-        // Unknown (unresolved type annotation). In that case, fall through to emit
-        // the field projection.
-        if let Some(Tir2Ty::Unknown { .. }) = self.tir_expr_type(self.expr_metadata_key(expr_id)) {
-            let base_is_also_unknown = self
-                .tir_expr_type(self.expr_metadata_key(base))
-                .map(|ty| matches!(ty, Tir2Ty::Unknown { .. }))
-                .unwrap_or(true);
-            if base_is_also_unknown {
-                self.builder
-                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-                return;
-            }
-            // Base is a real value (non-Unknown type) — fall through to field projection
-        }
-
         // Regular field access
         let base_ty = self.expr_ty(base);
         let base_op = self.lower_to_operand(base);
@@ -12541,7 +12513,7 @@ impl<'db> LoweringContext<'db> {
         }
         // The root view is the request itself, verbatim; only the
         // `requires` EXPANSION goes through hir_ty's realized closure.
-        // A TIR-internal `Unknown` sentinel in an argument
+        // An `Error` sentinel in an argument
         // cannot intern - it degrades to the error
         // sentinel FOR THE WALK, while the root view keeps the plain
         // originals.

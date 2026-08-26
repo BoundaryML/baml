@@ -318,7 +318,6 @@ pub fn var_under_union(param: &ParamTy, ty: &Ty) -> bool {
             | Ty::TypeAlias(..)
             | Ty::BuiltinUnknown { .. }
             | Ty::Never { .. }
-            | Ty::Unknown { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. } => false,
         }
@@ -570,9 +569,7 @@ fn unify_into_at(
     // variable (below), and is otherwise a distinct atomic type compared by
     // equality — `Box<unknown>` is disjoint from `Box<int>`, exactly how the
     // runtime resolver matches it.
-    if matches!(x, Ty::Unknown { .. } | Ty::Error { .. })
-        || matches!(y, Ty::Unknown { .. } | Ty::Error { .. })
-    {
+    if matches!(x, Ty::Error { .. }) || matches!(y, Ty::Error { .. }) {
         return Overlap::No;
     }
 
@@ -749,7 +746,6 @@ fn unify_into_at(
             | Ty::TypeVar(..)
             | Ty::BuiltinUnknown { .. }
             | Ty::Never { .. }
-            | Ty::Unknown { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. },
             _,
@@ -1349,7 +1345,6 @@ fn occurs_in(n: &ParamTy, t: &Ty, vars: &[ParamTy], bindings: &TypeBindings) -> 
         | Ty::TypeAlias(..)
         | Ty::BuiltinUnknown { .. }
         | Ty::Never { .. }
-        | Ty::Unknown { .. }
         | Ty::Error { .. }
         | Ty::Infer { .. } => false,
     }

@@ -202,11 +202,11 @@ mod tests {
     }
 
     #[test]
-    fn nested_unknown_in_list_blocks_conversion() {
-        let ty: Ty = Ty::List(Box::new(Ty::Unknown { attr: def() }), def());
+    fn nested_infer_in_list_blocks_conversion() {
+        let ty: Ty = Ty::List(Box::new(Ty::Infer { attr: def() }), def());
         assert_eq!(
             RealizedTy::try_from(&ty),
-            Err(NotRealizedTy { variant: "Unknown" })
+            Err(NotRealizedTy { variant: "Infer" })
         );
     }
 

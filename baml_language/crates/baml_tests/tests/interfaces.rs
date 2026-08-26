@@ -3931,7 +3931,7 @@ fn implements_for_unknown_target_is_rejected() {
     // The user-facing top type `unknown` denotes "any type" — it has no single
     // concrete implementor for dispatch to recover, so it is rejected like a
     // union/optional/interface (E0138). `unknown` lowers to `Ty::BuiltinUnknown`,
-    // which is distinct from the `Ty::Unknown` error-recovery sentinel, so the
+    // which is distinct from the `Ty::Error` error-recovery sentinel, so the
     // gate must list it explicitly.
     assert_compile_error_code(
         r#"
@@ -4670,7 +4670,7 @@ fn shared_var_across_interface_arg_and_for_type_overlaps_e0132() {
 
 // Two impls whose for-types fail to resolve must not additionally report an
 // overlap — the unresolved-type errors are the only relevant diagnostics. (An
-// unresolved for-type lowers to `Ty::Unknown`, which must never unify.)
+// unresolved for-type lowers to `Ty::Error`, which must never unify.)
 //
 // Asserts both halves so the test can't pass vacuously: the unresolved-type
 // diagnostics (one E0002 per bad target) must be present, and the overlap

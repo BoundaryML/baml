@@ -369,8 +369,8 @@ impl PpirTy {
                 // this materializes a synthesized `$stream` class field it must
                 // be a *valid* runtime type — a non-streamable field is just
                 // opaque during streaming — so reconstruct it as the `unknown`
-                // type rather than the error-recovery `Unknown` sentinel, which
-                // would trip the runtime lowering boundary (`Ty::Unknown` has no
+                // type rather than the error-recovery `Error` sentinel, which
+                // would trip the runtime lowering boundary (`Ty::Error` has no
                 // `RuntimeTy`).
                 CannotBeStreamedOrigin::Unknown => TypeExprKind::BuiltinUnknown { attrs: vec![] },
             },

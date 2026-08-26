@@ -196,7 +196,7 @@ pub(crate) fn lower_generic_param_interface_bounds<'db>(
                 });
             }
             // Already diagnosed by lowering the bound expression itself.
-            Ty::Unknown { .. } | Ty::Error { .. } | Ty::BuiltinUnknown { .. } => {}
+            Ty::Error { .. } | Ty::BuiltinUnknown { .. } => {}
             // BEP-044 requires bounds to be interfaces (E0142).
             other => diags.push(TirTypeError::GenericBoundNotInterface { bound: other }),
         }
@@ -1689,7 +1689,6 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<Name>) {
         | Ty::Void { .. }
         | Ty::BuiltinUnknown { .. }
         | Ty::Never { .. }
-        | Ty::Unknown { .. }
         | Ty::Error { .. }
         | Ty::Infer { .. } => {}
     }

@@ -167,7 +167,6 @@ impl StubViewpoint<'_> {
             | Ty::TypeVar(..)
             | Ty::BuiltinUnknown { .. }
             | Ty::Never { .. }
-            | Ty::Unknown { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. } => false,
         }

@@ -31,11 +31,11 @@ use baml_base::Literal;
 use baml_type::{PrimitiveType, QualifiedTypeName, Ty, TyAttr};
 use rustc_hash::FxHashSet;
 
-/// Does `ty` carry an error-recovery sentinel (`Ty::Error` or `Ty::Unknown`)
+/// Does `ty` carry an error-recovery sentinel (`Ty::Error`)
 /// anywhere in its structure? Inlined from TIR's `generics.rs` - the one
 /// crate-internal dependency the lifted algorithm had.
 fn contains_error_recovery(ty: &Ty) -> bool {
-    if matches!(ty, Ty::Error { .. } | Ty::Unknown { .. }) {
+    if matches!(ty, Ty::Error { .. }) {
         return true;
     }
     match ty {
@@ -417,7 +417,6 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
         Ty::Never { .. } => out.push_str("Never"),
         Ty::Void { .. } => out.push_str("Void"),
         Ty::BuiltinUnknown { .. } => out.push_str("BUnk"),
-        Ty::Unknown { .. } => out.push_str("Unk"),
         Ty::Error { .. } => out.push_str("Err"),
         Ty::Infer { .. } => out.push_str("Inf"),
         Ty::RustType { .. } => out.push_str("Rust"),

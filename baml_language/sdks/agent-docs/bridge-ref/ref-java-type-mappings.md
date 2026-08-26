@@ -193,7 +193,6 @@ nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wi
 | (no TIR row in Python) | `Ty::Interface` | interface type | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
 | (no TIR row in Python) | `Ty::Resource` | resource type | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
 | (no TIR row in Python) | `Ty::PromptAst` | prompt-AST type | `java.lang.Object` | (same) | `null` (wire-driven) | :157–162 |
-| `Ty::Unknown { … }` | no CodegenTy variant | error recovery sentinel | never reaches codegen | — | — | n/a |
 | `Ty::Error { … }` | no CodegenTy variant | hard error sentinel | never reaches codegen | — | — | n/a |
 
 Per-row deviation flags:
@@ -227,9 +226,8 @@ Per-row deviation flags:
 > `Ty::PromptAst`, all fall back to `java.lang.Object` (translate_ty.rs:147, :157–162; descriptor
 > `unknown`, lib.rs:401–407). Python drops `Type`/`Never`/`Future` as **unreachable / n/a** for a
 > Python type; Java gives them an explicit `Object` fallback so surrounding generated code still
-> compiles (the same stance as Python's `typing.Any` / TS's `unknown`). `Ty::Unknown` /
-> `Ty::Error` have **no CodegenTy variant at all** in Java, matching Python's "never reaches
-> codegen".
+> compiles (the same stance as Python's `typing.Any` / TS's `unknown`). `Ty::Error` has
+> **no CodegenTy variant at all** in Java, matching Python's "never reaches codegen".
 
 > ⚠ **Deviation from Python (options plumbing):** Python has a codegen `Ty::BamlOptions` →
 > `baml.Options`. Java has no such Ty; per-call options ride the AWS-SDK-v2-style **trailing

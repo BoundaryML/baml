@@ -350,14 +350,6 @@ fn collect(
             if !opts.allow_typevar_actuals && matches!(actual_ty, Ty::TypeVar(_, _)) {
                 return;
             }
-            // An `Unknown` actual carries NO information: binding it (or
-            // unioning it into an existing binding) only poisons the result —
-            // e.g. an expected return of `SpawnParams<unknown, unknown>`
-            // driving phase-0 must not turn a param-bound `T = int` into
-            // `int | unknown`.
-            if matches!(actual_ty, Ty::Unknown { .. }) {
-                return;
-            }
             vars.entry(name.clone())
                 .or_default()
                 .push((variance, actual_ty.clone()));
@@ -729,13 +721,13 @@ pub fn contains_typevar(ty: &Ty) -> bool {
     contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(_, _)))
 }
 
-/// Does `ty` carry an error-recovery sentinel (`Ty::Error` or `Ty::Unknown`)
+/// Does `ty` carry an error-recovery sentinel (`Ty::Error`)
 /// anywhere in its structure? An expression recorded with such a type already
 /// failed to compile at its own site; downstream consumers (e.g. call-site
 /// generic inference) use this to recognize an already-failed input and avoid
 /// cascading a second diagnostic off it.
 pub fn contains_error_recovery(ty: &Ty) -> bool {
-    contains_ty_where(ty, &|t| matches!(t, Ty::Error { .. } | Ty::Unknown { .. }))
+    contains_ty_where(ty, &|t| matches!(t, Ty::Error { .. }))
 }
 
 /// Returns `true` if `ty` contains any type variable for which `pred` returns

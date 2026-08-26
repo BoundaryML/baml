@@ -209,8 +209,9 @@ fn pattern_atom_meet(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Over
     match (pat, member) {
         // Error sentinels overlap nothing (mirrors `unify_into`): the type already
         // carries its own diagnostic, and callers suppress cascading reports.
-        (Ty::Unknown { .. } | Ty::Error { .. } | Ty::Infer { .. }, _)
-        | (_, Ty::Unknown { .. } | Ty::Error { .. } | Ty::Infer { .. }) => Overlap::No,
+        (Ty::Error { .. } | Ty::Infer { .. }, _) | (_, Ty::Error { .. } | Ty::Infer { .. }) => {
+            Overlap::No
+        }
         // `unknown` is the top type: it shares values with every inhabited type
         // (`never` was rejected before unification).
         (Ty::BuiltinUnknown { .. }, _) | (_, Ty::BuiltinUnknown { .. }) => Overlap::Yes,

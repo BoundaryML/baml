@@ -326,7 +326,7 @@ pub fn normalized_arg_implements_bound(
     bound: &baml_type::Interface,
 ) -> bool {
     let carried_bounds = match arg {
-        Ty::Unknown { .. } | Ty::Error { .. } => return true,
+        Ty::Error { .. } => return true,
         Ty::TypeVar(name, _) => ctx.type_var_bound(name),
         Ty::AssociatedTypeProjection {
             interface, member, ..
@@ -1716,10 +1716,7 @@ fn check_head_args(
             let admissible = arg.is_concrete()
                 || matches!(
                     arg,
-                    Ty::TypeVar(..)
-                        | Ty::AssociatedTypeProjection { .. }
-                        | Ty::Unknown { .. }
-                        | Ty::Error { .. }
+                    Ty::TypeVar(..) | Ty::AssociatedTypeProjection { .. } | Ty::Error { .. }
                 );
             if !admissible {
                 errors.push(TirTypeError::BoundedTypeArgNotConcrete {
@@ -1817,7 +1814,7 @@ pub enum Determination {
 fn projection_poisoned(ty: &Ty) -> bool {
     matches!(
         ty,
-        Ty::Error { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Infer { .. }
+        Ty::Error { .. } | Ty::BuiltinUnknown { .. } | Ty::Infer { .. }
     )
 }
 
@@ -2067,9 +2064,7 @@ fn determine_interface<'db>(
                 },
             }
         }
-        Ty::Error { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Infer { .. } => {
-            Determination::Poisoned
-        }
+        Ty::Error { .. } | Ty::BuiltinUnknown { .. } | Ty::Infer { .. } => Determination::Poisoned,
         Ty::TypeAlias(..) => Determination::Poisoned,
         _ => match explicit {
             Some(qualifier) => Determination::SubjectDoesNotImplementQualifier {

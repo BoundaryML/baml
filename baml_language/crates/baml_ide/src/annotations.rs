@@ -331,12 +331,12 @@ fn process_body(
 ///
 /// We suppress:
 /// - `Ty::Error` — type-check error, nothing useful to show
-/// - `Ty::BuiltinUnknown` / `Ty::Unknown` — no useful info
+/// - `Ty::BuiltinUnknown` — no useful info
 /// - `Ty::Never` — unreachable / error types
 fn should_suppress_type(ty: &Ty) -> bool {
     matches!(
         ty,
-        Ty::Error { .. } | Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } | Ty::Never { .. }
+        Ty::Error { .. } | Ty::BuiltinUnknown { .. } | Ty::Never { .. }
     )
 }
 

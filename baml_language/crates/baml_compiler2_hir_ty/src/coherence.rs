@@ -453,9 +453,7 @@ fn unify_into_at(
     // stack a spurious overlap. The inhabited top type `unknown`
     // (BuiltinUnknown) is deliberately NOT bailed: it binds an opposing
     // variable and is otherwise a distinct atomic type under invariance.
-    if matches!(x, Ty::Unknown { .. } | Ty::Error { .. })
-        || matches!(y, Ty::Unknown { .. } | Ty::Error { .. })
-    {
+    if matches!(x, Ty::Error { .. }) || matches!(y, Ty::Error { .. }) {
         return Overlap::No;
     }
 
