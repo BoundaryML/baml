@@ -91,6 +91,11 @@ pub struct Class {
 #[derive(Clone, Debug)]
 pub struct OutputFormatContent {
     pub enums: IndexMap<String, Enum>,
+    /// Hoist-render ordering: enum names in LAST-REFERENCE order (a
+    /// re-reference during the schema walk moves the name to the end).
+    /// Kept separate from `enums` so the map itself stays in DECLARATION
+    /// order for collision validation and stable error reporting.
+    pub enum_reference_order: Vec<String>,
     pub classes: IndexMap<String, Class>,
     pub target: ::sys_types::SapTy,
     pub recursive_classes: indexmap::IndexSet<String>,
@@ -104,6 +109,7 @@ impl OutputFormatContent {
     pub fn new(target: ::sys_types::SapTy) -> Self {
         Self {
             enums: IndexMap::new(),
+            enum_reference_order: Vec::new(),
             classes: IndexMap::new(),
             target,
             recursive_classes: indexmap::IndexSet::new(),
@@ -115,6 +121,9 @@ impl OutputFormatContent {
     /// Add an enum definition.
     #[must_use]
     pub fn with_enum(mut self, enm: Enum) -> Self {
+        if !self.enums.contains_key(&enm.name) {
+            self.enum_reference_order.push(enm.name.clone());
+        }
         self.enums.insert(enm.name.clone(), enm);
         self
     }
@@ -349,7 +358,10 @@ impl OutputFormatContent {
         let has_docs =
             |docs: &Option<String>| docs.as_deref().is_some_and(|docs| !docs.trim().is_empty());
         // Reverse of the walk's last-reference order (legacy renderer parity).
-        for (name, enm) in self.enums.iter().rev() {
+        for name in self.enum_reference_order.iter().rev() {
+            let Some(enm) = self.enums.get(name) else {
+                continue;
+            };
             if enm.values.len() > Self::INLINE_RENDER_ENUM_MAX_VALUES
                 || has_docs(&enm.description)
                 || has_docs(&enm.docstring)
@@ -1296,8 +1308,9 @@ fn walk_ty(
                 // end of the collection order; hoisted definitions are then
                 // emitted in REVERSE of that (last-referenced first).
                 let display = type_name.display_name().to_string();
-                if let Some(entry) = content.enums.shift_remove(&display) {
-                    content.enums.insert(display, entry);
+                if content.enums.contains_key(&display) {
+                    content.enum_reference_order.retain(|n| n != &display);
+                    content.enum_reference_order.push(display);
                 }
                 return Ok(());
             }
@@ -1315,6 +1328,9 @@ fn walk_ty(
                     })
                     .collect();
 
+                if !content.enums.contains_key(&output_name) {
+                    content.enum_reference_order.push(output_name.clone());
+                }
                 content.enums.insert(
                     output_name.clone(),
                     self::Enum {
@@ -2326,6 +2342,57 @@ mod tests {
                 })
                 .collect(),
         }
+    }
+
+    #[test]
+    fn re_referenced_enum_keeps_declaration_order_collision_reporting() {
+        // `Choice` is declared first but re-referenced LAST in the walk
+        // (Union[Choice, Choice_2, Choice]); the re-reference moves it to
+        // the end of the hoist-render order. Collision validation must
+        // still report declaration order: first == Choice.
+        let first = dynamic_key("Choice");
+        let second = dynamic_key("Choice_2");
+        let target = RuntimeTy::Union(
+            vec![
+                RuntimeTy::Enum(first.clone(), TyAttr::default()),
+                RuntimeTy::Enum(second.clone(), TyAttr::default()),
+                RuntimeTy::Enum(first.clone(), TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        let definition = |name: &str| sys_types::EnumDefinition {
+            name: name.to_string(),
+            docstring: None,
+            description: None,
+            alias: Some("SharedChoice".to_string()),
+            variants: vec![sys_types::EnumVariantDefinition {
+                name: "Value".to_string(),
+                docstring: None,
+                description: None,
+                alias: None,
+            }],
+        };
+        let mut enums = indexmap::IndexMap::new();
+        enums.insert(first, definition("Choice"));
+        enums.insert(second, definition("Choice_2"));
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.enum_definitions = Arc::new(enums);
+
+        let content = build_output_format_content(&target, &ctx);
+        let error = content
+            .render(&RenderOptions {
+                always_hoist_enums: RenderSetting::Always(true),
+                ..RenderOptions::default()
+            })
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedEnumNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
+        ));
     }
 
     #[test]
