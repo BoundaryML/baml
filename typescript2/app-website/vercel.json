@@ -4,7 +4,7 @@
   "git": {
     "deploymentEnabled": {
       "**": false,
-      "dhilan/website-v1": true
+      "canary": true
     }
   },
   "installCommand": "bash scripts/vercel-install.sh"
