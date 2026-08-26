@@ -6,7 +6,7 @@
 class ModelTurnInput {
     // The bound prompt template. The client supplies the output-format schema
     // handle and receives one structural prompt.
-    prompt: (OutputFormat) -> Prompt throws never,
+    prompt: (OutputFormat) -> Prompt throws root.errors.PromptRenderError,
     journal: Journal,
     toolbox: root.tools.Toolbox,
     output_type: reflect.Type,
