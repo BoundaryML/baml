@@ -6129,8 +6129,8 @@ impl<'db> InferenceContext<'db> {
     /// The `default` receiver's meaning inside an `implements` block:
     /// the block's target interface (its written args and associated
     /// bindings lowered in the owner's frame) plus the IMPLEMENTOR as
-    /// `Self` - the class's self type, or a free impl's for-target.
-    /// `None` anywhere else; the caller falls back to ordinary
+    /// `Self`, off the uniform [`impl_self_ty`](crate::lower::impl_self_ty)
+    /// surface. `None` anywhere else; the caller falls back to ordinary
     /// resolution.
     fn default_receiver_target(&mut self) -> Option<(InterfaceRef, Ty)> {
         let function = self.body_owner?;
@@ -6145,20 +6145,12 @@ impl<'db> InferenceContext<'db> {
             return None;
         };
         let self_ty = match baml_compiler2_ppir::item_data::method_owner(self.db, function) {
-            Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class)) => {
-                crate::lower::class_self_ty(self.db, class)
-            }
             Some(baml_compiler2_ppir::item_data::MethodOwner::Impl(impl_loc)) => {
-                let data = baml_compiler2_ppir::item_data::impl_block_data(self.db, impl_loc);
-                match &data.subject {
-                    baml_compiler2_ppir::item_data::ImplSubjectData::Free {
-                        for_target, ..
-                    } => self.lower.lower_type_ref(&data.type_refs, *for_target),
-                    baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
-                        crate::lower::class_self_ty(self.db, *class)
-                    }
-                }
+                crate::lower::impl_self_ty(self.db, impl_loc)
             }
+            // A recorded interface target pairs with an Impl owner —
+            // class-owned methods never carry one, and interface default
+            // bodies have no target.
             _ => return None,
         };
         Some((
