@@ -574,22 +574,20 @@ impl Ty {
         Ty::intern(kind)
     }
 
-    /// Materializes the finalized plain enum's structure.
-    ///
-    /// This is deliberately NOT a diagnostic path: unsolved-variable
-    /// reporting is inference FINALIZE's job — written `_` holes report
-    /// through `hole_vars` (E0147), origin-tracked variables through
-    /// `unsolved_var_diagnostics` (which materializes for its message via
-    /// `infer_to_diagnostic_unknown` and only then calls this), and the
-    /// residue erases to `Error` (`erase_infer`). A live variable reaching
-    /// here takes that same `Error` disposition (see the arm's BUG note);
-    /// it cannot panic, because error recovery keeps failing compiles
-    /// alive and a var can legally survive one.
-    #[deprecated = "a pre-D3 seam: downstream consumers should receive the finalized plain `Ty` \
-                    from inference finalize (the facts layer), never materialize interned state \
-                    themselves; removed when the D3 cutover makes the facts layer plain-native"]
-    pub fn to_plain(&self) -> crate::Ty {
-        let plain_all = |tys: &[Ty]| -> Box<[crate::Ty]> { tys.iter().map(Ty::to_plain).collect() };
+    /// Whether every node in this tree is free of live inference
+    /// variables — the [`ClosedTy`] invariant, answered in O(1) by the
+    /// cached flags.
+    pub fn is_closed(&self) -> bool {
+        !self.has_infer()
+    }
+
+    /// The walk behind [`ClosedTy::to_plain`]. PRIVATE: only the checked
+    /// newtype can start it, so an unproven (possibly open) `Ty` can never
+    /// reach the conversion; recursion stays on raw children because the
+    /// pool's flags are subtree unions — a closed root has no open child.
+    fn to_plain_closed(&self) -> crate::Ty {
+        let plain_all =
+            |tys: &[Ty]| -> Box<[crate::Ty]> { tys.iter().map(Ty::to_plain_closed).collect() };
         match self.kind() {
             InferTy::Int { attr } => crate::Ty::Int { attr: attr.clone() },
             InferTy::Bigint { attr } => crate::Ty::Bigint { attr: attr.clone() },
@@ -610,7 +608,7 @@ impl Ty {
                 plain_all(args),
                 assoc
                     .iter()
-                    .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                    .map(|(name, ty)| (name.clone(), ty.to_plain_closed()))
                     .collect(),
                 attr.clone(),
             ),
@@ -618,10 +616,12 @@ impl Ty {
             InferTy::EnumVariant(name, variant, attr) => {
                 crate::Ty::EnumVariant(name.clone(), variant.clone(), attr.clone())
             }
-            InferTy::List(inner, attr) => crate::Ty::List(Box::new(inner.to_plain()), attr.clone()),
+            InferTy::List(inner, attr) => {
+                crate::Ty::List(Box::new(inner.to_plain_closed()), attr.clone())
+            }
             InferTy::Map { key, value, attr } => crate::Ty::Map {
-                key: Box::new(key.to_plain()),
-                value: Box::new(value.to_plain()),
+                key: Box::new(key.to_plain_closed()),
+                value: Box::new(value.to_plain_closed()),
                 attr: attr.clone(),
             },
             InferTy::Union(members, attr) => crate::Ty::Union(plain_all(members), attr.clone()),
@@ -635,17 +635,17 @@ impl Ty {
                     .iter()
                     .map(|param| crate::FunctionParamTy {
                         name: param.name.clone(),
-                        ty: param.ty.to_plain(),
+                        ty: param.ty.to_plain_closed(),
                         mode: param.mode,
                     })
                     .collect(),
-                ret: Box::new(ret.to_plain()),
-                throws: Box::new(throws.to_plain()),
+                ret: Box::new(ret.to_plain_closed()),
+                throws: Box::new(throws.to_plain_closed()),
                 attr: attr.clone(),
             },
             InferTy::Future(value, error, attr) => crate::Ty::Future(
-                Box::new(value.to_plain()),
-                Box::new(error.to_plain()),
+                Box::new(value.to_plain_closed()),
+                Box::new(error.to_plain_closed()),
                 attr.clone(),
             ),
             InferTy::RustType { attr } => crate::Ty::RustType { attr: attr.clone() },
@@ -661,14 +661,14 @@ impl Ty {
                 member,
                 attr,
             } => crate::Ty::AssociatedTypeProjection {
-                base: Box::new(base.to_plain()),
+                base: Box::new(base.to_plain_closed()),
                 interface: Box::new(crate::Interface::new(
                     interface.name.clone(),
                     plain_all(&interface.generics),
                     interface
                         .associated_types
                         .iter()
-                        .map(|(name, ty)| (name.clone(), ty.to_plain()))
+                        .map(|(name, ty)| (name.clone(), ty.to_plain_closed()))
                         .collect(),
                 )),
                 member: member.clone(),
@@ -677,16 +677,160 @@ impl Ty {
             InferTy::Unknown { attr } => crate::Ty::Unknown { attr: attr.clone() },
             InferTy::Never { attr } => crate::Ty::Never { attr: attr.clone() },
             InferTy::Error { attr } => crate::Ty::Error { attr: attr.clone() },
-            // BUG: reachable, not unreachable — error recovery does not halt
-            // the pipeline (an `Error` fact keeps a failing compile alive to
-            // collect more diagnostics), so an unsolved variable can legally
-            // survive into a downstream materialization. Until the
-            // unsolved-inference-diagnostics thread makes finalize report
-            // every variable, this takes the same disposition as
-            // `erase_infer`'s residue: the error sentinel. An ICE here would
-            // trade a missing diagnostic for a crash on user input.
-            InferTy::InferVar { attr, .. } => crate::Ty::Error { attr: attr.clone() },
+            // Unreachable BY INVARIANT: `ClosedTy` construction checked the
+            // cached HAS_INFER flag over the whole tree.
+            InferTy::InferVar { .. } => {
+                unreachable!("ClosedTy invariant: no live inference variables")
+            }
         }
+    }
+}
+
+/// An interned type PROVEN free of live inference variables — the only
+/// vocabulary that can leave the interned world.
+///
+/// The interned→plain conversion ([`ClosedTy::to_plain`]) is reachable
+/// through this newtype and nowhere else, so "a live variable never
+/// converts" is a type invariant with checked entry points, not a
+/// call-site discipline. The [`TryFrom`] constructor costs one cached-flag
+/// test; its `Err` forces every boundary that can meet an open type to
+/// pick an explicit disposition — defer (relation oracles), suppress
+/// (exhaustiveness columns), rename-for-rendering (diagnostic payloads),
+/// or dispose (inference finalize, which diagnoses and substitutes the
+/// Error sentinel). An `Error` minted anywhere else would be unsound: its
+/// always-compatible algebra is justified only by an already-emitted
+/// fatal diagnostic, and an erased-but-legal variable has none.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ClosedTy(Ty);
+
+/// The type still contains a live inference variable; the boundary must
+/// defer, suppress, rename, or dispose instead of converting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OpenTy;
+
+impl TryFrom<&Ty> for ClosedTy {
+    type Error = OpenTy;
+
+    fn try_from(ty: &Ty) -> Result<ClosedTy, OpenTy> {
+        if ty.is_closed() {
+            Ok(ClosedTy(ty.clone()))
+        } else {
+            Err(OpenTy)
+        }
+    }
+}
+
+impl TryFrom<Ty> for ClosedTy {
+    type Error = OpenTy;
+
+    fn try_from(ty: Ty) -> Result<ClosedTy, OpenTy> {
+        if ty.is_closed() {
+            Ok(ClosedTy(ty))
+        } else {
+            Err(OpenTy)
+        }
+    }
+}
+
+/// The interface-constraint twin of the [`ClosedTy`] gate: a plain
+/// [`Interface`](crate::Interface) exists for an [`InferInterface`] iff every
+/// carried type is closed. The `Err` forces the boundary to pick a
+/// disposition, exactly like the type-level gate.
+impl TryFrom<&InferInterface> for crate::Interface {
+    type Error = OpenTy;
+
+    fn try_from(reference: &InferInterface) -> Result<crate::Interface, OpenTy> {
+        let closed = |ty: &Ty| ClosedTy::try_from(ty).map(|closed| closed.to_plain());
+        Ok(crate::Interface::new(
+            reference.name.clone(),
+            reference
+                .generics
+                .iter()
+                .map(&closed)
+                .collect::<Result<_, OpenTy>>()?,
+            reference
+                .associated_types
+                .iter()
+                .map(|(name, ty)| Ok((name.clone(), closed(ty)?)))
+                .collect::<Result<_, OpenTy>>()?,
+        ))
+    }
+}
+
+impl PartialEq<Ty> for ClosedTy {
+    fn eq(&self, other: &Ty) -> bool {
+        &self.0 == other
+    }
+}
+
+impl PartialEq<ClosedTy> for Ty {
+    fn eq(&self, other: &ClosedTy) -> bool {
+        self == &other.0
+    }
+}
+
+impl std::ops::Deref for ClosedTy {
+    type Target = Ty;
+
+    fn deref(&self) -> &Ty {
+        &self.0
+    }
+}
+
+impl ClosedTy {
+    /// The underlying handle.
+    pub fn as_ty(&self) -> &Ty {
+        &self.0
+    }
+
+    /// Unwrap the handle. Deliberately available: `Ty` is the general
+    /// vocabulary, so re-opening loses only the proof, never soundness.
+    pub fn into_ty(self) -> Ty {
+        self.0
+    }
+
+    /// Materializes the finalized plain structure — THE interned→plain
+    /// conversion, total by the closed invariant.
+    pub fn to_plain(&self) -> crate::Ty {
+        self.0.to_plain_closed()
+    }
+
+    /// Interning a plain type, TOTAL into the closed world: the finalized
+    /// plain vocabulary has no inference variants, so its image cannot
+    /// carry a variable.
+    pub fn from_plain(ty: &crate::Ty) -> ClosedTy {
+        ClosedTy(Ty::from_plain(ty))
+    }
+
+    /// Crate-internal constructor for values closed BY CONSTRUCTION
+    /// (children of a closed node, plain-derived interning). The single
+    /// home of the subtree argument; the O(1) flag check still guards it
+    /// in debug builds.
+    pub(crate) fn closed_by_construction(ty: Ty) -> ClosedTy {
+        debug_assert!(ty.is_closed(), "closed_by_construction on an open type");
+        ClosedTy(ty)
+    }
+
+    /// Visits each direct child, closed: `HAS_INFER` is a subtree union,
+    /// so every child of a closed node is closed. This pair of walkers is
+    /// where that argument lives — descents stay in the closed world
+    /// without re-proving it per node.
+    pub fn for_each_child(&self, mut f: impl FnMut(&ClosedTy)) {
+        for_each_child(self.0.kind(), |child| {
+            f(&ClosedTy::closed_by_construction(child.clone()));
+        });
+    }
+
+    /// Rebuilds the node with each child mapped through `f`, closed on
+    /// both sides: children are closed (subtree union), and the rebuilt
+    /// node's head is this node's head, which the closed invariant says
+    /// is not a variable.
+    pub fn map_children(&self, mut f: impl FnMut(&ClosedTy) -> ClosedTy) -> ClosedTy {
+        ClosedTy::closed_by_construction(Ty::intern(
+            self.0.kind().map_children(|child| {
+                f(&ClosedTy::closed_by_construction(child.clone())).into_ty()
+            }),
+        ))
     }
 }
 
@@ -847,15 +991,22 @@ mod tests {
     }
 
     #[test]
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn roundtrip_every_variant() {
         for plain in plain_samples() {
-            let roundtripped = Ty::from_plain(&plain).to_plain();
-            assert_eq!(plain, roundtripped);
+            let interned = Ty::from_plain(&plain);
+            let closed = ClosedTy::try_from(&interned).expect("plain input carries no variables");
+            assert_eq!(plain, closed.to_plain());
         }
+    }
+
+    #[test]
+    fn open_type_cannot_close() {
+        // The boundary is the type system: an open tree never reaches the
+        // conversion — the caller must defer, suppress, rename, or dispose.
+        let open = Ty::list(Ty::infer_var(InferVar::new(3)));
+        assert!(!open.is_closed());
+        assert_eq!(ClosedTy::try_from(&open), Err(OpenTy));
+        assert!(ClosedTy::try_from(&Ty::list(Ty::int())).is_ok());
     }
 
     #[test]
@@ -931,16 +1082,19 @@ mod tests {
     }
 
     #[test]
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn ordering_matches_plain_ordering() {
         let mut plain = plain_samples();
         let mut interned: Vec<Ty> = plain.iter().map(Ty::from_plain).collect();
         plain.sort();
         interned.sort();
-        let materialized: Vec<crate::Ty> = interned.iter().map(Ty::to_plain).collect();
+        let materialized: Vec<crate::Ty> = interned
+            .iter()
+            .map(|ty| {
+                ClosedTy::try_from(ty)
+                    .expect("samples are closed")
+                    .to_plain()
+            })
+            .collect();
         assert_eq!(plain, materialized);
     }
 

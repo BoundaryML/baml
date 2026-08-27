@@ -60,10 +60,6 @@ impl<'db> InferenceContext<'db> {
     /// branch expectation, then run the usefulness matrix over the
     /// unguarded arms (guarded arms contribute nothing to exhaustiveness -
     /// `TYPE_SYSTEM.md`'s guard rule). Non-exhaustive -> Error sentinel.
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     pub(super) fn infer_match(
         &mut self,
         body: &ExprBody,
@@ -172,10 +168,15 @@ impl<'db> InferenceContext<'db> {
             .iter()
             .any(|pending| matches!(pending, super::PendingDiag::UnknownPatternField { .. }));
 
-        if scrut_resolved.has_error() || scrut_resolved.has_infer() {
+        if scrut_resolved.has_error() {
             return Ty::error();
         }
-        let col_ty = scrut_resolved.to_plain();
+        let Ok(scrut_closed) = baml_type::interned::ClosedTy::try_from(&scrut_resolved) else {
+            // Open scrutinee: usefulness is undecidable; the sentinel
+            // suppresses (the pre-existing has_infer disposition).
+            return Ty::error();
+        };
+        let col_ty = scrut_closed.to_plain();
         let ctx = HirPatCtx { infer: self };
         let report = compute_match_usefulness(&ctx, &matrix_arms, col_ty);
         // An errored arm pattern makes the reachability verdicts noise
@@ -362,10 +363,15 @@ impl<'db> InferenceContext<'db> {
     /// members. Var/error scrutinees pass through (the oracle requires
     /// var-free input; those matches sentinel out anyway).
     pub(super) fn matrix_scrut(&self, ty: &Ty) -> Ty {
-        if ty.has_infer() || ty.has_error() {
+        if ty.has_error() {
             return ty.clone();
         }
-        normalize_interned(ty, &self.facts)
+        match baml_type::interned::ClosedTy::try_from(ty) {
+            Ok(closed) => normalize_interned(&closed, &self.facts).into_ty(),
+            // Open scrutinees pass through (the oracle takes closed input;
+            // those matches sentinel out anyway).
+            Err(baml_type::interned::OpenTy) => ty.clone(),
+        }
     }
 
     /// The scrutinee's binding, when it is a bare local - the only
@@ -616,10 +622,6 @@ impl<'db> InferenceContext<'db> {
     /// (`member_on_interface`), the head being the existential view at
     /// the written args - else the args a same-interface scrutinee
     /// member carries.
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn lower_interface_pattern(
         &mut self,
         body: &ExprBody,
@@ -668,13 +670,14 @@ impl<'db> InferenceContext<'db> {
                     if *member_qtn == qtn
                         && (written_args.is_empty()
                             || (written_args.len() == args.len()
-                                && written_args.iter().zip(args.iter()).all(|(a, b)| {
-                                    baml_type::normalize::equivalent(
-                                        &a.to_plain(),
-                                        &b.to_plain(),
-                                        &self.facts,
-                                    )
-                                }))) =>
+                                // The fail-closed pair: a written arg still
+                                // carrying a variable (an annotation hole)
+                                // adopts nothing rather than materializing
+                                // mid-inference.
+                                && written_args
+                                    .iter()
+                                    .zip(args.iter())
+                                    .all(|(a, b)| self.cached_equivalent(a, b)))) =>
                 {
                     Some((args.to_vec(), pins.to_vec()))
                 }
@@ -822,19 +825,23 @@ impl<'db> InferenceContext<'db> {
     /// pairs the oracle decides by unification; rigid/projection pairs
     /// ask the reachability oracle, whose `No` is trusted only when it
     /// can see every variable (the `all_typevars_within` obligation).
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn check_pattern_type_overlap(&mut self, pat: PatId, scrut: &Ty, pat_ty: &Ty) {
         if self.or_probe_depth > 0 || self.rest_reject_depth > 0 {
             return;
         }
-        if pat_ty.has_error() || scrut.has_error() || pat_ty.has_infer() || scrut.has_infer() {
+        if pat_ty.has_error() || scrut.has_error() {
             return;
         }
-        let pat_plain = pat_ty.to_plain();
-        let scrut_plain = scrut.to_plain();
+        let (Ok(pat_closed), Ok(scrut_closed)) = (
+            baml_type::interned::ClosedTy::try_from(pat_ty),
+            baml_type::interned::ClosedTy::try_from(scrut),
+        ) else {
+            // Open pair: undecidable, defer (the pre-existing has_infer
+            // disposition).
+            return;
+        };
+        let pat_plain = pat_closed.to_plain();
+        let scrut_plain = scrut_closed.to_plain();
         // The overlap oracle's `No` rejects on every shape (invariant
         // container elements, disjoint concretes), trusted only when it
         // can see every variable.
@@ -1234,7 +1241,10 @@ impl<'db> InferenceContext<'db> {
             let index = declared.iter().position(|(field, _)| field == name);
             match index {
                 Some(index) => {
-                    let field_ty = crate::lower::substitute_params(&declared[index].1, &args);
+                    let field_ty = crate::lower::substitute_params(
+                        &crate::impls::interned_ty(&declared[index].1),
+                        &args,
+                    );
                     let outcome = self.lower_pattern(body, *field_pat, &field_ty);
                     field_covers &= outcome.covers_type;
                     sub_dpats[index] = Some(outcome.dpat);
@@ -1258,7 +1268,10 @@ impl<'db> InferenceContext<'db> {
             .zip(sub_dpats)
             .map(|((_, field_ty), sub)| {
                 sub.unwrap_or_else(|| {
-                    DPat::wildcard(dpat_ty(&crate::lower::substitute_params(field_ty, &args)))
+                    DPat::wildcard(dpat_ty(&crate::lower::substitute_params(
+                        &crate::impls::interned_ty(field_ty),
+                        &args,
+                    )))
                 })
             })
             .collect();
@@ -1291,7 +1304,7 @@ impl<'db> InferenceContext<'db> {
                                         || (member_args.len() == args.len()
                                             && member_args.iter().zip(args.iter()).all(
                                                 |(member_arg, arg)| {
-                                                    baml_type::normalize::equivalent_interned(
+                                                    crate::impls::eq_admitted(
                                                         member_arg,
                                                         arg,
                                                         &self.facts,
@@ -1542,7 +1555,9 @@ impl<'db> InferenceContext<'db> {
             Some(baml_compiler2_hir::contributions::Definition::Class(class)) => {
                 crate::lower::class_field_types(self.db, class)
                     .iter()
-                    .map(|(_, field_ty)| crate::lower::substitute_params(field_ty, args))
+                    .map(|(_, field_ty)| {
+                        crate::lower::substitute_params(&crate::impls::interned_ty(field_ty), args)
+                    })
                     .collect()
             }
             _ => Vec::new(),
@@ -1566,17 +1581,18 @@ impl<'db> InferenceContext<'db> {
 /// (which kept the closed spine around per-node holes), in the conservative
 /// direction — fewer verdicts, never wrong ones. Recorded pattern FACTS are
 /// unaffected: `type_of_pat` stores the interned type, resolved at finalize.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn dpat_ty(ty: &Ty) -> baml_type::Ty {
-    if ty.has_infer() {
-        baml_type::Ty::Error {
+    match baml_type::interned::ClosedTy::try_from(ty) {
+        Ok(closed) => closed.to_plain(),
+        // SUPPRESSION disposition: an open column takes the Error sentinel
+        // because exhaustiveness exclusively WITHHOLDS verdicts on Error —
+        // it never derives from it — so this is conservative, not laundered
+        // compatibility. (An explicit unjudgeable `DPat` ctor could replace
+        // the sentinel reuse; today recovery-Error and open-Error want the
+        // same suppression.)
+        Err(baml_type::interned::OpenTy) => baml_type::Ty::Error {
             attr: baml_type::TyAttr::default(),
-        }
-    } else {
-        ty.to_plain()
+        },
     }
 }
 
@@ -1706,10 +1722,6 @@ impl PatCtx for HirPatCtx<'_, '_> {
 
     /// The struct-view field types of an existential column, in declared
     /// order - the same member instantiation field access uses.
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn interface_field_types(&self, iface_ty: &baml_type::Ty) -> Vec<baml_type::Ty> {
         use baml_compiler2_hir::contributions::Definition;
         let baml_type::Ty::Interface(qtn, args, pins, _) = iface_ty else {
@@ -1741,7 +1753,14 @@ impl PatCtx for HirPatCtx<'_, '_> {
                     &field.name,
                     true,
                 )
-                .map(|member| member.ty.to_plain())
+                // Instantiation of a closed scrutinee head is closed; an
+                // open escape poisons the column, the file's suppression
+                // discipline (`dpat_ty`).
+                .and_then(|member| {
+                    baml_type::interned::ClosedTy::try_from(&member.ty)
+                        .ok()
+                        .map(|closed| closed.to_plain())
+                })
                 .unwrap_or_else(|| baml_type::Ty::Error {
                     attr: TyAttr::default(),
                 })
@@ -1749,10 +1768,6 @@ impl PatCtx for HirPatCtx<'_, '_> {
             .collect()
     }
 
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn class_field_types(
         &self,
         qtn: &baml_type::QualifiedTypeName,
@@ -1768,7 +1783,15 @@ impl PatCtx for HirPatCtx<'_, '_> {
         self.infer
             .class_pattern_field_types(qtn, &args)
             .iter()
-            .map(Ty::to_plain)
+            // Substitution of closed args into declaration types is
+            // closed; an open escape poisons the column (`dpat_ty`).
+            .map(|ty| {
+                baml_type::interned::ClosedTy::try_from(ty)
+                    .map(|closed| closed.to_plain())
+                    .unwrap_or_else(|_| baml_type::Ty::Error {
+                        attr: TyAttr::default(),
+                    })
+            })
             .collect()
     }
 

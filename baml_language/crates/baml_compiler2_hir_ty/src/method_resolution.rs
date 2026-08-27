@@ -507,7 +507,7 @@ pub(crate) fn declared_method_self_restriction<'db>(
             .params
             .iter()
             .skip(1)
-            .any(|param| self_occurs(&param.ty, false))
+            .any(|param| self_occurs(&Ty::from_plain(&param.ty), false))
         {
             crate::diagnostics::SelfCallPosition::Parameter
         } else {
@@ -677,15 +677,50 @@ fn assoc_bound_roots<'db>(
     interface_ref: &baml_type::interned::InferInterface,
     member: &Name,
 ) -> Vec<InferInterface> {
-    if crate::package_interface::mounted_type_row(db, &interface_ref.name).is_some() {
+    // Empty is a real answer here, not a shrug: it must mean the projection
+    // GENUINELY has no bound roots (an unbounded associated type, or a bound
+    // whose declaration already failed with its own diagnostic). Every other
+    // early exit is a construction-bug state the projection's own validation
+    // excludes, asserted in debug and conservatively memberless in release.
+    if let Some(crate::package_interface::ExportedType::Interface {
+        associated_types, ..
+    }) = crate::package_interface::mounted_type_row(db, &interface_ref.name)
+    {
+        let Some(assoc) = associated_types.iter().find(|assoc| assoc.name == *member) else {
+            // Projections carry members validated against their qualifier
+            // (lowering) or read off its declaration (engine construction).
+            debug_assert!(
+                false,
+                "projection member `{member}` is not declared by its mounted qualifier"
+            );
+            return Vec::new();
+        };
+        if assoc.bound.is_none() {
+            // The genuine no-roots answer: an unbounded associated type
+            // gives a rigid projection nothing to resolve members through.
+            return Vec::new();
+        }
         return match crate::impls::realized_assoc_bound(db, interface_ref, base, member)
             .and_then(|ty| InferInterface::of_ty(&ty))
         {
             Some(bound) => vec![bound],
-            None => Vec::new(),
+            // The export format keeps mounted bounds interface-shaped and
+            // arity is pinned by construction (the instantiation's own
+            // assert), so a DECLARED bound cannot fail to realize.
+            None => {
+                debug_assert!(false, "a declared mounted assoc bound failed to realize");
+                Vec::new()
+            }
         };
     }
     let Some(Definition::Interface(interface)) = facts.definition_of(&interface_ref.name) else {
+        // A qualifier survives lowering only by resolving (an unresolved
+        // name becomes the diagnosed Error sentinel, which projects
+        // nothing), and this name is neither a mounted row nor local.
+        debug_assert!(
+            false,
+            "projection qualifier resolves to no interface definition"
+        );
         return Vec::new();
     };
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
@@ -694,9 +729,16 @@ fn assoc_bound_roots<'db>(
         .iter()
         .find(|assoc| assoc.name == *member)
     else {
+        // Same contract as the mounted arm's member lookup.
+        debug_assert!(
+            false,
+            "projection member `{member}` is not declared by its qualifier"
+        );
         return Vec::new();
     };
     let Some(bound) = assoc.bound else {
+        // The genuine no-roots answer (rustc's alias-bound tier: an
+        // associated type without item bounds contributes no candidates).
         return Vec::new();
     };
     let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db))
@@ -707,18 +749,23 @@ fn assoc_bound_roots<'db>(
         bound,
         crate::lower::TypePosition::ConstraintHead,
     )));
-    let target = InferInterface::new(
-        interface_ref.name.clone(),
-        interface_ref.generics.clone(),
-        interface_ref.associated_types.clone(),
-    );
-    let instantiation = interface_instantiation(base, &target, data);
-    match crate::lower::substitute_params(&bound_ty, &instantiation).kind() {
+    let Some(instantiation) = interface_instantiation(base, interface_ref, data) else {
+        // Asserted inside `interface_instantiation`.
+        return Vec::new();
+    };
+    let realized = crate::lower::substitute_params(&bound_ty, &instantiation);
+    match realized.kind() {
         InferTy::Interface(name, args, pins, _) => vec![InferInterface::new(
             name.clone(),
             args.clone(),
             pins.clone(),
         )],
+        // A bound that realizes to a non-interface (`type Item extends
+        // int`, `extends Self`) or to the Error sentinel was already
+        // rejected where it was declared (`GenericBoundNotInterface`, or
+        // the bound's own lowering diagnostics): the program is failing,
+        // and no roots is the bounded degradation of that diagnosed
+        // declaration, not a fresh verdict.
         _ => Vec::new(),
     }
 }
@@ -862,7 +909,7 @@ pub(crate) fn member_on_interface<'db>(
         return None;
     };
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
-    let instantiation = interface_instantiation(receiver, target, data);
+    let instantiation = interface_instantiation(receiver, target, data)?;
 
     // Fields first (mirroring the class path's field-before-method).
     if let Some(index) = data.fields.iter().position(|field| field.name == *name) {
@@ -1361,21 +1408,32 @@ fn external_interface_callable(
 /// the reference, associated slots take the reference's pins or the
 /// symbolic projection through the receiver (which I5's oracle reduces
 /// when the facts determine it).
+///
+/// `None` only on a reference whose generic arity diverges from the
+/// declaration - a state lowering makes unrepresentable (`enforce_arity`
+/// pins written references to declared arity; engine-built references
+/// copy the declaration's own frame), so it is asserted as a
+/// construction bug and answered conservatively in release; padding the
+/// frame instead would fabricate `Error` slots no diagnostic has
+/// vouched for. The same contract as
+/// [`crate::impls::mounted_interface_instantiation`].
 pub(crate) fn interface_instantiation(
     receiver: &Ty,
     target: &InferInterface,
     data: &baml_compiler2_ppir::item_data::InterfaceData<'_>,
-) -> Vec<Ty> {
-    let mut out = vec![receiver.clone()];
-    for (index, _) in data.generic_params.iter().enumerate() {
-        out.push(
-            target
-                .generics
-                .get(index)
-                .cloned()
-                .unwrap_or_else(Ty::error),
+) -> Option<Vec<Ty>> {
+    if data.generic_params.len() != target.generics.len() {
+        debug_assert!(
+            false,
+            "interface reference `{}` carries {} generic args; its declaration takes {}",
+            target.name,
+            target.generics.len(),
+            data.generic_params.len(),
         );
+        return None;
     }
+    let mut out = vec![receiver.clone()];
+    out.extend(target.generics.iter().cloned());
     let interface_ref = target.clone();
     for assoc in &data.associated_types {
         let slot = target
@@ -1393,7 +1451,7 @@ pub(crate) fn interface_instantiation(
             });
         out.push(slot);
     }
-    out
+    Some(out)
 }
 
 fn interface_frame<'db>(
@@ -1409,7 +1467,10 @@ fn instantiate_signature(signature: &crate::lower::FunctionSignature, instantiat
         .iter()
         .map(|param| baml_type::interned::InferFunctionParamTy {
             name: Some(param.name.clone()),
-            ty: crate::lower::substitute_params(&param.ty, instantiation),
+            ty: crate::lower::substitute_params(
+                &crate::impls::interned_ty(&param.ty),
+                instantiation,
+            ),
             mode: if param.has_default {
                 baml_type::FunctionParamMode::Optional
             } else {
@@ -1419,8 +1480,14 @@ fn instantiate_signature(signature: &crate::lower::FunctionSignature, instantiat
         .collect();
     Ty::intern(InferTy::Function {
         params,
-        ret: crate::lower::substitute_params(&signature.ret, instantiation),
-        throws: crate::lower::substitute_params(&signature.throws, instantiation),
+        ret: crate::lower::substitute_params(
+            &crate::impls::interned_ty(&signature.ret),
+            instantiation,
+        ),
+        throws: crate::lower::substitute_params(
+            &crate::impls::interned_ty(&signature.throws),
+            instantiation,
+        ),
         attr: TyAttr::default(),
     })
 }
@@ -1432,7 +1499,8 @@ fn instantiate_signature(signature: &crate::lower::FunctionSignature, instantiat
 /// collapses covariantly and stays legal). `Self.Assoc` projections are
 /// exempt - the existential's pins make them one concrete type.
 fn signature_breaks_one_self(signature: &crate::lower::FunctionSignature) -> bool {
-    let self_in = |ty: &Ty, top_ok: bool| -> bool { self_occurs(ty, top_ok) };
+    let self_in =
+        |ty: &baml_type::Ty, top_ok: bool| -> bool { self_occurs(&Ty::from_plain(ty), top_ok) };
     signature
         .params
         .iter()
@@ -1662,7 +1730,9 @@ fn union_class_field_join<'db>(
             crate::lower::class_field_types(db, class)
                 .iter()
                 .find(|(field, _)| field == name)
-                .map(|(_, ty)| crate::lower::substitute_params(ty, &class_args))?
+                .map(|(_, ty)| {
+                    crate::lower::substitute_params(&crate::impls::interned_ty(ty), &class_args)
+                })?
         } else if let InferTy::Class(qtn, class_args, _) = arm.kind()
             && let Some(crate::package_interface::ExportedType::Class { fields, .. }) =
                 crate::package_interface::mounted_type_row(db, qtn)

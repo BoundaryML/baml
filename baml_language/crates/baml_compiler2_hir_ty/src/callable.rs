@@ -155,12 +155,7 @@ pub fn callable_throws<'db>(
         db,
         baml_compiler2_hir::body::BodyOwnerId::Function(function),
     );
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
-    let throws = result.throws.to_plain();
-    CallableThrows(throws)
+    CallableThrows(result.throws.clone())
 }
 
 /// Declaration-site resolved signature of a function or method, as the
@@ -233,16 +228,12 @@ pub fn function_signature_ty<'db>(
 ) -> FunctionSignatureTy {
     let sig = crate::lower::function_signature(db, function);
     let enclosing = enclosing_param_count(db, function);
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     let params = sig
         .params
         .iter()
         .map(|param| baml_type::FunctionParamTy {
             name: Some(param.name.clone()),
-            ty: param.ty.to_plain(),
+            ty: param.ty.clone(),
             mode: if param.has_default {
                 baml_type::FunctionParamMode::Optional
             } else {
@@ -254,16 +245,8 @@ pub fn function_signature_ty<'db>(
         baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
         _ => None,
     };
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
-    let return_type = sig.ret.to_plain();
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
-    let declared_throws = sig.throws_declared.then(|| sig.throws.to_plain());
+    let return_type = sig.ret.clone();
+    let declared_throws = sig.throws_declared.then(|| sig.throws.clone());
     FunctionSignatureTy {
         params,
         return_type,

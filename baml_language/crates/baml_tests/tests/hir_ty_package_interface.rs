@@ -189,10 +189,6 @@ fn enriched_interface_is_symbolic_loc_free_and_borsh_stable() {
 }
 
 #[test]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new("/hir-ty-package-interface-consumer"));
@@ -208,21 +204,19 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
     let baml_type::Ty::Interface(qtn, args, pins, _) = ty else {
         unreachable!()
     };
-    let root = baml_type::interned::InferInterface::new(
+    let root = baml_type::Interface::new(
         qtn,
         if args.is_empty() {
-            Box::new([baml_type::interned::Ty::int()])
+            Box::new([baml_type::Ty::Int {
+                attr: baml_type::TyAttr::default(),
+            }])
         } else {
-            args.iter()
-                .map(baml_type::interned::Ty::from_plain)
-                .collect()
+            args.clone()
         },
-        pins.iter()
-            .map(|(name, ty)| (name.clone(), baml_type::interned::Ty::from_plain(ty)))
-            .collect(),
+        pins.clone(),
     );
     let inherited =
-        baml_compiler2_hir_ty::impls::direct_requires_closure(&db, &root, &root.existential(), 64);
+        baml_compiler2_hir_ty::impls::direct_requires_closure_plain(&db, &root, &root.to_ty(), 64);
     assert!(
         inherited
             .iter()
@@ -234,7 +228,7 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
         param.clone(),
         vec![baml_type::Interface {
             name: root.name.clone(),
-            generics: root.generics.iter().map(|ty| ty.to_plain()).collect(),
+            generics: root.generics.clone(),
             associated_types: Box::new([]),
         }],
     )]
@@ -364,10 +358,6 @@ function bad(
 }
 
 #[test]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn reflect_resolves_as_an_ordinary_builtin_package() {
     let mut db = ProjectDatabase::new();
     db.workspace(std::path::Path::new(
@@ -397,9 +387,7 @@ fn reflect_resolves_as_an_ordinary_builtin_package() {
         baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(&db, user_alias);
     assert!(user_errors.is_empty(), "{user_errors:?}");
     assert_eq!(
-        baml_compiler2_hir_ty::lower::type_alias_value(&db, user_alias)
-            .to_plain()
-            .render_canonical(),
+        baml_compiler2_hir_ty::lower::type_alias_value(&db, user_alias).render_canonical(),
         "reflect.Signature"
     );
 }
@@ -477,10 +465,6 @@ function raw_only_value_is_available() -> string throws never {
 }
 
 #[test]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn mounted_witnesses_members_defaults_and_symbolic_calls_type_check_source_less() {
     let errors = error_messages(WITNESS_CONSUMER);
     assert!(errors.is_empty(), "{errors:#?}");
@@ -514,7 +498,7 @@ fn mounted_witnesses_members_defaults_and_symbolic_calls_type_check_source_less(
             panic!("inspect has an expression body")
         };
         let root = body.root_expr.expect("inspect root expression");
-        let root_ty = inference.type_of_expr[&root].to_plain();
+        let root_ty = inference.type_of_expr[&root].clone();
         let targets = inference
             .member_resolutions
             .values()

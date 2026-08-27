@@ -119,10 +119,6 @@ pub fn resolved_aliases_for_package(
 /// be classified (recursive → pooled as a declaration) or expanded
 /// (non-recursive → inlined) — it survives as a name nothing declares, which
 /// `lower_to_runtime` now rejects.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn collect_type_aliases<'db>(
     db: &'db dyn crate::Db,
     pkg_id: baml_compiler2_hir::package::PackageId<'db>,
@@ -133,7 +129,7 @@ fn collect_type_aliases<'db>(
     for ns in pkg_items.namespaces.values() {
         for (name, def) in &ns.types {
             if let Definition::TypeAlias(loc) = def {
-                let value = baml_compiler2_hir_ty::lower::type_alias_value(db, *loc).to_plain();
+                let value = baml_compiler2_hir_ty::lower::type_alias_value(db, *loc);
                 aliases.insert(qualify_def(db, Definition::TypeAlias(*loc), name), value);
             }
         }
@@ -145,7 +141,7 @@ fn collect_type_aliases<'db>(
         }
         for &loc in baml_compiler2_ppir::item_data::file_type_aliases(db, file) {
             let data = baml_compiler2_ppir::item_data::type_alias_data(db, loc);
-            let value = baml_compiler2_hir_ty::lower::type_alias_value(db, loc).to_plain();
+            let value = baml_compiler2_hir_ty::lower::type_alias_value(db, loc);
             aliases.insert(
                 qualify_def(db, Definition::TypeAlias(loc), &data.name),
                 value,
@@ -168,7 +164,7 @@ fn lower_ty_with_bindings<'db>(
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     bindings: &FxHashMap<ParamTy, Tir2Ty>,
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::Interface>>,
 ) -> Tir2Ty {
     // The AST node lowers through hir's firewall into a scratch store,
     // then through hir_ty's ONE type-lowering road (S16: MIR's
@@ -190,7 +186,7 @@ fn lower_ref_with_bindings<'db>(
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     bindings: &FxHashMap<ParamTy, Tir2Ty>,
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::Interface>>,
 ) -> Tir2Ty {
     let generic_params: Vec<ParamTy> = bindings.keys().cloned().collect();
     let ctx =
@@ -212,7 +208,7 @@ fn lower_ref_in_scope<'db>(
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     generic_params: &[ParamTy],
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     self_ty: Option<Tir2Ty>,
 ) -> Tir2Ty {
     lower_ref_in_scope_at(
@@ -239,7 +235,7 @@ fn lower_ref_in_scope_at<'db>(
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     generic_params: &[ParamTy],
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     self_ty: Option<Tir2Ty>,
     position: baml_compiler2_hir_ty::lower::TypePosition,
 ) -> Tir2Ty {
@@ -247,7 +243,7 @@ fn lower_ref_in_scope_at<'db>(
         baml_compiler2_hir_ty::lower::lower_ctx_for_package(db, pkg_items, namespace_path.to_vec())
             .with_frame(generic_params.to_vec())
             .with_bounds(bounds.clone())
-            .with_self_ty(self_ty.map(|ty| baml_type::interned::Ty::from_plain(&ty)));
+            .with_self_ty(self_ty);
     baml_compiler2_hir_ty::lower::reject_holes(&ctx.lower_type_ref_at(store, id, position))
 }
 
@@ -259,7 +255,7 @@ fn lower_expr_in_scope<'db>(
     pkg_items: &'db baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     generic_params: &[ParamTy],
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     self_ty: Option<Tir2Ty>,
 ) -> Tir2Ty {
     let mut builder = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
@@ -391,18 +387,8 @@ fn qualify_def(
 
 /// An interned interface bound as the plain interface TYPE - the
 /// dispatch view MIR's per-param bound map holds.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
-fn plain_interface_ty(bound: &baml_type::interned::InferInterface) -> Tir2Ty {
-    baml_type::interned::Ty::intern(baml_type::interned::InferTy::Interface(
-        bound.name.clone(),
-        bound.generics.clone(),
-        bound.associated_types.clone(),
-        baml_type::TyAttr::default(),
-    ))
-    .to_plain()
+fn plain_interface_ty(bound: &baml_type::Interface) -> Tir2Ty {
+    bound.to_ty()
 }
 
 /// Whether `ty` contains an associated-type projection node at any depth.
@@ -1396,7 +1382,7 @@ fn lower_ref_interface_target_args<'db>(
     pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
     namespace_path: &[Name],
     generic_params: &[ParamTy],
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::Interface>>,
 ) -> Vec<Tir2Ty> {
     match &store[target].kind {
         baml_compiler2_hir::type_ref::TypeRefKind::Path { generic_args, .. } => generic_args
@@ -3672,10 +3658,6 @@ impl<'db> LoweringContext<'db> {
     /// carrying the enclosing function's rigid type variables — enumerated through
     /// the canonical L1 substrate, with each impl's generic bounds discharged by
     /// the canonical algebra against this scope's bounds.
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn l1_impl_views_for_recv(&self, recv: &Tir2Ty) -> Vec<InterfaceTypeView> {
         // hir_ty's substrate: alias transparency and impl-bound discharge
         // are internal to it (its own facts). Dispatch is by BASE type
@@ -3684,26 +3666,18 @@ impl<'db> LoweringContext<'db> {
         // reduce through the oracle before becoming dispatch types (the
         // requires-closure rule).
         let recv = widen_literal_bases(recv);
-        let Some(interned) = baml_compiler2_hir_ty::impls::try_interned_ty(&recv) else {
-            return Vec::new();
-        };
-        baml_compiler2_hir_ty::impls::impls_for_type(self.db, &interned)
+        baml_compiler2_hir_ty::impls::impl_views_for_type(self.db, &recv)
             .into_iter()
-            .map(|resolved| {
-                let realized = resolved.implemented_view(self.db, &interned);
+            .map(|view| {
                 (
-                    realized.name.clone(),
-                    realized
-                        .generics
+                    view.name.clone(),
+                    view.generics
                         .iter()
-                        .map(|ty| self.resolve_ty_projections(&ty.to_plain()))
+                        .map(|ty| self.resolve_ty_projections(ty))
                         .collect(),
-                    realized
-                        .associated_types
+                    view.associated_types
                         .iter()
-                        .map(|(name, ty)| {
-                            (name.clone(), self.resolve_ty_projections(&ty.to_plain()))
-                        })
+                        .map(|(name, ty)| (name.clone(), self.resolve_ty_projections(ty)))
                         .collect(),
                 )
             })
@@ -10336,9 +10310,7 @@ impl LoweringContext<'_> {
     /// the enclosing out-of-body impl's generics' bounds (which that query does not cover), so a
     /// `T.member` projection in a method body resolves through `T`'s declared bound instead of
     /// erasing to `unknown`.
-    fn enclosing_generic_param_bounds(
-        &self,
-    ) -> FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>> {
+    fn enclosing_generic_param_bounds(&self) -> FxHashMap<ParamTy, Vec<baml_type::Interface>> {
         let Some(fl) = self.func_loc else {
             return FxHashMap::default();
         };
@@ -12527,10 +12499,6 @@ impl<'db> LoweringContext<'db> {
             .collect()
     }
 
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn interface_closure_type_name_views(
         &self,
         iface_tn: &TypeName,
@@ -12542,56 +12510,46 @@ impl<'db> LoweringContext<'db> {
             return None;
         }
         // The root view is the request itself, verbatim; only the
-        // `requires` EXPANSION goes through hir_ty's realized closure.
-        // An `Error` sentinel in an argument
-        // cannot intern - it degrades to the error
-        // sentinel FOR THE WALK, while the root view keeps the plain
-        // originals.
-        let interned = |ty: &Tir2Ty| {
-            baml_compiler2_hir_ty::impls::try_interned_ty(ty)
-                .unwrap_or_else(baml_type::interned::Ty::error)
-        };
-        let root = baml_type::interned::InferInterface::new(
+        // `requires` EXPANSION goes through hir_ty's realized closure (its
+        // plain entry — interning and the closed exit live at that
+        // boundary).
+        let root = baml_type::Interface::new(
             baml_type::TypeName::new(
                 iface_tn.package().clone(),
                 iface_ns,
                 iface_tn.name().clone(),
             ),
-            iface_type_args
-                .iter()
-                .map(interned)
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
-            iface_assoc
-                .iter()
-                .map(|(name, ty)| (name.clone(), interned(ty)))
-                .collect(),
+            iface_type_args.to_vec().into_boxed_slice(),
+            iface_assoc.to_vec().into_boxed_slice(),
         );
-        let subject = root.existential();
+        let subject = root.to_ty();
         let mut views: Vec<InterfaceTypeView> =
             vec![(iface_tn.clone(), iface_type_args.into(), iface_assoc.into())];
         views.extend(
-            baml_compiler2_hir_ty::impls::direct_requires_closure(self.db, &root, &subject, 8)
-                .into_iter()
-                .map(|reference| {
-                    // A required interface's pins realize as PROJECTIONS on
-                    // the subject (`(subject as Iterator).Error`); the
-                    // oracle reduces them here - runtime dispatch types
-                    // carry the reduced members, exactly as TIR's eager
-                    // substitution emitted them.
-                    let reduce = |ty: &baml_type::interned::Ty| -> Tir2Ty {
-                        self.resolve_ty_projections(&ty.to_plain())
-                    };
-                    (
-                        reference.name.clone(),
-                        reference.generics.iter().map(reduce).collect(),
-                        reference
-                            .associated_types
-                            .iter()
-                            .map(|(name, ty)| (name.clone(), reduce(ty)))
-                            .collect(),
-                    )
-                }),
+            baml_compiler2_hir_ty::impls::direct_requires_closure_plain(
+                self.db, &root, &subject, 8,
+            )
+            .into_iter()
+            .map(|reference| {
+                // A required interface's pins realize as PROJECTIONS on
+                // the subject (`(subject as Iterator).Error`); the
+                // oracle reduces them here - runtime dispatch types
+                // carry the reduced members, exactly as TIR's eager
+                // substitution emitted them.
+                (
+                    reference.name.clone(),
+                    reference
+                        .generics
+                        .iter()
+                        .map(|ty| self.resolve_ty_projections(ty))
+                        .collect(),
+                    reference
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (name.clone(), self.resolve_ty_projections(ty)))
+                        .collect(),
+                )
+            }),
         );
         Some(views)
     }
@@ -12723,10 +12681,6 @@ impl<'db> LoweringContext<'db> {
     /// receiver typing), or the free impl's `for` pattern lowered over the
     /// impl's generics. `None` when the enclosing function is not an impl
     /// method.
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn implements_subject_tir_ty(&self) -> Option<Tir2Ty> {
         use baml_compiler2_ppir::item_data::{
             ImplSubjectData, MethodOwner, impl_block_data, method_owner,
@@ -12736,7 +12690,9 @@ impl<'db> LoweringContext<'db> {
             MethodOwner::Class(class_loc) => {
                 // The declared receiver at the class's own frame, through
                 // the builtin-container bridge (`Array` self IS `T[]`).
-                Some(baml_compiler2_hir_ty::lower::class_self_ty(self.db, class_loc).to_plain())
+                Some(baml_compiler2_hir_ty::lower::class_self_ty(
+                    self.db, class_loc,
+                ))
             }
             MethodOwner::FreeImpl(impl_loc) => {
                 let block = impl_block_data(self.db, impl_loc);

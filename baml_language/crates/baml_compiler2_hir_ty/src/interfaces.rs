@@ -55,33 +55,11 @@ pub(crate) struct LowerScope<'a, 'db> {
     pub self_ty: Option<Ty>,
 }
 
-fn interned_bounds(
-    bounds: &TypeVarBoundsMap,
-) -> rustc_hash::FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>> {
-    bounds
-        .iter()
-        .map(|(param, ifaces)| {
-            (
-                param.clone(),
-                ifaces
-                    .iter()
-                    .map(baml_type::interned::InferInterface::from_constraint)
-                    .collect(),
-            )
-        })
-        .collect()
-}
-
 fn scope_ctx<'db>(scope: &LowerScope<'_, 'db>) -> crate::lower::LowerCtx<'db> {
     crate::lower::lower_ctx_for_package(scope.db, scope.package_items, scope.ns_context.to_vec())
         .with_frame(scope.generic_params.to_vec())
-        .with_bounds(interned_bounds(scope.bounds))
-        .with_self_ty(
-            scope
-                .self_ty
-                .as_ref()
-                .map(baml_type::interned::Ty::from_plain),
-        )
+        .with_bounds(scope.bounds.clone())
+        .with_self_ty(scope.self_ty.clone())
 }
 
 pub(crate) fn lower_ref_in(
@@ -226,13 +204,7 @@ pub fn package_resolved_aliases<'db>(
                 if let Definition::TypeAlias(loc) = def {
                     aliases
                         .entry(qualify_def(db, Definition::TypeAlias(*loc), name))
-                        .or_insert_with(
-                            #[expect(
-                                deprecated,
-                                reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-                            )]
-                            || crate::lower::type_alias_value(db, *loc).to_plain(),
-                        );
+                        .or_insert_with(|| crate::lower::type_alias_value(db, *loc));
                 }
             }
         }
@@ -1619,22 +1591,7 @@ fn collect_type_generic_bound_errors<'db>(
             }
             if let Some(Definition::Interface(iface)) = facts.definition_of(qtn) {
                 let params = crate::lower::interface_declared_params(db, iface);
-                let plain = interface_declared_param_bounds(db, iface);
-                let declared: rustc_hash::FxHashMap<
-                    ParamTy,
-                    Vec<baml_type::interned::InferInterface>,
-                > = plain
-                    .iter()
-                    .map(|(param, bounds)| {
-                        (
-                            param.clone(),
-                            bounds
-                                .iter()
-                                .map(baml_type::interned::InferInterface::from_constraint)
-                                .collect(),
-                        )
-                    })
-                    .collect();
+                let declared = interface_declared_param_bounds(db, iface);
                 check_head_args(facts, &params, &declared, args, errors);
             }
         }
@@ -1691,14 +1648,10 @@ fn collect_type_generic_bound_errors<'db>(
 /// separate requirement, reported independently. Bounds may reference
 /// sibling params (`class Pair<A, B extends Container<A>>`), so the
 /// head's own bindings substitute through them first.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn check_head_args(
     facts: &crate::facts::Facts<'_>,
     params: &[ParamTy],
-    declared: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
+    declared: &rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     args: &[baml_type::LoweringTy],
     errors: &mut Vec<TirTypeError>,
 ) {
@@ -1723,20 +1676,7 @@ fn check_head_args(
             continue;
         };
         for bound in declared.get(param).into_iter().flatten() {
-            let bound_ty = Ty::Interface(
-                bound.name.clone(),
-                bound
-                    .generics
-                    .iter()
-                    .map(baml_type::interned::Ty::to_plain)
-                    .collect(),
-                bound
-                    .associated_types
-                    .iter()
-                    .map(|(name, ty)| (name.clone(), ty.to_plain()))
-                    .collect(),
-                TyAttr::default(),
-            );
+            let bound_ty = bound.to_ty();
             let Some(bound) = baml_type::unify::substitute_ty(&bound_ty, &bindings).as_interface()
             else {
                 continue;
@@ -1971,10 +1911,6 @@ pub fn lower_projection(
     ProjectionLowering { ty, diagnostics }
 }
 
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn determine_interface<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &crate::facts::Facts<'db>,
@@ -2059,15 +1995,13 @@ fn determine_interface<'db>(
             member: inner_member,
             ..
         } => {
-            let inner_ref = baml_type::interned::InferInterface::from_constraint(inner_interface);
-            let inner_base_interned = baml_type::interned::Ty::from_plain(inner_base);
-            let root = crate::impls::realized_assoc_bound(
+            let root = crate::impls::realized_assoc_bound_plain(
                 db,
-                &inner_ref,
-                &inner_base_interned,
+                inner_interface,
+                inner_base,
                 inner_member,
             )
-            .and_then(|bound| bound.to_plain().as_interface());
+            .and_then(|bound| bound.as_interface());
             match root {
                 Some(root) => {
                     let container = AssocContainer::Interface(root.name.clone());
@@ -2211,10 +2145,6 @@ fn written_qualifier_proven_by(
 /// shadows its own closure (the stdlib's `Iterator requires
 /// Iterable<Item = Self.Item>` pinning idiom depends on it); declarers
 /// dedupe by realized identity across the pool.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn resolve_through_roots(
     db: &dyn baml_compiler2_ppir::Db,
     roots: Vec<baml_type::Interface>,
@@ -2234,27 +2164,11 @@ fn resolve_through_roots(
             push(&mut declarers, root);
             continue;
         }
-        let root_ref = baml_type::interned::InferInterface::from_constraint(&root);
-        let subject = root_ref.existential();
+        let subject = root.to_ty();
         if crate::package_interface::mounted_type_row(db, &root.name).is_some() {
-            for inherited in crate::impls::direct_requires_closure(db, &root_ref, &subject, 64) {
+            for inherited in crate::impls::direct_requires_closure_plain(db, &root, &subject, 64) {
                 if interface_declares_member(db, &inherited.name, member, ns) {
-                    push(
-                        &mut declarers,
-                        baml_type::Interface {
-                            name: inherited.name,
-                            generics: inherited
-                                .generics
-                                .iter()
-                                .map(baml_type::interned::Ty::to_plain)
-                                .collect(),
-                            associated_types: inherited
-                                .associated_types
-                                .iter()
-                                .map(|(name, ty)| (name.clone(), ty.to_plain()))
-                                .collect(),
-                        },
-                    );
+                    push(&mut declarers, inherited);
                 }
             }
             continue;
@@ -2293,10 +2207,6 @@ fn resolve_through_roots(
 /// A concrete base's projection through its visible impls, requires-aware
 /// root-wins across declarers (the most-derived interface shadows one it
 /// transitively requires, mirroring the symbolic road).
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn determine_concrete<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     facts: &crate::facts::Facts<'db>,
@@ -2309,21 +2219,7 @@ fn determine_concrete<'db>(
         return Determination::Poisoned;
     };
     let mut declarers: Vec<baml_type::Interface> = Vec::new();
-    for resolved in crate::impls::impls_for_type(db, &interned) {
-        let view = resolved.implemented_view(db, &interned);
-        let interface = baml_type::Interface {
-            name: view.name.clone(),
-            generics: view
-                .generics
-                .iter()
-                .map(baml_type::interned::Ty::to_plain)
-                .collect(),
-            associated_types: view
-                .associated_types
-                .iter()
-                .map(|(name, ty)| (name.clone(), ty.to_plain()))
-                .collect(),
-        };
+    for interface in crate::impls::impl_views_for_type(db, base) {
         if interface_declares_member(db, &interface.name, member, ns)
             && !declarers.contains(&interface)
         {
@@ -2389,10 +2285,6 @@ fn determine_concrete<'db>(
 /// and resolve per realized argument at runtime, exactly as a typevar `Self`
 /// does — plus the impl's realization of the associated types the qualifier
 /// left unwritten.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn concrete_realized_interface(
     db: &dyn baml_compiler2_ppir::Db,
     base: &Ty,
@@ -2402,14 +2294,12 @@ fn concrete_realized_interface(
     let goal = baml_type::interned::InferInterface::from_constraint(qualifier);
     let resolved = crate::impls::resolve_impl(db, &interned, &goal)?;
     let view = resolved.implemented_view(db, &interned);
+    let view = baml_type::Interface::try_from(&view)
+        .unwrap_or_else(|_| unreachable!("realized view of a closed base is closed"));
     Some(baml_type::Interface {
-        name: view.name.clone(),
+        name: view.name,
         generics: qualifier.generics.clone(),
-        associated_types: view
-            .associated_types
-            .iter()
-            .map(|(name, ty)| (name.clone(), ty.to_plain()))
-            .collect(),
+        associated_types: view.associated_types,
     })
 }
 

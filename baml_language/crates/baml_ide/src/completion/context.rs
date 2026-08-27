@@ -109,7 +109,7 @@ pub(crate) enum DotTarget<'db> {
     /// the owner declared that bound).
     Value {
         owner: BodyOwnerId<'db>,
-        receiver: baml_type::interned::Ty,
+        receiver: baml_type::Ty,
     },
     /// A type qualifier: `Point.`, `int.`, `baml.iter.Range.` — the
     /// declaration it names.

@@ -156,6 +156,20 @@ fn dedup_and_collapse(types: Vec<Ty>, attr: TyAttr) -> Ty {
 }
 
 impl Ty {
+    /// The bottom type with default attributes.
+    pub fn never() -> Self {
+        Ty::Never {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// The error-recovery sentinel with default attributes.
+    pub fn error() -> Self {
+        Ty::Error {
+            attr: TyAttr::default(),
+        }
+    }
+
     /// Whether this type may be the *implementor* (`for`-target) of an interface
     /// implementation — i.e. `implement I for <Self>` is allowed.
     ///

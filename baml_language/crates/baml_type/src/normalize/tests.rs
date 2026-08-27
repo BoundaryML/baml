@@ -199,8 +199,10 @@ fn reflection_kind_classes_are_ordinary_classes_disjoint_from_the_carrier() {
         );
         assert!(
             !is_subtype_interned(
-                &interned::Ty::from_plain(&view),
-                &interned::Ty::from_plain(&carrier),
+                &interned::ClosedTy::try_from(interned::Ty::from_plain(&view))
+                    .expect("closed fixture"),
+                &interned::ClosedTy::try_from(interned::Ty::from_plain(&carrier))
+                    .expect("closed fixture"),
                 &ctx,
             ),
             "interned subtype entry admitted {kind:?} beneath the carrier"
@@ -1564,8 +1566,9 @@ mod interned_entry {
     use super::*;
     use crate::interned;
 
-    fn it(ty: &Ty) -> interned::Ty {
-        interned::Ty::from_plain(ty)
+    fn it(ty: &Ty) -> interned::ClosedTy {
+        interned::ClosedTy::try_from(interned::Ty::from_plain(ty))
+            .expect("plain input carries no variables")
     }
 
     /// Every verdict must agree between the plain entry and the interned

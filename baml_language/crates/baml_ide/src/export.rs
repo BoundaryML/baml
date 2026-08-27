@@ -866,14 +866,10 @@ fn interface_generics(db: &Db, iface: InterfaceLoc<'_>) -> Vec<(ParamTy, Vec<Int
 }
 
 /// An interned bounds map (the lowering layer's shape) as a plain list.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn plain_bounds(
-    interned: impl IntoIterator<Item = (ParamTy, Vec<baml_type::interned::InferInterface>)>,
+    bounds: impl IntoIterator<Item = (ParamTy, Vec<baml_type::Interface>)>,
 ) -> Vec<(ParamTy, Vec<InterfaceBound>)> {
-    interned
+    bounds
         .into_iter()
         .map(|(param, refs)| {
             (
@@ -881,16 +877,8 @@ fn plain_bounds(
                 refs.iter()
                     .map(|bound| InterfaceBound {
                         name: bound.name.clone(),
-                        generics: bound
-                            .generics
-                            .iter()
-                            .map(baml_type::interned::Ty::to_plain)
-                            .collect(),
-                        associated_types: bound
-                            .associated_types
-                            .iter()
-                            .map(|(name, t)| (name.clone(), t.to_plain()))
-                            .collect(),
+                        generics: bound.generics.iter().cloned().collect(),
+                        associated_types: bound.associated_types.iter().cloned().collect(),
                     })
                     .collect(),
             )
@@ -1226,10 +1214,6 @@ fn export_impl(db: &Db, imp: ImplLoc<'_>) -> Option<ImplExport> {
     })
 }
 
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn export_item<'db>(
     db: &'db Db,
     def: Definition<'db>,
@@ -1333,9 +1317,7 @@ fn export_item<'db>(
             }
         }
         Definition::TypeAlias(alias) => ItemDetail::TypeAlias {
-            resolved: TyRef::of(
-                &baml_compiler2_hir_ty::lower::type_alias_value(db, alias).to_plain(),
-            ),
+            resolved: TyRef::of(&baml_compiler2_hir_ty::lower::type_alias_value(db, alias)),
         },
         Definition::Function(function) => ItemDetail::Function {
             signature: function_export(db, function, false, None).signature,

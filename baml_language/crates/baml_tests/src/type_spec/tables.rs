@@ -178,10 +178,6 @@ function mr_variant() -> Status throws never {
 }
 
 #[test]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn records_path_ladders() {
     let source = r#"
 class City {
@@ -216,7 +212,7 @@ function mr_chain(p: Person) -> string throws never {
                 .segments
                 .iter()
                 .map(|segment| {
-                    let ty = segment.ty.to_plain().render_canonical();
+                    let ty = segment.ty.render_canonical();
                     match &segment.resolution {
                         Some(resolution) => format!("{ty}/{}", kind(resolution)),
                         None => ty,
@@ -245,10 +241,6 @@ function mr_chain(p: Person) -> string throws never {
 }
 
 #[test]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn records_call_plans() {
     let source = r#"
 function cp_id<T>(x: T) -> T throws never {
@@ -277,7 +269,7 @@ function cp_use() -> int throws never {
             let type_args: Vec<String> = plan
                 .type_args
                 .iter()
-                .map(|ty| ty.to_plain().render_canonical())
+                .map(|ty| ty.render_canonical())
                 .collect();
             let bindings: Vec<String> = plan
                 .bindings
@@ -315,10 +307,6 @@ function cp_use() -> int throws never {
 }
 
 #[test]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn static_method_call_uses_owner_then_function_generic_frame() {
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
 
@@ -358,12 +346,12 @@ function rt_owner_use() -> RtBox<int> throws never {
             assert!(matches!(
                 plan.slots.as_slice(),
                 [CallTypeArgPlan::Static { ty, .. }]
-                    if ty.to_plain().render_canonical() == "int"
+                    if ty.render_canonical() == "int"
             ));
             assert_eq!(
                 plan.type_args
                     .iter()
-                    .map(|ty| ty.to_plain().render_canonical())
+                    .map(|ty| ty.render_canonical())
                     .collect::<Vec<_>>(),
                 vec!["int"]
             );
@@ -373,10 +361,6 @@ function rt_owner_use() -> RtBox<int> throws never {
 }
 
 #[test]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn runtime_call_plan_preserves_mixed_slots_and_precise_deferrals() {
     let source = r#"
 interface RtAnchor {}
@@ -402,8 +386,11 @@ function rt_use(runtime_t: reflect.Type, good: RtGood) -> RtAnchor throws never 
                 .type_of_expr
                 .values()
                 .chain(result.call_plans.values().flat_map(|plan| &plan.type_args))
-                .all(|ty| !ty.has_infer()),
-            "final inference tables must be ground"
+                // Groundness itself is type-enforced now (the plain artifact
+                // has no variable variant); what remains checkable is that
+                // finalize did not leak whole-table error residue.
+                .any(|ty| !matches!(ty, baml_type::Ty::Error { .. })),
+            "final inference tables must not be all-error"
         );
         for (&call, plan) in &result.call_plans {
             if &source[source_map.expr_span(call)]
@@ -416,18 +403,18 @@ function rt_use(runtime_t: reflect.Type, good: RtGood) -> RtAnchor throws never 
             assert!(matches!(
                 &plan.slots[0],
                 CallTypeArgPlan::Runtime { occurrence_ty, parameter, .. }
-                    if occurrence_ty.to_plain().render_canonical() == "user.RtAnchor"
+                    if occurrence_ty.render_canonical() == "user.RtAnchor"
                         && parameter.name().as_str() == "A"
             ));
             assert!(matches!(
                 &plan.slots[1],
                 CallTypeArgPlan::Static { ty, .. }
-                    if ty.to_plain().render_canonical() == "user.RtGood"
+                    if ty.render_canonical() == "user.RtGood"
             ));
             assert_eq!(
                 plan.type_args
                     .iter()
-                    .map(|ty| ty.to_plain().render_canonical())
+                    .map(|ty| ty.render_canonical())
                     .collect::<Vec<_>>(),
                 vec!["user.RtAnchor", "user.RtGood"]
             );
@@ -454,10 +441,6 @@ function rt_use(runtime_t: reflect.Type, good: RtGood) -> RtAnchor throws never 
 }
 
 #[test]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn runtime_call_special_contracts_are_narrow_and_diagnostic() {
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
 
@@ -510,10 +493,8 @@ function sc_companion() -> baml.Map<string, int> throws never {
             let snippet = &source[source_map.expr_span(call)];
             if snippet.starts_with("pkg.get_function") {
                 extraction_throws = plan.slots.first().and_then(|slot| match slot {
-                    CallTypeArgPlan::Static { ty, .. } => match ty.kind() {
-                        baml_type::interned::InferTy::Function { throws, .. } => {
-                            Some(throws.to_plain().render_canonical())
-                        }
+                    CallTypeArgPlan::Static { ty, .. } => match ty {
+                        baml_type::Ty::Function { throws, .. } => Some(throws.render_canonical()),
                         _ => None,
                     },
                     CallTypeArgPlan::Runtime { .. } => None,
@@ -523,7 +504,7 @@ function sc_companion() -> baml.Map<string, int> throws never {
                 session_args = Some(
                     plan.type_args
                         .iter()
-                        .map(|ty| ty.to_plain().render_canonical())
+                        .map(|ty| ty.render_canonical())
                         .collect::<Vec<_>>(),
                 );
             }
@@ -568,10 +549,6 @@ function sc_companion() -> baml.Map<string, int> throws never {
 }
 
 #[test]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn scoped_runtime_types_shadow_and_erase_at_block_exit() {
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
 
@@ -634,8 +611,8 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                     check,
                     baml_compiler2_hir_ty::infer::RuntimeCheck::Argument { expected, .. }
                         if matches!(
-                            expected.kind(),
-                            baml_type::interned::InferTy::TypeVar(param, _)
+                            expected,
+                            baml_type::Ty::TypeVar(param, _)
                                 if param.index() & 0x8000_0000 != 0
                         )
                 ),
@@ -670,7 +647,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                 assert!(binding.parameter.index() & 0x8000_0000 != 0);
                 assert!(matches!(
                     plan.type_args.as_slice(),
-                    [ty] if matches!(ty.kind(), baml_type::interned::InferTy::TypeVar(param, _)
+                    [ty] if matches!(ty, baml_type::Ty::TypeVar(param, _)
                         if param == &binding.parameter)
                 ));
             }
@@ -679,7 +656,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                 saw_branch = true;
                 assert!(matches!(
                     plan.type_args.as_slice(),
-                    [ty] if matches!(ty.kind(), baml_type::interned::InferTy::TypeVar(param, _)
+                    [ty] if matches!(ty, baml_type::Ty::TypeVar(param, _)
                         if param == &binding.parameter)
                 ));
             }
@@ -687,7 +664,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
                 saw_outer = true;
                 assert!(matches!(
                     plan.type_args.as_slice(),
-                    [ty] if ty.to_plain().render_canonical() == "user.ScopeT"
+                    [ty] if ty.render_canonical() == "user.ScopeT"
                 ));
             }
         }
@@ -705,7 +682,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
         binding_blocks.sort_by_key(|(len, _)| *len);
         if let Some((_, ty)) = binding_blocks.first() {
             saw_erased_block = true;
-            assert_eq!(ty.to_plain().render_canonical(), "unknown");
+            assert_eq!(ty.render_canonical(), "unknown");
         }
 
         let mut lambda_binding_blocks: Vec<_> = result
@@ -722,9 +699,9 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
         if let Some((_, ty)) = lambda_binding_blocks.first() {
             saw_lambda_erasure = true;
             assert!(matches!(
-                ty.kind(),
-                baml_type::interned::InferTy::Function { ret, .. }
-                    if ret.to_plain().render_canonical() == "unknown"
+                &**ty,
+                baml_type::Ty::Function { ret, .. }
+                    if ret.render_canonical() == "unknown"
             ));
         }
     }
@@ -746,10 +723,6 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
 }
 
 #[test]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn unreflect_patterns_are_distinct_non_covering_and_effect_scoped() {
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
 
@@ -805,7 +778,7 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
             baml_compiler2_hir::body::BodyOwnerId::Let(_) => "<let>",
         };
         if owner_name == "pat_catch" {
-            saw_catch_effect = result.throws.to_plain().render_canonical() == "user.ScopeEffect";
+            saw_catch_effect = result.throws.render_canonical() == "user.ScopeEffect";
         }
         non_exhaustive += result
             .diagnostics
@@ -833,7 +806,7 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
             ) {
                 pattern_types += 1;
                 assert!(
-                    matches!(ty.to_plain().render_canonical().as_str(), "int" | "1"),
+                    matches!(ty.render_canonical().as_str(), "int" | "1"),
                     "runtime pattern did not preserve its scrutinee type: {ty:?}"
                 );
             }
@@ -841,15 +814,14 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
         for (&expr, ty) in &result.type_of_expr {
             let snippet = &source[source_map.expr_span(expr)];
             if snippet == "x is unreflect(scope_effect_type())" {
-                saw_direct_effect |=
-                    result.throws.to_plain().render_canonical() == "user.ScopeEffect";
+                saw_direct_effect |= result.throws.render_canonical() == "user.ScopeEffect";
             }
             if snippet.starts_with("(x: int) ->") {
                 saw_lambda_effect |= matches!(
-                    ty.kind(),
-                    baml_type::interned::InferTy::Function { throws, .. }
-                        if throws.to_plain().render_canonical() == "user.ScopeEffect"
-                ) && result.throws.to_plain().render_canonical() == "never";
+                    ty,
+                    baml_type::Ty::Function { throws, .. }
+                        if throws.render_canonical() == "user.ScopeEffect"
+                ) && result.throws.render_canonical() == "never";
             }
         }
     }
@@ -865,8 +837,7 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
         .expect("pat_default function");
     let default_owner = baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(default_function);
     let default_result = infer_body(&db, default_owner);
-    let saw_default_effect =
-        default_result.throws.to_plain().render_canonical() == "user.ScopeEffect";
+    let saw_default_effect = default_result.throws.render_canonical() == "user.ScopeEffect";
     let default_body = baml_compiler2_ppir::body(&db, default_owner);
     let default_body = default_body.expr_body().expect("default expression body");
     for (pat, ty) in &default_result.type_of_pat {
@@ -875,7 +846,7 @@ function pat_lambda() -> ((int) -> bool throws ScopeEffect) throws never {
             baml_compiler2_ast::Pattern::Unreflect(_)
         ) {
             pattern_types += 1;
-            assert_eq!(ty.to_plain().render_canonical(), "1");
+            assert_eq!(ty.render_canonical(), "1");
         }
     }
     assert_eq!(non_exhaustive, 1, "runtime patterns do not prove coverage");
@@ -928,10 +899,6 @@ function ea_use() -> int throws never {
 }
 
 #[test]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn infers_parameter_defaults_as_own_root() {
     let source = r#"
 function pd_take(a: int, tag: string = "t", n: int = 1 + 2, bad: int = "x") -> int throws never {
@@ -955,7 +922,7 @@ function pd_take(a: int, tag: string = "t", n: int = 1 + 2, bad: int = "x") -> i
             let ty = result
                 .type_of_expr
                 .get(&expr)
-                .map(|ty| ty.to_plain().render_canonical())
+                .map(|ty| ty.render_canonical())
                 .unwrap_or_else(|| "<missing>".into());
             let mismatch = if result.type_mismatches.contains_key(&expr) {
                 " MISMATCH"
@@ -977,10 +944,6 @@ function pd_take(a: int, tag: string = "t", n: int = 1 + 2, bad: int = "x") -> i
 }
 
 #[test]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn call_plan_waits_for_sibling_vars() {
     // The finish fixpoint must not commit a bounded var from its ground
     // lowers while a sibling var occurring in a DEFERRED lower is still
@@ -1014,7 +977,7 @@ function de_probe() -> bool throws never {
             let args: Vec<String> = plan
                 .type_args
                 .iter()
-                .map(|ty| ty.to_plain().render_canonical())
+                .map(|ty| ty.render_canonical())
                 .collect();
             plans.push(format!(
                 "{} -> {args:?}",
@@ -1034,10 +997,6 @@ function de_probe() -> bool throws never {
 }
 
 #[test]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn call_plan_effect_solves_from_deferred_lambda() {
     // Goals before solving (rustc's fulfillment-before-defaults, round
     // ordering): E's only REGISTERED bound is the declared-throws upper
@@ -1066,7 +1025,7 @@ function ir_probe() -> int throws unknown {
             plans.push(
                 plan.type_args[plan.own_offset..]
                     .iter()
-                    .map(|ty| ty.to_plain().render_canonical())
+                    .map(|ty| ty.render_canonical())
                     .collect::<Vec<_>>(),
             );
         }
@@ -1135,10 +1094,6 @@ function uv_probe(animal: UvCat | UvDog) -> string throws never {
 }
 
 #[test]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn pattern_ascription_records_written_nominal() {
     // Ruling 3 (S15): bindings record the WRITTEN pattern type; aliases
     // are nominal by design. The scrutinee's structural analysis may
@@ -1172,7 +1127,7 @@ function pa_probe() -> int {
             if snippet.starts_with("let arr")
                 && let Some(ty) = result.type_of_pat.get(&pat_id)
             {
-                renders.push(ty.to_plain().render_canonical());
+                renders.push(ty.render_canonical());
             }
         }
     }

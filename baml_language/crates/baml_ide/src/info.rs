@@ -467,10 +467,6 @@ form stringifies each value and produces a `string`."
 /// Build `TypeInfo` for a resolved [`SymbolTarget`]. Every arm reads
 /// recorded compiler data (firewall items, source maps, inference records) —
 /// no span-equality matching, no name heuristics.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn target_type_info(
     db: &dyn baml_compiler2_ppir::Db,
     target: crate::resolve::SymbolTarget<'_>,
@@ -497,7 +493,7 @@ fn target_type_info(
             // The owner is the class's own self type — the same subject-type
             // rule as methods, so generic owners anchor their params
             // (`user.Box<T>` above `item: T`).
-            let self_ty = baml_compiler2_hir_ty::lower::class_self_ty(db, class).to_plain();
+            let self_ty = baml_compiler2_hir_ty::lower::class_self_ty(db, class);
             Some(TypeInfo::LocalVar {
                 name: field.name.as_str().to_string(),
                 ty,
@@ -834,10 +830,6 @@ fn owning_path(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> String {
 /// block spells its resolved for-target, and an interface default method
 /// spells the interface's path. Full canonical paths throughout — member
 /// owners never elide.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn method_owner_path(
     db: &dyn baml_compiler2_ppir::Db,
     func: baml_compiler2_hir::loc::FunctionLoc<'_>,
@@ -846,7 +838,7 @@ fn method_owner_path(
 
     match item_data::method_owner(db, func)? {
         MethodOwner::Class(class) => {
-            let self_ty = baml_compiler2_hir_ty::lower::class_self_ty(db, class).to_plain();
+            let self_ty = baml_compiler2_hir_ty::lower::class_self_ty(db, class);
             Some(render::display_owner_ty(&self_ty))
         }
         MethodOwner::Interface(iface) => {
@@ -859,7 +851,9 @@ fn method_owner_path(
             // `impl_facts` is `None` when the block's header does not resolve
             // to an interface — honest absence beats a wrong owner.
             let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).as_ref()?;
-            Some(render::display_owner_ty(&facts.for_ty_pattern.to_plain()))
+            Some(render::display_owner_ty(
+                &baml_compiler2_hir_ty::impls::plain_for_ty_pattern(facts),
+            ))
         }
     }
 }
@@ -867,22 +861,16 @@ fn method_owner_path(
 /// Hover for a template-frame name (`ctx`, `role`): the matching parameter
 /// of the driver's `body` callback — the same signature slot inference
 /// injects interpolation names from.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn template_frame_param_info(
     db: &dyn baml_compiler2_ppir::Db,
     file: SourceFile,
     offset: TextSize,
     name: &Name,
 ) -> Option<TypeInfo> {
-    use baml_type::interned::InferTy;
-
     let driver = crate::resolve::template_driver_at(db, file, offset)?;
     let signature = baml_compiler2_hir_ty::lower::function_signature(db, driver);
     let body_param = signature.params.first()?;
-    let InferTy::Function { params, .. } = body_param.ty.kind() else {
+    let baml_type::Ty::Function { params, .. } = &body_param.ty else {
         return None;
     };
     let param = params
@@ -890,7 +878,7 @@ fn template_frame_param_info(
         .find(|param| param.name.as_ref() == Some(name))?;
     Some(TypeInfo::LocalVar {
         name: name.as_str().to_string(),
-        ty: render::display_ty_canonical_for_file(db, file, &param.ty.to_plain()),
+        ty: render::display_ty_canonical_for_file(db, file, &param.ty),
         is_let: false,
         owner: None,
     })
@@ -911,10 +899,6 @@ fn range_contains(range: TextRange, offset: TextSize) -> bool {
     range.contains(offset) || range.end() == offset
 }
 
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn generic_type_parameter_info_at(
     db: &dyn baml_compiler2_ppir::Db,
     file: SourceFile,
@@ -948,7 +932,11 @@ fn generic_type_parameter_info_at(
                 Some(item_data::MethodOwner::FreeImpl(block)) => {
                     let subject = baml_compiler2_hir_ty::impls::impl_facts(db, block)
                         .as_ref()
-                        .map(|facts| render::display_owner_ty(&facts.for_ty_pattern.to_plain()));
+                        .map(|facts| {
+                            render::display_owner_ty(
+                                &baml_compiler2_hir_ty::impls::plain_for_ty_pattern(facts),
+                            )
+                        });
                     match subject {
                         Some(subject) => format!("method {}.{}", subject, data.name.as_str()),
                         None => format!("function {}", data.name.as_str()),
@@ -981,7 +969,9 @@ fn generic_type_parameter_info_at(
                     |facts| {
                         format!(
                             "implements for {}",
-                            render::display_owner_ty(&facts.for_ty_pattern.to_plain())
+                            render::display_owner_ty(
+                                &baml_compiler2_hir_ty::impls::plain_for_ty_pattern(facts)
+                            )
                         )
                     },
                 );
@@ -1056,10 +1046,6 @@ fn generic_type_parameter_info_at(
 // ── type_info_for_definition ──────────────────────────────────────────────────
 
 /// Build `TypeInfo` for a top-level item definition.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definition<'_>) -> TypeInfo {
     match def {
         Definition::Function(func_loc) => {
@@ -1232,7 +1218,7 @@ pub fn type_info_for_definition(db: &dyn baml_compiler2_ppir::Db, def: Definitio
             let alias_name = alias_data.name.as_str().to_string();
 
             // Use the resolved (lowered) type for display.
-            let resolved = baml_compiler2_hir_ty::lower::type_alias_value(db, alias_loc).to_plain();
+            let resolved = baml_compiler2_hir_ty::lower::type_alias_value(db, alias_loc);
             let expansion = render::display_ty_for_file(db, alias_loc.file(db), &resolved);
 
             TypeInfo::TypeAlias {
@@ -1407,10 +1393,6 @@ fn callback_forwarding_note(
 /// inferences whose binding maps were populated from the use-site's own
 /// arena. Mirrors the structure already used by
 /// `completions.rs::find_binding_ty_for_local`.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn find_binding_ty_in_scopes(
     db: &dyn baml_compiler2_ppir::Db,
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
@@ -1423,7 +1405,7 @@ fn find_binding_ty_in_scopes(
             continue;
         };
         if let Some(ty) = inference.type_of_pat.get(&pat_id) {
-            return Some(ty.to_plain());
+            return Some(ty.clone());
         }
     }
     None

@@ -73,16 +73,12 @@ fn definition_of<'db>(
 
 /// Resolves an alias without retaining the result in a memo. One-shot
 /// fact-poor contexts use this directly; repeated scans use a cached context.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 pub(crate) fn uncached_alias_def(
     db: &dyn baml_compiler2_ppir::Db,
     name: &QualifiedTypeName,
 ) -> Option<Ty> {
     if let Some(Definition::TypeAlias(alias)) = definition_of(db, name) {
-        return Some(crate::lower::type_alias_value(db, alias).to_plain());
+        return Some(crate::lower::type_alias_value(db, alias));
     }
     match crate::package_interface::mounted_type_row(db, name) {
         Some(crate::package_interface::ExportedType::TypeAlias { resolved, .. }) => {
@@ -172,22 +168,17 @@ impl TypeContext for Facts<'_> {
         )
     }
 
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn associated_type_bound(&self, interface: &Interface, assoc: Name) -> Vec<Interface> {
         // The declared `type assoc extends J`, realized at the qualifier's
         // args with `Self` left symbolic (the trait's contract: the oracle
         // is a function of the reference, not an implementor) - rustc's
         // `explicit_item_bounds` instantiated.
-        let target = InferInterface::from_constraint(interface);
-        let symbolic_self = baml_type::interned::Ty::intern(baml_type::interned::InferTy::TypeVar(
+        let symbolic_self = Ty::TypeVar(
             ParamTy::new(0, Name::new("Self")),
             baml_type::TyAttr::default(),
-        ));
-        crate::impls::realized_assoc_bound(self.db, &target, &symbolic_self, &assoc)
-            .and_then(|bound| bound.to_plain().as_interface())
+        );
+        crate::impls::realized_assoc_bound_plain(self.db, interface, &symbolic_self, &assoc)
+            .and_then(|bound| bound.as_interface())
             .map(|bound| {
                 // Reduce sibling-pin projections the substitution left behind
                 // (`Producer<(Self as Parser<Item = int>).Item>` -> the pin):
@@ -223,10 +214,6 @@ impl TypeContext for Facts<'_> {
     /// unpinned member of a written reference realizes its declared
     /// DEFAULT - the spec's fill-at-reference rule, deliberately broader
     /// than rustc (documented at `realized_assoc_default`).
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn project(
         &self,
         base: &Ty,
@@ -236,7 +223,6 @@ impl TypeContext for Facts<'_> {
         // fuel across the reduction chain (the TIR-side precedent).
         _fuel: u32,
     ) -> ProjectionStep {
-        use baml_type::normalize::equivalent_interned;
         if let Some((_, pin)) = interface
             .associated_types
             .iter()
@@ -265,10 +251,13 @@ impl TypeContext for Facts<'_> {
                         .iter()
                         .find(|(name, _)| name == member)
                         .map(|(_, ty)| ty.clone());
+                    // Identity dedup (hash-consing makes handle equality
+                    // structural identity): merging by relate-equivalence
+                    // let compatible-but-distinct candidates collapse into
+                    // a forced pick; distinct spellings now stay distinct
+                    // and disagree into Opaque, the ambiguity disposition.
                     if let Some(value) = value
-                        && !candidates
-                            .iter()
-                            .any(|have| equivalent_interned(have, &value, &eq))
+                        && !candidates.contains(&value)
                     {
                         candidates.push(value);
                     }
@@ -276,7 +265,11 @@ impl TypeContext for Facts<'_> {
             }
             // A rigid var reaches no impl, so the param env decides alone.
             return match candidates.as_slice() {
-                [only] => ProjectionStep::Reduced(only.to_plain()),
+                [only] => match baml_type::interned::ClosedTy::try_from(only) {
+                    Ok(only) => ProjectionStep::Reduced(only.to_plain()),
+                    // An open candidate cannot reduce — fail closed.
+                    Err(_) => ProjectionStep::Opaque,
+                },
                 _ => ProjectionStep::Opaque,
             };
         }
@@ -303,7 +296,10 @@ impl TypeContext for Facts<'_> {
             if let Some(default) =
                 crate::impls::realized_assoc_default(self.db, &base_target, &base_interned, member)
             {
-                return ProjectionStep::Reduced(default.to_plain());
+                return match baml_type::interned::ClosedTy::try_from(&default) {
+                    Ok(default) => ProjectionStep::Reduced(default.to_plain()),
+                    Err(_) => ProjectionStep::Opaque,
+                };
             }
             return ProjectionStep::Opaque;
         }
@@ -314,7 +310,10 @@ impl TypeContext for Facts<'_> {
             && let Some(pin) =
                 crate::impls::resolved_pin(self.db, &resolved, &base_interned, member)
         {
-            return ProjectionStep::Reduced(pin.to_plain());
+            return match baml_type::interned::ClosedTy::try_from(&pin) {
+                Ok(pin) => ProjectionStep::Reduced(pin.to_plain()),
+                Err(_) => ProjectionStep::Opaque,
+            };
         }
         ProjectionStep::Opaque
     }

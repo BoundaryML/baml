@@ -435,7 +435,7 @@ fn build_packages(
     use baml_compiler2_ppir::item_data::{AssociatedTypeBindingData, ImplSubjectData};
     use baml_type as ty;
     use rustc_hash::FxHashMap;
-    type BoundsMap = FxHashMap<ty::ParamTy, Vec<baml_type::interned::InferInterface>>;
+    type BoundsMap = FxHashMap<ty::ParamTy, Vec<baml_type::Interface>>;
     use bex_vm_types::{
         ObjectIndex,
         types::{InterfaceBound, ProgramImplRule, ProgramMethodImpl},
@@ -1050,12 +1050,7 @@ fn build_packages(
             // The receiver type `Self` denotes for this class's blocks, in
             // `Ty` space for default-binding completion (structural sugar for
             // the builtin containers, matching TIR's receiver typing).
-            #[expect(
-                deprecated,
-                reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-            )]
-            let class_receiver_ty =
-                baml_compiler2_hir_ty::lower::class_self_ty(db, class_loc).to_plain();
+            let class_receiver_ty = baml_compiler2_hir_ty::lower::class_self_ty(db, class_loc);
             for block in &class.implements {
                 // Constraint position: written inline pins only (see the
                 // free-impl site above).
@@ -4413,17 +4408,12 @@ fn compute_function_metadata<'db>(
     // `Self` via `interface_signature_bindings`). The class/interface receiver is a
     // synthetic `Name<params>` path (no item-tree read); the free-impl receiver is
     // its `for_target` ref, lowered from the impl block's arena.
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     let receiver_ty: Option<Ty> = if enclosing_interface.is_some() {
         None
     } else {
         // `owner_self_ty` resolves both the class receiver (with the
         // builtin-container sugar) and a free impl's `for` target.
         baml_compiler2_hir_ty::lower::owner_self_ty(db, func_loc, &enclosing_generics)
-            .map(|ty| ty.to_plain())
     };
 
     // Lower a signature type ref (in `store`) against this method's scope. For an
@@ -4441,11 +4431,7 @@ fn compute_function_metadata<'db>(
             ctx.with_frame(interface_binding_params.clone())
         } else {
             ctx.with_frame(enclosing_generics.clone())
-                .with_self_ty(
-                    receiver_ty
-                        .as_ref()
-                        .map(baml_type::interned::Ty::from_plain),
-                )
+                .with_self_ty(receiver_ty.clone())
                 .with_impl_target(baml_compiler2_hir_ty::lower::owner_impl_target(
                     db,
                     func_loc,
@@ -4591,27 +4577,11 @@ fn compute_function_metadata<'db>(
                 .flatten()
                 .map(|bound| baml_compiler2_mir::RuntimeInterfaceBound {
                     interface: bound.name.clone(),
-                    args: bound
-                        .generics
-                        .iter()
-                        .map(
-                            #[expect(
-                                deprecated,
-                                reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-                            )]
-                            |ty| to_template(&ty.to_plain()),
-                        )
-                        .collect(),
+                    args: bound.generics.iter().map(to_template).collect(),
                     assoc: bound
                         .associated_types
                         .iter()
-                        .map(
-                            #[expect(
-                                deprecated,
-                                reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-                            )]
-                            |(name, ty)| (name.clone(), to_template(&ty.to_plain())),
-                        )
+                        .map(|(name, ty)| (name.clone(), to_template(ty)))
                         .collect(),
                 })
                 .collect()

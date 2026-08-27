@@ -230,16 +230,12 @@ impl Completions {
 
     /// An argument label in the call it belongs to — the most specific
     /// thing an argument slot can be, which the relevance says.
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     pub(super) fn add_argument_label(
         &mut self,
         db: &dyn baml_compiler2_ppir::Db,
         file: SourceFile,
         name: &Name,
-        ty: &baml_type::interned::Ty,
+        ty: &baml_type::Ty,
     ) {
         self.push(Completion {
             label: name.as_str().to_string(),
@@ -248,11 +244,7 @@ impl Completions {
             // after the equals rather than inside a placeholder.
             insert: CompletionInsert::Plain(format!("{} = ", name.as_str())),
             kind: CompletionKind::Parameter,
-            detail: Some(crate::render::display_ty_canonical_for_file(
-                db,
-                file,
-                &ty.to_plain(),
-            )),
+            detail: Some(crate::render::display_ty_canonical_for_file(db, file, ty)),
             documentation: None,
             relevance: CompletionRelevance {
                 is_parameter: true,

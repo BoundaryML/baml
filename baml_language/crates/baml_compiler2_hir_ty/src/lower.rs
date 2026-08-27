@@ -126,11 +126,11 @@ pub struct LowerCtx<'db> {
     /// implements-block (or free-impl) method: the qualifier `Self.Member`
     /// projects through (rustc resolves `Self::Assoc` in an impl via the
     /// impl's trait ref the same way).
-    self_impl_target: Option<baml_type::interned::InferInterface>,
+    self_impl_target: Option<baml_type::Interface>,
     /// The frame's declared interface bounds (I2's param env): each
     /// param's CONJUNCTION. Projections (`T.Output`) determine their
     /// interface through these.
-    bounds: FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
+    bounds: FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     /// Body-local runtime type atoms replaced by their synthesized rigid
     /// parameters. Empty for declaration signatures.
     runtime_type_params: FxHashMap<TypeRefId, ParamTy>,
@@ -227,27 +227,23 @@ impl<'db> LowerCtx<'db> {
     }
     /// See `LowerCtx::self_ty`.
     #[must_use]
-    pub fn with_impl_target(mut self, target: Option<baml_type::interned::InferInterface>) -> Self {
+    pub fn with_impl_target(mut self, target: Option<baml_type::Interface>) -> Self {
         self.self_impl_target = target;
         self
     }
 
     #[must_use]
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
-    pub fn with_self_ty(mut self, self_ty: Option<Ty>) -> Self {
-        // Owner `Self` types are declaration-side (hole-free), so the
-        // materialization into the lowering vocabulary is total.
-        self.self_ty = self_ty.map(|ty| ty.to_plain().into());
+    pub fn with_self_ty(mut self, self_ty: Option<baml_type::Ty>) -> Self {
+        // Owner `Self` types are declaration-side (hole-free) plain types;
+        // the widening into the lowering vocabulary is the zero-cost upcast.
+        self.self_ty = self_ty.map(Into::into);
         self
     }
 
     #[must_use]
     pub fn with_bounds(
         mut self,
-        bounds: FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
+        bounds: FxHashMap<ParamTy, Vec<baml_type::Interface>>,
     ) -> LowerCtx<'db> {
         self.bounds = bounds;
         self
@@ -614,36 +610,10 @@ impl<'db> LowerCtx<'db> {
         (clean && !ty.contains_error()).then_some(ty)
     }
 
-    /// The frame's bound env as the PLAIN constraint map the projection
-    /// determination judges through.
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
+    /// The frame's bound env as the constraint map the projection
+    /// determination judges through — the bounds' own (plain) vocabulary.
     fn plain_bounds_env(&self) -> rustc_hash::FxHashMap<ParamTy, Vec<baml_type::Interface>> {
-        self.bounds
-            .iter()
-            .map(|(param, refs)| {
-                (
-                    param.clone(),
-                    refs.iter()
-                        .map(|bound| baml_type::Interface {
-                            name: bound.name.clone(),
-                            generics: bound
-                                .generics
-                                .iter()
-                                .map(baml_type::interned::Ty::to_plain)
-                                .collect(),
-                            associated_types: bound
-                                .associated_types
-                                .iter()
-                                .map(|(name, ty)| (name.clone(), ty.to_plain()))
-                                .collect(),
-                        })
-                        .collect(),
-                )
-            })
-            .collect()
+        self.bounds.clone()
     }
 
     /// Record projection-determination diagnostics through the sink at the
@@ -663,10 +633,6 @@ impl<'db> LowerCtx<'db> {
     /// a type-var base, the UNIQUE bound in its conjunction whose
     /// interface declares `member` (0 or ambiguity is Error - S17's
     /// diagnostic); for an interface-existential base, itself.
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn projection_interface_for(
         &self,
         base: &LoweringTy,
@@ -680,27 +646,23 @@ impl<'db> LowerCtx<'db> {
                 crate::interfaces::MemberNamespace::Type,
             )
         };
-        // The bound conjunctions and the impl target live interned (they are
-        // declaration-side and hole-free); the chosen one materializes into
-        // the lowering vocabulary at the return.
-        let materialize = |target: &baml_type::interned::InferInterface| {
+        // The bound conjunctions and the impl target are declaration-side
+        // (hole-free) plain constraints; the chosen one widens into the
+        // lowering vocabulary at the return.
+        let materialize = |target: &baml_type::Interface| {
             LoweringInterface::new(
                 target.name.clone(),
-                target
-                    .generics
-                    .iter()
-                    .map(|ty| ty.to_plain().into())
-                    .collect(),
+                target.generics.iter().map(Into::into).collect(),
                 target
                     .associated_types
                     .iter()
-                    .map(|(name, ty)| (name.clone(), ty.to_plain().into()))
+                    .map(|(name, ty)| (name.clone(), ty.into()))
                     .collect(),
             )
         };
         match base {
             LoweringTy::TypeVar(param, _) => {
-                let candidates: Vec<&baml_type::interned::InferInterface> = self
+                let candidates: Vec<&baml_type::Interface> = self
                     .bounds
                     .get(param)
                     .map(|bounds| {
@@ -729,20 +691,17 @@ impl<'db> LowerCtx<'db> {
                 member: prev_member,
                 ..
             } => {
-                let target = baml_type::interned::InferInterface::from_constraint(
-                    &baml_type::Interface::try_from(interface.as_ref().clone()).ok()?,
-                );
-                let prev_base_interned =
-                    Ty::from_plain(&baml_type::Ty::try_from(prev_base.as_ref()).ok()?);
-                let bound = crate::impls::realized_assoc_bound(
+                let target = baml_type::Interface::try_from(interface.as_ref().clone()).ok()?;
+                let prev_base = baml_type::Ty::try_from(prev_base.as_ref()).ok()?;
+                let bound = crate::impls::realized_assoc_bound_plain(
                     self.db,
                     &target,
-                    &prev_base_interned,
+                    &prev_base,
                     prev_member,
                 )?;
-                match bound.kind() {
-                    InferTy::Interface(name, args, pins, _) => declares(name).then(|| {
-                        materialize(&baml_type::interned::InferInterface::new(
+                match &bound {
+                    baml_type::Ty::Interface(name, args, pins, _) => declares(name).then(|| {
+                        materialize(&baml_type::Interface::new(
                             name.clone(),
                             args.clone(),
                             pins.clone(),
@@ -777,13 +736,12 @@ impl<'db> LowerCtx<'db> {
             return key;
         }
         let facts = crate::facts::Facts::new(self.db);
-        let string = Ty::intern(InferTy::String {
+        let string = baml_type::Ty::String {
             attr: TyAttr::default(),
-        });
-        // Past the gate the key is closed, so the interned oracle's
-        // ingestion is total.
-        let key_interned = Ty::from_plain(&reject_holes(&key));
-        if !baml_type::normalize::is_subtype_interned(&key_interned, &string, &facts) {
+        };
+        // Past the gate the key is hole-free, so the reject fold is a pure
+        // narrowing; the judgment stays in the plain vocabulary.
+        if !baml_type::normalize::is_subtype(&reject_holes(&key), &string, &facts) {
             // Diagnose but keep the WRITTEN key (TIR's shape): the
             // diagnostic is the enforcement, and downstream surfaces
             // (codegen schemas, renders) still see what the user wrote.
@@ -1766,12 +1724,16 @@ pub fn class_qualified_name<'db>(
 /// params as `TypeVar`s, through the same builtin bridging as written
 /// annotations - so `self` in `baml.Array<T>` is `T[]`, and substituting
 /// the receiver's args yields e.g. `int[]` with no per-class special case.
-pub fn class_self_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, class: ClassLoc<'db>) -> Ty {
-    let args: Vec<Ty> = class_generic_frame(db, class)
+pub fn class_self_ty<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    class: ClassLoc<'db>,
+) -> baml_type::Ty {
+    let args: Vec<LoweringTy> = class_generic_frame(db, class)
         .into_iter()
-        .map(|param| Ty::intern(InferTy::TypeVar(param, TyAttr::default())))
+        .map(|param| LoweringTy::TypeVar(param, TyAttr::default()))
         .collect();
-    class_ty(class_qualified_name(db, class), args)
+    // Hole-free by construction, so the reject fold is a pure narrowing.
+    reject_holes(&class_lowering_ty(class_qualified_name(db, class), args))
 }
 
 /// A generic frame from bare interface param names (no `Self` slot -
@@ -1840,7 +1802,7 @@ pub fn impl_frame<'db>(
 pub fn impl_generic_bounds<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     block: baml_compiler2_hir::loc::ImplLoc<'db>,
-) -> FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>> {
+) -> FxHashMap<ParamTy, Vec<baml_type::Interface>> {
     let data = baml_compiler2_ppir::item_data::impl_block_data(db, block);
     match &data.subject {
         baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
@@ -1855,13 +1817,12 @@ pub fn impl_generic_bounds<'db>(
                     .bounds
                     .iter()
                     .filter_map(|&type_ref| {
-                        baml_type::interned::InferInterface::of_ty(&Ty::from_plain(&reject_holes(
-                            &ctx.lower_type_ref_at(
-                                &data.type_refs,
-                                type_ref,
-                                TypePosition::ConstraintHead,
-                            ),
-                        )))
+                        reject_holes(&ctx.lower_type_ref_at(
+                            &data.type_refs,
+                            type_ref,
+                            TypePosition::ConstraintHead,
+                        ))
+                        .as_interface()
                     })
                     .collect();
                 if !bounds.is_empty() {
@@ -1915,11 +1876,11 @@ fn extend_frame<'a>(frame: &mut Vec<ParamTy>, names: impl IntoIterator<Item = &'
 pub struct FunctionSignature {
     pub generic_params: Vec<ParamTy>,
     pub params: Vec<SignatureParam>,
-    pub ret: Ty,
+    pub ret: baml_type::Ty,
     /// The declared clause when written, else the INFERRED effect via
     /// `callable_throws` (S12) - body-derived, fixpoint over mutual
     /// recursion, `never` when nothing throws.
-    pub throws: Ty,
+    pub throws: baml_type::Ty,
     /// Whether `throws` was written. The owner's own inference checks its
     /// throw sites against a DECLARED clause (the contract) and ignores an
     /// inferred one (which is derived FROM those sites).
@@ -1929,7 +1890,7 @@ pub struct FunctionSignature {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SignatureParam {
     pub name: Name,
-    pub ty: Ty,
+    pub ty: baml_type::Ty,
     pub has_default: bool,
 }
 
@@ -2033,7 +1994,7 @@ fn fill_holes_as_errors(ty: &LoweringTy) -> baml_type::Ty {
 pub fn class_generic_bounds<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     class: ClassLoc<'db>,
-) -> FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>> {
+) -> FxHashMap<ParamTy, Vec<baml_type::Interface>> {
     let frame = class_generic_frame(db, class);
     let ctx = lower_ctx_for_file(db, class.file(db)).with_frame(frame.clone());
     let data = baml_compiler2_ppir::item_data::class_data(db, class);
@@ -2043,9 +2004,12 @@ pub fn class_generic_bounds<'db>(
             .bounds
             .iter()
             .filter_map(|&type_ref| {
-                baml_type::interned::InferInterface::of_ty(&Ty::from_plain(&reject_holes(
-                    &ctx.lower_type_ref_at(&data.type_refs, type_ref, TypePosition::ConstraintHead),
-                )))
+                reject_holes(&ctx.lower_type_ref_at(
+                    &data.type_refs,
+                    type_ref,
+                    TypePosition::ConstraintHead,
+                ))
+                .as_interface()
             })
             .collect();
         if !refs.is_empty() {
@@ -2061,16 +2025,14 @@ pub fn class_generic_bounds<'db>(
 pub fn function_generic_bounds<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
-) -> FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>> {
+) -> FxHashMap<ParamTy, Vec<baml_type::Interface>> {
     let frame = function_generic_frame(db, function);
     let ctx = lower_ctx_for_file(db, function.file(db)).with_frame(frame.clone());
     let mut out = FxHashMap::default();
-    // A lowered constraint head enters the interned bounds vocabulary
-    // through the reject fold: a hole inside a written bound degrades to
-    // `Error` (its diagnostic is the WF walk's), never panics.
-    let as_ref = |ty: &LoweringTy| {
-        baml_type::interned::InferInterface::of_ty(&Ty::from_plain(&reject_holes(ty)))
-    };
+    // A lowered constraint head enters the bounds vocabulary through the
+    // reject fold: a hole inside a written bound degrades to `Error` (its
+    // diagnostic is the WF walk's), never panics.
+    let as_ref = |ty: &LoweringTy| reject_holes(ty).as_interface();
     let mut frame_iter = frame.iter();
     match baml_compiler2_ppir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => {
@@ -2170,44 +2132,42 @@ pub fn function_generic_bounds<'db>(
 pub fn interface_scope_bounds<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-) -> FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>> {
+) -> FxHashMap<ParamTy, Vec<baml_type::Interface>> {
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
     let frame = interface_frame(db, interface);
     let ctx = lower_ctx_for_file(db, interface.file(db)).with_frame(frame.clone());
-    // A lowered constraint head enters the interned bounds vocabulary
-    // through the reject fold: a hole inside a written bound degrades to
-    // `Error` (its diagnostic is the WF walk's), never panics.
-    let as_ref = |ty: &LoweringTy| {
-        baml_type::interned::InferInterface::of_ty(&Ty::from_plain(&reject_holes(ty)))
-    };
+    // A lowered constraint head enters the bounds vocabulary through the
+    // reject fold: a hole inside a written bound degrades to `Error` (its
+    // diagnostic is the WF walk's), never panics.
+    let as_ref = |ty: &LoweringTy| reject_holes(ty).as_interface();
     let mut out = FxHashMap::default();
     let mut frame_iter = frame.iter();
     if let Some(self_param) = frame_iter.next() {
-        let args: Vec<Ty> = frame
+        let args: Vec<baml_type::Ty> = frame
             .iter()
             .skip(1)
             .take(data.generic_params.len())
-            .map(|param| Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default())))
+            .map(|param| baml_type::Ty::TypeVar(param.clone(), TyAttr::default()))
             .collect();
         // Each associated slot pins to the frame's OWN var, so inside the
         // interface `Self.Member` reduces to that slot (TIR's layout: the
         // member is a frame position, bound per-receiver at impl
         // selection - a default method's projection stays symbolic, never
         // the declared default).
-        let pins: Box<[(Name, Ty)]> = frame
+        let pins: Box<[(Name, baml_type::Ty)]> = frame
             .iter()
             .skip(1 + data.generic_params.len())
             .zip(&data.associated_types)
             .map(|(param, assoc)| {
                 (
                     assoc.name.clone(),
-                    Ty::intern(InferTy::TypeVar(param.clone(), TyAttr::default())),
+                    baml_type::Ty::TypeVar(param.clone(), TyAttr::default()),
                 )
             })
             .collect();
         out.insert(
             self_param.clone(),
-            vec![baml_type::interned::InferInterface::new(
+            vec![baml_type::Interface::new(
                 interface_qualified_name(db, interface),
                 args.into_boxed_slice(),
                 pins,
@@ -2292,8 +2252,8 @@ fn function_signature_cycle_initial<'db>(
     FunctionSignature {
         generic_params: Vec::new(),
         params: Vec::new(),
-        ret: Ty::error(),
-        throws: Ty::never(),
+        ret: baml_type::Ty::error(),
+        throws: baml_type::Ty::never(),
         throws_declared: false,
     }
 }
@@ -2307,7 +2267,7 @@ pub fn owner_self_ty<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
     frame: &[baml_type::ParamTy],
-) -> Option<Ty> {
+) -> Option<baml_type::Ty> {
     match baml_compiler2_ppir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => Some(class_self_ty(db, class)),
         Some(MethodOwner::FreeImpl(impl_loc)) => {
@@ -2315,9 +2275,9 @@ pub fn owner_self_ty<'db>(
             match &data.subject {
                 baml_compiler2_ppir::item_data::ImplSubjectData::Free { for_target, .. } => {
                     let ctx = lower_ctx_for_file(db, impl_loc.file(db)).with_frame(frame.to_vec());
-                    Some(Ty::from_plain(&reject_holes(
+                    Some(reject_holes(
                         &ctx.lower_type_ref(&data.type_refs, *for_target),
-                    )))
+                    ))
                 }
                 baml_compiler2_ppir::item_data::ImplSubjectData::InClass { class, .. } => {
                     Some(class_self_ty(db, *class))
@@ -2337,20 +2297,19 @@ pub fn owner_impl_target<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     function: FunctionLoc<'db>,
     frame: &[baml_type::ParamTy],
-) -> Option<baml_type::interned::InferInterface> {
+) -> Option<baml_type::Interface> {
     let target = baml_compiler2_ppir::item_data::method_interface_target(db, function).as_ref()?;
     // The impl's bounds ride along: a written `type Member = T.Item`
     // binding must find `Item`'s declaring interface through `T`'s bound.
     let ctx = lower_ctx_for_file(db, function.file(db))
         .with_frame(frame.to_vec())
         .with_bounds(function_generic_bounds(db, function));
-    let interface = baml_type::interned::InferInterface::of_ty(&Ty::from_plain(&reject_holes(
-        &ctx.lower_type_ref_at(
-            &target.type_refs,
-            target.target,
-            TypePosition::ConstraintHead,
-        ),
-    )))?;
+    let interface = reject_holes(&ctx.lower_type_ref_at(
+        &target.type_refs,
+        target.target,
+        TypePosition::ConstraintHead,
+    ))
+    .as_interface()?;
     let mut pins = target
         .associated_type_bindings
         .iter()
@@ -2358,9 +2317,7 @@ pub fn owner_impl_target<'db>(
             binding.type_ref.map(|type_ref| {
                 (
                     binding.name.clone(),
-                    Ty::from_plain(&reject_holes(
-                        &ctx.lower_type_ref(&target.type_refs, type_ref),
-                    )),
+                    reject_holes(&ctx.lower_type_ref(&target.type_refs, type_ref)),
                 )
             })
         })
@@ -2370,7 +2327,7 @@ pub fn owner_impl_target<'db>(
             pins.push((name.clone(), ty.clone()));
         }
     }
-    Some(baml_type::interned::InferInterface::new(
+    Some(baml_type::Interface::new(
         interface.name.clone(),
         interface.generics,
         pins.into_boxed_slice(),
@@ -2485,7 +2442,7 @@ pub fn signature_lowering_diagnostics<'db>(
     // The signature's written positions, each lowered for the sink AND
     // judged for generic-argument well-formedness (rustc's wfcheck:
     // `Box<int>` under `class Box<T extends Named>` reports here).
-    let scope_env = plain_scope_bounds(function_generic_bounds(db, function));
+    let scope_env = function_generic_bounds(db, function);
     let mut out: Vec<(text_size::TextRange, TirTypeError)> = Vec::new();
     let mut lower_and_judge = |type_ref: baml_compiler2_hir::type_ref::TypeRefId| {
         let (lowered, diagnostics) = ctx.lower_type_ref_with_diagnostics(&data.type_refs, type_ref);
@@ -2544,7 +2501,7 @@ pub fn signature_lowering_diagnostics<'db>(
                     db,
                     &func_data.type_refs,
                     *bound,
-                    &Ty::from_plain(&reject_holes(&lowered)),
+                    &reject_holes(&lowered),
                 ) {
                     out.push((source_map.type_refs.span(*bound), error));
                 }
@@ -2570,15 +2527,11 @@ pub fn signature_lowering_diagnostics<'db>(
 /// the interface's own obligation, checked at its declaration; a value
 /// still carrying a type variable resolves at instantiation and fails
 /// open. TIR's bound-side check from `lower_generic_param_interface_bounds`.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn bound_binding_violations(
     db: &dyn baml_compiler2_ppir::Db,
     store: &TypeRefStore,
     bound: TypeRefId,
-    lowered: &Ty,
+    lowered: &baml_type::Ty,
 ) -> Vec<crate::diagnostics::TirTypeError> {
     let TypeRefKind::Path {
         associated_type_bindings,
@@ -2590,8 +2543,7 @@ fn bound_binding_violations(
     if associated_type_bindings.is_empty() {
         return Vec::new();
     }
-    let plain = lowered.to_plain();
-    let baml_type::Ty::Interface(qtn, generics, pins, _) = &plain else {
+    let baml_type::Ty::Interface(qtn, generics, pins, _) = lowered else {
         return Vec::new();
     };
     let head = baml_type::Interface::new(qtn.clone(), generics.clone(), pins.clone());
@@ -2626,40 +2578,6 @@ fn bound_binding_violations(
     out
 }
 
-/// An interned scope-bounds map as the plain constraint env the
-/// well-formedness walk judges type-variable arguments through.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
-fn plain_scope_bounds(
-    interned: FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
-) -> FxHashMap<ParamTy, Vec<baml_type::Interface>> {
-    interned
-        .into_iter()
-        .map(|(param, refs)| {
-            (
-                param,
-                refs.iter()
-                    .map(|bound| baml_type::Interface {
-                        name: bound.name.clone(),
-                        generics: bound
-                            .generics
-                            .iter()
-                            .map(baml_type::interned::Ty::to_plain)
-                            .collect(),
-                        associated_types: bound
-                            .associated_types
-                            .iter()
-                            .map(|(name, ty)| (name.clone(), ty.to_plain()))
-                            .collect(),
-                    })
-                    .collect(),
-            )
-        })
-        .collect()
-}
-
 /// The check layer's CLASS-declaration diagnostic walk: generic-param
 /// bounds re-lowered with the sink under the class frame (unresolved,
 /// arity, non-interface and builtin-not-a-bound rules).
@@ -2678,7 +2596,7 @@ pub fn class_lowering_diagnostics<'db>(
     // Field annotations: every written field type re-lowers with the sink
     // (unresolved names, wrong arg counts - the pre-S17 structural walk)
     // and is judged for generic-argument well-formedness.
-    let scope_env = plain_scope_bounds(class_generic_bounds(db, class));
+    let scope_env = class_generic_bounds(db, class);
     for field in &data.fields {
         let (lowered, diagnostics) =
             ctx.lower_type_ref_with_diagnostics(&data.type_refs, field.type_ref);
@@ -2704,12 +2622,9 @@ pub fn class_lowering_diagnostics<'db>(
                 ));
             }
             LoweringTy::Interface(..) => {
-                for error in bound_binding_violations(
-                    db,
-                    &data.type_refs,
-                    *bound,
-                    &Ty::from_plain(&reject_holes(&lowered)),
-                ) {
+                for error in
+                    bound_binding_violations(db, &data.type_refs, *bound, &reject_holes(&lowered))
+                {
                     out.push((source_map.type_refs.span(*bound), error));
                 }
             }
@@ -2744,7 +2659,7 @@ pub fn interface_lowering_diagnostics<'db>(
     let mut out = Vec::new();
     // Field and required-method annotations judge for generic-argument
     // well-formedness in the interface's own scope.
-    let scope_env = plain_scope_bounds(interface_scope_bounds(db, interface));
+    let scope_env = interface_scope_bounds(db, interface);
     let judge = |type_ref: baml_compiler2_hir::type_ref::TypeRefId,
                  out: &mut Vec<(text_size::TextRange, TirTypeError)>| {
         let (lowered, diagnostics) = ctx.lower_type_ref_with_diagnostics(&data.type_refs, type_ref);
@@ -2762,7 +2677,7 @@ pub fn interface_lowering_diagnostics<'db>(
     // E0002 on its type parameters.
     {
         let resolved = crate::interfaces::resolve_interface_required_methods(db, interface);
-        let scope_env = plain_scope_bounds(interface_scope_bounds(db, interface));
+        let scope_env = interface_scope_bounds(db, interface);
         for (index, method) in resolved.iter().enumerate() {
             let mut env = scope_env.clone();
             for (param, bounds) in &method.generic_params {
@@ -2817,10 +2732,7 @@ pub fn interface_lowering_diagnostics<'db>(
     // default keeps `Self` symbolic and fails open through the
     // projection's carried bound.
     {
-        let facts = crate::facts::Facts::with_bounds(
-            db,
-            plain_scope_bounds(interface_scope_bounds(db, interface)),
-        );
+        let facts = crate::facts::Facts::with_bounds(db, interface_scope_bounds(db, interface));
         let own_params: Vec<baml_type::Ty> = interface_declared_params(db, interface)
             .iter()
             .map(|param| baml_type::Ty::TypeVar(param.clone(), baml_type::TyAttr::default()))
@@ -3002,13 +2914,13 @@ pub fn function_signature<'db>(
             return None;
         }
         match owner {
-            Some(MethodOwner::Interface(_)) => Some(Ty::intern(InferTy::TypeVar(
+            Some(MethodOwner::Interface(_)) => Some(baml_type::Ty::TypeVar(
                 frame
                     .first()
                     .cloned()
                     .expect("interface frame starts with Self"),
                 TyAttr::default(),
-            ))),
+            )),
             _ => concrete_self.clone(),
         }
     };
@@ -3018,17 +2930,15 @@ pub fn function_signature<'db>(
         .map(|param| SignatureParam {
             name: param.name.clone(),
             ty: self_ty(param).unwrap_or_else(|| {
-                Ty::from_plain(&reject_holes(
-                    &ctx.lower_type_ref(&data.type_refs, param.type_ref),
-                ))
+                reject_holes(&ctx.lower_type_ref(&data.type_refs, param.type_ref))
             }),
             has_default: param.has_default,
         })
         .collect();
     let ret = data
         .return_type
-        .map(|ret| Ty::from_plain(&reject_holes(&ctx.lower_type_ref(&data.type_refs, ret))))
-        .unwrap_or_else(Ty::error);
+        .map(|ret| reject_holes(&ctx.lower_type_ref(&data.type_refs, ret)))
+        .unwrap_or_else(baml_type::Ty::error);
     let throws_declared = data.throws.is_some();
     let throws = data
         .throws
@@ -3038,15 +2948,15 @@ pub fn function_signature<'db>(
                 // A PARTIAL clause (`throws T | _`, spec rule 3): callers
                 // see the merged surface (declared + inferred), which is
                 // what `callable_throws` computes through the body run.
-                Ty::from_plain(&crate::callable::callable_throws(db, function).0)
+                crate::callable::callable_throws(db, function).0
             } else {
-                Ty::from_plain(&reject_holes(&lowered))
+                reject_holes(&lowered)
             }
         })
         .unwrap_or_else(|| {
             // Omitted: the body-inferred effect, fixpoint over mutual
             // recursion (S12's callable_throws).
-            Ty::from_plain(&crate::callable::callable_throws(db, function).0)
+            crate::callable::callable_throws(db, function).0
         });
     FunctionSignature {
         generic_params: frame,
@@ -3061,7 +2971,7 @@ pub fn function_signature<'db>(
 pub fn class_field_types<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     class: ClassLoc<'db>,
-) -> Vec<(Name, Ty)> {
+) -> Vec<(Name, baml_type::Ty)> {
     let data = baml_compiler2_ppir::item_data::class_data(db, class);
     let ctx = lower_ctx_for_file(db, class.file(db)).with_frame(class_generic_frame(db, class));
     data.fields
@@ -3069,28 +2979,29 @@ pub fn class_field_types<'db>(
         .map(|field| {
             (
                 field.name.clone(),
-                Ty::from_plain(&reject_holes(
-                    &ctx.lower_type_ref(&data.type_refs, field.type_ref),
-                )),
+                reject_holes(&ctx.lower_type_ref(&data.type_refs, field.type_ref)),
             )
         })
         .collect()
 }
 
 /// A type alias's right-hand side, lowered (aliases are non-generic).
-pub fn type_alias_value<'db>(db: &'db dyn baml_compiler2_ppir::Db, alias: TypeAliasLoc<'db>) -> Ty {
+pub fn type_alias_value<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    alias: TypeAliasLoc<'db>,
+) -> baml_type::Ty {
     let data = baml_compiler2_ppir::item_data::type_alias_data(db, alias);
     let ctx = lower_ctx_for_file(db, alias.file(db));
     data.value
-        .map(|value| Ty::from_plain(&reject_holes(&ctx.lower_type_ref(&data.type_refs, value))))
-        .unwrap_or_else(Ty::error)
+        .map(|value| reject_holes(&ctx.lower_type_ref(&data.type_refs, value)))
+        .unwrap_or_else(baml_type::Ty::error)
 }
 
 /// One associated type's bound or default, lowered once in the interface
 /// frame. Wrapped for the manual `salsa::Update` impl (the
 /// `CallableThrows` precedent).
 #[derive(Debug, Clone, PartialEq)]
-pub struct AssocTypeLowering(pub Option<Ty>);
+pub struct AssocTypeLowering(pub Option<baml_type::Ty>);
 
 // SAFETY: PartialEq-driven overwrite, the CallableThrows precedent.
 #[allow(unsafe_code)]
@@ -3159,7 +3070,7 @@ fn lower_assoc_type_ref<'db>(
     member: &Name,
     position: TypePosition,
     select: impl Fn(&baml_compiler2_ppir::item_data::AssociatedTypeData) -> Option<TypeRefId>,
-) -> Option<Ty> {
+) -> Option<baml_type::Ty> {
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
     let assoc = data
         .associated_types
@@ -3169,11 +3080,11 @@ fn lower_assoc_type_ref<'db>(
     let ctx = lower_ctx_for_file(db, interface.file(db))
         .with_frame(interface_frame(db, interface))
         .with_bounds(interface_scope_bounds(db, interface));
-    Some(Ty::from_plain(&reject_holes(&ctx.lower_type_ref_at(
+    Some(reject_holes(&ctx.lower_type_ref_at(
         &data.type_refs,
         type_ref,
         position,
-    ))))
+    )))
 }
 
 /// Splits a lowered `throws` clause into its named members and whether it

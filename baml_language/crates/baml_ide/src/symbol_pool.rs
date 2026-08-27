@@ -84,10 +84,6 @@ fn split_companion(name: &str) -> Option<(&str, &str)> {
 /// Walks every file visible to compiler2 (user files + stdlib stubs),
 /// extracts classes/enums/type aliases/functions/methods, resolves their
 /// types, and converts to codegen types.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
     enum MethodKind {
         Static,
@@ -131,7 +127,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     if let baml_compiler2_hir::contributions::Definition::TypeAlias(loc) = def {
                         aliases.insert(
                             baml_compiler2_hir_ty::lower::qualify_def(db, *def, name),
-                            baml_compiler2_hir_ty::lower::type_alias_value(db, *loc).to_plain(),
+                            baml_compiler2_hir_ty::lower::type_alias_value(db, *loc),
                         );
                     }
                 }

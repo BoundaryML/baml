@@ -22,7 +22,7 @@ use baml_type::{
     interned::{InferTy, Ty},
 };
 
-use super::{Adjust, Adjustment, Expectation, InferenceContext, InferenceResult};
+use super::{Adjust, Adjustment, Expectation, InferenceContext, WorkingResult};
 
 /// What a value's static type says about its runtime truthiness.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -173,7 +173,7 @@ impl<'db> InferenceContext<'db> {
     /// before the S17 diagnostic materialization, writing into the SAME
     /// tables the eager path writes (`result` is already taken from
     /// `self.result` at this point in `finish`).
-    pub(super) fn decide_deferred_conditions(&mut self, result: &mut InferenceResult<'db>) {
+    pub(super) fn decide_deferred_conditions(&mut self, result: &mut WorkingResult<'db>) {
         for pending in std::mem::take(&mut self.pending_truthy_conditions) {
             let PendingCondition {
                 expr: condition,

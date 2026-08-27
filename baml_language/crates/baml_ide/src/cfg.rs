@@ -670,10 +670,6 @@ fn resolved_call_function<'db>(
     }
 }
 
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn dispatch_bindings_for_call(
     db: &dyn baml_compiler2_ppir::Db,
     inference: &baml_compiler2_hir_ty::infer::InferenceResult<'_>,
@@ -718,7 +714,7 @@ fn dispatch_bindings_for_call(
         let Some(concrete) = inference.type_of_expr.get(&arg_expr) else {
             return;
         };
-        bindings.insert(param.name.to_string(), concrete.to_plain());
+        bindings.insert(param.name.to_string(), concrete.clone());
     };
 
     if let Some(plan) = inference.call_plans.get(&call_expr) {

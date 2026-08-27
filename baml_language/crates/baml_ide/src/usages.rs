@@ -497,10 +497,6 @@ fn member_target_name(db: &dyn baml_compiler2_ppir::Db, target: SymbolTarget<'_>
     clippy::too_many_arguments,
     reason = "per-scope walk context threaded through one call site"
 )]
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn collect_constructor_key_usages(
     db: &dyn baml_compiler2_ppir::Db,
     file: SourceFile,
@@ -521,11 +517,7 @@ fn collect_constructor_key_usages(
             continue;
         };
 
-        let Some(obj_ty) = inference
-            .type_of_expr
-            .get(&expr_id)
-            .map(baml_type::interned::Ty::to_plain)
-        else {
+        let Some(obj_ty) = inference.type_of_expr.get(&expr_id).cloned() else {
             continue;
         };
         let Ty::Class(ref qtn, _, _) = obj_ty else {

@@ -396,40 +396,13 @@ impl ExportedType {
     }
 }
 
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
-fn plain_interface(reference: &baml_type::interned::InferInterface) -> baml_type::Interface {
-    baml_type::Interface::new(
-        reference.name.clone(),
-        reference
-            .generics
-            .iter()
-            .map(baml_type::interned::Ty::to_plain)
-            .collect(),
-        reference
-            .associated_types
-            .iter()
-            .map(|(name, ty)| (name.clone(), ty.to_plain()))
-            .collect(),
-    )
-}
-
 fn plain_bounds(
     params: &[ParamTy],
-    bounds: &FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>>,
+    bounds: &FxHashMap<ParamTy, Vec<baml_type::Interface>>,
 ) -> Vec<Vec<baml_type::Interface>> {
     params
         .iter()
-        .map(|param| {
-            bounds
-                .get(param)
-                .into_iter()
-                .flatten()
-                .map(plain_interface)
-                .collect()
-        })
+        .map(|param| bounds.get(param).into_iter().flatten().cloned().collect())
         .collect()
 }
 
@@ -601,10 +574,6 @@ fn exported_function_param(name: Name, ty: Ty, has_default: bool) -> FunctionPar
 /// (`callable_throws`). The one place the two facts are paired. Exported
 /// generics are the function's OWN params: the frame minus the enclosing
 /// type's prefix (`enclosing_param_count`, 0 for a free function).
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn exported_function<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -619,18 +588,18 @@ fn exported_function<'db>(
         .map(|param| {
             exported_function_param(
                 param.name.clone(),
-                reduce_ground_projections(db, &param.ty.to_plain(), 8),
+                crate::impls::reduce_ground_projections_plain(db, &param.ty, 8),
                 param.has_default,
             )
         })
         .collect();
     let declared_throws = sig
         .throws_declared
-        .then(|| reduce_ground_projections(db, &sig.throws.to_plain(), 8));
+        .then(|| crate::impls::reduce_ground_projections_plain(db, &sig.throws, 8));
     let callable_throws =
         if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
             if sig.throws_declared {
-                sig.throws.to_plain()
+                sig.throws.clone()
             } else {
                 Ty::Unknown {
                     attr: TyAttr::default(),
@@ -649,7 +618,7 @@ fn exported_function<'db>(
     ExportedFunction {
         name: name.clone(),
         params,
-        return_type: reduce_ground_projections(db, &sig.ret.to_plain(), 8),
+        return_type: crate::impls::reduce_ground_projections_plain(db, &sig.ret, 8),
         declared_throws,
         callable_throws,
         generic_param_bounds: plain_bounds(&own_generic_params, &all_bounds),
@@ -736,10 +705,6 @@ fn lower_enum_export<'db>(
 }
 
 /// Lower a type-alias definition into its `ExportedType::TypeAlias`.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn lower_alias_export<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     pkg_items: &PackageItems<'db>,
@@ -747,7 +712,7 @@ fn lower_alias_export<'db>(
     name: &Name,
 ) -> ExportedType {
     let _ = pkg_items;
-    let resolved = crate::lower::type_alias_value(db, ta_loc).to_plain();
+    let resolved = crate::lower::type_alias_value(db, ta_loc);
     let qtn = qualify_def(db, Definition::TypeAlias(ta_loc), name);
     ExportedType::TypeAlias { qtn, resolved }
 }
@@ -772,31 +737,26 @@ fn lower_interface_export<'db>(
         .with_frame(frame.clone())
         .with_bounds(bounds.clone());
 
-    let self_ty = baml_type::interned::Ty::intern(baml_type::interned::InferTy::TypeVar(
-        self_param.clone(),
-        TyAttr::default(),
-    ));
-    let mut requires_refs = Vec::new();
+    let self_ty = baml_type::Ty::TypeVar(self_param.clone(), TyAttr::default());
+    let mut requires: Vec<baml_type::Interface> = Vec::new();
     for &required in &data.requires {
-        let Some(root) = baml_type::interned::InferInterface::of_ty(&crate::impls::interned_ty(
-            &crate::lower::reject_holes(&ctx.lower_type_ref_at(
-                &data.type_refs,
-                required,
-                crate::lower::TypePosition::ConstraintHead,
-            )),
-        )) else {
+        let Some(root) = crate::lower::reject_holes(&ctx.lower_type_ref_at(
+            &data.type_refs,
+            required,
+            crate::lower::TypePosition::ConstraintHead,
+        ))
+        .as_interface() else {
             continue;
         };
-        if !requires_refs.contains(&root) {
-            requires_refs.push(root.clone());
+        if !requires.contains(&root) {
+            requires.push(root.clone());
         }
-        for inherited in crate::impls::direct_requires_closure(db, &root, &self_ty, 64) {
-            if !requires_refs.contains(&inherited) {
-                requires_refs.push(inherited);
+        for inherited in crate::impls::direct_requires_closure_plain(db, &root, &self_ty, 64) {
+            if !requires.contains(&inherited) {
+                requires.push(inherited);
             }
         }
     }
-    let requires = requires_refs.iter().map(plain_interface).collect();
 
     let associated_types = data
         .associated_types
@@ -804,14 +764,12 @@ fn lower_interface_export<'db>(
         .map(|assoc| ExportedAssociatedType {
             name: assoc.name.clone(),
             bound: assoc.bound.and_then(|bound| {
-                baml_type::interned::InferInterface::of_ty(&crate::impls::interned_ty(
-                    &crate::lower::reject_holes(&ctx.lower_type_ref_at(
-                        &data.type_refs,
-                        bound,
-                        crate::lower::TypePosition::ConstraintHead,
-                    )),
+                crate::lower::reject_holes(&ctx.lower_type_ref_at(
+                    &data.type_refs,
+                    bound,
+                    crate::lower::TypePosition::ConstraintHead,
                 ))
-                .map(|bound| plain_interface(&bound))
+                .as_interface()
             }),
             default: crate::interfaces::interface_associated_type_default(
                 db,
@@ -1071,10 +1029,6 @@ fn mark_precompiled_callables_linkable(interface: &mut PackageInterface) {
 /// Lower the package's implementation registry into a canonical, loc-free
 /// export. Malformed headers have no `ImplFacts` row and are skipped; their
 /// source diagnostics remain owned by the declaration checker.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn exported_impls<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     pkg_id: PackageId<'db>,
@@ -1095,7 +1049,15 @@ fn exported_impls<'db>(
         let param_bounds = facts
             .generic_params
             .iter()
-            .map(|(_, bounds)| bounds.iter().map(plain_interface).collect())
+            .map(|(_, bounds)| {
+                bounds
+                    .iter()
+                    .map(|bound| {
+                        baml_type::Interface::try_from(bound)
+                            .unwrap_or_else(|_| unreachable!("declaration-side bounds are closed"))
+                    })
+                    .collect()
+            })
             .collect();
         let methods = facts
             .methods
@@ -1120,15 +1082,11 @@ fn exported_impls<'db>(
             | ImplSubjectData::Free { .. } => ExportedImplOrigin::OutOfBody,
         };
         rows.push(ExportedImpl {
-            interface: plain_interface(&facts.interface),
-            for_ty_pattern: facts.for_ty_pattern.to_plain(),
+            interface: crate::impls::plain_implemented_interface(facts),
+            for_ty_pattern: crate::impls::plain_for_ty_pattern(facts),
             generic_params,
             param_bounds,
-            associated_types: facts
-                .associated_types
-                .iter()
-                .map(|(name, ty)| (name.clone(), ty.to_plain()))
-                .collect(),
+            associated_types: crate::impls::plain_impl_associated_types(facts),
             field_links: data
                 .field_links
                 .iter()

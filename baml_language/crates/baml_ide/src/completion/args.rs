@@ -8,7 +8,6 @@
 //! function value works the same way.
 
 use baml_base::SourceFile;
-use baml_type::interned::InferTy;
 
 use super::completions::Completions;
 use crate::resolve::CallPosition;
@@ -19,7 +18,7 @@ pub(crate) fn complete(
     call: &CallPosition,
     out: &mut Completions,
 ) {
-    let InferTy::Function { params, .. } = call.callee.kind() else {
+    let baml_type::Ty::Function { params, .. } = &call.callee else {
         return;
     };
     for param in params {

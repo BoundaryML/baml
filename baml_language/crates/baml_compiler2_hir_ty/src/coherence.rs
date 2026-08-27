@@ -341,10 +341,6 @@ fn normalized_alias_map<'db>(
     aliases
 }
 
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn collect_package_aliases<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     pkg: PackageId<'db>,
@@ -356,7 +352,7 @@ fn collect_package_aliases<'db>(
             if let Definition::TypeAlias(loc) = def {
                 let qualified = TypeName::new(items.package.clone(), ns_path.clone(), name.clone());
                 out.entry(qualified)
-                    .or_insert_with(|| crate::lower::type_alias_value(db, *loc).to_plain());
+                    .or_insert_with(|| crate::lower::type_alias_value(db, *loc));
             }
         }
     }
@@ -1157,10 +1153,6 @@ fn impl_sort_key(db: &dyn baml_compiler2_ppir::Db, loc: ImplLoc<'_>) -> (String,
 /// E0138 concreteness gate's subjects) contributes no overlap - it
 /// carries its own rejection, and stacking a spurious overlap on top
 /// would double-report.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 pub fn impls_conflict(
     db: &dyn baml_compiler2_ppir::Db,
     a: &ImplFacts<'_>,
@@ -1170,8 +1162,9 @@ pub fn impls_conflict(
     if a.interface.name != b.interface.name {
         return Overlap::No;
     }
-    if !expand_alias_head(&a.for_ty_pattern.to_plain(), aliases).is_valid_impl_subject()
-        || !expand_alias_head(&b.for_ty_pattern.to_plain(), aliases).is_valid_impl_subject()
+    if !expand_alias_head(&crate::impls::plain_for_ty_pattern(a), aliases).is_valid_impl_subject()
+        || !expand_alias_head(&crate::impls::plain_for_ty_pattern(b), aliases)
+            .is_valid_impl_subject()
     {
         return Overlap::No;
     }
@@ -1333,24 +1326,9 @@ fn bounds_hold_at_common_instance(
 }
 
 /// An interned bound target as a plain constraint.
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn plain_bound(target: &InferInterface) -> Interface {
-    Interface::new(
-        target.name.clone(),
-        target
-            .generics
-            .iter()
-            .map(baml_type::interned::Ty::to_plain)
-            .collect(),
-        target
-            .associated_types
-            .iter()
-            .map(|(name, ty)| (name.clone(), ty.to_plain()))
-            .collect(),
-    )
+    Interface::try_from(target)
+        .unwrap_or_else(|_| unreachable!("declared bounds are declaration-side and closed"))
 }
 
 /// Fresh unification param for side `prefix`'s `idx`-th generic param.
@@ -1365,10 +1343,6 @@ fn renamed_var(prefix: char, idx: usize) -> ParamTy {
 /// generic params renamed to side-`prefix` unification variables.
 /// Associated bindings are dropped (interface outputs, not overlap
 /// inputs).
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn renamed_subject(
     rule: &ImplFacts<'_>,
     prefix: char,
@@ -1386,14 +1360,13 @@ fn renamed_subject(
         })
         .collect();
     let for_ty = nf(
-        &substitute_plain(&rule.for_ty_pattern.to_plain(), &rename),
+        &substitute_plain(&crate::impls::plain_for_ty_pattern(rule), &rename),
         enum_variants,
     );
-    let args = rule
-        .interface
+    let args = crate::impls::plain_implemented_interface(rule)
         .generics
         .iter()
-        .map(|arg| nf(&substitute_plain(&arg.to_plain(), &rename), enum_variants))
+        .map(|arg| nf(&substitute_plain(arg, &rename), enum_variants))
         .collect();
     (for_ty, args)
 }
@@ -1445,21 +1418,10 @@ pub fn package_orphan_violations<'db>(
     let current_package = pkg.name(db);
     let mut violations = Vec::new();
     for (loc, facts) in package_impls(db, pkg) {
-        #[expect(
-            deprecated,
-            reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-        )]
-        let for_ty = facts.for_ty_pattern.to_plain();
-        #[expect(
-            deprecated,
-            reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-        )]
-        let args: Vec<Ty> = facts
-            .interface
+        let for_ty = crate::impls::plain_for_ty_pattern(facts);
+        let args: Vec<Ty> = crate::impls::plain_implemented_interface(facts)
             .generics
-            .iter()
-            .map(baml_type::interned::Ty::to_plain)
-            .collect();
+            .to_vec();
         match orphan_check(&current_package, &facts.interface.name, &for_ty, &args) {
             OrphanOutcome::Ok => {}
             OrphanOutcome::UncoveredParam(name) => violations.push(OrphanViolation {

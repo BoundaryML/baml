@@ -434,10 +434,6 @@ pub(crate) mod support {
     }
 
     /// Like `expr_desc` but enriches Call expressions with type params from inference.
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn expr_desc_rich(expr_id: ExprId, body: &ExprBody, inference: &InferenceResult) -> String {
         let expr = &body.exprs[expr_id];
         if let Expr::Call { callee, args, .. } = expr {
@@ -450,7 +446,7 @@ pub(crate) mod support {
                 })
                 .collect();
             let type_params = if let Some(callee_ty) = inference.type_of_expr.get(callee) {
-                collect_typevars(&callee_ty.to_plain())
+                collect_typevars(callee_ty)
             } else {
                 Vec::new()
             };
@@ -483,22 +479,14 @@ pub(crate) mod support {
     /// Uses `render_canonical()` (fully-qualified leaf names, including the
     /// implicit `user` package) so the TIR dump keeps `user.X` rather than the
     /// user-facing `Display`, which elides `user`.
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn expr_ty(inference: &InferenceResult, expr_id: ExprId) -> String {
         inference
             .type_of_expr
             .get(&expr_id)
-            .map(|t| t.to_plain().render_canonical())
+            .map(|t| t.render_canonical())
             .unwrap_or_else(|| "unknown".into())
     }
 
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn render_expr(
         expr_id: ExprId,
         body: &ExprBody,
@@ -591,7 +579,7 @@ pub(crate) mod support {
                     })
                     .collect();
                 let type_params = if let Some(callee_ty) = inference.type_of_expr.get(callee) {
-                    collect_typevars(&callee_ty.to_plain())
+                    collect_typevars(callee_ty)
                 } else {
                     Vec::new()
                 };
@@ -822,10 +810,6 @@ pub(crate) mod support {
         }
     }
 
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     fn render_stmt(
         stmt_id: StmtId,
         body: &ExprBody,
@@ -860,7 +844,7 @@ pub(crate) mod support {
                     let binding_ty = inference
                         .type_of_pat
                         .get(pattern)
-                        .map(|t| t.to_plain().render_canonical());
+                        .map(|t| t.render_canonical());
                     let ty_display = match &binding_ty {
                         Some(bt) if *bt != init_ty => format!("{init_ty} -> {bt}"),
                         _ => init_ty,
@@ -988,10 +972,6 @@ pub(crate) mod support {
 
     /// Render a file's TIR output in the same format as the onion skin tool.
     /// Uses the PPIR semantic index which includes synthetic stream_* types.
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     pub fn render_tir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
         use baml_compiler2_hir::package::PackageId;
 
@@ -1016,7 +996,7 @@ pub(crate) mod support {
                     Definition::TypeAlias(loc) => {
                         aliases.insert(
                             baml_compiler2_hir_ty::lower::qualify_def(db, *def, name),
-                            baml_compiler2_hir_ty::lower::type_alias_value(db, *loc).to_plain(),
+                            baml_compiler2_hir_ty::lower::type_alias_value(db, *loc),
                         );
                     }
                     Definition::Class(loc) => {
@@ -1136,8 +1116,7 @@ pub(crate) mod support {
                                 && let Definition::TypeAlias(alias_loc) = c.definition
                             {
                                 let resolved =
-                                    baml_compiler2_hir_ty::lower::type_alias_value(db, alias_loc)
-                                        .to_plain();
+                                    baml_compiler2_hir_ty::lower::type_alias_value(db, alias_loc);
                                 writeln!(
                                     output,
                                     "{kind_str} {fqn} = {}",
@@ -1221,12 +1200,12 @@ pub(crate) mod support {
                             format!(
                                 "{}: {}{}",
                                 param.name,
-                                param.ty.to_plain().render_canonical(),
+                                param.ty.render_canonical(),
                                 default_suffix
                             )
                         })
                         .collect();
-                    let ret = sig.ret.to_plain().render_canonical();
+                    let ret = sig.ret.render_canonical();
                     // Inferred throws from the package transitive throw set.
                     let inferred_throws: Option<String> = {
                         let key = baml_base::Name::new(&*fqn);
@@ -1240,7 +1219,7 @@ pub(crate) mod support {
                             })
                     };
                     let throws = if sig.throws_declared {
-                        let declared = sig.throws.to_plain().render_canonical();
+                        let declared = sig.throws.render_canonical();
                         match &inferred_throws {
                             Some(inferred) => {
                                 format!(" throws {declared} infers {inferred}")
@@ -2359,10 +2338,6 @@ pub(crate) mod support {
         output
     }
 
-    #[expect(
-        deprecated,
-        reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-    )]
     pub fn expr_type_in_function(
         db: &ProjectDatabase,
         file: baml_base::SourceFile,
@@ -2407,7 +2382,7 @@ pub(crate) mod support {
         inference
             .type_of_expr
             .get(&expr_id)
-            .map(|ty| ty.to_plain().render_canonical())
+            .map(|ty| ty.render_canonical())
             .unwrap_or_else(|| {
                 panic!(
                     "expression `{expr_text}` in function `{function_name}` has no inferred type"

@@ -1267,10 +1267,6 @@ struct SessionCompile {
     lease: bex_vm_types::SessionEvalLease,
 }
 
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
 fn let_initializer_type(db: &ProjectDatabase, name: &str) -> Option<baml_type::Ty> {
     let package_id = PackageId::new(db, Name::new("user"));
     let package_items = baml_compiler2_hir::package::package_items(db, package_id);
@@ -1282,12 +1278,8 @@ fn let_initializer_type(db: &ProjectDatabase, name: &str) -> Option<baml_type::T
     let LetBody::Expr(body) = body.as_ref() else {
         return None;
     };
-    body.root_expr.and_then(|root| {
-        inference
-            .type_of_expr
-            .get(&root)
-            .map(baml_type::interned::Ty::to_plain)
-    })
+    body.root_expr
+        .and_then(|root| inference.type_of_expr.get(&root).cloned())
 }
 
 fn lower_session_submission(

@@ -102,13 +102,15 @@ impl<'db> InferenceContext<'db> {
                 if ty.has_error() {
                     return Attempt::Done;
                 }
-                if !ty.has_infer() && !interface_has_infer(&interface) {
+                if let Ok(closed) = baml_type::interned::ClosedTy::try_from(&ty)
+                    && !interface_has_infer(&interface)
+                {
                     // One spelling, one verdict (B-1576): resolution can
                     // ground a syntactic union after this obligation
                     // registered. Judge the canonical form - the same
                     // spelling finalize's mismatch filter re-judges - so
                     // verdict and report cannot diverge.
-                    let ty = self.canonicalize_unions(&ty);
+                    let ty = self.canonicalize_unions(&closed).into_ty();
                     if *not_concrete_rejects
                         && matches!(ty.kind(), InferTy::Interface(..) | InferTy::Union(..))
                     {
@@ -393,13 +395,19 @@ impl<'db> InferenceContext<'db> {
             // spelling. Var-carrying pins skip reduction (the oracle's
             // plain conversion erases inference vars) and unify as
             // variables.
-            let requested = if requested.has_projection() && !requested.has_infer() {
-                self.reduce_projections(requested, super::PROJECTION_FINALIZE_FUEL)
+            let requested = if requested.has_projection()
+                && let Ok(closed) = baml_type::interned::ClosedTy::try_from(requested)
+            {
+                self.reduce_projections(&closed, super::PROJECTION_FINALIZE_FUEL)
+                    .into_ty()
             } else {
                 requested.clone()
             };
-            let supplied = if supplied.has_projection() && !supplied.has_infer() {
-                self.reduce_projections(&supplied, super::PROJECTION_FINALIZE_FUEL)
+            let supplied = if supplied.has_projection()
+                && let Ok(closed) = baml_type::interned::ClosedTy::try_from(&supplied)
+            {
+                self.reduce_projections(&closed, super::PROJECTION_FINALIZE_FUEL)
+                    .into_ty()
             } else {
                 supplied
             };
@@ -604,7 +612,6 @@ fn carried_satisfies(
     want: &InferInterface,
     eq: &crate::impls::AliasOnlyFacts<'_>,
 ) -> bool {
-    use baml_type::normalize::equivalent_interned;
     // The shared head relation, plus the pin-superset this consumer
     // layers on (a bare carried bound does not satisfy a pinned
     // requirement). Args and pins compare under the alias oracle -
@@ -612,7 +619,7 @@ fn carried_satisfies(
     crate::impls::head_matches(have, want, eq)
         && want.associated_types.iter().all(|(name, want_pin)| {
             have.associated_types.iter().any(|(have_name, have_pin)| {
-                have_name == name && equivalent_interned(have_pin, want_pin, eq)
+                have_name == name && crate::impls::eq_admitted(have_pin, want_pin, eq)
             })
         })
 }

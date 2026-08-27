@@ -49,38 +49,15 @@ pub fn interned_ty(ty: &baml_type::Ty) -> Ty {
     Ty::from_plain(ty)
 }
 
-/// [`interned_ty`], declining input the interned family cannot
-/// represent. An oracle asked about such a type answers "undecidable",
-/// never panics.
+/// [`interned_ty`], declining input the oracles cannot soundly judge: a
+/// type carrying an `Error` sentinel anywhere. `Error`'s always-compatible
+/// algebra is justified only by an already-reported failure, so an
+/// impl/projection verdict over such a subject would launder that recovery
+/// into over-approval. An oracle asked about such a type answers
+/// "undecidable" (`None`; the callers' Opaque/Poisoned/no-views
+/// dispositions), never a laundered verdict.
 pub fn try_interned_ty(ty: &baml_type::Ty) -> Option<Ty> {
-    fn representable(ty: &baml_type::Ty) -> bool {
-        use baml_type::Ty as P;
-        match ty {
-            P::List(inner, _) => representable(inner),
-            P::Map { key, value, .. } => representable(key) && representable(value),
-            P::Future(value, error, _) => representable(value) && representable(error),
-            P::Union(members, _) => members.iter().all(representable),
-            P::Class(_, args, _) => args.iter().all(representable),
-            P::Interface(_, args, pins, _) => {
-                args.iter().all(representable) && pins.iter().all(|(_, ty)| representable(ty))
-            }
-            P::AssociatedTypeProjection {
-                base, interface, ..
-            } => representable(base) && interface.tys().all(representable),
-            P::Function {
-                params,
-                ret,
-                throws,
-                ..
-            } => {
-                params.iter().all(|param| representable(&param.ty))
-                    && representable(ret)
-                    && representable(throws)
-            }
-            _ => true,
-        }
-    }
-    representable(ty).then(|| Ty::from_plain(ty))
+    (!ty.as_lowering_ty().contains_error()).then(|| Ty::from_plain(ty))
 }
 
 /// One impl's resolution-relevant facts, normalized to the free shape.
@@ -124,7 +101,7 @@ pub fn impl_facts<'db>(
     let file = block.file(db);
 
     // The generic frame and for-target, normalized to the free shape.
-    let (params, param_bounds, for_ty_pattern): (Vec<ParamTy>, Vec<Vec<InferInterface>>, _) =
+    let (params, param_bounds, for_ty_pattern): (Vec<ParamTy>, Vec<Vec<baml_type::Interface>>, _) =
         match &data.subject {
             ImplSubjectData::InClass { class, .. } => {
                 let frame = crate::lower::class_generic_frame(db, *class);
@@ -138,18 +115,21 @@ pub fn impl_facts<'db>(
                             .bounds
                             .iter()
                             .filter_map(|&type_ref| {
-                                InferInterface::of_ty(&interned_ty(&crate::lower::reject_holes(
-                                    &ctx.lower_type_ref_at(
-                                        &class_data.type_refs,
-                                        type_ref,
-                                        crate::lower::TypePosition::ConstraintHead,
-                                    ),
-                                )))
+                                crate::lower::reject_holes(&ctx.lower_type_ref_at(
+                                    &class_data.type_refs,
+                                    type_ref,
+                                    crate::lower::TypePosition::ConstraintHead,
+                                ))
+                                .as_interface()
                             })
                             .collect()
                     })
                     .collect();
-                (frame, bounds, crate::lower::class_self_ty(db, *class))
+                (
+                    frame,
+                    bounds,
+                    interned_ty(&crate::lower::class_self_ty(db, *class)),
+                )
             }
             ImplSubjectData::Free {
                 for_target,
@@ -173,13 +153,12 @@ pub fn impl_facts<'db>(
                             .bounds
                             .iter()
                             .filter_map(|&type_ref| {
-                                InferInterface::of_ty(&interned_ty(&crate::lower::reject_holes(
-                                    &ctx.lower_type_ref_at(
-                                        &data.type_refs,
-                                        type_ref,
-                                        crate::lower::TypePosition::ConstraintHead,
-                                    ),
-                                )))
+                                crate::lower::reject_holes(&ctx.lower_type_ref_at(
+                                    &data.type_refs,
+                                    type_ref,
+                                    crate::lower::TypePosition::ConstraintHead,
+                                ))
+                                .as_interface()
                             })
                             .collect()
                     })
@@ -193,7 +172,7 @@ pub fn impl_facts<'db>(
 
     // The impl's own bounds ride along: `type Output = T.Item` must
     // find `Item`'s declaring interface through `T`'s declared bound.
-    let bounds_map: FxHashMap<ParamTy, Vec<baml_type::interned::InferInterface>> = params
+    let bounds_map: FxHashMap<ParamTy, Vec<baml_type::Interface>> = params
         .iter()
         .cloned()
         .zip(param_bounds.iter())
@@ -227,7 +206,17 @@ pub fn impl_facts<'db>(
     Some(ImplFacts {
         interface,
         for_ty_pattern,
-        generic_params: params.into_iter().zip(param_bounds).collect(),
+        // The engine's matcher vocabulary is interned; bound constraints
+        // enter it here (plain→interned, the total ingestion direction).
+        generic_params: params
+            .into_iter()
+            .zip(param_bounds.iter().map(|bounds| {
+                bounds
+                    .iter()
+                    .map(InferInterface::from_constraint)
+                    .collect::<Vec<_>>()
+            }))
+            .collect(),
         associated_types,
         methods: data.methods.clone(),
     })
@@ -675,13 +664,87 @@ pub(crate) fn realized_assoc_default(
     let lowered = crate::lower::interface_assoc_default(db, interface, member.clone())
         .0
         .as_ref()?;
-    let instantiation = crate::method_resolution::interface_instantiation(self_ty, target, data);
-    Some(crate::lower::substitute_params(lowered, &instantiation))
+    let instantiation = crate::method_resolution::interface_instantiation(self_ty, target, data)?;
+    // Declaration-side lowering is plain now; the engine's substitution
+    // ingests it (plain→interned, the total direction).
+    Some(crate::lower::substitute_params(
+        &interned_ty(lowered),
+        &instantiation,
+    ))
 }
 
 /// The declared BOUND of `member` (`type member extends J`), realized at
 /// the reference - rustc's `explicit_item_bounds` instantiated: what a
 /// still-symbolic projection is provable against.
+/// The implemented-interface header in the plain vocabulary — the
+/// display/read surface for consumers outside the matcher.
+pub fn plain_implemented_interface(facts: &ImplFacts<'_>) -> baml_type::Interface {
+    baml_type::Interface::try_from(&facts.interface)
+        .unwrap_or_else(|_| unreachable!("declaration-side interface header is closed"))
+}
+
+/// The `for`-target pattern in the plain vocabulary — the display/read
+/// surface for consumers outside the matcher. Declaration-side lowering
+/// rejects holes and never sees inference, so the pattern is closed.
+pub fn plain_for_ty_pattern(facts: &ImplFacts<'_>) -> baml_type::Ty {
+    baml_type::interned::ClosedTy::try_from(&facts.for_ty_pattern)
+        .unwrap_or_else(|_| unreachable!("declaration-side for-target is closed"))
+        .to_plain()
+}
+
+/// The impl's associated-type bindings in the plain vocabulary — same
+/// declaration-side contract as [`plain_for_ty_pattern`].
+pub fn plain_impl_associated_types(facts: &ImplFacts<'_>) -> Vec<(Name, baml_type::Ty)> {
+    facts
+        .associated_types
+        .iter()
+        .map(|(name, ty)| {
+            (
+                name.clone(),
+                baml_type::interned::ClosedTy::try_from(ty)
+                    .unwrap_or_else(|_| unreachable!("declaration-side bindings are closed"))
+                    .to_plain(),
+            )
+        })
+        .collect()
+}
+
+/// Equivalence over matcher values: both sides close (the entry gates
+/// reject open goals; patterns/pins are declaration-side), so an open
+/// operand slipping through matches NOTHING — fail closed, never a
+/// laundered verdict.
+pub(crate) fn eq_admitted(a: &Ty, b: &Ty, eq: &impl TypeContext) -> bool {
+    let (Ok(a), Ok(b)) = (
+        baml_type::interned::ClosedTy::try_from(a),
+        baml_type::interned::ClosedTy::try_from(b),
+    ) else {
+        return false;
+    };
+    equivalent_interned(&a, &b, eq)
+}
+
+/// [`realized_assoc_bound`]'s PLAIN entry, for the declaration-side
+/// consumers (lowering's projection probe, the facts oracle): plain inputs
+/// intern on the way in (the total ingestion direction), and the realized
+/// bound exits through the [`ClosedTy`](baml_type::interned::ClosedTy)
+/// boundary — closed inputs substituted into declaration-side (var-free)
+/// bounds realize to a closed bound, so the closure cannot fail.
+pub(crate) fn realized_assoc_bound_plain(
+    db: &dyn baml_compiler2_ppir::Db,
+    target: &baml_type::Interface,
+    self_ty: &baml_type::Ty,
+    member: &Name,
+) -> Option<baml_type::Ty> {
+    let target = InferInterface::from_constraint(target);
+    let self_ty = Ty::from_plain(self_ty);
+    let bound = realized_assoc_bound(db, &target, &self_ty, member)?;
+    Some(
+        baml_type::interned::ClosedTy::try_from(&bound)
+            .unwrap_or_else(|_| unreachable!("closed inputs realize to a closed bound"))
+            .to_plain(),
+    )
+}
+
 pub(crate) fn realized_assoc_bound(
     db: &dyn baml_compiler2_ppir::Db,
     target: &InferInterface,
@@ -717,13 +780,19 @@ pub(crate) fn realized_assoc_bound(
     let lowered = crate::lower::interface_assoc_bound(db, interface, member.clone())
         .0
         .as_ref()?;
-    let instantiation = crate::method_resolution::interface_instantiation(self_ty, target, data);
-    Some(crate::lower::substitute_params(lowered, &instantiation))
+    let instantiation = crate::method_resolution::interface_instantiation(self_ty, target, data)?;
+    // Declaration-side lowering is plain now; the engine's substitution
+    // ingests it (plain→interned, the total direction).
+    Some(crate::lower::substitute_params(
+        &interned_ty(lowered),
+        &instantiation,
+    ))
 }
 
-/// The interface definition and its data for a realization, arity-gated
-/// (a bare or mis-applied reference realizes nothing - fail-safe, the
-/// diagnostic is S17's).
+/// The interface definition and its data for a realization. Arity is NOT
+/// judged here: every caller proceeds into
+/// [`crate::method_resolution::interface_instantiation`], which owns the
+/// single arity gate (and its construction-bug assert).
 fn assoc_realization_env<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     target: &InferInterface,
@@ -738,12 +807,14 @@ fn assoc_realization_env<'db>(
         return None;
     };
     let data = baml_compiler2_ppir::item_data::interface_data(db, interface);
-    if data.generic_params.len() != target.generics.len() {
-        return None;
-    }
     Some((interface, data))
 }
 
+/// [`crate::method_resolution::interface_instantiation`] for a mounted
+/// interface row, with the same contract: `None` only on a reference
+/// whose generic arity diverges from the declaration - a construction
+/// bug (lowering's `enforce_arity` and engine-built references both pin
+/// arity to the declaration), asserted and answered conservatively.
 pub(crate) fn mounted_interface_instantiation(
     target: &InferInterface,
     self_ty: &Ty,
@@ -751,6 +822,13 @@ pub(crate) fn mounted_interface_instantiation(
     associated_types: &[crate::package_interface::ExportedAssociatedType],
 ) -> Option<Vec<Ty>> {
     if generic_params.len() != target.generics.len() {
+        debug_assert!(
+            false,
+            "interface reference `{}` carries {} generic args; its declaration takes {}",
+            target.name,
+            target.generics.len(),
+            generic_params.len(),
+        );
         return None;
     }
     let mut out = vec![self_ty.clone()];
@@ -786,6 +864,48 @@ pub(crate) fn mounted_interface_instantiation(
 /// call-site variable introduction (the probe machinery), and leaking
 /// raw impl params into a body's inference would collide with its
 /// frame. Fail-safe, not fail-wrong.
+/// The dispatch views every impl block contributes for a PLAIN receiver —
+/// the downstream (MIR) entry: the receiver interns on the way in, each
+/// resolved impl's implemented view realizes engine-side, and the views
+/// exit through the closed boundary (declaration-realized values over a
+/// closed receiver are closed; rigid type variables are not inference
+/// variables).
+pub fn impl_views_for_type(
+    db: &dyn baml_compiler2_ppir::Db,
+    concrete: &baml_type::Ty,
+) -> Vec<baml_type::Interface> {
+    let Some(interned) = try_interned_ty(concrete) else {
+        return Vec::new();
+    };
+    impls_for_type(db, &interned)
+        .into_iter()
+        .map(|resolved| {
+            let view = resolved.implemented_view(db, &interned);
+            baml_type::Interface::try_from(&view)
+                .unwrap_or_else(|_| unreachable!("realized view of a closed receiver is closed"))
+        })
+        .collect()
+}
+
+/// [`direct_requires_closure`]'s PLAIN entry, same boundary discipline as
+/// [`impl_views_for_type`].
+pub fn direct_requires_closure_plain(
+    db: &dyn baml_compiler2_ppir::Db,
+    root: &baml_type::Interface,
+    self_ty: &baml_type::Ty,
+    fuel: u32,
+) -> Vec<baml_type::Interface> {
+    let root = InferInterface::from_constraint(root);
+    let self_ty = interned_ty(self_ty);
+    direct_requires_closure(db, &root, &self_ty, fuel)
+        .into_iter()
+        .map(|reference| {
+            baml_type::Interface::try_from(&reference)
+                .unwrap_or_else(|_| unreachable!("requires closure of closed inputs is closed"))
+        })
+        .collect()
+}
+
 pub fn impls_for_type<'db>(
     db: &'db dyn baml_compiler2_ppir::Db,
     concrete: &Ty,
@@ -877,7 +997,12 @@ fn derived_impl_allows(
     if !interface.is_reflect_root_type("AnyClass") {
         return true;
     }
-    let normalized = baml_type::normalize::normalize_interned(concrete, &AliasOnlyFacts::new(db));
+    let Ok(concrete_closed) = baml_type::interned::ClosedTy::try_from(concrete) else {
+        // Fail closed: an open value proves no membership.
+        return false;
+    };
+    let normalized =
+        baml_type::normalize::normalize_interned(&concrete_closed, &AliasOnlyFacts::new(db));
     matches!(normalized.kind(), InferTy::Class(..))
 }
 
@@ -917,7 +1042,7 @@ fn impls_for_type_cached<'db>(
         for (origin, facts) in package_impl_candidates(db, package) {
             let pattern = facts.for_ty_pattern();
             let pattern_has_typevar = pattern.has_typevar();
-            if !pattern_has_typevar && !equivalent_interned(pattern, concrete, &eq) {
+            if !pattern_has_typevar && !eq_admitted(pattern, concrete, &eq) {
                 continue;
             }
             let params: Vec<ParamTy> = facts
@@ -1177,7 +1302,13 @@ pub fn resolve_impl<'db>(
     // impl var, never with ground structure. Only unresolved inference
     // vars and error sentinels stay out.
     let admissible = |ty: &Ty| !ty.has_infer() && !ty.has_error();
-    if !admissible(concrete) || !interface.generics.iter().all(admissible) {
+    if !admissible(concrete)
+        || !interface.generics.iter().all(admissible)
+        || !interface
+            .associated_types
+            .iter()
+            .all(|(_, ty)| admissible(ty))
+    {
         return None;
     }
     // A literal-typed value implements what its base primitive does
@@ -1363,7 +1494,7 @@ fn match_impl_head(
                 // that only meets `Output = string` by VALUE.
                 let supplied = reduce_ground_projections(db, &supplied, 8);
                 let requested = reduce_ground_projections(db, requested, 8);
-                if !equivalent_interned(&supplied, &requested, eq) {
+                if !eq_admitted(&supplied, &requested, eq) {
                     return None;
                 }
             }
@@ -1385,10 +1516,19 @@ fn match_impl_head(
 /// impl's `type Output = T.Item` by VALUE once the match binds `T`, and
 /// the alias-only equivalence cannot project. Var-carrying input returns
 /// unchanged (the oracle's plain conversion erases inference vars).
-#[expect(
-    deprecated,
-    reason = "pre-D3: materializes interned inference state; moves to the finalized facts layer with the cutover"
-)]
+/// [`reduce_ground_projections`]'s PLAIN entry for the export layer:
+/// plain (closed) input interns on the way in, and the reduced ground
+/// result exits through the closed boundary.
+pub(crate) fn reduce_ground_projections_plain(
+    db: &dyn baml_compiler2_ppir::Db,
+    ty: &baml_type::Ty,
+    fuel: u32,
+) -> baml_type::Ty {
+    baml_type::interned::ClosedTy::try_from(&reduce_ground_projections(db, &interned_ty(ty), fuel))
+        .unwrap_or_else(|_| unreachable!("ground reduction of a closed type is closed"))
+        .to_plain()
+}
+
 pub(crate) fn reduce_ground_projections(
     db: &dyn baml_compiler2_ppir::Db,
     ty: &Ty,
@@ -1409,14 +1549,20 @@ pub(crate) fn reduce_ground_projections(
     } = rebuilt.kind()
     {
         let facts = crate::facts::Facts::new(db);
-        let plain_base = base.to_plain();
+        // The entry gate (`has_infer` bail) proved the whole tree closed.
+        let closed = |ty: &Ty| -> baml_type::Ty {
+            baml_type::interned::ClosedTy::try_from(ty)
+                .unwrap_or_else(|_| unreachable!("gated ground: no inference variables"))
+                .to_plain()
+        };
+        let plain_base = closed(base);
         let plain_interface = baml_type::Interface::new(
             interface.name.clone(),
-            interface.generics.iter().map(Ty::to_plain).collect(),
+            interface.generics.iter().map(&closed).collect(),
             interface
                 .associated_types
                 .iter()
-                .map(|(name, pin)| (name.clone(), pin.to_plain()))
+                .map(|(name, pin)| (name.clone(), closed(pin)))
                 .collect(),
         );
         if let baml_type::normalize::ProjectionStep::Reduced(step) =
@@ -1445,7 +1591,7 @@ fn match_pattern(
         && params.contains(param)
     {
         return match bindings.get(param) {
-            Some(bound) => equivalent_interned(bound, target, eq),
+            Some(bound) => eq_admitted(bound, target, eq),
             None => {
                 bindings.insert(param.clone(), target.clone());
                 true
@@ -1453,14 +1599,14 @@ fn match_pattern(
         };
     }
     if !pattern.has_typevar() {
-        return equivalent_interned(pattern, target, eq);
+        return eq_admitted(pattern, target, eq);
     }
     // Substitute-and-compare escape: a pattern whose vars are all bound
     // already can be compared semantically (union normalization no
     // structural descent sees).
     if pattern_fully_bound(pattern, params, bindings) {
         let substituted = substitute_bindings(pattern, bindings);
-        if equivalent_interned(&substituted, target, eq) {
+        if eq_admitted(&substituted, target, eq) {
             return true;
         }
     }
@@ -1712,14 +1858,13 @@ pub(crate) fn head_matches(
     want: &InferInterface,
     eq: &AliasOnlyFacts<'_>,
 ) -> bool {
-    use baml_type::normalize::equivalent_interned;
     have.name == want.name
         && have.generics.len() == want.generics.len()
         && have
             .generics
             .iter()
             .zip(&want.generics)
-            .all(|(a, b)| equivalent_interned(a, b, eq))
+            .all(|(a, b)| eq_admitted(a, b, eq))
 }
 
 /// The realized DIRECT-plus-transitive `requires` closure of an
@@ -1809,7 +1954,10 @@ fn direct_requires(
     let ctx = crate::lower::lower_ctx_for_file(db, interface.file(db))
         .with_frame(crate::lower::interface_frame(db, interface))
         .with_bounds(crate::lower::interface_scope_bounds(db, interface));
-    let instantiation = crate::method_resolution::interface_instantiation(self_ty, of, data);
+    let Some(instantiation) = crate::method_resolution::interface_instantiation(self_ty, of, data)
+    else {
+        return Vec::new();
+    };
     data.requires
         .iter()
         .filter_map(|&required| {
