@@ -26,7 +26,7 @@ function main() -> string {
 "#,
         entry: "main",
         expected: Ok(BexExternalValue::from(
-            "Hello, Alice! You are 30 years old.",
+            "[system]\nHello, Alice! You are 30 years old.",
         )),
         ..Default::default()
     })
@@ -78,7 +78,7 @@ function main() -> string {
 }
 "#,
         entry: "main",
-        expected: Ok(BexExternalValue::from("Category: SPORTS")),
+        expected: Ok(BexExternalValue::from("[system]\nCategory: SPORTS")),
         ..Default::default()
     })
     .await
@@ -107,6 +107,33 @@ class Sentiment {
             && rendered.contains("confidence")
             && rendered.contains("reasoning"),
         "prompt did not include return class fields:\n{rendered}"
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_keeps_generic_class_instantiations_distinct() {
+    let rendered = common::render_output_format(
+        r#"
+class Box<T> {
+    value T
+}
+
+class Combined {
+    int_box Box<int>
+    string_box Box<string>
+}
+"#,
+        "Combined",
+    )
+    .await;
+
+    assert!(
+        rendered.contains("int_box: {\n    value: int,"),
+        "{rendered}"
+    );
+    assert!(
+        rendered.contains("string_box: {\n    value: string,"),
+        "{rendered}"
     );
 }
 
@@ -152,7 +179,7 @@ function Extract(raw: string) -> C {
     client: Fast
     prompt: `
         Extract from ${raw}.
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 
@@ -252,7 +279,7 @@ function ExtractAny() -> json {
     prompt: `
         Return whatever JSON you like.
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 

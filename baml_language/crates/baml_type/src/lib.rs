@@ -34,8 +34,11 @@ use borsh::{BorshDeserialize, BorshSerialize};
 mod attr;
 mod codegen_ty;
 pub mod decl_cycles;
+mod declaration_name;
 mod defs;
 mod family;
+mod head;
+mod int;
 pub mod interned;
 mod names;
 pub mod normalize;
@@ -52,8 +55,11 @@ pub mod typetag;
 pub mod unify;
 pub mod user_facing;
 pub use attr::*;
+pub use declaration_name::DeclarationName;
 pub use defs::*;
 pub use family::*;
+pub use head::{Head, TaggedTypeName};
+pub use int::{Int63, IntShiftError};
 pub use names::*;
 pub use param::*;
 pub use primitive::*;
@@ -149,6 +155,52 @@ fn dedup_and_collapse(types: Vec<Ty>, attr: TyAttr) -> Ty {
     }
 }
 
+/// Does `pred` hold for `ty` or any type nested inside it?
+pub fn contains_ty_where(ty: &Ty, pred: &dyn Fn(&Ty) -> bool) -> bool {
+    if pred(ty) {
+        return true;
+    }
+
+    match ty {
+        Ty::AssociatedTypeProjection {
+            base, interface, ..
+        } => contains_ty_where(base, pred) || interface.tys().any(|t| contains_ty_where(t, pred)),
+        Ty::List(inner, _) => contains_ty_where(inner, pred),
+        Ty::Map {
+            key: k, value: v, ..
+        } => contains_ty_where(k, pred) || contains_ty_where(v, pred),
+        Ty::Union(tys, _) => tys.iter().any(|t| contains_ty_where(t, pred)),
+        Ty::Future(value, error, _) => {
+            contains_ty_where(value, pred) || contains_ty_where(error, pred)
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params
+                .iter()
+                .any(|param| contains_ty_where(&param.ty, pred))
+                || contains_ty_where(ret, pred)
+                || contains_ty_where(throws, pred)
+        }
+        Ty::Class(_, type_args, _) => type_args.iter().any(|t| contains_ty_where(t, pred)),
+        Ty::Interface(_, type_args, associated_bindings, _) => {
+            type_args.iter().any(|t| contains_ty_where(t, pred))
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| contains_ty_where(ty, pred))
+        }
+        _ => false,
+    }
+}
+
+/// Does `ty` carry `Ty::Error` or `Ty::Unknown` anywhere in its structure?
+pub fn contains_error_recovery(ty: &Ty) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::Error { .. } | Ty::Unknown { .. }))
+}
+
 impl Ty {
     /// Whether this type may be the *implementor* (`for`-target) of an interface
     /// implementation — i.e. `implement I for <Self>` is allowed.
@@ -172,8 +224,8 @@ impl Ty {
     ///     their own;
     ///   - `Interface` (existential) and `Union` — no single concrete implementor;
     ///   - `Function` (an arrow type) and `RustType` (an opaque native leaf);
-    ///   - `Void`, the top type `BuiltinUnknown`, and the compiler-only sentinels
-    ///     `Unknown` / `Error` / `EvolvingList` / `EvolvingMap`;
+    ///   - `Void`, the top type `Unknown`, and the compiler-only sentinels
+    ///     `Unknown` / `Error`;
     ///   - `TypeAlias` — callers resolve aliases first, so a surviving alias here
     ///     is unresolved (recursive or missing), i.e. not a valid bare target.
     ///
@@ -208,26 +260,23 @@ impl Ty {
             | Ty::RustType { .. }
             | Ty::TypeAlias(..)
             | Ty::Void { .. }
-            | Ty::BuiltinUnknown { .. }
             | Ty::Unknown { .. }
             | Ty::Error { .. }
-            | Ty::Infer { .. }
-            | Ty::EvolvingList(..)
-            | Ty::EvolvingMap(..) => false,
+            | Ty::Infer { .. } => false,
         }
     }
 
     /// Whether this is a **concrete** type per the TYPE_SYSTEM.md taxonomy: a type
     /// every value of which has exactly one run-time representation that method
     /// dispatch can key on. The concrete category is the primitives, `Media`, classes,
-    /// enums, the containers `T[]` / `map<K, V>` (with their inference-time `Evolving*`
-    /// forms), function types, `Future`, the builtin handles `Type` / `Resource` /
+    /// enums, the containers `T[]` / `map<K, V>`, function types, `Future`, the
+    /// builtin handles `Type` / `Resource` /
     /// `PromptAst`, and the native `RustType`.
     ///
     /// NOT concrete — the doc's *abstract* and *literal* categories, plus `never`:
     ///   - `Union` and `Interface` (existential) — the union of several concrete
     ///     types, so no single run-time representation;
-    ///   - the top type `BuiltinUnknown` (`unknown`) — the union of all types;
+    ///   - the top type `Unknown` (`unknown`) — the union of all types;
     ///   - `Literal` / `EnumVariant` — literal types, subsets of a concrete base that
     ///     dispatch through it rather than being a concrete type of their own;
     ///   - `Never` — the empty type (no values);
@@ -261,8 +310,6 @@ impl Ty {
             | Ty::Enum(..)
             | Ty::List(..)
             | Ty::Map { .. }
-            | Ty::EvolvingList(..)
-            | Ty::EvolvingMap(..)
             | Ty::Function { .. }
             | Ty::Future(..)
             | Ty::Type { .. }
@@ -271,7 +318,7 @@ impl Ty {
             | Ty::RustType { .. } => true,
             Ty::Union(..)
             | Ty::Interface(..)
-            | Ty::BuiltinUnknown { .. }
+            | Ty::Unknown { .. }
             | Ty::Literal(..)
             | Ty::EnumVariant(..)
             | Ty::Never { .. }
@@ -279,7 +326,6 @@ impl Ty {
             | Ty::TypeVar(..)
             | Ty::AssociatedTypeProjection { .. }
             | Ty::TypeAlias(..)
-            | Ty::Unknown { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. } => false,
         }
@@ -457,33 +503,6 @@ impl Ty {
         }
     }
 
-    /// Promote empty containers to evolving containers.
-    ///
-    /// Called at mutable binding sites (`let` without annotation), right
-    /// after `widen_fresh()`. This is the mirror of `widen_fresh()`:
-    /// - `widen_fresh` *removes* literal specificity (1 → int)
-    /// - `make_evolving` *adds* container mutability (List(Never) → EvolvingList(Never))
-    ///
-    /// Only converts `List(Never)` and `Map(Never, Never)` — non-empty
-    /// container literals already have a known element type and don't need
-    /// evolving semantics.
-    #[must_use]
-    pub fn make_evolving(self) -> Ty {
-        match self {
-            Ty::List(inner, attr) if matches!(*inner, Ty::Never { .. }) => {
-                Ty::EvolvingList(inner, attr)
-            }
-            Ty::Map {
-                key: k,
-                value: v,
-                attr,
-            } if matches!(*k, Ty::Never { .. }) && matches!(*v, Ty::Never { .. }) => {
-                Ty::EvolvingMap(k, v, attr)
-            }
-            other => other,
-        }
-    }
-
     /// `T[]` (list) with default attributes.
     pub fn list(inner: Ty) -> Self {
         Ty::List(Box::new(inner), TyAttr::default())
@@ -510,7 +529,7 @@ impl Ty {
 
     /// `unknown` with default attributes.
     pub fn unknown() -> Self {
-        Ty::BuiltinUnknown {
+        Ty::Unknown {
             attr: TyAttr::default(),
         }
     }
@@ -553,8 +572,8 @@ impl Ty {
         }
     }
 
-    /// Meta-type — a runtime value that wraps a `Ty`. Renders as the `type`
-    /// keyword though its qualified name is `baml.reflect.Type`.
+    /// Meta-type — a runtime value that wraps a `Ty`. Renders as
+    /// `reflect.Type`.
     pub fn type_type() -> Self {
         Ty::Type {
             attr: TyAttr::default(),
@@ -569,7 +588,7 @@ impl Ty {
             // for output format rendering (cycle detection needs the alias name).
             Ty::TypeAlias(_, _) => Ok(()),
             Ty::Void { .. } => Err("Void type should not reach runtime".to_string()),
-            Ty::BuiltinUnknown { .. } => Ok(()),
+            Ty::Unknown { .. } => Ok(()),
             // Recurse into containers
             Ty::List(inner, _) => inner.validate_runtime(),
             Ty::Map { key, value, .. } => {
@@ -622,11 +641,8 @@ impl Ty {
             Ty::TypeVar(..)
             | Ty::AssociatedTypeProjection { .. }
             | Ty::Never { .. }
-            | Ty::Unknown { .. }
             | Ty::Error { .. }
-            | Ty::Infer { .. }
-            | Ty::EvolvingList(..)
-            | Ty::EvolvingMap(..) => Err("compiler-only type should not reach runtime".to_string()),
+            | Ty::Infer { .. } => Err("compiler-only type should not reach runtime".to_string()),
             Ty::Int { .. }
             | Ty::Bigint { .. }
             | Ty::Float { .. }
@@ -648,7 +664,9 @@ impl Ty {
             | Ty::PromptAst { .. } => Ok(()),
         }
     }
+}
 
+impl<N: Clone> Ty<N> {
     fn needs_postfix_parens(&self) -> bool {
         matches!(self, Ty::Union(..) | Ty::Function { .. })
     }
@@ -656,7 +674,9 @@ impl Ty {
     fn needs_function_result_parens(&self) -> bool {
         matches!(self, Ty::Function { .. })
     }
+}
 
+impl<N: Clone + HeadDisplay> Ty<N> {
     fn fmt_as_postfix_base(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.needs_postfix_parens() {
             write!(f, "({self})")
@@ -676,6 +696,41 @@ impl Ty {
 
 // ── Strategy-based rendering ─────────────────────────────────────────────────
 
+/// A head that can name itself without outside help — what [`Display`](fmt::Display)
+/// on a [`Ty`] needs, since a formatter carries no context to look anything up in.
+///
+/// Deliberately *not* folded into [`Head`]: the algebra is written so a head is
+/// opaque to it, and requiring name recovery there would force every
+/// representation to understand names. This is the opt-in for representations
+/// that happen to be able to. A compiler head answers from the name it already
+/// is; a runtime head answers by reaching its declaration.
+///
+/// Note this is the compact spelling used by `Display` — the short/dotted
+/// `display_name`, *not* the fully-qualified [`Ty::render_canonical`] form.
+/// The two renderings differ on purpose and are not interchangeable.
+pub trait HeadDisplay {
+    /// This head's compact display name.
+    fn head_display_name(&self) -> String;
+}
+
+impl HeadDisplay for QualifiedTypeName {
+    fn head_display_name(&self) -> String {
+        self.display_name().to_string()
+    }
+}
+
+impl HeadDisplay for crate::head::TaggedTypeName {
+    fn head_display_name(&self) -> String {
+        self.name().display_name().to_string()
+    }
+}
+
+impl HeadDisplay for crate::DeclarationName {
+    fn head_display_name(&self) -> String {
+        self.display_name().to_string()
+    }
+}
+
 /// Strategy controlling how a [`Ty`] renders its leaf names plus a couple of
 /// presentation choices. A single recursive renderer ([`Ty::render_with`])
 /// walks the structure; everything package-, type-var-, or context-specific
@@ -683,19 +738,19 @@ impl Ty {
 /// into text — the canonical dump renderer, user-facing diagnostics, and the
 /// LSP's context-aware hover all implement this trait instead of re-walking
 /// `Ty` (the former "~10 renderers").
-pub trait TyRenderStrategy {
-    /// Render a qualified name's dotted path (package/namespace/name) *without*
+///
+/// Parameterized by the head so one renderer serves both spellings: the
+/// compiler's `QualifiedTypeName` and the runtime's heap handle. Naming a head
+/// is the *only* head-specific decision in the walk, and it already lives behind
+/// [`qtn`](TyRenderStrategy::qtn) — so the structure below stays a single
+/// implementation rather than gaining a runtime twin.
+pub trait TyRenderStrategy<N = QualifiedTypeName> {
+    /// Render a head's dotted path (package/namespace/name) *without*
     /// any `<...>` suffix; the renderer appends any type args separately.
-    fn qtn(&self, qtn: &QualifiedTypeName) -> String;
+    fn qtn(&self, qtn: &N) -> String;
 
     /// Render a type-variable name (`T`, or a synthetic effect param).
     fn type_var(&self, name: &Name) -> String;
-
-    /// Whether evolving list/map types are annotated `(evolving)`.
-    /// Canonical/user-facing: yes; the LSP's hover hides it.
-    fn show_evolving(&self) -> bool {
-        true
-    }
 }
 
 impl Ty {
@@ -714,9 +769,11 @@ impl Ty {
     pub fn render_canonical(&self) -> String {
         self.render_with(&CanonicalTyRender { user_facing: false })
     }
+}
 
+impl<N: Clone> Ty<N> {
     /// Render with parentheses if needed for postfix (`[]`/`?`) context.
-    fn render_as_postfix_base(&self, s: &dyn TyRenderStrategy) -> String {
+    fn render_as_postfix_base(&self, s: &dyn TyRenderStrategy<N>) -> String {
         let inner = self.render_with(s);
         if self.needs_postfix_parens() {
             format!("({inner})")
@@ -726,7 +783,7 @@ impl Ty {
     }
 
     /// Render with parentheses if needed in a function-return position.
-    fn render_as_function_result(&self, s: &dyn TyRenderStrategy) -> String {
+    fn render_as_function_result(&self, s: &dyn TyRenderStrategy<N>) -> String {
         let inner = self.render_with(s);
         if self.needs_function_result_parens() {
             format!("({inner})")
@@ -739,7 +796,7 @@ impl Ty {
     /// package-, type-var-, and presentation-policy decision to `s`. All type
     /// rendering — canonical dumps, user-facing diagnostics, LSP hover —
     /// funnels through here so the structure is described in exactly one place.
-    pub fn render_with(&self, s: &dyn TyRenderStrategy) -> String {
+    pub fn render_with(&self, s: &dyn TyRenderStrategy<N>) -> String {
         match self {
             Ty::Class(qn, type_args, _) => {
                 let mut out = s.qtn(qn);
@@ -780,24 +837,6 @@ impl Ty {
             Ty::Map {
                 key: k, value: v, ..
             } => format!("map<{}, {}>", k.render_with(s), v.render_with(s)),
-            Ty::EvolvingList(inner, _) => {
-                if matches!(**inner, Ty::Never { .. }) {
-                    "_[]".to_string()
-                } else if s.show_evolving() {
-                    format!("{}[] (evolving)", inner.render_as_postfix_base(s))
-                } else {
-                    format!("{}[]", inner.render_as_postfix_base(s))
-                }
-            }
-            Ty::EvolvingMap(k, v, _) => {
-                if matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. }) {
-                    "map<_, _>".to_string()
-                } else if s.show_evolving() {
-                    format!("map<{}, {}> (evolving)", k.render_with(s), v.render_with(s))
-                } else {
-                    format!("map<{}, {}>", k.render_with(s), v.render_with(s))
-                }
-            }
             Ty::Union(members, _) => {
                 // `?` is sugar that exists only in source/lowering; after that a
                 // nullable type is a plain union and renders as `T | null`.
@@ -857,18 +896,24 @@ impl Ty {
             }
             Ty::Never { .. } => "never".to_string(),
             Ty::Void { .. } => "void".to_string(),
-            Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } => "unknown".to_string(),
+            Ty::Unknown { .. } => "unknown".to_string(),
             // The wildcard hole renders as the `_` the user wrote.
             Ty::Infer { .. } => "_".to_string(),
             Ty::RustType { .. } => "$rust_type".to_string(),
-            Ty::Type { .. } => "type".to_string(),
+            Ty::Type { .. } => "reflect.Type".to_string(),
             // Opaque leaf types render as their fixed qualified names; these
             // strings feed canonical dumps and must stay byte-identical.
             Ty::Resource { .. } => "ai.Resource".to_string(),
             Ty::PromptAst { .. } => "ai.Prompt".to_string(),
             Ty::Error { .. } => "!error".to_string(),
+            // Like the opaque leaves above: the WRITABLE spelling. Bare
+            // `Future` resolves nowhere — the class lives in `baml.future`.
             Ty::Future(value, error, _) => {
-                format!("Future<{}, {}>", value.render_with(s), error.render_with(s))
+                format!(
+                    "baml.future.Future<{}, {}>",
+                    value.render_with(s),
+                    error.render_with(s)
+                )
             }
         }
     }
@@ -884,7 +929,7 @@ pub struct CanonicalTyRender {
     pub user_facing: bool,
 }
 
-impl TyRenderStrategy for CanonicalTyRender {
+impl TyRenderStrategy<QualifiedTypeName> for CanonicalTyRender {
     fn qtn(&self, qtn: &QualifiedTypeName) -> String {
         qtn.render_dotted(self.user_facing)
     }
@@ -901,7 +946,7 @@ impl TyRenderStrategy for CanonicalTyRender {
     }
 }
 
-impl Interface {
+impl<N: Clone> Interface<N> {
     /// The interface *existential* type ([`Ty::Interface`]) denoted by this
     /// constraint, with default attributes. The inverse of
     /// [`Ty::as_interface`].
@@ -909,7 +954,7 @@ impl Interface {
     /// A constraint may pin only some associated types whereas a fully-specified
     /// existential pins all of them; this lifts the constraint verbatim, so the
     /// result carries exactly the bindings the constraint holds.
-    pub fn to_ty(&self) -> Ty {
+    pub fn to_ty(&self) -> Ty<N> {
         Ty::Interface(
             self.name.clone(),
             self.generics.clone(),
@@ -922,7 +967,7 @@ impl Interface {
     /// followed by the type of each associated-type binding (the names are not
     /// yielded). Lets generic `Ty`-walkers descend into a constraint without
     /// re-deriving its shape.
-    pub fn tys(&self) -> impl Iterator<Item = &Ty> {
+    pub fn tys(&self) -> impl Iterator<Item = &Ty<N>> {
         self.generics
             .iter()
             .chain(self.associated_types.iter().map(|(_, ty)| ty))
@@ -932,7 +977,7 @@ impl Interface {
     /// associated-type bindings) mapped through `f`. The name and the binding
     /// names are preserved. The structure-preserving companion to [`tys`](Self::tys),
     /// for substitution/erasure/normalization passes.
-    pub fn map_tys(&self, mut f: impl FnMut(&Ty) -> Ty) -> Interface {
+    pub fn map_tys(&self, mut f: impl FnMut(&Ty<N>) -> Ty<N>) -> Interface<N> {
         // Route through `new` so the sort invariant is self-enforcing. `f` maps
         // only the binding *types*, never the names, so on an already-sorted
         // constraint the re-sort is a no-op — but it removes the dependence on
@@ -948,7 +993,17 @@ impl Interface {
     }
 }
 
-impl fmt::Display for Ty {
+// BUG: this is a THIRD rendering, distinct from both `render_canonical` and
+// `render_user_facing`. It elides the reserved `user` package like the
+// user-facing renderer, but diverges from it on `Ty::Error` (`<error>` vs
+// `!error`), `Ty::Future` (`future<..>` vs `Future<..>`), and synthetic effect
+// params (raw `__effect_param_N` vs `callback`). Diagnostics that interpolate
+// a `Ty` directly therefore get *almost* the user-facing string — which is why
+// the divergence keeps going unnoticed until one of those variants shows up.
+// The fix is to converge `Display` onto `render_user_facing` (or delete it and
+// force an explicit renderer at every site); until then, diagnostics must call
+// `render_user_facing()` rather than interpolate.
+impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Ty::Int { .. } => write!(f, "int"),
@@ -967,7 +1022,7 @@ impl fmt::Display for Ty {
             },
             Ty::Bigint { .. } => write!(f, "bigint"),
             Ty::Class(tn, args, _) => {
-                write!(f, "{}", tn.display_name())?;
+                write!(f, "{}", tn.head_display_name())?;
                 if !args.is_empty() {
                     write!(f, "<")?;
                     for (i, arg) in args.iter().enumerate() {
@@ -981,7 +1036,7 @@ impl fmt::Display for Ty {
                 Ok(())
             }
             Ty::Interface(tn, args, associated_bindings, _) => {
-                write!(f, "{}", tn.display_name())?;
+                write!(f, "{}", tn.head_display_name())?;
                 if !args.is_empty() || !associated_bindings.is_empty() {
                     write!(f, "<")?;
                     let mut first = true;
@@ -1003,9 +1058,9 @@ impl fmt::Display for Ty {
                 }
                 Ok(())
             }
-            Ty::Enum(tn, _) => write!(f, "{}", tn.display_name()),
-            Ty::EnumVariant(tn, variant, _) => write!(f, "{}.{variant}", tn.display_name()),
-            Ty::TypeAlias(tn, _) => write!(f, "{}", tn.display_name()),
+            Ty::Enum(tn, _) => write!(f, "{}", tn.head_display_name()),
+            Ty::EnumVariant(tn, variant, _) => write!(f, "{}.{variant}", tn.head_display_name()),
+            Ty::TypeAlias(tn, _) => write!(f, "{}", tn.head_display_name()),
             Ty::List(inner, _) => {
                 inner.fmt_as_postfix_base(f)?;
                 write!(f, "[]")
@@ -1047,8 +1102,12 @@ impl fmt::Display for Ty {
                 write!(f, " throws {}", throws_display)
             }
             Ty::Void { .. } => write!(f, "void"),
-            Ty::BuiltinUnknown { .. } => write!(f, "unknown"),
-            Ty::Future(value, error, _) => write!(f, "future<{value}, {error}>"),
+            Ty::Unknown { .. } => write!(f, "unknown"),
+            Ty::Future(value, error, _) => {
+                // The writable spelling — lowercase `future<…>` resolves
+                // nowhere, and a diagnostic must not teach it.
+                write!(f, "baml.future.Future<{value}, {error}>")
+            }
             Ty::TypeVar(name, _) => write!(f, "{name}"),
             Ty::AssociatedTypeProjection {
                 base,
@@ -1057,16 +1116,12 @@ impl fmt::Display for Ty {
                 ..
             } => write!(f, "({base} as {}).{member}", interface.to_ty()),
             Ty::Never { .. } => write!(f, "never"),
-            Ty::Unknown { .. } => write!(f, "unknown"),
             Ty::Error { .. } => write!(f, "<error>"),
             Ty::Infer { .. } => write!(f, "_"),
-            Ty::EvolvingList(inner, _) => write!(f, "{inner}[]"),
-            Ty::EvolvingMap(key, value, _) => write!(f, "map<{key}, {value}>"),
             // Opaque leaf types: render identically to `render_with` so the two
-            // renderers never diverge. (`type`/`$rust_type` are keywords; the
-            // resource/prompt handles render as their fixed qualified names.)
+            // renderers never diverge.
             Ty::RustType { .. } => write!(f, "$rust_type"),
-            Ty::Type { .. } => write!(f, "type"),
+            Ty::Type { .. } => write!(f, "reflect.Type"),
             Ty::Resource { .. } => write!(f, "ai.Resource"),
             Ty::PromptAst { .. } => write!(f, "ai.Prompt"),
         }
@@ -1180,14 +1235,13 @@ mod tests {
             Ty::Void {
                 attr: TyAttr::default(),
             },
-            Ty::BuiltinUnknown {
+            Ty::Unknown {
                 attr: TyAttr::default(),
             },
             Ty::unknown(),
             Ty::Error {
                 attr: TyAttr::default(),
             },
-            Ty::EvolvingList(boxed(ty_int()), TyAttr::default()),
         ];
         for ty in &invalid {
             assert!(
@@ -1205,8 +1259,7 @@ mod tests {
         // Concrete: a single run-time representation dispatch can key on. Note the
         // differences from `is_valid_impl_subject` — `Function`/`Future`/`RustType`
         // are concrete types even though they are not written-impl targets (for
-        // `Future`, only because that is unimplemented), and the `Evolving*`
-        // inference forms are lists/maps.
+        // `Future`, only because that is unimplemented).
         let concrete = [
             ty_int(),
             Ty::Bigint {
@@ -1224,7 +1277,6 @@ mod tests {
                 value: boxed(ty_int()),
                 attr: TyAttr::default(),
             },
-            Ty::EvolvingList(boxed(ty_int()), TyAttr::default()),
             Ty::Function {
                 params: vec![],
                 ret: boxed(Ty::null()),
@@ -1252,7 +1304,7 @@ mod tests {
         let not_concrete = [
             Ty::union([ty_int(), ty_string()]),
             Ty::Interface(qtn("I"), vec![], vec![], TyAttr::default()),
-            Ty::BuiltinUnknown {
+            Ty::Unknown {
                 attr: TyAttr::default(),
             },
             Ty::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default()),
@@ -1271,9 +1323,6 @@ mod tests {
                 attr: TyAttr::default(),
             },
             Ty::TypeAlias(qtn("A"), TyAttr::default()),
-            Ty::Unknown {
-                attr: TyAttr::default(),
-            },
             Ty::Error {
                 attr: TyAttr::default(),
             },
@@ -1313,7 +1362,7 @@ mod tests {
     fn test_display_opaque_types() {
         assert_eq!(Ty::resource().to_string(), "ai.Resource");
         assert_eq!(Ty::prompt_ast().to_string(), "ai.Prompt");
-        assert_eq!(Ty::type_type().to_string(), "type");
+        assert_eq!(Ty::type_type().to_string(), "reflect.Type");
     }
 
     #[test]

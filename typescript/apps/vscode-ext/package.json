@@ -2,7 +2,7 @@
   "name": "baml-extension",
   "displayName": "BAML v0",
   "description": "BAML v0 is a DSL for AI applications.",
-  "version": "0.226.0",
+  "version": "0.226.1",
   "publisher": "Boundary",
   "packageManager": "pnpm@9.12.0",
   "repository": "https://github.com/BoundaryML/baml",

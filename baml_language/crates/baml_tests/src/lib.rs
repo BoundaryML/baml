@@ -5,6 +5,7 @@
 //! - Automatic snapshot tests generated from the `projects/{tier}/` directories by `build.rs`
 
 pub mod engine;
+pub mod stdlib_prefix;
 
 /// Compile BAML source and run the entry function, returning bytecode display + result.
 ///
@@ -232,6 +233,9 @@ pub mod compiler2_mir;
 
 #[cfg(test)]
 pub mod compiler2_emit;
+
+#[cfg(test)]
+pub mod corpus;
 
 #[cfg(test)]
 pub mod incremental;

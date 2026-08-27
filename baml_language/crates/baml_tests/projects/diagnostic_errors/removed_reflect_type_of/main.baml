@@ -1,11 +1,20 @@
-// BEP-066: the removed `reflect.type_of` reader is an ordinary nonexistent
-// function. Both the bare shorthand spelling and the fully qualified one must
-// produce an ordinary unresolved-name diagnostic.
+// BEP-066 removed the `reflect.type_of` reader outright. Nothing replaces it
+// under another name, so it reports as an ordinary name that does not exist —
+// unlike the spellings that merely MOVED, which name their replacement (see
+// ../removed_reflect_spellings).
+//
+// Three shapes, three different diagnostics: a package-level function that is
+// not there, the same word looked for on `reflect.Type`, and the same word as
+// a method on a type value.
 
-function old_bare_spelling() -> type {
+function package_level_reader_is_gone() -> reflect.Type {
     reflect.type_of<int>()
 }
 
-function old_qualified_spelling() -> type {
-    baml.reflect.type_of<string>()
+function type_level_reader_is_gone() -> reflect.Type {
+    reflect.Type.type_of<string>()
+}
+
+function method_form_is_gone() -> reflect.Type {
+    reflect.Type.of_value(1).type_of()
 }

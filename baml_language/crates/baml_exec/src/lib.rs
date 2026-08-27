@@ -23,7 +23,7 @@ pub mod json_coerce;
 pub mod output;
 
 pub use auto_cli::{is_auto_cli_primitive, parse_cli_value};
-pub use call_context::CallContextCapture;
+pub use call_context::HelperCallContext;
 pub use clap_target::{CLAP_STYLING, ParsedTargetArgs, parse_multi_target_argv, parse_target_argv};
 pub use diag_print::{print_anyhow_error, print_error, print_warning};
 

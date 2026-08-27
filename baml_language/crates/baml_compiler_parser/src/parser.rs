@@ -499,7 +499,7 @@ impl<'a> Parser<'a> {
     fn is_at_type_start(&self) -> bool {
         self.at(TokenKind::Word)
             || self.at(TokenKind::Quote) // string literal type
-            || self.at(TokenKind::Hash) // raw string literal type
+            || self.at(TokenKind::Hash) // removed hash string recovery
             || self.at(TokenKind::BigintLiteral)
             || self.at(TokenKind::IntegerLiteral)
             || self.at(TokenKind::FloatLiteral)
@@ -523,25 +523,41 @@ impl<'a> Parser<'a> {
         matches!(kind, TokenKind::Whitespace | TokenKind::Newline)
     }
 
+    /// Token kinds legal as a `.member` name — identifiers plus the contextual
+    /// keywords a declaration may use as a member name (`parse_interface_method`
+    /// accepts the same set, so a method named `implements` must stay reachable
+    /// through every access spelling).
+    ///
+    /// Kind-based so lookahead can test a token at an arbitrary index; see
+    /// [`Self::at_member_name`] for the position-based form.
+    fn kind_is_member_name(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::Word
+                | TokenKind::Class
+                | TokenKind::Enum
+                | TokenKind::Function
+                | TokenKind::Implements
+                | TokenKind::Implement
+                | TokenKind::Extends
+                | TokenKind::Requires
+                | TokenKind::Interface
+                // `client` is a keyword for LLM config/declarations, but stays
+                // valid as a class field name and member-access name so
+                // BEP-049 §10's `ctx.client` (on the `Context` type) parses.
+                // Unambiguous here: class bodies and `.member` access have no
+                // `client` construct.
+                | TokenKind::Client
+        )
+    }
+
     /// True when the current token can serve as a member name after `.`.
     ///
     /// Declaration keywords remain valid as member names — e.g.
     /// `dog_t.implements(animal_t)` on the reflection `type` value.
     fn at_member_name(&self) -> bool {
-        self.at(TokenKind::Word)
-            || self.at(TokenKind::Class)
-            || self.at(TokenKind::Enum)
-            || self.at(TokenKind::Function)
-            || self.at(TokenKind::Implements)
-            || self.at(TokenKind::Implement)
-            || self.at(TokenKind::Extends)
-            || self.at(TokenKind::Requires)
-            || self.at(TokenKind::Interface)
-            // `client` is a keyword for LLM config/declarations, but stays valid
-            // as a class field name and member-access name so BEP-049 §10's
-            // `ctx.client` (on the `Context` type) parses. Unambiguous here:
-            // class bodies and `.member` access have no `client` construct.
-            || self.at(TokenKind::Client)
+        self.current()
+            .is_some_and(|token| Self::kind_is_member_name(token.kind))
     }
 
     /// True for `field as class_field` inside an `implements` block.
@@ -565,6 +581,42 @@ impl<'a> Parser<'a> {
         self.tokens
             .get(second)
             .is_some_and(|t| t.kind == TokenKind::Word && t.text == "as")
+    }
+
+    /// True when `kind` can be the LAST token of a type that could legally
+    /// stand as a qualified projection's `Self`.
+    ///
+    /// [`Self::looks_like_qualified_projection`] uses this to tell the
+    /// separator `as` in `(Base as Iface).item` from an `as` that is merely a
+    /// variable of that name: the separator can only follow a token that ends
+    /// a written type, so `(as).x` and `(1 + as).x` stay ordinary expressions.
+    ///
+    /// The set is deliberately exact rather than "anything that ends an
+    /// operand":
+    /// - `Word` — a named type, including the primitives (`int`, `string`, …),
+    ///   which lex as words rather than keywords.
+    /// - `Greater` / `GreaterGreater` — generic arguments, `Box<int>`,
+    ///   `Box<Box<int>>`.
+    /// - `RBracket` — an array suffix, `int[]`.
+    /// - `Question` — an optional suffix, `T?`.
+    /// - `RParen` — a parenthesized type: `(A | B)`, or a redundantly wrapped
+    ///   base, `((Document) as Codec<F>).Output`.
+    ///
+    /// Literal-ending tokens (`Quote`, the number literals) are excluded on
+    /// purpose: a literal type is a singleton whose values dispatch through
+    /// their base, so it can never implement an interface (E0138) and can
+    /// never be a projection's `Self`. Admitting them would only let a
+    /// guaranteed type error reach the parser in projection shape.
+    fn kind_can_end_projection_self(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::Word
+                | TokenKind::Greater
+                | TokenKind::GreaterGreater
+                | TokenKind::RBracket
+                | TokenKind::Question
+                | TokenKind::RParen
+        )
     }
 
     /// True for the BEP-044 projection operator `.as<T>`.
@@ -592,7 +644,12 @@ impl<'a> Parser<'a> {
     }
 
     /// True for a type-level associated type projection: `(T as I).Item`.
-    fn looks_like_associated_type_projection(&self) -> bool {
+    /// Lookahead for the qualified-projection token shape
+    /// `( … as … ) . WORD`, shared by BOTH namespaces: it denotes an
+    /// associated-type projection in type position and a qualified item
+    /// reference in expression position. One lookahead so the two spellings
+    /// can never drift apart.
+    fn looks_like_qualified_projection(&self) -> bool {
         let mut i = self.skip_trivia_and_comments_from(self.current);
         if self
             .tokens
@@ -607,6 +664,7 @@ impl<'a> Parser<'a> {
         let mut angle_depth = 0_i32;
         let mut saw_as = false;
         let mut rparen_idx = None;
+        let mut previous_significant: Option<TokenKind> = None;
 
         while i < self.tokens.len() {
             let new_i = self.skip_comment_at(i);
@@ -631,11 +689,22 @@ impl<'a> Parser<'a> {
                 TokenKind::Less => angle_depth += 1,
                 TokenKind::Greater => angle_depth -= 1,
                 TokenKind::GreaterGreater => angle_depth -= 2,
-                TokenKind::Word if token.text == "as" && paren_depth == 1 && angle_depth == 0 => {
+                // `as` is CONTEXTUAL (a legal binding name), so the separator
+                // only counts when the token before it can end a written type
+                // (see `kind_can_end_projection_self`). Without the gate,
+                // expressions like `(as).x` or `(1 + as).x` — where `as` is a
+                // variable — would be hijacked into the projection parse.
+                TokenKind::Word
+                    if token.text == "as"
+                        && paren_depth == 1
+                        && angle_depth == 0
+                        && previous_significant.is_some_and(Self::kind_can_end_projection_self) =>
+                {
                     saw_as = true;
                 }
                 _ => {}
             }
+            previous_significant = Some(token.kind);
             i += 1;
         }
 
@@ -656,7 +725,7 @@ impl<'a> Parser<'a> {
         let member_idx = self.skip_trivia_and_comments_from(dot_idx + 1);
         self.tokens
             .get(member_idx)
-            .is_some_and(|t| t.kind == TokenKind::Word)
+            .is_some_and(|t| Self::kind_is_member_name(t.kind))
     }
 
     /// True when a postfix `(` must NOT be glued onto the expression parsed so
@@ -1213,7 +1282,7 @@ impl<'a> Parser<'a> {
 
     /// [`at_top_level_keyword`] minus tokens that are valid in statement position:
     /// - `client` can start `client.method(...)` (parameter named `client`)
-    /// - `test` with a string literal is an expression-body test (valid in blocks)
+    /// - `test` starts an expression-body test (valid in blocks)
     /// - `testset` with a string literal is a testset declaration (valid in blocks)
     fn at_top_level_keyword_except_client(&self) -> bool {
         if !self.at_top_level_keyword() {
@@ -1223,9 +1292,7 @@ impl<'a> Parser<'a> {
             return false;
         }
         // Expression-body test/testset are valid inside block expressions
-        if (self.at(TokenKind::Test) && self.looks_like_test_expr_body())
-            || self.at(TokenKind::TestSet)
-        {
+        if self.at(TokenKind::Test) || self.at(TokenKind::TestSet) {
             return false;
         }
         true
@@ -1421,7 +1488,7 @@ impl<'a> Parser<'a> {
 
     /// Recover from a legacy `type_builder { ... }` / `type_builder: { ... }`
     /// block (BEP-066 removed the `TypeBuilder` feature; runtime type
-    /// construction is `baml.reflect` now). `type_builder` is a plain `Word`
+    /// construction is `reflect` now). `type_builder` is a plain `Word`
     /// today, so this is a cheap text check at positions where a declaration
     /// or config entry may start. Emits E0098 and consumes the whole block
     /// inside an ERROR node. Returns true if recovery was performed.
@@ -1444,7 +1511,7 @@ impl<'a> Parser<'a> {
         let span = self.current().map(|t| t.span).unwrap_or_default();
         self.events.push(Event::RemovedFeature {
             message: "`type_builder` blocks were removed; runtime type construction is \
-                      `baml.reflect` (BEP-066)"
+                      `reflect` (BEP-066)"
                 .to_string(),
             span,
         });
@@ -1459,7 +1526,7 @@ impl<'a> Parser<'a> {
 
     /// Recover from a legacy `dynamic class Name { ... }` / `dynamic enum
     /// Name { ... }` definition (BEP-066 removed the `TypeBuilder` feature;
-    /// runtime type construction is `baml.reflect` now). `dynamic` is a
+    /// runtime type construction is `reflect` now). `dynamic` is a
     /// plain `Word` today, so this is a cheap text check at positions where
     /// a declaration or config entry may start. Emits E0098 and consumes the
     /// whole definition inside an ERROR node. Returns true if recovery was
@@ -1478,7 +1545,7 @@ impl<'a> Parser<'a> {
         self.events.push(Event::RemovedFeature {
             message: format!(
                 "`dynamic {keyword}` definitions were removed; runtime type construction is \
-                 `baml.reflect` (BEP-066)"
+                 `reflect` (BEP-066)"
             ),
             span,
         });
@@ -1489,6 +1556,47 @@ impl<'a> Parser<'a> {
         if self.at(TokenKind::Word) {
             self.bump(); // type name
         }
+        self.skip_balanced_braces();
+        self.finish_node();
+        true
+    }
+
+    /// Recover from a legacy `test Name { ... }` declaration. Tests now use
+    /// expression bodies and quoted names. Emits E0098 and consumes the whole
+    /// declaration inside an ERROR node so invalid config contents do not
+    /// produce cascading diagnostics.
+    fn try_recover_removed_legacy_test(&mut self) -> bool {
+        let starts_legacy_config = self.peek(3).is_some_and(|token| {
+            token.kind == TokenKind::Word
+                && match token.text.as_str() {
+                    "functions" => self.peek(4).is_some_and(|next| {
+                        matches!(next.kind, TokenKind::LBracket | TokenKind::Colon)
+                    }),
+                    "args" | "type_builder" => self.peek(4).is_some_and(|next| {
+                        matches!(next.kind, TokenKind::LBrace | TokenKind::Colon)
+                    }),
+                    _ => false,
+                }
+        });
+        if !self.at(TokenKind::Test)
+            || self.peek(1).map(|token| token.kind) != Some(TokenKind::Word)
+            || self.peek(2).map(|token| token.kind) != Some(TokenKind::LBrace)
+            || !starts_legacy_config
+        {
+            return false;
+        }
+
+        let start_span = self.current().map(|token| token.span).unwrap_or_default();
+        let name_span = self.peek(1).map(|token| token.span).unwrap_or(start_span);
+        self.events.push(Event::RemovedFeature {
+            message: "Legacy test declarations were removed. Use an expression-body test with a quoted name, for example: `test \"Name\" { assert.equal(Foo(...), expected) }`."
+                .to_string(),
+            span: Self::span_from_to(start_span, name_span),
+        });
+
+        self.start_node(SyntaxKind::ERROR);
+        self.bump();
+        self.bump();
         self.skip_balanced_braces();
         self.finish_node();
         true
@@ -2055,10 +2163,21 @@ impl<'a> Parser<'a> {
         true
     }
 
-    /// Parse a raw string literal with hash delimiters
+    /// Parse a removed hash string literal for lossless recovery.
     /// Lexer emits: Hash+, Quote, (content tokens), Quote, Hash+
     /// Parser assembles and validates matching hash counts
     pub(crate) fn parse_raw_string(&mut self) -> bool {
+        self.parse_raw_string_with_removed_feature_error(true)
+    }
+
+    fn parse_raw_string_without_removed_feature_error(&mut self) -> bool {
+        self.parse_raw_string_with_removed_feature_error(false)
+    }
+
+    fn parse_raw_string_with_removed_feature_error(
+        &mut self,
+        report_removed_feature: bool,
+    ) -> bool {
         if !self.at(TokenKind::Hash) {
             return false;
         }
@@ -2082,6 +2201,8 @@ impl<'a> Parser<'a> {
         // before starting the RAW_STRING_LITERAL node, handle all leading trivia
         while self.eat_trivia() {}
 
+        let start_span = self.current().map(|token| token.span).unwrap_or_default();
+
         self.with_node(SyntaxKind::RAW_STRING_LITERAL, |p| {
             // Consume opening hashes
             for _ in 0..opening_hashes {
@@ -2093,10 +2214,19 @@ impl<'a> Parser<'a> {
             p.parse_raw_string_content(opening_hashes);
         });
 
+        if report_removed_feature {
+            let end_span = self.previous_non_trivia_span().unwrap_or(start_span);
+            self.events.push(Event::RemovedFeature {
+                message: "Hash string literals like `#\"...\"#` are no longer supported. Use quoted strings or backtick strings instead."
+                    .to_string(),
+                span: Self::span_from_to(start_span, end_span),
+            });
+        }
+
         true
     }
 
-    /// Parse the content inside a raw string.
+    /// Parse the content inside a removed hash string.
     fn parse_raw_string_content(&mut self, opening_hashes: usize) {
         let mut loop_counter = 0;
 
@@ -2134,7 +2264,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse a string or raw string (dispatches to correct method)
+    /// Parse a quoted, backtick, or removed hash string.
     pub(crate) fn parse_any_string(&mut self) -> bool {
         if self.at(TokenKind::Hash) {
             self.parse_raw_string()
@@ -2790,7 +2920,7 @@ impl<'a> Parser<'a> {
     fn parse_attribute_arg(&mut self) {
         // Attribute argument can be:
         // - String: @alias("user_name")
-        // - Raw string: @description(#"Multi-line\ndescription"#)
+        // - Removed hash string, parsed for a targeted diagnostic
         // - Expression: @some_attr({{ this > 0 }})
         // - Unquoted string: @alias(my_alias) - one WORD token
 
@@ -2887,6 +3017,27 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_type_primary(&mut self, consume_union: bool) {
+        // `unreflect(expr)` is a type atom. Its legality is deliberately not
+        // a grammar decision: body positions lower it to a scoped runtime
+        // binding, while declaration signatures diagnose it in the checker.
+        if self.at_contextual_kw("unreflect")
+            && self
+                .peek(1)
+                .is_some_and(|token| token.kind == TokenKind::LParen)
+        {
+            self.with_node(SyntaxKind::UNREFLECT_TYPE, |p| {
+                p.bump();
+                p.expect(TokenKind::LParen);
+                if p.at(TokenKind::RParen) {
+                    p.error_here("`unreflect` requires an operand".to_string());
+                } else {
+                    p.parse_expr();
+                }
+                p.expect(TokenKind::RParen);
+            });
+            return;
+        }
+
         // Function values cannot declare their own generic parameters, so a
         // leading `<...>` on a function type is rejected. Recover by consuming the
         // list and parsing the `(...) -> R` so the rest of the file still parses.
@@ -2997,8 +3148,8 @@ impl<'a> Parser<'a> {
             //
             // Projections have their own `as` separator and trailing `.Member`,
             // so parse those before the general paren/function path.
-            if self.looks_like_associated_type_projection() {
-                self.parse_associated_type_projection();
+            if self.looks_like_qualified_projection() {
+                self.parse_qualified_projection();
             } else {
                 // We parse the contents as function type parameters (which can be either
                 // `name: type` or just `type`), then check for `->` to determine which case.
@@ -3039,8 +3190,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse `(Base as Interface).Member` inside the surrounding `TYPE_EXPR`.
-    fn parse_associated_type_projection(&mut self) {
+    /// Parse `(Base as Interface).Member` — the token shape itself, without
+    /// the enclosing node. In type position the caller is the surrounding
+    /// `TYPE_EXPR`; in expression position it is `QUALIFIED_PATH_EXPR`.
+    fn parse_qualified_projection(&mut self) {
         self.expect(TokenKind::LParen);
         self.parse_type();
         if self.at_contextual_kw("as") {
@@ -3051,10 +3204,10 @@ impl<'a> Parser<'a> {
         self.parse_type();
         self.expect(TokenKind::RParen);
         self.expect(TokenKind::Dot);
-        if self.at(TokenKind::Word) {
+        if self.at_member_name() {
             self.bump();
         } else {
-            self.error_unexpected_token("associated type name".to_string());
+            self.error_unexpected_token("projected item name".to_string());
         }
     }
 
@@ -4308,8 +4461,14 @@ impl<'a> Parser<'a> {
             }
             p.expect(TokenKind::Colon);
 
-            // Prompt value (usually a raw string)
-            if !p.parse_any_string() {
+            // Keep the prompt-specific Jinja migration diagnostic emitted by
+            // lowering instead of also reporting the general hash-string error.
+            let parsed = if p.at(TokenKind::Hash) {
+                p.parse_raw_string_without_removed_feature_error()
+            } else {
+                p.parse_any_string()
+            };
+            if !parsed {
                 p.error_unexpected_token("prompt string".to_string());
             }
         });
@@ -4457,7 +4616,7 @@ impl<'a> Parser<'a> {
             self.parse_throw_stmt();
         } else if self.at(TokenKind::Defer) {
             self.parse_defer_stmt();
-        } else if self.at(TokenKind::Test) && self.looks_like_test_expr_body() {
+        } else if self.at(TokenKind::Test) {
             if self.testset_body_depth > 0 {
                 self.parse_test_expr();
             } else {
@@ -4491,14 +4650,7 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("type binding name".to_string());
             }
             p.expect(TokenKind::Equals);
-            if p.at_contextual_kw("unreflect") {
-                p.bump();
-            } else {
-                p.error_unexpected_token("'unreflect'".to_string());
-            }
-            p.expect(TokenKind::LParen);
-            p.parse_expr();
-            p.expect(TokenKind::RParen);
+            p.parse_type();
             p.eat(TokenKind::Semicolon);
         });
     }
@@ -4936,7 +5088,7 @@ impl<'a> Parser<'a> {
             // Paren-type-suffix paren consumes `|` because the whole
             // expression is unambiguously one type — `(int | string)[] | float`
             // parses as the union type `(int | string)[] | float`.
-            if self.looks_like_associated_type_projection() {
+            if self.looks_like_qualified_projection() {
                 self.with_node(SyntaxKind::TYPE_PATTERN, |p| {
                     p.parse_type_with(/* consume_union = */ false);
                 });
@@ -4964,22 +5116,6 @@ impl<'a> Parser<'a> {
 
         if self.at_binding_intro_pattern() {
             self.parse_let_pattern();
-            return;
-        }
-
-        if self.at_contextual_kw("unreflect")
-            && self
-                .peek(1)
-                .is_some_and(|token| token.kind == TokenKind::LParen)
-        {
-            self.with_node(SyntaxKind::UNREFLECT_PATTERN, |p| {
-                p.bump();
-                p.expect(TokenKind::LParen);
-                if !p.at(TokenKind::RParen) {
-                    p.parse_expr();
-                }
-                p.expect(TokenKind::RParen);
-            });
             return;
         }
 
@@ -5197,6 +5333,35 @@ impl<'a> Parser<'a> {
         let mut depth: i32 = 1;
         let mut i = self.skip_trivia_and_comments_from(start + 1);
         while i < self.tokens.len() {
+            // Runtime type operands are arbitrary expressions. Treat their
+            // balanced parentheses as opaque so comparisons inside the
+            // operand cannot perturb the surrounding generic-argument depth.
+            if self.tokens[i].kind == TokenKind::Word && self.tokens[i].text == "unreflect" {
+                let after_word = self.skip_trivia_and_comments_from(i + 1);
+                if self.tokens.get(after_word).map(|token| token.kind) == Some(TokenKind::LParen) {
+                    let mut paren_depth = 1_u32;
+                    let mut j = self.skip_trivia_and_comments_from(after_word + 1);
+                    while let Some(token) = self.tokens.get(j) {
+                        match token.kind {
+                            TokenKind::LParen => paren_depth += 1,
+                            TokenKind::RParen => {
+                                paren_depth -= 1;
+                                if paren_depth == 0 {
+                                    j += 1;
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                        j = self.skip_trivia_and_comments_from(j + 1);
+                    }
+                    if paren_depth != 0 {
+                        return None;
+                    }
+                    i = self.skip_trivia_and_comments_from(j);
+                    continue;
+                }
+            }
             match self.tokens[i].kind {
                 TokenKind::Less => depth += 1,
                 TokenKind::Greater => {
@@ -6326,11 +6491,13 @@ impl<'a> Parser<'a> {
                     depth -= 1;
                     if depth == 0 {
                         // We just closed a complete expression
-                        // Allow PATH_EXPR or FIELD_ACCESS_EXPR for module-qualified types
-                        return matches!(
-                            kind,
-                            SyntaxKind::PATH_EXPR | SyntaxKind::FIELD_ACCESS_EXPR
-                        );
+                        // Identifier and module-qualified constructors are
+                        // PATH_EXPRs. FIELD_ACCESS_EXPR is reserved for a
+                        // complex value receiver (call/index/paren); accepting
+                        // it here lets recovery turn malformed expressions such
+                        // as `(1). { x: 2 }` into constructor-less object
+                        // literals that the AST cannot represent.
+                        return *kind == SyntaxKind::PATH_EXPR;
                     }
                 }
                 Event::Token { kind, text, .. } => {
@@ -6584,6 +6751,14 @@ impl<'a> Parser<'a> {
         } else if self.at(TokenKind::LParen) && self.looks_like_lambda() {
             // Lambda expression: (params) -> [RetType] { body }
             self.parse_lambda_expr();
+        } else if self.at(TokenKind::LParen) && self.looks_like_qualified_projection() {
+            // Fully-qualified item reference: `(Base as Interface).item`. The
+            // same token shape spells an associated-type projection in type
+            // position; only the namespace of the projected item differs, so
+            // the lookahead and the parse are shared with it.
+            self.with_node(SyntaxKind::QUALIFIED_PATH_EXPR, |p| {
+                p.parse_qualified_projection();
+            });
         } else if self.at(TokenKind::LParen) {
             // Parenthesized expression. Parens reset the destructure and
             // object-literal suppression: `if (x is Foo { f })` and
@@ -6905,7 +7080,7 @@ impl<'a> Parser<'a> {
                 | IntegerLiteral
                 | FloatLiteral
                 | Quote   // string literal
-                | Hash    // raw string literal `#"..."#`
+                | Hash    // removed hash string recovery
                 | Word
                 | Client
                 | LParen
@@ -7024,14 +7199,14 @@ impl<'a> Parser<'a> {
 
             // Parse first type argument
             if !p.at(TokenKind::Greater) && !p.at(TokenKind::GreaterGreater) {
-                p.parse_generic_arg();
+                p.parse_type();
 
                 // Parse remaining type arguments
                 while p.eat(TokenKind::Comma) {
                     if p.at(TokenKind::Greater) || p.at(TokenKind::GreaterGreater) {
                         break; // Trailing comma
                     }
-                    p.parse_generic_arg();
+                    p.parse_type();
                 }
             }
 
@@ -7058,26 +7233,6 @@ impl<'a> Parser<'a> {
             }
             self.pending_greaters = 0;
             self.pending_greater_span = None;
-        }
-    }
-
-    /// Parse one call-site generic argument. `unreflect` remains an ordinary
-    /// identifier everywhere else; only the exact `unreflect(` shape in this
-    /// position activates the marker.
-    fn parse_generic_arg(&mut self) {
-        if self.at_contextual_kw("unreflect")
-            && self.peek(1).is_some_and(|t| t.kind == TokenKind::LParen)
-        {
-            self.with_node(SyntaxKind::UNREFLECT_ARG, |p| {
-                p.bump();
-                p.expect(TokenKind::LParen);
-                if !p.at(TokenKind::RParen) {
-                    p.parse_expr();
-                }
-                p.expect(TokenKind::RParen);
-            });
-        } else {
-            self.parse_type();
         }
     }
 
@@ -7742,7 +7897,8 @@ impl<'a> Parser<'a> {
         // config keys (e.g., `enum ["celsius", "fahrenheit"]`).
 
         self.with_node(SyntaxKind::CONFIG_ITEM, |p| {
-            // Config key: identifier, keyword-as-identifier, or quoted/raw string
+            // Config key: identifier, keyword-as-identifier, quoted string, or
+            // removed hash string parsed for a targeted diagnostic
             // Note: Some top-level keywords are also valid as config keys:
             // - RetryPolicy: `retry_policy MyPolicy` inside client blocks
             // - Enum: `enum ["celsius", "fahrenheit"]` inside nested option maps
@@ -7756,7 +7912,7 @@ impl<'a> Parser<'a> {
             {
                 p.bump();
             } else if p.at(TokenKind::Quote) || p.at(TokenKind::Hash) {
-                // Quoted or raw string key (e.g., "string key" or #"raw key"#)
+                // Quoted string or removed hash string key
                 if !p.parse_any_string() {
                     p.error_unexpected_token("config key".to_string());
                     if !p.at_end() {
@@ -7950,89 +8106,6 @@ impl<'a> Parser<'a> {
 
     // ============ Test Parsing ============
 
-    /// Parse a test declaration
-    pub(crate) fn parse_test(&mut self) {
-        self.with_node(SyntaxKind::TEST_DEF, |p| {
-            // 'test' keyword
-            p.expect(TokenKind::Test);
-
-            // Test name
-            let test_name = if p.at(TokenKind::Word) {
-                let name = p.current().map(|t| t.text.clone());
-                p.bump();
-                name
-            } else {
-                p.error_unexpected_token("test name".to_string());
-                None
-            };
-
-            // Check for unnecessary parentheses and emit helpful hint
-            if p.at(TokenKind::LParen) {
-                let name = test_name.as_deref().unwrap_or("Name");
-                let start_span = p.current().map(|t| t.span).unwrap();
-                p.bump(); // consume (
-                let end_span = if p.at(TokenKind::RParen) {
-                    let span = p.current().map(|t| t.span).unwrap();
-                    p.bump(); // consume )
-                    span
-                } else {
-                    start_span
-                };
-                let span = baml_base::Span::new(
-                    start_span.file_id,
-                    TextRange::new(start_span.range.start(), end_span.range.end()),
-                );
-                p.error(
-                    format!("remove parentheses from test name: `test {name}`"),
-                    span,
-                );
-            }
-
-            // Config block
-            if p.at(TokenKind::LBrace) {
-                p.parse_config_block();
-            } else {
-                p.error_unexpected_token("test body".to_string());
-            }
-        });
-    }
-
-    /// Check if the current test looks like an expression-body test (new-style).
-    ///
-    /// Old-style: `test Name { functions [...] ... }` — config block
-    /// New-style: `test <expr> [with <expr>] { ... }` — expression body
-    ///
-    /// We detect the old style and default to new style otherwise, so that
-    /// any expression (string concat, function calls, etc.) works as a test name.
-    fn looks_like_test_expr_body(&self) -> bool {
-        let Some(next) = self.peek(1) else {
-            return true;
-        };
-        // Old-style is only: `test Name { functions ...}` or `test Name { type_builder ...}`
-        // (`type_builder` is legacy BEP-066 syntax; routing it to config-block
-        // parsing surfaces the targeted E0098 removed-feature error there.)
-        // There is no old-style form with parens — `test Name(...)` was never valid old-style
-        // syntax (the old parser just emits a "remove parentheses" error).
-        if next.kind == TokenKind::Word {
-            if let Some(after_word) = self.peek(2) {
-                if after_word.kind == TokenKind::LBrace {
-                    // Peek inside the brace: `test Name { functions` or
-                    // `test Name { type_builder`. The latter is legacy
-                    // BEP-066 syntax that must reach config-block recovery so
-                    // it produces the targeted removed-feature diagnostic.
-                    if let Some(inside) = self.peek(3) {
-                        if inside.kind == TokenKind::Word
-                            && (inside.text == "functions" || inside.text == "type_builder")
-                        {
-                            return false; // old-style config block
-                        }
-                    }
-                }
-            }
-        }
-        true
-    }
-
     /// Parse an expression-body test: `test <name_expr> [with expr] { body }`
     ///
     /// The name is any expression that type-checks as a string, e.g.:
@@ -8215,8 +8288,14 @@ impl<'a> Parser<'a> {
                 p.parse_parameter_list();
             }
 
-            // Template body (raw string)
-            if !p.parse_any_string() {
+            // The declaration-level removal diagnostic is more actionable than
+            // also reporting the general hash-string error for its body.
+            let parsed = if p.at(TokenKind::Hash) {
+                p.parse_raw_string_without_removed_feature_error()
+            } else {
+                p.parse_any_string()
+            };
+            if !parsed {
                 p.error_unexpected_token("template string body".to_string());
             }
         });
@@ -8244,28 +8323,13 @@ impl<'a> Parser<'a> {
             // Equals
             p.expect(TokenKind::Equals);
 
-            let runtime_binding = p.at_contextual_kw("unreflect")
-                && p.peek(1).map(|token| token.kind) == Some(TokenKind::LParen);
-            if runtime_binding {
-                p.error_here(
-                    "runtime type bindings are only allowed inside a function, lambda, or block"
-                        .to_string(),
-                );
-                // Consume the runtime operand as an expression so the explicit
-                // placement diagnostic does not cascade into unrelated
-                // top-level parse errors.
-                p.bump();
-                p.expect(TokenKind::LParen);
-                p.parse_expr();
-                p.expect(TokenKind::RParen);
-            } else {
-                // Type definition
-                p.parse_type();
+            // Type definition. Runtime type atoms are accepted here too; the
+            // declaration checker reports that they have no lexical scope.
+            p.parse_type();
 
-                // Optional attributes (not including those taken by the type)
-                while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                    p.parse_at_attribute();
-                }
+            // Optional attributes (not including those taken by the type)
+            while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
+                p.parse_at_attribute();
             }
 
             // Optional semicolon
@@ -8309,10 +8373,8 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
         } else if parser.at(TokenKind::Generator) {
             parser.parse_generator();
         } else if parser.at(TokenKind::Test) {
-            if parser.looks_like_test_expr_body() {
+            if !parser.try_recover_removed_legacy_test() {
                 parser.parse_test_expr();
-            } else {
-                parser.parse_test();
             }
         } else if parser.at(TokenKind::TestSet) {
             parser.parse_testset();
@@ -8452,6 +8514,31 @@ mod tests {
         }
     }
 
+    #[test]
+    fn removed_legacy_tests_recover_without_cascading() {
+        for source in [
+            "test OldStyle {\n  functions [Foo]\n  args { value 1 }\n}\nfunction After() -> int { 1 }\n",
+            "test ArgsFirst {\n  args { value 1 }\n  functions [Foo]\n}\nfunction After() -> int { 1 }\n",
+            "test BuilderFirst {\n  type_builder { class Foo { value int } }\n  functions [Foo]\n}\nfunction After() -> int { 1 }\n",
+        ] {
+            assert_removed_feature_recovery(source, "Legacy test declarations were removed");
+        }
+    }
+
+    #[test]
+    fn expression_body_tests_can_use_identifier_names() {
+        let source = r#"
+testset "dynamic" {
+  let name = "case"
+  test name { assert.is_true(true) }
+  test name { args() }
+  test name { functions() }
+}
+"#;
+        let (_root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+    }
+
     /// A run of hashes at EOF (an incomplete raw string like `##`) must
     /// parse to errors, never panic: `find_token_after_hashes` returns
     /// `None` at EOF instead of the one-past-the-end index its callers
@@ -8509,35 +8596,31 @@ mod tests {
         );
     }
 
-    /// BEP-066 K-13 (M-9): `type` as an expression path head. `type` is a
-    /// contextual keyword, so in expression position `type.of<int>()` /
-    /// `type.of_value(x)` parse as ordinary member-call paths (a `Word` head).
-    /// Block statement dispatch uses the full `type Name =` lookahead.
+    /// `reflect.Type.of` and `reflect.Type.of_value` parse as ordinary
+    /// member-call paths while `type Name = ...` keeps its statement meaning.
     #[test]
-    fn type_as_expression_path_head_parses() {
-        let source = "function main() -> string {\n  let t = type.of<int>();\n  let u = type.of_value(1);\n  type.of<int[]>();\n  t.to_string()\n}\n";
+    fn reflect_type_expression_paths_parse() {
+        let source = "function main() -> string {\n  let t = reflect.Type.of<int>();\n  let u = reflect.Type.of_value(1);\n  reflect.Type.of<int[]>();\n  t.to_string()\n}\n";
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
-        // The heads lower as plain path segments: WORD("type") followed by DOT.
-        let type_head_paths = root
+        let type_segments = root
             .descendants_with_tokens()
             .filter(|elem| {
                 matches!(
                     elem,
                     rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::WORD
-                        && t.text() == "type"
+                        && t.text() == "Type"
                 )
             })
             .count();
-        assert_eq!(type_head_paths, 3, "all three `type.` heads parse as words");
+        assert_eq!(type_segments, 3, "all three `reflect.Type` paths parse");
     }
 
-    /// The `type.of` expression form must not steal top-level `type X = ...`
+    /// The `reflect.Type.of` expression form must not steal top-level `type X = ...`
     /// alias declarations (their dispatch is unchanged).
     #[test]
     fn type_alias_declarations_unaffected_by_type_of() {
-        let source =
-            "type MyAlias = int | string\nfunction main() -> type {\n  type.of<MyAlias>()\n}\n";
+        let source = "type MyAlias = int | string\nfunction main() -> reflect.Type {\n  reflect.Type.of<MyAlias>()\n}\n";
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
         let has_alias = root
@@ -8551,8 +8634,7 @@ mod tests {
 
     #[test]
     fn scoped_runtime_type_binding_parses_as_a_statement() {
-        let source =
-            "function main(t: type) -> type {\n  type T = unreflect(t);\n  type.of<T>()\n}\n";
+        let source = "function main(t: reflect.Type) -> reflect.Type {\n  type T = unreflect(t);\n  reflect.Type.of<T>()\n}\n";
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
         assert!(
@@ -8562,14 +8644,40 @@ mod tests {
     }
 
     #[test]
-    fn top_level_runtime_type_binding_has_an_explicit_diagnostic() {
-        let source = "type T = unreflect(type.of<string>())\n";
-        let (_root, errors) = parse_source(source);
-        assert!(errors.iter().any(|error| matches!(
-            error,
-            ParseError::InvalidSyntax { message, .. }
-                if message.contains("runtime type bindings are only allowed inside")
-        )));
+    fn top_level_runtime_type_atom_parses_for_checker_diagnostics() {
+        let source = "type T = unreflect(reflect.Type.of<string>())\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
+                .count(),
+            1,
+        );
+    }
+
+    #[test]
+    fn empty_unreflect_operand_reports_one_targeted_error() {
+        let source = "type T = unreflect()\n";
+        let (root, errors) = parse_source(source);
+        assert_eq!(
+            errors.len(),
+            1,
+            "empty unreflect must not cause a parse-error cascade: {errors:#?}"
+        );
+        assert!(
+            matches!(
+                &errors[0],
+                ParseError::InvalidSyntax { message, .. }
+                    if message == "`unreflect` requires an operand"
+            ),
+            "expected a targeted empty-unreflect diagnostic, got: {errors:#?}"
+        );
+        assert_eq!(
+            root.text().to_string(),
+            source,
+            "recovery must stay lossless"
+        );
     }
 
     /// Parsing must stay lossless: the original source — shebang included —
@@ -9328,11 +9436,6 @@ client<llm> TestClient {
   }
 }
 
-test Legacy {
-  //# test config
-  functions []
-}
-
 function llm_body() -> string {
   client: TestClient
   //# llm fields
@@ -9349,7 +9452,7 @@ function executable() -> int {
 
         assert_eq!(
             errors.len(),
-            8,
+            7,
             "every non-expression header should produce one diagnostic: {errors:#?}"
         );
         assert!(errors.iter().all(|error| {
@@ -9375,7 +9478,7 @@ function executable() -> int {
                     )
                 })
                 .count(),
-            8,
+            7,
             "non-expression headers should be ordinary line-comment trivia"
         );
     }
@@ -9663,31 +9766,6 @@ client<llm> Foo {
             root.children().any(|n| n.kind() == SyntaxKind::CLIENT_DEF),
             "client<llm> should recover as a top-level declaration"
         );
-    }
-
-    #[test]
-    fn raw_string_keeps_template_markers_as_text() {
-        for marker in ["//", "*/", "{{ name }}", "{% if true %}", "{# note #}"] {
-            let source = format!(
-                r##"
-function Demo() -> string {{
-  #"{marker}"#
-}}
-"##
-            );
-
-            let (root, errors) = parse_source(&source);
-            assert_no_errors(&errors);
-
-            let raw_string = root
-                .descendants()
-                .find(|n| n.kind() == SyntaxKind::RAW_STRING_LITERAL)
-                .expect("expected raw string literal");
-            assert!(
-                raw_string.text().to_string().contains(marker),
-                "raw string should retain marker {marker:?}: {raw_string:?}"
-            );
-        }
     }
 
     #[test]
@@ -10082,8 +10160,6 @@ function Foo() -> {
             "`the client sent nothing`",
             "`prompt: ${\"client\"}`",
             "``a `client` quote``",
-            // raw string
-            r##"#"the client sent nothing"#"##,
             // escaped quote inside the literal must not end it early
             r#""say \"client\" now""#,
             // an unbalanced brace inside a literal must not confuse depth
@@ -10111,7 +10187,7 @@ function Foo() -> {
             "function F(raw: string) -> string {\n  client: Fast\n  prompt: `hi ${raw}`\n}\n",
             "function F(raw: string) -> string {\n  client: Fast\n  prompt: #\"hi\"#\n}\n",
             // prompt first, and a prompt mentioning `client` / braces
-            "function F(raw: string) -> string {\n  prompt: `client {x} ${raw} ${ctx.output_format}`\n  client: Fast\n}\n",
+            "function F(raw: string) -> string {\n  prompt: `client {x} ${raw} ${ctx.output_format()}`\n  client: Fast\n}\n",
         ];
         for source in sources {
             let (root, errors) = parse_source(source);
@@ -10204,31 +10280,6 @@ function Demo(x "hello") -> int {
   1
 }
 "#;
-
-        let (root, errors) = parse_source(source);
-
-        assert_no_errors(&errors);
-
-        let param = root
-            .descendants()
-            .find(|n| n.kind() == SyntaxKind::PARAMETER)
-            .expect("expected PARAMETER node");
-        let param_text = param.text().to_string();
-        assert!(
-            param_text.contains("hello"),
-            "parameter should contain parsed type, got: {param_text:?}"
-        );
-    }
-
-    #[test]
-    fn accepts_parameter_raw_string_type_without_colon() {
-        // BEP-019: colons are optional in function parameters.
-        // `x #"hello"#` is valid syntax.
-        let source = r##"
-function Demo(x #"hello"#) -> int {
-  1
-}
-"##;
 
         let (root, errors) = parse_source(source);
 
@@ -10832,6 +10883,31 @@ function Demo() -> int {
                 .descendants()
                 .all(|n| n.kind() != SyntaxKind::BINDING_PATTERN),
             "bare identifier should NOT produce a BINDING_PATTERN"
+        );
+    }
+
+    #[test]
+    fn destructure_generic_lookahead_ignores_unreflect_operand_comparisons() {
+        let source = r#"
+function Demo(x: unknown, a: int, b: int) -> bool {
+  match x {
+    Wrapper<unreflect(a < b && true)> { value } => true,
+    _ => false,
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let first_arm = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::MATCH_ARM)
+            .expect("first match arm");
+        assert!(
+            first_arm
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::DESTRUCTURE_PATTERN),
+            "generic class pattern should retain its trailing destructure"
         );
     }
 
@@ -13104,6 +13180,26 @@ function build(options: string, retries: int) -> Request {
                 .children_with_tokens()
                 .all(|elem| elem.kind() != SyntaxKind::COLON)
         }));
+    }
+
+    #[test]
+    fn recovered_field_access_is_not_an_object_constructor() {
+        let source = r#"
+function Broken() -> null {
+    (1). { x: 2 }
+}
+"#;
+        let (root, errors) = parse_source(source);
+
+        assert!(
+            !errors.is_empty(),
+            "the dangling field access must be rejected"
+        );
+        assert!(
+            root.descendants()
+                .all(|node| node.kind() != SyntaxKind::OBJECT_LITERAL),
+            "a complex field-access receiver cannot become an object constructor"
+        );
     }
 
     #[test]

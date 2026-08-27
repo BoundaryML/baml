@@ -11,6 +11,8 @@ use sys_ops::io::{
     self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError, owned,
 };
 
+const MAX_READ_CHUNK: usize = 64 * 1024;
+
 // Process-level shared BufReader for stdin, preventing data loss when
 // BufReader over-reads into its internal buffer across multiple io.input() calls.
 static STDIN_READER: OnceLock<tokio::sync::Mutex<tokio::io::BufReader<tokio::io::Stdin>>> =
@@ -34,7 +36,7 @@ impl io::IoClassReflectPackage for NativeSysOps {
         _files: indexmap::IndexMap<String, String>,
         _packages: indexmap::IndexMap<String, io::owned::reflect::Package>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::reflect::Package> {
+    ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "runtime compiler is not installed".to_string(),
         })
@@ -48,9 +50,9 @@ impl io::IoClassReflectSession for NativeSysOps {
         _call_id: CallId,
         _session: io::owned::reflect::Session,
         _source: String,
-        _type_arg_0: baml_type::RuntimeTy,
+        _type_arg_0: ::sys_types::SapTy,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::reflect::Package> {
+    ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
         SysOpOutput::err(VmBamlError::Unsupported {
             message: "runtime compiler is not installed".to_string(),
         })
@@ -415,81 +417,23 @@ fn closed_err() -> VmBamlError {
     }
 }
 
+fn closed_io_err() -> VmBamlError {
+    VmBamlError::Io {
+        message: "File is closed".into(),
+    }
+}
+
 impl io::IoClassFsFile for NativeSysOps {
-    fn text(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        use tokio::io::AsyncReadExt;
-
-        SysOpOutput::async_op(async move {
-            let handle = downcast_handle(&file)?;
-            let mut guard = handle.lock().await;
-            let f = guard.as_mut().ok_or_else(closed_err)?;
-            let mut contents = String::new();
-            f.read_to_string(&mut contents)
-                .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to read file: {e}"),
-                })?;
-            Ok(contents)
-        })
-    }
-
-    fn bytes(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        use tokio::io::AsyncReadExt;
-
-        SysOpOutput::async_op(async move {
-            let handle = downcast_handle(&file)?;
-            let mut guard = handle.lock().await;
-            let f = guard.as_mut().ok_or_else(closed_err)?;
-            let mut contents = Vec::new();
-            f.read_to_end(&mut contents)
-                .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to read file: {e}"),
-                })?;
-            Ok(contents)
-        })
-    }
-
     fn read(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         file: owned::fs::File,
-        n: i64,
+        limit: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::async_op(async move {
-            let bytes = read_up_to(&file, n).await?;
-            String::from_utf8(bytes)
-                .map_err(|e| VmBamlError::ParseError {
-                    message: format!("Invalid UTF-8 in file: {e}"),
-                })
-                .map_err(VmRustFnError::from)
-        })
-    }
-
-    fn read_bytes(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        n: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
         SysOpOutput::async_op(
-            async move { read_up_to(&file, n).await.map_err(VmRustFnError::from) },
+            async move { read_up_to(&file, limit).await.map_err(VmRustFnError::from) },
         )
     }
 
@@ -555,22 +499,7 @@ impl io::IoClassFsFile for NativeSysOps {
         })
     }
 
-    fn write(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        data: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::async_op(async move {
-            write_all_bytes(&file, data.into_bytes())
-                .await
-                .map_err(VmRustFnError::from)
-        })
-    }
-
-    fn write_bytes(
+    fn write_some(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
@@ -584,17 +513,41 @@ impl io::IoClassFsFile for NativeSysOps {
                 .map_err(VmRustFnError::from)
         })
     }
+
+    fn flush(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        file: owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use tokio::io::AsyncWriteExt;
+
+        SysOpOutput::async_op(async move {
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_io_err)?;
+            f.flush().await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to flush: {e}"),
+            })?;
+            Ok(())
+        })
+    }
 }
 
-async fn read_up_to(file: &owned::fs::File, n: i64) -> Result<Vec<u8>, VmBamlError> {
+async fn read_up_to(file: &owned::fs::File, limit: i64) -> Result<Option<Vec<u8>>, VmBamlError> {
     use tokio::io::AsyncReadExt;
 
-    let cap = u64::try_from(n).map_err(|_| VmBamlError::InvalidArgument {
-        message: format!("Negative read length: {n}"),
-    })?;
+    let limit = usize::try_from(limit)
+        .ok()
+        .filter(|limit| *limit > 0)
+        .ok_or_else(|| VmBamlError::Io {
+            message: "read limit must be greater than zero".to_string(),
+        })?;
+    let cap = limit.min(MAX_READ_CHUNK) as u64;
     let handle = downcast_handle(file)?;
     let mut guard = handle.lock().await;
-    let f = guard.as_mut().ok_or_else(closed_err)?;
+    let f = guard.as_mut().ok_or_else(closed_io_err)?;
     let mut buf = Vec::new();
     f.take(cap)
         .read_to_end(&mut buf)
@@ -602,7 +555,7 @@ async fn read_up_to(file: &owned::fs::File, n: i64) -> Result<Vec<u8>, VmBamlErr
         .map_err(|e| VmBamlError::Io {
             message: format!("Failed to read file: {e}"),
         })?;
-    Ok(buf)
+    Ok((!buf.is_empty()).then_some(buf))
 }
 
 async fn write_all_bytes(file: &owned::fs::File, data: Vec<u8>) -> Result<i64, VmBamlError> {
@@ -610,7 +563,7 @@ async fn write_all_bytes(file: &owned::fs::File, data: Vec<u8>) -> Result<i64, V
 
     let handle = downcast_handle(file)?;
     let mut guard = handle.lock().await;
-    let f = guard.as_mut().ok_or_else(closed_err)?;
+    let f = guard.as_mut().ok_or_else(closed_io_err)?;
     #[allow(clippy::cast_possible_wrap)]
     let len = data.len() as i64;
     f.write_all(&data).await.map_err(|e| VmBamlError::Io {
@@ -1266,24 +1219,104 @@ impl io::IoClassGlobGlob for NativeSysOps {
 // ============================================================================
 
 type NativeProcessResult = Result<owned::sys::ProcessExit, String>;
-type NativeProcessLineResult = Result<String, String>;
 
 struct LiveProcessHandle {
     kill_tx: tokio::sync::watch::Sender<bool>,
     exit_rx: tokio::sync::watch::Receiver<Option<NativeProcessResult>>,
-    stdin: tokio::sync::Mutex<Option<tokio::process::ChildStdin>>,
     deadline: Option<tokio::time::Instant>,
     timeout_ms: Option<i64>,
     label: String,
 }
 
-struct ProcessLineStreamHandle {
-    lines: tokio::sync::Mutex<tokio::sync::mpsc::Receiver<NativeProcessLineResult>>,
+struct ReadPipeHandle {
+    reader: tokio::sync::Mutex<Option<Box<dyn tokio::io::AsyncRead + Send + Unpin>>>,
     close_tx: tokio::sync::watch::Sender<bool>,
-    closed: std::sync::atomic::AtomicBool,
-    deadline: Option<tokio::time::Instant>,
-    timeout_ms: Option<i64>,
     label: String,
+}
+
+struct WritePipeHandle {
+    writer: tokio::sync::Mutex<Option<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>>,
+    label: String,
+}
+
+fn stderr_stdio(
+    mode: Option<&BexExternalValue>,
+) -> Result<(std::process::Stdio, bool), VmBamlError> {
+    use std::process::Stdio;
+
+    let Some(mode) = mode else {
+        return Ok((Stdio::inherit(), false));
+    };
+    let BexExternalValue::Variant { variant_name, .. } = mode else {
+        return Err(VmBamlError::InvalidArgument {
+            message: format!("Invalid stderr mode: {}", mode.type_name()),
+        });
+    };
+    match variant_name.as_str() {
+        "Inherit" => Ok((Stdio::inherit(), false)),
+        "Pipe" => Ok((Stdio::piped(), true)),
+        "Discard" => Ok((Stdio::null(), false)),
+        other => Err(VmBamlError::InvalidArgument {
+            message: format!(
+                "Unsupported stderr mode '{other}': expected Inherit, Pipe, or Discard"
+            ),
+        }),
+    }
+}
+
+fn downcast_read_pipe(pipe: &owned::sys::ReadPipe) -> Result<Arc<ReadPipeHandle>, VmBamlError> {
+    pipe._pipe
+        .clone()
+        .downcast::<ReadPipeHandle>()
+        .map_err(|_| VmBamlError::DevOther {
+            message: "Invalid read pipe handle type".into(),
+        })
+}
+
+fn downcast_write_pipe(pipe: &owned::sys::WritePipe) -> Result<Arc<WritePipeHandle>, VmBamlError> {
+    pipe._pipe
+        .clone()
+        .downcast::<WritePipeHandle>()
+        .map_err(|_| VmBamlError::DevOther {
+            message: "Invalid write pipe handle type".into(),
+        })
+}
+
+fn read_pipe(
+    reader: impl tokio::io::AsyncRead + Send + Unpin + 'static,
+    label: String,
+) -> owned::sys::ReadPipe {
+    let (close_tx, _close_rx) = tokio::sync::watch::channel(false);
+    owned::sys::ReadPipe {
+        _pipe: Arc::new(ReadPipeHandle {
+            reader: tokio::sync::Mutex::new(Some(Box::new(reader))),
+            close_tx,
+            label,
+        }),
+    }
+}
+
+fn read_pipe_closed_error(label: &str) -> VmBamlError {
+    VmBamlError::Io {
+        message: format!("Read pipe for '{label}' is closed"),
+    }
+}
+
+async fn close_read_pipe(handle: &ReadPipeHandle) {
+    handle.close_tx.send_replace(true);
+    handle.reader.lock().await.take();
+}
+
+fn write_pipe(
+    writer: impl tokio::io::AsyncWrite + Send + Unpin + 'static,
+    label: String,
+) -> owned::sys::WritePipe {
+    owned::sys::WritePipe {
+        _pipe: Arc::new(WritePipeHandle {
+            writer: tokio::sync::Mutex::new(Some(Box::new(writer))),
+            label,
+        }),
+    }
 }
 
 fn downcast_process_handle(
@@ -1295,18 +1328,6 @@ fn downcast_process_handle(
         .downcast::<LiveProcessHandle>()
         .map_err(|_| VmBamlError::DevOther {
             message: "Invalid process handle type".into(),
-        })
-}
-
-fn downcast_process_line_stream_handle(
-    stream: &owned::sys::ProcessLineStream,
-) -> Result<Arc<ProcessLineStreamHandle>, VmBamlError> {
-    stream
-        ._handle
-        .clone()
-        .downcast::<ProcessLineStreamHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid process stdout stream handle type".into(),
         })
 }
 
@@ -1346,103 +1367,53 @@ async fn receive_process_exit(
     }
 }
 
-fn start_stdout_line_reader(
-    stdout: tokio::process::ChildStdout,
-    deadline: Option<tokio::time::Instant>,
-    timeout_ms: Option<i64>,
-    label: String,
-) -> owned::sys::ProcessLineStream {
-    let (lines_tx, lines_rx) = tokio::sync::mpsc::channel(32);
-    let (close_tx, mut close_rx) = tokio::sync::watch::channel(false);
-    let reader_label = label.clone();
-
-    tokio::spawn(async move {
-        use tokio::io::AsyncBufReadExt as _;
-
-        let mut reader = tokio::io::BufReader::new(stdout);
-        let mut bytes = Vec::new();
-        loop {
-            bytes.clear();
-            let read_result = tokio::select! {
-                biased;
-                _ = close_rx.changed() => break,
-                result = reader.read_until(b'\n', &mut bytes) => result,
-            };
-
-            match read_result {
-                Ok(0) => break,
-                Ok(_) => {
-                    if bytes.last() == Some(&b'\n') {
-                        bytes.pop();
-                    }
-                    if bytes.last() == Some(&b'\r') {
-                        bytes.pop();
-                    }
-                    let line = String::from_utf8_lossy(&bytes).into_owned();
-                    tokio::select! {
-                        biased;
-                        _ = close_rx.changed() => break,
-                        result = lines_tx.send(Ok(line)) => {
-                            if result.is_err() {
-                                break;
-                            }
-                        }
-                    }
-                }
-                Err(error) => {
-                    let _ = lines_tx
-                        .send(Err(format!(
-                            "Failed to read stdout from '{reader_label}': {error}"
-                        )))
-                        .await;
-                    break;
-                }
-            }
-        }
-    });
-
-    owned::sys::ProcessLineStream {
-        _handle: Arc::new(ProcessLineStreamHandle {
-            lines: tokio::sync::Mutex::new(lines_rx),
-            close_tx,
-            closed: std::sync::atomic::AtomicBool::new(false),
-            deadline,
-            timeout_ms,
-            label,
-        }),
-    }
-}
-
-impl io::IoClassSysProcessLineStream for NativeSysOps {
-    fn _next(
+impl io::IoClassSysReadPipe for NativeSysOps {
+    fn read(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        processlinestream: owned::sys::ProcessLineStream,
+        readpipe: owned::sys::ReadPipe,
+        limit: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
+        use tokio::io::AsyncReadExt as _;
+
+        let limit = match usize::try_from(limit).ok().filter(|limit| *limit > 0) {
+            Some(limit) => limit.min(MAX_READ_CHUNK),
+            None => {
+                return SysOpOutput::err(VmBamlError::Io {
+                    message: "read limit must be greater than zero".to_string(),
+                });
+            }
+        };
         SysOpOutput::async_op(async move {
-            let handle = downcast_process_line_stream_handle(&processlinestream)?;
-            if handle.closed.load(std::sync::atomic::Ordering::Acquire) {
+            let handle = downcast_read_pipe(&readpipe)?;
+            let mut close_rx = handle.close_tx.subscribe();
+            if *close_rx.borrow() {
+                return Err(read_pipe_closed_error(&handle.label).into());
+            }
+            let mut guard = handle.reader.lock().await;
+            if *close_rx.borrow() {
+                return Err(read_pipe_closed_error(&handle.label).into());
+            }
+            let reader = guard
+                .as_mut()
+                .ok_or_else(|| read_pipe_closed_error(&handle.label))?;
+            let mut buffer = vec![0u8; limit];
+            let read = tokio::select! {
+                biased;
+                _ = close_rx.changed() => {
+                    return Err(read_pipe_closed_error(&handle.label).into());
+                }
+                result = reader.read(&mut buffer) => result.map_err(|error| VmBamlError::Io {
+                    message: format!("Failed to read from '{}': {error}", handle.label),
+                })?,
+            };
+            if read == 0 {
                 return Ok(None);
             }
-            let mut lines = handle.lines.lock().await;
-            let next_line = if let Some(deadline) = handle.deadline {
-                match tokio::time::timeout_at(deadline, lines.recv()).await {
-                    Ok(line) => line,
-                    Err(_) => {
-                        return Err(process_timeout_error(&handle.label, handle.timeout_ms).into());
-                    }
-                }
-            } else {
-                lines.recv().await
-            };
-
-            match next_line {
-                Some(Ok(line)) => Ok(Some(line)),
-                Some(Err(message)) => Err(VmBamlError::Io { message }.into()),
-                None => Ok(None),
-            }
+            buffer.truncate(read);
+            Ok(Some(buffer))
         })
     }
 
@@ -1450,62 +1421,91 @@ impl io::IoClassSysProcessLineStream for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        processlinestream: owned::sys::ProcessLineStream,
+        readpipe: owned::sys::ReadPipe,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        if let Ok(handle) = downcast_process_line_stream_handle(&processlinestream) {
-            handle
-                .closed
-                .store(true, std::sync::atomic::Ordering::Release);
-            let _ = handle.close_tx.send(true);
-        }
-        SysOpOutput::ok(())
+        SysOpOutput::async_op(async move {
+            let handle = downcast_read_pipe(&readpipe)?;
+            close_read_pipe(&handle).await;
+            Ok(())
+        })
+    }
+}
+
+impl io::IoClassSysWritePipe for NativeSysOps {
+    fn write_some(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        writepipe: owned::sys::WritePipe,
+        data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        use tokio::io::AsyncWriteExt as _;
+
+        SysOpOutput::async_op(async move {
+            let handle = downcast_write_pipe(&writepipe)?;
+            let mut guard = handle.writer.lock().await;
+            let writer = guard.as_mut().ok_or_else(|| VmBamlError::Io {
+                message: format!("Write pipe for '{}' is closed", handle.label),
+            })?;
+            let written = writer.write(&data).await.map_err(|error| VmBamlError::Io {
+                message: format!("Failed to write to '{}': {error}", handle.label),
+            })?;
+            i64::try_from(written).map_err(|_| {
+                VmRustFnError::from(VmBamlError::Io {
+                    message: "pipe write count exceeds int range".to_string(),
+                })
+            })
+        })
+    }
+
+    fn flush(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        writepipe: owned::sys::WritePipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use tokio::io::AsyncWriteExt as _;
+
+        SysOpOutput::async_op(async move {
+            let handle = downcast_write_pipe(&writepipe)?;
+            let mut guard = handle.writer.lock().await;
+            let writer = guard.as_mut().ok_or_else(|| VmBamlError::Io {
+                message: format!("Write pipe for '{}' is closed", handle.label),
+            })?;
+            writer.flush().await.map_err(|error| VmBamlError::Io {
+                message: format!("Failed to flush '{}': {error}", handle.label),
+            })?;
+            Ok(())
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        writepipe: owned::sys::WritePipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use tokio::io::AsyncWriteExt as _;
+
+        SysOpOutput::async_op(async move {
+            let handle = downcast_write_pipe(&writepipe)?;
+            let mut writer = handle.writer.lock().await;
+            if let Some(writer) = writer.as_mut() {
+                writer.flush().await.map_err(|error| VmBamlError::Io {
+                    message: format!("Failed to flush '{}' before close: {error}", handle.label),
+                })?;
+            }
+            writer.take();
+            Ok(())
+        })
     }
 }
 
 impl io::IoClassSysProcess for NativeSysOps {
-    fn write_stdin(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        process: owned::sys::Process,
-        data: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
-            use tokio::io::AsyncWriteExt as _;
-
-            let handle = downcast_process_handle(&process)?;
-            let mut stdin = handle.stdin.lock().await;
-            let pipe = stdin.as_mut().ok_or_else(|| VmBamlError::Io {
-                message: format!("Stdin for '{}' is not open", handle.label),
-            })?;
-            pipe.write_all(data.as_bytes())
-                .await
-                .map_err(|error| VmBamlError::Io {
-                    message: format!("Failed to write stdin to '{}': {error}", handle.label),
-                })?;
-            pipe.flush().await.map_err(|error| VmBamlError::Io {
-                message: format!("Failed to flush stdin for '{}': {error}", handle.label),
-            })?;
-            Ok(())
-        })
-    }
-
-    fn close_stdin(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        process: owned::sys::Process,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
-            let handle = downcast_process_handle(&process)?;
-            handle.stdin.lock().await.take();
-            Ok(())
-        })
-    }
-
     fn wait(
         &self,
         _heap: &Arc<BexHeap>,
@@ -1557,16 +1557,23 @@ impl io::IoClassSysProcess for NativeSysOps {
         process: owned::sys::Process,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        if let Ok(handle) = downcast_process_handle(&process) {
-            let _ = handle.kill_tx.send(true);
-        }
-        if let Ok(handle) = downcast_process_line_stream_handle(&process.stdout) {
-            handle
-                .closed
-                .store(true, std::sync::atomic::Ordering::Release);
-            let _ = handle.close_tx.send(true);
-        }
-        SysOpOutput::ok(())
+        SysOpOutput::async_op(async move {
+            if let Ok(handle) = downcast_process_handle(&process) {
+                let _ = handle.kill_tx.send(true);
+            }
+            if let Ok(handle) = downcast_write_pipe(&process.stdin) {
+                handle.writer.lock().await.take();
+            }
+            for pipe in [Some(&process.stdout), process.stderr.as_ref()]
+                .into_iter()
+                .flatten()
+            {
+                if let Ok(handle) = downcast_read_pipe(pipe) {
+                    close_read_pipe(&handle).await;
+                }
+            }
+            Ok(())
+        })
     }
 }
 
@@ -1714,40 +1721,28 @@ impl io::IoNamespaceSys for NativeSysOps {
                             .map(|(key, value)| (key.as_str(), value.as_str())),
                     );
                 }
-                if options.stdin.is_some() || options.keep_stdin_open == Some(true) {
-                    cmd.stdin(Stdio::piped());
-                }
             }
 
-            cmd.stdout(Stdio::piped())
-                .stderr(Stdio::inherit())
+            let (stderr_stdio, stderr_piped) =
+                stderr_stdio(options.as_ref().and_then(|options| options.stderr.as_ref()))?;
+            cmd.stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(stderr_stdio)
                 .kill_on_drop(true);
 
             let mut child = cmd.spawn().map_err(|error| VmBamlError::Io {
                 message: format!("Failed to spawn '{program}': {error}"),
             })?;
-            let stdout = child.stdout.take().ok_or_else(|| VmBamlError::Io {
-                message: format!("Failed to capture stdout from '{program}'"),
-            })?;
-
-            let keep_stdin_open = options
-                .as_ref()
-                .and_then(|options| options.keep_stdin_open)
-                .unwrap_or(false);
-            let mut stdin = child.stdin.take();
-            if let Some(stdin_data) = options.as_ref().and_then(|options| options.stdin.as_ref()) {
-                if let Some(stdin) = stdin.as_mut() {
-                    stdin
-                        .write_all(stdin_data.as_bytes())
-                        .await
-                        .map_err(|error| VmBamlError::Io {
-                            message: format!("Failed to write stdin to '{program}': {error}"),
-                        })?;
-                }
-            }
-            if !keep_stdin_open {
-                stdin = None;
-            }
+            let missing_pipe = |stream: &str| VmBamlError::Io {
+                message: format!("Failed to capture {stream} from '{program}'"),
+            };
+            let child_stdin = child.stdin.take().ok_or_else(|| missing_pipe("stdin"))?;
+            let child_stdout = child.stdout.take().ok_or_else(|| missing_pipe("stdout"))?;
+            let child_stderr = if stderr_piped {
+                Some(child.stderr.take().ok_or_else(|| missing_pipe("stderr"))?)
+            } else {
+                None
+            };
 
             let timeout_ms = options
                 .as_ref()
@@ -1758,7 +1753,10 @@ impl io::IoNamespaceSys for NativeSysOps {
                     milliseconds.cast_unsigned(),
                 ))
             });
-            let stdout = start_stdout_line_reader(stdout, deadline, timeout_ms, program.clone());
+            let stdin = write_pipe(child_stdin, format!("{program} stdin"));
+            let stdout = read_pipe(child_stdout, format!("{program} stdout"));
+            let stderr = child_stderr
+                .map(|child_stderr| read_pipe(child_stderr, format!("{program} stderr")));
 
             let (kill_tx, mut kill_rx) = tokio::sync::watch::channel(false);
             let (exit_tx, exit_rx) = tokio::sync::watch::channel(None);
@@ -1777,12 +1775,38 @@ impl io::IoNamespaceSys for NativeSysOps {
                 let _ = exit_tx.send(Some(exit));
             });
 
+            if let Some(stdin_data) = options.as_ref().and_then(|options| options.stdin.as_ref()) {
+                let handle = downcast_write_pipe(&stdin)?;
+                let mut writer = handle.writer.lock().await;
+                let write_result = if let Some(writer) = writer.as_mut() {
+                    let write = writer.write_all(stdin_data.as_bytes());
+                    let result =
+                        match deadline {
+                            Some(deadline) => tokio::time::timeout_at(deadline, write)
+                                .await
+                                .map_err(|_| {
+                                    let _ = kill_tx.send(true);
+                                    process_timeout_error(&program, timeout_ms)
+                                })?,
+                            None => write.await,
+                        };
+                    result.map_err(|error| VmBamlError::Io {
+                        message: format!("Failed to write stdin to '{program}': {error}"),
+                    })
+                } else {
+                    Ok(())
+                };
+                writer.take();
+                write_result?;
+            }
+
             Ok(owned::sys::Process {
+                stdin,
                 stdout,
+                stderr,
                 _handle: Arc::new(LiveProcessHandle {
                     kill_tx,
                     exit_rx,
-                    stdin: tokio::sync::Mutex::new(stdin),
                     deadline,
                     timeout_ms,
                     label: program,
@@ -1868,16 +1892,19 @@ fn sleep_nanos_from_delay(delay: BexExternalValue) -> Result<u64, VmRustFnError>
 // Network
 // ============================================================================
 
-// Network handles mirror `FsFileHandle`: the socket lives inside a
-// `Mutex<Option<_>>` so `close()` can `take()` it, after which every other
-// reference to the same handle deterministically observes a closed socket.
+// Network handles keep each socket in an optional slot so `close()` can take
+// it, after which every other reference observes a closed socket.
 //
-// `TcpStream` ops need `&mut` access, so (like `fs::File`) we hold the guard
-// across the await. `TcpListener`/`UdpSocket` ops only need `&self`, so we keep
-// each socket behind an inner `Arc` and clone it out under a brief lock — that
-// way `close()` stays deterministic without serializing concurrent
+// `TcpStream` ops need `&mut` access, so they hold the guard across the await
+// and select against a close notification. `TcpListener`/`UdpSocket` ops only
+// need `&self`, so each socket has an inner `Arc` cloned under a brief lock.
+// This keeps `close()` deterministic without serializing concurrent
 // `accept`/`recv_from`/`send_to` on the same socket.
-type NetTcpStreamHandle = tokio::sync::Mutex<Option<tokio::net::TcpStream>>;
+struct NetTcpStreamHandle {
+    stream: tokio::sync::Mutex<Option<tokio::net::TcpStream>>,
+    close_tx: tokio::sync::watch::Sender<bool>,
+}
+
 type NetTcpListenerHandle = tokio::sync::Mutex<Option<Arc<tokio::net::TcpListener>>>;
 type NetUdpSocketHandle = tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>;
 
@@ -1906,6 +1933,22 @@ fn downcast_tcpstream(
         .map_err(|_| VmBamlError::DevOther {
             message: "Invalid TcpStream handle type".to_string(),
         })
+}
+
+fn net_tcp_stream(stream: tokio::net::TcpStream) -> owned::net::TcpStream {
+    let (close_tx, _close_rx) = tokio::sync::watch::channel(false);
+    owned::net::TcpStream {
+        _handle: Arc::new(NetTcpStreamHandle {
+            stream: tokio::sync::Mutex::new(Some(stream)),
+            close_tx,
+        }),
+    }
+}
+
+fn tcp_stream_closed_error() -> VmBamlError {
+    VmBamlError::Io {
+        message: "TcpStream is closed".to_string(),
+    }
 }
 
 fn downcast_tcplistener(
@@ -1963,94 +2006,92 @@ impl io::IoClassNetTcpStream for NativeSysOps {
             .map_err(|e| VmBamlError::Io {
                 message: format!("Failed to connect to '{addr}': {e}"),
             })?;
-            let handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(Some(stream)));
-            Ok(owned::net::TcpStream { _handle: handle })
+            Ok(net_tcp_stream(stream))
         })
     }
 
-    fn _read(
+    fn read(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         stream: owned::net::TcpStream,
-        timeout_nanos: Arc<num_bigint::BigInt>,
+        limit: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
         use tokio::io::AsyncReadExt;
 
-        let timeout = timeout_from_nanos(&timeout_nanos);
+        let limit = match usize::try_from(limit).ok().filter(|limit| *limit > 0) {
+            Some(limit) => limit.min(MAX_READ_CHUNK),
+            None => {
+                return SysOpOutput::err(VmBamlError::Io {
+                    message: "read limit must be greater than zero".to_string(),
+                });
+            }
+        };
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;
-            let mut guard = handle.lock().await;
-            let stream = guard.as_mut().ok_or_else(|| VmBamlError::Io {
-                message: "TcpStream is closed".to_string(),
-            })?;
-            let mut buffer = vec![0u8; 4096];
-            let read = stream.read(&mut buffer);
-            let n = match timeout {
-                Some(dur) => match tokio::time::timeout(dur, read).await {
-                    Ok(result) => result,
-                    Err(_elapsed) => {
-                        return Err(VmBamlError::Timeout {
-                            message: "Reading from socket timed out".to_string(),
-                            duration_ms: i64::try_from(dur.as_millis()).ok(),
-                        }
-                        .into());
-                    }
-                },
-                None => read.await,
+            let mut close_rx = handle.close_tx.subscribe();
+            if *close_rx.borrow() {
+                return Err(tcp_stream_closed_error().into());
             }
-            .map_err(|e| VmBamlError::Io {
-                message: format!("Failed to read from socket: {e}"),
-            })?;
-            buffer.truncate(n);
-            Ok(buffer)
+            let mut guard = handle.stream.lock().await;
+            if *close_rx.borrow() {
+                return Err(tcp_stream_closed_error().into());
+            }
+            let stream = guard.as_mut().ok_or_else(tcp_stream_closed_error)?;
+            let mut buffer = vec![0u8; limit];
+            let read = tokio::select! {
+                biased;
+                _ = close_rx.changed() => {
+                    return Err(tcp_stream_closed_error().into());
+                }
+                result = stream.read(&mut buffer) => result.map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to read from socket: {e}"),
+                })?,
+            };
+            if read == 0 {
+                return Ok(None);
+            }
+            buffer.truncate(read);
+            Ok(Some(buffer))
         })
     }
 
-    fn _write(
+    fn write_some(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         stream: owned::net::TcpStream,
         data: Vec<u8>,
-        timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
+    ) -> SysOpOutput<i64> {
         use tokio::io::AsyncWriteExt;
 
-        let timeout = timeout_from_nanos(&timeout_nanos);
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;
-            let mut guard = handle.lock().await;
-            let stream = guard.as_mut().ok_or_else(|| VmBamlError::Io {
-                message: "TcpStream is closed".to_string(),
-            })?;
-            // The whole write (every byte flushed) shares one deadline.
-            let write = async {
-                stream.write_all(&data).await.map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to write to socket: {e}"),
-                })?;
-                stream.flush().await.map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to flush socket: {e}"),
-                })?;
-                Ok::<(), VmBamlError>(())
-            };
-            match timeout {
-                Some(dur) => match tokio::time::timeout(dur, write).await {
-                    Ok(result) => result?,
-                    Err(_elapsed) => {
-                        return Err(VmBamlError::Timeout {
-                            message: "Writing to socket timed out".to_string(),
-                            duration_ms: i64::try_from(dur.as_millis()).ok(),
-                        }
-                        .into());
-                    }
-                },
-                None => write.await?,
+            let mut close_rx = handle.close_tx.subscribe();
+            if *close_rx.borrow() {
+                return Err(tcp_stream_closed_error().into());
             }
-            Ok(())
+            let mut guard = handle.stream.lock().await;
+            if *close_rx.borrow() {
+                return Err(tcp_stream_closed_error().into());
+            }
+            let stream = guard.as_mut().ok_or_else(tcp_stream_closed_error)?;
+            let written = tokio::select! {
+                biased;
+                _ = close_rx.changed() => {
+                    return Err(tcp_stream_closed_error().into());
+                }
+                result = stream.write(&data) => result.map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to write to socket: {e}"),
+                })?,
+            };
+            i64::try_from(written).map_err(|_| {
+                VmRustFnError::from(VmBamlError::Io {
+                    message: "socket write count exceeds int range".to_string(),
+                })
+            })
         })
     }
 
@@ -2065,9 +2106,10 @@ impl io::IoClassNetTcpStream for NativeSysOps {
 
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;
+            handle.close_tx.send_replace(true);
             // Take the stream out of the shared handle so any other reference
             // observes a closed socket on its next op. Already-closed is a no-op.
-            let Some(mut stream) = handle.lock().await.take() else {
+            let Some(mut stream) = handle.stream.lock().await.take() else {
                 return Ok(());
             };
             // shutdown() flushes pending writes and closes the write half, so
@@ -2129,11 +2171,7 @@ impl io::IoClassNetTcpListener for NativeSysOps {
             let (stream, _peer) = inner.accept().await.map_err(|e| VmBamlError::Io {
                 message: format!("Failed to accept connection: {e}"),
             })?;
-            let sock_handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(Some(stream)));
-            Ok(owned::net::TcpStream {
-                _handle: sock_handle,
-            })
+            Ok(net_tcp_stream(stream))
         })
     }
 
@@ -2480,7 +2518,7 @@ impl io::IoClassHttpResponse for NativeSysOps {
 /// handle network failures instead of them surfacing as an uncatchable host
 /// error.
 #[cfg(feature = "bundle-http")]
-fn http_transport_error(context: &str, e: &reqwest::Error) -> VmBamlError {
+pub(crate) fn http_transport_error(context: &str, e: &reqwest::Error) -> VmBamlError {
     if e.is_timeout() {
         VmBamlError::Timeout {
             message: format!("{context}: {e}"),
@@ -2691,7 +2729,7 @@ impl io::IoClassHttpSseStream for NativeSysOps {
                         })?));
                     }
                     if let Some(err) = buf.error.take() {
-                        return Err(VmRustFnError::from(VmBamlError::Io { message: err }));
+                        return Err(VmRustFnError::from(err));
                     }
                     if buf.done {
                         return Ok(None);
@@ -2819,11 +2857,13 @@ impl io::IoNamespaceHttp for NativeSysOps {
     }
 
     #[cfg(feature = "bundle-http")]
-    fn fetch_sse(
+    fn _fetch_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         request: owned::http::Request,
+        timeout_nanos: Arc<num_bigint::BigInt>,
+        first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         use std::sync::atomic::{AtomicBool, Ordering};
@@ -2853,23 +2893,41 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 builder = builder.body(request.body.clone());
             }
 
-            let response = builder
+            let response = apply_http_timeout(builder, &timeout_nanos)
                 .send()
                 .await
                 .map_err(|e| http_transport_error("SSE connection failed", &e))?;
 
             if !response.status().is_success() {
                 let status = response.status().as_u16();
-                let body = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|_| "<could not read body>".to_string());
+                let body = match response.text().await {
+                    Ok(body) => body,
+                    Err(error) if error.is_timeout() => {
+                        return Err(VmRustFnError::from(http_transport_error(
+                            "SSE error response body failed",
+                            &error,
+                        )));
+                    }
+                    Err(_) => "<could not read body>".to_string(),
+                };
                 return Err(VmRustFnError::from(VmBamlError::Io {
                     message: format!("SSE request failed with status {status}: {body}"),
                 }));
             }
 
             let url = response.url().to_string();
+            let status_code = i64::from(response.status().as_u16());
+            let headers: indexmap::IndexMap<String, String> = response
+                .headers()
+                .iter()
+                .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
+                .collect();
+            // Legacy TTFT semantics start after the SSE response opens and end
+            // on the first parsed event; connection/headers are governed only
+            // by the total request timeout.
+            let first_event_timeout = timeout_from_nanos(&first_event_timeout_nanos);
+            let first_event_deadline = first_event_timeout
+                .map(|duration| (tokio::time::Instant::now() + duration, duration));
 
             let buffer = Arc::new(TokioMutex::new(SseBuffer {
                 events: Vec::new(),
@@ -2896,7 +2954,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
                             if let Ok(mut buf) = self.buffer.try_lock() {
                                 if !buf.done {
                                     if !self.closed.load(Ordering::Acquire) {
-                                        buf.error = Some("SSE stream task was cancelled".into());
+                                        buf.error = Some(VmBamlError::Io {
+                                            message: "SSE stream task was cancelled".into(),
+                                        });
                                     }
                                     buf.done = true;
                                 }
@@ -2915,12 +2975,74 @@ impl io::IoNamespaceHttp for NativeSysOps {
 
                 let mut parser = SseParser::new();
                 let mut byte_stream = response.bytes_stream();
+                let mut first_event_deadline = first_event_deadline;
 
-                while let Some(chunk_result) = byte_stream.next().await {
+                loop {
+                    let next_chunk = if let Some((deadline, duration)) = first_event_deadline {
+                        // `timeout_at` polls the inner future before checking
+                        // the clock, so a task whose first poll is delayed past
+                        // BOTH the deadline and the server's send would find
+                        // the data already buffered and never time out. Check
+                        // the deadline explicitly first: an expired budget is a
+                        // timeout even when bytes arrived late.
+                        let outcome = if tokio::time::Instant::now() >= deadline {
+                            Err(())
+                        } else {
+                            tokio::time::timeout_at(deadline, byte_stream.next())
+                                .await
+                                .map_err(|_elapsed| ())
+                        };
+                        match outcome {
+                            Ok(chunk) => chunk,
+                            Err(()) => {
+                                let mut buf = buf_clone.lock().await;
+                                buf.error = Some(VmBamlError::Timeout {
+                                    message: format!(
+                                        "SSE first event timed out after {}ms",
+                                        duration.as_millis()
+                                    ),
+                                    duration_ms: i64::try_from(duration.as_millis()).ok(),
+                                });
+                                buf.done = true;
+                                notify_clone.notify_waiters();
+                                guard.completed = true;
+                                return;
+                            }
+                        }
+                    } else {
+                        byte_stream.next().await
+                    };
+                    let Some(chunk_result) = next_chunk else {
+                        break;
+                    };
                     match chunk_result {
                         Ok(bytes) => {
                             let events = parser.feed(&bytes);
                             if !events.is_empty() {
+                                // The budget runs to the first PARSED event.
+                                // `timeout_at` polls the stream before the
+                                // clock, so a wakeup delayed past the deadline
+                                // can hand over late-but-buffered data — and a
+                                // chunk taken in time can still parse late.
+                                // Enforcing here, where the first events are
+                                // about to be stored, covers every path.
+                                if let Some((deadline, duration)) = first_event_deadline
+                                    && tokio::time::Instant::now() >= deadline
+                                {
+                                    let mut buf = buf_clone.lock().await;
+                                    buf.error = Some(VmBamlError::Timeout {
+                                        message: format!(
+                                            "SSE first event timed out after {}ms",
+                                            duration.as_millis()
+                                        ),
+                                        duration_ms: i64::try_from(duration.as_millis()).ok(),
+                                    });
+                                    buf.done = true;
+                                    notify_clone.notify_waiters();
+                                    guard.completed = true;
+                                    return;
+                                }
+                                first_event_deadline = None;
                                 let mut buf = buf_clone.lock().await;
                                 buf.events.extend(events);
                                 notify_clone.notify_waiters();
@@ -2928,7 +3050,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                         }
                         Err(e) => {
                             let mut buf = buf_clone.lock().await;
-                            buf.error = Some(format!("SSE stream error: {e}"));
+                            buf.error = Some(http_transport_error("SSE stream failed", &e));
                             buf.done = true;
                             notify_clone.notify_waiters();
                             guard.completed = true;
@@ -2939,7 +3061,27 @@ impl io::IoNamespaceHttp for NativeSysOps {
 
                 // Stream ended cleanly — flush any event buffered without a
                 // trailing blank line (some servers omit the final delimiter).
+                // The first-event budget applies here too: a flush-delivered
+                // first event that only materialized after the deadline is a
+                // timeout, not a completion.
                 let final_events = parser.finish();
+                if !final_events.is_empty()
+                    && let Some((deadline, duration)) = first_event_deadline
+                    && tokio::time::Instant::now() >= deadline
+                {
+                    let mut buf = buf_clone.lock().await;
+                    buf.error = Some(VmBamlError::Timeout {
+                        message: format!(
+                            "SSE first event timed out after {}ms",
+                            duration.as_millis()
+                        ),
+                        duration_ms: i64::try_from(duration.as_millis()).ok(),
+                    });
+                    buf.done = true;
+                    notify_clone.notify_waiters();
+                    guard.completed = true;
+                    return;
+                }
                 let mut buf = buf_clone.lock().await;
                 if !final_events.is_empty() {
                     buf.events.extend(final_events);
@@ -2959,17 +3101,21 @@ impl io::IoNamespaceHttp for NativeSysOps {
             let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(handle);
             Ok(owned::http::SseStream {
                 url,
+                status_code,
+                headers,
                 _handle: handle,
             })
         })
     }
 
     #[cfg(not(feature = "bundle-http"))]
-    fn fetch_sse(
+    fn _fetch_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _request: owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -3254,7 +3400,7 @@ impl io::IoNamespaceAiInternal for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        return_type: baml_type::RuntimeTy,
+        return_type: ::sys_types::SapTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         sys_ops::render_output_format_op(&return_type, ctx)
@@ -3264,7 +3410,7 @@ impl io::IoNamespaceAiInternal for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        return_type: baml_type::RuntimeTy,
+        return_type: ::sys_types::SapTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::ai::OutputFormat> {
         sys_ops::build_output_format_op(&return_type, ctx)
@@ -3276,7 +3422,7 @@ impl io::IoNamespaceAiInternal for NativeSysOps {
         _call_id: CallId,
         function_name: String,
         ctx: &SysOpContext,
-    ) -> SysOpOutput<baml_type::RuntimeTy> {
+    ) -> SysOpOutput<::sys_types::SapTy> {
         sys_ops::get_return_type_op(&function_name, ctx)
     }
 

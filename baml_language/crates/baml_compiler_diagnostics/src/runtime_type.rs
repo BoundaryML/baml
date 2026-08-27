@@ -94,16 +94,22 @@ pub fn expected_class_instance(callee: &str, got: &str) -> Diagnostic {
 /// Package extraction supplies a package-qualified display name; dynamic
 /// `call_any` has no package context and supplies the callable's bare declared
 /// name. The difference is intentional and keeps both diagnostics actionable.
+///
+/// A by-name lookup has nowhere to put type arguments, so an unspecialized
+/// generic is refused. (No route supplies them today; when descriptor
+/// specialization lands on the reflection kind views, the message should
+/// name it again.)
 pub fn unspecialized_reflected_generic(name: &str) -> Diagnostic {
     Diagnostic::error(
         DiagnosticId::UnspecializedReflectedGeneric,
         format!(
-            "generic function `{name}` cannot be extracted through reflection: reflected packages cannot supply type arguments yet"
+            "generic function `{name}` cannot be extracted through reflection: its signature \
+             still mentions its own type parameters"
         ),
     )
 }
 
-/// E0165 — a reflected generic callable was invoked without specialization.
+/// E0165 — a reflected generic callable was invoked without its type arguments.
 ///
 /// The sibling above covers *extraction*: a callable whose signature still
 /// mentions its own type parameters cannot even be handed out. This one covers
@@ -114,8 +120,8 @@ pub fn unspecialized_reflected_generic_call(name: &str) -> Diagnostic {
     Diagnostic::error(
         DiagnosticId::UnspecializedReflectedGeneric,
         format!(
-            "generic function `{name}` cannot be invoked through reflection until it is \
-             specialized: its body needs type arguments and reflection cannot supply them yet"
+            "generic function `{name}` cannot be invoked through reflection: its body needs \
+             type arguments"
         ),
     )
 }
@@ -126,6 +132,132 @@ pub fn computed_generic_argument_requires_unreflect(name: &str) -> Diagnostic {
         DiagnosticId::UnknownType,
         format!("computed type argument `{name}` must be written as `unreflect({name})`"),
     )
+}
+
+/// What a [`runtime_type_must_be_named`] report could recover of the code the
+/// user actually wrote. Both halves are optional: a reporting site that cannot
+/// print one cleanly leaves it out and the suggestion degrades to the generic
+/// spelling rather than inventing source.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RuntimeTypeNameRewrite {
+    /// The carrier expression written inside `unreflect(...)`.
+    pub carrier: Option<String>,
+    /// The whole written expression with the inline slot replaced by `Out`.
+    pub named: Option<String>,
+}
+
+/// The name an E0168 suggestion introduces for the runtime type.
+pub const RUNTIME_TYPE_NAME: &str = "Out";
+
+/// A suggestion longer than this stops being a suggestion and starts being a
+/// wall of text; the `type` line alone still says what to do.
+const RUNTIME_TYPE_REWRITE_BUDGET: usize = 120;
+
+impl RuntimeTypeNameRewrite {
+    /// Derive both halves from the source the author actually wrote.
+    /// `expression` is the whole written expression and `slot` is the byte
+    /// range of its `unreflect(...)` argument. Nothing is produced unless the
+    /// slot really reads as that marker — a caller whose spans did not line up
+    /// gets the generic suggestion, never a rewrite of source we misread — and
+    /// a half that would not print cleanly (empty, multi-line, or past the
+    /// budget) is dropped on its own.
+    pub fn from_source(expression: &str, slot: std::ops::Range<usize>) -> Self {
+        let Some(carrier) = expression
+            .get(slot.clone())
+            .map(str::trim)
+            .and_then(|slot| slot.strip_prefix("unreflect"))
+            .map(str::trim_start)
+            .and_then(|rest| rest.strip_prefix('('))
+            .and_then(|rest| rest.strip_suffix(')'))
+            .map(str::trim)
+        else {
+            return Self::default();
+        };
+        let named = format!(
+            "{}{RUNTIME_TYPE_NAME}{}",
+            &expression[..slot.start],
+            &expression[slot.end..]
+        );
+        Self {
+            carrier: printable(carrier).then(|| carrier.to_owned()),
+            named: printable(&named).then_some(named),
+        }
+    }
+}
+
+fn printable(text: &str) -> bool {
+    !text.is_empty() && !text.contains('\n') && text.len() <= RUNTIME_TYPE_REWRITE_BUDGET
+}
+
+/// E0168 — the note that explains why an inline `unreflect(...)` is too
+/// short-lived for the value this expression produces.
+pub const RUNTIME_TYPE_MUST_BE_NAMED_NOTE: &str = concat!(
+    "a type created at runtime only lasts for one call when written inline with ",
+    "`unreflect(...)`, but the value this expression creates would still need it afterwards",
+);
+
+/// E0168 — the same explanation for the error channel. A `throws` clause
+/// publishes the type just as a result does, and the caller reads it after the
+/// call has returned. Worded for a clause the author may never have written:
+/// an undeclared `throws` is inferred from the body, so this note has to make
+/// sense with no `throws` in sight.
+pub const RUNTIME_TYPE_MUST_BE_NAMED_THROWS_NOTE: &str = concat!(
+    "a type created at runtime only lasts for one call when written inline with ",
+    "`unreflect(...)`, but the error this call can throw would still need it afterwards",
+);
+
+/// Which published type an inline `unreflect(...)` slot escaped into. Only the
+/// note differs: the headline is the same complaint and the suggested rewrite
+/// is the same fix either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum RuntimeTypeEscape {
+    /// The value the expression produces — a result type that wraps the
+    /// parameter, a class literal, or a `?.` chain that republishes the
+    /// call's result as a nullable.
+    Value,
+    /// The error the call can throw.
+    Error,
+}
+
+impl RuntimeTypeEscape {
+    /// The note printed at the `unreflect(...)` slot.
+    pub fn note(self) -> &'static str {
+        match self {
+            Self::Value => RUNTIME_TYPE_MUST_BE_NAMED_NOTE,
+            Self::Error => RUNTIME_TYPE_MUST_BE_NAMED_THROWS_NOTE,
+        }
+    }
+}
+
+/// E0168 — an inline `unreflect(value)` type argument would escape its call.
+pub fn runtime_type_must_be_named() -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::RuntimeTypeMustBeNamed,
+        "this runtime type must be given a name before it can be used here",
+    )
+}
+
+/// E0168 — a runtime type atom was written in an item signature, where no
+/// executable body can own its frame slot.
+pub fn runtime_type_has_no_scope() -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::RuntimeTypeMustBeNamed,
+        "a runtime type has no scope here; bind it inside a function body: `type T = unreflect(…)`",
+    )
+}
+
+/// E0168 — the suggested rewrite, written with the user's own carrier
+/// expression whenever the reporting site could print it.
+pub fn runtime_type_must_be_named_help(rewrite: &RuntimeTypeNameRewrite) -> String {
+    let carrier = rewrite.carrier.as_deref().unwrap_or("...");
+    let mut help = format!(
+        "name the type first, then use the name:\n    type {RUNTIME_TYPE_NAME} = unreflect({carrier});"
+    );
+    if let Some(named) = &rewrite.named {
+        help.push_str("\n    ");
+        help.push_str(named);
+    }
+    help
 }
 
 /// E0010 — an indirect call cannot carry a deferred runtime argument check.
@@ -247,12 +379,12 @@ mod tests {
             (
                 unspecialized_reflected_generic("root.Extract"),
                 "E0165",
-                "generic function `root.Extract` cannot be extracted through reflection: reflected packages cannot supply type arguments yet",
+                "generic function `root.Extract` cannot be extracted through reflection: its signature still mentions its own type parameters",
             ),
             (
                 unspecialized_reflected_generic_call("GenericList$render_prompt"),
                 "E0165",
-                "generic function `GenericList$render_prompt` cannot be invoked through reflection until it is specialized: its body needs type arguments and reflection cannot supply them yet",
+                "generic function `GenericList$render_prompt` cannot be invoked through reflection: its body needs type arguments",
             ),
             (
                 computed_generic_argument_requires_unreflect("runtime_t"),
@@ -270,9 +402,9 @@ mod tests {
                 "duplicate field `Collision.wire`",
             ),
             (
-                cannot_construct_reflection_kind("baml.reflect.class.Type"),
+                cannot_construct_reflection_kind("reflect.class.Type"),
                 "E0001",
-                "reflection kind `baml.reflect.class.Type` cannot be constructed; obtain it from a type value",
+                "reflection kind `reflect.class.Type` cannot be constructed; obtain it from a type value",
             ),
             (
                 cannot_construct_builtin_companion("baml.Int", "int", "literals", true),
@@ -324,11 +456,96 @@ mod tests {
                 "E0164",
                 "field `Envelope.payload` has non-data type `unknown`, which cannot be rendered as an LLM output schema",
             ),
+            (
+                runtime_type_must_be_named(),
+                "E0168",
+                "this runtime type must be given a name before it can be used here",
+            ),
         ];
 
         for (diagnostic, code, message) in cases {
             assert_eq!(diagnostic.code(), code);
             assert_eq!(diagnostic.message, message);
         }
+    }
+
+    #[test]
+    fn runtime_type_notes_name_the_published_type_that_would_outlive_the_call() {
+        // One complaint, one fix; the tail of the note is the only thing the
+        // reader needs to be told apart, and it names what they wrote.
+        let (value, error) = (
+            RuntimeTypeEscape::Value.note(),
+            RuntimeTypeEscape::Error.note(),
+        );
+        assert!(
+            value.ends_with("but the value this expression creates would still need it afterwards")
+        );
+        assert!(
+            error.ends_with("but the error this call can throw would still need it afterwards")
+        );
+        let shared = "a type created at runtime only lasts for one call when written inline with `unreflect(...)`, ";
+        assert!(value.starts_with(shared));
+        assert!(error.starts_with(shared));
+    }
+
+    #[test]
+    fn runtime_type_help_uses_the_authors_own_spelling_and_degrades_cleanly() {
+        assert_eq!(
+            runtime_type_must_be_named_help(&RuntimeTypeNameRewrite {
+                carrier: Some("t".to_owned()),
+                named: Some(r#"Holder<Out> { label: "h" }"#.to_owned()),
+            }),
+            "name the type first, then use the name:\n    \
+             type Out = unreflect(t);\n    \
+             Holder<Out> { label: \"h\" }"
+        );
+        assert_eq!(
+            runtime_type_must_be_named_help(&RuntimeTypeNameRewrite::default()),
+            "name the type first, then use the name:\n    type Out = unreflect(...);"
+        );
+    }
+
+    #[test]
+    fn runtime_type_rewrite_reads_back_the_written_source() {
+        let written = r#"Holder<unreflect(t)> { label: "h" }"#;
+        let slot = written.find("unreflect").expect("slot")..written.find("> {").expect("end");
+        assert_eq!(
+            RuntimeTypeNameRewrite::from_source(written, slot),
+            RuntimeTypeNameRewrite {
+                carrier: Some("t".to_owned()),
+                named: Some(r#"Holder<Out> { label: "h" }"#.to_owned()),
+            }
+        );
+    }
+
+    #[test]
+    fn runtime_type_rewrite_drops_halves_it_cannot_print() {
+        // A multi-line literal keeps the carrier but not the whole rewrite.
+        let written = "Holder<unreflect(t)> {\n  label: \"h\",\n}";
+        let slot = written.find("unreflect").expect("slot")..written.find("> {").expect("end");
+        assert_eq!(
+            RuntimeTypeNameRewrite::from_source(written, slot),
+            RuntimeTypeNameRewrite {
+                carrier: Some("t".to_owned()),
+                named: None,
+            }
+        );
+        // A carrier spanning lines is not spelled back at the user, but the
+        // rewrite that replaces it still is — naming the slot is what removes
+        // the newline.
+        let written = "f<unreflect(pick(\n  a))>()";
+        let slot = written.find("unreflect").expect("slot")..written.find(")>(").expect("end") + 1;
+        assert_eq!(
+            RuntimeTypeNameRewrite::from_source(written, slot),
+            RuntimeTypeNameRewrite {
+                carrier: None,
+                named: Some("f<Out>()".to_owned()),
+            }
+        );
+        // An out-of-range slot degrades instead of panicking.
+        assert_eq!(
+            RuntimeTypeNameRewrite::from_source("f<unreflect(t)>()", 4..900),
+            RuntimeTypeNameRewrite::default()
+        );
     }
 }

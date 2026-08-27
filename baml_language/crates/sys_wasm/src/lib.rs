@@ -44,6 +44,15 @@ pub fn configure_web_sysops(fetch_key: u64, read_file_sync_key: u64) -> Result<(
 }
 
 /// Build the exact Web capability surface: fetch, readFileSync, and user host callables.
+///
+// BUG: the base is `SysOpsBuilder::new()`, so every operation not named here
+// throws `Unsupported` — including `baml.time.Instant.now` and
+// `baml.random.SystemRandom`, which are ambient in a browser rather than
+// capabilities to withhold. `testing.run_test` times every test, so no BAML
+// test can run under this table. The deleted `bridge_wasm` table wired both
+// (`wasm_time` over `Date.now`/`performance.now` + `Temporal`, `wasm_random`
+// over `crypto.getRandomValues` via getrandom's `wasm_js` backend); the same
+// implementations belong here unless withholding them is deliberate.
 pub fn build() -> Result<sys_ops::SysOps, String> {
     let config = WEB_SYSOP_CONFIG
         .with(|slot| slot.borrow().clone())

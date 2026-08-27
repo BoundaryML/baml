@@ -36,14 +36,6 @@ class user.NameVsAlias$stream {
   x: string | null
   b: string | null
 }
-class user.NormalizedCollision {
-  a: string
-  b: string
-}
-class user.NormalizedCollision$stream {
-  a: string | null
-  b: string | null
-}
 class user.SkippedDoesNotCollide {
   a: string
   b: string

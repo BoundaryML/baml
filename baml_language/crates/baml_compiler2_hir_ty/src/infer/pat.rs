@@ -68,7 +68,31 @@ impl<'db> InferenceContext<'db> {
         arms: &[MatchArmId],
         expected: &Expectation,
     ) -> Ty {
-        let scrut_ty = self.infer_expr(body, scrutinee, &Expectation::None);
+        let written_scrutinee = self
+            .type_refs
+            .match_scrutinee_types
+            .get(&match_expr)
+            .copied();
+        let scrut_ty = match written_scrutinee {
+            Some(type_ref) => {
+                let mut nested = Vec::new();
+                super::collect_unreflect_type_refs(
+                    &self.type_refs.store,
+                    self.type_refs.raw_id(type_ref),
+                    &mut nested,
+                );
+                for (_, operand) in nested {
+                    self.validate_runtime_type_operand(body, operand);
+                }
+                let annotation = self.lower_body_annotation(type_ref);
+                self.check_expr(body, scrutinee, &annotation);
+                // A match annotation declares the matrix's full input type.
+                // Keep it instead of narrowing back to the scrutinee's current
+                // concrete value so later arms remain reachable.
+                annotation
+            }
+            None => self.infer_expr(body, scrutinee, &Expectation::None),
+        };
         let scrut_resolved = self.scrutinee_demand(&scrut_ty);
         let scrut_binding = self.narrowable_binding(body, scrutinee);
         let branch_expectation = expected.adjust_for_branches(&mut self.table);
@@ -103,7 +127,7 @@ impl<'db> InferenceContext<'db> {
             }
             self.diverges = super::Diverges::Maybe;
             if let Some(guard) = arm.guard {
-                self.check_expr(body, guard, &Ty::bool());
+                self.check_condition(body, guard);
                 let guard_facts = self.condition_facts(body, guard);
                 self.apply_facts(&guard_facts.when_true);
             }
@@ -393,6 +417,39 @@ impl<'db> InferenceContext<'db> {
     }
 
     fn lower_pattern_inner(&mut self, body: &ExprBody, pat: PatId, scrut: &Ty) -> PatternOutcome {
+        let mut written_refs = Vec::new();
+        written_refs.extend(self.type_refs.pattern_types.get(&pat).copied());
+        written_refs.extend(self.type_refs.array_ascriptions.get(&pat).copied());
+        written_refs.extend(
+            self.type_refs
+                .pattern_class_args
+                .get(&pat)
+                .into_iter()
+                .flatten()
+                .copied(),
+        );
+        written_refs.extend(
+            self.type_refs
+                .pattern_assoc_bindings
+                .get(&pat)
+                .into_iter()
+                .flatten()
+                .map(|(_, type_ref)| *type_ref),
+        );
+        let mut operands = Vec::new();
+        for type_ref in written_refs {
+            let mut nested = Vec::new();
+            super::collect_unreflect_type_refs(
+                &self.type_refs.store,
+                self.type_refs.raw_id(type_ref),
+                &mut nested,
+            );
+            operands.extend(nested.into_iter().map(|(_, operand)| operand));
+        }
+        for operand in operands {
+            self.validate_runtime_type_operand(body, operand);
+        }
+
         match &body.patterns[pat] {
             Pattern::Wildcard => PatternOutcome {
                 dpat: DPat::wildcard(scrut.to_plain()),
@@ -808,9 +865,7 @@ impl<'db> InferenceContext<'db> {
         let scrut = self.expand_alias_chain(scrut);
         match (&pat, &scrut) {
             (P::Never { .. }, _) => true,
-            (P::List(a, _) | P::EvolvingList(a, _), P::List(b, _) | P::EvolvingList(b, _)) => {
-                self.pattern_matchable(a, b)
-            }
+            (P::List(a, _), P::List(b, _)) => self.pattern_matchable(a, b),
             (
                 P::Map {
                     key: ka, value: va, ..
@@ -1296,7 +1351,12 @@ impl<'db> InferenceContext<'db> {
         // only a UNIQUE fit claims - B-633's provable-overlap
         // conservatism: "cannot tell" keeps the member, several
         // survivors stay unclaimed.
-        let claimed_union = match effective.kind() {
+        // Keep the original scrutinee as the matrix column. The narrowed
+        // `effective` type belongs inside the UnionMember constructor; using
+        // it as the column loses the union discriminator and makes equal-shape
+        // slices cover one another regardless of their ascriptions.
+        let scrut_structure = self.structurally_resolve(scrut);
+        let claimed_union = match scrut_structure.kind() {
             TyKind::Union(members, _) => {
                 let members = members.to_vec();
                 let mut lists: Vec<Ty> = Vec::new();
@@ -1321,7 +1381,7 @@ impl<'db> InferenceContext<'db> {
                         }
                     }
                 };
-                claimed.map(|member| (effective.clone(), member))
+                claimed.map(|member| (scrut.clone(), member))
             }
             _ => None,
         };
@@ -1428,6 +1488,15 @@ impl<'db> InferenceContext<'db> {
                 let TyKind::List(element, _) = expanded.kind() else {
                     return false;
                 };
+                if let Some(type_ref) = self.type_refs.array_ascriptions.get(&pat).copied() {
+                    let ascribed = self.lower_body_annotation(type_ref);
+                    if !ascribed.has_error()
+                        && !self.provable_subtype(&ascribed, &expanded)
+                        && !self.provable_subtype(&expanded, &ascribed)
+                    {
+                        return false;
+                    }
+                }
                 let element = element.clone();
                 let subs: Vec<PatId> = prefix.iter().chain(suffix.iter()).copied().collect();
                 let rest_pat = rest.as_ref().and_then(|rest| rest.pat);
@@ -1591,7 +1660,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
             // over its declared fields (rustc's non-enum struct shape).
             P::Interface(..) => vec![Ctor::Interface(ty.clone())],
             // Slice splitting owns list columns; empty defers to it.
-            P::List(..) | P::EvolvingList(..) => vec![],
+            P::List(..) => vec![],
             // Everything else is an infinite or open alphabet.
             _ => vec![Ctor::NonExhaustive],
         }
@@ -1659,7 +1728,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
 
     fn list_element_type(&self, ty: &baml_type::Ty) -> baml_type::Ty {
         match self.peel_aliases(ty.clone(), 8) {
-            baml_type::Ty::List(element, _) | baml_type::Ty::EvolvingList(element, _) => *element,
+            baml_type::Ty::List(element, _) => *element,
             other => other,
         }
     }

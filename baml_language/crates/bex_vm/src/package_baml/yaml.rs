@@ -23,10 +23,10 @@ fn parse_yaml(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
     };
 
     let parsed = serde_yaml::Value::deserialize(first_doc)
-        .map_err(|e| VmRustFnError::Thrown(make_yaml_parse_error(vm, e.to_string())))?;
+        .map_err(|e| VmRustFnError::thrown_fresh(make_yaml_parse_error(vm, e.to_string())))?;
 
     if docs.next().is_some() {
-        return Err(VmRustFnError::Thrown(make_yaml_parse_error(
+        return Err(VmRustFnError::thrown_fresh(make_yaml_parse_error(
             vm,
             "YAML stream contains multiple documents; baml.yaml.parse accepts exactly one document"
                 .to_string(),
@@ -49,14 +49,14 @@ fn convert_yaml_value(vm: &mut BexVm, value: serde_yaml::Value) -> Result<Value,
                 .collect::<Result<Vec<Value>, VmRustFnError>>()?;
             // YAML is parsed into the `baml.json.json` value algebra.
             Ok(Value::object(
-                vm.alloc_array(super::json::json_alias_ty(), values),
+                vm.alloc_array(super::json::json_alias_ty(vm), values),
             ))
         }
         serde_yaml::Value::Mapping(map) => {
             let mut entries = IndexMap::with_capacity(map.len());
             for (key, value) in map {
                 let serde_yaml::Value::String(key) = key else {
-                    return Err(VmRustFnError::Thrown(make_yaml_parse_error(
+                    return Err(VmRustFnError::thrown_fresh(make_yaml_parse_error(
                         vm,
                         "YAML mappings must use string keys to fit baml.json.json".to_string(),
                     )));
@@ -66,12 +66,12 @@ fn convert_yaml_value(vm: &mut BexVm, value: serde_yaml::Value) -> Result<Value,
             }
             // `baml.json.json` maps: string keys, `json` values.
             Ok(Value::object(vm.alloc_map(
-                baml_type::RealizedTy::string(),
-                super::json::json_alias_ty(),
+                bex_vm_types::RealizedTy::string(),
+                super::json::json_alias_ty(vm),
                 entries,
             )))
         }
-        serde_yaml::Value::Tagged(_) => Err(VmRustFnError::Thrown(make_yaml_parse_error(
+        serde_yaml::Value::Tagged(_) => Err(VmRustFnError::thrown_fresh(make_yaml_parse_error(
             vm,
             "YAML tags are not supported by baml.yaml.parse".to_string(),
         ))),
@@ -81,7 +81,7 @@ fn convert_yaml_value(vm: &mut BexVm, value: serde_yaml::Value) -> Result<Value,
 fn convert_yaml_number(vm: &mut BexVm, n: &serde_yaml::Number) -> Result<Value, VmRustFnError> {
     if let Some(i) = n.as_i64() {
         return Value::try_int(i).ok_or_else(|| {
-            VmRustFnError::Thrown(make_yaml_parse_error(
+            VmRustFnError::thrown_fresh(make_yaml_parse_error(
                 vm,
                 "YAML integer is outside BAML int range".to_string(),
             ))
@@ -89,21 +89,21 @@ fn convert_yaml_number(vm: &mut BexVm, n: &serde_yaml::Number) -> Result<Value, 
     }
 
     if n.is_u64() {
-        return Err(VmRustFnError::Thrown(make_yaml_parse_error(
+        return Err(VmRustFnError::thrown_fresh(make_yaml_parse_error(
             vm,
             "YAML integer is outside BAML int range".to_string(),
         )));
     }
 
     let Some(f) = n.as_f64() else {
-        return Err(VmRustFnError::Thrown(make_yaml_parse_error(
+        return Err(VmRustFnError::thrown_fresh(make_yaml_parse_error(
             vm,
             "YAML number cannot be represented as a BAML int or float".to_string(),
         )));
     };
 
     if !f.is_finite() {
-        return Err(VmRustFnError::Thrown(make_yaml_parse_error(
+        return Err(VmRustFnError::thrown_fresh(make_yaml_parse_error(
             vm,
             "YAML non-finite floats are not supported by baml.yaml.parse".to_string(),
         )));

@@ -1,0 +1,67 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function spawn_basic.$init_test_ns_spawn_basic_spawn_basic(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.spawn_basic"
+    load_const "spawn_returning_int_literal"
+    make_closure .<lambda($init_test_ns_spawn_basic_spawn_basic, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.spawn_basic"
+    load_const "spawn_returning_string"
+    make_closure .<lambda($init_test_ns_spawn_basic_spawn_basic, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.spawn_basic"
+    load_const "spawn_with_name_literal"
+    make_closure .<lambda($init_test_ns_spawn_basic_spawn_basic, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function spawn_basic.spawn_returning_int_literal() -> int {
+    make_closure .<lambda(spawn_returning_int_literal, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type never
+    spawn
+    store_var _3
+    load_var _3
+    await
+    return
+}
+
+function spawn_basic.spawn_returning_string() -> string {
+    make_closure .<lambda(spawn_returning_string, 0)>, 0
+    load_const null
+    load_const null
+    load_type string
+    load_type never
+    spawn
+    store_var _3
+    load_var _3
+    await
+    return
+}
+
+function spawn_basic.spawn_with_name_literal() -> int {
+    make_closure .<lambda(spawn_with_name_literal, 0)>, 0
+    load_const "answer"
+    load_const null
+    load_type int
+    load_type never
+    spawn
+    store_var _3
+    load_var _3
+    await
+    return
+}

@@ -28,7 +28,7 @@
 //!
 //! Deliberately NOT replicated from TIR (survey-recorded defects): the
 //! single-bound conjunction asymmetry (bounds are `Vec` end to end
-//! here), and `get_method`'s silent `BuiltinUnknown` fill for unbound
+//! here), and `get_method`'s silent `Unknown` fill for unbound
 //! params (resolution here leaves methods to I3).
 
 use baml_compiler2_hir::{loc::ImplLoc, package::PackageId};
@@ -36,7 +36,6 @@ use baml_type::{
     Name, ParamTy, TypeName,
     interned::{InterfaceRef, Ty, TyKind},
     normalize::{TypeContext, equivalent_interned},
-    type_kind::class_inhabits_any_class,
 };
 use rustc_hash::FxHashMap;
 
@@ -51,14 +50,12 @@ pub fn interned_ty(ty: &baml_type::Ty) -> Ty {
 }
 
 /// [`interned_ty`], declining input the interned family cannot
-/// represent (TIR's `Unknown`/`Evolving` inference sentinels, live only
-/// while the dual provider serves TIR-typed tables). An oracle asked
-/// about such a type answers "undecidable", never panics.
+/// represent. An oracle asked about such a type answers "undecidable",
+/// never panics.
 pub fn try_interned_ty(ty: &baml_type::Ty) -> Option<Ty> {
     fn representable(ty: &baml_type::Ty) -> bool {
         use baml_type::Ty as P;
         match ty {
-            P::Unknown { .. } | P::EvolvingList(..) | P::EvolvingMap(..) => false,
             P::List(inner, _) => representable(inner),
             P::Map { key, value, .. } => representable(key) && representable(value),
             P::Future(value, error, _) => representable(value) && representable(error),
@@ -236,16 +233,48 @@ pub fn package_impl_locs<'db>(
     package: PackageId<'db>,
 ) -> Vec<ImplLoc<'db>> {
     let mut out = Vec::new();
-    for file in baml_compiler2_hir::compiler2_all_files(db) {
-        let file_package = baml_compiler2_hir::file_package::file_package(db, file);
-        if PackageId::new(db, file_package.package) != package {
-            continue;
-        }
+    // Scan only the package's own files (`package_files`), so edits to
+    // another root's file set never invalidate this query.
+    for file in baml_compiler2_hir::package::package_files(db, package) {
         out.extend(
-            baml_compiler2_ppir::item_data::file_impls(db, file)
+            baml_compiler2_ppir::item_data::file_impls(db, *file)
                 .iter()
                 .copied(),
         );
+    }
+    out
+}
+
+/// Every source impl block whose HEAD names `interface`, across all packages
+/// contributing files — the definition-site inverse of [`impls_for_type`]'s
+/// per-receiver scan, for `describe`/IDE surfaces ("who implements this?").
+///
+/// Matching is nominal on the head's qualified name (implements is nominal):
+/// every generic instantiation of `Foo` names `Foo`, so instantiations are not
+/// distinguished here. Order is deterministic — packages sorted by name (via
+/// `all_packages`), blocks in source order within each. Mounted and
+/// precompiled packages ship no source blocks, so their impls are not listed.
+#[salsa::tracked(returns(ref))]
+pub fn impls_naming_interface<'db>(
+    db: &'db dyn baml_compiler2_ppir::Db,
+    interface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+) -> Vec<ImplLoc<'db>> {
+    let name = &baml_compiler2_ppir::item_data::interface_data(db, interface).name;
+    let target = crate::lower::qualify_def(
+        db,
+        baml_compiler2_hir::contributions::Definition::Interface(interface),
+        name,
+    );
+    let mut out = Vec::new();
+    for &package in all_packages(db) {
+        for &block in package_impl_locs(db, package) {
+            let Some(facts) = impl_facts(db, block).as_ref() else {
+                continue;
+            };
+            if facts.interface.name == target {
+                out.push(block);
+            }
+        }
     }
     out
 }
@@ -279,6 +308,11 @@ impl<'db> AliasOnlyFacts<'db> {
 }
 
 impl TypeContext for AliasOnlyFacts<'_> {
+    /// A name-based context represents a declaration by its own name, so this
+    /// is the identity — no resolution step, and never `None`.
+    fn head_lookup(&self, qtn: &TypeName) -> Option<TypeName> {
+        Some(qtn.clone())
+    }
     fn alias_def(&self, name: &TypeName) -> Option<baml_type::Ty> {
         self.memoized.as_ref().map_or_else(
             || crate::facts::uncached_alias_def(self.db, name),
@@ -801,7 +835,7 @@ pub fn impls_for_type<'db>(
             // concrete-member provider. Keep its blanket witness out of the
             // concrete receiver lookup tier so established fields and methods
             // named `get`, `name`, `type`, and so on retain their resolution.
-            // Explicit `baml.AnyClass` receivers dispatch through
+            // Explicit `reflect.AnyClass` receivers dispatch through
             // `resolve_impl`, where the witness remains available.
             provides_concrete_members(&implemented.name)
         })
@@ -813,7 +847,7 @@ pub fn impls_for_type<'db>(
 /// narrowing, so its blanket default methods must stay out of both the ground
 /// registry and the inference-variable method probe.
 pub(crate) fn provides_concrete_members(interface: &TypeName) -> bool {
-    !interface.is_builtin_root_type("AnyClass")
+    !interface.is_reflect_root_type("AnyClass")
 }
 
 /// Compiler-derived interfaces may deliberately narrow a blanket stdlib impl.
@@ -826,14 +860,11 @@ fn derived_impl_allows(
     concrete: &Ty,
     interface: &TypeName,
 ) -> bool {
-    if !interface.is_builtin_root_type("AnyClass") {
+    if !interface.is_reflect_root_type("AnyClass") {
         return true;
     }
     let normalized = baml_type::normalize::normalize_interned(concrete, &AliasOnlyFacts::new(db));
-    matches!(
-        normalized.kind(),
-        TyKind::Class(name, _, _) if class_inhabits_any_class(name)
-    )
+    matches!(normalized.kind(), TyKind::Class(..))
 }
 
 #[salsa::interned]
@@ -938,11 +969,17 @@ fn impls_for_type_cached<'db>(
 }
 
 /// Every package contributing files to the compilation, deduplicated.
+///
+/// Reads the source-root table (every root carries exactly one package) plus
+/// the external (mounted/precompiled) package names — never the files
+/// themselves, so adding or removing a file cannot invalidate the package set.
 #[salsa::tracked(returns(ref))]
 fn all_packages(db: &dyn baml_compiler2_ppir::Db) -> Vec<PackageId<'_>> {
-    let mut names: Vec<Name> = baml_compiler2_hir::compiler2_all_files(db)
-        .into_iter()
-        .map(|file| baml_compiler2_hir::file_package::file_package(db, file).package)
+    let mut names: Vec<Name> = db
+        .source_roots()
+        .roots(db)
+        .iter()
+        .map(|root| root.package(db))
         .collect();
     names.extend(baml_compiler2_hir::package::external_package_names(db));
     names.sort();

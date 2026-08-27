@@ -183,9 +183,9 @@ pub(crate) fn lower_generic_param_interface_bounds<'db>(
             diags,
         );
         match ty {
-            // BEP-062: `baml.AnyFunction` is legal only as a value type; as a
+            // BEP-062: `reflect.AnyFunction` is legal only as a value type; as a
             // bound it is rejected and contributes no constraint.
-            Ty::Interface(qtn, ..) if qtn.is_builtin_root_type("AnyFunction") => {
+            Ty::Interface(qtn, ..) if qtn.is_reflect_root_type("AnyFunction") => {
                 diags.push(TirTypeError::BuiltinInterfaceNotABound { interface: qtn });
             }
             Ty::Interface(qtn, generics, assoc, _) => {
@@ -196,7 +196,7 @@ pub(crate) fn lower_generic_param_interface_bounds<'db>(
                 });
             }
             // Already diagnosed by lowering the bound expression itself.
-            Ty::Unknown { .. } | Ty::Error { .. } | Ty::BuiltinUnknown { .. } => {}
+            Ty::Error { .. } | Ty::Unknown { .. } => {}
             // BEP-044 requires bounds to be interfaces (E0142).
             other => diags.push(TirTypeError::GenericBoundNotInterface { bound: other }),
         }
@@ -422,9 +422,9 @@ pub fn impl_data<'db>(
     // and associated-binding hygiene. (Signature conformance is phase 5.)
     let mut conformance_diags: Vec<(TirTypeError, ImplDiagnosticLocation)> = Vec::new();
     if let Some(iface_qtn) = interface_loc_qtn(db, iface_loc) {
-        // BEP-062 (E0153): `baml.AnyFunction`'s conformance is compiler-derived;
+        // BEP-062 (E0153): `reflect.AnyFunction`'s conformance is compiler-derived;
         // a written impl is rejected outright.
-        if iface_qtn.is_builtin_root_type("AnyFunction") {
+        if iface_qtn.is_reflect_root_type("AnyFunction") {
             conformance_diags.push((
                 TirTypeError::BuiltinInterfaceNotImplementable {
                     interface: iface_qtn.clone(),
@@ -748,10 +748,10 @@ pub fn impl_data_source_map<'db>(
 fn collect_type_var_names(ty: &Ty, out: &mut Vec<ParamTy>) {
     match ty {
         Ty::TypeVar(name, _) => out.push(name.clone()),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+        Ty::List(inner, _) => {
             collect_type_var_names(inner, out);
         }
-        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
+        Ty::Map { key, value, .. } => {
             collect_type_var_names(key, out);
             collect_type_var_names(value, out);
         }
@@ -832,11 +832,11 @@ impl<'db> InterfaceMethodSpec<'db> {
         let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
         let (args, kwargs) = split_params(sig.params.iter().map(|p| {
             // The implicit `self` receiver: name "self" with no declared type
-            // (elaboration synthesizes an `Unknown` node for it).
+            // (elaboration synthesizes a `Missing` node for it).
             let is_self = p.name.as_str() == "self"
                 && matches!(
                     sig.type_refs[p.type_ref].kind,
-                    baml_compiler2_hir::type_ref::TypeRefKind::Unknown
+                    baml_compiler2_hir::type_ref::TypeRefKind::Missing
                 );
             (
                 is_self,
@@ -909,7 +909,7 @@ impl<'db> InterfaceMethodSpec<'db> {
             associated_type_bindings: Box::new([]),
         });
         let unknown_id =
-            scratch.alloc_synthetic(baml_compiler2_hir::type_ref::TypeRefKind::Unknown);
+            scratch.alloc_synthetic(baml_compiler2_hir::type_ref::TypeRefKind::Missing);
         let (scratch_store, _) = scratch.finish();
         let lower = |slot: SigTypeRef, diags: &mut Vec<TirTypeError>| match slot {
             SigTypeRef::Id(id) => lower_ref_in(scope, self.sig_refs, id, diags),
@@ -1533,18 +1533,13 @@ pub fn package_impl_locs<'db>(
     pkg_id: PackageId<'db>,
 ) -> Vec<baml_compiler2_hir::loc::ImplLoc<'db>> {
     let mut out = Vec::new();
-    for file in baml_compiler2_hir::compiler2_all_files(db) {
-        let file_pkg = PackageId::new(
-            db,
-            baml_compiler2_hir::file_package::file_package(db, file).package,
-        );
-        if file_pkg != pkg_id {
-            continue;
-        }
+    // Scan only the package's own files (`package_files`), so edits to
+    // another root's file set never invalidate this query.
+    for file in baml_compiler2_hir::package::package_files(db, pkg_id) {
         // `file_impls` yields the blocks in source order, so the resolver's
         // "first full match" is reproducible.
         out.extend(
-            baml_compiler2_ppir::item_data::file_impls(db, file)
+            baml_compiler2_ppir::item_data::file_impls(db, *file)
                 .iter()
                 .copied(),
         );
@@ -1646,10 +1641,10 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<Name>) {
             }
         }
         Ty::Enum(qtn, _) | Ty::EnumVariant(qtn, _, _) | Ty::TypeAlias(qtn, _) => push(qtn, out),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+        Ty::List(inner, _) => {
             collect_ty_packages(inner, out);
         }
-        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) | Ty::Future(key, value, _) => {
+        Ty::Map { key, value, .. } | Ty::Future(key, value, _) => {
             collect_ty_packages(key, out);
             collect_ty_packages(value, out);
         }
@@ -1692,9 +1687,8 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<Name>) {
         | Ty::Resource { .. }
         | Ty::PromptAst { .. }
         | Ty::Void { .. }
-        | Ty::BuiltinUnknown { .. }
-        | Ty::Never { .. }
         | Ty::Unknown { .. }
+        | Ty::Never { .. }
         | Ty::Error { .. }
         | Ty::Infer { .. } => {}
     }
@@ -1727,7 +1721,7 @@ pub fn implements_interface(
     // The blanket stdlib impl supplies AnyClass's default-method dispatch, but
     // membership is compiler-derived and narrower. Reuse the normalizer's
     // class-only rule so `requires AnyClass` cannot observe the blanket.
-    if interface.name.is_builtin_root_type("AnyClass") {
+    if interface.name.is_reflect_root_type("AnyClass") {
         return is_subtype(concrete, &interface.to_ty());
     }
 
@@ -2114,12 +2108,9 @@ impl<'db> ResolvedImpl<'db> {
                     .generic_params
                     .iter()
                     .map(|(name, _)| {
-                        self.bindings
-                            .get(name)
-                            .cloned()
-                            .unwrap_or(Ty::BuiltinUnknown {
-                                attr: TyAttr::default(),
-                            })
+                        self.bindings.get(name).cloned().unwrap_or(Ty::Unknown {
+                            attr: TyAttr::default(),
+                        })
                     })
                     .collect();
                 return Some(ResolvedMethod {

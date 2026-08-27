@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.bigint_literal.GetBigint() -> bigint {
+    load_const 42n
+    return
+}
+
+function fixtures.bigint_literal.GetLargeBigint() -> bigint {
+    load_const 99999999999999999999n
+    return
+}
+
+function fixtures.bigint_literal.GetNegativeBigint() -> bigint {
+    load_const -7n
+    return
+}

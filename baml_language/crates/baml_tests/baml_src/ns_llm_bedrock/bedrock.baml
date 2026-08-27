@@ -46,7 +46,7 @@ function BedrockEcho(question: string) -> string {
 }
 
 // A leading literal keeps the media part at a known index: the rendered parts
-// are ["Look at ", <media>].
+// are ["Look at", <media>].
 function BedrockVision(picture: image) -> string {
     client: "openai/gpt-4o-mini"
     prompt: `
@@ -551,7 +551,7 @@ function bedrock_blank_prompt_parts_are_dropped() -> string {
 }
 
 test "bedrock_blank_prompt_parts_are_dropped" {
-    assert.equal(bedrock_blank_prompt_parts_are_dropped(), "blocks=2|Look at |empty_text=false")
+    assert.equal(bedrock_blank_prompt_parts_are_dropped(), "blocks=2|Look at|empty_text=false")
 }
 
 // ─── 5. toolConfig (NET-NEW — neither sys_llm nor the engine sent one) ────────
@@ -849,7 +849,7 @@ function bedrock_image_base64() -> string {
 }
 
 test "bedrock_image_base64" {
-    assert.equal(bedrock_image_base64(), "Look at |png|SGVsbG8=|false")
+    assert.equal(bedrock_image_base64(), "Look at|png|SGVsbG8=|false")
 }
 
 function bedrock_video_s3() -> string {
@@ -1254,7 +1254,7 @@ function live_bedrock_answers() -> bool {
         profile = baml.env.get("AWS_PROFILE"),
         max_tokens = 64,
     );
-    let result = ai.Agent<string>.new(client = cl).run(LiveBedrockEcho@spec("Say pong."));
+    let result = ai.Agent.new(client = cl).run(LiveBedrockEcho@spec("Say pong."));
     result.value.trim().length() > 0
 }
 

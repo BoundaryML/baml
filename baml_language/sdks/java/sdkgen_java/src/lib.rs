@@ -479,7 +479,7 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
         Ty::Null { .. } => "null".to_string(),
         Ty::Uint8Array { .. } => "uint8array".to_string(),
         Ty::Void { .. } => "void".to_string(),
-        Ty::BuiltinUnknown { .. } => "unknown".to_string(),
+        Ty::Unknown { .. } => "unknown".to_string(),
         // A generic class carries its concrete type args in its identity token
         // (`Wrapper<int>` vs `Wrapper<string>`) — kept for parity with
         // `registry_arm_expr`, which distinguishes two instantiations so a union /
@@ -761,6 +761,7 @@ mod tests {
             generic_params: Vec::new(),
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("x"),
                 docstring: None,
                 ty: t_int(),
@@ -782,6 +783,7 @@ mod tests {
             generic_params: Vec::new(),
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new(arg.0),
                 docstring: None,
                 ty: arg.1,
@@ -953,6 +955,7 @@ mod tests {
                 generic_params: Vec::new(),
                 docstring: None,
                 arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("ctx"),
                     docstring: None,
                     ty: t_string(),
@@ -1052,6 +1055,7 @@ mod tests {
             generic_params: Vec::new(),
             docstring: Some("Load a document from a path.".to_string()),
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("path"),
                 docstring: None,
                 ty: t_string(),
@@ -1179,12 +1183,14 @@ mod tests {
             docstring: None,
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("x"),
                     docstring: None,
                     ty: t_int(),
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("opt1"),
                     docstring: None,
                     ty: t_int(),
@@ -1193,6 +1199,7 @@ mod tests {
                     ))),
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("opt2"),
                     docstring: None,
                     ty: t_string(),
@@ -1271,12 +1278,14 @@ mod tests {
             docstring: None,
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("arg0"),
                     docstring: None,
                     ty: t_int(),
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("opt1"),
                     docstring: None,
                     ty: t_int(),
@@ -1346,12 +1355,14 @@ mod tests {
             docstring: None,
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("callback"),
                     docstring: None,
                     ty: callback_ty,
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("x"),
                     docstring: None,
                     ty: t_int(),
@@ -1641,6 +1652,7 @@ mod tests {
             generic_params: vec![BaseName::new("T")],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("x"),
                 docstring: None,
                 ty: t_typevar("T"),
@@ -1736,12 +1748,14 @@ mod tests {
             docstring: None,
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("x"),
                     docstring: None,
                     ty: t_typevar("T"),
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("opt1"),
                     docstring: None,
                     ty: t_int(),
@@ -2157,6 +2171,7 @@ mod tests {
             generic_params: Vec::new(),
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("needle"),
                 docstring: None,
                 ty: t_opt(t_string()),
@@ -2196,12 +2211,14 @@ mod tests {
             docstring: None,
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("x"),
                     docstring: None,
                     ty: t_int(),
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("hint"),
                     docstring: None,
                     ty: t_opt(t_string()),

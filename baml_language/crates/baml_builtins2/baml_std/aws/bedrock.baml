@@ -91,6 +91,10 @@ class BedrockClient {
     headers: map<string, string>?,
     /// Extra query parameters, appended (and percent-encoded) BEFORE signing.
     query_params: map<string, string>?,
+    /// Record request/response bodies on the LLMCall wire records delivered
+    /// through on_event. Status, headers, and timing are always recorded; this
+    /// flag only gates the bodies.
+    capture_wire: bool,
 
     function new(
         model: string,
@@ -111,6 +115,7 @@ class BedrockClient {
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
+        capture_wire: bool = true,
     ) -> BedrockClient {
         BedrockClient {
             model: model,
@@ -131,6 +136,7 @@ class BedrockClient {
             request_body: request_body,
             headers: headers,
             query_params: query_params,
+            capture_wire: capture_wire,
         }
     }
 
@@ -146,9 +152,17 @@ class BedrockClient {
             `bedrock/${self.model}`
         }
 
+        // This is deliberately the unsigned Converse request. Signing is an
+        // invocation concern and would read credentials during a snapshot.
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            aws.internal.build_request(self, input, preview = true) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        }
+
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             root.internal.invoke(self, input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }

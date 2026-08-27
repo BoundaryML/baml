@@ -274,9 +274,7 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
         }
         RuntimeTy::Void { .. } => TyVariant::Void(crate::baml_bridge::cffi::BamlTyVoid {}),
         RuntimeTy::Never { .. } => TyVariant::Never(crate::baml_bridge::cffi::BamlTyNever {}),
-        RuntimeTy::BuiltinUnknown { .. } => {
-            TyVariant::Unknown(crate::baml_bridge::cffi::BamlTyUnknown {})
-        }
+        RuntimeTy::Unknown { .. } => TyVariant::Unknown(crate::baml_bridge::cffi::BamlTyUnknown {}),
     }
 }
 

@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use baml_tests::baml_test;
-use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
+use baml_tests::{baml_test, engine::TestOutput};
+use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
 use bex_heap::{CollectionLevel, HeapPermit};
 use bex_vm_types::Object;
 use sys_native::SysOpsExt;
@@ -11,26 +11,174 @@ use sys_native::SysOpsExt;
 const BASIC_SESSION: &str = r####"
 function main() -> int throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let x = 10"#)
-  s.eval<int>(#"x + 1"#)
+  s.eval(`let x = 10`)
+  s.eval<int>(`x + 1`)
 }
 "####;
 
+fn evaluation_error_value(output: TestOutput) -> BexExternalValue {
+    match output.result.unwrap_err() {
+        EngineError::UnhandledThrow { value, .. } => {
+            let value = *value;
+            match &value {
+                BexExternalValue::Instance { class_name, .. }
+                    if class_name == "reflect.errors.EvaluationError" =>
+                {
+                    value
+                }
+                _ => panic!("expected EvaluationError, got {value:?}"),
+            }
+        }
+        other => panic!("expected an unhandled EvaluationError, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn session_evaluation_error_preserves_structured_cause_for_host() {
+    let output = baml_test!(
+        r####"
+class AppError {
+  code string
+}
+
+function fail_cell() -> null throws AppError {
+  throw AppError { code: "E42" }
+}
+
+function main() -> null throws unknown {
+  let session = reflect.Session.new(packages = { "app": reflect.Package.current() })
+  session.eval<null>(`app.fail_cell()`)
+}
+"####
+    );
+    let error = evaluation_error_value(output);
+    let BexExternalValue::Instance { fields, .. } = error else {
+        unreachable!()
+    };
+
+    assert!(
+        fields
+            .get("message")
+            .and_then(BexExternalValue::as_string)
+            .is_some_and(|message| message.contains("AppError") && message.contains("E42")),
+        "EvaluationError message did not describe its cause: {fields:?}"
+    );
+    let Some(BexExternalValue::Instance {
+        class_name,
+        fields: cause_fields,
+        ..
+    }) = fields.get("cause")
+    else {
+        panic!("EvaluationError did not carry the structured cause: {fields:?}")
+    };
+    assert_eq!(class_name, "user.AppError");
+    assert_eq!(
+        cause_fields
+            .get("code")
+            .and_then(BexExternalValue::as_string),
+        Some("E42".into())
+    );
+}
+
+#[tokio::test]
+async fn session_evaluation_error_preserves_string_cause_for_host() {
+    let output = baml_test!(
+        r####"
+function main() -> unknown throws unknown {
+  let session = reflect.Session.new()
+  session.eval<unknown>(`throw "cell failed"`)
+}
+"####
+    );
+    let error = evaluation_error_value(output);
+    let BexExternalValue::Instance { fields, .. } = error else {
+        unreachable!()
+    };
+
+    assert_eq!(
+        fields.get("cause").and_then(BexExternalValue::as_string),
+        Some("cell failed".into())
+    );
+    assert!(
+        fields
+            .get("message")
+            .and_then(BexExternalValue::as_string)
+            .is_some_and(|message| message.contains("cell failed")),
+        "EvaluationError message did not describe its string cause: {fields:?}"
+    );
+}
+
+#[tokio::test]
+async fn session_compile_artifact_is_consumed_once() {
+    let output = baml_test!(
+        r####"
+function main() -> bool throws unknown {
+  let session = reflect.Session.new()
+  let artifact = session._compile<int>(`1`)
+  let first = session._finish<int>(artifact)
+  let rejected = false
+  let _ = session._finish<int>(artifact) catch (_) {
+    _ => { rejected = true },
+  }
+  first == 1 && rejected
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn session_finish_refuses_package_compile_artifact() {
+    let output = baml_test!(
+        r####"
+function main() -> bool throws unknown {
+  let session = reflect.Session.new()
+  let artifact = reflect.Package._compile(
+    { "main.baml": "function ready() -> bool { true }" },
+    {},
+  )
+  let rejected = false
+  let _ = session._finish<unknown>(artifact) catch (_) {
+    _ => { rejected = true },
+  }
+  rejected
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn session_synthetic_step_names_do_not_collide_with_user_bindings() {
+    let output = baml_test!(
+        r####"
+function main() -> int throws unknown {
+  let session = reflect.Session.new()
+  session.eval(`let result = 5`)
+  session.eval(`let stmt_1 = 7
+log.info("keep the second generated step")`)
+  session.eval<int>(`result + stmt_1`)
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(12)));
+}
+
 const S11_LIVENESS_PROBE: &str = r#####"
-function escape_one_session_value() -> type throws unknown {
+function escape_one_session_value() -> reflect.Type throws unknown {
   let dependency = reflect.Package.compile({
-    "dep.baml": #"
+    "dep.baml": `
       class Mounted {
         value int
       }
-    "#,
+    `,
   })
   let s = reflect.Session.new(packages = { "dep": dependency })
-  s.eval(#"class Escaped { value string }"#)
-  s.eval(#"let first = Escaped { value: "first" }"#)
-  s.eval(#"let count = 2"#)
-  s.eval(#"let note = "history""#)
-  s.eval<type>(#"type.of<Escaped>()"#)
+  s.eval(`class Escaped { value string }`)
+  s.eval(`let first = Escaped { value: "first" }`)
+  s.eval(`let count = 2`)
+  s.eval(`let note = "history"`)
+  s.eval<reflect.Type>(`reflect.Type.of<Escaped>()`)
 }
 "#####;
 
@@ -41,9 +189,9 @@ function LoadNotes() -> string {
 
 function inspect() -> unknown throws unknown {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
-  s.eval(#"class Draft { title string, body string }"#)
-  s.eval(#"let draft = Draft { title: "title", body: app.LoadNotes() }"#)
-  s.eval(#"draft.body"#)
+  s.eval(`class Draft { title string, body string }`)
+  s.eval(`let draft = Draft { title: "title", body: app.LoadNotes() }`)
+  s.eval(`draft.body`)
 }
 "####;
 
@@ -94,7 +242,7 @@ function scenario_7() -> bool throws unknown {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
 
   // Submission 1: declarations hoist and execute nothing.
-  s.eval(#"
+  s.eval(`
     class Draft {
       title: string,
       body: string,
@@ -103,56 +251,56 @@ function scenario_7() -> bool throws unknown {
     function Polish(d: Draft) -> Draft {
       Draft { title: d.title, body: app.ImprovePost(d.body) }
     }
-  "#)
+  `)
 
   // Submission 2: the binding becomes visible only after its initializer.
-  s.eval(#"let draft = Draft { title: "Eval in BAML", body: app.LoadNotes() }"#)
-  let title = s.eval<string>(#"Polish(draft).title"#)
+  s.eval(`let draft = Draft { title: "Eval in BAML", body: app.LoadNotes() }`)
+  let title = s.eval<string>(`Polish(draft).title`)
 
   // Containment is a committed prefix, not rollback.
-  let _ = s.eval(#"
+  let _ = s.eval(`
     let saved = app.SaveDraft(draft.title, draft.body)
     app.ValidateOrThrow(draft.title, draft.body)
     let approved = true
-  "#) catch (e) {
-    baml.reflect.errors.EvaluationError => null,
+  `) catch (e) {
+    reflect.errors.EvaluationError => null,
     _ => throw e,
   }
-  let saved = s.eval<string>(#"saved"#)
-  let approved_missing = s.eval<bool>(#"approved"#) catch (_) {
-    baml.reflect.errors.CompilationError => true,
+  let saved = s.eval<string>(`saved`)
+  let approved_missing = s.eval<bool>(`approved`) catch (_) {
+    reflect.errors.CompilationError => true,
     _ => false,
   }
 
-  let _ = s.eval(#"
+  let _ = s.eval(`
     let x = 10
     let checked = app.Validate(-1)
     let y = "hi"
-  "#) catch (e) {
-    baml.reflect.errors.EvaluationError => null,
+  `) catch (e) {
+    reflect.errors.EvaluationError => null,
     _ => throw e,
   }
-  let x = s.eval<int>(#"x"#)
-  let y_missing = (s.eval<string>(#"y"#) == "") catch (_) {
-    baml.reflect.errors.CompilationError => true,
+  let x = s.eval<int>(`x`)
+  let y_missing = (s.eval<string>(`y`) == "") catch (_) {
+    reflect.errors.CompilationError => true,
     _ => false,
   }
 
   // Assignment updates the old cell; shadowing allocates a new one.
-  s.eval(#"let greeting = "hello""#)
-  s.eval(#"let shout = (name: string) -> { `${greeting}, ${name}!` }"#)
-  s.eval(#"greeting = "howdy""#)
-  let a = s.eval<string>(#"shout("Ada")"#)
-  s.eval(#"let greeting = "goodbye""#)
-  let b = s.eval<string>(#"shout("Ada")"#)
+  s.eval(`let greeting = "hello"`)
+  s.eval(``let shout = (name: string) -> { `\${greeting}, \${name}!` }``)
+  s.eval(`greeting = "howdy"`)
+  let a = s.eval<string>(`shout("Ada")`)
+  s.eval(`let greeting = "goodbye"`)
+  let b = s.eval<string>(`shout("Ada")`)
 
   // A failed compile never poisons the Session.
   let compile_failed = false
-  let _ = s.eval(#"let broken: MissingType = null"#) catch (_) {
-    baml.reflect.errors.CompilationError => { compile_failed = true },
+  let _ = s.eval(`let broken: MissingType = null`) catch (_) {
+    reflect.errors.CompilationError => { compile_failed = true },
     _ => null,
   }
-  let continued = s.eval<int>(#"x + 1"#)
+  let continued = s.eval<int>(`x + 1`)
 
   title == "Eval in BAML" &&
     saved == "draft-1" &&
@@ -167,8 +315,8 @@ function scenario_7() -> bool throws unknown {
 
 function diagnostic_submission_name() -> string throws unknown {
   let s = reflect.Session.new()
-  let _ = s.eval(#"let bad: MissingType = null"#) catch (e) {
-    baml.reflect.errors.CompilationError => {
+  let _ = s.eval(`let bad: MissingType = null`) catch (e) {
+    reflect.errors.CompilationError => {
       let span = e.diagnostics[0].span ?? throw "missing diagnostic span"
       return span.file ?? ""
     },
@@ -179,8 +327,8 @@ function diagnostic_submission_name() -> string throws unknown {
 
 function package_current_is_rejected() -> bool throws unknown {
   let s = reflect.Session.new()
-  let _ = s.eval(#"reflect.Package.current()"#) catch (_) {
-    baml.reflect.errors.CompilationError => return true,
+  let _ = s.eval(`reflect.Package.current()`) catch (_) {
+    reflect.errors.CompilationError => return true,
     _ => return false,
   }
   false
@@ -188,39 +336,39 @@ function package_current_is_rejected() -> bool throws unknown {
 
 function runtime_and_failed_contracts() -> bool throws unknown {
   let s = reflect.Session.new()
-  let string_t = type.of<string>()
-  let value = s.eval<unreflect(string_t)>(#""ok""#)
-  let rejected = (s.eval<string>(#"
+  let string_t = reflect.Type.of<string>()
+  let value = s.eval<unreflect(string_t)>(`"ok"`)
+  let rejected = (s.eval<string>(`
     let should_not_exist = 7
     42
-  "#) == "") catch (_) {
-    baml.reflect.errors.CompilationError => true,
+  `) == "") catch (_) {
+    reflect.errors.CompilationError => true,
     _ => false,
   }
-  let missing = (s.eval<int>(#"should_not_exist"#) == 0) catch (_) {
-    baml.reflect.errors.CompilationError => true,
+  let missing = (s.eval<int>(`should_not_exist`) == 0) catch (_) {
+    reflect.errors.CompilationError => true,
     _ => false,
   }
-  type.of_value(value) == string_t && rejected && missing
+  reflect.Type.of_value(value) == string_t && rejected && missing
 }
 
 function concurrent_eval_is_busy() -> bool throws unknown {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
-  let pending = spawn { s.eval<int>(#"app.Wait()"#) }
+  let pending = spawn { s.eval<int>(`app.Wait()`) }
   baml.sys.sleep(baml.time.Duration.from_milliseconds(20))
-  let busy = (s.eval<int>(#"1"#) == 0) catch (_) {
-    baml.reflect.errors.SessionBusy => true,
+  let busy = (s.eval<int>(`1`) == 0) catch (_) {
+    reflect.errors.SessionBusy => true,
     _ => false,
   }
   let waited = await pending
-  busy && waited == 1 && s.eval<int>(#"2"#) == 2
+  busy && waited == 1 && s.eval<int>(`2`) == 2
 }
 
 function cancelled_eval_releases_lease_and_preserves_prefix() -> bool throws unknown {
   let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
-  s.eval(#"let baseline = 40"#)
+  s.eval(`let baseline = 40`)
   let pending = spawn {
-    s.eval<int>(#"app.LongWait()"#)
+    s.eval<int>(`app.LongWait()`)
   }
   baml.sys.sleep(baml.time.Duration.from_milliseconds(20))
   pending.cancel()
@@ -229,54 +377,54 @@ function cancelled_eval_releases_lease_and_preserves_prefix() -> bool throws unk
     _ => false,
   }
 
-  cancelled && s.eval<int>(#"baseline + 2"#) == 42
+  cancelled && s.eval<int>(`baseline + 2`) == 42
 }
 
 function declaration_redefinition_keeps_earlier_resolution() -> bool throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"function Current() -> int { 1 }"#)
-  s.eval(#"let old = () -> { Current() }"#)
-  s.eval(#"function Current() -> int { 2 }"#)
-  s.eval<int>(#"old()"#) == 1 && s.eval<int>(#"Current()"#) == 2
+  s.eval(`function Current() -> int { 1 }`)
+  s.eval(`let old = () -> { Current() }`)
+  s.eval(`function Current() -> int { 2 }`)
+  s.eval<int>(`old()`) == 1 && s.eval<int>(`Current()`) == 2
 }
 
 function client_declaration_is_lazy() -> bool throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"
+  s.eval(`
     client NeverContacted = openai.ResponsesClient.new(
     model = "no-network-during-declaration",
     api_key = "unused",
     base_url = "http://127.0.0.1:1",
 );
-  "#)
-  s.eval<int>(#"1"#) == 1
+  `)
+  s.eval<int>(`1`) == 1
 }
 
 function runtime_type_binding_persists() -> bool throws unknown {
   let s = reflect.Session.new()
-  let first = s.eval<bool>(#"
-    type T = unreflect(type.of<string>());
-    type.of<T>() == type.of<string>()
-  "#)
-  let later = s.eval<bool>(#"type.of<T>() == type.of<string>()"#)
-  s.eval(#"type T = unreflect(type.of<int>());"#)
-  let rebound = s.eval<bool>(#"type.of<T>() == type.of<int>()"#)
+  let first = s.eval<bool>(`
+    type T = unreflect(reflect.Type.of<string>());
+    reflect.Type.of<T>() == reflect.Type.of<string>()
+  `)
+  let later = s.eval<bool>(`reflect.Type.of<T>() == reflect.Type.of<string>()`)
+  s.eval(`type T = unreflect(reflect.Type.of<int>());`)
+  let rebound = s.eval<bool>(`reflect.Type.of<T>() == reflect.Type.of<int>()`)
   first && later && rebound
 }
 
-function session_declaration_mints_are_generative() -> bool throws unknown {
+function session_declarations_are_generative() -> bool throws unknown {
   let left = reflect.Session.new()
   let right = reflect.Session.new()
-  left.eval(#"class SameName { value string }"#)
-  right.eval(#"class SameName { value string }"#)
-  let left_type = left.eval<type>(#"type.of<SameName>()"#)
-  let right_type = right.eval<type>(#"type.of<SameName>()"#)
+  left.eval(`class SameName { value string }`)
+  right.eval(`class SameName { value string }`)
+  let left_type = left.eval<reflect.Type>(`reflect.Type.of<SameName>()`)
+  let right_type = right.eval<reflect.Type>(`reflect.Type.of<SameName>()`)
   left_type != right_type
 }
 
 function host_dispatch_recovers_session_class_provenance() -> bool throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"
+  s.eval(`
     class SessionValue {
       value string
       implements baml.ToString {
@@ -285,8 +433,8 @@ function host_dispatch_recovers_session_class_provenance() -> bool throws unknow
         }
       }
     }
-  "#)
-  let value = s.eval<baml.ToString>(#"SessionValue { value: "from session" }"#)
+  `)
+  let value = s.eval<baml.ToString>(`SessionValue { value: "from session" }`)
   host_dispatch_session_value(value) == "from session"
 }
 
@@ -297,7 +445,7 @@ function perf_500() -> string throws unknown {
   let five_hundredth = 1n
   while (i < 500) {
     let start = baml.time.Instant.now()
-    let value = s.eval<int>(#"1"#)
+    let value = s.eval<int>(`1`)
     let elapsed = start.elapsed().to_nanoseconds()
     if (i == 9) {
       tenth = elapsed
@@ -323,6 +471,86 @@ async fn session_reimports_instance_fields_without_changing_the_value() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("raw notes".into()))
+    );
+}
+
+#[tokio::test]
+async fn session_reads_fields_from_mounted_return_types_inline_and_after_binding() {
+    let output = baml_test!(
+        r####"
+class Ticket {
+  subject string
+}
+
+class Envelope {
+  ticket Ticket
+}
+
+function GetTicket() -> Ticket {
+  Ticket { subject: "hello" }
+}
+
+function GetEnvelope() -> Envelope {
+  Envelope { ticket: GetTicket() }
+}
+
+function main() -> string throws unknown {
+  let s = reflect.Session.new(packages = { "app": reflect.Package.current() })
+  let inline = s.eval(`app.GetTicket().subject`)
+  s.eval(`let ticket = app.GetTicket()`)
+  let rebound = s.eval(`ticket.subject`)
+  let nested = s.eval(`app.GetEnvelope().ticket.subject`)
+  `${inline}|${rebound}|${nested}`
+}
+"####
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hello|hello|hello".into()))
+    );
+}
+
+#[tokio::test]
+async fn session_compiler_sees_with_types_exports_from_dependencies() {
+    let output = baml_test!(
+        r####"
+function main() -> bool throws unknown {
+  let mounted = reflect.class.new("MountedTicket", {
+    "subject": reflect.Type.of<string>(),
+  })
+  let app = reflect.Package.current().with_types({ "MountedTicket": mounted })
+  let s = reflect.Session.new(packages = { "app": app })
+  s.eval(`let ticket = app.MountedTicket { subject: "visible" }
+ticket.subject`) == "visible"
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
+
+#[tokio::test]
+async fn session_export_alias_preserves_nested_mounted_field_types() {
+    let output = baml_test!(
+        r####"
+function main() -> string throws unknown {
+  let inner = reflect.class.new("MountedInner", {
+    "value": reflect.Type.of<string>(),
+  })
+  let outer = reflect.class.new("MountedOuter", {
+    "inner": inner.as_type(),
+  })
+  let app = reflect.Package.current().with_types({ "OuterAlias": outer })
+  let s = reflect.Session.new(packages = { "app": app })
+  s.eval<string>(`let outer = app.OuterAlias {
+  inner: app.MountedInner { value: "visible" },
+}
+outer.inner.value`)
+}
+"####
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("visible".into()))
     );
 }
 
@@ -390,10 +618,10 @@ async fn scoped_runtime_type_bindings_persist_and_rebind_between_submissions() {
 }
 
 #[tokio::test]
-async fn identical_declarations_in_two_sessions_have_distinct_mints() {
+async fn identical_declarations_in_two_sessions_are_distinct_types() {
     let output = baml_test!(
         baml: SCENARIO_7,
-        entry: "session_declaration_mints_are_generative"
+        entry: "session_declarations_are_generative"
     );
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
@@ -414,16 +642,16 @@ async fn mutually_recursive_session_lets_diagnose_without_panicking() {
 function main() -> bool throws unknown {
   let s = reflect.Session.new()
   let diagnosed = false
-  let _ = s.eval(#"
+  let _ = s.eval(`
     let a = b
     let b = a
-  "#) catch (e) {
-    baml.reflect.errors.CompilationError => {
+  `) catch (e) {
+    reflect.errors.CompilationError => {
       diagnosed = e.diagnostics.length() > 0
     },
     _ => null,
   }
-  diagnosed && s.eval<int>(#"1"#) == 1
+  diagnosed && s.eval<int>(`1`) == 1
 }
 "##
     );
@@ -436,9 +664,9 @@ async fn session_let_named_json_does_not_shadow_json_package_paths() {
         r##"
 function main() -> bool throws unknown {
   let s = reflect.Session.new()
-  s.eval(#"let json = "local""#)
-  let local = s.eval<string>(#"json"#)
-  let encoded = s.eval<string>(#"json.stringify(7)"#)
+  s.eval(`let json = "local"`)
+  let local = s.eval<string>(`json`)
+  let encoded = s.eval<string>(`json.stringify(7)`)
   local == "local" && encoded == "7"
 }
 "##
@@ -448,7 +676,7 @@ function main() -> bool throws unknown {
 
 #[tokio::test]
 async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
-    let program = baml_project::testing::compile_source(S11_LIVENESS_PROBE);
+    let program = baml_db::testing::compile_source(S11_LIVENESS_PROBE);
     let engine = Arc::new(
         BexEngine::new_with_runtime_compiler(
             program,
@@ -480,21 +708,27 @@ async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
     let Object::Type(escaped_type) = (unsafe { escaped_ptr.get() }) else {
         panic!("escaped handle should point to Object::Type")
     };
-    let definition_classes = escaped_type.defs().classes.len();
-    let owner_ptr = (!escaped_type.owner.is_null())
-        .then_some(escaped_type.owner)
-        .or_else(|| {
-            escaped_type.defs().classes.values().find_map(|class_ptr| {
-                match unsafe { class_ptr.get() } {
-                    Object::Class(class) => class
-                        .runtime_type
-                        .as_ref()
-                        .map(|runtime| runtime.owner)
-                        .filter(|owner| !owner.is_null()),
-                    _ => None,
-                }
-            })
-        });
+    // A type value's edges are its heads, so its declarations — and through
+    // their owner back-edges, the session that keeps them alive — are reached
+    // by walking them. There is no sidecar to consult.
+    let mut declarations = Vec::new();
+    escaped_type.ty.visit_heads(&mut |head| {
+        if head.is_resolved() {
+            declarations.push(head.ptr());
+        }
+    });
+    let definition_classes = declarations
+        .iter()
+        .filter(|ptr| matches!(unsafe { ptr.get() }, Object::Class(_)))
+        .count();
+    let owner_ptr = declarations.iter().find_map(|ptr| {
+        let owner = match unsafe { ptr.get() } {
+            Object::Class(class) => class.owner,
+            Object::Enum(enm) => enm.owner,
+            _ => return None,
+        };
+        (!owner.is_null()).then_some(owner)
+    });
     let mut owner_is_session = false;
     let mut session_history = 0;
     let mut retained_globals = 0;
@@ -505,12 +739,9 @@ async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
         let Object::Package(owner) = (unsafe { owner_ptr.get() }) else {
             panic!("escaped definition owner should be a Package")
         };
-        owner_is_session = owner.session.is_some();
-        session_history = owner
-            .session
-            .as_ref()
-            .map_or(0, |state| state.history.len());
-        let runtime = owner.runtime.as_ref().expect("runtime owner image");
+        owner_is_session = owner.session().is_some();
+        session_history = owner.session().map_or(0, |state| state.history.len());
+        let runtime = owner.runtime().expect("runtime owner image");
         retained_globals = runtime.globals.len();
         retained_objects = runtime.objects.len();
         retained_dependencies = runtime.dependencies.len();
@@ -518,10 +749,9 @@ async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
             .dependencies
             .iter()
             .map(|dependency| match unsafe { dependency.get() } {
-                Object::Package(package) => package
-                    .runtime
-                    .as_ref()
-                    .map_or(0, |runtime| runtime.objects.len()),
+                Object::Package(package) => {
+                    package.runtime().map_or(0, |runtime| runtime.objects.len())
+                }
                 _ => 0,
             })
             .sum::<usize>();
@@ -599,7 +829,7 @@ fn trim_allocator() {}
 
 #[tokio::test]
 async fn five_hundred_evals_have_flat_latency_and_bounded_artifacts() {
-    let program = baml_project::testing::compile_source(SCENARIO_7);
+    let program = baml_db::testing::compile_source(SCENARIO_7);
     let engine = Arc::new(
         BexEngine::new_with_runtime_compiler(
             program,
@@ -651,5 +881,577 @@ async fn five_hundred_evals_have_flat_latency_and_bounded_artifacts() {
     assert!(
         rss_growth < 256 * 1024,
         "fresh compiler contexts were retained: RSS grew {rss_growth} KiB"
+    );
+}
+
+/// A Session's top-level `let` is a binding site, so a fresh literal
+/// initializer widens to its base type exactly as `let` in a body does. It used
+/// to bind the literal type itself — `let n = 5` gave `n` the type `5`.
+///
+/// The contract is the clean oracle: `5` accepts a `5`-typed submission and
+/// refuses an `int`-typed one, so this flips from accepted to refused at the
+/// change and cannot pass for an unrelated reason.
+const SESSION_LET_WIDENING: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`let n = 5`)
+  let _ = s.eval<5>(`n`) catch (e) {
+    reflect.errors.CompilationError => return e.diagnostics[0].message,
+    _ => return "wrong error",
+  }
+  "accepted"
+}
+"####;
+
+/// The same widening seen through member resolution, for all three literal
+/// kinds at once.
+///
+/// NOTE ON THE ORACLE: this pins the *type* each message names, which is the
+/// binding's and is what changed. It does **not** endorse the message itself —
+/// `to_string` is universally available through the sugar road but is not
+/// reachable through the member walk these paths use, so "has no member
+/// `to_string`" is a second, unrelated gap. If that gap is
+/// fixed, this test should be re-pointed at a genuinely absent member rather
+/// than deleted.
+const SESSION_LET_WIDENING_MEMBERS: &str = r####"
+function probe(s: reflect.Session, source: string) -> string throws unknown {
+  let _ = s.eval(source) catch (e) {
+    reflect.errors.CompilationError => return e.diagnostics[0].message,
+    _ => return "wrong error",
+  }
+  "unexpected success"
+}
+
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`let n = 5`)
+  s.eval(`let text = "hi"`)
+  s.eval(`let flag = true`)
+  `${probe(s, `n.to_string()`)}
+${probe(s, `text.to_string()`)}
+${probe(s, `flag.to_string()`)}`
+}
+"####;
+
+/// A consequence of widening worth pinning rather than discovering: a match
+/// that covered the literal exhaustively no longer covers the widened base.
+/// The mirror also holds — a two-arm `true`/`false` match on a `bool` binding
+/// is exhaustive where it used to be a match on the literal `true` alone.
+const SESSION_LET_WIDENING_EXHAUSTIVENESS: &str = r####"
+function probe(s: reflect.Session, source: string) -> string throws unknown {
+  let _ = s.eval(source) catch (e) {
+    reflect.errors.CompilationError => return e.diagnostics[0].message,
+    _ => return "wrong error",
+  }
+  "accepted"
+}
+
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`let n = 5`)
+  s.eval(`let flag = true`)
+  `${probe(s, `match (n) { 5 => "five" }`)}
+${probe(s, `match (flag) { true => "t", false => "f" }`)}`
+}
+"####;
+
+/// Widening changes the binding, not the values that flow through it: the
+/// committed value is unchanged, rebinding across submissions still works, and
+/// a later submission still reads what the last one wrote.
+const SESSION_LET_REBINDING: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`let n = 5`)
+  s.eval(`let text = "hi"`)
+  s.eval(`let flag = true`)
+  s.eval(`n = 7`)
+  s.eval(`text = "there"`)
+  s.eval(`flag = false`)
+  s.eval<string>(`` `\${n}|\${text}|\${flag}` ``)
+}
+"####;
+
+/// Widening is unconditional because a Session binding cannot opt out of it: an
+/// annotation is not a legal session spelling at all. Ordinary code keeps the
+/// precise type through `let n: 5 = 5`; a submission is refused before it gets
+/// that far, and that refusal is what this pins.
+const SESSION_LET_ANNOTATION_REJECTED: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  let _ = s.eval(`let n: int = 5`) catch (e) {
+    reflect.errors.CompilationError => return e.diagnostics[0].message,
+    _ => return "wrong error",
+  }
+  "unexpected success"
+}
+"####;
+
+/// Widening removes literal specificity from the BINDING, not from the values
+/// flowing through it: narrowing a widened session binding still works.
+const SESSION_LET_NARROWING: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`let n = 5`)
+  s.eval<string>(`if (n is 5) { "narrowed" } else { "wide" }`)
+}
+"####;
+
+/// A method call on a Session `let` binding used to reach the VM with
+/// a NULL receiver. A session binding is an initialized global, not a lexical
+/// local, so MIR's "place for this name" lookup correctly found nothing — and
+/// several roads turned that into "no receiver". Field access and indexing were
+/// unaffected, because those roads already loaded the global.
+///
+/// The receivers below cover every road the fix touches: a primitive companion
+/// method, a container method that lowers to a `Call`, the one that lowers to
+/// `Rvalue::Len`, a user class declared in the session, and a reflection handle.
+const SESSION_BINDING_METHOD_CALLS: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`
+    class P {
+      name string
+      function greet(self) -> string throws never {
+        "hi " + self.name
+      }
+    }
+  `)
+  s.eval(`let n = 5`)
+  s.eval(`let text = "hi"`)
+  s.eval(`let v = ["a", "b"]`)
+  s.eval(`let m = { "k": 1, "j": 2 }`)
+  s.eval(`let p = P { name: "ada" }`)
+  s.eval(`let cls = reflect.class.new("R", { "a": reflect.Type.of<string>() })`)
+  s.eval<string>(
+    `` `\${n.abs()}|\${text.to_upper_case()}|\${v.length()}|\${m.length()}|\${v.join("-")}|\${m.keys().join("-")}|\${p.greet()}|\${cls.fields()[0].name}` ``
+  )
+}
+"####;
+
+/// The same call inside the submission that introduces the binding — the defect
+/// never needed two submissions, so neither does its regression.
+const SESSION_BINDING_METHOD_CALL_SAME_SUBMISSION: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval<string>(`let v = ["a", "b"]
+v.length().to_string()`)
+}
+"####;
+
+/// The controls that always worked, kept so a future change cannot fix method
+/// dispatch by breaking them: field access on a binding, and indexing one.
+const SESSION_BINDING_FIELD_AND_INDEX: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`class Draft { title string }`)
+  s.eval(`let draft = Draft { title: "titled" }`)
+  s.eval(`let items = [7, 8]`)
+  s.eval<string>(`` `\${draft.title}|\${items[0]}` ``)
+}
+"####;
+
+/// A `client` declaration lowers to a top-level `let` too, so it took the same
+/// defect — in ORDINARY BAML, with no Session anywhere. `MyClient.id()` was a VM
+/// internal error (`expected instance, got any`) on canary.
+const CLIENT_DECLARATION_METHOD: &str = r####"
+client MyClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+function main() -> string throws unknown {
+  MyClient.id()
+}
+"####;
+
+#[tokio::test]
+async fn session_top_level_lets_widen_literal_initializers() {
+    let output = baml_test!(SESSION_LET_WIDENING);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "submission result has type `int`, which is not a subtype of requested contract `5`"
+                .into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn session_let_widening_is_visible_through_member_resolution() {
+    let output = baml_test!(SESSION_LET_WIDENING_MEMBERS);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "type `int` has no member `to_string`\n\
+             type `string` has no member `to_string`\n\
+             type `bool` has no member `to_string`"
+                .into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn session_let_widening_moves_match_exhaustiveness_to_the_base_type() {
+    let output = baml_test!(SESSION_LET_WIDENING_EXHAUSTIVENESS);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "non-exhaustive match on type int; missing: _\naccepted".into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn session_let_rebinding_across_submissions_is_unaffected() {
+    let output = baml_test!(SESSION_LET_REBINDING);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("7|there|false".into()))
+    );
+}
+
+#[tokio::test]
+async fn session_let_annotations_are_still_rejected() {
+    let output = baml_test!(SESSION_LET_ANNOTATION_REJECTED);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "invalid pattern type ascription: session bindings do not support patterns or `else`: \
+             type ascription not allowed here"
+                .into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn session_let_narrowing_still_sees_the_literal() {
+    let output = baml_test!(SESSION_LET_NARROWING);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("narrowed".into()))
+    );
+}
+
+#[tokio::test]
+async fn method_calls_on_session_let_bindings_dispatch() {
+    let output = baml_test!(SESSION_BINDING_METHOD_CALLS);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("5|HI|2|2|a-b|k-j|hi ada|a".into()))
+    );
+}
+
+#[tokio::test]
+async fn method_calls_on_a_session_binding_work_in_its_own_submission() {
+    let output = baml_test!(SESSION_BINDING_METHOD_CALL_SAME_SUBMISSION);
+    assert_eq!(output.result, Ok(BexExternalValue::String("2".into())));
+}
+
+#[tokio::test]
+async fn session_binding_field_access_and_indexing_still_work() {
+    let output = baml_test!(SESSION_BINDING_FIELD_AND_INDEX);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("titled|7".into()))
+    );
+}
+
+#[tokio::test]
+async fn client_declaration_methods_dispatch() {
+    let output = baml_test!(CLIENT_DECLARATION_METHOD);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("openai/gpt-4o-mini".into()))
+    );
+}
+
+// ── An assignment in a Session is an ordinary assignment ──
+//
+// A Session binding lives in a global, so an assignment to it cannot be
+// written in place and is rewritten. The rewrite used to bind the value to a
+// fresh `let` and commit it, which checked the value against nothing at all:
+// `let n = 5` followed by `n = "seven"` was accepted, and the next thing that
+// treated `n` as an `int` crashed in the VM with no catchable error. The
+// assignment now goes through the ordinary road, and the oracle for every
+// refusal below is ordinary BAML itself — the tests compare the two messages
+// character for character rather than pinning a string of their own.
+
+/// Compile ordinary BAML and return its single error the way a Session
+/// reports one: `code: message`, with the primary label folded in, which is
+/// exactly what `reflect.errors.CompilationError` carries.
+fn ordinary_compile_error(source: &str) -> String {
+    let errors = ordinary_compile_errors(source);
+    let [error] = errors.as_slice() else {
+        panic!("expected exactly one error for:\n{source}\ngot: {errors:#?}");
+    };
+    error.clone()
+}
+
+fn ordinary_compile_errors(source: &str) -> Vec<String> {
+    use baml_compiler_diagnostics::Severity;
+    use baml_tests::stdlib_prefix::{check_user_files, setup_test_db};
+
+    check_user_files(&setup_test_db(source))
+        .into_iter()
+        .filter(|diagnostic| diagnostic.severity == Severity::Error)
+        .map(|diagnostic| {
+            format!(
+                "{}: {}",
+                diagnostic.code(),
+                diagnostic.message_with_primary_label()
+            )
+        })
+        .collect()
+}
+
+/// The probe every case below uses: evaluate one submission and hand back its
+/// diagnostic (or `accepted`), so the Rust side can compare.
+const SESSION_ASSIGN_PROBE: &str = r####"
+function probe(s: reflect.Session, source: string) -> string throws unknown {
+  let _ = s.eval(source) catch (e) {
+    reflect.errors.CompilationError => return `${e.diagnostics[0].code}: ${e.diagnostics[0].message}`,
+    baml.panics.Panic => return "compiled, panicked at runtime",
+    _ => return "wrong error",
+  }
+  "accepted"
+}
+"####;
+
+/// The ruling's headline shape: assigning a `string` to an `int` binding is
+/// refused, and the binding still holds what it held.
+const SESSION_ASSIGNMENT_AT_ANOTHER_TYPE: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`let n = 5`)
+  let refusal = probe(s, `n = "seven"`)
+  let kept = s.eval<int>(`n`)
+  `${refusal}|${kept}`
+}
+"####;
+
+/// A previously crashing shape, verbatim. Every step of it now
+/// happens at compile time: the assignment is refused, and the method call
+/// that used to reach the VM with a `string` in an `int` binding still sees
+/// the `int`.
+const SESSION_ASSIGNMENT_CRASH_SHAPE: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`let n = 5`)
+  let refusal = probe(s, `n = "seven"`)
+  let still_an_int = s.eval<int>(`n.abs()`)
+  `${refusal}|${still_an_int}`
+}
+"####;
+
+/// Re-declaring is not assigning: `let` at a new type is a new binding, as it
+/// is in ordinary code, and the methods that follow dispatch on the new type.
+const SESSION_LET_SHADOWS_AT_A_NEW_TYPE: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`let n = 5`)
+  s.eval(`let n = "seven"`)
+  s.eval<string>(`n.to_upper_case()`)
+}
+"####;
+
+/// A compound assignment is checked the same way, through the same operator
+/// road: legal on the `int` it was declared with, refused once the name has
+/// been re-declared as a `string`.
+const SESSION_COMPOUND_ASSIGNMENT: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`let n = 5`)
+  s.eval(`n += 1`)
+  let after = s.eval<int>(`n`)
+  s.eval(`let n = "seven"`)
+  let refusal = probe(s, `n += 1`)
+  `${after}|${refusal}`
+}
+"####;
+
+/// A wider numeric operand: ordinary code accepts this, so a Session must too
+/// — the refusal must be about the binding's type, never about the shape the
+/// rewrite happens to generate.
+const SESSION_COMPOUND_WITH_A_WIDER_OPERAND: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`let n = 5`)
+  let accepted = probe(s, `n += 1.5`)
+  accepted
+}
+"####;
+
+/// The rewrite introduces one name of its own, and a name is a collision
+/// waiting to happen: a user binding called `target_1` mints
+/// `__baml_session_N_target_1`, which is exactly what a per-statement local
+/// named after the target and the statement index would have been called. A
+/// block-local wins over the global, so the assignment would have read its own
+/// copy of `n` instead of the user's `target_1` — no diagnostic, just the
+/// wrong answer. The submission below is the collision: `let target_1` is
+/// statement 0 and the assignment that reads it is statement 1.
+const SESSION_ASSIGNMENT_NAME_COLLISION: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`let n = 5`)
+  s.eval(`let target_1 = 99
+n = target_1`)
+  let after = s.eval<int>(`n`)
+  `${after}`
+}
+"####;
+
+/// Values whose spelling could have been broken by wrapping: a map literal, a
+/// template literal, a value that reads the binding it writes.
+const SESSION_ASSIGNMENT_VALUE_SHAPES: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`let m = { "k": 1 }`)
+  s.eval(`let text = "hi"`)
+  s.eval(`m = { "k": 2 }`)
+  s.eval(``text = `\${text} there```)
+  s.eval<string>(`` `\${m["k"]}|\${text}` ``)
+}
+"####;
+
+/// Assignment at the binding's own type is untouched, including the compound
+/// form and a value that reads the binding it writes.
+const SESSION_ASSIGNMENT_AT_THE_SAME_TYPE: &str = r####"
+function main() -> string throws unknown {
+  let s = reflect.Session.new()
+  s.eval(`let n = 5`)
+  s.eval(`let text = "hi"`)
+  s.eval(`n = n + 2`)
+  s.eval(`text += " there"`)
+  s.eval<string>(`` `\${n}|\${text}` ``)
+}
+"####;
+
+fn session_program(probe: &str, main: &str) -> String {
+    format!("{probe}\n{main}")
+}
+
+#[tokio::test]
+async fn session_assignment_at_another_type_fails_like_ordinary_code() {
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_ASSIGNMENT_AT_ANOTHER_TYPE);
+    let output = baml_test!(&program);
+    let ordinary = ordinary_compile_error(
+        r#"
+function main() -> int throws unknown {
+    let n = 5
+    n = "seven"
+    n
+}
+"#,
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(format!("{ordinary}|5").into()))
+    );
+}
+
+#[tokio::test]
+async fn the_session_assignment_crash_shape_dies_at_compile_time() {
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_ASSIGNMENT_CRASH_SHAPE);
+    let output = baml_test!(&program);
+    let ordinary = ordinary_compile_error(
+        r#"
+function main() -> int throws unknown {
+    let n = 5
+    n = "seven"
+    n
+}
+"#,
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(format!("{ordinary}|5").into()))
+    );
+}
+
+#[tokio::test]
+async fn a_session_let_still_shadows_at_a_new_type() {
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_LET_SHADOWS_AT_A_NEW_TYPE);
+    let output = baml_test!(&program);
+    assert_eq!(output.result, Ok(BexExternalValue::String("SEVEN".into())));
+}
+
+#[tokio::test]
+async fn session_compound_assignments_check_like_ordinary_code() {
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_COMPOUND_ASSIGNMENT);
+    let output = baml_test!(&program);
+    let ordinary = ordinary_compile_error(
+        r#"
+function main() -> string throws unknown {
+    let n = "seven"
+    n += 1
+    n
+}
+"#,
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(format!("6|{ordinary}").into()))
+    );
+}
+
+/// The check must be no stricter AND no laxer than ordinary code: `n += 1.5`
+/// on an `int` binding is refused in both, with the same diagnostic. The
+/// operator's `Output` (`int + float` is `float`) is not a subtype of the
+/// destination, so the compound assignment cannot store its result.
+///
+/// This doubles as a splice-fidelity check: the Session rewrites the submitted
+/// line before checking it, so a rewrite that mangled or dropped the value
+/// would land on a different diagnostic (or none) than the ordinary spelling.
+/// Parenthesizing the value is the shape the rewrite used to apply; it must
+/// reach the same verdict too.
+#[tokio::test]
+async fn a_session_assignment_is_no_stricter_than_ordinary_code() {
+    let ordinary = r#"
+function main() -> string throws unknown {
+    let n = 5
+    n += 1.5
+    `${n}`
+}
+"#;
+    let expected = "E0001: mismatched types: expected `int`, found `float`".to_string();
+    assert_eq!(ordinary_compile_errors(ordinary), vec![expected.clone()]);
+    assert_eq!(
+        ordinary_compile_errors(&ordinary.replace("n += 1.5", "n += (1.5)")),
+        vec![expected.clone()],
+    );
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_COMPOUND_WITH_A_WIDER_OPERAND);
+    let output = baml_test!(&program);
+    assert_eq!(output.result, Ok(BexExternalValue::String(expected.into())));
+}
+
+/// A user binding whose name could collide with the local the rewrite
+/// introduces must not shadow the global the value reads: `n = target_1` binds
+/// the user's `99`, not `n`'s own copy of itself.
+#[tokio::test]
+async fn a_session_assignment_does_not_shadow_a_user_binding() {
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_ASSIGNMENT_NAME_COLLISION);
+    let output = baml_test!(&program);
+    assert_eq!(output.result, Ok(BexExternalValue::String("99".into())));
+}
+
+/// The value keeps its own spelling, whatever shape it has.
+#[tokio::test]
+async fn session_assignment_values_keep_their_shape() {
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_ASSIGNMENT_VALUE_SHAPES);
+    let output = baml_test!(&program);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("2|hi there".into()))
+    );
+}
+
+#[tokio::test]
+async fn session_assignments_at_the_binding_type_are_unaffected() {
+    let program = session_program(SESSION_ASSIGN_PROBE, SESSION_ASSIGNMENT_AT_THE_SAME_TYPE);
+    let output = baml_test!(&program);
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("7|hi there".into()))
     );
 }

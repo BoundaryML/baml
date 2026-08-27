@@ -250,9 +250,11 @@ fn collect_default_expr_forward_references(
         } => {
             collect_default_expr_forward_references(*callee, body, later_params, shadowed, refs);
             for type_arg in type_args {
-                if let ast::TypeArg::Unreflect(operand) = type_arg {
+                let mut operands = Vec::new();
+                type_arg.unreflect_operands(&mut operands);
+                for operand in operands {
                     collect_default_expr_forward_references(
-                        *operand,
+                        operand,
                         body,
                         later_params,
                         shadowed,
@@ -421,7 +423,13 @@ fn collect_default_expr_forward_references(
         Expr::GenericApply { base, .. } => {
             collect_default_expr_forward_references(*base, body, later_params, shadowed, refs);
         }
-        Expr::Literal(_) | Expr::ByteStringLiteral(_) | Expr::Null | Expr::Missing => {}
+        // A qualified item reference is built from two TYPES, so it can never
+        // forward-reference a later parameter's default.
+        Expr::Literal(_)
+        | Expr::ByteStringLiteral(_)
+        | Expr::Null
+        | Expr::QualifiedPath { .. }
+        | Expr::Missing => {}
     }
 }
 
@@ -584,11 +592,21 @@ fn collect_default_stmt_forward_references(
     refs: &mut Vec<Name>,
 ) {
     match &body.stmts[stmt_id] {
-        Stmt::Expr(expr)
-        | Stmt::TypeBinding { value: expr, .. }
-        | Stmt::Return(Some(expr))
-        | Stmt::Throw { value: expr } => {
+        Stmt::Expr(expr) | Stmt::Return(Some(expr)) | Stmt::Throw { value: expr } => {
             collect_default_expr_forward_references(*expr, body, later_params, shadowed, refs);
+        }
+        Stmt::TypeBinding { value, .. } => {
+            let mut operands = Vec::new();
+            value.unreflect_operands(&mut operands);
+            for operand in operands {
+                collect_default_expr_forward_references(
+                    operand,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+            }
         }
         Stmt::Let {
             pattern,
@@ -706,7 +724,8 @@ fn collect_default_stmt_forward_references(
 #[cfg(test)]
 mod tests {
     use baml_base::Literal;
-    use baml_compiler2_ast::{CallArg, Pattern, TypeArg};
+    use baml_compiler2_ast::{CallArg, Pattern, TypeExprKind};
+    use text_size::TextRange;
 
     use super::*;
 
@@ -723,7 +742,13 @@ mod tests {
         let operand = call_body.exprs.alloc(Expr::Path(vec![Name::new("later")]));
         let call = call_body.exprs.alloc(Expr::Call {
             callee,
-            type_args: vec![TypeArg::Unreflect(operand)],
+            type_args: vec![
+                TypeExprKind::Unreflect {
+                    operand: Some(operand),
+                    attrs: Vec::new(),
+                }
+                .at(TextRange::default()),
+            ],
             args: Vec::<CallArg>::new(),
         });
         assert_eq!(
@@ -737,7 +762,11 @@ mod tests {
             .alloc(Expr::Path(vec![Name::new("later")]));
         let stmt = binding_body.stmts.alloc(Stmt::TypeBinding {
             name: Name::new("T"),
-            value,
+            value: TypeExprKind::Unreflect {
+                operand: Some(value),
+                attrs: Vec::new(),
+            }
+            .at(TextRange::default()),
         });
         let block = binding_body.exprs.alloc(Expr::Block {
             stmts: vec![stmt],

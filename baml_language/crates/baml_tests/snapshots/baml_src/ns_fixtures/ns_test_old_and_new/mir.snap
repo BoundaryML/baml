@@ -1,0 +1,43 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.test_old_and_new.$init_test_ns_fixtures_ns_test_old_and_new_main(registry: testing.TestCollector) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.TestCollector // registry // param
+    let _2: void
+    let _3: () -> void throws never
+
+    bb0: {
+        _3 = make_closure lambda[0]();
+        _2 = call const fn testing.TestCollector.register_test_at(copy _1, const "root.fixtures.test_old_and_new", const "new style", copy _3, const null) -> [bb1];
+    }
+
+    bb1: {
+        _0 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda($init_test_ns_fixtures_ns_test_old_and_new_main, 0)>() -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: string // result
+    let _2: string
+
+    bb0: {
+        _1 = const "hello";
+        _2 = copy _1;
+        _0 = call const fn assert.not_null(copy _2) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}

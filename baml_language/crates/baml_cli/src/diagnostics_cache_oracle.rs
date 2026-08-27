@@ -14,7 +14,7 @@
 
 use std::{collections::HashSet, path::PathBuf};
 
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
 
 use crate::{
     bytecode_cache::{CacheContext, prepare_reuse_plan},
@@ -67,7 +67,7 @@ fn run_scenario_with(
     // v2 served path: reuse plan + seed + incremental gate.
     let r2 = resolved(&root, edited);
     let mut db2 = project_load::build_db_from_sources(&r2, |_| {});
-    let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+    let ctx2 = CacheContext::open(&r2).expect("cache reopens");
     let pending_plan = ctx2.plan_reuse(&db2);
     let plan = prepare_reuse_plan(&mut db2, pending_plan);
     let served = match serve_path {
@@ -86,7 +86,7 @@ fn run_scenario_with(
 
     // v2 honest path: an independent fresh database, no cache, no seed.
     let db_honest = project_load::build_db_from_sources(&r2, |_| {});
-    let honest = baml_project::collect_compiler2_diagnostics(&db_honest);
+    let honest = baml_db::collect_compiler2_diagnostics(&db_honest);
     let honest_render = render_project_diagnostics(&db_honest, &honest);
 
     let _ = std::fs::remove_dir_all(&root);
@@ -367,7 +367,7 @@ fn check_corrupt_clean_blob_degrades_to_honest_file_check() {
         let pending_plan = ctx.plan_reuse(db);
         let plan = prepare_reuse_plan(db, pending_plan);
         let served = ctx.collect_diagnostics_for_check(db, plan.as_ref());
-        let honest = baml_project::collect_compiler2_diagnostics(db);
+        let honest = baml_db::collect_compiler2_diagnostics(db);
         assert_eq!(
             render_project_diagnostics(db, &served),
             render_project_diagnostics(db, &honest),
@@ -450,7 +450,7 @@ fn with_stored_manifest(
 
     let r1 = resolved(&root, files);
     let mut db2 = project_load::build_db_from_sources(&r1, |_| {});
-    let ctx2 = CacheContext::open(&r1, false).expect("cache reopens");
+    let ctx2 = CacheContext::open(&r1).expect("cache reopens");
     check(&ctx2, &mut db2);
     let _ = std::fs::remove_dir_all(&root);
 }

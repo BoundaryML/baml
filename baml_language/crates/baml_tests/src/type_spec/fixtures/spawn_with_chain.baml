@@ -13,12 +13,12 @@ function swc_work() -> int throws never {
 function chained() -> int throws never {
     let g = baml.spawn.TaskGroup.new(2);
     let t = spawn with baml.spawn.options(group = g) { swc_work() };
-     // ^ Future<int, never>
+     // ^ baml.future.Future<int, never>
     await t
 }
 
 function with_cancel(tok: baml.spawn.CancelToken) -> int throws never {
     let t = spawn with baml.spawn.options(cancel = tok, detach = true) { swc_work() };
-     // ^ Future<int, never>
+     // ^ baml.future.Future<int, never>
     await t
 }

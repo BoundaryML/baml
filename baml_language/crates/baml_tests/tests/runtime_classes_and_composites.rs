@@ -1,14 +1,16 @@
 //! BEP-066 Scenarios 2 and 3: runtime classes and composites flow
-//! through offline LLM companions, retain mint identity, and remain usable
-//! through the dynamic access/JSON surfaces.
+//! through offline LLM companions, keep pointing at their declarations, and
+//! remain usable through the dynamic access/JSON surfaces.
 
 use baml_compiler_diagnostics::Severity;
-use baml_project::{collect_diagnostics, testing::setup_test_db};
-use baml_tests::baml_test;
+use baml_tests::{
+    baml_test,
+    stdlib_prefix::{check_user_files, setup_test_db},
+};
 use bex_engine::BexExternalValue;
 
 fn compile_errors(source: &str) -> Vec<(String, String)> {
-    collect_diagnostics(&setup_test_db(source))
+    check_user_files(&setup_test_db(source))
         .into_iter()
         .filter(|diagnostic| diagnostic.severity == Severity::Error)
         .map(|diagnostic| (diagnostic.code().to_string(), diagnostic.message))
@@ -45,7 +47,7 @@ async fn scenario_2_saved_form_class_renders_parses_and_assert_reads() {
 
         function ExtractNote<T>(transcript: string) -> T {
             client: TestClient
-            prompt: `Extract a visit note from ${transcript}.\n${ctx.output_format}`
+            prompt: `Extract a visit note from ${transcript}.\n${ctx.output_format()}`
         }
 
         class SavedField {
@@ -59,20 +61,20 @@ async fn scenario_2_saved_form_class_renders_parses_and_assert_reads() {
             kind string
         }
 
-        function NoteType(saved: SavedField[]) -> baml.reflect.class.Type {
-            let fields: map<string, type | baml.reflect.WithMeta<type>> = {}
+        function NoteType(saved: SavedField[]) -> reflect.class.Type {
+            let fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>> = {}
             for (let field in saved) {
                 let ty = match (field.kind) {
                     "dropdown" => {
-                        let members: type[] = []
+                        let members: reflect.Type[] = []
                         for (let option in field.options) {
                             members.push(reflect.literal.new(option).as_type())
                         }
                         reflect.union.new(members).as_type()
                     },
-                    "bulleted_list" => type.of<string>().array().as_type(),
-                    "number" => type.of<int>(),
-                    "text" => type.of<string>(),
+                    "bulleted_list" => reflect.Type.of<string>().array().as_type(),
+                    "number" => reflect.Type.of<int>(),
+                    "text" => reflect.Type.of<string>(),
                     _ => throw UnknownFieldKind { kind: field.kind },
                 }
                 let description = if (field.kind == "bulleted_list") {
@@ -117,7 +119,7 @@ async fn scenario_2_saved_form_class_renders_parses_and_assert_reads() {
                 + "\n<RESULT>" + height.to_string()
                 + "|" + complaint
                 + "|" + bullets[1]
-                + "|" + baml.json.encode(note)
+                + "|" + baml.json.to_string(note)
         }
         "##
     );
@@ -148,7 +150,7 @@ async fn scenario_2_saved_form_class_renders_parses_and_assert_reads() {
 }
 
 #[tokio::test]
-async fn scenario_3_tool_union_dispatches_by_runtime_class_mint() {
+async fn scenario_3_tool_union_dispatches_by_runtime_class() {
     let output = baml_test!(
         r##"
         client TestClient = openai.ResponsesClient.new(
@@ -159,20 +161,20 @@ async fn scenario_3_tool_union_dispatches_by_runtime_class_mint() {
 
         function PickAction<T>(context: string) -> T {
             client: TestClient
-            prompt: `Pick one action for ${context}.\n${ctx.output_format}`
+            prompt: `Pick one action for ${context}.\n${ctx.output_format()}`
         }
 
         function main() -> string {
             let read_args_t = reflect.class.new("Tool0Args", {
-                "path": type.of<string>().meta(alias = "file_path"),
+                "path": reflect.Type.of<string>().meta(alias = "file_path"),
             })
             let read_t = reflect.class.new("Tool0Action", {
                 "tool": reflect.literal.new("filesystem/read_file").as_type(),
                 "args": read_args_t.as_type(),
             })
             let search_args_t = reflect.class.new("Tool1Args", {
-                "query": type.of<string>(),
-                "limit": type.of<int>().optional().as_type(),
+                "query": reflect.Type.of<string>(),
+                "limit": reflect.Type.of<int>().optional().as_type(),
             })
             let search_t = reflect.class.new("Tool1Action", {
                 "tool": reflect.literal.new("web/search").as_type(),
@@ -201,10 +203,10 @@ async fn scenario_3_tool_union_dispatches_by_runtime_class_mint() {
             return prompt
                 + "\n<RESULT>" + branch
                 + "|" + matched
-                + "|" + (type.of_value(action) == read_t.as_type()).to_string()
+                + "|" + (reflect.Type.of_value(action) == read_t.as_type()).to_string()
                 + "|" + tool
                 + "|" + path
-                + "|" + baml.json.encode(action)
+                + "|" + baml.json.to_string(action)
         }
         "##
     );
@@ -237,7 +239,7 @@ async fn empty_runtime_union_throws_the_reserved_diagnostic() {
         r#"
         function main() -> string {
             let result = reflect.union.new([]) catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 }
             }
@@ -263,16 +265,16 @@ async fn class_order_identity_composites_and_to_baml_are_canonical() {
         r#"
         function main() -> string {
             let left = reflect.class.new("Ordered", {
-                "a": type.of<int>(),
-                "b": type.of<string>().meta(description = "second"),
+                "a": reflect.Type.of<int>(),
+                "b": reflect.Type.of<string>().meta(description = "second"),
             })
             let right = reflect.class.new("Ordered", {
-                "b": type.of<string>().meta(description = "second"),
-                "a": type.of<int>(),
+                "b": reflect.Type.of<string>().meta(description = "second"),
+                "a": reflect.Type.of<int>(),
             })
             let literal = reflect.literal.new("fixed")
-            let union = reflect.union.new([literal.as_type(), type.of<int>()])
-            let map_t = reflect.map.new(type.of<string>(), union.as_type())
+            let union = reflect.union.new([literal.as_type(), reflect.Type.of<int>()])
+            let map_t = reflect.map.new(reflect.Type.of<string>(), union.as_type())
             let array_t = map_t.as_type().array()
             let optional_t = array_t.as_type().optional()
             let empty = reflect.class.new("Empty", {})
@@ -326,20 +328,20 @@ async fn constructed_type_to_baml_compiles_to_equivalent_new_identity() {
 
         function RoundTrip<T>() -> T {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> bool throws unknown {
             let scores_t = reflect.map.new(
-                type.of<string>(),
-                type.of<int>().optional().as_type(),
+                reflect.Type.of<string>(),
+                reflect.Type.of<int>().optional().as_type(),
             )
             let original = reflect.class.new("RoundTripRecord", {
                 "kind": reflect.literal.new("visit").as_type().meta(
                     alias = "wire_kind",
                     description = "dispatch key",
                 ),
-                "tags": type.of<string>().array().as_type().meta(
+                "tags": reflect.Type.of<string>().array().as_type().meta(
                     description = "ordered labels",
                 ),
                 "scores": scores_t.as_type(),
@@ -360,9 +362,9 @@ async fn constructed_type_to_baml_compiles_to_equivalent_new_identity() {
                 && source == compiled.as_type().to_baml()
                 && RoundTrip$render_prompt<unreflect(original.as_type())>().text()
                     == RoundTrip$render_prompt<unreflect(compiled.as_type())>().text()
-                && baml.json.encode(original_value) == baml.json.encode(compiled_value)
-                && type.of_value(original_value) == original.as_type()
-                && type.of_value(compiled_value) == compiled.as_type()
+                && baml.json.to_string(original_value) == baml.json.to_string(compiled_value)
+                && reflect.Type.of_value(original_value) == original.as_type()
+                && reflect.Type.of_value(compiled_value) == compiled.as_type()
         }
         "##
     );
@@ -404,13 +406,13 @@ async fn runtime_class_validation_is_eager_and_uses_compiler_diagnostics() {
         r#"
         function main() -> string throws never {
             let bad_name = reflect.class.new("bad name", {}) catch (e) {
-                baml.reflect.errors.CompilationError => e.diagnostics[0].code
+                reflect.errors.CompilationError => e.diagnostics[0].code
             }
             let duplicate_wire_key = reflect.class.new("Collision", {
-                "wire": type.of<string>(),
-                "internal": type.of<int>().meta(alias = "wire"),
+                "wire": reflect.Type.of<string>(),
+                "internal": reflect.Type.of<int>().meta(alias = "wire"),
             }) catch (e) {
-                baml.reflect.errors.CompilationError => e.diagnostics[0].code
+                reflect.errors.CompilationError => e.diagnostics[0].code
             }
             let name_code = "name did not throw"
             if bad_name is string {
@@ -443,17 +445,17 @@ async fn same_fields_in_different_orders_render_independently() {
 
         function Render<T>() -> T {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> string {
             let left = reflect.class.new("SameName", {
-                "first": type.of<int>(),
-                "second": type.of<string>(),
+                "first": reflect.Type.of<int>(),
+                "second": reflect.Type.of<string>(),
             })
             let right = reflect.class.new("SameName", {
-                "second": type.of<string>(),
-                "first": type.of<int>(),
+                "second": reflect.Type.of<string>(),
+                "first": reflect.Type.of<int>(),
             })
             return Render$render_prompt<unreflect(left.as_type())>().text()
                 + "\n<RIGHT>\n"
@@ -498,19 +500,19 @@ async fn get_field_missing_and_wrong_type_throw_compilation_diagnostics() {
 
         function Extract<T>() -> T {
             client: TestClient
-            prompt: `${ctx.output_format}`
+            prompt: `${ctx.output_format()}`
         }
 
         function main() -> string {
-            let t = reflect.class.new("OneField", { "count": type.of<int>() })
+            let t = reflect.class.new("OneField", { "count": reflect.Type.of<int>() })
             let value = Extract$parse<unreflect(t.as_type())>(`{"count": 4}`)
             let missing = reflect.class.get_field<int>(value, "absent") catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     e.diagnostics[0].code + ":" + e.diagnostics[0].message
                 }
             }
             let wrong = reflect.class.get_field<string>(value, "count") catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     e.diagnostics[0].code + ":" + e.diagnostics[0].message
                 }
             }
@@ -541,4 +543,98 @@ async fn get_field_missing_and_wrong_type_throw_compilation_diagnostics() {
         result.contains("field `OneField.count` has type `int`, expected `string`"),
         "unexpected type mismatch: {result}"
     );
+}
+
+/// A runtime-created class has no spelling a host can resolve, and its bare
+/// item name collides with a *compiled* class of the same name — an echoed
+/// value would rebind to that declaration and violate its contract. So its
+/// instance crosses as an opaque handle rather than structurally.
+#[tokio::test]
+async fn an_anonymous_class_instance_crosses_as_an_opaque_handle() {
+    let output = baml_test!(
+        r##"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        /// The compiled declaration whose item name the runtime one repeats.
+        class Widget {
+            name: string,
+        }
+
+        function Extract<T>() -> T {
+            client: TestClient
+            prompt: `${ctx.output_format()}`
+        }
+
+        function main() -> unknown {
+            let widget_t = reflect.class.new("Widget", {
+                "name": reflect.Type.of<string>(),
+            })
+            Extract$parse<unreflect(widget_t.as_type())>(`{"name":"anonymous"}`)
+        }
+        "##
+    );
+
+    match output
+        .result
+        .expect("a runtime class instance should reach the host")
+    {
+        BexExternalValue::Handle(_) => {}
+        other => panic!(
+            "an anonymous class instance must not cross structurally under a \
+             name that resolves to the compiled `Widget`: {other:?}"
+        ),
+    }
+}
+
+/// The same for a *runtime-compiled package* member, which is the case a
+/// name-based guard misses: it is a `Declared` name like any static class, and
+/// emit qualifies it identically (`user.ExtractedRecord`), so it collides with
+/// the statically compiled declaration below — whose fields even match, which
+/// is what would make the rebind silent. Only the compile-time heap section is
+/// host-addressable; a runtime-compiled member lives on the moving heap and has
+/// no codegen entry, exactly like an anonymous one.
+#[tokio::test]
+async fn a_runtime_compiled_class_instance_crosses_as_an_opaque_handle() {
+    let output = baml_test!(
+        r##"
+        client TestClient = openai.ResponsesClient.new(
+            model = "gpt-4o-mini",
+            api_key = "test-key",
+            base_url = "http://localhost:1234",
+        );
+
+        /// The statically compiled declaration a rebind would land on.
+        class ExtractedRecord {
+            account: string,
+        }
+
+        function Extract<T>() -> T {
+            client: TestClient
+            prompt: `${ctx.output_format()}`
+        }
+
+        function main() -> unknown throws unknown {
+            let pkg = reflect.Package.compile({
+                "schema.baml": "class ExtractedRecord { account string }"
+            })
+            let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
+            Extract$parse<unreflect(record_t.as_type())>(`{"account":"AC-1"}`)
+        }
+        "##
+    );
+
+    match output
+        .result
+        .expect("a runtime-compiled class instance should reach the host")
+    {
+        BexExternalValue::Handle(_) => {}
+        other => panic!(
+            "a runtime-compiled class instance must not cross structurally under a \
+             name that resolves to the static `ExtractedRecord`: {other:?}"
+        ),
+    }
 }

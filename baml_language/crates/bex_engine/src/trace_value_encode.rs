@@ -431,6 +431,279 @@ pub(crate) fn encode_trace_snapshot_body(snapshot: &TraceSnapshot) -> Result<Vec
     Ok(value.encode_to_vec())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn encode_trace_snapshot_body_bounded(
+    snapshot: &TraceSnapshot,
+    reservation: &mut bex_events::prof::backend::Reservation,
+    single_value_bytes: u64,
+) -> Result<Vec<u8>, bex_events::prof::backend::ValueLossReason> {
+    use bex_events::prof::backend::ValueLossReason;
+
+    reservation
+        .try_grow(encoder_scratch_bound(snapshot))
+        .map_err(|_| ValueLossReason::ValueMemoryExceeded)?;
+    let value =
+        encode_value(snapshot, snapshot.root()).map_err(|_| ValueLossReason::EncodeFailed)?;
+    let encoded_len = value.encoded_len();
+    if u64::try_from(encoded_len).unwrap_or(u64::MAX) > single_value_bytes {
+        return Err(ValueLossReason::ValueTooLarge);
+    }
+    reservation
+        .try_grow(u64::try_from(encoded_len).unwrap_or(u64::MAX))
+        .map_err(|_| ValueLossReason::ValueMemoryExceeded)?;
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(encoded_len)
+        .map_err(|_| ValueLossReason::EncodeFailed)?;
+    value
+        .encode(&mut bytes)
+        .map_err(|_| ValueLossReason::EncodeFailed)?;
+    Ok(bytes)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, Default)]
+struct AllocationMetric {
+    units: u64,
+    bytes: u64,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl AllocationMetric {
+    fn unit(mut self) -> Self {
+        self.units = self.units.saturating_add(1);
+        self
+    }
+
+    fn add_bytes(mut self, bytes: usize) -> Self {
+        self.bytes = self
+            .bytes
+            .saturating_add(u64::try_from(bytes).unwrap_or(u64::MAX));
+        self
+    }
+
+    fn merge(mut self, other: Self) -> Self {
+        self.units = self.units.saturating_add(other.units);
+        self.bytes = self.bytes.saturating_add(other.bytes);
+        self
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn encoder_scratch_bound(snapshot: &TraceSnapshot) -> u64 {
+    let metric = snapshot
+        .values()
+        .fold(AllocationMetric::default(), |total, value| {
+            total.merge(trace_value_allocation_metric(value))
+        });
+    // One KiB per message/container/string allocation plus twice all dynamic
+    // payload bytes is deliberately conservative and independent of allocator
+    // internals. It covers the temporary protobuf tree and iterator scratch.
+    metric
+        .units
+        .saturating_mul(1024)
+        .saturating_add(metric.bytes.saturating_mul(2))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn trace_value_allocation_metric(value: &TraceValue) -> AllocationMetric {
+    let mut metric = AllocationMetric::default().unit();
+    match value {
+        TraceValue::Bigint(value) | TraceValue::String(value) => {
+            metric = metric.unit().add_bytes(value.len());
+        }
+        TraceValue::Bytes(value) => metric = metric.unit().add_bytes(value.len()),
+        TraceValue::Array(items) => {
+            metric.units = metric
+                .units
+                .saturating_add(u64::try_from(items.len()).unwrap_or(u64::MAX));
+        }
+        TraceValue::Map(entries) => {
+            metric.units = metric
+                .units
+                .saturating_add(u64::try_from(entries.len()).unwrap_or(u64::MAX));
+            for (key, _) in entries {
+                metric = metric.unit().add_bytes(key.len());
+            }
+        }
+        TraceValue::Media(media) => {
+            if let Some(mime_type) = &media.mime_type {
+                metric = metric.unit().add_bytes(mime_type.len());
+            }
+            let content = match &media.content {
+                TraceMediaContent::Url(value)
+                | TraceMediaContent::Base64(value)
+                | TraceMediaContent::File(value) => value,
+            };
+            metric = metric.unit().add_bytes(content.len());
+        }
+        TraceValue::Instance {
+            type_name,
+            type_args,
+            fields,
+        } => {
+            metric = metric.unit().add_bytes(type_name.len());
+            metric.units = metric.units.saturating_add(
+                u64::try_from(type_args.len().saturating_add(fields.len())).unwrap_or(u64::MAX),
+            );
+            for ty in type_args {
+                metric = metric.merge(runtime_ty_allocation_metric(ty));
+            }
+            for (name, _) in fields {
+                metric = metric.unit().add_bytes(name.len());
+            }
+        }
+        TraceValue::Enum { type_name, variant } => {
+            metric = metric
+                .unit()
+                .add_bytes(type_name.len())
+                .unit()
+                .add_bytes(variant.len());
+        }
+        TraceValue::Omitted(descriptor) => {
+            metric = metric
+                .unit()
+                .add_bytes(descriptor.message.len())
+                .unit()
+                .add_bytes(64);
+        }
+        TraceValue::Null | TraceValue::Bool(_) | TraceValue::Int(_) | TraceValue::Float(_) => {}
+    }
+    metric
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn type_name_metric(name: &baml_type::TypeName) -> AllocationMetric {
+    let mut metric = AllocationMetric::default()
+        .unit()
+        .add_bytes(name.package().as_str().len())
+        .add_bytes(name.name().as_str().len());
+    for part in name.namespace() {
+        metric = metric.add_bytes(part.as_str().len()).add_bytes(1);
+    }
+    metric
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn runtime_ty_allocation_metric(ty: &RuntimeTy) -> AllocationMetric {
+    use baml_type::{Literal, RuntimeTy};
+
+    let mut metric = AllocationMetric::default().unit();
+    match ty {
+        RuntimeTy::Literal(literal, _, _) => match literal {
+            Literal::String(value) | Literal::Float(value) => {
+                metric = metric.unit().add_bytes(value.len());
+            }
+            Literal::Bigint(value) => {
+                metric = metric.unit().add_bytes(
+                    usize::try_from(value.bits())
+                        .unwrap_or(usize::MAX)
+                        .saturating_add(2),
+                );
+            }
+            Literal::Int(_) | Literal::Bool(_) => {}
+        },
+        RuntimeTy::Class(name, args, _) => {
+            metric = metric.merge(type_name_metric(name));
+            for arg in args {
+                metric = metric.merge(runtime_ty_allocation_metric(arg));
+            }
+        }
+        RuntimeTy::Interface(name, args, bindings, _) => {
+            metric = metric.merge(type_name_metric(name));
+            for arg in args {
+                metric = metric.merge(runtime_ty_allocation_metric(arg));
+            }
+            for (name, ty) in bindings {
+                metric = metric
+                    .unit()
+                    .add_bytes(name.as_str().len())
+                    .merge(runtime_ty_allocation_metric(ty));
+            }
+        }
+        RuntimeTy::Enum(name, _) | RuntimeTy::TypeAlias(name, _) => {
+            metric = metric.merge(type_name_metric(name));
+        }
+        RuntimeTy::EnumVariant(name, variant, _) => {
+            metric = metric
+                .merge(type_name_metric(name))
+                .unit()
+                .add_bytes(variant.as_str().len());
+        }
+        RuntimeTy::List(inner, _) => metric = metric.merge(runtime_ty_allocation_metric(inner)),
+        RuntimeTy::Map { key, value, .. } | RuntimeTy::Future(key, value, _) => {
+            metric = metric
+                .merge(runtime_ty_allocation_metric(key))
+                .merge(runtime_ty_allocation_metric(value));
+        }
+        RuntimeTy::Union(members, _) => {
+            metric.units = metric
+                .units
+                .saturating_add(u64::try_from(members.len()).unwrap_or(u64::MAX));
+            for member in members {
+                metric = metric.merge(runtime_ty_allocation_metric(member));
+            }
+        }
+        RuntimeTy::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            for param in params {
+                metric = metric.unit();
+                if let Some(name) = &param.name {
+                    metric = metric.unit().add_bytes(name.as_str().len());
+                }
+                metric = metric.merge(runtime_ty_allocation_metric(&param.ty));
+            }
+            metric = metric
+                .merge(runtime_ty_allocation_metric(ret))
+                .merge(runtime_ty_allocation_metric(throws));
+        }
+        RuntimeTy::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } => {
+            metric = metric
+                .merge(runtime_ty_allocation_metric(base))
+                .merge(type_name_metric(&interface.name))
+                .unit()
+                .add_bytes(member.as_str().len());
+            for ty in &interface.generics {
+                metric = metric.merge(runtime_ty_allocation_metric(ty));
+            }
+            for (name, ty) in &interface.associated_types {
+                metric = metric
+                    .unit()
+                    .add_bytes(name.as_str().len())
+                    .merge(runtime_ty_allocation_metric(ty));
+            }
+        }
+        RuntimeTy::TypeVar(param, _) => {
+            metric = metric.unit().add_bytes(param.as_str().len());
+        }
+        RuntimeTy::Int { .. }
+        | RuntimeTy::Bigint { .. }
+        | RuntimeTy::Float { .. }
+        | RuntimeTy::String { .. }
+        | RuntimeTy::Bool { .. }
+        | RuntimeTy::Null { .. }
+        | RuntimeTy::Uint8Array { .. }
+        | RuntimeTy::Media(_, _)
+        | RuntimeTy::RustType { .. }
+        | RuntimeTy::Type { .. }
+        | RuntimeTy::Resource { .. }
+        | RuntimeTy::PromptAst { .. }
+        | RuntimeTy::Void { .. }
+        | RuntimeTy::Unknown { .. }
+        | RuntimeTy::Never { .. } => {}
+    }
+    metric
+}
+
 fn encode_value(
     snapshot: &TraceSnapshot,
     value_ref: TraceValueRef,
@@ -673,7 +946,7 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
             ))),
             member: member.as_str().to_string(),
         }),
-        RuntimeTy::BuiltinUnknown { .. } => BamlTyVariant::Unknown(BamlTyUnknown {}),
+        RuntimeTy::Unknown { .. } => BamlTyVariant::Unknown(BamlTyUnknown {}),
         RuntimeTy::Never { .. } => BamlTyVariant::Never(BamlTyNever {}),
     }
 }
@@ -848,6 +1121,10 @@ fn render_media_value(media: &BamlValueMedia) -> String {
 
 #[cfg(test)]
 mod tests {
+    use bex_events::prof::backend::{
+        MeasuredLayouts, Owner, ProfilerMemoryGovernor, ProfilerSizingPolicy, ReservationClass,
+        ValueLossReason,
+    };
     use bridge_ctypes::baml_bridge::cffi::{
         BamlOutboundValue, BamlTyPrimitiveKind, baml_outbound_value::Value as BamlValueVariant,
         baml_ty,
@@ -878,6 +1155,52 @@ mod tests {
             panic!("root should encode as a map");
         };
         assert_eq!(map.entries.len(), 2);
+    }
+
+    #[test]
+    fn bounded_encoding_checks_limit_before_output_allocation_and_releases_charge() {
+        let sizing = ProfilerSizingPolicy::derive(32 * 1024 * 1024, MeasuredLayouts::V1).unwrap();
+        let governor = ProfilerMemoryGovernor::new(sizing, MeasuredLayouts::V1);
+        let mut reservation = governor
+            .try_reserve(ReservationClass::General, Owner::Values, 1)
+            .unwrap();
+        let snapshot = TraceSnapshot::for_test(
+            TraceValueRef::for_test(0),
+            vec![TraceValue::String("larger than one byte".to_string())],
+        );
+
+        assert_eq!(
+            super::encode_trace_snapshot_body_bounded(&snapshot, &mut reservation, 1),
+            Err(ValueLossReason::ValueTooLarge)
+        );
+        assert!(reservation.accounted_bytes() > MeasuredLayouts::V1.value_root_min_bytes);
+        drop(reservation);
+        assert_eq!(governor.used_bytes(ReservationClass::General), 0);
+    }
+
+    #[test]
+    fn bounded_encoding_reports_governor_exhaustion_and_releases_partial_state() {
+        let sizing = ProfilerSizingPolicy::derive(32 * 1024 * 1024, MeasuredLayouts::V1).unwrap();
+        let governor = ProfilerMemoryGovernor::new(sizing, MeasuredLayouts::V1);
+        let mut reservation = governor
+            .try_reserve(ReservationClass::General, Owner::Values, 1)
+            .unwrap();
+        let remaining = governor.available_bytes(ReservationClass::General);
+        let pressure = governor
+            .try_reserve(ReservationClass::General, Owner::Writer, remaining)
+            .unwrap();
+        let snapshot = TraceSnapshot::for_test(
+            TraceValueRef::for_test(0),
+            vec![TraceValue::String("value".to_string())],
+        );
+
+        assert_eq!(
+            super::encode_trace_snapshot_body_bounded(&snapshot, &mut reservation, u64::MAX),
+            Err(ValueLossReason::ValueMemoryExceeded)
+        );
+        drop(pressure);
+        drop(reservation);
+        assert_eq!(governor.used_bytes(ReservationClass::General), 0);
     }
 
     #[test]

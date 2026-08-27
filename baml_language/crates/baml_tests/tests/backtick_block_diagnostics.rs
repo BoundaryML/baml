@@ -7,13 +7,14 @@
 //! user-facing diagnostic pointing at the offending tag. Covers both the M5
 //! `prompt` path and plain untagged backticks (the shared segment builder).
 
-use baml_project::{ProjectDatabase, collect_compiler2_diagnostics};
+use baml_db::{ProjectDatabase, collect_compiler2_diagnostics};
+use baml_tests::engine::TestDbExt;
 
 /// Compile `source` and return the user-facing diagnostic messages.
 fn messages(source: &str) -> Vec<String> {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("."));
-    db.add_file("test.baml", source);
+    db.workspace(std::path::Path::new("."));
+    db.file("test.baml", source);
     collect_compiler2_diagnostics(&db)
         .iter()
         .map(|d| d.message.clone())
@@ -130,7 +131,7 @@ fn for_header_accepts_const_binding() {
 #[test]
 fn unresolved_name_in_interp_reports_cleanly() {
     // BEP §4: a real unresolved name in `${…}` must surface a clean diagnostic,
-    // not slip through as `Ty::Unknown` and ICE at runtime lowering. The
+    // not slip through as `Ty::Error` and ICE at runtime lowering. The
     // untagged-template desugaring never introduces a fresh name reference, so a
     // bare unresolved name here is always genuine user code and is retained.
     let msgs = messages(&untagged("${ nope }"));
@@ -170,7 +171,7 @@ fn unresolved_name_in_interp_reports() {
     // diagnostic — not compile silently. Before the fix the untagged template
     // truncated ALL diagnostics from typing its desugared form (to drop
     // synthetic `.to_string()` noise), which also swallowed this genuine
-    // `UnresolvedName`; the resulting `Ty::Unknown` then ICEd at MIR runtime
+    // `UnresolvedName`; the resulting `Ty::Error` then ICEd at MIR runtime
     // lowering. Now the genuine name error survives the truncation.
     assert_has(&untagged("${ nope }"), "nope");
     assert_has(&prompt("${ nope }"), "nope");

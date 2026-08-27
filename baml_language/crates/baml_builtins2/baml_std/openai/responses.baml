@@ -30,6 +30,11 @@ class ResponsesClient {
     // always safe — and a `Ref` keeps the secret out of the client value.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
+    // Native request deadline, including a streaming response body. Null or a
+    // non-positive value is unbounded; browser/Wasm does not enforce it.
+    request_timeout_ms: int?,
+    // Native streaming deadline from SSE open until the first parsed event.
+    time_to_first_token_timeout_ms: int?,
 
     // --- typed request parameters (omitted from the body when null) --------
     temperature: float?,
@@ -58,11 +63,17 @@ class ResponsesClient {
     headers: map<string, string>?,
     /// Extra URL query parameters, percent-encoded onto the endpoint.
     query_params: map<string, string>?,
+    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // records delivered through on_event. Status, headers, and timing are
+    // always recorded; this flag only gates the bodies.
+    capture_wire: bool,
 
     function new(
         model: string = "gpt-4o-mini",
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
+        request_timeout_ms: int? = null,
+        time_to_first_token_timeout_ms: int? = null,
         temperature: float? = null,
         top_p: float? = null,
         max_output_tokens: int? = null,
@@ -74,11 +85,14 @@ class ResponsesClient {
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
+        capture_wire: bool = true,
     ) -> ResponsesClient {
         ResponsesClient {
             model: model,
             api_key: api_key,
             base_url: base_url,
+            request_timeout_ms: request_timeout_ms,
+            time_to_first_token_timeout_ms: time_to_first_token_timeout_ms,
             temperature: temperature,
             top_p: top_p,
             max_output_tokens: max_output_tokens,
@@ -90,6 +104,7 @@ class ResponsesClient {
             request_body: request_body,
             headers: headers,
             query_params: query_params,
+            capture_wire: capture_wire,
         }
     }
 
@@ -123,9 +138,15 @@ class ResponsesClient {
             `openai/${self.model}`
         }
 
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            openai.internal.openai_preview(self, input) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        }
+
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             root.internal.invoke(self, input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }
@@ -133,7 +154,7 @@ class ResponsesClient {
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
             root.internal.invoke_stream(self, input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }

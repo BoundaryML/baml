@@ -172,6 +172,17 @@ fn lower_base(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>) -> T
 /// Parse the base type (no modifiers, not a union).
 fn lower_base_terminal(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>) -> TypeExpr {
     let span = type_expr.syntax().span_range();
+    if let Some(unreflect) = type_expr
+        .syntax()
+        .children()
+        .find(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
+    {
+        return TypeExprKind::Unreflect {
+            operand: None,
+            attrs: vec![],
+        }
+        .at(unreflect.span_range());
+    }
     // BUG: a qualified projection captures only a single member — `(base as I).A.B`
     // drops the trailing `.B` (`associated_type_projection` returns one member). A chained
     // explicit qualifier (`(T as Outer).Asdf.Assoc`) therefore silently loses `.Assoc`,
@@ -200,14 +211,14 @@ fn lower_base_terminal(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnost
                 let ty = p
                     .ty()
                     .map(|t| lower_type_expr_inner(&t, false, diags))
-                    .unwrap_or_else(|| TypeExprKind::Unknown { attrs: vec![] }.at(span));
+                    .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(span));
                 AstFunctionTypeParam { name, optional, ty }
             })
             .collect();
         let ret = type_expr
             .function_return_type()
             .map(|t| lower_type_expr_inner(&t, false, diags))
-            .unwrap_or_else(|| TypeExprKind::Unknown { attrs: vec![] }.at(span));
+            .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(span));
         let throws = type_expr
             .function_throws_type()
             .map(|t| Box::new(lower_type_expr_inner(&t, false, diags)));
@@ -327,7 +338,7 @@ fn lower_base_type(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>)
         );
     }
 
-    TypeExprKind::Unknown { attrs: vec![] }.at(span)
+    TypeExprKind::Missing { attrs: vec![] }.at(span)
 }
 
 /// Parse a union member from its structured parts.
@@ -353,6 +364,17 @@ fn lower_union_member_base(
     diags: &mut Vec<LoweringDiagnostic>,
 ) -> TypeExpr {
     let span = parts.span().unwrap_or_default();
+    if let Some(unreflect) = parts
+        .child_nodes
+        .iter()
+        .find(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
+    {
+        return TypeExprKind::Unreflect {
+            operand: None,
+            attrs: vec![],
+        }
+        .at(unreflect.span_range());
+    }
     if let Some((base, interface, member)) = parts.associated_type_projection() {
         return TypeExprKind::AssociatedTypeProjection {
             base: Box::new(lower_type_expr_inner(&base, false, diags)),
@@ -472,7 +494,7 @@ fn lower_union_member_base(
         };
     }
 
-    TypeExprKind::Unknown { attrs: vec![] }.at(span)
+    TypeExprKind::Missing { attrs: vec![] }.at(span)
 }
 
 /// Create a `TypeExpr` from a type name string with optional generic arguments.
@@ -487,7 +509,7 @@ pub(crate) fn lower_associated_type_binding(
     let ty = binding
         .default_or_binding()
         .map(|ty| lower_type_expr_inner(&ty, false, diags))
-        .unwrap_or_else(|| TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
+        .unwrap_or_else(|| TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default()));
     Some(AssociatedTypeBinding {
         name: Name::new(name.text()),
         ty: Box::new(ty),
@@ -509,11 +531,14 @@ fn lower_from_type_name_with_generic_args(
         "null" => TypeExprKind::Null { attrs: vec![] },
         "never" => TypeExprKind::Never { attrs: vec![] },
         "void" => TypeExprKind::Void { attrs: vec![] },
-        "unknown" => TypeExprKind::BuiltinUnknown { attrs: vec![] },
+        "unknown" => TypeExprKind::Unknown { attrs: vec![] },
         // The wildcard `_` is an inference hole, not a named type. Any stray
         // generic args on it (`_<...>`, nonsensical) are dropped.
         "_" => TypeExprKind::Infer { attrs: vec![] },
-        "type" => TypeExprKind::Type { attrs: vec![] },
+        // `reflect.Type` is the source spelling of the runtime metatype. Keep
+        // the dedicated AST node so the VM representation remains a compiler
+        // primitive rather than an ordinary class instance.
+        "reflect.Type" => TypeExprKind::Type { attrs: vec![] },
         "$rust_type" => TypeExprKind::Rust { attrs: vec![] },
         "image" => TypeExprKind::Media {
             kind: baml_base::MediaKind::Image,
@@ -662,7 +687,7 @@ pub(crate) fn check_throws_wildcard(
 /// is applied to (a signature parameter/return, a field, an alias, a generic
 /// bound): there is nothing local to infer a hole from there, so every
 /// occurrence is reported AND rewritten to [`TypeExprKind::Error`]. It then
-/// lowers to the error-recovery `Ty::Unknown` sentinel rather than a `Ty::Infer`
+/// lowers to the error-recovery `Ty::Error` sentinel rather than a `Ty::Infer`
 /// — which would otherwise reach type normalization, where an inference hole has
 /// no sound form (see `baml_type::normalize`).
 ///

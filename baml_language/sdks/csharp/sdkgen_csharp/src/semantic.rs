@@ -710,7 +710,7 @@ impl RenderContext<'_> {
             Ty::Media(MediaKind::Audio, _) => "global::Baml.BamlAudio".to_string(),
             Ty::Media(MediaKind::Video, _) => "global::Baml.BamlVideo".to_string(),
             Ty::Media(MediaKind::Pdf, _) => "global::Baml.BamlPdf".to_string(),
-            Ty::Null { .. } | Ty::BuiltinUnknown { .. } | Ty::Void { .. } | Ty::Never { .. } => {
+            Ty::Null { .. } | Ty::Unknown { .. } | Ty::Void { .. } | Ty::Never { .. } => {
                 "global::Baml.BamlValue".to_string()
             }
             Ty::Literal(literal, ..) => literal_source(literal).to_string(),
@@ -984,7 +984,7 @@ impl RenderContext<'_> {
             | Ty::List(..)
             | Ty::Map { .. }
             | Ty::Function { .. }
-            | Ty::BuiltinUnknown { .. }
+            | Ty::Unknown { .. }
             | Ty::Void { .. }
             | Ty::Never { .. } => false,
             _ => unreachable!("unsupported type reached projection classification"),
@@ -1651,7 +1651,7 @@ fn require_supported_type_inner(
         | Ty::String { .. }
         | Ty::Uint8Array { .. }
         | Ty::Null { .. }
-        | Ty::BuiltinUnknown { .. }
+        | Ty::Unknown { .. }
         | Ty::Literal(..)
         | Ty::TypeVar(..)
         | Ty::Void { .. }
@@ -1900,7 +1900,7 @@ fn csharp_projection_key(ty: &Ty, model: &CodegenModel) -> String {
         Ty::Float { .. } | Ty::Literal(Literal::Float(_), ..) => "double".to_string(),
         Ty::String { .. } | Ty::Literal(Literal::String(_), ..) => "string".to_string(),
         Ty::Uint8Array { .. } => "System.ReadOnlyMemory<byte>".to_string(),
-        Ty::Null { .. } | Ty::BuiltinUnknown { .. } | Ty::Void { .. } | Ty::Never { .. } => {
+        Ty::Null { .. } | Ty::Unknown { .. } | Ty::Void { .. } | Ty::Never { .. } => {
             "Baml.BamlValue".to_string()
         }
         Ty::Media(kind, _) => format!("Baml.Media::{kind:?}"),
@@ -1977,7 +1977,7 @@ fn canonical_generic_primitive_types() -> Vec<Ty> {
         Ty::Media(MediaKind::Audio, TyAttr::EMPTY),
         Ty::Media(MediaKind::Video, TyAttr::EMPTY),
         Ty::Media(MediaKind::Pdf, TyAttr::EMPTY),
-        Ty::BuiltinUnknown {
+        Ty::Unknown {
             attr: TyAttr::EMPTY,
         },
     ]
@@ -2060,7 +2060,7 @@ fn is_canonical_generic_binding(ty: &Ty) -> bool {
         | Ty::String { .. }
         | Ty::Uint8Array { .. }
         | Ty::Media(MediaKind::Image | MediaKind::Audio | MediaKind::Video | MediaKind::Pdf, _)
-        | Ty::BuiltinUnknown { .. }
+        | Ty::Unknown { .. }
         | Ty::Enum(..) => true,
         Ty::Class(name, arguments, _) => {
             (is_resource_projection(name) && !arguments.iter().any(contains_type_var))
@@ -2094,7 +2094,7 @@ fn codec_type(ty: &Ty) -> Ty {
         Ty::Null { .. } => Ty::Null {
             attr: TyAttr::EMPTY,
         },
-        Ty::BuiltinUnknown { .. } => Ty::BuiltinUnknown {
+        Ty::Unknown { .. } => Ty::Unknown {
             attr: TyAttr::EMPTY,
         },
         Ty::Media(kind, _) => Ty::Media(*kind, TyAttr::EMPTY),
@@ -3501,7 +3501,7 @@ fn render_codec(render: &RenderContext<'_>, ty: &Ty, codec_name: &str) -> String
             "            return context.Fail<global::Baml.BamlValue>(\n                \"The native bridge returned from a function declared as never.\",\n                \"A BAML never position is uninhabited.\");\n"
                 .to_string(),
         ),
-        Ty::BuiltinUnknown { .. } => (
+        Ty::Unknown { .. } => (
             "            return context.Value(value);\n".to_string(),
             "            return context.ReadValue(value);\n".to_string(),
         ),
@@ -4430,7 +4430,7 @@ fn encode_type_metadata(ty: &Ty) -> Vec<u8> {
             push_varint_field(&mut media, 1, kind);
             push_message(&mut message, 11, &media);
         }
-        Ty::BuiltinUnknown { .. } => push_message(&mut message, 10, &[]),
+        Ty::Unknown { .. } => push_message(&mut message, 10, &[]),
         Ty::Class(name, arguments, _) => {
             let mut class = Vec::new();
             push_string(&mut class, 1, &name.to_string());
@@ -4860,6 +4860,7 @@ mod tests {
         );
         let wire_name = BaseName::new("RoundTrip");
         let argument = |name: &str, ty: Ty| FunctionArgument {
+            injected: false,
             name: BaseName::new(name),
             docstring: None,
             ty,
@@ -4882,12 +4883,12 @@ mod tests {
                 ),
                 argument(
                     "dynamic_value",
-                    Ty::BuiltinUnknown {
+                    Ty::Unknown {
                         attr: TyAttr::EMPTY,
                     },
                 ),
             ],
-            return_type: Ty::BuiltinUnknown {
+            return_type: Ty::Unknown {
                 attr: TyAttr::EMPTY,
             },
             throws: None,
@@ -5065,6 +5066,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: envelope_ty.clone(),
@@ -5191,6 +5193,7 @@ mod tests {
             BaseName::new("Echo$stream"),
         );
         let argument = || FunctionArgument {
+            injected: false,
             name: BaseName::new("prompt"),
             docstring: None,
             ty: primitive_string(),
@@ -5336,12 +5339,14 @@ mod tests {
             docstring: None,
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("scan"),
                     docstring: None,
                     ty: Ty::Class(scan_name.clone(), vec![], TyAttr::EMPTY),
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("error"),
                     docstring: None,
                     ty: Ty::Class(error_name.clone(), vec![], TyAttr::EMPTY),
@@ -5519,6 +5524,7 @@ mod tests {
                     arguments: arguments
                         .into_iter()
                         .map(|(name, ty)| FunctionArgument {
+                            injected: false,
                             name: BaseName::new(name),
                             docstring: None,
                             ty,
@@ -5599,6 +5605,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("callback"),
                 docstring: None,
                 ty: host_callable_type(2),
@@ -5667,12 +5674,14 @@ mod tests {
             docstring: None,
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("f"),
                     docstring: None,
                     ty: callback,
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("x"),
                     docstring: None,
                     ty: type_t,
@@ -5735,6 +5744,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: nullable_bytes.clone(),
@@ -5944,6 +5954,7 @@ mod tests {
                 generic_params: vec![],
                 docstring: None,
                 arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: union.clone(),
@@ -6002,7 +6013,7 @@ mod tests {
             vec![0x0a, 0x02, 0x08, 0x05],
         );
         assert_eq!(
-            encode_type_metadata(&Ty::BuiltinUnknown {
+            encode_type_metadata(&Ty::Unknown {
                 attr: TyAttr::EMPTY,
             }),
             vec![0x52, 0x00],
@@ -6318,7 +6329,7 @@ mod tests {
             assert!(canonical.contains(&ty));
             assert!(is_canonical_generic_binding(&ty));
         }
-        let dynamic = Ty::BuiltinUnknown {
+        let dynamic = Ty::Unknown {
             attr: TyAttr::EMPTY,
         };
         assert!(canonical.contains(&dynamic));
@@ -6428,6 +6439,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: primitive_int(),
@@ -6447,6 +6459,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: primitive_int(),

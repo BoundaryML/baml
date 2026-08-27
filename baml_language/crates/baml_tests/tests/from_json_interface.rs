@@ -7,9 +7,9 @@
 /// Compile errors raised in the user file, as `[CODE] message`.
 fn compile_errors(source: &str) -> Vec<String> {
     use baml_compiler_diagnostics::Severity;
-    use baml_project::{collect_diagnostics, testing::setup_test_db};
+    use baml_tests::stdlib_prefix::{check_user_files, setup_test_db};
     let db = setup_test_db(source);
-    collect_diagnostics(&db)
+    check_user_files(&db)
         .into_iter()
         .filter(|d| matches!(d.severity, Severity::Error))
         .map(|d| format!("[{}] {}", d.code(), d.message_with_primary_label()))

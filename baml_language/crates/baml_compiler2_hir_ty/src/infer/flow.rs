@@ -105,8 +105,58 @@ impl InferenceContext<'_> {
                 }
                 facts
             }
-            _ => CondFacts::default(),
+            // Truthiness (B-1563): a bare narrowable value as the whole
+            // condition narrows by POLARITY - the true branch drops
+            // always-falsy union members (`null`, `false`, zero/empty
+            // literals), the false branch drops always-truthy ones
+            // (instances, functions, non-falsy literals). Runtime-decided
+            // members (`string`, `int`, containers) survive both sides -
+            // the language has no "non-empty string" type to narrow to.
+            _ => {
+                let Some(binding) = self.narrowable_binding(body, condition) else {
+                    return CondFacts::default();
+                };
+                let scrut = self.binding_flow_ty(binding);
+                let resolved = self.table.resolve_completely(&scrut);
+                if resolved.has_error() || resolved.has_infer() {
+                    return CondFacts::default();
+                }
+                let mut facts = CondFacts::default();
+                facts
+                    .when_true
+                    .insert(binding, Self::drop_members_by_truthiness(&resolved, false));
+                facts
+                    .when_false
+                    .insert(binding, Self::drop_members_by_truthiness(&resolved, true));
+                facts
+            }
         }
+    }
+
+    /// Set-subtraction on truthiness (the `subtract_narrow` discipline):
+    /// drop the members whose truthiness is statically the given
+    /// polarity; survivors keep their identity, nothing dropped leaves
+    /// the type unchanged, everything dropped is `never`.
+    fn drop_members_by_truthiness(scrut: &Ty, drop_truthy: bool) -> Ty {
+        use crate::infer::truthy::{Truthiness, truthiness};
+        let members: Vec<Ty> = match scrut.kind() {
+            TyKind::Union(members, _) => members.to_vec(),
+            _ => vec![scrut.clone()],
+        };
+        let dropped = if drop_truthy {
+            Truthiness::AlwaysTruthy
+        } else {
+            Truthiness::AlwaysFalsy
+        };
+        let kept: Vec<Ty> = members
+            .iter()
+            .filter(|member| truthiness(member) != dropped)
+            .cloned()
+            .collect();
+        if kept.len() == members.len() {
+            return scrut.clone();
+        }
+        crate::infer::syntactic_union(&kept)
     }
 
     /// `x == null` / `null == x` for a narrowable `x`: true implies the

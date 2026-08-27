@@ -1,0 +1,178 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.patterns_class_destructure_namespaces.DeepGenericDestructureNamespaceQualifiedLet() -> int {
+    load_const "done"
+    load_type string
+    init_instance<1> user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box .value
+    load_type string
+    init_instance<1> user.fixtures.patterns_class_destructure_namespaces.llm.openai.Outer .inner
+    load_field .inner
+    load_field .value
+    call baml.String.length
+    return
+}
+
+function fixtures.patterns_class_destructure_namespaces.DeepGenericDestructureQualifiedLet() -> int {
+    load_const 52
+    load_type int
+    init_instance<1> user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box .value
+    load_type int
+    init_instance<1> user.fixtures.patterns_class_destructure_namespaces.llm.openai.Outer .inner
+    load_field .inner
+    load_field .value
+    return
+}
+
+function fixtures.patterns_class_destructure_namespaces.DestructureNamespaceQualifiedLet() -> int {
+    load_const "ok"
+    load_const 45
+    init_instance user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response .text, .score
+    load_field .score
+    return
+}
+
+function fixtures.patterns_class_destructure_namespaces.DestructureNamespaceQualifiedMatch() -> int {
+    load_const "ok"
+    load_const 46
+    init_instance user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response .text, .score
+    store_var_load_var response
+    is_type fixtures.patterns_class_destructure_namespaces.llm.openai.Response
+    pop_jump_if_false L0
+    load_var response
+    load_field .score
+    is_type 0
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var response
+    load_field .score
+    jump L2
+
+  L1:
+    load_const 0
+
+  L2:
+    return
+}
+
+function fixtures.patterns_class_destructure_namespaces.DestructureQualifiedLet() -> int {
+    load_const "ok"
+    load_const 41
+    init_instance user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response .text, .score
+    load_field .score
+    return
+}
+
+function fixtures.patterns_class_destructure_namespaces.DestructureQualifiedMatch() -> int {
+    load_const "ok"
+    load_const 42
+    init_instance user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response .text, .score
+    store_var_load_var response
+    is_type fixtures.patterns_class_destructure_namespaces.llm.openai.Response
+    pop_jump_if_false L0
+    load_var response
+    load_field .score
+    is_type 0
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var response
+    load_field .score
+    jump L2
+
+  L1:
+    load_const 0
+
+  L2:
+    return
+}
+
+function fixtures.patterns_class_destructure_namespaces.GenericDestructureNamespaceQualifiedLet() -> int {
+    load_const "ok"
+    load_type string
+    init_instance<1> user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box .value
+    load_field .value
+    call baml.String.length
+    return
+}
+
+function fixtures.patterns_class_destructure_namespaces.GenericDestructureQualifiedLet() -> int {
+    load_const 49
+    load_type int
+    init_instance<1> user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box .value
+    load_field .value
+    return
+}
+
+function fixtures.patterns_class_destructure_namespaces.GenericTypePatternNamespaceQualifiedMatch() -> int {
+    load_const "ready"
+    load_type string
+    init_instance<1> user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box .value
+    is_type fixtures.patterns_class_destructure_namespaces.llm.openai.Box<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 51
+    jump L2
+
+  L1:
+    load_const 0
+
+  L2:
+    return
+}
+
+function fixtures.patterns_class_destructure_namespaces.GenericTypePatternQualifiedMatch() -> int {
+    load_const 50
+    load_type int
+    init_instance<1> user.fixtures.patterns_class_destructure_namespaces.llm.openai.Box .value
+    is_type fixtures.patterns_class_destructure_namespaces.llm.openai.Box<...>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 50
+    jump L2
+
+  L1:
+    load_const 0
+
+  L2:
+    return
+}
+
+function fixtures.patterns_class_destructure_namespaces.TypePatternNamespaceQualifiedLet() -> int {
+    load_const "ok"
+    load_const 47
+    init_instance user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response .text, .score
+    load_field .score
+    return
+}
+
+function fixtures.patterns_class_destructure_namespaces.TypePatternNamespaceQualifiedMatch() -> int {
+    load_const "ok"
+    load_const 48
+    init_instance user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response .text, .score
+    load_field .score
+    return
+}
+
+function fixtures.patterns_class_destructure_namespaces.TypePatternQualifiedLet() -> int {
+    load_const "ok"
+    load_const 43
+    init_instance user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response .text, .score
+    load_field .score
+    return
+}
+
+function fixtures.patterns_class_destructure_namespaces.TypePatternQualifiedMatch() -> int {
+    load_const "ok"
+    load_const 44
+    init_instance user.fixtures.patterns_class_destructure_namespaces.llm.openai.Response .text, .score
+    load_field .score
+    return
+}

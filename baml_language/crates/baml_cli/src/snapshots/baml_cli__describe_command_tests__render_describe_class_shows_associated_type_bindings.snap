@@ -1,5 +1,6 @@
 ---
 source: crates/baml_cli/src/describe_command_tests.rs
+assertion_line: 370
 expression: output
 ---
 class IntDecoder  interfaces.baml:7-14
@@ -11,6 +12,6 @@ class IntDecoder {
 }
 
 methods:
-  function decode(self, raw: string) -> int  interfaces.baml:10-12
+  function decode(self, raw: string) -> int throws never  interfaces.baml:10-12
 
 references (0):

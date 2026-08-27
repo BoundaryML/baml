@@ -1,15 +1,12 @@
 version = 1
-recorded_at = "2026-08-16T04:00:02Z"
-git_sha = "2273e45dbf4e23231743f428bd2e53d978b91e9a"
+recorded_at = "2026-08-26T18:49:22Z"
+git_sha = "f5828b1ba5f6b42885a2637813a773ee0cd39045"
 
-# Re-recorded from CI run 31925567696: Package.compile's compiler-built stdlib
-# prefix is embedded in bex_project so first-call runtime compilation does not
-# rebuild the full stdlib.
 [artifacts.baml-cli]
-file_bytes = "25.9 MiB"
-stripped_bytes = "25.9 MiB"
-gzip_bytes = "10.8 MiB"
+file_bytes = "79.2 MiB"
+stripped_bytes = "79.2 MiB"
+gzip_bytes = "26.6 MiB"
 
 [artifacts.packed-program]
-file_bytes = "20.7 MiB"
-gzip_bytes = "7.9 MiB"
+file_bytes = "29.5 MiB"
+gzip_bytes = "10.3 MiB"

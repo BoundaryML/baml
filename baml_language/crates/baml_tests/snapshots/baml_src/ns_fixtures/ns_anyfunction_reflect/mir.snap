@@ -1,0 +1,729 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.anyfunction_reflect.web_search(q: string) -> fixtures.anyfunction_reflect.Doc[] {
+    // Locals:
+    let _0: fixtures.anyfunction_reflect.Doc[] // _0 // return
+    let _1: string // q // param
+    let _2: bool
+    let _3: fixtures.anyfunction_reflect.ToolError
+    let _4: fixtures.anyfunction_reflect.Doc
+
+    bb0: {
+        _2 = copy _1 == const "boom";
+        branch copy _2 -> [bb3, bb1];
+    }
+
+    bb1: {
+        _4 = user.fixtures.anyfunction_reflect.Doc { copy _1 };
+        _0 = [copy _4]: fixtures.anyfunction_reflect.Doc[];
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+
+    bb3: {
+        _3 = user.fixtures.anyfunction_reflect.ToolError { const "no results" };
+        throw copy _3;
+    }
+}
+
+fn user.fixtures.anyfunction_reflect.current_time() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        _0 = const "now";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.anyfunction_reflect.bare_and_pinned() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: reflect.AnyFunction<Returns = string | fixtures.anyfunction_reflect.Doc[], Throws = fixtures.anyfunction_reflect.ToolError> // g
+
+    bb0: {
+        _1 = const fn user.fixtures.anyfunction_reflect.web_search;
+        _0 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.anyfunction_reflect.heterogeneous_tool_map() -> map<string, reflect.AnyFunction<Returns = string | fixtures.anyfunction_reflect.Doc[], Throws = fixtures.anyfunction_reflect.ToolError>> {
+    // Locals:
+    let _0: map<string, reflect.AnyFunction<Returns = string | fixtures.anyfunction_reflect.Doc[], Throws = fixtures.anyfunction_reflect.ToolError>> // _0 // return
+
+    bb0: {
+        _0 = { const "search": const fn user.fixtures.anyfunction_reflect.web_search, const "now": const fn user.fixtures.anyfunction_reflect.current_time }: map<string, reflect.AnyFunction<Returns = string | fixtures.anyfunction_reflect.Doc[], Throws = fixtures.anyfunction_reflect.ToolError>>;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.anyfunction_reflect.signature_access(f: reflect.AnyFunction<Returns = unknown, Throws = unknown>) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: reflect.AnyFunction<Returns = unknown, Throws = unknown> // f // param
+    let _2: reflect.Signature // sig
+    let _3: string // parts
+    let _4: string
+    let _5: string
+    let _6: (reflect.Type) -> string throws never
+    let _7: string
+    let _8: (reflect.Type) -> string throws never
+    let _9: string
+    let _10: int
+    let _11: (reflect.Arg[]) -> int throws never
+    let _12: reflect.Type
+    let _13: reflect.Arg[]
+    let _14: baml.iter.Iterator<Error = never, Item = reflect.Arg>
+    let _15: unknown
+    let _16: bool
+    let _17: reflect.Arg
+    let _18: reflect.Arg // arg
+    let _19: string
+    let _20: string
+    let _21: string
+    let _22: string
+    let _23: (reflect.Type) -> string throws never
+    let _24: string[]
+    let _25: (map<string, reflect.Arg>) -> string[] throws never
+    let _26: reflect.Type
+    let _27: reflect.Type
+    let _28: baml.iter.Iterator<Error = never, Item = string>
+    let _29: unknown
+    let _30: bool
+    let _31: string
+    let _32: string // key
+    let _33: null | reflect.Arg // opt
+    let _34: (map<string, reflect.Arg>, string) -> null | reflect.Arg throws never
+    let _35: string
+    let _36: reflect.Type
+    let _37: reflect.Type
+    let _38: bool
+    let _39: null | reflect.Arg
+    let _40: bool
+    let _41: string
+    let _42: string
+    let _43: string
+    let _44: string
+    let _45: (reflect.Type) -> string throws never
+
+    bb0: {
+        _2 = call const fn reflect.signature(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _6 = copy _2.3;
+        _5 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _6) -> [bb2];
+    }
+
+    bb2: {
+        _8 = copy _2.4;
+        _7 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _8) -> [bb3];
+    }
+
+    bb3: {
+        _4 = copy _5 + copy _7;
+        _11 = copy _2.1;
+        _10 = len(_11);
+        goto -> bb4;
+    }
+
+    bb4: {
+        _12 = load_type(int);
+        _9 = call const fn baml.String.from<copy _12>(copy _10) -> [bb5];
+    }
+
+    bb5: {
+        _3 = copy _4 + copy _9;
+        _13 = copy _2.1;
+        _14 = virtual_call iter as baml.iter.Iterable<Error = never, Item = reflect.Arg>(copy _13) -> [bb6];
+    }
+
+    bb6: {
+        _15 = virtual_call next as baml.iter.Iterator<Error = never, Item = reflect.Arg>(copy _14) -> [bb7];
+    }
+
+    bb7: {
+        _16 = is_type(copy _15, baml.iter.Done);
+        branch copy _16 -> [bb10, bb8];
+    }
+
+    bb8: {
+        _17 = copy _15;
+        fresh_cell(_18);
+        _18 = copy _17;
+        _20 = copy _3;
+        _21 = copy _18.0;
+        _19 = copy _20 + copy _21;
+        _23 = copy _18.1;
+        _22 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _23) -> [bb9];
+    }
+
+    bb9: {
+        _3 = copy _19 + copy _22;
+        goto -> bb6;
+    }
+
+    bb10: {
+        _25 = copy _2.2;
+        _26 = load_type(string);
+        _27 = load_type(reflect.Arg);
+        _24 = call const fn baml.Map.keys<copy _26, copy _27>(copy _25) -> [bb11];
+    }
+
+    bb11: {
+        _28 = virtual_call iter as baml.iter.Iterable<Error = never, Item = string>(copy _24) -> [bb12];
+    }
+
+    bb12: {
+        _29 = virtual_call next as baml.iter.Iterator<Error = never, Item = string>(copy _28) -> [bb13];
+    }
+
+    bb13: {
+        _30 = is_type(copy _29, baml.iter.Done);
+        branch copy _30 -> [bb19, bb14];
+    }
+
+    bb14: {
+        _31 = copy _29;
+        fresh_cell(_32);
+        _32 = copy _31;
+        _34 = copy _2.2;
+        _35 = copy _32;
+        _36 = load_type(string);
+        _37 = load_type(reflect.Arg);
+        _33 = call const fn baml.Map.get<copy _36, copy _37>(copy _34, copy _35) -> [bb15];
+    }
+
+    bb15: {
+        _39 = copy _33;
+        _40 = call const fn baml.ops.equals_equals(copy _39, const null) -> [bb16];
+    }
+
+    bb16: {
+        _38 = !copy _40;
+        branch copy _38 -> [bb17, bb12];
+    }
+
+    bb17: {
+        _42 = copy _3;
+        _43 = copy _32;
+        _41 = copy _42 + copy _43;
+        _45 = copy _33.1;
+        _44 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _45) -> [bb18];
+    }
+
+    bb18: {
+        _3 = copy _41 + copy _44;
+        goto -> bb12;
+    }
+
+    bb19: {
+        _0 = copy _3;
+        goto -> bb20;
+    }
+
+    bb20: {
+        return;
+    }
+}
+
+fn user.fixtures.anyfunction_reflect.typed_dispatch(name: string, args: map<string, unknown>) -> string | fixtures.anyfunction_reflect.Doc[] {
+    // Locals:
+    let _0: string | fixtures.anyfunction_reflect.Doc[] // _0 // return
+    let _1: string // name // param
+    let _2: map<string, unknown> // args // param
+    let _3: map<string, reflect.AnyFunction<Returns = string | fixtures.anyfunction_reflect.Doc[], Throws = fixtures.anyfunction_reflect.ToolError>> // tools
+    let _4: null | reflect.AnyFunction<Returns = string | fixtures.anyfunction_reflect.Doc[], Throws = fixtures.anyfunction_reflect.ToolError> // f
+    let _5: reflect.Type
+    let _6: reflect.Type
+    let _7: bool
+    let _8: bool
+    let _9: fixtures.anyfunction_reflect.ToolError // e
+    let _10: reflect.AnyFunction<Returns = string | fixtures.anyfunction_reflect.Doc[], Throws = fixtures.anyfunction_reflect.ToolError>
+    let _11: reflect.Type
+    let _12: reflect.Type
+    let _13: bool
+    let _14: bool
+    let _15: bool
+    let _16: string
+
+    bb0: {
+        _3 = call const fn user.fixtures.anyfunction_reflect.heterogeneous_tool_map() -> [bb1];
+    }
+
+    bb1: {
+        _5 = load_type(string);
+        _6 = load_type(reflect.AnyFunction<Returns = string | fixtures.anyfunction_reflect.Doc[], Throws = fixtures.anyfunction_reflect.ToolError>);
+        _4 = call const fn baml.Map.get<copy _5, copy _6>(copy _3, copy _1) -> [bb2];
+    }
+
+    bb2: {
+        _8 = copy _4 == const null;
+        branch copy _8 -> [bb4, bb3];
+    }
+
+    bb3: {
+        _7 = const false;
+        goto -> bb5;
+    }
+
+    bb4: {
+        _7 = const true;
+        goto -> bb5;
+    }
+
+    bb5: {
+        branch copy _7 -> [bb7, bb6];
+    }
+
+    bb6: {
+        _10 = copy _4;
+        _11 = load_type(string | fixtures.anyfunction_reflect.Doc[]);
+        _12 = load_type(fixtures.anyfunction_reflect.ToolError);
+        _0 = call const fn reflect.call_any<copy _11, copy _12>(copy _10, copy _2) -> [bb15, unwind: bb8];
+    }
+
+    bb7: {
+        _0 = const "no-such-tool";
+        goto -> bb15;
+    }
+
+    bb8: {
+        _13 = is_type(copy _9, fixtures.anyfunction_reflect.ToolError);
+        branch copy _13 -> [bb14, bb9];
+    }
+
+    bb9: {
+        _14 = is_type(copy _9, reflect.InvalidArgumentError);
+        branch copy _14 -> [bb13, bb10];
+    }
+
+    bb10: {
+        _15 = is_type(copy _9, reflect.errors.CompilationError);
+        branch copy _15 -> [bb12, bb11];
+    }
+
+    bb11: {
+        rethrow copy _9;
+    }
+
+    bb12: {
+        _0 = const "uncompiled-generic";
+        goto -> bb15;
+    }
+
+    bb13: {
+        _0 = const "bad-args";
+        goto -> bb15;
+    }
+
+    bb14: {
+        _16 = copy _9.0;
+        _0 = const "tool-error:" + copy _16;
+        goto -> bb15;
+    }
+
+    bb15: {
+        return;
+    }
+}
+
+fn user.fixtures.anyfunction_reflect.RuntimeClassify(input: string, client: null | ai.Client, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: string // input // param
+    let _2: null | ai.Client // client // param
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.RunResult<T>
+    let _7: ai.Agent
+    let _8: reflect.Type
+    let _9: ai.FunctionSpec<T>
+    let _10: reflect.Type
+    let _11: reflect.Type
+
+    bb0: {
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _3 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _8 = load_type(unknown);
+        _7 = call const fn ai.Agent.new<copy _8>(const <omitted>, const <omitted>, copy _2, const <omitted>, copy _3) -> [bb5];
+    }
+
+    bb5: {
+        _10 = load_type(#0);
+        _9 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _10>(copy _1) -> [bb6];
+    }
+
+    bb6: {
+        _11 = load_type(#0);
+        _6 = virtual_call run as ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure><copy _11>(copy _7, copy _9) -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _6.0;
+        goto -> bb8;
+    }
+
+    bb8: {
+        return;
+    }
+}
+
+fn user.fixtures.anyfunction_reflect.RuntimeClassify$build_request(input: string, client: null | ai.Client) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // input // param
+    let _2: null | ai.Client // client // param
+    let _3: bool
+    let _4: ai.FunctionSpec<T>
+    let _5: reflect.Type
+    let _6: reflect.Type
+
+    bb0: {
+        _3 = copy _2 == const <omitted>;
+        branch copy _3 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = load_type(#0);
+        _4 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _5>(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _6 = load_type(#0);
+        _0 = call const fn ai.FunctionSpec.build_request<copy _6>(copy _4, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.fixtures.anyfunction_reflect.RuntimeClassify$parse(json: string) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: string // json // param
+    let _2: reflect.Type
+
+    bb0: {
+        _2 = load_type(#0);
+        _0 = call const fn baml.sap.parse<copy _2>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.anyfunction_reflect.RuntimeClassify$render_prompt(input: string) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: string // input // param
+    let _2: ai.FunctionSpec<T>
+    let _3: reflect.Type
+    let _4: reflect.Type
+
+    bb0: {
+        _3 = load_type(#0);
+        _2 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _3>(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _4 = load_type(#0);
+        _0 = call const fn ai.FunctionSpec.prompt<copy _4>(copy _2) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec(input: string) -> ai.FunctionSpec<T> {
+    // Locals:
+    let _0: ai.FunctionSpec<T> // _0 // return
+    let _1: string // input // param [captured]
+    let _2: map<string, unknown>
+    let _3: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _4: ai.tools.Toolbox
+    let _5: ai.tools.Tool[]
+    let _6: ai.Client
+
+    bb0: {
+        _2 = { const "input": copy _1 }: map<string, unknown>;
+        _3 = make_closure lambda[0]<1 type_args>(copy _1);
+        _5 = []: ai.tools.Tool[];
+        _4 = call const fn ai.tools.Toolbox.new(copy _5) -> [bb1];
+    }
+
+    bb1: {
+        _6 = call const fn ai.clients.resolve(const item user.fixtures.anyfunction_reflect.RuntimeEnumClient) -> [bb2];
+    }
+
+    bb2: {
+        _0 = ai.FunctionSpec<#0> { const "RuntimeClassify", copy _2, copy _3, copy _4, copy _6 };
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(RuntimeClassify$spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai.Prompt {
+    // Locals:
+    let _0: ai.Prompt // _0 // return
+    let _1: ai.OutputFormat //  __spec_output_format // param
+    let _2: unknown //  __prompt_render_err
+    let _3: ai.internal.SpecCtx // ctx
+    let _4: baml.TaggedString //  __spec_tagged_prompt
+    let _5: string[] //  __tt_parts
+    let _6: unknown[] //  __tt_values
+    let _7: string //  __tt_cur
+    let _8: string
+    let _9: int
+    let _10: string[]
+    let _11: string
+    let _12: reflect.Type
+    let _13: int
+    let _14: unknown[]
+    let _15: string
+    let _16: reflect.Type
+    let _17: int
+    let _18: string[]
+    let _19: ".\n"
+    let _20: reflect.Type
+    let _21: int
+    let _22: unknown[]
+    let _23: string
+    let _24: reflect.Type
+    let _25: int
+    let _26: string[]
+    let _27: ""
+    let _28: reflect.Type
+    let _29: string[]
+    let _30: unknown[]
+    let _31: string[]
+    let _32: baml.TaggedString
+    let _33: unknown[]
+    let _34: baml.TaggedString
+    let _35: ai.errors.PromptRenderError
+    let _36: never
+
+    bb0: {
+        _3 = ai.internal.SpecCtx { copy _1 };
+        _5 = []: string[];
+        _6 = []: unknown[];
+        _7 = const "";
+        _8 = copy _7;
+        _7 = copy _8 + const "Choose a category for ";
+        _10 = copy _5;
+        _11 = copy _7;
+        _12 = load_type(string);
+        _9 = call const fn baml.Array.push<copy _12>(copy _10, copy _11) -> [bb1, unwind: bb8];
+    }
+
+    bb1: {
+        _7 = const "";
+        _14 = copy _6;
+        _15 = copy capture[0];
+        _16 = load_type(unknown);
+        _13 = call const fn baml.Array.push<copy _16>(copy _14, copy _15) -> [bb2, unwind: bb8];
+    }
+
+    bb2: {
+        _7 = const ".\n";
+        _18 = copy _5;
+        _19 = copy _7;
+        _20 = load_type(string);
+        _17 = call const fn baml.Array.push<copy _20>(copy _18, copy _19) -> [bb3, unwind: bb8];
+    }
+
+    bb3: {
+        _7 = const "";
+        _22 = copy _6;
+        _23 = call const fn ai.internal.SpecCtx.output_format(copy _3, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb4, unwind: bb8];
+    }
+
+    bb4: {
+        _24 = load_type(unknown);
+        _21 = call const fn baml.Array.push<copy _24>(copy _22, copy _23) -> [bb5, unwind: bb8];
+    }
+
+    bb5: {
+        _26 = copy _5;
+        _27 = copy _7;
+        _28 = load_type(string);
+        _25 = call const fn baml.Array.push<copy _28>(copy _26, copy _27) -> [bb6, unwind: bb8];
+    }
+
+    bb6: {
+        _29 = copy _5;
+        _30 = copy _6;
+        _4 = baml.TaggedString { copy _29, copy _30 };
+        _32 = copy _4;
+        _31 = copy _32.0;
+        _34 = copy _4;
+        _33 = copy _34.1;
+        _0 = call const fn ai.internal.assemble_llm_prompt(copy _31, copy _33) -> [bb7, unwind: bb8];
+    }
+
+    bb7: {
+        return;
+    }
+
+    bb8: {
+        throw_if_panic copy _2 -> bb9;
+    }
+
+    bb9: {
+        _36 = copy _2;
+        _35 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _36 };
+        throw copy _35;
+    }
+}
+
+fn user.fixtures.anyfunction_reflect.RuntimeClassify$stream(input: string, client: null | ai.stream.StreamingClient, on_event: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never)) -> ai.stream.Stream<null | T, T> {
+    // Locals:
+    let _0: ai.stream.Stream<null | T, T> // _0 // return
+    let _1: string // input // param
+    let _2: null | ai.stream.StreamingClient // client // param
+    let _3: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> void throws never) // on_event // param
+    let _4: bool
+    let _5: bool
+    let _6: ai.FunctionSpec<T>
+    let _7: reflect.Type
+    let _8: reflect.Type
+    let _9: reflect.Type
+
+    bb0: {
+        _4 = copy _2 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _2 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _5 = copy _3 == const <omitted>;
+        branch copy _5 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _3 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _7 = load_type(#0);
+        _6 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$spec<copy _7>(copy _1) -> [bb5];
+    }
+
+    bb5: {
+        _8 = load_type(#0 | null);
+        _9 = load_type(#0);
+        _0 = call const fn ai.stream.from_spec<copy _8, copy _9>(copy _6, copy _2, copy _3) -> [bb6];
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.fixtures.anyfunction_reflect.runtime_enum_llm_companions_compile() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: reflect.enum.Type // category
+    let _2: (string | reflect.enum.Value)[]
+    let _3: reflect.enum.Value
+    let _4: string // prompt
+    let _5: ai.Prompt
+    let _6: reflect.enum.Type
+    let _7: unknown // parsed
+    let _8: reflect.enum.Type
+    let _9: string
+    let _10: string
+    let _11: unknown
+
+    bb0: {
+        _3 = call const fn reflect.enum.value(const "RED", const "k7", const "warm", const <omitted>, const <omitted>) -> [bb1];
+    }
+
+    bb1: {
+        _2 = [copy _3, const "BLUE"]: string | reflect.enum.Value[];
+        _1 = call const fn reflect.enum.new(const "Category", copy _2) -> [bb2];
+    }
+
+    bb2: {
+        _6 = copy _1;
+        _5 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$render_prompt<copy _6>(const "sample"; runtime_type_check) -> [bb3];
+    }
+
+    bb3: {
+        _4 = call const fn ai.Prompt.text(copy _5) -> [bb4];
+    }
+
+    bb4: {
+        _8 = copy _1;
+        _7 = call const fn user.fixtures.anyfunction_reflect.RuntimeClassify$parse<copy _8>(const "\"k7\""; runtime_type_check) -> [bb5];
+    }
+
+    bb5: {
+        _9 = copy _4;
+        _11 = copy _7;
+        _10 = call const fn reflect.enum.get_value(copy _11) -> [bb6];
+    }
+
+    bb6: {
+        _0 = copy _9 + copy _10;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}

@@ -315,7 +315,7 @@ pub enum DiagnosticId {
     /// Two or more fields of a class serialize to the same JSON key — either two
     /// fields share an `@alias`, or one field's name equals another field's
     /// `@alias`. Such a schema is unsatisfiable: an aliased field's real name is
-    /// never matched, so `ctx.output_format` renders duplicate keys and a
+    /// never matched, so `ctx.output_format()` renders duplicate keys and a
     /// required shadowed field can never be parsed (Linear B-615).
     DuplicateFieldAlias,
 
@@ -328,11 +328,11 @@ pub enum DiagnosticId {
 
     // Builtin interfaces (BEP-062, E0153/E0154)
     /// An `implements` block targets a compiler-builtin interface
-    /// (`baml.AnyFunction`), whose conformance is derived by the compiler
+    /// (`reflect.AnyFunction`), whose conformance is derived by the compiler
     /// (every function type implements it) and cannot be written by hand.
     BuiltinInterfaceNotImplementable,
     /// A generic parameter's bound (`T extends X`) names a compiler-builtin
-    /// interface (`baml.AnyFunction`) that is only legal as a value type
+    /// interface (`reflect.AnyFunction`) that is only legal as a value type
     /// (an existential), never as a bound.
     BuiltinInterfaceNotABound,
 
@@ -355,6 +355,8 @@ pub enum DiagnosticId {
     /// Empty enums are legal declarations/constructions, but have no output
     /// representation and therefore fail at render time (BEP-066 R-4).
     EmptyEnumAtRender,
+    /// An interface method (required or default) omits its `throws` clause.
+    InterfaceMethodMissingThrows,
 
     /// A runtime reflection union constructor received no members. Static
     /// source cannot spell this defect, so BEP-066 reserves a surface code.
@@ -379,6 +381,21 @@ pub enum DiagnosticId {
     /// (`baml.Int`, `baml.Map`, …). They exist to hang methods on a builtin
     /// type, never to be instantiated.
     CannotConstructBuiltinCompanion,
+    /// A condition whose static type decides the branch (always truthy /
+    /// always falsy) - B-1563 truthiness.
+    ConditionAlwaysConstant,
+    /// An inline `unreflect(value)` type argument would escape its call: the
+    /// runtime type parameter is rigid for that one call, but the expression's
+    /// published type still mentions it. The lexical `type T = unreflect(v)`
+    /// binding is the spelling that outlives the call.
+    RuntimeTypeMustBeNamed,
+    /// `reflect.function.Type.specialize` was given type arguments the
+    /// callable cannot accept: the wrong number of them, one that fails a
+    /// declared interface bound, or any at all for a callable with nothing
+    /// left to bind.
+    ReflectSpecializationFailed,
+    /// An ordinary inference variable remained unresolved at writeback (E0155).
+    TypeMustBeKnown,
 }
 
 impl DiagnosticId {
@@ -558,6 +575,7 @@ impl DiagnosticId {
             DiagnosticId::ConflictingTypeDefinitionAtRender => "E0162",
             DiagnosticId::InitIoNotAllowed => "E0163",
             DiagnosticId::NonDataTypeAtRender => "E0164",
+            DiagnosticId::ConditionAlwaysConstant => "E0167",
             DiagnosticId::GenericBoundNotInterface => "E0145",
             DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 
@@ -584,6 +602,11 @@ impl DiagnosticId {
             // E0164 is owned by the non-data output-format diagnostic in #4470.
             DiagnosticId::UnspecializedReflectedGeneric => "E0165",
             DiagnosticId::CannotConstructBuiltinCompanion => "E0166",
+            // E0167 is owned by the always-constant-condition lint in #4498.
+            DiagnosticId::RuntimeTypeMustBeNamed => "E0168",
+            DiagnosticId::ReflectSpecializationFailed => "E0169",
+            DiagnosticId::InterfaceMethodMissingThrows => "E0170",
+            DiagnosticId::TypeMustBeKnown => "E0155",
         }
     }
 }

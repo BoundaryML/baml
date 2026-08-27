@@ -1,0 +1,61 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.reflect_type_of_user_generic.reflect_type() -> reflect.Type {
+    // Locals:
+    let _0: reflect.Type // _0 // return
+
+    bb0: {
+        _0 = load_type(#0);
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.reflect_type_of_user_generic.reflect_array() -> reflect.Type {
+    // Locals:
+    let _0: reflect.Type // _0 // return
+
+    bb0: {
+        _0 = load_type(#0[]);
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.reflect_type_of_user_generic.reflect_person() -> reflect.Type {
+    // Locals:
+    let _0: reflect.Type // _0 // return
+    let _1: reflect.Type
+
+    bb0: {
+        _1 = load_type(fixtures.reflect_type_of_user_generic.Person);
+        _0 = call const fn user.fixtures.reflect_type_of_user_generic.reflect_type<copy _1>() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.reflect_type_of_user_generic.reflect_int_array() -> reflect.Type {
+    // Locals:
+    let _0: reflect.Type // _0 // return
+    let _1: reflect.Type
+
+    bb0: {
+        _1 = load_type(int);
+        _0 = call const fn user.fixtures.reflect_type_of_user_generic.reflect_array<copy _1>() -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}

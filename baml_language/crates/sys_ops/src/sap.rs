@@ -1,5 +1,5 @@
-use ::baml_type::TypeName;
 use ::bex_sap::sap_model;
+use ::sys_types::DefKey;
 
 /// Cached schema information for incremental or one-shot SAP parsing.
 pub struct SapParseCache {
@@ -11,11 +11,11 @@ impl SapParseCache {
         Self { types }
     }
 
-    pub fn db(&self) -> &sap_model::TypeRefDb<'_, TypeName> {
+    pub fn db(&self) -> &sap_model::TypeRefDb<'_, DefKey> {
         self.types.db()
     }
 
-    pub fn ty(&self) -> &sap_model::AnnotatedTy<'_, TypeName> {
+    pub fn ty(&self) -> &sap_model::AnnotatedTy<'_, DefKey> {
         self.types.ty()
     }
 
@@ -23,10 +23,10 @@ impl SapParseCache {
         &self,
     ) -> Result<
         sap_model::TyWithMeta<
-            sap_model::TyResolvedRef<'_, TypeName>,
-            &sap_model::TypeAnnotations<'_, TypeName>,
+            sap_model::TyResolvedRef<'_, DefKey>,
+            &sap_model::TypeAnnotations<'_, DefKey>,
         >,
-        &TypeName,
+        &DefKey,
     > {
         self.db().resolve_with_meta(self.ty().as_ref())
     }
@@ -35,10 +35,10 @@ impl SapParseCache {
         &self,
     ) -> Result<
         sap_model::TyWithMeta<
-            sap_model::TyResolvedRef<'_, TypeName>,
-            &sap_model::TypeAnnotations<'_, TypeName>,
+            sap_model::TyResolvedRef<'_, DefKey>,
+            &sap_model::TypeAnnotations<'_, DefKey>,
         >,
-        &TypeName,
+        &DefKey,
     > {
         self.db().resolve_with_meta(self.types.stream_ty().as_ref())
     }

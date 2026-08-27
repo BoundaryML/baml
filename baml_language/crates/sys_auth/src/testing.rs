@@ -18,7 +18,7 @@ use std::{
 use indexmap::IndexMap;
 use sys_types::{
     BexExternalValue,
-    runtime_io::{FsFileHandle, HttpResponseHandle, RuntimeIo, RuntimeIoError},
+    runtime_io::{HttpResponseHandle, RuntimeIo, RuntimeIoError},
 };
 
 /// Counts the IO a resolution actually performed, so a test can assert that
@@ -92,35 +92,14 @@ impl RuntimeIo for StubIo {
         Box::pin(async move { Ok(value) })
     }
 
-    fn fs_open(
+    fn fs_read(
         &self,
         path: String,
-        _mode: BexExternalValue,
-    ) -> Pin<Box<dyn Future<Output = Result<FsFileHandle, RuntimeIoError>> + Send + '_>> {
-        self.calls.fs.fetch_add(1, Ordering::SeqCst);
-        let exists = self.files.contains_key(&path);
-        Box::pin(async move {
-            if exists {
-                // The handle carries the path so `fs_file_text` can resolve it.
-                Ok(FsFileHandle {
-                    raw: BexExternalValue::String(path.into()),
-                })
-            } else {
-                Err(RuntimeIoError::Other(format!("no such file: {path}")))
-            }
-        })
-    }
-
-    fn fs_file_text(
-        &self,
-        file: &FsFileHandle,
     ) -> Pin<Box<dyn Future<Output = Result<String, RuntimeIoError>> + Send + '_>> {
-        let contents = match &file.raw {
-            BexExternalValue::String(path) => self.files.get(&path.to_string()).cloned(),
-            _ => None,
-        };
+        self.calls.fs.fetch_add(1, Ordering::SeqCst);
+        let contents = self.files.get(&path).cloned();
         Box::pin(async move {
-            contents.ok_or_else(|| RuntimeIoError::Other("unreadable handle".to_string()))
+            contents.ok_or_else(|| RuntimeIoError::Other(format!("no such file: {path}")))
         })
     }
 

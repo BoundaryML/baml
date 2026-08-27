@@ -37,11 +37,12 @@ pub enum LoweringDiagnostic {
     /// A parameter default was parsed in a context that does not support defaults.
     UnsupportedParameterDefault { context: String, span: TextRange },
 
-    /// A user-authored LLM function declared `client`, which is reserved for
-    /// the compiler-injected client override parameter.
-    ReservedLlmClientParam {
+    /// A user-authored LLM function parameter collides with a binding owned by
+    /// the compiler's LLM lowering.
+    ReservedLlmParam {
         function_name: String,
         param_name: String,
+        reserved_for: &'static str,
         span: TextRange,
     },
 
@@ -150,6 +151,11 @@ pub enum LoweringDiagnostic {
     /// has no value; without this diagnostic it would lower to a `Missing` that
     /// only fails at runtime.
     AssignmentInExpressionPosition { span: TextRange },
+
+    /// Parser recovery produced an object-literal node without a constructor
+    /// identifier. The AST cannot represent a constructor-less object, so the
+    /// expression lowers to `Missing` and this diagnostic preserves the error.
+    MissingObjectConstructor { span: TextRange },
 
     /// Top-level `implements I for T` where `T` does not match any class in the file.
     UnresolvedImplementsForTarget {
@@ -324,18 +330,19 @@ impl LoweringDiagnostic {
                 *span,
                 "default value is not allowed here",
             ),
-            LoweringDiagnostic::ReservedLlmClientParam {
+            LoweringDiagnostic::ReservedLlmParam {
                 function_name,
                 param_name,
+                reserved_for,
                 span,
             } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
                 format!(
-                    "LLM function `{function_name}` cannot declare a parameter named `{param_name}`; `client` is reserved for the compiler-injected LLM client override"
+                    "LLM function `{function_name}` cannot declare a parameter named `{param_name}`; `{param_name}` is reserved for {reserved_for}"
                 ),
                 *span,
-                "`client` is reserved here",
+                "reserved LLM parameter name",
             ),
             LoweringDiagnostic::MissingVariantName { enum_name, span } => (
                 DiagnosticId::MissingName,
@@ -563,6 +570,13 @@ impl LoweringDiagnostic {
                     .to_string(),
                 *span,
                 "assignment not allowed here",
+            ),
+            LoweringDiagnostic::MissingObjectConstructor { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "object construction requires a class or type name".to_string(),
+                *span,
+                "expected a constructor name before `{`",
             ),
             LoweringDiagnostic::UnresolvedImplementsForTarget {
                 interface_name,

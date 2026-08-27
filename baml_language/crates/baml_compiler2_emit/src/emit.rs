@@ -366,7 +366,7 @@ struct StackifyCodegen<'ctx, 'obj> {
     current_block_start: usize,
 
     /// MIR local types for field name resolution (debug info).
-    local_types: HashMap<Local, RuntimeTy>,
+    local_types: HashMap<Local, bex_vm_types::RuntimeTy>,
 
     /// Slot index → variable name mapping for debug metadata.
     slot_names: Vec<String>,
@@ -382,7 +382,7 @@ struct StackifyCodegen<'ctx, 'obj> {
 
     /// Compile-time types for this function's closure captures, indexed by
     /// `Place::Capture`.
-    capture_types: Vec<RuntimeTy>,
+    capture_types: Vec<bex_vm_types::RuntimeTy>,
 
     /// Set of locals that are captured by child lambdas and need cell wrapping.
     /// Derived from `LocalDecl.is_captured` during `compile()`.
@@ -468,7 +468,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             slot_names: Vec::new(),
             lambda_object_indices: ctx.lambda_object_indices.to_vec(),
             lambda_names: ctx.lambda_names.to_vec(),
-            capture_types: ctx.capture_types.to_vec(),
+            // Codegen resolves places at the runtime's head; anchor the
+            // compiler-side capture types once, here, rather than at each read.
+            capture_types: ctx
+                .capture_types
+                .iter()
+                .map(bex_vm_types::anchor_runtime_ty)
+                .collect(),
             captured_locals: HashSet::new(),
             spawn_captured_locals: HashSet::new(),
             spawn_captured_captures: ctx.spawn_capture_indices.clone(),
@@ -486,11 +492,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         idx
     }
 
-    /// Look up a field name from the class-field snapshot given a class name
-    /// and field index.
-    fn lookup_class_field_name(&self, class_name: &str, field_idx: usize) -> Option<String> {
+    /// A field's declared name, by the owning class's identity and the field's
+    /// index.
+    fn lookup_class_field_name(
+        &self,
+        class: baml_type::typetag::TypeTag,
+        field_idx: usize,
+    ) -> Option<String> {
         self.class_fields
-            .get(class_name)?
+            .get(&class)?
             .get(field_idx)
             .map(|(name, _)| name.clone())
     }
@@ -511,13 +521,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Class field metadata for a class type name, resolved through the same
     /// name fallbacks as [`Self::class_object_index_for_type_name`] but
     /// against the read-only snapshot instead of the pool.
-    fn class_fields_for_type_name(&self, tn: &TypeName) -> Option<&[(String, RuntimeTy)]> {
-        let full_name = tn.render_dotted(false);
-        self.class_fields
-            .get(&full_name)
-            .or_else(|| self.class_fields.get(tn.display_name().as_str()))
-            .or_else(|| self.class_fields.get(tn.name().as_str()))
-            .map(Vec::as_slice)
+    fn class_fields_for(
+        &self,
+        class: baml_type::typetag::TypeTag,
+    ) -> Option<&[(String, bex_vm_types::RuntimeTy)]> {
+        self.class_fields.get(&class).map(Vec::as_slice)
     }
 
     /// Enum-object index for an enum type name, mirroring
@@ -538,15 +546,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Resolve the type of a MIR Place by walking from the root local through projections.
-    fn resolve_place_type(&self, place: &Place) -> Option<RuntimeTy> {
+    fn resolve_place_type(&self, place: &Place) -> Option<bex_vm_types::RuntimeTy> {
         match place {
             Place::Local(local) => self.local_types.get(local).cloned(),
             Place::Capture(idx) => self.capture_types.get(*idx).cloned(),
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
-                    RuntimeTy::Class(type_name, _, _) => self
-                        .class_fields_for_type_name(type_name)?
+                    bex_vm_types::RuntimeTy::Class(head, _, _) => self
+                        .class_fields_for(head.tag())?
                         .get(*field)
                         .map(|(_, field_type)| field_type.clone()),
                     _ => None,
@@ -555,8 +563,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Place::Index { base, .. } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match base_ty {
-                    RuntimeTy::List(inner, _) => Some(*inner),
-                    RuntimeTy::Map { value, .. } => Some(*value),
+                    bex_vm_types::RuntimeTy::List(inner, _) => Some(*inner),
+                    bex_vm_types::RuntimeTy::Map { value, .. } => Some(*value),
                     _ => None,
                 }
             }
@@ -564,15 +572,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Resolve the compile-time type of an operand, if known.
-    fn resolve_operand_type(&self, operand: &Operand) -> Option<RuntimeTy> {
+    fn resolve_operand_type(&self, operand: &Operand) -> Option<bex_vm_types::RuntimeTy> {
         match operand {
             Operand::Constant(c) => match c {
-                Constant::Int(_) => Some(RuntimeTy::int()),
-                Constant::Bigint(_) => Some(RuntimeTy::bigint()),
-                Constant::Float(_) => Some(RuntimeTy::float()),
+                Constant::Int(_) => Some(bex_vm_types::RuntimeTy::int()),
+                Constant::Bigint(_) => Some(bex_vm_types::RuntimeTy::bigint()),
+                Constant::Float(_) => Some(bex_vm_types::RuntimeTy::float()),
                 Constant::String(_) => Some(RuntimeTy::string()),
                 Constant::Bool(_) => Some(RuntimeTy::bool()),
-                Constant::Null => Some(RuntimeTy::null()),
+                Constant::Null => Some(bex_vm_types::RuntimeTy::null()),
                 Constant::OmittedArg => None,
                 _ => None,
             },
@@ -587,14 +595,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// `Int`, and similarly for `Float`/`Bigint`. This lets us specialize
     /// expressions like `(-1n) & 255n` where the lhs operand carries a
     /// `RuntimeTy::Literal(Bigint(-1))` after constant-folding in TIR.
-    fn classify_arith_ty(ty: &RuntimeTy) -> Option<ArithTyClass> {
+    fn classify_arith_ty(ty: &bex_vm_types::RuntimeTy) -> Option<ArithTyClass> {
+        use bex_vm_types::RuntimeTy as T;
         match ty {
-            RuntimeTy::Int { .. } => Some(ArithTyClass::Int),
-            RuntimeTy::Float { .. } => Some(ArithTyClass::Float),
-            RuntimeTy::Bigint { .. } => Some(ArithTyClass::Bigint),
-            RuntimeTy::Literal(baml_type::Literal::Int(_), _, _) => Some(ArithTyClass::Int),
-            RuntimeTy::Literal(baml_type::Literal::Float(_), _, _) => Some(ArithTyClass::Float),
-            RuntimeTy::Literal(baml_type::Literal::Bigint(_), _, _) => Some(ArithTyClass::Bigint),
+            T::Int { .. } => Some(ArithTyClass::Int),
+            T::Float { .. } => Some(ArithTyClass::Float),
+            T::Bigint { .. } => Some(ArithTyClass::Bigint),
+            T::Literal(baml_type::Literal::Int(_), _, _) => Some(ArithTyClass::Int),
+            T::Literal(baml_type::Literal::Float(_), _, _) => Some(ArithTyClass::Float),
+            T::Literal(baml_type::Literal::Bigint(_), _, _) => Some(ArithTyClass::Bigint),
             _ => None,
         }
     }
@@ -798,6 +807,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => elements
                 .iter()
                 .any(|operand| self.operand_reads_spawn_captured_local(operand, seen)),
+            Rvalue::MakeVirtualFunction { type_args, .. } => type_args
+                .iter()
+                .any(|arg| self.operand_reads_spawn_captured_local(arg, seen)),
             Rvalue::Uint8Array(_)
             | Rvalue::LoadType(_)
             | Rvalue::CurrentPackage(_)
@@ -974,7 +986,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         // Build local type map for field name resolution (debug info).
         for (i, local_decl) in mir.locals.iter().enumerate() {
-            self.local_types.insert(Local(i), local_decl.ty.clone());
+            self.local_types
+                .insert(Local(i), bex_vm_types::anchor_runtime_ty(&local_decl.ty));
         }
 
         // Build slot name mapping for debug metadata.
@@ -1456,7 +1469,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // the interface, the value, and the receiver in that order.
                 self.emit_operand_pull(receiver);
                 self.emit_operand_pull(value);
-                let iface_const = self.add_constant(ConstValue::Type(iface.to_template()));
+                let iface_const = self.add_constant(ConstValue::Type(
+                    bex_vm_types::anchor_template(&iface.to_template()),
+                ));
                 let inst = self.emit(Instruction::LoadType(iface_const));
                 self.set_operand(inst, OperandMeta::Const(iface.to_string()));
                 let inst = self.emit(Instruction::VirtualStoreField(*field_index as usize));
@@ -1890,15 +1905,50 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             // by `LoadType`), then the method name — the opcode pops in reverse.
             self.emit_operand_pull(receiver);
             for template in type_args {
-                let const_idx = self.add_constant(ConstValue::Type(template.clone()));
+                let const_idx =
+                    self.add_constant(ConstValue::Type(bex_vm_types::anchor_template(template)));
                 let inst = self.emit(Instruction::LoadType(const_idx));
                 self.set_operand(inst, OperandMeta::Const(template.to_string()));
             }
-            let iface_const = self.add_constant(ConstValue::Type(iface.to_template()));
+            let iface_const = self.add_constant(ConstValue::Type(bex_vm_types::anchor_template(
+                &iface.to_template(),
+            )));
             let inst = self.emit(Instruction::LoadType(iface_const));
             self.set_operand(inst, OperandMeta::Const(iface.to_string()));
             self.emit_constant(&Constant::String(method.clone()));
             let inst = self.emit(Instruction::MakeVirtualBoundMethod {
+                ntypeargs: u16::try_from(type_args.len()).expect("ntypeargs fits in u16"),
+            });
+            self.set_operand(inst, OperandMeta::Callable(method.clone()));
+            return;
+        }
+        if let Rvalue::MakeVirtualFunction {
+            self_ty,
+            iface,
+            method,
+            type_args,
+        } = rvalue
+        {
+            // Stack layout mirrors `MakeVirtualBoundMethod` with the `Self`
+            // TYPE in the receiver's slot: `Self`, then the method-level type
+            // args (already `Object::Type` OPERANDS — a written static arg is
+            // a `LoadType` temp, a runtime `unreflect` arg any expression),
+            // then the interface type, then the method name — the opcode pops
+            // in reverse.
+            let self_const =
+                self.add_constant(ConstValue::Type(bex_vm_types::anchor_template(self_ty)));
+            let inst = self.emit(Instruction::LoadType(self_const));
+            self.set_operand(inst, OperandMeta::Const(self_ty.to_string()));
+            for arg in type_args {
+                self.emit_operand_pull(arg);
+            }
+            let iface_const = self.add_constant(ConstValue::Type(bex_vm_types::anchor_template(
+                &iface.to_template(),
+            )));
+            let inst = self.emit(Instruction::LoadType(iface_const));
+            self.set_operand(inst, OperandMeta::Const(iface.to_string()));
+            self.emit_constant(&Constant::String(method.clone()));
+            let inst = self.emit(Instruction::MakeVirtualFunction {
                 ntypeargs: u16::try_from(type_args.len()).expect("ntypeargs fits in u16"),
             });
             self.set_operand(inst, OperandMeta::Callable(method.clone()));
@@ -1914,7 +1964,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             // Stack: receiver, then the interface type (resolved against the frame
             // by `LoadType`) — the opcode pops the interface, then the receiver.
             self.emit_operand_pull(receiver);
-            let iface_const = self.add_constant(ConstValue::Type(iface.to_template()));
+            let iface_const = self.add_constant(ConstValue::Type(bex_vm_types::anchor_template(
+                &iface.to_template(),
+            )));
             let inst = self.emit(Instruction::LoadType(iface_const));
             self.set_operand(inst, OperandMeta::Const(iface.to_string()));
             let inst = self.emit(Instruction::VirtualLoadField(*field_index as usize));
@@ -1950,19 +2002,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             .get(&name_str)
             .unwrap_or_else(|| panic!("undefined function: {name_str}"));
         let gidx = GlobalIndex::from_raw(global_idx);
+        // The pooled object carries runtime heads; anchor once and compare in
+        // that space so an existing instantiation is actually recognized.
+        let anchored_args: Box<[bex_vm_types::RealizedTy]> = type_args
+            .iter()
+            .map(bex_vm_types::anchor_realized)
+            .collect();
         let existing = self
             .objects
             .iter()
             .position(|o| {
                 matches!(o, Object::GenericFunction(gf)
-                if gf.function == gidx && gf.type_args.as_ref() == type_args)
+                if gf.function == gidx && gf.type_args == anchored_args)
             })
             .map(|local| self.objects_base + local);
         let pool_idx = match existing {
             Some(idx) => idx,
             None => self.mint_object(Object::GenericFunction(bex_vm_types::GenericFunction {
                 function: gidx,
-                type_args: type_args.to_vec().into_boxed_slice(),
+                type_args: anchored_args,
                 runtime_package: bex_vm_types::HeapPtr::null(),
             })),
         };
@@ -2342,7 +2400,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // interface, then the `ntypeargs` method type args, then reads the
                 // receiver (first value arg) to resolve the impl at runtime.
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
-                let iface_const = self.add_constant(ConstValue::Type(iface.to_template()));
+                let iface_const = self.add_constant(ConstValue::Type(
+                    bex_vm_types::anchor_template(&iface.to_template()),
+                ));
                 let inst = self.emit(Instruction::LoadType(iface_const));
                 self.set_operand(inst, OperandMeta::Const(iface.to_string()));
                 self.emit_constant(&Constant::String(method.clone()));
@@ -2629,22 +2689,30 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     /// Build the bytecode exception table from MIR catch regions.
     ///
-    /// Each `CatchRegion` maps a try-body entry block and handler block to PC
-    /// ranges. The try body spans from the entry block's first instruction up
-    /// to (but not including) the handler block's first instruction.
+    /// Each `CatchRegion` contributes the exact PC ranges of its protected
+    /// `body_blocks` (coalesced where the layout made them contiguous), NOT a
+    /// single `[body_entry_pc, handler_pc)` span. A span-based table is only
+    /// correct if the layout places every protected block before the handler
+    /// and every unprotected block outside the span — reverse-postorder
+    /// guarantees neither (a direct-throw block is a CFG leaf that sinks past
+    /// the handler; a panic-capable call-free block has no unwind edge to
+    /// anchor it), and both escaped their `catch` before this was made exact.
+    ///
+    /// Nested regions overlap: the protected PC set of an inner region is a
+    /// subset of every enclosing region's (inner windows nest inside outer
+    /// windows at lowering). The VM picks the innermost covering entry —
+    /// largest `start_pc`, then smallest `end_pc`, then latest table order —
+    /// which subset-nesting makes unambiguous: the inner region's coalesced
+    /// range around any PC is contained in the outer's, and for byte-identical
+    /// ranges the stable sort below preserves `catch_regions` creation order
+    /// (always outer before inner), so the last matching entry is the inner
+    /// handler.
     fn build_exception_table(&mut self, mir: &MirFunctionBody) {
         use bex_vm_types::bytecode::{ExceptionTableEntry, HandlerContextEntry};
 
         for region in &mir.catch_regions {
-            let body_entry = self.analysis.resolve_jump_target(region.body_entry);
             let handler = self.analysis.resolve_jump_target(region.handler);
 
-            let &start_pc = self.block_addresses.get(&body_entry).unwrap_or_else(|| {
-                unreachable!(
-                    "exception table: body entry block {body_entry:?} has no PC address — \
-                     catch region was emitted but its body block was dropped"
-                )
-            });
             let &handler_pc = self.block_addresses.get(&handler).unwrap_or_else(|| {
                 unreachable!(
                     "exception table: handler block {handler:?} has no PC address — \
@@ -2661,15 +2729,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 );
                 continue;
             };
-
-            // The RPO seeds the entry block first so that body_entry is
-            // always a DFS ancestor of handler, guaranteeing start_pc <
-            // handler_pc.
-            debug_assert!(
-                start_pc < handler_pc,
-                "exception table: handler {handler:?} (pc {handler_pc}) placed before \
-                 body entry {body_entry:?} (pc {start_pc}) — RPO ordering bug"
-            );
 
             let stack_trace_slot = region
                 .stack_trace_local
@@ -2704,19 +2763,43 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     });
             }
 
-            self.bytecode.exception_table.push(ExceptionTableEntry {
-                start_pc,
-                end_pc: handler_pc,
-                handler_pc,
-                error_slot,
-                stack_trace_slot,
-            });
+            // Exact protected coverage: one PC range per protected block,
+            // merged where the layout put member blocks back-to-back. Blocks
+            // dropped by layout/DCE have no addresses and nothing to protect;
+            // gaps between member fragments (e.g. an interleaved handler or
+            // post-join block) stay uncovered by construction.
+            let mut ranges: Vec<(usize, usize)> = region
+                .body_blocks
+                .iter()
+                .filter_map(|&block| {
+                    let &block_start = self.block_addresses.get(&block)?;
+                    let &block_end = self.block_end_addresses.get(&block)?;
+                    (block_start < block_end).then_some((block_start, block_end))
+                })
+                .collect();
+            ranges.sort_unstable();
+            let mut coalesced: Vec<(usize, usize)> = Vec::new();
+            for (start, end) in ranges {
+                match coalesced.last_mut() {
+                    Some(last) if start <= last.1 => last.1 = last.1.max(end),
+                    _ => coalesced.push((start, end)),
+                }
+            }
+            for (start_pc, end_pc) in coalesced {
+                self.bytecode.exception_table.push(ExceptionTableEntry {
+                    start_pc,
+                    end_pc,
+                    handler_pc,
+                    error_slot,
+                    stack_trace_slot,
+                });
+            }
         }
 
-        // Sort by start_pc so the VM can do a linear scan from most-specific
-        // (innermost) to least-specific. For nested catch blocks the inner
-        // region has a later start_pc, so reverse-sorted order gives innermost
-        // first during a reverse linear scan.
+        // Stable sort by start_pc: the VM selects the innermost covering entry
+        // by (largest start_pc, smallest end_pc, latest table order); stability
+        // keeps outer-before-inner creation order for byte-identical ranges so
+        // "latest" resolves to the inner handler (see the function doc).
         self.bytecode.exception_table.sort_by_key(|e| e.start_pc);
     }
 
@@ -3056,6 +3139,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         match op {
             UnaryOp::Not => Instruction::UnaryOp(VmUnaryOp::Not),
             UnaryOp::Neg => Instruction::UnaryOp(VmUnaryOp::Neg),
+            UnaryOp::Truthy => Instruction::UnaryOp(VmUnaryOp::Truthy),
         }
     }
 
@@ -3189,6 +3273,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     Rvalue::MakeClosure { .. }
                         | Rvalue::MakeBoundMethod { .. }
                         | Rvalue::MakeVirtualBoundMethod { .. }
+                        | Rvalue::MakeVirtualFunction { .. }
                         | Rvalue::VirtualFieldAccess { .. }
                         | Rvalue::BinaryOp { .. }
                         | Rvalue::Aggregate {
@@ -3418,7 +3503,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
         // arg-discriminating check a coarse type tag cannot express (`int[]` ≠
         // `string[]`, `map<string,int>` ≠ `map<string,string>`, a realized `T[]`).
         let emit_structural = |this: &mut Self, template: &TyTemplate| {
-            let c = this.add_constant(ConstValue::Type(template.clone()));
+            let c = this.add_constant(ConstValue::Type(bex_vm_types::anchor_template(template)));
             let inst = this.emit(Instruction::IsType(c));
             this.set_operand(inst, OperandMeta::Const(template.to_string()));
         };
@@ -3429,15 +3514,6 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // so the VM compares each arg invariantly; empty args →
             // class-pointer identity.
             TyTemplate::Class(tn, type_args_templates, _) => {
-                // A reflected `type` value is physically `Object::Type` but its
-                // reconstructed concrete type is one of the nine sealed kind
-                // classes. Kind tests must therefore use the structural value
-                // matcher; class-object pointer identity only applies to normal
-                // user instances.
-                if baml_type::type_kind::is_type_kind_class(tn) {
-                    emit_structural(self, ty_template);
-                    return Ok(());
-                }
                 let class_name_str = tn.display_name();
                 let Some(class_obj_idx) = self.class_object_index_for_type_name(tn) else {
                     emit_false(self);
@@ -3451,7 +3527,10 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 } else {
                     let c = self.add_constant(ConstValue::ClassWithTypeArgs {
                         class_obj: ObjectIndex::from_raw(class_obj_idx),
-                        type_args_templates: type_args_templates.clone(),
+                        type_args_templates: type_args_templates
+                            .iter()
+                            .map(bex_vm_types::anchor_template)
+                            .collect(),
                     });
                     let inst = self.emit(Instruction::IsType(c));
                     self.set_operand(inst, OperandMeta::Const(format!("{class_name_str}<...>")));
@@ -3505,7 +3584,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // to constant-FALSE — silently misrouting every value, not just the
             // valueless ones. (Only refutable positions reach here at all: an
             // exhaustive final `let v: unknown` arm has its test elided.)
-            TyTemplate::BuiltinUnknown { .. } => emit_true(self),
+            TyTemplate::Unknown { .. } => emit_true(self),
 
             // ── Singleton (literal) ──────────────────────────────────────────
             // A literal type is a set of one, so membership is decided against
@@ -3605,7 +3684,8 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error> {
-        let const_idx = self.add_constant(ConstValue::Type(template.clone()));
+        let const_idx =
+            self.add_constant(ConstValue::Type(bex_vm_types::anchor_template(template)));
         let inst = self.emit(Instruction::LoadType(const_idx));
         self.set_operand(inst, OperandMeta::Const(template.to_string()));
         Ok(())
@@ -3674,16 +3754,19 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String {
-        let class_name = match self.resolve_place_type(base) {
-            Some(RuntimeTy::Class(tn, _, _)) => tn.display_name().to_string(),
+        let class = match self.resolve_place_type(base) {
+            Some(bex_vm_types::RuntimeTy::Class(head, _, _)) => head.tag(),
             _ => return format!("{field_idx}"),
         };
-        self.lookup_class_field_name(&class_name, field_idx)
+        self.lookup_class_field_name(class, field_idx)
             .unwrap_or_else(|| format!("{field_idx}"))
     }
 
+    /// Field name for a class MIR named directly. `class_name` is the
+    /// fully-qualified spelling the pool is keyed by, so its tag is the class's
+    /// own — the same function that minted it at declaration.
     fn class_field_name(&self, class_name: &str, field_idx: usize) -> String {
-        self.lookup_class_field_name(class_name, field_idx)
+        self.lookup_class_field_name(baml_type::typetag::TypeTag::of_head(class_name), field_idx)
             .unwrap_or_else(|| format!("{field_idx}"))
     }
 }
@@ -3747,7 +3830,7 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
         | RealizedTy::PromptAst { .. }
         | RealizedTy::Void { .. }
         | RealizedTy::TypeAlias(..)
-        | RealizedTy::BuiltinUnknown { .. }
+        | RealizedTy::Unknown { .. }
         | RealizedTy::Never { .. }
         | RealizedTy::EnumVariant(..) => None,
     }

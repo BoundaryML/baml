@@ -54,7 +54,9 @@ pub enum VmPanic {
     #[error("operation cancelled")]
     Cancelled,
 
-    /// A user-caused panic from `baml.sys.panic`.
+    /// A user-caused panic from `baml.sys.panic`, and the stdlib's panic of
+    /// record for a user-violated native invariant (e.g. a reflection kind
+    /// view's `_ty` field overwritten with a type of a different kind).
     #[error("baml.sys.panic: {message}")]
     UserPanic { message: String },
 
@@ -289,11 +291,96 @@ pub enum VmInternalError {
 }
 
 /// Any kind of virtual machine error.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProfilerErrorKind {
+    Fresh,
+    Rethrow,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VmUnwindSource {
+    Bytecode,
+    NativeCall,
+    EngineCall,
+    FutureResume,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VmThrowSite {
+    pub file_id: u32,
+    pub line: u32,
+    pub start_offset: u32,
+    pub end_offset: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VmUnwindOrigin {
+    pub throw_call_id: u64,
+    pub throw_function_id: u32,
+    pub throw_site: Option<VmThrowSite>,
+    pub source: VmUnwindSource,
+    pub selected_error: bool,
+    pub manual_eligible: bool,
+    pub origin_span_already_terminated: bool,
+}
+
+impl VmUnwindOrigin {
+    #[must_use]
+    pub const fn unresolved(source: VmUnwindSource) -> Self {
+        Self {
+            throw_call_id: 0,
+            throw_function_id: 0,
+            throw_site: None,
+            source,
+            selected_error: false,
+            manual_eligible: false,
+            origin_span_already_terminated: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct VmThrown {
+    pub value: Value,
+    pub profiler_kind: ProfilerErrorKind,
+    pub language_is_rethrow: bool,
+    pub origin: VmUnwindOrigin,
+}
+
+impl VmThrown {
+    #[must_use]
+    pub const fn fresh(value: Value, source: VmUnwindSource) -> Self {
+        Self {
+            value,
+            profiler_kind: ProfilerErrorKind::Fresh,
+            language_is_rethrow: false,
+            origin: VmUnwindOrigin::unresolved(source),
+        }
+    }
+
+    #[must_use]
+    pub const fn rethrow(value: Value, source: VmUnwindSource, language_is_rethrow: bool) -> Self {
+        Self {
+            value,
+            profiler_kind: ProfilerErrorKind::Rethrow,
+            language_is_rethrow,
+            origin: VmUnwindOrigin::unresolved(source),
+        }
+    }
+
+    #[must_use]
+    pub const fn with_origin(mut self, origin: VmUnwindOrigin) -> Self {
+        self.origin = origin;
+        self
+    }
+}
+
+/// Any kind of virtual machine error.
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum VmError {
     /// Catchable (panics and error values) — internal signal for exception unwinding.
     #[error("uncaught throw: {0:?}")]
-    Thrown(Value),
+    Thrown(VmThrown),
     /// An exception that escaped all catch handlers, with captured stack trace.
     #[error("uncaught throw: {value:?}")]
     ThrownUnhandled {
@@ -310,6 +397,13 @@ pub enum VmError {
         source: VmInternalError,
         trace: Vec<StackFrame>,
     },
+}
+
+impl VmError {
+    #[must_use]
+    pub const fn thrown_fresh(value: Value) -> Self {
+        Self::Thrown(VmThrown::fresh(value, VmUnwindSource::Bytecode))
+    }
 }
 
 /// An error returned by a Rust function. Will generally be turned into a [`VmError`].
@@ -329,7 +423,28 @@ pub enum VmRustFnError {
     /// (e.g. `baml.json.JsonParseError`) without going through the
     /// `VmPanic` / `VmBamlError` enumeration machinery.
     #[error("thrown value")]
-    Thrown(Value),
+    Thrown {
+        value: Value,
+        profiler_kind: ProfilerErrorKind,
+    },
+}
+
+impl VmRustFnError {
+    #[must_use]
+    pub const fn thrown_fresh(value: Value) -> Self {
+        Self::Thrown {
+            value,
+            profiler_kind: ProfilerErrorKind::Fresh,
+        }
+    }
+
+    #[must_use]
+    pub const fn thrown_rethrow(value: Value) -> Self {
+        Self::Thrown {
+            value,
+            profiler_kind: ProfilerErrorKind::Rethrow,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

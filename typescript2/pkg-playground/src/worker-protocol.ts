@@ -138,27 +138,11 @@ export interface FunctionInfo {
   params?: ParamSchema[];
 }
 
-/** A statically declared legacy test that can seed function previews. */
-export interface TestInfo {
-  name: string;
-  functionName: string;
-  argsJson: string;
-}
-
-/** Stable identity shared by preview selection state and sidebar rows. */
-export function previewTestKey(
-  test: Pick<TestInfo, 'functionName' | 'name'>,
-): string {
-  return `${test.functionName}\u0000${test.name}`;
-}
-
 export interface ProjectUpdate {
   isBexCurrent: boolean;
   /** Generation of the installed engine backing this update. Omitted by older runtimes. */
   generation?: number;
   functions: FunctionInfo[];
-  /** Omitted by older runtimes; the UI treats that as no previewable tests. */
-  tests?: TestInfo[];
   /** Shared type table for `FunctionInfo.params` refs. `undefined` = binary
    *  predates the args form (refs, if any, degrade to raw JSON); may be an
    *  empty object when no function references named types. */
@@ -191,23 +175,7 @@ export type PlaygroundNotification =
       data: number[];
       expandError?: { testsetName: string; message: string };
     }
-  | {
-      type: 'profileArtifactChunk';
-      boundaryId?: BoundaryId;
-      engineId: number;
-      processId: string;
-      bytesBase64: string;
-      retainedBytes: number;
-      maxBytes?: number;
-      droppedBytes: number;
-      droppedChunks: number;
-    }
   | ({ type: 'valueBody' } & ValueBodyResponse);
-
-export type ProfileArtifactChunkMessage = Extract<
-  PlaygroundNotification,
-  { type: 'profileArtifactChunk' }
->;
 
 // ---------------------------------------------------------------------------
 // Control flow graph types (matches Rust serde output from baml_compiler2_visualization)
@@ -394,38 +362,6 @@ export interface RunDiagnostic {
   payloadId: string | null;
 }
 
-export interface ThreadNode {
-  id: string;
-  parentThreadId: string | null;
-  parentCallNodeId: string | null;
-  name: string | null;
-  startedAtNs: string | null;
-  endedAtNs: string | null;
-  status: 'running' | 'completed' | 'cancelled' | 'errored';
-  callNodeIds: string[];
-}
-
-export interface CallNode {
-  id: string;
-  threadId: string;
-  parentId: string | null;
-  functionId: number;
-  functionName: string | null;
-  functionOrigin:
-    | 'user'
-    | 'builtin'
-    | 'companion'
-    | 'internal'
-    | 'unknown'
-    | null;
-  calleeSource: RunSourceLocation | null;
-  callSiteSource: RunSourceLocation | null;
-  startedAtNs: string | null;
-  endedAtNs: string | null;
-  status: 'running' | 'ok' | 'errored' | 'cancelled' | 'exited';
-  payloadIds: string[];
-}
-
 export interface RunSourceLocation {
   filePath?: string | null;
   fileId?: number | null;
@@ -555,26 +491,9 @@ export interface Run {
   result: RunResult | null;
   error: RunError | null;
   cancellation: RunCancellation | null;
-  rootCallNodeId: string | null;
-  graphRuntimeOverlay: GraphRuntimeOverlay | null;
-  calls: CallNode[];
-  threads: ThreadNode[];
   payloads: PayloadEvent[];
   diagnostics: RunDiagnostic[];
   cursor: RunCursor;
-}
-
-export interface GraphRuntimeOverlay {
-  boundaryId: BoundaryId;
-  projectGeneration: number;
-  entries: GraphRuntimeOverlayEntry[];
-  unattachedCallNodeIds: string[];
-  diagnostics: RunDiagnostic[];
-}
-
-export interface GraphRuntimeOverlayEntry {
-  cfgNodeId: number;
-  callNodeIds: string[];
 }
 
 export interface RunSummary {
@@ -589,6 +508,194 @@ export interface RunSummary {
   retention: string;
 }
 
+// ---------------------------------------------------------------------------
+// Telemetry (profiles-v1, catalog v1)
+//
+// Structure and timing live in the profile store, not the run store. These
+// mirror the catalog relations one field per column, so a reader can check a
+// value against `baml query` output without a translation step.
+//
+// The grains are deliberately different and must not be conflated:
+//   - `TelemetryCallPath` is population-true: every call contributes.
+//   - `TelemetryCall` is one individually retained span, bounded by capture
+//     policy. It is never "all the calls".
+// ---------------------------------------------------------------------------
+
+/** One execution: a root thread, and a row in the executions table. */
+export interface TelemetryExecution {
+  executionId: string;
+  /** Root function. Null when the root span was not retained. */
+  entryFqn: string | null;
+  /** Human label for whatever started this run. */
+  sourceLabel: string | null;
+  revisionId: string | null;
+  status:
+    | 'running'
+    | 'abandoned'
+    | 'succeeded'
+    | 'failed'
+    | 'cancelled'
+    | 'panicked'
+    | null;
+  /**
+   * `complete` | `no_root_ended` | `root_started_lost` | `index_corrupt`.
+   * Anything but `complete` means this execution's evidence is partial and
+   * the UI must say so rather than present it as whole.
+   */
+  indexState: string | null;
+  /** `complete` | `partial` | `none`: whether captured values survived. */
+  valueState: string | null;
+  startedAtMs: number | null;
+  durationNs: number | null;
+  /** Every call that ran, retained or not. */
+  totalCalls: number | null;
+  totalErrors: number | null;
+  /** Calls kept as spans. The shortfall against `totalCalls` is the gap. */
+  callsRetained: number | null;
+  threadsTotal: number | null;
+}
+
+/** One logical thread. Root threads are executions. */
+export interface TelemetryThread {
+  threadId: string;
+  parentThreadId: string | null;
+  spawnCallId: string | null;
+  spawnFqn: string | null;
+  spawnSiteFile: string | null;
+  spawnSiteLine: number | null;
+  name: string | null;
+  kind: 'root' | 'spawn' | null;
+  startedNs: number | null;
+  endedNs: number | null;
+  endStatus: 'completed' | 'cancelled' | 'errored' | null;
+}
+
+/**
+ * One calling context: complete counts for every call that took this path,
+ * with no per-instance ordering or timestamps by construction.
+ */
+export interface TelemetryCallPath {
+  callPathId: string;
+  parentCallPathId: string | null;
+  depth: number | null;
+  fqn: string | null;
+  /** `bytecode` | `sysop` | `native` | `native_unresolved`. */
+  kind: string | null;
+  /** `user` | `companion` | `internal` | `builtin` | `auto_derive`. */
+  origin: string | null;
+  /** `root` | `call` | `spawn`. Spawned paths overlap their parent in time. */
+  edgeKind: 'root' | 'call' | 'spawn' | null;
+  callSiteFile: string | null;
+  callSiteLine: number | null;
+  callSiteStart: number | null;
+  callSiteEnd: number | null;
+  /** Population entries: the denominator for any rate or mean. */
+  callsStarted: number | null;
+  callsSelected: number | null;
+  completedOk: number | null;
+  completedError: number | null;
+  completedCancelled: number | null;
+  inclusiveNs: number | null;
+  directChildNs: number | null;
+  awaitNs: number | null;
+  /**
+   * `inclusiveNs - directChildNs - awaitNs`. The three are disjoint parts of
+   * inclusive time, so summing `selfNs` across paths is a valid CPU total
+   * and summing `awaitNs` a valid waiting total, with no double counting.
+   */
+  selfNs: number | null;
+  /** False when a counter saturated or self time underflowed. */
+  timingComplete: boolean | null;
+  /** Non-null only on synthetic rows standing in for folded-away paths. */
+  overflowReason: string | null;
+}
+
+/** One individually retained call, with exact timestamps. Evidence. */
+export interface TelemetryCall {
+  callId: string;
+  parentCallId: string | null;
+  threadId: string | null;
+  /** Exact join to the aggregate: never inferred from the function name. */
+  callPathId: string | null;
+  fqn: string | null;
+  kind: string | null;
+  edgeKind: 'root' | 'call' | 'spawn' | null;
+  callSiteFile: string | null;
+  callSiteLine: number | null;
+  startedNs: number | null;
+  endedNs: number | null;
+  durationNs: number | null;
+  status: 'ok' | 'errored' | 'cancelled' | 'exited' | null;
+  /** Why this call was kept: `root` | `llm` | `manual`. */
+  selectionReasons: string[];
+  /**
+   * `available` | `not_captured` | `lost:<reason>` | `not_applicable`.
+   * Not captured and lost are different facts with different remedies, so
+   * the UI must never collapse them into one "no value" state.
+   */
+  argsState: string | null;
+  outputState: string | null;
+  errorState: string | null;
+  argsCid: string | null;
+  outputCid: string | null;
+  errorCid: string | null;
+  errorId: string | null;
+  /**
+   * Hydrated captured values, rendered. Media appears as a descriptor
+   * (`{"$media":…,"bytes_len":N}`) rather than its bytes, which are fetched
+   * separately by content id.
+   */
+  args: string | null;
+  output: string | null;
+  error: string | null;
+}
+
+/** One captured media payload, fetched on demand by content id. */
+export interface TelemetryMedia {
+  /** `image`, `audio`, `pdf`. */
+  kind: string;
+  mime: string;
+  /** Base64 bytes, or null when the value carried a URL instead. */
+  base64: string | null;
+  url: string | null;
+  bytesLen: number | null;
+}
+
+/** One captured error. */
+export interface TelemetryErrorCapture {
+  errorId: string;
+  throwCallId: string | null;
+  throwThreadId: string | null;
+  throwCallPathId: string | null;
+  throwFqn: string | null;
+  throwSiteFile: string | null;
+  throwSiteLine: number | null;
+  /** `fresh` | `rethrow`. */
+  kind: string | null;
+  source: string | null;
+  valueState: string | null;
+  valueCid: string | null;
+  /** False when the stack has gaps: not a complete root-to-throw path. */
+  stackComplete: boolean | null;
+  /** Function names, root to throw. */
+  stack: string[];
+  /**
+   * The captured error, hydrated server-side and carried as its rendered
+   * form. Null when nothing was captured or the capture was lost, which
+   * `valueState` distinguishes.
+   */
+  value: string | null;
+}
+
+/** One execution's evidence, in the four grains the catalog serves. */
+export interface ExecutionTelemetry {
+  execution: TelemetryExecution | null;
+  threads: TelemetryThread[];
+  callPaths: TelemetryCallPath[];
+  calls: TelemetryCall[];
+  errors: TelemetryErrorCapture[];
+}
+
 export interface RunListFilter {
   projectId?: string;
   projectGeneration?: number;
@@ -598,12 +705,8 @@ export interface RunListFilter {
 }
 
 export type RunPatchChange =
-  | { type: 'upsertCallNode'; call: CallNode }
-  | { type: 'upsertThreadNode'; thread: ThreadNode }
   | { type: 'upsertPayload'; payload: PayloadEvent }
   | { type: 'upsertDiagnostic'; diagnostic: RunDiagnostic }
-  | { type: 'setRootCallNode'; callNodeId: string | null }
-  | { type: 'setGraphRuntimeOverlay'; overlay: GraphRuntimeOverlay }
   | { type: 'setStatus'; status: RunStatus }
   | {
       type: 'complete';
@@ -656,6 +759,25 @@ export type WebSocketOutMessage =
   | { type: 'commandError'; requestId: number; code: string; message: string }
   | { type: 'runList'; requestId: number; runs: RunSummary[] }
   | { type: 'historyList'; requestId: number; runs: RunSummary[] }
+  | {
+      type: 'executionList';
+      requestId: number;
+      executions: TelemetryExecution[];
+      /** True when the project has no profile store yet: an empty state. */
+      storeMissing?: boolean;
+    }
+  | {
+      type: 'executionTelemetry';
+      requestId: number;
+      executionId: string;
+      telemetry: ExecutionTelemetry;
+    }
+  | {
+      type: 'telemetryMedia';
+      requestId: number;
+      cid: string;
+      media: TelemetryMedia;
+    }
   | {
       type: 'runSnapshot';
       requestId?: number;
@@ -750,6 +872,19 @@ export type WebSocketInMessage =
     }
   | { type: 'listRuns'; requestId: number; filter?: RunListFilter }
   | { type: 'listHistory'; requestId: number; filter?: RunListFilter }
+  | { type: 'listExecutions'; requestId: number; project: string }
+  | {
+      type: 'readTelemetryMedia';
+      requestId: number;
+      project: string;
+      cid: string;
+    }
+  | {
+      type: 'openExecution';
+      requestId: number;
+      project: string;
+      executionId: string;
+    }
   | { type: 'openHistory'; requestId: number; boundaryId: BoundaryId }
   | { type: 'snapshot'; requestId: number; boundaryId: BoundaryId }
   | {
@@ -810,7 +945,6 @@ export type WebSocketInMessage =
 export type WorkerOutMessage =
   | { type: 'ready'; version?: string; commit?: string }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
-  | ProfileArtifactChunkMessage
   | { type: 'diagnostics'; entries: DiagnosticEntry[] }
   | { type: 'runStarted'; requestId?: number; run: Run }
   | { type: 'runPatch'; patch: RunPatch }
@@ -822,6 +956,25 @@ export type WorkerOutMessage =
   | { type: 'commandError'; requestId: number; code: string; message: string }
   | { type: 'runList'; requestId: number; runs: RunSummary[] }
   | { type: 'historyList'; requestId: number; runs: RunSummary[] }
+  | {
+      type: 'executionList';
+      requestId: number;
+      executions: TelemetryExecution[];
+      /** True when the project has no profile store yet: an empty state. */
+      storeMissing?: boolean;
+    }
+  | {
+      type: 'executionTelemetry';
+      requestId: number;
+      executionId: string;
+      telemetry: ExecutionTelemetry;
+    }
+  | {
+      type: 'telemetryMedia';
+      requestId: number;
+      cid: string;
+      media: TelemetryMedia;
+    }
   | {
       type: 'runSnapshot';
       requestId?: number;
@@ -908,6 +1061,19 @@ export type WorkerInMessage =
     }
   | { type: 'listRuns'; requestId: number; filter?: RunListFilter }
   | { type: 'listHistory'; requestId: number; filter?: RunListFilter }
+  | { type: 'listExecutions'; requestId: number; project: string }
+  | {
+      type: 'readTelemetryMedia';
+      requestId: number;
+      project: string;
+      cid: string;
+    }
+  | {
+      type: 'openExecution';
+      requestId: number;
+      project: string;
+      executionId: string;
+    }
   | { type: 'openHistory'; requestId: number; boundaryId: BoundaryId }
   | { type: 'snapshot'; requestId: number; boundaryId: BoundaryId }
   | {

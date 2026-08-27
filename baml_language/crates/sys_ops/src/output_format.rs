@@ -1,12 +1,12 @@
 use std::fmt::Write as _;
 
+use ::sys_types::SapTy;
 use baml_base::Literal as LiteralValue;
-use baml_type::RuntimeTy;
 use indexmap::IndexMap;
 use thiserror::Error;
 
 /// Error type for output format rendering.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum RenderError {
     #[error("Enum '{0}' not found")]
     EnumNotFound(String),
@@ -14,6 +14,38 @@ pub enum RenderError {
     ClassNotFound(String),
     #[error("Type '{0}' is not supported in outputs")]
     UnsupportedType(String),
+    #[error(
+        "Non-regular recursive generic class '{class}' expands from '{ancestor}' to '{instantiation}'"
+    )]
+    NonRegularRecursiveGeneric {
+        class: String,
+        ancestor: String,
+        instantiation: String,
+    },
+    #[error(
+        "Output definitions '{first}' and '{second}' both render as '{rendered_name}' in the output schema"
+    )]
+    RenderedClassNameCollision {
+        rendered_name: String,
+        first: String,
+        second: String,
+    },
+    #[error(
+        "Output definitions '{first}' and '{second}' both render as '{rendered_name}' in the output schema"
+    )]
+    RenderedEnumNameCollision {
+        rendered_name: String,
+        first: String,
+        second: String,
+    },
+    #[error(
+        "Type alias definitions for '{rendered_name}' have non-equivalent targets '{first}' and '{second}'"
+    )]
+    RenderedTypeAliasNameCollision {
+        rendered_name: String,
+        first: String,
+        second: String,
+    },
 }
 
 /// A value within an enum definition for output format rendering.
@@ -22,6 +54,7 @@ pub struct EnumValue {
     pub name: String,
     pub alias: Option<String>,
     pub description: Option<String>,
+    pub docstring: Option<String>,
 }
 
 /// An enum definition for output format rendering.
@@ -30,6 +63,7 @@ pub struct Enum {
     pub name: String,
     pub alias: Option<String>,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub values: Vec<EnumValue>,
 }
 
@@ -38,8 +72,9 @@ pub struct Enum {
 pub struct ClassField {
     pub name: String,
     pub alias: Option<String>,
-    pub field_type: RuntimeTy,
+    pub field_type: SapTy,
     pub description: Option<String>,
+    pub docstring: Option<String>,
 }
 
 /// A class definition for output format rendering.
@@ -48,6 +83,7 @@ pub struct Class {
     pub name: String,
     pub alias: Option<String>,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub fields: Vec<ClassField>,
 }
 
@@ -55,28 +91,39 @@ pub struct Class {
 #[derive(Clone, Debug)]
 pub struct OutputFormatContent {
     pub enums: IndexMap<String, Enum>,
+    /// Hoist-render ordering: enum names in LAST-REFERENCE order (a
+    /// re-reference during the schema walk moves the name to the end).
+    /// Kept separate from `enums` so the map itself stays in DECLARATION
+    /// order for collision validation and stable error reporting.
+    pub enum_reference_order: Vec<String>,
     pub classes: IndexMap<String, Class>,
-    pub target: RuntimeTy,
+    pub target: ::sys_types::SapTy,
     pub recursive_classes: indexmap::IndexSet<String>,
     /// Recursive type aliases: alias name → target type.
-    pub recursive_type_aliases: IndexMap<String, RuntimeTy>,
+    pub recursive_type_aliases: IndexMap<String, SapTy>,
+    build_error: Option<RenderError>,
 }
 
 impl OutputFormatContent {
     /// Create a new `OutputFormatContent` with the given target type.
-    pub fn new(target: RuntimeTy) -> Self {
+    pub fn new(target: ::sys_types::SapTy) -> Self {
         Self {
             enums: IndexMap::new(),
+            enum_reference_order: Vec::new(),
             classes: IndexMap::new(),
             target,
             recursive_classes: indexmap::IndexSet::new(),
             recursive_type_aliases: IndexMap::new(),
+            build_error: None,
         }
     }
 
     /// Add an enum definition.
     #[must_use]
     pub fn with_enum(mut self, enm: Enum) -> Self {
+        if !self.enums.contains_key(&enm.name) {
+            self.enum_reference_order.push(enm.name.clone());
+        }
         self.enums.insert(enm.name.clone(), enm);
         self
     }
@@ -104,6 +151,10 @@ impl OutputFormatContent {
     }
 
     fn render_impl(&self, options: &RenderOptions) -> Result<Option<String>, RenderError> {
+        if let Some(error) = &self.build_error {
+            return Err(error.clone());
+        }
+
         if matches!(options.prefix, RenderSetting::Auto) {
             if let Some(instruction) = media_output_instruction(&self.target, options) {
                 return Ok(Some(instruction));
@@ -111,7 +162,7 @@ impl OutputFormatContent {
         }
 
         // For string target with no explicit prefix, return None
-        if matches!(self.target, RuntimeTy::String { .. })
+        if matches!(self.target, SapTy::String { .. })
             && matches!(options.prefix, RenderSetting::Auto)
         {
             return Ok(None);
@@ -120,7 +171,7 @@ impl OutputFormatContent {
         // The `json` type alias is an opaque leaf from the LLM's perspective.
         // Regardless of rendering options, the only thing we ask the model to produce
         // is arbitrary JSON — no schema body, no prefix enumeration.
-        if let RuntimeTy::TypeAlias(tn, _) = &self.target {
+        if let SapTy::TypeAlias(tn, _) = &self.target {
             if tn.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
                 return Ok(Some("Respond with valid JSON.".to_string()));
             }
@@ -129,6 +180,7 @@ impl OutputFormatContent {
         // Compute which classes and enums to hoist
         let hoisted_classes = self.compute_hoisted_classes(options);
         let hoisted_enums = self.compute_hoisted_enums(options);
+        self.validate_hoisted_definition_names(&hoisted_classes, &hoisted_enums)?;
 
         let prefix = self.get_prefix(options, &hoisted_classes);
 
@@ -136,17 +188,14 @@ impl OutputFormatContent {
         // But with explicit prefix, we need to append the type
         if matches!(
             self.target,
-            RuntimeTy::Int { .. }
-                | RuntimeTy::Bigint { .. }
-                | RuntimeTy::Float { .. }
-                | RuntimeTy::Bool { .. }
+            SapTy::Int { .. } | SapTy::Bigint { .. } | SapTy::Float { .. } | SapTy::Bool { .. }
         ) && matches!(options.prefix, RenderSetting::Auto)
         {
             return Ok(prefix);
         }
 
         // Check if the target is a hoisted enum
-        let target_is_hoisted_enum = if let RuntimeTy::Enum(tn, _) = &self.target {
+        let target_is_hoisted_enum = if let SapTy::Enum(tn, _) = &self.target {
             hoisted_enums.contains(tn.display_name().as_str())
         } else {
             false
@@ -192,16 +241,18 @@ impl OutputFormatContent {
                     _ => String::new(),
                 };
 
-                let display_name = rendered_name(name, cls.alias.as_ref());
+                let display_name = rendered_hoisted_definition_name(name, cls);
 
                 // Render class description above the name for hoisted classes
                 let mut def = String::new();
-                if let Some(ref desc) = cls.description {
-                    let desc = desc.trim();
-                    if !desc.is_empty() {
-                        for line in desc.lines() {
-                            let _ = writeln!(def, "/// {line}");
-                        }
+                for docs in [&cls.description, &cls.docstring]
+                    .into_iter()
+                    .flatten()
+                    .map(|docs| docs.trim())
+                    .filter(|docs| !docs.is_empty())
+                {
+                    for line in docs.lines() {
+                        let _ = writeln!(def, "/// {line}");
                     }
                 }
                 let _ = write!(def, "{hoisted_prefix}{display_name} {body}");
@@ -227,20 +278,19 @@ impl OutputFormatContent {
         }
 
         // Render the target type with hoisting awareness
-        let message = if let RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) =
-            &self.target
-        {
+        let message = if let SapTy::Class(tn, _, _) | SapTy::Interface(tn, _, _, _) = &self.target {
             let tn_display_name = tn.display_name();
-            if hoisted_classes.contains(tn_display_name.as_str()) {
-                let display_name = self
-                    .find_class(tn_display_name.as_str())
-                    .and_then(|cls| cls.alias.as_deref())
-                    .unwrap_or(tn_display_name.as_str());
-                Some(display_name.to_string())
+            let class_key = class_instantiation_key(&self.target);
+            if hoisted_classes.contains(&class_key) {
+                Some(rendered_hoisted_class_name(
+                    &self.target,
+                    self.find_class(&class_key)
+                        .or_else(|| self.find_class(tn_display_name.as_str())),
+                ))
             } else {
                 self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
             }
-        } else if let RuntimeTy::Enum(tn, _) = &self.target {
+        } else if let SapTy::Enum(tn, _) = &self.target {
             if target_is_hoisted_enum {
                 // Hoisted target enum: rendered in enum_definitions block
                 None
@@ -250,7 +300,7 @@ impl OutputFormatContent {
             } else {
                 Some(tn.display_name().to_string())
             }
-        } else if let RuntimeTy::TypeAlias(fqn, _) = &self.target {
+        } else if let SapTy::TypeAlias(fqn, _) = &self.target {
             Some(fqn.display_name().to_string())
         } else {
             self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
@@ -303,11 +353,22 @@ impl OutputFormatContent {
 
     /// Compute which enums should be hoisted (rendered as top-level definitions).
     fn compute_hoisted_enums(&self, options: &RenderOptions) -> indexmap::IndexSet<String> {
+        // Reverse of the walk's last-reference order (legacy renderer parity).
         let mut hoisted = indexmap::IndexSet::new();
-        for (name, enm) in &self.enums {
+        let has_docs =
+            |docs: &Option<String>| docs.as_deref().is_some_and(|docs| !docs.trim().is_empty());
+        // Reverse of the walk's last-reference order (legacy renderer parity).
+        for name in self.enum_reference_order.iter().rev() {
+            let Some(enm) = self.enums.get(name) else {
+                continue;
+            };
             if enm.values.len() > Self::INLINE_RENDER_ENUM_MAX_VALUES
-                || enm.description.is_some()
-                || enm.values.iter().any(|v| v.description.is_some())
+                || has_docs(&enm.description)
+                || has_docs(&enm.docstring)
+                || enm
+                    .values
+                    .iter()
+                    .any(|v| has_docs(&v.description) || has_docs(&v.docstring))
                 || matches!(options.always_hoist_enums, RenderSetting::Always(true))
             {
                 hoisted.insert(name.clone());
@@ -329,7 +390,16 @@ impl OutputFormatContent {
                 hoisted.extend(self.classes.keys().cloned());
             }
             HoistClasses::Subset(names) => {
-                hoisted.extend(names.iter().cloned());
+                for requested_name in names {
+                    hoisted.extend(
+                        self.classes
+                            .iter()
+                            .filter(|(definition_key, cls)| {
+                                *definition_key == requested_name || cls.name == *requested_name
+                            })
+                            .map(|(definition_key, _)| definition_key.clone()),
+                    );
+                }
             }
             HoistClasses::Auto => {
                 // Only recursive classes (already added above)
@@ -337,6 +407,51 @@ impl OutputFormatContent {
         }
 
         hoisted
+    }
+
+    fn validate_hoisted_definition_names(
+        &self,
+        hoisted_classes: &indexmap::IndexSet<String>,
+        hoisted_enums: &indexmap::IndexSet<String>,
+    ) -> Result<(), RenderError> {
+        let mut definitions_by_rendered_name = self
+            .recursive_type_aliases
+            .keys()
+            .map(|name| (name.clone(), name.clone()))
+            .collect::<IndexMap<String, String>>();
+        for definition_key in hoisted_classes {
+            let Some(cls) = self.find_class(definition_key) else {
+                continue;
+            };
+            let rendered_name = rendered_hoisted_definition_name(definition_key, cls);
+            if let Some(first) = definitions_by_rendered_name.get(&rendered_name) {
+                return Err(RenderError::RenderedClassNameCollision {
+                    rendered_name,
+                    first: first.clone(),
+                    second: definition_key.clone(),
+                });
+            }
+            definitions_by_rendered_name.insert(rendered_name, definition_key.clone());
+        }
+        // Validate in DECLARATION order, not hoist-render order: hoisted
+        // enums render in reverse last-reference order (legacy parity), but
+        // collision reporting must stay stable and name the declaration-order
+        // first/second pair.
+        for (definition_key, enm) in &self.enums {
+            if !hoisted_enums.contains(definition_key) {
+                continue;
+            }
+            let rendered_name = rendered_name(&enm.name, enm.alias.as_ref()).to_string();
+            if let Some(first) = definitions_by_rendered_name.get(&rendered_name) {
+                return Err(RenderError::RenderedEnumNameCollision {
+                    rendered_name,
+                    first: first.clone(),
+                    second: definition_key.clone(),
+                });
+            }
+            definitions_by_rendered_name.insert(rendered_name, definition_key.clone());
+        }
+        Ok(())
     }
 
     fn get_prefix(
@@ -362,51 +477,64 @@ impl OutputFormatContent {
     /// (`T?` == `T | null`) delegates to its non-null part — so `string?` has no
     /// prefix like `string`, and `Class?` uses the class prefix.
     fn auto_prefix(
-        ty: &RuntimeTy,
+        ty: &SapTy,
         type_word: &str,
         hoisted: &indexmap::IndexSet<String>,
     ) -> Option<String> {
         match ty {
-            RuntimeTy::String { .. } => None,
-            RuntimeTy::Int { .. } => Some("Answer as an int".to_string()),
-            RuntimeTy::Bigint { .. } => Some("Answer as a bigint".to_string()),
-            RuntimeTy::Float { .. } => Some("Answer as a float".to_string()),
-            RuntimeTy::Bool { .. } => Some("Answer as a bool".to_string()),
-            RuntimeTy::List(..) => {
-                Some("Answer with a JSON Array using this schema:\n".to_string())
-            }
-            RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) => {
-                let end = if hoisted.contains(tn.display_name().as_str()) {
+            SapTy::String { .. } => None,
+            SapTy::Int { .. } => Some("Answer as an int".to_string()),
+            SapTy::Bigint { .. } => Some("Answer as a bigint".to_string()),
+            SapTy::Float { .. } => Some("Answer as a float".to_string()),
+            SapTy::Bool { .. } => Some("Answer as a bool".to_string()),
+            SapTy::List(..) => Some("Answer with a JSON Array using this schema:\n".to_string()),
+            SapTy::Class(_, _, _) | SapTy::Interface(_, _, _, _) => {
+                let end = if class_is_hoisted(ty, hoisted) {
                     " "
                 } else {
                     "\n"
                 };
                 Some(format!("Answer in JSON using this {type_word}:{end}"))
             }
-            RuntimeTy::Map { .. } => Some(format!("Answer in JSON using this {type_word}:\n")),
-            RuntimeTy::Enum(..) => Some("Answer with any of the categories:\n".to_string()),
-            RuntimeTy::Union(variants, _) => {
-                let non_null: Vec<&RuntimeTy> = variants
+            SapTy::Map { .. } => Some(format!("Answer in JSON using this {type_word}:\n")),
+            SapTy::Enum(..) => Some("Answer with any of the categories:\n".to_string()),
+            SapTy::Union(variants, _) => {
+                let non_null: Vec<&SapTy> = variants
                     .iter()
-                    .filter(|v| !matches!(v, RuntimeTy::Null { .. }))
+                    .filter(|v| !matches!(v, SapTy::Null { .. }))
                     .collect();
                 // `T?` (single non-null member + null) follows the inner type's
-                // prefix; a true multi-member union gets the union prefix.
+                // prefix — except that a nullable PRIMITIVE, unlike a bare
+                // primitive (which renders no schema at all), does render a
+                // schema (`int or null`) and therefore takes the generic
+                // schema prefix (legacy renderer parity). The bare-primitive
+                // "Answer as an int" prefix would duplicate the type wording
+                // in front of the rendered schema.
                 if non_null.len() == 1 && non_null.len() < variants.len() {
-                    Self::auto_prefix(non_null[0], type_word, hoisted)
+                    match non_null[0] {
+                        SapTy::String { .. }
+                        | SapTy::Int { .. }
+                        | SapTy::Bigint { .. }
+                        | SapTy::Float { .. }
+                        | SapTy::Bool { .. } => {
+                            Some(format!("Answer in JSON using this {type_word}:\n"))
+                        }
+                        inner => Self::auto_prefix(inner, type_word, hoisted)
+                            .or_else(|| Some(format!("Answer in JSON using this {type_word}:\n"))),
+                    }
                 } else if non_null.len() > 1 {
                     Some(format!("Answer in JSON using any of these {type_word}s:\n"))
                 } else {
                     Some(format!("Answer in JSON using this {type_word}:\n"))
                 }
             }
-            RuntimeTy::TypeAlias(tn, _)
+            SapTy::TypeAlias(tn, _)
                 if tn.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON =>
             {
                 None
             }
-            RuntimeTy::TypeAlias(..) => Some(format!("Answer in JSON using this {type_word}: ")),
-            RuntimeTy::Literal(..) => Some("Answer using this specific value:\n".to_string()),
+            SapTy::TypeAlias(..) => Some(format!("Answer in JSON using this {type_word}: ")),
+            SapTy::Literal(..) => Some("Answer using this specific value:\n".to_string()),
             _ => None,
         }
     }
@@ -414,20 +542,21 @@ impl OutputFormatContent {
     /// Render a type, with hoisted classes rendered as just their name.
     fn render_type_hoisted(
         &self,
-        ty: &RuntimeTy,
+        ty: &SapTy,
         options: &RenderOptions,
         hoisted_classes: &indexmap::IndexSet<String>,
         hoisted_enums: &indexmap::IndexSet<String>,
     ) -> Result<Option<String>, RenderError> {
         // Intercept hoisted classes: return just the (aliased) name
-        if let RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) = ty {
+        if let SapTy::Class(tn, _, _) | SapTy::Interface(tn, _, _, _) = ty {
             let tn_display_name = tn.display_name();
-            if hoisted_classes.contains(tn_display_name.as_str()) {
-                let display_name = self
-                    .find_class(tn_display_name.as_str())
-                    .and_then(|cls| cls.alias.as_deref())
-                    .unwrap_or(tn_display_name.as_str());
-                return Ok(Some(display_name.to_string()));
+            let class_key = class_instantiation_key(ty);
+            if hoisted_classes.contains(&class_key) {
+                return Ok(Some(rendered_hoisted_class_name(
+                    ty,
+                    self.find_class(&class_key)
+                        .or_else(|| self.find_class(tn_display_name.as_str())),
+                )));
             }
         }
 
@@ -437,48 +566,50 @@ impl OutputFormatContent {
         };
 
         match ty {
-            RuntimeTy::String { .. } => Ok(Some("string".to_string())),
-            RuntimeTy::Int { .. } => Ok(Some("int".to_string())),
-            RuntimeTy::Bigint { .. } => Ok(Some("bigint".to_string())),
-            RuntimeTy::Float { .. } => Ok(Some("float".to_string())),
-            RuntimeTy::Bool { .. } => Ok(Some("bool".to_string())),
-            RuntimeTy::Null { .. } => Ok(Some(rendered_null_type(options).to_string())),
+            SapTy::String { .. } => Ok(Some("string".to_string())),
+            SapTy::Int { .. } => Ok(Some("int".to_string())),
+            SapTy::Bigint { .. } => Ok(Some("bigint".to_string())),
+            SapTy::Float { .. } => Ok(Some("float".to_string())),
+            SapTy::Bool { .. } => Ok(Some("bool".to_string())),
+            SapTy::Null { .. } => Ok(Some(rendered_null_type(options).to_string())),
 
-            RuntimeTy::List(inner, _) => {
+            SapTy::List(inner, _) => {
                 let inner_str = self
                     .render_type_hoisted(inner, options, hoisted_classes, hoisted_enums)?
                     .unwrap_or_else(|| "unknown".to_string());
 
                 // Determine if we need multiline rendering
                 let is_hoisted = match inner.as_ref() {
-                    RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) => {
-                        hoisted_classes.contains(tn.display_name().as_str())
+                    SapTy::Class(..) | SapTy::Interface(..) => {
+                        class_is_hoisted(inner, hoisted_classes)
                     }
-                    RuntimeTy::TypeAlias(tn, _) => self
+                    SapTy::TypeAlias(tn, _) => self
                         .recursive_type_aliases
                         .contains_key(tn.display_name().as_str()),
                     _ => false,
                 };
                 let needs_multiline = !is_hoisted
                     && match inner.as_ref() {
-                        RuntimeTy::String { .. }
-                        | RuntimeTy::Int { .. }
-                        | RuntimeTy::Float { .. }
-                        | RuntimeTy::Bool { .. }
-                        | RuntimeTy::Null { .. } => false,
-                        RuntimeTy::Enum(tn, _) => {
-                            // Inline enums render short; hoisted ones are just a name
-                            !hoisted_enums.contains(tn.display_name().as_str())
-                                && inner_str.len() > 15
+                        SapTy::String { .. }
+                        | SapTy::Int { .. }
+                        | SapTy::Float { .. }
+                        | SapTy::Bool { .. }
+                        | SapTy::Null { .. } => false,
+                        SapTy::Enum(tn, _) => {
+                            // Hoisted enums render as a bracketed block (legacy
+                            // parity: `[\n  Name\n]`); inline enums go
+                            // multiline only when long.
+                            hoisted_enums.contains(tn.display_name().as_str())
+                                || inner_str.len() > 15
                         }
-                        RuntimeTy::Union(items, _) => items.iter().all(|t| {
+                        SapTy::Union(items, _) => items.iter().all(|t| {
                             !matches!(
                                 t,
-                                RuntimeTy::String { .. }
-                                    | RuntimeTy::Int { .. }
-                                    | RuntimeTy::Float { .. }
-                                    | RuntimeTy::Bool { .. }
-                                    | RuntimeTy::Null { .. }
+                                SapTy::String { .. }
+                                    | SapTy::Int { .. }
+                                    | SapTy::Float { .. }
+                                    | SapTy::Bool { .. }
+                                    | SapTy::Null { .. }
                             )
                         }),
                         _ => true,
@@ -486,14 +617,14 @@ impl OutputFormatContent {
 
                 if needs_multiline {
                     Ok(Some(format!("[\n  {}\n]", inner_str.replace('\n', "\n  "))))
-                } else if matches!(inner.as_ref(), RuntimeTy::Union(_, _)) {
+                } else if matches!(inner.as_ref(), SapTy::Union(_, _)) {
                     Ok(Some(format!("({inner_str})[]")))
                 } else {
                     Ok(Some(format!("{inner_str}[]")))
                 }
             }
 
-            RuntimeTy::Map { key, value, .. } => {
+            SapTy::Map { key, value, .. } => {
                 let key_str = self
                     .render_type_hoisted(key, options, hoisted_classes, hoisted_enums)?
                     .unwrap_or_else(|| "string".to_string());
@@ -508,9 +639,15 @@ impl OutputFormatContent {
                 }
             }
 
-            RuntimeTy::Union(variants, _) => {
-                let rendered: Vec<String> = variants
+            SapTy::Union(variants, _) => {
+                // Null arms render last (`X or null`), matching the legacy
+                // renderer regardless of the union's internal arm order.
+                let (null_variants, value_variants): (Vec<&SapTy>, Vec<&SapTy>) = variants
                     .iter()
+                    .partition(|v| matches!(v, SapTy::Null { .. }));
+                let rendered: Vec<String> = value_variants
+                    .into_iter()
+                    .chain(null_variants)
                     .filter_map(|v| {
                         self.render_type_hoisted(v, options, hoisted_classes, hoisted_enums)
                             .ok()
@@ -520,7 +657,7 @@ impl OutputFormatContent {
                 Ok(Some(rendered.join(or_splitter)))
             }
 
-            RuntimeTy::Enum(tn, _) => {
+            SapTy::Enum(tn, _) => {
                 let tn_display_name = tn.display_name();
                 if hoisted_enums.contains(tn_display_name.as_str()) {
                     // Hoisted enum: render as just the display name
@@ -545,8 +682,12 @@ impl OutputFormatContent {
                 }
             }
 
-            RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) => {
-                if let Some(cls) = self.find_class(tn.display_name().as_str()) {
+            SapTy::Class(tn, _, _) | SapTy::Interface(tn, _, _, _) => {
+                let class_key = class_instantiation_key(ty);
+                if let Some(cls) = self
+                    .find_class(&class_key)
+                    .or_else(|| self.find_class(tn.display_name().as_str()))
+                {
                     Ok(Some(self.render_class_hoisted(
                         cls,
                         options,
@@ -555,46 +696,48 @@ impl OutputFormatContent {
                         false,
                     )?))
                 } else {
-                    Ok(Some(tn.display_name().to_string()))
+                    Ok(Some(class_instantiation_key(ty)))
                 }
             }
 
-            RuntimeTy::Uint8Array { .. } => {
+            SapTy::Uint8Array { .. } => {
                 Err(RenderError::UnsupportedType("uint8array".to_string()))
             }
-            RuntimeTy::Media(kind, _) => Ok(Some(kind.to_string())),
+            SapTy::Media(kind, _) => Ok(Some(kind.to_string())),
 
-            RuntimeTy::Literal(lit, _, _) => Ok(Some(render_literal(lit))),
+            SapTy::Literal(lit, _, _) => Ok(Some(render_literal(lit))),
 
             // Opaque leaf types have no JSON output-format schema. They surface
-            // as `UnsupportedType` named the same way `RuntimeTy`'s `Display` renders
-            // them (`type`, or the fixed qualified name).
-            RuntimeTy::Type { .. } => Err(RenderError::UnsupportedType("type".to_string())),
-            RuntimeTy::Resource { .. } => {
+            // as `UnsupportedType` named the same way `SapTy`'s `Display` renders
+            // them (`reflect.Type`, or the fixed qualified name).
+            SapTy::Type { .. } => {
+                Err(RenderError::UnsupportedType("reflect.Type".to_string()))
+            }
+            SapTy::Resource { .. } => {
                 Err(RenderError::UnsupportedType("ai.Resource".to_string()))
             }
-            RuntimeTy::PromptAst { .. } => {
+            SapTy::PromptAst { .. } => {
                 Err(RenderError::UnsupportedType("ai.Prompt".to_string()))
             }
 
-            RuntimeTy::TypeAlias(fqn, _) => {
+            SapTy::TypeAlias(fqn, _) => {
                 // Recursive type aliases render as just their display name
                 Ok(Some(fqn.display_name().to_string()))
             }
 
-            RuntimeTy::Function { .. }
-            | RuntimeTy::Void { .. }
-            | RuntimeTy::BuiltinUnknown { .. }
-            | RuntimeTy::EnumVariant(..)
-            | RuntimeTy::Future(..)
-            | RuntimeTy::TypeVar(..)
-            | RuntimeTy::AssociatedTypeProjection { .. }
-            | RuntimeTy::Never { .. }
+            SapTy::Function { .. }
+            | SapTy::Void { .. }
+            | SapTy::Unknown { .. }
+            | SapTy::EnumVariant(..)
+            | SapTy::Future(..)
+            | SapTy::TypeVar(..)
+            | SapTy::AssociatedTypeProjection { .. }
+            | SapTy::Never { .. }
             // Checked LLM execution and render-companion paths reject these at
             // `validate_output_type`. Throws-never low-level output-format
             // helpers may still degrade this error to an empty string, so keep
             // the formatter fallible rather than aborting the process.
-            | RuntimeTy::RustType { .. } => Err(RenderError::UnsupportedType(ty.to_string())),
+            | SapTy::RustType { .. } => Err(RenderError::UnsupportedType(ty.to_string())),
         }
     }
 
@@ -605,13 +748,15 @@ impl OutputFormatContent {
         let display_name = rendered_name(&enm.name, enm.alias.as_ref());
 
         let mut result = String::new();
-        // Enum-level description as /// comments above the name
-        if let Some(ref d) = enm.description {
-            let d = d.trim();
-            if !d.is_empty() {
-                for line in d.lines() {
-                    let _ = writeln!(result, "/// {line}");
-                }
+        // Enum-level description and source docs as /// comments above the name.
+        for docs in [&enm.description, &enm.docstring]
+            .into_iter()
+            .flatten()
+            .map(|docs| docs.trim())
+            .filter(|docs| !docs.is_empty())
+        {
+            for line in docs.lines() {
+                let _ = writeln!(result, "/// {line}");
             }
         }
 
@@ -626,9 +771,28 @@ impl OutputFormatContent {
                 RenderSetting::Always(p) => p.as_str(),
                 RenderSetting::Never => "",
             };
-            let line = match &v.description {
-                Some(d) => format!("{prefix}{value_name}: {d}"),
-                None => format!("{prefix}{value_name}"),
+            let docs = [&v.description, &v.docstring]
+                .into_iter()
+                .flatten()
+                .map(|docs| docs.trim())
+                .filter(|docs| !docs.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            let line = if docs.is_empty() {
+                format!("{prefix}{value_name}")
+            } else {
+                // Continuation lines align under the value text (legacy
+                // renderer behavior; keeps multi-line descriptions visually
+                // attached to their value). The indent is the configured
+                // prefix's width — two spaces for the default "- " (legacy
+                // parity bytes unchanged), zero when the prefix is Never.
+                // Docstrings join the description (upstream behavior) but
+                // interior newlines are preserved.
+                let indent = " ".repeat(prefix.chars().count());
+                format!(
+                    "{prefix}{value_name}: {}",
+                    docs.replace('\r', "").replace('\n', &format!("\n{indent}"))
+                )
             };
             result.push('\n');
             result.push_str(&line);
@@ -669,9 +833,14 @@ impl OutputFormatContent {
             } else {
                 display_name.to_string()
             };
-            // Field description as /// comment above the field
-            if let Some(d) = &field.description {
-                fields_str.push(format!("  /// {}", d.replace('\n', "\n  /// ")));
+            // Field description and source docs render in that order.
+            for docs in [&field.description, &field.docstring]
+                .into_iter()
+                .flatten()
+                .map(|docs| docs.trim())
+                .filter(|docs| !docs.is_empty())
+            {
+                fields_str.push(format!("  /// {}", docs.replace('\n', "\n  /// ")));
             }
             fields_str.push(format!("  {field_name}: {ty_str},"));
         }
@@ -679,18 +848,30 @@ impl OutputFormatContent {
         let mut output = String::new();
         output.push_str("{\n");
         if !skip_class_description {
-            if let Some(ref d) = cls.description {
-                let d = d.trim();
-                if !d.is_empty() {
-                    for line in d.lines() {
-                        let _ = writeln!(output, "  /// {line}");
-                    }
-                    output.push('\n');
+            let mut wrote_docs = false;
+            for docs in [&cls.description, &cls.docstring]
+                .into_iter()
+                .flatten()
+                .map(|docs| docs.trim())
+                .filter(|docs| !docs.is_empty())
+            {
+                wrote_docs = true;
+                for line in docs.lines() {
+                    let _ = writeln!(output, "  /// {line}");
                 }
             }
+            if wrote_docs {
+                output.push('\n');
+            }
         }
-        output.push_str(&fields_str.join("\n"));
-        output.push_str("\n}");
+        if fields_str.is_empty() {
+            // An empty (fully dynamic, not yet extended) class renders as
+            // "{\n}" rather than leaving a blank line between the braces.
+            output.push('}');
+        } else {
+            output.push_str(&fields_str.join("\n"));
+            output.push_str("\n}");
+        }
 
         Ok(output)
     }
@@ -701,10 +882,55 @@ fn rendered_name<'a>(name: &'a str, alias: Option<&'a String>) -> &'a str {
     alias.map(String::as_str).unwrap_or(name)
 }
 
+fn rendered_hoisted_definition_name(definition_key: &str, cls: &Class) -> String {
+    let rendered_base = rendered_name(&cls.name, cls.alias.as_ref());
+    match definition_key.strip_prefix(&cls.name) {
+        Some("") => rendered_base.to_string(),
+        Some(type_args) if type_args.starts_with('<') => {
+            format!("{rendered_base}{type_args}")
+        }
+        _ => definition_key.to_string(),
+    }
+}
+
+fn rendered_hoisted_class_name(ty: &SapTy, class_def: Option<&Class>) -> String {
+    let class_key = class_instantiation_key(ty);
+    class_def.map_or(class_key.clone(), |cls| {
+        rendered_hoisted_definition_name(&class_key, cls)
+    })
+}
+
+fn class_is_hoisted(ty: &SapTy, hoisted: &indexmap::IndexSet<String>) -> bool {
+    hoisted.contains(&class_instantiation_key(ty))
+}
+
+/// Key a class definition by its realized generic instantiation. A generic
+/// class's display name alone is insufficient: `Box<int>` and `Box<string>`
+/// have different field schemas even though both are named `Box`.
+fn class_instantiation_key(ty: &SapTy) -> String {
+    let (SapTy::Class(type_name, type_args, _) | SapTy::Interface(type_name, type_args, _, _)) = ty
+    else {
+        unreachable!("class_instantiation_key called for a non-class type")
+    };
+    if type_args.is_empty() {
+        type_name.display_name().to_string()
+    } else {
+        format!(
+            "{}<{}>",
+            type_name.display_name(),
+            type_args
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
 /// Extract the display name from an enum target type.
-fn enm_display_name(ty: &RuntimeTy) -> Option<baml_type::Name> {
+fn enm_display_name(ty: &SapTy) -> Option<baml_type::Name> {
     match ty {
-        RuntimeTy::Enum(tn, _) => Some(tn.display_name()),
+        SapTy::Enum(tn, _) => Some(tn.display_name()),
         _ => None,
     }
 }
@@ -727,16 +953,16 @@ fn rendered_null_type(options: &RenderOptions) -> &str {
     }
 }
 
-fn media_output_instruction(target: &RuntimeTy, options: &RenderOptions) -> Option<String> {
+fn media_output_instruction(target: &SapTy, options: &RenderOptions) -> Option<String> {
     let null_type = rendered_null_type(options);
     match target {
-        RuntimeTy::Media(kind, _) => Some(format!("Return an {kind} output.")),
-        RuntimeTy::Union(variants, _) if nullable_media_union_kind(variants).is_some() => {
+        SapTy::Media(kind, _) => Some(format!("Return an {kind} output.")),
+        SapTy::Union(variants, _) if nullable_media_union_kind(variants).is_some() => {
             let kind = nullable_media_union_kind(variants).expect("checked above");
             Some(format!("Return an {kind} output or {null_type}."))
         }
-        RuntimeTy::List(inner, _) => match inner.as_ref() {
-            RuntimeTy::Media(kind, _) => Some(format!("Return one or more {kind} outputs.")),
+        SapTy::List(inner, _) => match inner.as_ref() {
+            SapTy::Media(kind, _) => Some(format!("Return one or more {kind} outputs.")),
             inner if is_text_or_image_union(inner) => {
                 Some("Return an ordered sequence of text and image outputs.".to_string())
             }
@@ -749,12 +975,12 @@ fn media_output_instruction(target: &RuntimeTy, options: &RenderOptions) -> Opti
     }
 }
 
-fn nullable_media_union_kind(variants: &[RuntimeTy]) -> Option<baml_base::MediaKind> {
+fn nullable_media_union_kind(variants: &[SapTy]) -> Option<baml_base::MediaKind> {
     let mut kind = None;
     let mut has_null = false;
     for variant in variants {
         match variant {
-            RuntimeTy::Media(media_kind, _) => {
+            SapTy::Media(media_kind, _) => {
                 if kind
                     .replace(*media_kind)
                     .is_some_and(|prev| prev != *media_kind)
@@ -762,7 +988,7 @@ fn nullable_media_union_kind(variants: &[RuntimeTy]) -> Option<baml_base::MediaK
                     return None;
                 }
             }
-            RuntimeTy::Null { .. } => has_null = true,
+            SapTy::Null { .. } => has_null = true,
             _ => return None,
         }
     }
@@ -770,8 +996,8 @@ fn nullable_media_union_kind(variants: &[RuntimeTy]) -> Option<baml_base::MediaK
     if has_null { kind } else { None }
 }
 
-pub(crate) fn is_text_or_image_union(target: &RuntimeTy) -> bool {
-    let RuntimeTy::Union(variants, _) = target else {
+pub(crate) fn is_text_or_image_union(target: &SapTy) -> bool {
+    let SapTy::Union(variants, _) = target else {
         return false;
     };
 
@@ -779,9 +1005,9 @@ pub(crate) fn is_text_or_image_union(target: &RuntimeTy) -> bool {
     let mut has_image = false;
     for variant in variants {
         match variant {
-            RuntimeTy::String { .. } => has_string = true,
-            RuntimeTy::Media(baml_base::MediaKind::Image, _) => has_image = true,
-            RuntimeTy::Null { .. } => {}
+            SapTy::String { .. } => has_string = true,
+            SapTy::Media(baml_base::MediaKind::Image, _) => has_image = true,
+            SapTy::Null { .. } => {}
             _ => return false,
         }
     }
@@ -877,11 +1103,11 @@ impl RenderOptions {
 // ============================================================================
 
 /// Render `return_type`'s schema with default options for
-/// `ctx.output_format`. Build the `OutputFormatContent`, then render with
+/// `ctx.output_format()`. Build the `OutputFormatContent`, then render with
 /// `RenderOptions::default()`. An empty or `None`
 /// render (e.g. a primitive return type with no schema) becomes the empty string.
 pub fn render_output_format(
-    return_type: &baml_type::RuntimeTy,
+    return_type: &::sys_types::SapTy,
     ctx: &::sys_types::SysOpContext,
 ) -> String {
     build_output_format_content(return_type, ctx)
@@ -892,54 +1118,17 @@ pub fn render_output_format(
 }
 
 /// Render a prebuilt [`OutputFormatContent`] with caller-supplied options.
-/// This backs the parameterized `ctx.output_format_with(...)` accessor. The content is
-/// carried as an opaque handle on `Context` (built once by
-/// [`build_output_format_content`]); this only re-renders. The option mapping
-/// (`RenderSetting`/`RenderOptions`) stays crate-internal: a value overrides
-/// that aspect (`Always`), `None` keeps the default (`Auto`).
-// Options arrive by value from the sys-op glue; most are moved into
-// `RenderOptions`, `map_style` is only read — taking it by ref too would just
-// shift the clone to the caller.
-#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
 pub fn render_output_format_content(
     content: &self::OutputFormatContent,
-    prefix: Option<String>,
-    or_splitter: Option<String>,
-    enum_value_prefix: Option<String>,
-    hoisted_class_prefix: Option<String>,
-    always_hoist_enums: Option<bool>,
-    quote_class_fields: Option<bool>,
-    hoist_classes: Option<Vec<String>>,
-    map_style: Option<String>,
-    render_null_as: Option<String>,
-) -> String {
-    use self::{HoistClasses, MapStyle, RenderOptions, RenderSetting};
-    fn setting<V>(o: Option<V>) -> RenderSetting<V> {
-        o.map_or(RenderSetting::Auto, RenderSetting::Always)
-    }
-    let options = RenderOptions {
-        prefix: setting(prefix),
-        or_splitter: setting(or_splitter),
-        enum_value_prefix: setting(enum_value_prefix),
-        hoisted_class_prefix: setting(hoisted_class_prefix),
-        always_hoist_enums: setting(always_hoist_enums),
-        quote_class_fields: setting(quote_class_fields),
-        hoist_classes: hoist_classes.map_or(HoistClasses::Auto, HoistClasses::Subset),
-        map_style: match map_style.as_deref() {
-            // `type_parameters` is the opt-in escape hatch (`map<K, V>`); every
-            // other value (including the default) renders the JSON object shape.
-            Some("type_parameters") => MapStyle::TypeParameters,
-            _ => MapStyle::ObjectLiteral,
-        },
-        render_null_as: setting(render_null_as),
-    };
-    content.render(&options).ok().flatten().unwrap_or_default()
+    options: &self::RenderOptions,
+) -> Result<String, RenderError> {
+    content.render(options).map(Option::unwrap_or_default)
 }
 
-/// Build an `OutputFormatContent` by walking a `RuntimeTy` and collecting all
+/// Build an `OutputFormatContent` by walking a `SapTy` and collecting all
 /// referenced class/enum/type-alias definitions from `SysOpContext`.
 pub fn build_output_format_content(
-    ty: &baml_type::RuntimeTy,
+    ty: &::sys_types::SapTy,
     ctx: &::sys_types::SysOpContext,
 ) -> self::OutputFormatContent {
     use std::collections::HashSet;
@@ -948,128 +1137,185 @@ pub fn build_output_format_content(
     let mut visited = HashSet::new();
     let mut ancestry = Vec::new();
 
-    walk_ty(ty, ctx, &mut content, &mut visited, &mut ancestry);
+    if let Err(error) = walk_ty(
+        ty,
+        &LaneOrigins::root(),
+        ctx,
+        &mut content,
+        &mut visited,
+        &mut ancestry,
+    ) {
+        content.build_error = Some(error);
+    }
 
     content
 }
 
+/// Look up a class definition by declaration identity.
+///
+/// An exact lookup with nothing to fall back to: the key's `Eq` is its tag, so
+/// this either finds the declaration the type actually names or finds nothing.
+/// The old name-based fallback — scan for a unique matching `display_name` —
+/// existed because the table was keyed by name, which made two declarations a
+/// user spelled alike indistinguishable. It could return a *different*
+/// declaration that happened to share a spelling, and is unrepresentable now.
 fn find_class_definition<'a>(
     ctx: &'a ::sys_types::SysOpContext,
-    type_name: &baml_type::TypeName,
+    head: &::sys_types::DefKey,
 ) -> Option<&'a ::sys_types::ClassDefinition> {
-    ctx.class_definitions.get(type_name).or_else(|| {
-        let mut matches = ctx
-            .class_definitions
-            .iter()
-            .filter(|(name, _)| name.display_name() == type_name.display_name())
-            .map(|(_, def)| def);
-        let first = matches.next()?;
-        matches.next().is_none().then_some(first)
-    })
+    ctx.class_definitions.get(head)
 }
 
+/// See [`find_class_definition`] — same contract, for enums.
 fn find_enum_definition<'a>(
     ctx: &'a ::sys_types::SysOpContext,
-    type_name: &baml_type::TypeName,
+    head: &::sys_types::DefKey,
 ) -> Option<&'a ::sys_types::EnumDefinition> {
-    ctx.enum_definitions.get(type_name).or_else(|| {
-        let mut matches = ctx
-            .enum_definitions
-            .iter()
-            .filter(|(name, _)| name.display_name() == type_name.display_name())
-            .map(|(_, def)| def);
-        let first = matches.next()?;
-        matches.next().is_none().then_some(first)
-    })
+    ctx.enum_definitions.get(head)
 }
 
+/// See [`find_class_definition`] — same contract, for recursive type aliases.
 fn find_type_alias_definition<'a>(
     ctx: &'a ::sys_types::SysOpContext,
-    type_name: &baml_type::TypeName,
-) -> Option<&'a baml_type::RuntimeTy> {
-    ctx.type_alias_definitions.get(type_name).or_else(|| {
-        let mut matches = ctx
-            .type_alias_definitions
-            .iter()
-            .filter(|(name, _)| name.display_name() == type_name.display_name())
-            .map(|(_, ty)| ty);
-        let first = matches.next()?;
-        matches.next().is_none().then_some(first)
-    })
+    head: &::sys_types::DefKey,
+) -> Option<&'a ::sys_types::SapTy> {
+    ctx.type_alias_definitions.get(head)
 }
 
-/// Recursive DFS walk of a type tree. `ancestry` tracks the class names
-/// currently on the call stack so mutual recursion (A → B → A) is detected.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum OutputVisitKey {
+    Enum(::sys_types::DefKey),
+    TypeAlias(::sys_types::DefKey),
+}
+
+/// The origins lane for the walk: symbolic realizations headed by the same
+/// declaration identities the walk keys on.
+type LaneOrigins = baml_type::template::TyTemplateOrigins<::sys_types::DefKey>;
+
+struct ClassFrame {
+    ty: SapTy,
+    head: ::sys_types::DefKey,
+    output_name: String,
+    arity: usize,
+}
+
+/// Recursive DFS walk of a type tree. `ancestry` tracks the realized classes
+/// currently on the call stack so mutual recursion (A → B → A) is detected and
+/// transformed generic recursion (`Box<int> → Box<Box<int>> → ...`) is
+/// rejected.
 fn walk_ty(
-    ty: &baml_type::RuntimeTy,
+    ty: &SapTy,
+    origins: &LaneOrigins,
     ctx: &::sys_types::SysOpContext,
     content: &mut self::OutputFormatContent,
-    visited: &mut std::collections::HashSet<baml_type::TypeName>,
-    ancestry: &mut Vec<baml_type::TypeName>,
-) {
-    use baml_type::RuntimeTy;
-
+    visited: &mut std::collections::HashSet<OutputVisitKey>,
+    ancestry: &mut Vec<ClassFrame>,
+) -> Result<(), RenderError> {
     match ty {
-        RuntimeTy::Class(type_name, _, _) => {
-            // Runtime definitions carry a mint-qualified internal TypeName. Use
-            // that identity for traversal: the display name is an output label,
-            // not a definition key (BEP-066 R-3).
-            let key = type_name.clone();
+        SapTy::Class(type_name, type_args, _) => {
+            let output_key = class_instantiation_key(ty);
+            let output_name = type_name.display_name().to_string();
 
             // If this class is already on the ancestry stack, it's a recursive cycle.
             // Only mark classes from the cycle start, not unrelated ancestors.
-            if let Some(start) = ancestry.iter().position(|name| name == &key) {
-                for name in &ancestry[start..] {
-                    content
-                        .recursive_classes
-                        .insert(name.display_name().to_string());
+            if let Some(start) = ancestry.iter().position(|frame| frame.ty == *ty) {
+                for frame in &ancestry[start..] {
+                    content.recursive_classes.insert(frame.output_name.clone());
                 }
-                return;
+                return Ok(());
             }
 
-            if !visited.insert(key.clone()) {
-                return;
+            for (index, ancestor) in ancestry.iter().enumerate() {
+                if ancestor.head == *type_name
+                    && origins.class_transform_expands(index, type_name, ancestor.arity)
+                {
+                    return Err(RenderError::NonRegularRecursiveGeneric {
+                        class: output_name,
+                        ancestor: ancestor.output_name.clone(),
+                        instantiation: output_key,
+                    });
+                }
             }
 
             if let Some(class_def) = find_class_definition(ctx, type_name) {
+                // `field_type` is the erased/runtime shape used by older
+                // callers. Emitted classes also carry a symbolic template so
+                // a generic class visited as `Outer<Choice>` can substitute
+                // `T` through nested positions such as `Inner<T>.values`.
+                let field_types: Vec<SapTy> = class_def
+                    .fields
+                    .iter()
+                    .filter(|f| !f.skip)
+                    .map(|f| {
+                        f.field_template
+                            .as_ref()
+                            .map(|template| template.substitute_symbolic(type_args))
+                            .unwrap_or_else(|| f.field_type.clone())
+                    })
+                    .collect();
                 let fields: Vec<self::ClassField> = class_def
                     .fields
                     .iter()
                     .filter(|f| !f.skip)
-                    .map(|f| self::ClassField {
-                        name: f.name.clone(),
-                        alias: f.alias.clone(),
-                        field_type: f.field_type.clone(),
-                        description: f.description.clone(),
+                    .zip(field_types.iter())
+                    .map(|(field, field_type)| self::ClassField {
+                        name: field.name.clone(),
+                        alias: field.alias.clone(),
+                        field_type: field_type.clone(),
+                        description: field.description.clone(),
+                        docstring: field.docstring.clone(),
                     })
                     .collect();
 
                 content.classes.insert(
-                    type_name.display_name().to_string(),
+                    output_key.clone(),
                     self::Class {
-                        name: type_name.display_name().to_string(),
+                        name: output_name,
                         alias: class_def.alias.clone(),
                         description: class_def.description.clone(),
+                        docstring: class_def.docstring.clone(),
                         fields,
                     },
                 );
 
                 // Push onto ancestry before recursing into fields
-                ancestry.push(key);
-                for field_def in &class_def.fields {
-                    if !field_def.skip {
-                        walk_ty(&field_def.field_type, ctx, content, visited, ancestry);
-                    }
+                ancestry.push(ClassFrame {
+                    ty: ty.clone(),
+                    head: type_name.clone(),
+                    output_name: output_key,
+                    arity: type_args.len(),
+                });
+                for (field, field_type) in class_def
+                    .fields
+                    .iter()
+                    .filter(|field| !field.skip)
+                    .zip(&field_types)
+                {
+                    let field_origins = if let Some(template) = &field.field_template {
+                        origins.through_field(type_name, type_args.len(), template)
+                    } else {
+                        LaneOrigins::opaque(ancestry.len())
+                    };
+                    walk_ty(field_type, &field_origins, ctx, content, visited, ancestry)?;
                 }
                 ancestry.pop();
             }
         }
-        RuntimeTy::Enum(type_name, _) => {
-            let key = type_name.clone();
+        SapTy::Enum(type_name, _) => {
+            let key = OutputVisitKey::Enum(type_name.clone());
             if !visited.insert(key) {
-                return;
+                // Legacy renderer parity: a re-reference moves the enum to the
+                // end of the collection order; hoisted definitions are then
+                // emitted in REVERSE of that (last-referenced first).
+                let display = type_name.display_name().to_string();
+                if content.enums.contains_key(&display) {
+                    content.enum_reference_order.retain(|n| n != &display);
+                    content.enum_reference_order.push(display);
+                }
+                return Ok(());
             }
             if let Some(enum_def) = find_enum_definition(ctx, type_name) {
+                let output_name = type_name.display_name().to_string();
                 // Skipped variants are already filtered out in bex_engine extraction.
                 let values: Vec<self::EnumValue> = enum_def
                     .variants
@@ -1078,21 +1324,26 @@ fn walk_ty(
                         name: v.name.clone(),
                         alias: v.alias.clone(),
                         description: v.description.clone(),
+                        docstring: v.docstring.clone(),
                     })
                     .collect();
 
+                if !content.enums.contains_key(&output_name) {
+                    content.enum_reference_order.push(output_name.clone());
+                }
                 content.enums.insert(
-                    type_name.display_name().to_string(),
+                    output_name.clone(),
                     self::Enum {
-                        name: type_name.display_name().to_string(),
+                        name: output_name,
                         alias: enum_def.alias.clone(),
                         description: enum_def.description.clone(),
+                        docstring: enum_def.docstring.clone(),
                         values,
                     },
                 );
             }
         }
-        RuntimeTy::TypeAlias(type_name, _) => {
+        SapTy::TypeAlias(type_name, _) => {
             // The `baml.json.json` recursive alias is an opaque leaf for output-format
             // rendering — it has no schema body to collect.  Record the sentinel visit so
             // any later reference is de-duped, but do *not* insert it into
@@ -1100,41 +1351,257 @@ fn walk_ty(
             // recurse into the alias body (which would diverge on the self-referential
             // `json[]` / `map<string, json>` arms).
             if type_name.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
-                visited.insert(type_name.clone());
-                return;
+                visited.insert(OutputVisitKey::TypeAlias(type_name.clone()));
+                return Ok(());
             }
-            let key = type_name.clone();
+            let key = OutputVisitKey::TypeAlias(type_name.clone());
             if !visited.insert(key) {
-                return;
+                return Ok(());
             }
             if let Some(target_ty) = find_type_alias_definition(ctx, type_name) {
-                content
-                    .recursive_type_aliases
-                    .insert(type_name.display_name().to_string(), target_ty.clone());
-                walk_ty(target_ty, ctx, content, visited, ancestry);
+                let output_name = type_name.display_name().to_string();
+                if let Some(first) = content.recursive_type_aliases.get(&output_name) {
+                    if first != target_ty {
+                        return Err(RenderError::RenderedTypeAliasNameCollision {
+                            rendered_name: output_name,
+                            first: first.to_string(),
+                            second: target_ty.to_string(),
+                        });
+                    }
+                } else {
+                    content
+                        .recursive_type_aliases
+                        .insert(output_name, target_ty.clone());
+                }
+                let target_origins = LaneOrigins::opaque(ancestry.len());
+                walk_ty(target_ty, &target_origins, ctx, content, visited, ancestry)?;
             }
         }
-        RuntimeTy::List(inner, _) => {
-            walk_ty(inner, ctx, content, visited, ancestry);
+        SapTy::List(inner, _) => {
+            let inner_origins = origins.list_element();
+            walk_ty(inner, &inner_origins, ctx, content, visited, ancestry)?;
         }
-        RuntimeTy::Map { key, value, .. } => {
-            walk_ty(key, ctx, content, visited, ancestry);
-            walk_ty(value, ctx, content, visited, ancestry);
+        SapTy::Map { key, value, .. } => {
+            let key_origins = origins.map_key();
+            let value_origins = origins.map_value();
+            walk_ty(key, &key_origins, ctx, content, visited, ancestry)?;
+            walk_ty(value, &value_origins, ctx, content, visited, ancestry)?;
         }
-        RuntimeTy::Union(members, _) => {
-            for member in members {
-                walk_ty(member, ctx, content, visited, ancestry);
+        SapTy::Union(members, _) => {
+            for (index, member) in members.iter().enumerate() {
+                let member_origins = origins.union_member(index);
+                walk_ty(member, &member_origins, ctx, content, visited, ancestry)?;
             }
         }
         _ => {}
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{Freshness, TyAttr, TypeName};
+    use std::sync::Arc;
+
+    use baml_type::{DeclarationName, Freshness, TyAttr, TypeName};
+    use sys_types::{DefKey, SapTy as RuntimeTy};
+
+    /// Build a lane key for a test declaration: a compiled declaration's
+    /// identity is the content-addressed tag of its qualified name.
+    fn key(name: &TypeName) -> DefKey {
+        DefKey::new(
+            baml_type::typetag::TypeTag::of_head(&name.render_dotted(false)),
+            DeclarationName::Declared(name.clone()),
+        )
+    }
+
+    fn dynamic_key(name: &str) -> DefKey {
+        DefKey::new(
+            baml_type::typetag::TypeTag::fresh_dynamic(),
+            DeclarationName::Anonymous(baml_type::Name::new(name)),
+        )
+    }
 
     use super::*;
+
+    #[test]
+    fn duplicate_hoisted_enum_aliases_are_rejected() {
+        let first = dynamic_key("Choice");
+        let second = dynamic_key("Choice_2");
+        let target = RuntimeTy::Union(
+            vec![
+                RuntimeTy::Enum(first.clone(), TyAttr::default()),
+                RuntimeTy::Enum(second.clone(), TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        let definition = |name: &str| sys_types::EnumDefinition {
+            name: name.to_string(),
+            docstring: None,
+            description: None,
+            alias: Some("SharedChoice".to_string()),
+            variants: vec![sys_types::EnumVariantDefinition {
+                name: "Value".to_string(),
+                docstring: None,
+                description: None,
+                alias: None,
+            }],
+        };
+        let mut enums = indexmap::IndexMap::new();
+        enums.insert(first, definition("Choice"));
+        enums.insert(second, definition("Choice_2"));
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.enum_definitions = Arc::new(enums);
+
+        let content = build_output_format_content(&target, &ctx);
+        let error = content
+            .render(&RenderOptions {
+                always_hoist_enums: RenderSetting::Always(true),
+                ..RenderOptions::default()
+            })
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedEnumNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
+        ));
+    }
+
+    #[test]
+    fn class_and_enum_hoisted_alias_collision_is_rejected() {
+        let class_key = dynamic_key("Choice");
+        let enum_key = dynamic_key("Choice_2");
+        let target = RuntimeTy::Union(
+            vec![
+                RuntimeTy::Class(class_key.clone(), Vec::new(), TyAttr::default()),
+                RuntimeTy::Enum(enum_key.clone(), TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        let mut class = ctx_class_definition(
+            &class_key,
+            vec![ctx_class_field("value", ty_string(), None)],
+        );
+        class.alias = Some("SharedChoice".to_string());
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(class_key, class);
+        let mut enums = indexmap::IndexMap::new();
+        enums.insert(
+            enum_key,
+            sys_types::EnumDefinition {
+                name: "Choice_2".to_string(),
+                docstring: None,
+                description: None,
+                alias: Some("SharedChoice".to_string()),
+                variants: vec![sys_types::EnumVariantDefinition {
+                    name: "Value".to_string(),
+                    docstring: None,
+                    description: None,
+                    alias: None,
+                }],
+            },
+        );
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+        ctx.enum_definitions = Arc::new(enums);
+
+        let content = build_output_format_content(&target, &ctx);
+        let error = content
+            .render(&RenderOptions {
+                hoist_classes: HoistClasses::All,
+                always_hoist_enums: RenderSetting::Always(true),
+                ..RenderOptions::default()
+            })
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedEnumNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
+        ));
+    }
+
+    #[test]
+    fn type_alias_and_hoisted_class_alias_collision_is_rejected() {
+        let mut class = mk_class("Choice", vec![("value", ty_string())]);
+        class.alias = Some("SharedChoice".to_string());
+        let mut content = OutputFormatContent::new(ty_class("Choice")).with_class(class);
+        content
+            .recursive_type_aliases
+            .insert("SharedChoice".to_string(), ty_string());
+
+        let error = content
+            .render(&RenderOptions {
+                hoist_classes: HoistClasses::All,
+                ..RenderOptions::default()
+            })
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedClassNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "SharedChoice" && first == "SharedChoice" && second == "Choice"
+        ));
+    }
+
+    #[test]
+    fn same_name_type_aliases_with_different_targets_are_rejected() {
+        let first = dynamic_key("SharedAlias");
+        let second = dynamic_key("SharedAlias");
+        let target = RuntimeTy::Union(
+            vec![
+                RuntimeTy::TypeAlias(first.clone(), TyAttr::default()),
+                RuntimeTy::TypeAlias(second.clone(), TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        let mut aliases = indexmap::IndexMap::new();
+        aliases.insert(first, ty_string());
+        aliases.insert(second, ty_int());
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.type_alias_definitions = Arc::new(aliases);
+
+        let error = build_output_format_content(&target, &ctx)
+            .render(&RenderOptions::default())
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedTypeAliasNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "SharedAlias" && first == "string" && second == "int"
+        ));
+    }
+
+    #[test]
+    fn same_name_type_aliases_with_equivalent_targets_fold_once() {
+        let first = dynamic_key("SharedAlias");
+        let second = dynamic_key("SharedAlias");
+        let target = RuntimeTy::Union(
+            vec![
+                RuntimeTy::TypeAlias(first.clone(), TyAttr::default()),
+                RuntimeTy::TypeAlias(second.clone(), TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        let mut aliases = indexmap::IndexMap::new();
+        aliases.insert(first, ty_string());
+        aliases.insert(second, ty_string());
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.type_alias_definitions = Arc::new(aliases);
+
+        let content = build_output_format_content(&target, &ctx);
+        assert_eq!(content.recursive_type_aliases.len(), 1);
+        assert!(content.render(&RenderOptions::default()).is_ok());
+    }
 
     // -------------------------------------------------------------------------
     // Phase 3: json alias sentinel
@@ -1146,7 +1613,7 @@ mod tests {
     #[test]
     fn test_render_json_alias_sentinel() {
         let json_tn = TypeName::from_dotted_path(::baml_base::qualified_name::BAML_JSON_JSON);
-        let json_ty = RuntimeTy::TypeAlias(json_tn, TyAttr::default());
+        let json_ty = RuntimeTy::TypeAlias(key(&json_tn), TyAttr::default());
         let content = OutputFormatContent::new(json_ty);
 
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -1162,7 +1629,7 @@ mod tests {
     #[test]
     fn test_render_json_alias_sentinel_ignores_explicit_prefix() {
         let json_tn = TypeName::from_dotted_path(::baml_base::qualified_name::BAML_JSON_JSON);
-        let json_ty = RuntimeTy::TypeAlias(json_tn, TyAttr::default());
+        let json_ty = RuntimeTy::TypeAlias(key(&json_tn), TyAttr::default());
         let content = OutputFormatContent::new(json_ty);
 
         let options = RenderOptions {
@@ -1181,7 +1648,7 @@ mod tests {
     #[test]
     fn test_render_non_json_alias_does_not_sentinel() {
         let other_tn = TypeName::from_dotted_path("baml.other.SomeAlias");
-        let other_ty = RuntimeTy::TypeAlias(other_tn, TyAttr::default());
+        let other_ty = RuntimeTy::TypeAlias(key(&other_tn), TyAttr::default());
         // Without any class/enum definitions or recursive_type_aliases, the alias
         // renders as just its display name (the existing fallback).
         let content = OutputFormatContent::new(other_ty);
@@ -1357,7 +1824,12 @@ mod tests {
             attr: TyAttr::default(),
         }));
         let rendered = content.render(&RenderOptions::default()).unwrap();
-        assert_eq!(rendered, Some("string or null".to_string()));
+        // A nullable primitive renders a schema, so it takes the generic
+        // schema prefix (legacy renderer parity) — unlike a bare primitive.
+        assert_eq!(
+            rendered,
+            Some("Answer in JSON using this schema:\nstring or null".to_string())
+        );
     }
 
     #[test]
@@ -1371,7 +1843,10 @@ mod tests {
                 ..RenderOptions::default()
             })
             .unwrap();
-        assert_eq!(rendered, Some("string or omit".to_string()));
+        assert_eq!(
+            rendered,
+            Some("Answer in JSON using this schema:\nstring or omit".to_string())
+        );
     }
 
     #[test]
@@ -1445,6 +1920,7 @@ mod tests {
             name: "Person".to_string(),
             alias: None,
             description: Some("A person".to_string()),
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "name".to_string(),
@@ -1453,6 +1929,7 @@ mod tests {
                         attr: TyAttr::default(),
                     },
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "age".to_string(),
@@ -1461,12 +1938,13 @@ mod tests {
                         attr: TyAttr::default(),
                     },
                     description: Some("Age in years".to_string()),
+                    docstring: None,
                 },
             ],
         };
 
         let content = OutputFormatContent::new(RuntimeTy::Class(
-            baml_type::TypeName::local("Person".into()),
+            key(&baml_type::TypeName::local("Person".into())),
             Vec::new(),
             TyAttr::default(),
         ))
@@ -1495,6 +1973,7 @@ mod tests {
             name: "Point".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "x".to_string(),
@@ -1503,6 +1982,7 @@ mod tests {
                         attr: TyAttr::default(),
                     },
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "y".to_string(),
@@ -1511,12 +1991,13 @@ mod tests {
                         attr: TyAttr::default(),
                     },
                     description: None,
+                    docstring: None,
                 },
             ],
         };
 
         let content = OutputFormatContent::new(RuntimeTy::Class(
-            baml_type::TypeName::local("Point".into()),
+            key(&baml_type::TypeName::local("Point".into())),
             Vec::new(),
             TyAttr::default(),
         ))
@@ -1542,27 +2023,31 @@ mod tests {
             name: "Color".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             values: vec![
                 EnumValue {
                     name: "Red".to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 },
                 EnumValue {
                     name: "Green".to_string(),
                     alias: None,
                     description: Some("Like grass".to_string()),
+                    docstring: None,
                 },
                 EnumValue {
                     name: "Blue".to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 },
             ],
         };
 
         let content = OutputFormatContent::new(RuntimeTy::Enum(
-            baml_type::TypeName::local("Color".into()),
+            key(&baml_type::TypeName::local("Color".into())),
             TyAttr::default(),
         ))
         .with_enum(enm);
@@ -1579,6 +2064,60 @@ mod tests {
                  - Blue"
                     .to_string()
             )
+        );
+    }
+
+    #[test]
+    fn blank_enum_docs_do_not_change_hoisting() {
+        let clean = OutputFormatContent::new(ty_enum("Color"))
+            .with_enum(mk_enum("Color", vec!["Red", "Blue"]));
+        let mut blank_enum = mk_enum("Color", vec!["Red", "Blue"]);
+        blank_enum.description = Some(" \n ".to_string());
+        blank_enum.docstring = Some("\t".to_string());
+        blank_enum.values[0].description = Some("  ".to_string());
+        blank_enum.values[1].docstring = Some("\n".to_string());
+        let blank = OutputFormatContent::new(ty_enum("Color")).with_enum(blank_enum);
+
+        assert_eq!(
+            blank.render(&RenderOptions::default()).unwrap(),
+            clean.render(&RenderOptions::default()).unwrap()
+        );
+    }
+
+    #[test]
+    fn enum_value_docs_preserve_lines_with_prefix_indent() {
+        // Interior newlines are PRESERVED and continuation lines indent by
+        // the prefix width (legacy renderer parity — multi-line enum-value
+        // descriptions render aligned beneath the value text, not collapsed
+        // onto one line). Description and docstring join with a space, and
+        // CRLF normalizes to LF.
+        let mut enm = mk_enum("Color", vec!["Red"]);
+        enm.values[0].description = Some(" first line\n second line ".to_string());
+        enm.values[0].docstring = Some("third line\r\nfourth line".to_string());
+        let content = OutputFormatContent::new(ty_enum("Color")).with_enum(enm);
+
+        let rendered = content
+            .render(&RenderOptions::default())
+            .unwrap()
+            .expect("an enum renders");
+        assert!(
+            rendered.contains("- Red: first line\n   second line third line\n  fourth line"),
+            "{rendered}"
+        );
+    }
+
+    #[test]
+    fn blank_field_docs_are_not_rendered() {
+        let clean = OutputFormatContent::new(ty_class("Point"))
+            .with_class(mk_class("Point", vec![("x", ty_int())]));
+        let mut blank_class = mk_class("Point", vec![("x", ty_int())]);
+        blank_class.fields[0].description = Some(" \n ".to_string());
+        blank_class.fields[0].docstring = Some("\t".to_string());
+        let blank = OutputFormatContent::new(ty_class("Point")).with_class(blank_class);
+
+        assert_eq!(
+            blank.render(&RenderOptions::default()).unwrap(),
+            clean.render(&RenderOptions::default()).unwrap()
         );
     }
 
@@ -1675,7 +2214,7 @@ mod tests {
     fn test_render_opaque_unsupported() {
         let content = OutputFormatContent::new(RuntimeTy::type_type());
         let err = content.render(&RenderOptions::default()).unwrap_err();
-        assert!(matches!(err, RenderError::UnsupportedType(s) if s == "type"));
+        assert!(matches!(err, RenderError::UnsupportedType(s) if s == "reflect.Type"));
     }
 
     #[test]
@@ -1713,8 +2252,15 @@ mod tests {
     }
     fn ty_class(name: &str) -> RuntimeTy {
         RuntimeTy::Class(
-            baml_type::TypeName::local(name.into()),
+            key(&baml_type::TypeName::local(name.into())),
             Vec::new(),
+            TyAttr::default(),
+        )
+    }
+    fn ty_class_with_args(name: &str, args: Vec<RuntimeTy>) -> RuntimeTy {
+        RuntimeTy::Class(
+            key(&baml_type::TypeName::local(name.into())),
+            args,
             TyAttr::default(),
         )
     }
@@ -1736,7 +2282,10 @@ mod tests {
     }
 
     fn ty_enum(name: &str) -> RuntimeTy {
-        RuntimeTy::Enum(baml_type::TypeName::local(name.into()), TyAttr::default())
+        RuntimeTy::Enum(
+            key(&baml_type::TypeName::local(name.into())),
+            TyAttr::default(),
+        )
     }
 
     fn mk_class(name: &str, fields: Vec<(&str, RuntimeTy)>) -> Class {
@@ -1744,6 +2293,7 @@ mod tests {
             name: name.to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: fields
                 .into_iter()
                 .map(|(n, t)| ClassField {
@@ -1751,6 +2301,7 @@ mod tests {
                     alias: None,
                     field_type: t,
                     description: None,
+                    docstring: None,
                 })
                 .collect(),
         }
@@ -1761,6 +2312,7 @@ mod tests {
             name: name.to_string(),
             alias: None,
             description: Some(desc.to_string()),
+            docstring: None,
             fields: fields
                 .into_iter()
                 .map(|(n, t)| ClassField {
@@ -1768,6 +2320,7 @@ mod tests {
                     alias: None,
                     field_type: t,
                     description: None,
+                    docstring: None,
                 })
                 .collect(),
         }
@@ -1778,19 +2331,159 @@ mod tests {
             name: name.to_string(),
             alias: None,
             description: None,
+            docstring: None,
             values: values
                 .into_iter()
                 .map(|v| EnumValue {
                     name: v.to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 })
                 .collect(),
         }
     }
 
+    #[test]
+    fn re_referenced_enum_keeps_declaration_order_collision_reporting() {
+        // `Choice` is declared first but re-referenced LAST in the walk
+        // (Union[Choice, Choice_2, Choice]); the re-reference moves it to
+        // the end of the hoist-render order. Collision validation must
+        // still report declaration order: first == Choice.
+        let first = dynamic_key("Choice");
+        let second = dynamic_key("Choice_2");
+        let target = RuntimeTy::Union(
+            vec![
+                RuntimeTy::Enum(first.clone(), TyAttr::default()),
+                RuntimeTy::Enum(second.clone(), TyAttr::default()),
+                RuntimeTy::Enum(first.clone(), TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        let definition = |name: &str| sys_types::EnumDefinition {
+            name: name.to_string(),
+            docstring: None,
+            description: None,
+            alias: Some("SharedChoice".to_string()),
+            variants: vec![sys_types::EnumVariantDefinition {
+                name: "Value".to_string(),
+                docstring: None,
+                description: None,
+                alias: None,
+            }],
+        };
+        let mut enums = indexmap::IndexMap::new();
+        enums.insert(first, definition("Choice"));
+        enums.insert(second, definition("Choice_2"));
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.enum_definitions = Arc::new(enums);
+
+        let content = build_output_format_content(&target, &ctx);
+        let error = content
+            .render(&RenderOptions {
+                always_hoist_enums: RenderSetting::Always(true),
+                ..RenderOptions::default()
+            })
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedEnumNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "SharedChoice" && first == "Choice" && second == "Choice_2"
+        ));
+    }
+
+    #[test]
+    fn nullable_primitive_targets_take_the_generic_schema_prefix() {
+        let ty_bigint = || RuntimeTy::Bigint {
+            attr: TyAttr::default(),
+        };
+        for (ty, rendered) in [
+            (ty_int(), "int"),
+            (ty_bigint(), "bigint"),
+            (ty_float(), "float"),
+            (ty_bool(), "bool"),
+            (ty_string(), "string"),
+        ] {
+            let content =
+                build_output_format_content(&ty_optional(ty), &sys_types::SysOpContext::empty());
+            let output = content
+                .render(&RenderOptions::default())
+                .unwrap()
+                .unwrap_or_default();
+            assert_eq!(
+                output,
+                format!("Answer in JSON using this schema:\n{rendered} or null"),
+            );
+        }
+    }
+
+    #[test]
+    fn enum_value_continuation_indent_follows_the_prefix() {
+        let content = || {
+            let mut enm = mk_enum("Choice", vec!["Red"]);
+            enm.values[0].description = Some("first line\nsecond line".to_string());
+            OutputFormatContent::new(ty_enum("Choice")).with_enum(enm)
+        };
+        // default "- " prefix: two-space continuation (legacy parity)
+        let out = content()
+            .render(&RenderOptions::default())
+            .unwrap()
+            .unwrap_or_default();
+        assert!(out.contains("- Red: first line\n  second line"), "{out}");
+        // wider custom prefix: continuation matches its width
+        let out = content()
+            .render(&RenderOptions {
+                enum_value_prefix: RenderSetting::Always("-- ".to_string()),
+                ..RenderOptions::default()
+            })
+            .unwrap()
+            .unwrap_or_default();
+        assert!(out.contains("-- Red: first line\n   second line"), "{out}");
+        // Never: no prefix, no continuation indent
+        let out = content()
+            .render(&RenderOptions {
+                enum_value_prefix: RenderSetting::Never,
+                ..RenderOptions::default()
+            })
+            .unwrap()
+            .unwrap_or_default();
+        assert!(out.contains("Red: first line\nsecond line"), "{out}");
+    }
+
     fn mk_recursive(names: &[&str]) -> indexmap::IndexSet<String> {
         names.iter().map(std::string::ToString::to_string).collect()
+    }
+
+    fn ctx_class_field(
+        name: &str,
+        field_type: RuntimeTy,
+        field_template: Option<::sys_types::SapTyTemplate>,
+    ) -> sys_types::ClassFieldDefinition {
+        sys_types::ClassFieldDefinition {
+            name: name.to_string(),
+            field_type,
+            field_template,
+            description: None,
+            docstring: None,
+            alias: None,
+            skip: false,
+        }
+    }
+
+    fn ctx_class_definition(
+        name: &DefKey,
+        fields: Vec<sys_types::ClassFieldDefinition>,
+    ) -> sys_types::ClassDefinition {
+        sys_types::ClassDefinition {
+            name: name.display_name().to_string(),
+            description: None,
+            docstring: None,
+            alias: None,
+            fields,
+        }
     }
 
     // ========================================================================
@@ -2632,6 +3325,38 @@ Answer in JSON using this schema:
     }
 
     #[test]
+    fn test_render_hoisted_generic_class_family_subset() {
+        let box_int = ty_class_with_args("Box", vec![ty_int()]);
+        let box_string = ty_class_with_args("Box", vec![ty_string()]);
+        let mut content = OutputFormatContent::new(ty_class("Ret")).with_class(mk_class(
+            "Ret",
+            vec![
+                ("int_box", box_int.clone()),
+                ("string_box", box_string.clone()),
+            ],
+        ));
+        content.classes.insert(
+            class_instantiation_key(&box_int),
+            mk_class("Box", vec![("value", ty_int())]),
+        );
+        content.classes.insert(
+            class_instantiation_key(&box_string),
+            mk_class("Box", vec![("value", ty_string())]),
+        );
+
+        let options = RenderOptions {
+            hoist_classes: HoistClasses::Subset(vec!["Box".to_string()]),
+            ..Default::default()
+        };
+        let rendered = content.render(&options).unwrap().unwrap();
+
+        assert_eq!(rendered.matches("Box<int> {").count(), 1, "{rendered}");
+        assert_eq!(rendered.matches("Box<string> {").count(), 1, "{rendered}");
+        assert!(rendered.contains("int_box: Box<int>,"), "{rendered}");
+        assert!(rendered.contains("string_box: Box<string>,"), "{rendered}");
+    }
+
+    #[test]
     fn test_render_hoist_all_classes() {
         let content = OutputFormatContent::new(ty_class("Ret"))
             .with_class(mk_class("A", vec![("prop", ty_int())]))
@@ -2689,10 +3414,12 @@ Answer in JSON using this schema: Ret"#
             name: "Foo".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             values: vec![EnumValue {
                 name: "Bar".to_string(),
                 alias: None,
                 description: None,
+                docstring: None,
             }],
             // Baz is already filtered out by the extraction layer
         };
@@ -2719,11 +3446,13 @@ Answer in JSON using this schema: Ret"#
             name: "MyClass".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![ClassField {
                 name: "keep".to_string(),
                 alias: None,
                 field_type: ty_string(),
                 description: None,
+                docstring: None,
             }],
             // hidden field is already filtered out by the extraction layer
         };
@@ -2770,24 +3499,28 @@ Answer in JSON using this schema: Ret"#
             name: "Date".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "day".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "month".to_string(),
                     alias: None,
                     field_type: ty_enum("Month"),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "year".to_string(),
                     alias: None,
                     field_type: ty_optional(ty_class("Date")),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -2796,12 +3529,14 @@ Answer in JSON using this schema: Ret"#
             name: "Education".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "from_date".to_string(),
                     alias: None,
                     field_type: ty_class("Date"),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "to_date".to_string(),
@@ -2815,18 +3550,21 @@ Answer in JSON using this schema: Ret"#
                         ),
                     ]),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "school".to_string(),
                     alias: None,
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "description".to_string(),
                     alias: None,
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -2835,11 +3573,13 @@ Answer in JSON using this schema: Ret"#
             name: "Resume".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![ClassField {
                 name: "education".to_string(),
                 alias: None,
                 field_type: ty_list(ty_class("Education")),
                 description: None,
+                docstring: None,
             }],
         };
 
@@ -2893,24 +3633,28 @@ Answer in JSON using this schema: Ret"#
             name: "Date".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "day".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "month".to_string(),
                     alias: None,
                     field_type: ty_enum("Month"),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "year".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -2919,12 +3663,14 @@ Answer in JSON using this schema: Ret"#
             name: "Education".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "from_date".to_string(),
                     alias: None,
                     field_type: ty_class("Date"),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "to_date".to_string(),
@@ -2938,18 +3684,21 @@ Answer in JSON using this schema: Ret"#
                         ),
                     ]),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "school".to_string(),
                     alias: None,
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "description".to_string(),
                     alias: None,
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -2958,11 +3707,13 @@ Answer in JSON using this schema: Ret"#
             name: "Resume".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![ClassField {
                 name: "education".to_string(),
                 alias: None,
                 field_type: ty_list(ty_class("Education")),
                 description: None,
+                docstring: None,
             }],
         };
 
@@ -2992,11 +3743,13 @@ Answer in JSON using this schema: Ret"#
             name: "MyClass".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![ClassField {
                 name: "Name".to_string(),
                 alias: Some("a".to_string()),
                 field_type: ty_string(),
                 description: Some("d".to_string()),
+                docstring: None,
             }],
         };
 
@@ -3022,18 +3775,21 @@ Answer in JSON using this schema: Ret"#
             name: "MyClass".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "my_field".to_string(),
                     alias: Some("myField".to_string()),
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "other".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3060,21 +3816,25 @@ Answer in JSON using this schema: Ret"#
             name: "Color".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             values: vec![
                 EnumValue {
                     name: "Red".to_string(),
                     alias: Some("r".to_string()),
                     description: None,
+                    docstring: None,
                 },
                 EnumValue {
                     name: "Green".to_string(),
                     alias: Some("g".to_string()),
                     description: Some("Like grass".to_string()),
+                    docstring: None,
                 },
                 EnumValue {
                     name: "Blue".to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3102,16 +3862,19 @@ Answer in JSON using this schema: Ret"#
             name: "TestEnum".to_string(),
             alias: Some("Category".to_string()),
             description: None,
+            docstring: None,
             values: vec![
                 EnumValue {
                     name: "A".to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 },
                 EnumValue {
                     name: "B".to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3138,18 +3901,21 @@ Answer in JSON using this schema: Ret"#
             name: "Node".to_string(),
             alias: Some("GraphNode".to_string()),
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "data".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "next".to_string(),
                     alias: None,
                     field_type: ty_optional(ty_class("Node")),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3171,6 +3937,99 @@ Answer in JSON using this schema: Ret"#
         );
     }
 
+    #[test]
+    fn test_hoisted_generic_class_alias_preserves_type_arguments() {
+        let generic_key = "Box<int>";
+        let mut content = OutputFormatContent::new(ty_class("Wrapper"))
+            .with_class(mk_class(
+                "Wrapper",
+                vec![("value", ty_class_with_args("Box", vec![ty_int()]))],
+            ))
+            .with_class(Class {
+                name: "Box".to_string(),
+                alias: None,
+                description: None,
+                docstring: None,
+                fields: vec![ClassField {
+                    name: "value".to_string(),
+                    alias: None,
+                    field_type: ty_int(),
+                    description: None,
+                    docstring: None,
+                }],
+            });
+        content.classes.swap_remove("Box");
+        content.classes.insert(
+            generic_key.to_string(),
+            Class {
+                name: "Box".to_string(),
+                alias: Some("Container".to_string()),
+                description: None,
+                docstring: None,
+                fields: vec![ClassField {
+                    name: "value".to_string(),
+                    alias: None,
+                    field_type: ty_int(),
+                    description: None,
+                    docstring: None,
+                }],
+            },
+        );
+        content.recursive_classes = mk_recursive(&[generic_key]);
+
+        let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+        assert!(
+            rendered.contains("Container<int> {\n  value: int,\n}"),
+            "{rendered}"
+        );
+        assert!(rendered.contains("value: Container<int>,"), "{rendered}");
+    }
+
+    #[test]
+    fn test_hoisted_generic_class_alias_collision_is_rejected() {
+        let box_int = ty_class_with_args("Box", vec![ty_int()]);
+        let crate_int = ty_class_with_args("Crate", vec![ty_int()]);
+        let mut content = OutputFormatContent::new(ty_class("Wrapper")).with_class(mk_class(
+            "Wrapper",
+            vec![("box", box_int.clone()), ("crate", crate_int.clone())],
+        ));
+        for (ty, name) in [(box_int, "Box"), (crate_int, "Crate")] {
+            content.classes.insert(
+                class_instantiation_key(&ty),
+                Class {
+                    name: name.to_string(),
+                    alias: Some("Container".to_string()),
+                    description: None,
+                    docstring: None,
+                    fields: vec![ClassField {
+                        name: "value".to_string(),
+                        alias: None,
+                        field_type: ty_int(),
+                        description: None,
+                        docstring: None,
+                    }],
+                },
+            );
+        }
+
+        let error = content
+            .render(&RenderOptions {
+                hoist_classes: HoistClasses::All,
+                ..Default::default()
+            })
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::RenderedClassNameCollision {
+                rendered_name,
+                first,
+                second,
+            } if rendered_name == "Container<int>"
+                && first == "Box<int>"
+                && second == "Crate<int>"
+        ));
+    }
+
     /// New test: class with @@description, verify comment rendered
     #[test]
     fn test_render_class_with_class_description() {
@@ -3178,18 +4037,21 @@ Answer in JSON using this schema: Ret"#
             name: "Foo".to_string(),
             alias: None,
             description: Some("A foo object".to_string()),
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "bar".to_string(),
                     alias: None,
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "baz".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: Some("A baz field".to_string()),
+                    docstring: None,
                 },
             ],
         };
@@ -3217,7 +4079,10 @@ Answer in JSON using this schema: Ret"#
     // ========================================================================
 
     fn ty_alias(name: &str) -> RuntimeTy {
-        RuntimeTy::TypeAlias(baml_type::TypeName::local(name.into()), TyAttr::default())
+        RuntimeTy::TypeAlias(
+            key(&baml_type::TypeName::local(name.into())),
+            TyAttr::default(),
+        )
     }
 
     #[test]
@@ -3325,6 +4190,209 @@ Answer in JSON using this type: A"#
         );
     }
 
+    #[test]
+    fn test_build_output_format_preserves_exact_recursive_generic() {
+        let chain = key(&baml_type::TypeName::local("Chain".into()));
+        let target = RuntimeTy::Class(chain.clone(), vec![ty_int()], TyAttr::default());
+        let next_template =
+            baml_type::TyTemplate::class(chain.clone(), vec![baml_type::TyTemplate::TypeArgRef(0)]);
+
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            chain.clone(),
+            ctx_class_definition(
+                &chain,
+                vec![ctx_class_field("next", target.clone(), Some(next_template))],
+            ),
+        );
+
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+
+        let content = build_output_format_content(&target, &ctx);
+        let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+        assert!(rendered.contains("Chain<int> {\n  next: Chain<int>,\n}"));
+    }
+
+    #[test]
+    fn test_build_output_format_preserves_finite_nested_generic() {
+        let boxed = key(&baml_type::TypeName::local("Box".into()));
+        let box_int = RuntimeTy::Class(boxed.clone(), vec![ty_int()], TyAttr::default());
+        let target = RuntimeTy::Class(boxed.clone(), vec![box_int], TyAttr::default());
+
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            boxed.clone(),
+            ctx_class_definition(
+                &boxed,
+                vec![ctx_class_field(
+                    "value",
+                    ty_int(),
+                    Some(baml_type::TyTemplate::TypeArgRef(0)),
+                )],
+            ),
+        );
+
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+
+        let content = build_output_format_content(&target, &ctx);
+        assert!(content.classes.contains_key("Box<Box<int>>"));
+        assert!(content.classes.contains_key("Box<int>"));
+        assert!(content.render(&RenderOptions::default()).is_ok());
+    }
+
+    #[test]
+    fn test_build_output_format_preserves_finite_transformed_recursion() {
+        let step = key(&baml_type::TypeName::local("Step".into()));
+        let target = RuntimeTy::Class(
+            step.clone(),
+            vec![ty_string(), ty_bool()],
+            TyAttr::default(),
+        );
+        let next_template = baml_type::TyTemplate::class(
+            step.clone(),
+            vec![
+                baml_type::TyTemplate::list(baml_type::TyTemplate::TypeArgRef(1)),
+                baml_type::TyTemplate::from(baml_type::RealizedTy::int()),
+            ],
+        );
+        let next_realized = RuntimeTy::Class(
+            step.clone(),
+            vec![ty_list(ty_bool()), ty_int()],
+            TyAttr::default(),
+        );
+
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            step.clone(),
+            ctx_class_definition(
+                &step,
+                vec![ctx_class_field("next", next_realized, Some(next_template))],
+            ),
+        );
+
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+
+        let content = build_output_format_content(&target, &ctx);
+        assert!(content.classes.contains_key("Step<string, bool>"));
+        assert!(content.classes.contains_key("Step<bool[], int>"));
+        assert!(content.classes.contains_key("Step<int[], int>"));
+        assert!(content.render(&RenderOptions::default()).is_ok());
+    }
+
+    #[test]
+    fn test_render_output_format_content_rejects_non_regular_recursive_generic() {
+        let chain = key(&baml_type::TypeName::local("Chain".into()));
+        let target = RuntimeTy::Class(chain.clone(), vec![ty_int()], TyAttr::default());
+        let next_template = baml_type::TyTemplate::class(
+            chain.clone(),
+            vec![baml_type::TyTemplate::class(
+                chain.clone(),
+                vec![baml_type::TyTemplate::TypeArgRef(0)],
+            )],
+        );
+        let next_realized = RuntimeTy::Class(
+            chain.clone(),
+            vec![RuntimeTy::Class(
+                chain.clone(),
+                vec![ty_int()],
+                TyAttr::default(),
+            )],
+            TyAttr::default(),
+        );
+
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            chain.clone(),
+            ctx_class_definition(
+                &chain,
+                vec![ctx_class_field("next", next_realized, Some(next_template))],
+            ),
+        );
+
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+
+        let content = build_output_format_content(&target, &ctx);
+        let error = render_output_format_content(&content, &RenderOptions::default()).unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::NonRegularRecursiveGeneric {
+                class,
+                ancestor,
+                instantiation,
+            } if class == "Chain"
+                && ancestor == "Chain<int>"
+                && instantiation == "Chain<Chain<int>>"
+        ));
+    }
+
+    #[test]
+    fn test_build_output_format_rejects_mutually_expansive_recursive_generic() {
+        let a = key(&baml_type::TypeName::local("A".into()));
+        let b = key(&baml_type::TypeName::local("B".into()));
+        let target = RuntimeTy::Class(a.clone(), vec![ty_int()], TyAttr::default());
+        let b_int = RuntimeTy::Class(b.clone(), vec![ty_int()], TyAttr::default());
+        let a_a_int = RuntimeTy::Class(
+            a.clone(),
+            vec![RuntimeTy::Class(
+                a.clone(),
+                vec![ty_int()],
+                TyAttr::default(),
+            )],
+            TyAttr::default(),
+        );
+
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            a.clone(),
+            ctx_class_definition(
+                &a,
+                vec![ctx_class_field(
+                    "b",
+                    b_int,
+                    Some(baml_type::TyTemplate::class(
+                        b.clone(),
+                        vec![baml_type::TyTemplate::TypeArgRef(0)],
+                    )),
+                )],
+            ),
+        );
+        classes.insert(
+            b.clone(),
+            ctx_class_definition(
+                &b,
+                vec![ctx_class_field(
+                    "a",
+                    a_a_int,
+                    Some(baml_type::TyTemplate::class(
+                        a.clone(),
+                        vec![baml_type::TyTemplate::class(
+                            a,
+                            vec![baml_type::TyTemplate::TypeArgRef(0)],
+                        )],
+                    )),
+                )],
+            ),
+        );
+
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+
+        let content = build_output_format_content(&target, &ctx);
+        let error = content.render(&RenderOptions::default()).unwrap_err();
+        assert!(matches!(
+            error,
+            RenderError::NonRegularRecursiveGeneric {
+                class,
+                ancestor,
+                instantiation,
+            } if class == "A" && ancestor == "A<int>" && instantiation == "A<A<int>>"
+        ));
+    }
+
     // ========================================================================
     // Enum hoisting and inline rendering
     // ========================================================================
@@ -3354,11 +4422,13 @@ Answer in JSON using this type: A"#
             name: "BigEnum".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             values: (0..8)
                 .map(|i| EnumValue {
                     name: format!("V{i}"),
                     alias: None,
                     description: None,
+                    docstring: None,
                 })
                 .collect(),
         };
@@ -3386,16 +4456,19 @@ Answer in JSON using this type: A"#
             name: "Status".to_string(),
             alias: None,
             description: Some("The status of an order".to_string()),
+            docstring: None,
             values: vec![
                 EnumValue {
                     name: "Pending".to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 },
                 EnumValue {
                     name: "Done".to_string(),
                     alias: None,
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3422,18 +4495,21 @@ Answer in JSON using this type: A"#
             name: "User".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "user_name".to_string(),
                     alias: Some("username".to_string()),
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
                 ClassField {
                     name: "email_addr".to_string(),
                     alias: Some("email".to_string()),
                     field_type: ty_string(),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3460,16 +4536,19 @@ Answer in JSON using this type: A"#
             name: "Color".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             values: vec![
                 EnumValue {
                     name: "Red".to_string(),
                     alias: Some("r".to_string()),
                     description: None,
+                    docstring: None,
                 },
                 EnumValue {
                     name: "Green".to_string(),
                     alias: Some("g".to_string()),
                     description: None,
+                    docstring: None,
                 },
             ],
         };
@@ -3515,18 +4594,21 @@ Answer in JSON using this type: A"#
             name: "User".to_string(),
             alias: None,
             description: None,
+            docstring: None,
             fields: vec![
                 ClassField {
                     name: "name".to_string(),
                     alias: None,
                     field_type: ty_string(),
                     description: Some("The user's full name".to_string()),
+                    docstring: None,
                 },
                 ClassField {
                     name: "age".to_string(),
                     alias: None,
                     field_type: ty_int(),
                     description: None,
+                    docstring: None,
                 },
             ],
         };

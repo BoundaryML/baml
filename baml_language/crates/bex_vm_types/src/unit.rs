@@ -16,11 +16,10 @@
 //! local operands through the existing `relink` operand walkers.
 //!
 use baml_base::Name;
-use baml_type::{RealizedTy, RuntimeTy, TyTemplate};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
-    Object, TestCase,
+    Object, RealizedTy, TyTemplate,
     types::{InterfaceBound, LocalName},
 };
 
@@ -95,6 +94,8 @@ pub enum LocalRef {
     Enum(u32),
     /// Offset into the unit's `interfaces` bucket.
     Interface(u32),
+    /// Offset into the unit's `type_alias_objects` bucket.
+    TypeAlias(u32),
     /// Offset into the unit's `code` bucket (functions, lambdas, interned
     /// literals, local generic-fns).
     Code(u32),
@@ -135,10 +136,12 @@ pub struct ProgramPackageFrag {
     /// Implemented-interface fully-qualified name to the impl rules declared for
     /// it in this unit (the interface may live in a dependency package).
     pub impl_rules: Vec<(String, Vec<ProgramImplRuleFrag>)>,
-    /// Recursive type aliases, carried verbatim (they hold no object refs to
-    /// relocate).
-    pub recursive_type_aliases: Vec<(LocalName, RuntimeTy)>,
-    /// Whole-package enriched interface. Exactly one unit is its carrier.
+    /// Recursive type aliases defined in this unit, by fully-qualified name of
+    /// the emitted `Object::TypeAlias`. Non-recursive aliases are expanded at
+    /// lowering and never appear.
+    pub type_aliases: Vec<(LocalName, String)>,
+    /// Versioned artifact containing the whole-package enriched interface.
+    /// Exactly one unit is its carrier.
     pub interface_blob: Vec<u8>,
     /// Fully-qualified synthesized `$init_test` symbol, when present.
     pub test_init: Option<String>,
@@ -199,6 +202,8 @@ pub struct CompilationUnit {
     pub enums: Vec<Object>,
     /// `Object::Interface` definitions.
     pub interfaces: Vec<Object>,
+    /// `Object::TypeAlias` definitions (recursive aliases only).
+    pub type_alias_objects: Vec<Object>,
     /// The pass-4 block: functions, lambdas, interned literals, and local
     /// generic-fn objects, in emit order.
     pub code: Vec<Object>,
@@ -214,8 +219,6 @@ pub struct CompilationUnit {
     // --- side-table fragments the whole-program passes consume at link ---
     /// This unit's symbolic contribution to its package's structure.
     pub package_fragment: ProgramPackageFrag,
-    /// Pass-8 compiled test cases defined in this file.
-    pub test_cases: Vec<TestCase>,
     /// `borsh(CallableThrowsFragment)` for this file. Opaque bytes
     /// because `bex_vm_types` sits below `baml_compiler2_hir_ty`, which owns the
     /// typed fragment — the same decoupling as the stdlib-interface blob. Empty

@@ -19,6 +19,10 @@ class GenericClient {
     // configuration error as no base_url at all.
     base_url: ai.Credential?,
     api_key: ai.Credential?,
+    // Native request deadline; TTFT begins only after a streaming response opens.
+    // Null/non-positive is unbounded; browser/Wasm does not enforce these fields.
+    request_timeout_ms: int?,
+    time_to_first_token_timeout_ms: int?,
 
     request_body: baml.json.json?,
     headers: map<string, string>?,
@@ -29,11 +33,17 @@ class GenericClient {
     top_p: float?,
     stop: string[]?,
     seed: int?,
+    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // records delivered through on_event. Status, headers, and timing are
+    // always recorded; this flag only gates the bodies.
+    capture_wire: bool,
 
     function new(
         model: string,
         base_url: ai.Credential? = null,
         api_key: ai.Credential? = null,
+        request_timeout_ms: int? = null,
+        time_to_first_token_timeout_ms: int? = null,
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
@@ -42,11 +52,14 @@ class GenericClient {
         top_p: float? = null,
         stop: string[]? = null,
         seed: int? = null,
+        capture_wire: bool = true,
     ) -> GenericClient {
         GenericClient {
             model: model,
             base_url: base_url,
             api_key: api_key,
+            request_timeout_ms: request_timeout_ms,
+            time_to_first_token_timeout_ms: time_to_first_token_timeout_ms,
             request_body: request_body,
             headers: headers,
             query_params: query_params,
@@ -55,6 +68,7 @@ class GenericClient {
             top_p: top_p,
             stop: stop,
             seed: seed,
+            capture_wire: capture_wire,
         }
     }
 
@@ -83,26 +97,34 @@ class GenericClient {
     }
 
     function compat(self) -> root.internal.ChatCompat {
-        root.internal.ChatCompat.new(
-            provider = "openai-generic",
-            base_url = self.resolved_base_url(),
-            collapse_text_content = true,
-        )
+        root.internal
+            .ChatCompat
+            .new(
+                provider = "openai-generic",
+                base_url = self.resolved_base_url(),
+                collapse_text_content = true,
+            )
     }
 
-    function params(self) -> root.internal.ChatParams {
-        root.internal.ChatParams.new(
-            model = self.model,
-            api_key = self.resolved_api_key(),
-            temperature = self.temperature,
-            max_tokens = self.max_tokens,
-            top_p = self.top_p,
-            stop = self.stop,
-            seed = self.seed,
-            headers = self.headers,
-            query_params = self.query_params,
-            request_body = self.request_body,
-        )
+    function params(self, preview: bool = false) -> root.internal.ChatParams {
+        root.internal
+            .ChatParams
+            .new(
+                model = self.model,
+                api_key = if (preview) {
+                    null
+                } else {
+                    self.resolved_api_key()
+                },
+                temperature = self.temperature,
+                max_tokens = self.max_tokens,
+                top_p = self.top_p,
+                stop = self.stop,
+                seed = self.seed,
+                headers = self.headers,
+                query_params = self.query_params,
+                request_body = self.request_body,
+            )
     }
 
     implements ai.Client {
@@ -110,17 +132,36 @@ class GenericClient {
             `openai-generic/${self.model}`
         }
 
-        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
-            root.internal.chat_invoke(self.compat(), self.params(), input) catch_all (e) {
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            openai.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
+            }
+        }
+
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            root.internal.chat_invoke(
+                self.compat(),
+                self.params(),
+                input,
+                capture_wire = self.capture_wire,
+                request_timeout_ms = self.request_timeout_ms,
+            ) catch_all (e) {
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }
 
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-            root.internal.chat_invoke_stream(self.compat(), self.params(), input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+            root.internal.chat_invoke_stream(
+                self.compat(),
+                self.params(),
+                input,
+                capture_wire = self.capture_wire,
+                request_timeout_ms = self.request_timeout_ms,
+                time_to_first_token_timeout_ms = self.time_to_first_token_timeout_ms,
+            ) catch_all (e) {
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }

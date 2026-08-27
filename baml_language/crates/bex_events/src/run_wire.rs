@@ -1,11 +1,11 @@
+use base64::Engine as _;
 use serde_json::{Value, json};
 
 use crate::{
     run::{
-        CallNode, CallStatus, CapturedValueRole, DiagnosticSeverity, EnvResolutionStatus,
-        PayloadBody, PayloadBodyState, PayloadEvent, PayloadId, PayloadKind, Run, RunDiagnostic,
-        RunError, RunOutcome, RunPatch, RunPatchChange, RunRequestState, RunResult, RunStatus,
-        RunSummary, RunTarget, RunVisibility, ThreadNode, ThreadStatus,
+        DiagnosticSeverity, EnvResolutionStatus, PayloadBody, PayloadBodyState, PayloadEvent,
+        PayloadId, PayloadKind, Run, RunDiagnostic, RunError, RunOutcome, RunPatch, RunPatchChange,
+        RunRequestState, RunResult, RunStatus, RunSummary, RunTarget, RunVisibility,
     },
     value::ValueRef,
 };
@@ -37,10 +37,6 @@ pub fn run_to_wire(run: &Run) -> Value {
             "completedAtMs": cancellation.completed_at_ms,
             "reason": cancellation.reason,
         })),
-        "rootCallNodeId": run.root_call_node_id.map(call_node_id_to_wire),
-        "graphRuntimeOverlay": run.graph_runtime_overlay.as_ref().map(graph_runtime_overlay_to_wire),
-        "calls": run.calls.iter().map(call_to_wire).collect::<Vec<_>>(),
-        "threads": run.threads.iter().map(thread_to_wire).collect::<Vec<_>>(),
         "payloads": run.payloads.iter().map(payload_to_wire).collect::<Vec<_>>(),
         "diagnostics": run.diagnostics.iter().map(diagnostic_to_wire).collect::<Vec<_>>(),
         "cursor": run.cursor.0,
@@ -113,23 +109,11 @@ fn visibility_to_wire(visibility: &RunVisibility) -> Value {
 
 fn patch_change_to_wire(change: &RunPatchChange) -> Value {
     match change {
-        RunPatchChange::UpsertCallNode(call) => {
-            json!({ "type": "upsertCallNode", "call": call_to_wire(call) })
-        }
-        RunPatchChange::UpsertThreadNode(thread) => {
-            json!({ "type": "upsertThreadNode", "thread": thread_to_wire(thread) })
-        }
         RunPatchChange::UpsertPayload(payload) => {
             json!({ "type": "upsertPayload", "payload": payload_to_wire(payload) })
         }
         RunPatchChange::UpsertDiagnostic(diagnostic) => {
             json!({ "type": "upsertDiagnostic", "diagnostic": diagnostic_to_wire(diagnostic) })
-        }
-        RunPatchChange::SetRootCallNode(id) => {
-            json!({ "type": "setRootCallNode", "callNodeId": id.map(call_node_id_to_wire) })
-        }
-        RunPatchChange::SetGraphRuntimeOverlay(overlay) => {
-            json!({ "type": "setGraphRuntimeOverlay", "overlay": graph_runtime_overlay_to_wire(overlay) })
         }
         RunPatchChange::SetStatus(status) => {
             json!({ "type": "setStatus", "status": status_to_wire(*status) })
@@ -137,59 +121,6 @@ fn patch_change_to_wire(change: &RunPatchChange) -> Value {
         RunPatchChange::Complete(outcome) => {
             json!({ "type": "complete", "outcome": outcome_to_wire(outcome) })
         }
-    }
-}
-
-fn thread_to_wire(thread: &ThreadNode) -> Value {
-    json!({
-        "id": thread_node_id_to_wire(thread.id),
-        "parentThreadId": thread.parent_thread_id.map(thread_node_id_to_wire),
-        "parentCallNodeId": thread.parent_call_node_id.map(call_node_id_to_wire),
-        "name": thread.name,
-        "startedAtNs": thread.started_at_ns.map(|value| value.to_string()),
-        "endedAtNs": thread.ended_at_ns.map(|value| value.to_string()),
-        "status": thread_status_to_wire(thread.status),
-        "callNodeIds": thread.call_node_ids.iter().copied().map(call_node_id_to_wire).collect::<Vec<_>>(),
-    })
-}
-
-fn call_to_wire(call: &CallNode) -> Value {
-    json!({
-        "id": call_node_id_to_wire(call.id),
-        "threadId": thread_node_id_to_wire(call.thread_id),
-        "parentId": call.parent_id.map(call_node_id_to_wire),
-        "functionId": call.function_id.0,
-        "functionName": call.function_name,
-        "functionOrigin": call.function_origin.as_ref().map(function_origin_to_wire),
-        "calleeSource": call.callee_source.as_ref().map(source_location_to_wire),
-        "callSiteSource": call.call_site_source.as_ref().map(source_location_to_wire),
-        "startedAtNs": call.started_at_ns.map(|value| value.to_string()),
-        "endedAtNs": call.ended_at_ns.map(|value| value.to_string()),
-        "status": call_status_to_wire(call.status),
-        "payloadIds": call.payload_ids.iter().copied().map(payload_id_to_wire).collect::<Vec<_>>(),
-    })
-}
-
-fn graph_runtime_overlay_to_wire(overlay: &crate::run::GraphRuntimeOverlay) -> Value {
-    json!({
-        "boundaryId": overlay.boundary_id.to_wire_string(),
-        "projectGeneration": overlay.project_generation.0,
-        "entries": overlay.entries.iter().map(|entry| json!({
-            "cfgNodeId": entry.cfg_node_id.0,
-            "callNodeIds": entry.call_node_ids.iter().copied().map(call_node_id_to_wire).collect::<Vec<_>>(),
-        })).collect::<Vec<_>>(),
-        "unattachedCallNodeIds": overlay.unattached_call_node_ids.iter().copied().map(call_node_id_to_wire).collect::<Vec<_>>(),
-        "diagnostics": overlay.diagnostics.iter().map(diagnostic_to_wire).collect::<Vec<_>>(),
-    })
-}
-
-fn function_origin_to_wire(origin: &crate::run::FunctionOrigin) -> &'static str {
-    match origin {
-        crate::run::FunctionOrigin::User => "user",
-        crate::run::FunctionOrigin::Builtin => "builtin",
-        crate::run::FunctionOrigin::Companion => "companion",
-        crate::run::FunctionOrigin::Internal => "internal",
-        crate::run::FunctionOrigin::Unknown => "unknown",
     }
 }
 
@@ -209,7 +140,6 @@ fn source_location_to_wire(source: &crate::run::SourceLocation) -> Value {
 fn payload_to_wire(payload: &PayloadEvent) -> Value {
     json!({
         "id": payload.payload_id_wire(),
-        "callNodeId": payload.call_node_id.map(call_node_id_to_wire),
         "timestampMs": payload.timestamp_ms,
         "kind": payload_kind_to_wire(&payload.kind),
         "redaction": {
@@ -300,21 +230,6 @@ fn payload_kind_to_wire(kind: &PayloadKind) -> Value {
             "stream": output.stream.as_wire_str(),
             "text": &output.text,
         }),
-        PayloadKind::CapturedValue(captured) => json!({
-            "type": "capturedValue",
-            "role": captured_value_role_to_wire(captured.role),
-            "label": captured.label.as_ref(),
-            "valueRef": captured.value_ref.as_ref().map(value_ref_to_wire),
-        }),
-    }
-}
-
-fn captured_value_role_to_wire(role: CapturedValueRole) -> &'static str {
-    match role {
-        CapturedValueRole::RootInput => "rootInput",
-        CapturedValueRole::CallInput => "callInput",
-        CapturedValueRole::CallOutput => "callOutput",
-        CapturedValueRole::CallError => "callError",
     }
 }
 
@@ -332,6 +247,10 @@ fn value_ref_to_wire(value_ref: &ValueRef) -> Value {
 fn result_to_wire(result: &RunResult) -> Value {
     json!({
         "valueRef": result.value_ref.as_ref().map(value_ref_to_wire),
+        "value": result
+            .value
+            .as_deref()
+            .map(|bytes| base64::engine::general_purpose::STANDARD.encode(bytes)),
         "rendererHint": result.renderer_hint,
         "supportingPayloadIds": result.supporting_payload_ids.iter().copied().map(payload_id_to_wire).collect::<Vec<_>>(),
     })
@@ -373,7 +292,6 @@ fn diagnostic_to_wire(diagnostic: &RunDiagnostic) -> Value {
         "severity": severity_to_wire(diagnostic.severity),
         "code": diagnostic.code,
         "message": diagnostic.message,
-        "callNodeId": diagnostic.call_node_id.map(call_node_id_to_wire),
         "payloadId": diagnostic.payload_id.map(payload_id_to_wire),
     })
 }
@@ -417,25 +335,6 @@ fn status_to_wire(status: RunStatus) -> &'static str {
     }
 }
 
-fn thread_status_to_wire(status: ThreadStatus) -> &'static str {
-    match status {
-        ThreadStatus::Running => "running",
-        ThreadStatus::Completed => "completed",
-        ThreadStatus::Cancelled => "cancelled",
-        ThreadStatus::Errored => "errored",
-    }
-}
-
-fn call_status_to_wire(status: CallStatus) -> &'static str {
-    match status {
-        CallStatus::Running => "running",
-        CallStatus::Ok => "ok",
-        CallStatus::Errored => "errored",
-        CallStatus::Cancelled => "cancelled",
-        CallStatus::Exited => "exited",
-    }
-}
-
 fn request_state_to_wire(state: RunRequestState) -> &'static str {
     match state {
         RunRequestState::Pending => "pending",
@@ -463,10 +362,62 @@ fn severity_to_wire(severity: DiagnosticSeverity) -> &'static str {
     }
 }
 
-fn call_node_id_to_wire(id: crate::run::CallNodeId) -> String {
-    format!("call_node_{}", id.get())
-}
+#[cfg(test)]
+mod tests {
+    use crate::{
+        ids::BoundaryId,
+        run::{
+            ProjectGeneration, ProjectId, Run, RunCursor, RunRequestSummary, RunStatus, RunTarget,
+            RunTimeAnchor, RunVisibility,
+        },
+    };
 
-fn thread_node_id_to_wire(id: crate::run::ThreadNodeId) -> String {
-    format!("thread_node_{}", id.get())
+    #[test]
+    fn run_wire_has_no_invocation_profile_shape() {
+        let target = RunTarget::Function {
+            function_name: "main".to_string(),
+        };
+        let run = Run {
+            boundary_id: BoundaryId::from_bytes([7; 16]),
+            target: target.clone(),
+            visibility: RunVisibility::History,
+            status: RunStatus::Running,
+            created_at_ms: 1,
+            started_at_ms: Some(2),
+            completed_at_ms: None,
+            time_anchor: RunTimeAnchor {
+                epoch_created_at_ms: 1,
+                trace_zero_ns: 0,
+            },
+            request: RunRequestSummary {
+                project_id: ProjectId("project".to_string()),
+                project_generation: ProjectGeneration(1),
+                target,
+                args_summary: None,
+                options_summary: None,
+            },
+            result: None,
+            error: None,
+            cancellation: None,
+            payloads: Vec::new(),
+            diagnostics: Vec::new(),
+            cursor: RunCursor(0),
+        };
+
+        let wire = super::run_to_wire(&run);
+        let object = wire.as_object().expect("run wire object");
+        for removed in [
+            "rootCallNodeId",
+            "calls",
+            "threads",
+            "graphRuntimeOverlay",
+            "profileEvents",
+            "capturedValues",
+        ] {
+            assert!(
+                !object.contains_key(removed),
+                "unexpected `{removed}` field"
+            );
+        }
+    }
 }

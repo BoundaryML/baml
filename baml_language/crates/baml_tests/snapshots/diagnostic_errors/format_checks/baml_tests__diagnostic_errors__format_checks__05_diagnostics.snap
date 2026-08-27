@@ -541,12 +541,9 @@ source: crates/baml_tests/src/generated_tests.rs
  104 │ │       provider openai,
  105 │ │       options: {
  106 │ │           model: "gpt-4"
- 107 │ │           system_prompt #"
- 108 │ │               You are a helpful assistant.
- 109 │ │               Always be concise.
- 110 │ │           "#
- 111 │ │       },
- 112 │ ├─▶ }
+ 107 │ │           system_prompt "You are a helpful assistant.\nAlways be concise."
+ 108 │ │       },
+ 109 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -554,19 +551,19 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client MixedValuesClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:115:1]
- 115 │ ╭─▶ client<llm> MixedValuesClient {
- 116 │ │       provider openai
- 117 │ │       options {
- 118 │ │           model "gpt-4"
- 119 │ │           max_tokens 100
- 120 │ │           temperature 0.7
- 121 │ │           stream true
- 122 │ │           stop ["END"]
- 123 │ │           inline_string #"inline raw"#
- 124 │ │           "string key" "value with spaces"
- 125 │ │       }
- 126 │ ├─▶ }
+     ╭─[config_decls.baml:112:1]
+ 112 │ ╭─▶ client<llm> MixedValuesClient {
+ 113 │ │       provider openai
+ 114 │ │       options {
+ 115 │ │           model "gpt-4"
+ 116 │ │           max_tokens 100
+ 117 │ │           temperature 0.7
+ 118 │ │           stream true
+ 119 │ │           stop ["END"]
+ 120 │ │           inline_string "inline quoted"
+ 121 │ │           "string key" "value with spaces"
+ 122 │ │       }
+ 123 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -574,34 +571,34 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
-     ╭─[config_decls.baml:130:1]
- 130 │ ╭─▶ client // 2 client keyword trailing
- 131 │ │   // 3 type angle leading
- 132 │ │   < // 4 open angle trailing
- 133 │ │   // 5 type leading
- 134 │ │   llm // 6 type trailing
- 135 │ │   // 7 close angle leading
- 136 │ │   > // 8 close angle trailing
- 137 │ │   // 9 name leading
- 138 │ │   TriviaClient // 10 name trailing
- 139 │ │   // 11 open brace leading
- 140 │ │   { // 12 open brace trailing
- 141 │ │       // 13 provider key leading
- 142 │ │       provider: // 14 provider key trailing
- 143 │ │       // 15 provider value leading
- 144 │ │       openai // 16 provider value trailing
- 145 │ │       // 17 options key leading
- 146 │ │       options // 18 options key trailing
- 147 │ │       // 19 options brace leading
- 148 │ │       { // 20 options open brace trailing
- 149 │ │           // 21 first option leading
- 150 │ │           model // 22 model key trailing
- 151 │ │           // 23 model value leading
- 152 │ │           "gpt-4" // 24 model value trailing
- 153 │ │       // 25 options close brace leading
- 154 │ │       } // 26 options close brace trailing
- 155 │ │   // 27 close brace leading
- 156 │ ├─▶ } // 28 close brace trailing
+     ╭─[config_decls.baml:127:1]
+ 127 │ ╭─▶ client // 2 client keyword trailing
+ 128 │ │   // 3 type angle leading
+ 129 │ │   < // 4 open angle trailing
+ 130 │ │   // 5 type leading
+ 131 │ │   llm // 6 type trailing
+ 132 │ │   // 7 close angle leading
+ 133 │ │   > // 8 close angle trailing
+ 134 │ │   // 9 name leading
+ 135 │ │   TriviaClient // 10 name trailing
+ 136 │ │   // 11 open brace leading
+ 137 │ │   { // 12 open brace trailing
+ 138 │ │       // 13 provider key leading
+ 139 │ │       provider: // 14 provider key trailing
+ 140 │ │       // 15 provider value leading
+ 141 │ │       openai // 16 provider value trailing
+ 142 │ │       // 17 options key leading
+ 143 │ │       options // 18 options key trailing
+ 144 │ │       // 19 options brace leading
+ 145 │ │       { // 20 options open brace trailing
+ 146 │ │           // 21 first option leading
+ 147 │ │           model // 22 model key trailing
+ 148 │ │           // 23 model value leading
+ 149 │ │           "gpt-4" // 24 model value trailing
+ 150 │ │       // 25 options close brace leading
+ 151 │ │       } // 26 options close brace trailing
+ 152 │ │   // 27 close brace leading
+ 153 │ ├─▶ } // 28 close brace trailing
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -609,34 +606,34 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaClientBlock = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:162:1]
- 162 │ ╭─▶ client /* 2 client keyword trailing */
- 163 │ │   /* 3 type angle leading */
- 164 │ │   < /* 4 open angle trailing */
- 165 │ │   /* 5 type leading */
- 166 │ │   llm /* 6 type trailing */
- 167 │ │   /* 7 close angle leading */
- 168 │ │   > /* 8 close angle trailing */
- 169 │ │   /* 9 name leading */
- 170 │ │   TriviaClientBlock /* 10 name trailing */
- 171 │ │   /* 11 open brace leading */
- 172 │ │   { /* 12 open brace trailing */
- 173 │ │       /* 13 provider key leading */
- 174 │ │       provider /* 14 provider key trailing */
- 175 │ │       /* 15 provider value leading */
- 176 │ │       openai /* 16 provider value trailing */
- 177 │ │       /* 17 options key leading */
- 178 │ │       options: /* 18 options key trailing */
- 179 │ │       /* 19 options brace leading */
- 180 │ │       { /* 20 options open brace trailing */
- 181 │ │           /* 21 first option leading */
- 182 │ │           model /* 22 model key trailing */
- 183 │ │           /* 23 model value leading */
- 184 │ │           "gpt-4" /* 24 model value trailing */
- 185 │ │       /* 25 options close brace leading */
- 186 │ │       } /* 26 options close brace trailing */
- 187 │ │   /* 27 close brace leading */
- 188 │ ├─▶ } /* 28 close brace trailing */
+     ╭─[config_decls.baml:159:1]
+ 159 │ ╭─▶ client /* 2 client keyword trailing */
+ 160 │ │   /* 3 type angle leading */
+ 161 │ │   < /* 4 open angle trailing */
+ 162 │ │   /* 5 type leading */
+ 163 │ │   llm /* 6 type trailing */
+ 164 │ │   /* 7 close angle leading */
+ 165 │ │   > /* 8 close angle trailing */
+ 166 │ │   /* 9 name leading */
+ 167 │ │   TriviaClientBlock /* 10 name trailing */
+ 168 │ │   /* 11 open brace leading */
+ 169 │ │   { /* 12 open brace trailing */
+ 170 │ │       /* 13 provider key leading */
+ 171 │ │       provider /* 14 provider key trailing */
+ 172 │ │       /* 15 provider value leading */
+ 173 │ │       openai /* 16 provider value trailing */
+ 174 │ │       /* 17 options key leading */
+ 175 │ │       options: /* 18 options key trailing */
+ 176 │ │       /* 19 options brace leading */
+ 177 │ │       { /* 20 options open brace trailing */
+ 178 │ │           /* 21 first option leading */
+ 179 │ │           model /* 22 model key trailing */
+ 180 │ │           /* 23 model value leading */
+ 181 │ │           "gpt-4" /* 24 model value trailing */
+ 182 │ │       /* 25 options close brace leading */
+ 183 │ │       } /* 26 options close brace trailing */
+ 184 │ │   /* 27 close brace leading */
+ 185 │ ├─▶ } /* 28 close brace trailing */
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -644,13 +641,13 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns =
   │ openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:193:1]
- 193 │ ╭─▶ client<llm> ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns {
- 194 │ │       provider openai
- 195 │ │       options {
- 196 │ │           model "gpt-4"
- 197 │ │       }
- 198 │ ├─▶ }
+     ╭─[config_decls.baml:190:1]
+ 190 │ ╭─▶ client<llm> ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns {
+ 191 │ │       provider openai
+ 192 │ │       options {
+ 193 │ │           model "gpt-4"
+ 194 │ │       }
+ 195 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -658,25 +655,25 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client DeeplyNestedClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:201:1]
- 201 │ ╭─▶ client<llm> DeeplyNestedClient {
- 202 │ │       provider openai
- 203 │ │       options {
- 204 │ │           model "gpt-4"
- 205 │ │           headers {
- 206 │ │               "X-API-Key" "my-key"
- 207 │ │               "Authorization" "Bearer token"
- 208 │ │               custom_config {
- 209 │ │                   retry_on_failure true
- 210 │ │                   timeout_ms 30000
- 211 │ │                   metadata {
- 212 │ │                       team "platform"
- 213 │ │                       environment "production"
- 214 │ │                   }
- 215 │ │               }
- 216 │ │           }
- 217 │ │       }
- 218 │ ├─▶ }
+     ╭─[config_decls.baml:198:1]
+ 198 │ ╭─▶ client<llm> DeeplyNestedClient {
+ 199 │ │       provider openai
+ 200 │ │       options {
+ 201 │ │           model "gpt-4"
+ 202 │ │           headers {
+ 203 │ │               "X-API-Key" "my-key"
+ 204 │ │               "Authorization" "Bearer token"
+ 205 │ │               custom_config {
+ 206 │ │                   retry_on_failure true
+ 207 │ │                   timeout_ms 30000
+ 208 │ │                   metadata {
+ 209 │ │                       team "platform"
+ 210 │ │                       environment "production"
+ 211 │ │                   }
+ 212 │ │               }
+ 213 │ │           }
+ 214 │ │       }
+ 215 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -684,18 +681,18 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client LongNestedValuesClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:221:1]
- 221 │ ╭─▶ client<llm> LongNestedValuesClient {
- 222 │ │       provider openai
- 223 │ │       options {
- 224 │ │           model "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily"
- 225 │ │           base_url "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming"
- 226 │ │           headers {
- 227 │ │               "Authorization" "Bearer some-extremely-long-api-token-value-that-is-used-for-authentication-and-exceeds-the-line-limit-easily-and-comfortably"
- 228 │ │               "X-Custom-Header" "another-very-long-header-value-that-also-pushes-past-one-hundred-columns-for-testing-purposes"
- 229 │ │           }
- 230 │ │       }
- 231 │ ├─▶ }
+     ╭─[config_decls.baml:218:1]
+ 218 │ ╭─▶ client<llm> LongNestedValuesClient {
+ 219 │ │       provider openai
+ 220 │ │       options {
+ 221 │ │           model "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily"
+ 222 │ │           base_url "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming"
+ 223 │ │           headers {
+ 224 │ │               "Authorization" "Bearer some-extremely-long-api-token-value-that-is-used-for-authentication-and-exceeds-the-line-limit-easily-and-comfortably"
+ 225 │ │               "X-Custom-Header" "another-very-long-header-value-that-also-pushes-past-one-hundred-columns-for-testing-purposes"
+ 226 │ │           }
+ 227 │ │       }
+ 228 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -703,22 +700,22 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client ManyOptionsClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:234:1]
- 234 │ ╭─▶ client<llm> ManyOptionsClient {
- 235 │ │       provider openai
- 236 │ │       options {
- 237 │ │           model "gpt-4"
- 238 │ │           max_tokens 4096
- 239 │ │           temperature 0.7
- 240 │ │           top_p 0.95
- 241 │ │           frequency_penalty 0.5
- 242 │ │           presence_penalty 0.3
- 243 │ │           stream true
- 244 │ │           stop_sequences ["END", "STOP", "DONE", "COMPLETE", "FINISHED"]
- 245 │ │           api_key env.OPENAI_API_KEY
- 246 │ │           base_url "https://api.openai.com/v1"
- 247 │ │       }
- 248 │ ├─▶ }
+     ╭─[config_decls.baml:231:1]
+ 231 │ ╭─▶ client<llm> ManyOptionsClient {
+ 232 │ │       provider openai
+ 233 │ │       options {
+ 234 │ │           model "gpt-4"
+ 235 │ │           max_tokens 4096
+ 236 │ │           temperature 0.7
+ 237 │ │           top_p 0.95
+ 238 │ │           frequency_penalty 0.5
+ 239 │ │           presence_penalty 0.3
+ 240 │ │           stream true
+ 241 │ │           stop_sequences ["END", "STOP", "DONE", "COMPLETE", "FINISHED"]
+ 242 │ │           api_key env.OPENAI_API_KEY
+ 243 │ │           base_url "https://api.openai.com/v1"
+ 244 │ │       }
+ 245 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -726,14 +723,14 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client LongArrayClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
-     ╭─[config_decls.baml:251:1]
- 251 │ ╭─▶ client<llm> LongArrayClient {
- 252 │ │       provider openai
- 253 │ │       options {
- 254 │ │           model "gpt-4"
- 255 │ │           stop_sequences ["STOP_GENERATION_NOW", "END_OF_RESPONSE_MARKER", "COMPLETION_FINISHED_SIGNAL", "TERMINATE_OUTPUT_HERE", "FINAL_ANSWER_DELIMITER"]
- 256 │ │       }
- 257 │ ├─▶ }
+     ╭─[config_decls.baml:248:1]
+ 248 │ ╭─▶ client<llm> LongArrayClient {
+ 249 │ │       provider openai
+ 250 │ │       options {
+ 251 │ │           model "gpt-4"
+ 252 │ │           stop_sequences ["STOP_GENERATION_NOW", "END_OF_RESPONSE_MARKER", "COMPLETION_FINISHED_SIGNAL", "TERMINATE_OUTPUT_HERE", "FINAL_ANSWER_DELIMITER"]
+ 253 │ │       }
+ 254 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -741,25 +738,25 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client LongArrayOfObjectsClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:260:1]
- 260 │ ╭─▶ client<llm> LongArrayOfObjectsClient {
- 261 │ │       provider openai
- 262 │ │       options {
- 263 │ │           model "gpt-4"
- 264 │ │           tools [
- 265 │ │               {
- 266 │ │                   server_label "this_is_a_very_long_server_label_that_exceeds_the_line_limit_when_combined_with_indentation"
- 267 │ │                   server_url "https://some-extremely-long-domain-name-for-the-mcp-server.internal.production.example.com/api/v2"
- 268 │ │                   type "mcp"
- 269 │ │                   description "A very long description of the tool server that explains what it does and how it should be used by the model"
- 270 │ │               }
- 271 │ │               {
- 272 │ │                   server_label "another_long_server_label_for_testing_line_wrapping_behavior_in_nested_array_objects"
- 273 │ │                   server_url "https://another-long-domain.internal.staging.example.com/tools/v1"
- 274 │ │               }
- 275 │ │           ]
- 276 │ │       }
- 277 │ ├─▶ }
+     ╭─[config_decls.baml:257:1]
+ 257 │ ╭─▶ client<llm> LongArrayOfObjectsClient {
+ 258 │ │       provider openai
+ 259 │ │       options {
+ 260 │ │           model "gpt-4"
+ 261 │ │           tools [
+ 262 │ │               {
+ 263 │ │                   server_label "this_is_a_very_long_server_label_that_exceeds_the_line_limit_when_combined_with_indentation"
+ 264 │ │                   server_url "https://some-extremely-long-domain-name-for-the-mcp-server.internal.production.example.com/api/v2"
+ 265 │ │                   type "mcp"
+ 266 │ │                   description "A very long description of the tool server that explains what it does and how it should be used by the model"
+ 267 │ │               }
+ 268 │ │               {
+ 269 │ │                   server_label "another_long_server_label_for_testing_line_wrapping_behavior_in_nested_array_objects"
+ 270 │ │                   server_url "https://another-long-domain.internal.staging.example.com/tools/v1"
+ 271 │ │               }
+ 272 │ │           ]
+ 273 │ │       }
+ 274 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -767,45 +764,45 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaDeeplyNestedClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:281:1]
- 281 │ ╭─▶ client // 2 client trailing
- 282 │ │   < // 3 angle trailing
- 283 │ │   llm // 4 type trailing
- 284 │ │   > // 5 close angle trailing
- 285 │ │   // 6 name leading
- 286 │ │   TriviaDeeplyNestedClient // 7 name trailing
- 287 │ │   // 8 open brace leading
- 288 │ │   { // 9 open brace trailing
- 289 │ │       // 10 provider leading
- 290 │ │       provider // 11 provider trailing
- 291 │ │       // 12 value leading
- 292 │ │       openai // 13 value trailing
- 293 │ │       // 14 options leading
- 294 │ │       options // 15 options trailing
- 295 │ │       // 16 options brace leading
- 296 │ │       { // 17 options brace trailing
- 297 │ │           // 18 model leading
- 298 │ │           model // 19 model trailing
- 299 │ │           // 20 model value leading
- 300 │ │           "gpt-4" // 21 model value trailing
- 301 │ │           // 22 headers leading
- 302 │ │           headers // 23 headers trailing
- 303 │ │           // 24 headers brace leading
- 304 │ │           { // 25 headers brace trailing
- 305 │ │               // 26 first header leading
- 306 │ │               "X-API-Key" // 27 first header trailing
- 307 │ │               // 28 first value leading
- 308 │ │               "my-key" // 29 first value trailing
- 309 │ │               // 30 second header leading
- 310 │ │               "Authorization" // 31 second header trailing
- 311 │ │               // 32 second value leading
- 312 │ │               "Bearer token" // 33 second value trailing
- 313 │ │           // 34 headers close leading
- 314 │ │           } // 35 headers close trailing
- 315 │ │       // 36 options close leading
- 316 │ │       } // 37 options close trailing
- 317 │ │   // 38 close brace leading
- 318 │ ├─▶ } // 39 close brace trailing
+     ╭─[config_decls.baml:278:1]
+ 278 │ ╭─▶ client // 2 client trailing
+ 279 │ │   < // 3 angle trailing
+ 280 │ │   llm // 4 type trailing
+ 281 │ │   > // 5 close angle trailing
+ 282 │ │   // 6 name leading
+ 283 │ │   TriviaDeeplyNestedClient // 7 name trailing
+ 284 │ │   // 8 open brace leading
+ 285 │ │   { // 9 open brace trailing
+ 286 │ │       // 10 provider leading
+ 287 │ │       provider // 11 provider trailing
+ 288 │ │       // 12 value leading
+ 289 │ │       openai // 13 value trailing
+ 290 │ │       // 14 options leading
+ 291 │ │       options // 15 options trailing
+ 292 │ │       // 16 options brace leading
+ 293 │ │       { // 17 options brace trailing
+ 294 │ │           // 18 model leading
+ 295 │ │           model // 19 model trailing
+ 296 │ │           // 20 model value leading
+ 297 │ │           "gpt-4" // 21 model value trailing
+ 298 │ │           // 22 headers leading
+ 299 │ │           headers // 23 headers trailing
+ 300 │ │           // 24 headers brace leading
+ 301 │ │           { // 25 headers brace trailing
+ 302 │ │               // 26 first header leading
+ 303 │ │               "X-API-Key" // 27 first header trailing
+ 304 │ │               // 28 first value leading
+ 305 │ │               "my-key" // 29 first value trailing
+ 306 │ │               // 30 second header leading
+ 307 │ │               "Authorization" // 31 second header trailing
+ 308 │ │               // 32 second value leading
+ 309 │ │               "Bearer token" // 33 second value trailing
+ 310 │ │           // 34 headers close leading
+ 311 │ │           } // 35 headers close trailing
+ 312 │ │       // 36 options close leading
+ 313 │ │       } // 37 options close trailing
+ 314 │ │   // 38 close brace leading
+ 315 │ ├─▶ } // 39 close brace trailing
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -813,47 +810,47 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaDeeplyNestedClientBlock = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:324:1]
- 324 │ ╭─▶ client /* 2 client trailing */
- 325 │ │   < /* 3 angle trailing */
- 326 │ │   llm /* 4 type trailing */
- 327 │ │   > /* 5 close angle trailing */
- 328 │ │   /* 6 name leading */
- 329 │ │   TriviaDeeplyNestedClientBlock /* 7 name trailing */
- 330 │ │   /* 8 open brace leading */
- 331 │ │   { /* 9 open brace trailing */
- 332 │ │       /* 10 provider leading */
- 333 │ │       provider /* 11 provider trailing */
- 334 │ │       /* 12 value leading */
- 335 │ │       openai /* 13 value trailing */
- 336 │ │       /* 14 options leading */
- 337 │ │       options /* 15 options trailing */
- 338 │ │       /* 16 options brace leading */
- 339 │ │       { /* 17 options brace trailing */
- 340 │ │           /* 18 model leading */
- 341 │ │           model /* 19 model trailing */
- 342 │ │           /* 20 model value leading */
- 343 │ │           "gpt-4" /* 21 model value trailing */
- 344 │ │           /* 22 headers leading */
- 345 │ │           headers /* 23 headers trailing */
- 346 │ │           /* 24 headers brace leading */
- 347 │ │           { /* 25 headers brace trailing */
- 348 │ │               /* 26 first header leading */
- 349 │ │               "X-API-Key" /* 27 first header trailing */
- 350 │ │               /* 28 first value leading */
- 351 │ │               "my-key" /* 29 first value trailing */
- 352 │ │               /* 30 second header leading */
- 353 │ │               "Authorization" /* 31 second header trailing */
- 354 │ │               /* 32 second value leading */
- 355 │ │               "Bearer token" /* 33 second value trailing */
- 356 │ │           /* 34 headers close leading */
- 357 │ │           } /* 35 headers close trailing */
- 358 │ │       /* 36 options close leading */
- 359 │ │       } /* 37 options close trailing */
- 360 │ │       /* 38 comma leading */
- 361 │ │       , /* 39 comma trailing */
- 362 │ │   /* 40 close brace leading */
- 363 │ ├─▶ } /* 41 close brace trailing */
+     ╭─[config_decls.baml:321:1]
+ 321 │ ╭─▶ client /* 2 client trailing */
+ 322 │ │   < /* 3 angle trailing */
+ 323 │ │   llm /* 4 type trailing */
+ 324 │ │   > /* 5 close angle trailing */
+ 325 │ │   /* 6 name leading */
+ 326 │ │   TriviaDeeplyNestedClientBlock /* 7 name trailing */
+ 327 │ │   /* 8 open brace leading */
+ 328 │ │   { /* 9 open brace trailing */
+ 329 │ │       /* 10 provider leading */
+ 330 │ │       provider /* 11 provider trailing */
+ 331 │ │       /* 12 value leading */
+ 332 │ │       openai /* 13 value trailing */
+ 333 │ │       /* 14 options leading */
+ 334 │ │       options /* 15 options trailing */
+ 335 │ │       /* 16 options brace leading */
+ 336 │ │       { /* 17 options brace trailing */
+ 337 │ │           /* 18 model leading */
+ 338 │ │           model /* 19 model trailing */
+ 339 │ │           /* 20 model value leading */
+ 340 │ │           "gpt-4" /* 21 model value trailing */
+ 341 │ │           /* 22 headers leading */
+ 342 │ │           headers /* 23 headers trailing */
+ 343 │ │           /* 24 headers brace leading */
+ 344 │ │           { /* 25 headers brace trailing */
+ 345 │ │               /* 26 first header leading */
+ 346 │ │               "X-API-Key" /* 27 first header trailing */
+ 347 │ │               /* 28 first value leading */
+ 348 │ │               "my-key" /* 29 first value trailing */
+ 349 │ │               /* 30 second header leading */
+ 350 │ │               "Authorization" /* 31 second header trailing */
+ 351 │ │               /* 32 second value leading */
+ 352 │ │               "Bearer token" /* 33 second value trailing */
+ 353 │ │           /* 34 headers close leading */
+ 354 │ │           } /* 35 headers close trailing */
+ 355 │ │       /* 36 options close leading */
+ 356 │ │       } /* 37 options close trailing */
+ 357 │ │       /* 38 comma leading */
+ 358 │ │       , /* 39 comma trailing */
+ 359 │ │   /* 40 close brace leading */
+ 360 │ ├─▶ } /* 41 close brace trailing */
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -861,20 +858,20 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaLongValueClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:368:1]
- 368 │ ╭─▶ client<llm> TriviaLongValueClient {
- 369 │ │       provider openai
- 370 │ │       options {
- 371 │ │           // 1 key leading
- 372 │ │           model // 2 key trailing
- 373 │ │           // 3 value leading
- 374 │ │           "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit" // 4 value trailing
- 375 │ │           // 5 next key leading
- 376 │ │           base_url // 6 next key trailing
- 377 │ │           // 7 next value leading
- 378 │ │           "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" // 8 next value trailing
- 379 │ │       }
- 380 │ ├─▶ }
+     ╭─[config_decls.baml:365:1]
+ 365 │ ╭─▶ client<llm> TriviaLongValueClient {
+ 366 │ │       provider openai
+ 367 │ │       options {
+ 368 │ │           // 1 key leading
+ 369 │ │           model // 2 key trailing
+ 370 │ │           // 3 value leading
+ 371 │ │           "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit" // 4 value trailing
+ 372 │ │           // 5 next key leading
+ 373 │ │           base_url // 6 next key trailing
+ 374 │ │           // 7 next value leading
+ 375 │ │           "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" // 8 next value trailing
+ 376 │ │       }
+ 377 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -882,42 +879,42 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client TriviaLongValueClientBlock = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:383:1]
- 383 │ ╭─▶ client<llm> TriviaLongValueClientBlock {
- 384 │ │       provider openai
- 385 │ │       options {
- 386 │ │           /* 1 key leading */
- 387 │ │           model /* 2 key trailing */
- 388 │ │           /* 3 value leading */
- 389 │ │           "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit" /* 4 value trailing */
- 390 │ │           /* 5 next key leading */
- 391 │ │           base_url /* 6 next key trailing */
- 392 │ │           /* 7 next value leading */
- 393 │ │           "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" /* 8 next value trailing */
- 394 │ │       }
- 395 │ ├─▶ }
+     ╭─[config_decls.baml:380:1]
+ 380 │ ╭─▶ client<llm> TriviaLongValueClientBlock {
+ 381 │ │       provider openai
+ 382 │ │       options {
+ 383 │ │           /* 1 key leading */
+ 384 │ │           model /* 2 key trailing */
+ 385 │ │           /* 3 value leading */
+ 386 │ │           "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit" /* 4 value trailing */
+ 387 │ │           /* 5 next key leading */
+ 388 │ │           base_url /* 6 next key trailing */
+ 389 │ │           /* 7 next value leading */
+ 390 │ │           "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" /* 8 next value trailing */
+ 391 │ │       }
+ 392 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
   [hir] E0010
 
   × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`BasicRetry` has no effect)
-     ╭─[config_decls.baml:398:1]
- 398 │ ╭─▶ retry_policy BasicRetry {
- 399 │ │       max_retries 3
- 400 │ ├─▶ }
+     ╭─[config_decls.baml:395:1]
+ 395 │ ╭─▶ retry_policy BasicRetry {
+ 396 │ │       max_retries 3
+ 397 │ ├─▶ }
      · ╰──── retry composes at the client boundary now
      ╰────
 
   [hir] E0010
 
   × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`FullRetry` has no effect)
-     ╭─[config_decls.baml:403:1]
- 403 │ ╭─▶ retry_policy FullRetry {
- 404 │ │       max_retries 5
- 405 │ │       backoff_multiplier 2.0
- 406 │ │       initial_delay_ms 1000
- 407 │ ├─▶ }
+     ╭─[config_decls.baml:400:1]
+ 400 │ ╭─▶ retry_policy FullRetry {
+ 401 │ │       max_retries 5
+ 402 │ │       backoff_multiplier 2.0
+ 403 │ │       initial_delay_ms 1000
+ 404 │ ├─▶ }
      · ╰──── retry composes at the client boundary now
      ╰────
 
@@ -925,79 +922,79 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);`
   │ (`ThisIsAnExtremelyLongRetryPolicyNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredCols` has no effect)
-     ╭─[config_decls.baml:410:1]
- 410 │ ╭─▶ retry_policy ThisIsAnExtremelyLongRetryPolicyNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredCols {
- 411 │ │       max_retries 10
- 412 │ │       backoff_multiplier 3.0
- 413 │ │       initial_delay_ms 5000
- 414 │ ├─▶ }
+     ╭─[config_decls.baml:407:1]
+ 407 │ ╭─▶ retry_policy ThisIsAnExtremelyLongRetryPolicyNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredCols {
+ 408 │ │       max_retries 10
+ 409 │ │       backoff_multiplier 3.0
+ 410 │ │       initial_delay_ms 5000
+ 411 │ ├─▶ }
      · ╰──── retry composes at the client boundary now
      ╰────
 
   [hir] E0010
 
   × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`TriviaRetry` has no effect)
-     ╭─[config_decls.baml:418:1]
- 418 │ ╭─▶ retry_policy // 2 keyword trailing
- 419 │ │   // 3 name leading
- 420 │ │   TriviaRetry // 4 name trailing
- 421 │ │   // 5 open brace leading
- 422 │ │   { // 6 open brace trailing
- 423 │ │       // 7 first item leading
- 424 │ │       max_retries // 8 key trailing
- 425 │ │       // 9 value leading
- 426 │ │       3 // 10 value trailing
- 427 │ │   // 11 close brace leading
- 428 │ ├─▶ } // 12 close brace trailing
+     ╭─[config_decls.baml:415:1]
+ 415 │ ╭─▶ retry_policy // 2 keyword trailing
+ 416 │ │   // 3 name leading
+ 417 │ │   TriviaRetry // 4 name trailing
+ 418 │ │   // 5 open brace leading
+ 419 │ │   { // 6 open brace trailing
+ 420 │ │       // 7 first item leading
+ 421 │ │       max_retries // 8 key trailing
+ 422 │ │       // 9 value leading
+ 423 │ │       3 // 10 value trailing
+ 424 │ │   // 11 close brace leading
+ 425 │ ├─▶ } // 12 close brace trailing
      · ╰──── retry composes at the client boundary now
      ╰────
 
   [hir] E0010
 
   × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`TriviaRetryBlock` has no effect)
-     ╭─[config_decls.baml:432:1]
- 432 │ ╭─▶ retry_policy /* 2 keyword trailing */
- 433 │ │   /* 3 name leading */
- 434 │ │   TriviaRetryBlock /* 4 name trailing */
- 435 │ │   /* 5 open brace leading */
- 436 │ │   { /* 6 open brace trailing */
- 437 │ │       /* 7 first item leading */
- 438 │ │       max_retries /* 8 key trailing */
- 439 │ │       /* 9 value leading */
- 440 │ │       3 /* 10 value trailing */
- 441 │ │   /* 11 close brace leading */
- 442 │ ├─▶ } /* 12 close brace trailing */
+     ╭─[config_decls.baml:429:1]
+ 429 │ ╭─▶ retry_policy /* 2 keyword trailing */
+ 430 │ │   /* 3 name leading */
+ 431 │ │   TriviaRetryBlock /* 4 name trailing */
+ 432 │ │   /* 5 open brace leading */
+ 433 │ │   { /* 6 open brace trailing */
+ 434 │ │       /* 7 first item leading */
+ 435 │ │       max_retries /* 8 key trailing */
+ 436 │ │       /* 9 value leading */
+ 437 │ │       3 /* 10 value trailing */
+ 438 │ │   /* 11 close brace leading */
+ 439 │ ├─▶ } /* 12 close brace trailing */
      · ╰──── retry composes at the client boundary now
      ╰────
 
   [type] E0003
 
   × unresolved name: `BasicClient`
-     ╭─[config_decls.baml:446:13]
- 446 │     client: BasicClient
+     ╭─[config_decls.baml:443:13]
+ 443 │     client: BasicClient
      ·             ───────────
      ╰────
 
   [hir] E0010
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client C = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:498:1]
- 498 │ ╭─▶ client<llm> C {
- 499 │ │       provider openai
- 500 │ │       options {
- 501 │ │           model "gpt-4"
- 502 │ │       }
- 503 │ ├─▶ }
+     ╭─[config_decls.baml:476:1]
+ 476 │ ╭─▶ client<llm> C {
+ 477 │ │       provider openai
+ 478 │ │       options {
+ 479 │ │           model "gpt-4"
+ 480 │ │       }
+ 481 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
   [hir] E0010
 
   × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`R` has no effect)
-     ╭─[config_decls.baml:505:1]
- 505 │ ╭─▶ retry_policy R {
- 506 │ │       max_retries 1
- 507 │ ├─▶ }
+     ╭─[config_decls.baml:483:1]
+ 483 │ ╭─▶ retry_policy R {
+ 484 │ │       max_retries 1
+ 485 │ ├─▶ }
      · ╰──── retry composes at the client boundary now
      ╰────
 
@@ -1005,23 +1002,23 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client ExtraWhitespaceClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry /
   │ ai.Fallback / ai.RoundRobin)
-     ╭─[config_decls.baml:510:1]
- 510 │ ╭─▶ client<llm>    ExtraWhitespaceClient    {
- 511 │ │       provider    openai
- 512 │ │       options    {
- 513 │ │           model    "gpt-4"
- 514 │ │       }
- 515 │ ├─▶ }
+     ╭─[config_decls.baml:488:1]
+ 488 │ ╭─▶ client<llm>    ExtraWhitespaceClient    {
+ 489 │ │       provider    openai
+ 490 │ │       options    {
+ 491 │ │           model    "gpt-4"
+ 492 │ │       }
+ 493 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
   [hir] E0010
 
   × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`ExtraWhitespaceRetry` has no effect)
-     ╭─[config_decls.baml:517:1]
- 517 │ ╭─▶ retry_policy    ExtraWhitespaceRetry    {
- 518 │ │       max_retries    3
- 519 │ ├─▶ }
+     ╭─[config_decls.baml:495:1]
+ 495 │ ╭─▶ retry_policy    ExtraWhitespaceRetry    {
+ 496 │ │       max_retries    3
+ 497 │ ├─▶ }
      · ╰──── retry composes at the client boundary now
      ╰────
 
@@ -1029,14 +1026,14 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client CommaClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
-     ╭─[config_decls.baml:522:1]
- 522 │ ╭─▶ client<llm> CommaClient {
- 523 │ │       provider openai,
- 524 │ │       options {
- 525 │ │           model "gpt-4",
- 526 │ │           max_tokens 100,
- 527 │ │       }
- 528 │ ├─▶ }
+     ╭─[config_decls.baml:500:1]
+ 500 │ ╭─▶ client<llm> CommaClient {
+ 501 │ │       provider openai,
+ 502 │ │       options {
+ 503 │ │           model "gpt-4",
+ 504 │ │           max_tokens 100,
+ 505 │ │       }
+ 506 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -1044,11 +1041,11 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `client<llm>` config blocks are removed; declare a client value instead: `client SameLineClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
   │ ai.RoundRobin)
-     ╭─[config_decls.baml:531:1]
- 531 │ ╭─▶ client<llm> SameLineClient {
- 532 │ │       provider openai
- 533 │ │       options { model "gpt-4" }
- 534 │ ├─▶ }
+     ╭─[config_decls.baml:509:1]
+ 509 │ ╭─▶ client<llm> SameLineClient {
+ 510 │ │       provider openai
+ 511 │ │       options { model "gpt-4" }
+ 512 │ ├─▶ }
      · ╰──── replace with `client Name = <expr>;`
      ╰────
 
@@ -1329,6 +1326,15 @@ source: crates/baml_tests/src/generated_tests.rs
  420 │         (1 /* inner1 */ | 2 /* inner2 */) /* outer-trail */ | 3 => 0
      ·                                                                    ┬
      ·                                                                    ╰── expected `string`, found `0`
+     ╰────
+
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `unknown[]`
+     ╭─[other_exprs.baml:101:5]
+ 101 │     [];
+     ·     ──
      ╰────
 
   [validation] E0011

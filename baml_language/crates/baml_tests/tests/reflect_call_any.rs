@@ -1,10 +1,255 @@
-//! Runtime semantics of BEP-062's AnyFunction slice: `baml.AnyFunction`
+//! Runtime semantics of BEP-062's AnyFunction slice: `reflect.AnyFunction`
 //! coercion carried to runtime, `reflect.signature`, and `reflect.call_any`
 //! (argument checking, callee defaults, error propagation).
 
-use baml_project::{collect_diagnostics, testing::setup_test_db};
-use baml_tests::baml_test;
+use baml_tests::{
+    baml_test,
+    engine::{IndexMap, OptLevel, compile_source_with_opt, run_compiled},
+    stdlib_prefix::{check_user_files, setup_test_db},
+};
 use bex_engine::BexExternalValue;
+use bex_vm_types::{ConstValue, Instruction, Object};
+
+#[tokio::test]
+async fn call_any_infers_pins_from_function_value() {
+    let output = baml_test!(
+        r#"
+        function plain(required: string) -> string throws never {
+            required
+        }
+
+        function main() -> string throws never {
+            reflect.call_any(plain, { "required": "hello" }) catch (e) {
+                _ => "error"
+            }
+        }
+        "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::String("hello".into())));
+}
+
+#[tokio::test]
+async fn call_any_inferred_and_explicit_class_returns_match() {
+    let output = baml_test!(
+        r#"
+        class Result {
+            value string
+        }
+
+        function make_result() -> Result throws never {
+            Result { value: "hello" }
+        }
+
+        function inferred() -> Result throws never {
+            reflect.call_any(make_result, {}) catch (e) {
+                _ => Result { value: "inferred error" }
+            }
+        }
+
+        function explicit() -> Result throws never {
+            reflect.call_any<Result, never>(make_result, {}) catch (e) {
+                _ => Result { value: "explicit error" }
+            }
+        }
+
+        function main() -> string throws never {
+            inferred().value + "|" + explicit().value
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hello|hello".into()))
+    );
+}
+
+#[tokio::test]
+async fn call_any_inferred_and_explicit_list_returns_match() {
+    let output = baml_test!(
+        r#"
+        function make_list() -> string[] throws never {
+            ["alpha", "beta"]
+        }
+
+        function main() -> string throws never {
+            let inferred = reflect.call_any(make_list, {}) catch (e) {
+                _ => ["inferred error"]
+            }
+            let explicit = reflect.call_any<string[], never>(make_list, {}) catch (e) {
+                _ => ["explicit error"]
+            }
+            inferred[0] + ":" + inferred[1] + "|" + explicit[0] + ":" + explicit[1]
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("alpha:beta|alpha:beta".into()))
+    );
+}
+
+#[tokio::test]
+async fn call_any_inferred_and_explicit_map_returns_match() {
+    let output = baml_test!(
+        r#"
+        function make_map() -> map<string, int> throws never {
+            let result: map<string, int> = { "alpha": 1, "beta": 2 }
+            result
+        }
+
+        function inferred_fallback() -> map<string, int> throws never {
+            let result: map<string, int> = { "alpha": -10, "beta": -20 }
+            result
+        }
+
+        function explicit_fallback() -> map<string, int> throws never {
+            let result: map<string, int> = { "alpha": -100, "beta": -200 }
+            result
+        }
+
+        function inferred() -> map<string, int> throws never {
+            reflect.call_any(make_map, {}) catch (e) {
+                _ => inferred_fallback()
+            }
+        }
+
+        function explicit() -> map<string, int> throws never {
+            reflect.call_any<map<string, int>, never>(make_map, {}) catch (e) {
+                _ => explicit_fallback()
+            }
+        }
+
+        function main() -> map<string, int>[] throws never {
+            [inferred(), explicit()]
+        }
+        "#
+    );
+    let Ok(BexExternalValue::Array { items, .. }) = output.result else {
+        panic!("expected inferred and explicit maps");
+    };
+    assert_eq!(items.len(), 2);
+    for item in items {
+        let BexExternalValue::Map { entries, .. } = item else {
+            panic!("expected map result");
+        };
+        assert_eq!(entries.get("alpha"), Some(&BexExternalValue::Int(1)));
+        assert_eq!(entries.get("beta"), Some(&BexExternalValue::Int(2)));
+    }
+}
+
+#[tokio::test]
+async fn call_any_inferred_and_explicit_throws_match() {
+    let output = baml_test!(
+        r#"
+        class CallError {
+            message string
+        }
+
+        function fail() -> string throws CallError {
+            throw CallError { message: "boom" }
+        }
+
+        function inferred() -> string throws never {
+            reflect.call_any(fail, {}) catch (e) {
+                CallError => "inferred:" + e.message,
+                reflect.InvalidArgumentError => "inferred argument error",
+                reflect.errors.CompilationError => "inferred compilation error",
+            }
+        }
+
+        function explicit() -> string throws never {
+            reflect.call_any<string, CallError>(fail, {}) catch (e) {
+                CallError => "explicit:" + e.message,
+                reflect.InvalidArgumentError => "explicit argument error",
+                reflect.errors.CompilationError => "explicit compilation error",
+            }
+        }
+
+        function main() -> string throws never {
+            inferred() + "|" + explicit()
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "inferred:boom|explicit:boom".into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn call_any_inferred_class_return_crosses_sys_op_and_host_boundaries() {
+    let output = baml_test!(
+        r#"
+        class Result {
+            value string
+        }
+
+        function main() -> Result throws never {
+            reflect.call_any(baml.sap.parse<Result>, { "text": `{"value":"hello"}` }) catch (e) {
+                _ => Result { value: "error" }
+            }
+        }
+        "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::instance(
+            "user.Result",
+            [("value", BexExternalValue::String("hello".into()))]
+                .into_iter()
+                .collect(),
+        ))
+    );
+}
+
+#[tokio::test]
+async fn call_any_rejects_a_return_outside_inferred_r() {
+    let mut program = compile_source_with_opt(
+        r#"
+        function lie() -> string throws never {
+            "declared string"
+        }
+
+        function main() -> string throws never {
+            reflect.call_any(lie, {}) catch_all (e) {
+                reflect.InvalidArgumentError => {
+                    return e.argument + "|" + e.expected.to_string() + "|" + e.got.to_string()
+                },
+                _ => return "unexpected error",
+            }
+            "mismatch was accepted"
+        }
+        "#,
+        OptLevel::One,
+    );
+
+    // Preserve `lie`'s declared `string` signature while deliberately making
+    // its bytecode return an `int`. This models a faulty dynamic/host callee
+    // without allowing another boundary to reject the value first.
+    let lie_idx = program
+        .function_index("user.lie")
+        .expect("user.lie should exist");
+    let Object::Function(lie) = program
+        .objects
+        .get_mut(lie_idx)
+        .expect("user.lie object should exist")
+    else {
+        panic!("user.lie should be a function");
+    };
+    lie.bytecode.instructions = vec![Instruction::LoadConst(0), Instruction::Return];
+    lie.bytecode.constants = vec![ConstValue::Int(42)];
+    lie.bytecode.compact = None;
+
+    let output = run_compiled(program, "main", IndexMap::new(), false).await;
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            "reflect.call_any return value|string|int".into()
+        ))
+    );
+}
 
 #[tokio::test]
 async fn call_any_dispatches_named_args() {
@@ -15,7 +260,7 @@ async fn call_any_dispatches_named_args() {
         }
 
         function main() -> int throws never {
-            let f: baml.AnyFunction<Returns = int, Throws = never> = add
+            let f: reflect.AnyFunction<Returns = int, Throws = never> = add
             return reflect.call_any(f, { "x": 20, "y": 22 }) catch (e) {
                 _ => -1
             }
@@ -23,6 +268,131 @@ async fn call_any_dispatches_named_args() {
         "#
     );
     assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+#[tokio::test]
+async fn json_serializes_unknown_call_any_results_by_runtime_value() {
+    let output = baml_test!(
+        r#"
+        class Record {
+            name string
+        }
+
+        class Wrapped {
+            value int
+            implements baml.ToJson {
+                function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+                    { "overridden": baml.json.from(self.value) }
+                }
+            }
+        }
+
+        enum State {
+            Ready
+        }
+
+        function make_record() -> Record throws never {
+            Record { name: "Ada" }
+        }
+
+        function make_wrapped_list() -> Wrapped[] throws never {
+            [Wrapped { value: 1 }]
+        }
+
+        function make_state() -> State throws never {
+            State.Ready
+        }
+
+        function make_bigint() -> bigint throws never {
+            99999999999999999999n
+        }
+
+        function make_map() -> map<string, int> throws never {
+            { "x": 1 }
+        }
+
+        function make_image() -> image throws never {
+            image.from_url("https://example.com/a.png", "image/png")
+        }
+
+        function serialize_unknown(f: reflect.AnyFunction) -> string throws unknown {
+            let value: unknown = reflect.call_any(f, {})
+            baml.json.to_string(value) + "|" + baml.json.stringify(baml.json.to_json(value))
+        }
+
+        function main() -> string throws unknown {
+            serialize_unknown(make_record)
+                + "\n" + serialize_unknown(make_wrapped_list)
+                + "\n" + serialize_unknown(make_state)
+                + "\n" + serialize_unknown(make_bigint)
+                + "\n" + serialize_unknown(make_map)
+                + "\n" + serialize_unknown(make_image)
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            concat!(
+                r#"{"name":"Ada"}|{"name":"Ada"}"#,
+                "\n",
+                r#"[{"overridden":1}]|[{"overridden":1}]"#,
+                "\n",
+                r#""Ready"|"Ready""#,
+                "\n",
+                r#""99999999999999999999"|"99999999999999999999""#,
+                "\n",
+                r#"{"x":1}|{"x":1}"#,
+                "\n",
+                r#"{"kind":"image","source":"url","value":"https://example.com/a.png","mime":"image/png"}|{"kind":"image","source":"url","value":"https://example.com/a.png","mime":"image/png"}"#,
+            )
+            .into()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn json_rejects_unknown_uint8array_call_any_results() {
+    let output = baml_test!(
+        r#"
+        function make_bytes() -> uint8array throws unknown {
+            baml.Uint8Array.from_hex("00ff")
+        }
+
+        function to_string_error(value: unknown) -> string throws unknown {
+            {
+                let _ = baml.json.to_string(value)
+                "unexpected success"
+            } catch (e) {
+                let err: baml.json.JsonSerializationError => err.message,
+            }
+        }
+
+        function to_json_error(value: unknown) -> string throws unknown {
+            {
+                let _ = baml.json.to_json(value)
+                "unexpected success"
+            } catch (e) {
+                let err: baml.json.JsonSerializationError => err.message,
+            }
+        }
+
+        function main() -> string throws unknown {
+            let f: reflect.AnyFunction = make_bytes
+            let value: unknown = reflect.call_any(f, {})
+            to_string_error(value) + "|" + to_json_error(value)
+        }
+        "#
+    );
+
+    let message = "uint8array requires explicit encoding (use to_base64() or to_hex())";
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String(
+            format!("{message}|{message}").into()
+        ))
+    );
 }
 
 #[tokio::test]
@@ -34,7 +404,7 @@ async fn call_any_absent_optional_fires_callee_default() {
         }
 
         function main() -> int throws never {
-            let f: baml.AnyFunction<Returns = int, Throws = never> = scale
+            let f: reflect.AnyFunction<Returns = int, Throws = never> = scale
             // Absent: the callee's own (non-constant) default fires: 5 * 6.
             let defaulted = reflect.call_any(f, { "x": 5 }) catch (e) {
                 _ => -1
@@ -59,22 +429,22 @@ async fn call_any_rejects_missing_key_and_type_mismatches() {
         }
 
         function main() -> int throws never {
-            let f: baml.AnyFunction<Returns = string, Throws = never> = greet
+            let f: reflect.AnyFunction<Returns = string, Throws = never> = greet
             let missing = reflect.call_any(f, {}) catch (e) {
                 reflect.InvalidArgumentError => 1,
-                baml.reflect.errors.CompilationError => 100,
+                reflect.errors.CompilationError => 100,
             }
             let ty = reflect.call_any(f, { "name": 42 }) catch (e) {
                 reflect.InvalidArgumentError => 1,
-                baml.reflect.errors.CompilationError => 100,
+                reflect.errors.CompilationError => 100,
             }
             let key = reflect.call_any(f, { "name": "x", "volume": 11 }) catch (e) {
                 reflect.InvalidArgumentError => 1,
-                baml.reflect.errors.CompilationError => 100,
+                reflect.errors.CompilationError => 100,
             }
             let opt_ty = reflect.call_any(f, { "name": "x", "excited": "yes" }) catch (e) {
                 reflect.InvalidArgumentError => 1,
-                baml.reflect.errors.CompilationError => 100,
+                reflect.errors.CompilationError => 100,
             }
             let failures = 0
             if missing is int {
@@ -113,39 +483,39 @@ async fn call_any_widens_int_for_float_param() {
         }
 
         function main() -> int throws never {
-            let g: baml.AnyFunction<Returns = float, Throws = never> = scale
+            let g: reflect.AnyFunction<Returns = float, Throws = never> = scale
             // The one boundary conversion: an integral value widens for a
             // `float` parameter (JSON Schema's `number` admits integers)...
             let widened = reflect.call_any(g, { "budget": 150 }) catch (e) {
                 reflect.InvalidArgumentError => -1.0,
-                baml.reflect.errors.CompilationError => -100.0,
+                reflect.errors.CompilationError => -100.0,
             }
             // ...and for a `float?` parameter.
             let opt = reflect.call_any(g, { "budget": 2, "factor": 3 }) catch (e) {
                 reflect.InvalidArgumentError => -1.0,
-                baml.reflect.errors.CompilationError => -100.0,
+                reflect.errors.CompilationError => -100.0,
             }
             // Nothing else converts: a float does not narrow to `int`, and a
             // numeric string does not parse to `float`.
-            let h: baml.AnyFunction<Returns = int, Throws = never> = takes_int
+            let h: reflect.AnyFunction<Returns = int, Throws = never> = takes_int
             let narrowed = reflect.call_any(h, { "n": 1.5 }) catch (e) {
                 reflect.InvalidArgumentError => -1,
-                baml.reflect.errors.CompilationError => -100,
+                reflect.errors.CompilationError => -100,
             }
             let stringy = reflect.call_any(g, { "budget": "150" }) catch (e) {
                 reflect.InvalidArgumentError => -2.0,
-                baml.reflect.errors.CompilationError => -100.0,
+                reflect.errors.CompilationError => -100.0,
             }
             // Widening is lossless-only: 2^53 is the last exactly
             // representable integer and widens; 2^53 + 1 would silently
             // round, so it stays an InvalidArgumentError.
             let exact = reflect.call_any(g, { "budget": 9007199254740992 }) catch (e) {
                 reflect.InvalidArgumentError => -1.0,
-                baml.reflect.errors.CompilationError => -100.0,
+                reflect.errors.CompilationError => -100.0,
             }
             let lossy = reflect.call_any(g, { "budget": 9007199254740993 }) catch (e) {
                 reflect.InvalidArgumentError => -3.0,
-                baml.reflect.errors.CompilationError => -100.0,
+                reflect.errors.CompilationError => -100.0,
             }
             let ok = 0
             if widened == 150.0 {
@@ -182,14 +552,14 @@ async fn call_any_invalid_argument_error_carries_types() {
         }
 
         function main() -> string throws never {
-            let f: baml.AnyFunction<Returns = string, Throws = never> = greet
+            let f: reflect.AnyFunction<Returns = string, Throws = never> = greet
             let bad_value = reflect.call_any(f, { "name": 42 }) catch (e) {
                 reflect.InvalidArgumentError => e.argument + ":" + e.expected.to_string() + "|" + e.got.to_string(),
-                baml.reflect.errors.CompilationError => "unexpected-compilation-error",
+                reflect.errors.CompilationError => "unexpected-compilation-error",
             }
             let missing = reflect.call_any(f, {}) catch (e) {
                 reflect.InvalidArgumentError => e.argument + ":" + e.expected.to_string() + "|" + e.got.to_string(),
-                baml.reflect.errors.CompilationError => "unexpected-compilation-error",
+                reflect.errors.CompilationError => "unexpected-compilation-error",
             }
             let out = "?"
             if bad_value is string {
@@ -225,12 +595,12 @@ async fn call_any_propagates_callee_typed_throw() {
         }
 
         function main() -> string throws never {
-            let f: baml.AnyFunction<Returns = string, Throws = ToolError> = fail_search
+            let f: reflect.AnyFunction<Returns = string, Throws = ToolError> = fail_search
             // Exhaustive without a wildcard: all declared channels are named.
             return reflect.call_any(f, { "q": "cats" }) catch (e) {
                 ToolError => e.message,
                 reflect.InvalidArgumentError => "iae",
-                baml.reflect.errors.CompilationError => "compilation-error",
+                reflect.errors.CompilationError => "compilation-error",
             }
         }
         "#
@@ -257,7 +627,7 @@ async fn call_any_heterogeneous_tool_map_dispatch() {
             throw ToolError { message: s }
         }
 
-        function dispatch(tools: map<string, baml.AnyFunction<Returns = string, Throws = ToolError>>, name: string, args: map<string, unknown>) -> string throws never {
+        function dispatch(tools: map<string, reflect.AnyFunction<Returns = string, Throws = ToolError>>, name: string, args: map<string, unknown>) -> string throws never {
             let f = tools.get(name)
             if f is null {
                 return "no-such-tool"
@@ -265,12 +635,12 @@ async fn call_any_heterogeneous_tool_map_dispatch() {
             return reflect.call_any(f, args) catch (e) {
                 ToolError => "err:" + e.message,
                 reflect.InvalidArgumentError => "iae",
-                baml.reflect.errors.CompilationError => "compilation-error",
+                reflect.errors.CompilationError => "compilation-error",
             }
         }
 
         function main() -> string throws never {
-            let tools: map<string, baml.AnyFunction<Returns = string, Throws = ToolError>> = {
+            let tools: map<string, reflect.AnyFunction<Returns = string, Throws = ToolError>> = {
                 "shout": shout,
                 "fail": fail,
             }
@@ -292,7 +662,7 @@ async fn call_any_lambda_callee() {
             let double = (x: int) -> int throws never {
                 x * 2
             }
-            let f: baml.AnyFunction<Returns = int, Throws = never> = double
+            let f: reflect.AnyFunction<Returns = int, Throws = never> = double
             return reflect.call_any(f, { "x": 21 }) catch (e) {
                 _ => -1
             }
@@ -316,7 +686,7 @@ async fn call_any_bound_method_callee() {
 
         function main() -> int throws never {
             let c = Counter { base: 40 }
-            let m: baml.AnyFunction<Returns = int, Throws = never> = c.bump
+            let m: reflect.AnyFunction<Returns = int, Throws = never> = c.bump
             return reflect.call_any(m, { "amount": 2 }) catch (e) {
                 _ => -1
             }
@@ -343,7 +713,7 @@ async fn signature_reports_types_and_param_split() {
         }
 
         function main() -> string throws never {
-            let f: baml.AnyFunction = search
+            let f: reflect.AnyFunction = search
             let sig = reflect.signature(f)
             let limit = sig.opts.get("limit")
             let limit_str = "absent"
@@ -389,7 +759,7 @@ async fn signature_bound_method_drops_receiver() {
 
         function main() -> string throws never {
             let c = Counter { base: 40 }
-            let m: baml.AnyFunction = c.bump
+            let m: reflect.AnyFunction = c.bump
             let sig = reflect.signature(m)
             let method_name = "unnamed"
             let n = sig.name
@@ -424,7 +794,7 @@ async fn instantiated_generic_function_reflects_precisely_and_dispatches() {
         function main() -> string throws never {
             // An instantiated generic callable carries its realized frame, so its
             // signature reconstructs at that instantiation rather than coarsely.
-            let f: baml.AnyFunction = ident<int>
+            let f: reflect.AnyFunction = ident<int>
             let sig = reflect.signature(f)
             let r = reflect.call_any(f, { "x": 42 }) catch (e) {
                 _ => -1
@@ -452,9 +822,9 @@ async fn call_any_reports_unspecialized_generic_function() {
         }
 
         function main() -> string throws unknown {
-            let f: baml.AnyFunction = ident
+            let f: reflect.AnyFunction = ident
             let _ = reflect.call_any(f, { "x": 42 }) catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => throw e,
@@ -466,7 +836,7 @@ async fn call_any_reports_unspecialized_generic_function() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "E0165|generic function `ident` cannot be extracted through reflection: reflected packages cannot supply type arguments yet".into()
+            "E0165|generic function `ident` cannot be extracted through reflection: its signature still mentions its own type parameters".into()
         ))
     );
 }
@@ -480,9 +850,9 @@ async fn pinned_call_any_declares_unspecialized_generic_compilation_error() {
         }
 
         function main() -> string throws never {
-            let f: baml.AnyFunction<Returns = string, Throws = never> = ident
+            let f: reflect.AnyFunction<Returns = string, Throws = never> = ident
             let _ = reflect.call_any(f, { "x": "value" }) catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => return "wrong error",
@@ -494,7 +864,7 @@ async fn pinned_call_any_declares_unspecialized_generic_compilation_error() {
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String(
-            "E0165|generic function `ident` cannot be extracted through reflection: reflected packages cannot supply type arguments yet".into()
+            "E0165|generic function `ident` cannot be extracted through reflection: its signature still mentions its own type parameters".into()
         ))
     );
 }
@@ -514,7 +884,7 @@ async fn uninstantiated_generic_function_reference_is_a_compile_error() {
         }
 
         function main() -> string throws never {
-            let f: baml.AnyFunction = ident
+            let f: reflect.AnyFunction = ident
             return "unreachable"
         }
         "#
@@ -536,8 +906,8 @@ async fn signature_object_literal_construction() {
             let manual = reflect.Signature {
                 args: [],
                 opts: {},
-                returns: type.of<int>(),
-                errors: type.of<never>(),
+                returns: reflect.Type.of<int>(),
+                errors: reflect.Type.of<never>(),
                 docstring: null,
             }
             return manual.returns.to_string() + "|" + manual.errors.to_string()
@@ -559,10 +929,10 @@ async fn unreflect_reifies_the_runtime_type_argument() {
     let output = baml_test!(
         r#"
         function inspect<T>() -> string throws never {
-            return type.of<T>().to_string()
+            return reflect.Type.of<T>().to_string()
         }
 
-        function main() -> string throws baml.reflect.errors.CompilationError {
+        function main() -> string throws reflect.errors.CompilationError {
             let t = reflect.enum.new("Category", ["RED", "BLUE"])
             return inspect<unreflect(t)>()
         }
@@ -586,7 +956,7 @@ async fn runtime_enum_renders_and_alias_round_trips_through_sap() {
 
         function Classify<T>(input: string) -> T {
             client: TestClient
-            prompt: `Choose a category for ${input}.\n${ctx.output_format}`
+            prompt: `Choose a category for ${input}.\n${ctx.output_format()}`
         }
 
         function main() -> string {
@@ -626,6 +996,47 @@ async fn runtime_enum_renders_and_alias_round_trips_through_sap() {
 }
 
 #[tokio::test]
+async fn nested_unreflect_runtime_type_renders_through_a_generic_wrapper() {
+    let output = baml_test!(
+        r##"
+client TestClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+)
+
+class Wrapper<T> {
+    value T
+}
+
+function Extract<T>(input: string) -> T {
+    client: TestClient
+    prompt: `Extract ${input}.\n${ctx.output_format()}`
+}
+
+function main() -> string {
+    let runtime_class = reflect.class.new("RuntimeTranscript", {
+        "speaker": reflect.Type.of<string>(),
+        "words": reflect.Type.of<string[]>(),
+    })
+    Extract$render_prompt<Wrapper<unreflect(runtime_class.as_type())>>("sample").text()
+}
+"##
+    );
+
+    let BexExternalValue::String(prompt) = output
+        .result
+        .expect("nested runtime type should render without executing a model call")
+    else {
+        panic!("expected rendered prompt text")
+    };
+    assert!(
+        prompt.contains("value:") && prompt.contains("speaker") && prompt.contains("words"),
+        "missing static wrapper or nested runtime class schema: {prompt}",
+    );
+}
+
+#[tokio::test]
 async fn runtime_enum_identity_and_metadata_are_preserved() {
     let output = baml_test!(
         r##"
@@ -637,14 +1048,14 @@ async fn runtime_enum_identity_and_metadata_are_preserved() {
 
         function Classify<T>(input: string) -> T {
             client: TestClient
-            prompt: `Choose a category for ${input}.\n${ctx.output_format}`
+            prompt: `Choose a category for ${input}.\n${ctx.output_format()}`
         }
 
         function main() -> string {
-            // Widen explicitly to select `type.meta(...)`, rather than the
-            // enum-kind view's zero-argument metadata reader.
-            let left: type = reflect.enum.new("Category", ["RED", "BLUE"])
-            let right: type = reflect.enum.new("Category", ["RED", "BLUE"])
+            // Widen explicitly (`as_type`) to select `reflect.Type.meta(...)`,
+            // rather than the enum-kind view's zero-argument metadata reader.
+            let left: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"]).as_type()
+            let right: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"]).as_type()
             let left_prompt = Classify$render_prompt<unreflect(left)>("sample").text()
             let right_prompt = Classify$render_prompt<unreflect(right)>("sample").text()
             let tagged = left.meta(
@@ -679,7 +1090,7 @@ async fn duplicate_runtime_enum_value_uses_compiler_diagnostic() {
         r#"
         function main() -> string throws never {
             let result = reflect.enum.new("Category", ["RED", "RED"]) catch (e) {
-                baml.reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message
+                reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message
             }
             if result is string {
                 return result
@@ -717,7 +1128,7 @@ async fn empty_runtime_enum_fails_at_the_render_boundary() {
 
         function Classify<T>(input: string) -> T {
             client: TestClient
-            prompt: `Choose a category for ${input}.\n${ctx.output_format}`
+            prompt: `Choose a category for ${input}.\n${ctx.output_format()}`
         }
 
         function main() -> string throws never {
@@ -725,7 +1136,7 @@ async fn empty_runtime_enum_fails_at_the_render_boundary() {
                 _ => return "constructor threw"
             }
             let rendered = Classify$render_prompt<unreflect(t)>("sample") catch (e) {
-                baml.reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+                reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                 _ => "wrong render error",
             }
             if rendered is string {
@@ -760,7 +1171,7 @@ fn runtime_type_arguments_are_rejected_on_streaming_companions() {
 
         function Classify<T>(input: string) -> T {
             client: TestClient
-            prompt: `${input} ${ctx.output_format}`
+            prompt: `${input} ${ctx.output_format()}`
         }
 
         function main() -> null {
@@ -770,7 +1181,7 @@ fn runtime_type_arguments_are_rejected_on_streaming_companions() {
         }
         "##,
     );
-    let diagnostics = collect_diagnostics(&db);
+    let diagnostics = check_user_files(&db);
     assert!(
         diagnostics
             .iter()
@@ -799,13 +1210,13 @@ async fn get_function_refuses_an_unspecialized_generic_through_any_function() {
             base_url = "http://localhost:1234",
         );
 
-        type AnyCallable = baml.AnyFunction<Returns = unknown, Throws = unknown>;
+        type AnyCallable = reflect.AnyFunction<Returns = unknown, Throws = unknown>;
 
         function GenericList<T>(topic: string) -> T[] {
             client: TestClient
             prompt: `
                 Return an empty list of ${topic}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
 
@@ -814,7 +1225,7 @@ async fn get_function_refuses_an_unspecialized_generic_through_any_function() {
             let callable: AnyCallable = package.get_function<AnyCallable>(
                 "GenericList$render_prompt",
             ) catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => return "wrong error",
@@ -834,8 +1245,7 @@ async fn get_function_refuses_an_unspecialized_generic_through_any_function() {
         output.result,
         Ok(BexExternalValue::String(
             "E0165|generic function `GenericList$render_prompt` cannot be invoked through \
-             reflection until it is specialized: its body needs type arguments and reflection \
-             cannot supply them yet"
+             reflection: its body needs type arguments"
                 .into()
         ))
     );
@@ -853,13 +1263,13 @@ async fn call_any_still_invokes_a_non_generic_companion() {
             base_url = "http://localhost:1234",
         );
 
-        type AnyCallable = baml.AnyFunction<Returns = unknown, Throws = unknown>;
+        type AnyCallable = reflect.AnyFunction<Returns = unknown, Throws = unknown>;
 
         function Plain(topic: string) -> string {
             client: TestClient
             prompt: `
                 Say ${topic}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
 
@@ -896,7 +1306,7 @@ async fn get_function_refuses_an_unspecialized_generic_companion() {
             client: TestClient
             prompt: `
                 Return an empty list of ${topic}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
 
@@ -905,7 +1315,7 @@ async fn get_function_refuses_an_unspecialized_generic_companion() {
             let callable: PromptFn = package.get_function<PromptFn>(
                 "GenericList$render_prompt",
             ) catch (e) {
-                baml.reflect.errors.CompilationError => {
+                reflect.errors.CompilationError => {
                     return e.diagnostics[0].code + "|" + e.diagnostics[0].message
                 },
                 _ => return "wrong error",
@@ -925,8 +1335,7 @@ async fn get_function_refuses_an_unspecialized_generic_companion() {
         output.result,
         Ok(BexExternalValue::String(
             "E0165|generic function `GenericList$render_prompt` cannot be invoked through \
-             reflection until it is specialized: its body needs type arguments and reflection \
-             cannot supply them yet"
+             reflection: its body needs type arguments"
                 .into()
         ))
     );
@@ -951,7 +1360,7 @@ async fn get_function_still_extracts_a_non_generic_companion() {
             client: TestClient
             prompt: `
                 Say ${topic}.
-                ${ctx.output_format}
+                ${ctx.output_format()}
             `
         }
 

@@ -1,6 +1,7 @@
 use std::{path::Path, process::Command};
 
-use baml_project::{ProjectDatabase, collect_compiler2_diagnostics};
+use baml_db::{ProjectDatabase, collect_compiler2_diagnostics};
+use baml_tests::engine::TestDbExt;
 
 const CHILD_TEST_NAME: &str = "incremental_function_typing_repro_child";
 const INCOMPLETE_LOG_CHILD_TEST_NAME: &str = "incremental_incomplete_log_repro_child";
@@ -9,7 +10,7 @@ fn run_incremental_repro_sequence() {
     let mut db = ProjectDatabase::new();
     let root = Path::new("/repro");
     let file = Path::new("/repro/repro.baml");
-    db.set_project_root(root);
+    db.workspace(root);
 
     let prefix = r#"
 function Existing() -> string {
@@ -23,7 +24,7 @@ function Existing() -> string {
     for i in 0..=typed.len() {
         let current = format!("{prefix}{}{}", &typed[..i], suffix);
         eprintln!("repro step {i}: `{}`", &typed[..i]);
-        db.add_or_update_file(file, &current);
+        db.file(file, &current);
 
         // This is the narrowest known path that reproduces the crash from
         // `textDocument/didChange`: mutate the same DB incrementally and then
@@ -62,7 +63,7 @@ fn run_incomplete_log_repro_sequence() {
     let mut db = ProjectDatabase::new();
     let root = Path::new("/repro-incomplete-log");
     let file = Path::new("/repro-incomplete-log/main.baml");
-    db.set_project_root(root);
+    db.workspace(root);
 
     let source = r##"
 client GPT4o {
@@ -98,7 +99,7 @@ function TakeGuess(user_guess: string, famous_person_name: string, history: stri
     ${user_guess}
     ${famous_person_name}
     ${history}
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 
@@ -112,9 +113,8 @@ function GuessGameAgent() -> GuessResponse {
 }
 "##;
 
-    db.add_or_update_file(file, source);
+    db.file(file, source);
     let _ = collect_compiler2_diagnostics(&db);
-    let _ = baml_project::list_functions_with_metadata(&db);
 }
 
 #[test]
@@ -146,9 +146,9 @@ fn incremental_property_syntax_change_invalidates_inference() {
     let mut db = ProjectDatabase::new();
     let root = Path::new("/property-syntax");
     let file = Path::new("/property-syntax/main.baml");
-    db.set_project_root(root);
+    db.workspace(root);
 
-    db.add_or_update_file(
+    db.file(
         file,
         r#"
 function build() -> map<string, string> {
@@ -169,7 +169,7 @@ function build() -> map<string, string> {
 
     // These forms have identical key/value expressions after desugaring, so
     // property syntax must participate in the structural body equality.
-    db.add_or_update_file(
+    db.file(
         file,
         r#"
 function build() -> map<string, string> {

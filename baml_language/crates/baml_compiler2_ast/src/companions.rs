@@ -8,10 +8,11 @@
 //! Adding a new companion = writing one `fn(&FunctionDef) -> Option<FunctionDef>`
 //! and appending it to `COMPANIONS`.
 //!
-//! Every LLM function lives in the single-path ai world and gets three
+//! Every LLM function lives in the single-path ai world and gets four
 //! companions: `$spec` (the bound, unrun `ai.FunctionSpec<Out>`), `$render_prompt`
-//! (the spec's prompt rendered with the return type's output-format text), and
-//! `$parse` (a network-free `baml.sap.parse<Out>` of an existing reply).
+//! (the spec's prompt rendered with the return type's output-format text),
+//! `$build_request` (a network-free provider request preview), and `$parse`
+//! (a network-free `baml.sap.parse<Out>` of an existing reply).
 //! `$stream` is synthesized at PPIR level — its body needs the stream-expanded
 //! return type, which only PPIR can compute.
 
@@ -25,7 +26,8 @@ use crate::{
 
 type CompanionExpander = fn(&FunctionDef) -> Option<FunctionDef>;
 
-const COMPANIONS: &[CompanionExpander] = &[llm_spec, llm_render_prompt, llm_parse];
+const COMPANIONS: &[CompanionExpander] =
+    &[llm_spec, llm_render_prompt, llm_build_request, llm_parse];
 
 /// Run all companion expanders on the given function.
 /// Works identically for top-level functions and class methods.
@@ -51,13 +53,13 @@ fn spec_llm_meta(parent: &FunctionDef) -> Option<&crate::ast::LlmBodyDef> {
     }
 }
 
-/// The function's own parameters — the compiler-injected `client` override
-/// belongs to the runner, never to a companion's surface.
+/// The function's own parameters — the compiler-injected `client` and
+/// `on_event` overrides belong to the runner, never to a companion's surface.
 fn own_params(parent: &FunctionDef) -> Vec<Param> {
     parent
         .params
         .iter()
-        .filter(|p| p.name.as_str() != "client")
+        .filter(|p| p.name.as_str() != "client" && p.name.as_str() != "on_event")
         .cloned()
         .collect()
 }
@@ -120,9 +122,8 @@ fn llm_spec(parent: &FunctionDef) -> Option<FunctionDef> {
 /// the return type's output-format text as a structural `ai.Prompt`.
 fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
     spec_llm_meta(parent)?;
-    let out = parent.return_type.clone()?;
+    parent.return_type.as_ref()?;
     let params = own_params(parent);
-    let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
     let generic_param_names: Vec<Name> = parent
         .generic_params
         .iter()
@@ -130,9 +131,8 @@ fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
         .collect();
     let body = lower_expr_body::synthesize_spec_render_prompt_body(
         parent.name.as_str(),
-        &param_names,
+        &params,
         &generic_param_names,
-        Some(out),
         parent.span,
     );
     let return_type = (TypeExprKind::Path {
@@ -147,6 +147,48 @@ fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
         Name::new(format!("{}$render_prompt", parent.name)),
         params,
         Some(return_type),
+        body,
+    ))
+}
+
+/// Build the `<Fn>$build_request` companion. It accepts the same parameters as
+/// the parent plus its injected `client` override and delegates to the spec's
+/// pure `FunctionSpec.build_request` method. This keeps request construction
+/// provider-neutral while preserving the parent's default-client semantics.
+fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
+    spec_llm_meta(parent)?;
+    // Keep the injected `client` (default-client semantics) but not
+    // `on_event`: a network-free request preview never runs the agent, so
+    // there are no events to listen to.
+    let params: Vec<Param> = parent
+        .params
+        .iter()
+        .filter(|p| p.name.as_str() != "on_event")
+        .cloned()
+        .collect();
+    let body = lower_expr_body::synthesize_spec_build_request_body(
+        parent.name.as_str(),
+        &own_params(parent),
+        &parent
+            .generic_params
+            .iter()
+            .map(|p| p.name.clone())
+            .collect::<Vec<_>>(),
+        parent.span,
+    );
+    Some(companion_def(
+        parent,
+        Name::new(format!("{}$build_request", parent.name)),
+        params,
+        Some(
+            (TypeExprKind::Path {
+                segments: vec![Name::new("baml"), Name::new("http"), Name::new("Request")],
+                generic_args: vec![],
+                associated_type_bindings: vec![],
+                attrs: vec![],
+            })
+            .at(parent.span),
+        ),
         body,
     ))
 }

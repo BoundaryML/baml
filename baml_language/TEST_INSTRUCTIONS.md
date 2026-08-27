@@ -1,55 +1,142 @@
 # BAML Language Testing Guide
 
+## Where does a new test go?
+
+Answer one question first: **what is the test actually about?**
+
+| The subject of the test | Where it goes |
+|---|---|
+| BAML *behavior* — run code, assert a value or a catchable throw | `crates/baml_tests/baml_src/ns_<topic>/` as a `test` block |
+| A compile **error** (or intentionally broken syntax) | `crates/baml_tests/projects/diagnostic_errors/` or `projects/broken_syntax/` |
+| Compiler IR — PPIR/MIR/bytecode/diagnostics of code that compiles | `crates/baml_tests/baml_src/ns_fixtures/ns_<topic>/` (snapshots are generated automatically) |
+| Something only Rust can see — VM/heap/GC state, host arg marshalling, wall-clock timing, salsa invalidation, CLI/LSP/FFI surface | a Rust test in the owning crate |
+
+**The default is a BAML `test` block.** If you find yourself writing a Rust test
+that compiles a BAML string, runs a function, and asserts the returned value,
+stop — that test belongs in `baml_src/`. The whole corpus compiles *once* for
+the entire suite, while each Rust test pays its own full compile (stdlib
+included). That difference is why the old per-project snapshot tier cost ~23 CPU
+minutes and its replacement costs well under one.
+
+Writing one is just:
+
+```baml
+// crates/baml_tests/baml_src/ns_<topic>/<topic>.baml
+function add(a: int, b: int) -> int { a + b }
+
+test "adds two ints" {
+  assert.equal(add(2, 3), 5)
+}
+```
+
+Run it with `target/debug/baml-cli test --from crates/baml_tests/baml_src`
+(add `-i "<name>"` to select one). See `crates/baml_tests/README.md` for the
+corpus layout and the "END-TO-END TESTING" section below for the CLI workflow
+and the language traps worth knowing.
+
+A Rust test is the right call when BAML genuinely cannot observe the thing —
+and when that is so, say why in a comment, the way
+`crates/bex_vm/tests/bigint_equality.rs` does (equal literals may share a
+constant-pool entry, so BAML source cannot force two distinct allocations).
+
+## Rust tests: import the prefixed compile helpers
+
+A fresh `ProjectDatabase` re-derives the whole stdlib — about nine CPU-seconds,
+against a few milliseconds for the snippet under test. `cargo nextest` runs each
+test in its own process, so no in-process cache can amortize that; the stdlib
+slice is compiled **once at build time** by `baml_tests`' build script
+instead.
+
+So in a Rust test, import the compile helpers from `baml_tests::stdlib_prefix`,
+not from `baml_project::testing`:
+
+```rust
+// slow — re-derives the stdlib on every test
+use baml_project::{collect_diagnostics, testing::setup_test_db};
+
+// fast — splices in the build-time stdlib slice
+use baml_tests::stdlib_prefix::{check_user_files, setup_test_db};
+```
+
+| Need | Use |
+|---|---|
+| compile a snippet to bytecode | `baml_tests::stdlib_prefix::compile_source{,_with_opt}` |
+| several files in one project | `baml_tests::stdlib_prefix::compile_multi_file` / `setup_multi_file_db` |
+| a database to collect diagnostics from | `baml_tests::stdlib_prefix::setup_test_db` |
+| the diagnostics themselves | `baml_tests::stdlib_prefix::check_user_files` (**not** `collect_diagnostics`) |
+
+`check_user_files` checks only the project's own files plus the package-level
+pass, instead of re-checking all ~50 stdlib files whose diagnostics every caller
+then filters out anyway. That narrowing is sound here because a test database is
+written once and read once, so nothing can go stale — it is *not* safe on the
+LSP's long-lived database, which is why `collect_diagnostics` still checks
+everything.
+
+Emitted bytecode is **byte-identical** either way, at every optimization level;
+`tests/stdlib_prefix_equivalence.rs` compiles a corpus both ways and compares
+the serialized programs, so a divergence fails CI. That oracle is why the honest
+helpers in `baml_project::testing` still exist — they are its control arm, not
+dead code.
+
+One thing deliberately *not* done: mounting the stdlib as a source-less
+precompiled package (what runtime `reflect.Package.compile` does) is faster
+again, but without stdlib bodies a direct sysop call lowers to `call` instead of
+`sys_op`, and checks that walk stdlib bodies or declaration sites (E0153, E0163)
+go silent. Speed there would mean testing a different artifact than we ship.
+
 ## Test Suites
 
 | Suite | Location | Purpose |
 |-------|----------|---------|
 | `baml_tests` | `crates/baml_tests/` | Snapshot tests with detailed compiler IR output |
-| `baml_lsp2_actions_tests` | `crates/baml_lsp2_actions_tests/` | LSP integration tests with inline expectations |
+| `baml_ide` | `crates/baml_ide/` | Editor/agent query surface: hover, definition, references, tokens, describe |
+| `baml_lsp` / `baml_lsp_server` | `crates/baml_lsp*/` | Protocol layer and transport, including the stdio end-to-end transcript |
 
 ## Workflow: Debugging a Failing Test
 
-### 1. Identify the issue in baml_lsp2_actions_tests
+### 1. Identify the issue in the editor surface
 
 ```bash
-cargo test --package baml_lsp2_actions_tests
+cargo nextest run -p baml_ide -p baml_lsp -p baml_lsp_server
 ```
 
-Look for errors in `crates/baml_lsp2_actions_tests/test_files/syntax/`.
+Cursor-position fixtures live inline in each `baml_ide` feature module.
 
 ### 2. Create a minimal repro in baml_tests
 
-Create a new project directory:
+If the repro **compiles cleanly** and you want its IR, add it to the fixture
+corpus:
 ```bash
-mkdir -p crates/baml_tests/projects/my_repro/
+mkdir -p crates/baml_tests/baml_src/ns_fixtures/ns_my_repro/
+# ...write crates/baml_tests/baml_src/ns_fixtures/ns_my_repro/repro.baml
 ```
 
-Add a `.baml` file with the minimal repro case:
+If the repro **must fail to compile**, add a project instead:
 ```bash
-# crates/baml_tests/projects/my_repro/repro.baml
+mkdir -p crates/baml_tests/projects/diagnostic_errors/my_repro/   # semantic errors
+mkdir -p crates/baml_tests/projects/broken_syntax/my_repro/       # parse errors
 ```
 
 ### 3. Run and generate snapshots
 
 ```bash
-cargo test --package baml_tests my_repro
-```
-
-Accept new snapshots:
-```bash
-cargo insta accept --all
+cargo insta test --test-runner=nextest --accept -p baml_tests
 ```
 
 ### 4. Inspect the output
 
-Snapshots are created in `crates/baml_tests/snapshots/my_repro/`:
+Fixture snapshots land next to the source in the mirrored snapshot tree,
+`crates/baml_tests/snapshots/baml_src/ns_fixtures/ns_my_repro/`:
 
 | Snapshot | Contents |
 |----------|----------|
-| `*_03_hir.snap` | HIR (High-level IR) |
-| `*_04_thir.snap` | THIR (Typed HIR) with type inference |
-| `*_05_diagnostics.snap` | All errors and warnings |
-| `*_06_codegen.snap` | Generated bytecode |
+| `ppir.snap` | PPIR (post-expansion item tree) |
+| `mir.snap` | MIR |
+| `bytecode.snap` | Generated bytecode |
+| `diagnostics.snap` | Warnings for that namespace (errors fail the run) |
+
+Failing-to-compile projects snapshot under
+`crates/baml_tests/snapshots/{diagnostic_errors,broken_syntax}/my_repro/`.
 
 ### 5. Fix the issue
 
@@ -59,11 +146,10 @@ Edit the relevant crate (`baml_compiler_parser`, `baml_compiler_syntax`, `baml_c
 
 ```bash
 # Update baml_tests snapshots
-cargo test --package baml_tests my_repro
-cargo insta accept --all
+cargo insta test --test-runner=nextest --accept -p baml_tests
 
-# Update baml_lsp2_actions_tests inline expectations
-UPDATE_EXPECT=1 cargo test --package baml_lsp2_actions_tests
+# Update baml_ide snapshots
+cargo insta test --test-runner=nextest --accept -p baml_ide
 ```
 
 ### 7. Verify all tests pass
@@ -72,28 +158,31 @@ UPDATE_EXPECT=1 cargo test --package baml_lsp2_actions_tests
 # Library unit tests — always run these when Rust code changes
 cargo test --lib
 
-# Run all tests (can skip slow parser_stress with --skip parser_stress)
-cargo test --package baml_tests -- --skip parser_stress
-cargo test --package baml_lsp2_actions_tests
+# Run all tests
+cargo nextest run -p baml_tests
+cargo nextest run -p baml_ide -p baml_lsp -p baml_lsp_server
 ```
 
 ## Quick Commands
 
 ```bash
 # Run specific test project
-cargo test --package baml_tests my_project_name
+cargo nextest run -p baml_tests -E 'test(/my_project_name/)'
 
 # Run all snapshot tests
-cargo test --package baml_tests
+cargo nextest run -p baml_tests
 
-# Run all snapshot tests (skip slow parser_stress tests)
-cargo test --package baml_tests -- --skip parser_stress
+# Run just the corpus snapshot pass (PPIR/MIR/bytecode/diagnostics, one compile)
+cargo nextest run -p baml_tests --lib -E 'test(/corpus_/)'
 
-# Run LSP tests and auto-update expectations
-UPDATE_EXPECT=1 cargo test --package baml_lsp2_actions_tests
+# Execute the BAML corpus the way CI does
+target/debug/baml-cli test --from crates/baml_tests/baml_src
+
+# Run the editor-surface tests
+cargo nextest run -p baml_ide -p baml_lsp -p baml_lsp_server
 
 # Accept all pending snapshots
-cargo insta accept --all
+cargo insta test --test-runner=nextest --accept -p baml_tests
 
 # Review snapshots interactively
 cargo insta review
@@ -109,7 +198,7 @@ cargo insta review
 - **Type checking**: `crates/baml_compiler2_tir/src/builder.rs`
 
 
-DO NOT EDIT the diagnostics manually in baml_lsp2_actions_tests. Use UPDATE_EXPECT=1
+DO NOT EDIT the diagnostics manually in the corpus fixtures. Use `cargo insta … --accept`
 
 Find the base-case that makes syntax fail and add that to baml_test with a good name and good folder organization.
 
@@ -135,7 +224,7 @@ Build and use the local dev CLI (do **not** use a `brew`-installed `baml` — yo
 
 ```bash
 cargo build -p baml_cli           # produces target/debug/baml-cli
-BAML=/Users/aaron/projects/baml/baml_language/target/debug/baml-cli
+BAML="$PWD/target/debug/baml-cli"   # run from baml_language/
 ```
 
 It prints `warning: using the internal BAML toolchain binary directly is not recommended` on

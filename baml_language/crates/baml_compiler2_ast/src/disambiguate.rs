@@ -12,8 +12,9 @@ use crate::ast::{
     TypeExpr, TypeExprKind,
 };
 
-/// The canonical set of field attribute names.
-const FIELD_ATTR_NAMES: &[&str] = &["alias", "description", "skip"];
+/// The canonical set of field attribute names. Public so completion can
+/// enumerate exactly what [`is_field_attr`] accepts.
+pub const FIELD_ATTR_NAMES: &[&str] = &["alias", "description", "skip"];
 
 /// Check if an attribute name is a field attribute.
 pub fn is_field_attr(name: &str) -> bool {

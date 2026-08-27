@@ -1,0 +1,416 @@
+# ix preview copy of .github/workflows/size-gate.reusable.yaml, linux and
+# wasm halves only - the mac/win halves stay exclusively in the gating
+# workflow, so the preview never duplicates Blacksmith spend and the
+# unified report here covers linux and wasm. It runs side by side with
+# the original via ix-ci.yml, is never a required check, and changes
+# nothing about how the original runs. Promote or delete after the
+# trial; do not evolve both copies.
+#
+# sccache strategy
+# ================
+#
+# These jobs compile the same release artifacts the cargo tests do, so they
+# share the sccache + Swatinem/rust-cache setup documented at the top of
+# cargo-tests.reusable.yaml: sccache holds the compiled `target/` tree (R2
+# backend), while rust-cache keeps the registry/git state (`cache-all-crates:
+# true`, `cache-targets: false`). They are read-only consumers of the shared
+# rust-cache entries written by canary in cargo-tests.reusable.yaml, and read
+# the same sccache R2 cache via .envrc.
+#
+# Secretless runs (e.g. fork PRs) still install sccache, but .envrc sees no R2
+# credentials and falls back to the runner-local cache.
+name: Size Gate (Reusable)
+
+on:
+  workflow_call:
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID:
+        required: false
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY:
+        required: false
+
+# Read-only: these jobs run PR-controlled code and only upload artifacts,
+# so they must not inherit whatever the caller grants.
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # Inputs read by .envrc; everything else (RUSTC_WRAPPER, SCCACHE_*) is set by
+  # .envrc itself so it stays the single source of truth across CI and local.
+  # The R2 credentials .envrc maps to AWS_* for sccache.
+  BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+  BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
+
+# Individual measure-baml-size jobs are intentionally never allowed to fail.
+# Each platform job has `continue-on-error: true` so a violation, runner
+# death, or build hiccup does not fail the calling workflow. The
+# enforce-baml-size job aggregates all available reports and is the one
+# place where a real failure (policy violation or a missing platform
+# report) can block CI.
+
+jobs:
+  size-gate-linux:
+    name: "measure-baml-size (linux)"
+    # Fork PRs stay on the hosted runner; untrusted code never lands on ix.
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-gnu"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Keep the warm seed's ignored files (target/, node_modules);
+          # tracked files still hard-reset to the SHA. No-op on hosted runners.
+          clean: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          shared-key: "linux-cargo"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      - name: "Run size-gate check"
+        id: check
+        working-directory: baml_language
+        run: |
+          cargo run --timings -p cargo-size-gate -- size-gate check \
+            --only baml-cli,packed-program \
+            --format json > size-gate-linux.json 2> size-gate-stderr.txt || exit_code=$?
+          cat size-gate-stderr.txt >&2
+          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+
+      - name: "Upload size-gate report"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: size-gate-linux
+          path: baml_language/size-gate-linux.json
+          if-no-files-found: ignore
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-size-gate-linux.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-size-gate-linux
+          path: sccache-stats-size-gate-linux.json
+          if-no-files-found: ignore
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-size-gate-linux
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
+  size-gate-wasm:
+    name: "measure-baml-size (wasm)"
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-wasm"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    timeout-minutes: 25
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Keep the warm seed's ignored files (target/, node_modules);
+          # tracked files still hard-reset to the SHA. No-op on hosted runners.
+          clean: false
+
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          shared-key: "linux-wasm"
+          # Read-only consumer. The canary saver lives in
+          # cargo-tests.reusable.yaml; see the cache strategy comment there.
+          save-if: false
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch --target wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Run size-gate check"
+        id: check
+        working-directory: baml_language
+        run: |
+          cargo run --timings -p cargo-size-gate -- size-gate check \
+            --only bridge_wasm \
+            --format json > size-gate-wasm.json 2> size-gate-stderr.txt || exit_code=$?
+          cat size-gate-stderr.txt >&2
+          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+
+      - name: "Upload size-gate report"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: size-gate-wasm
+          path: baml_language/size-gate-wasm.json
+          if-no-files-found: ignore
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Dump sccache stats (json)"
+        if: always()
+        run: sccache --show-stats --stats-format json > sccache-stats-size-gate-wasm.json
+
+      - name: "Upload sccache stats"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sccache-stats-size-gate-wasm
+          path: sccache-stats-size-gate-wasm.json
+          if-no-files-found: ignore
+
+      - name: "Upload cargo timings"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cargo-timings-size-gate-wasm
+          path: baml_language/target/cargo-timings/
+          if-no-files-found: ignore
+
+  size-gate-report:
+    name: "enforce-baml-size"
+    runs-on: ${{ (((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["ix", "ix-light"]')) || 'blacksmith-4vcpu-ubuntu-2404' }}
+    if: ${{ always() && !cancelled() }}
+    needs: [size-gate-linux, size-gate-wasm]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # Keep the warm seed's ignored files (target/, node_modules);
+          # tracked files still hard-reset to the SHA. No-op on hosted runners.
+          clean: false
+
+      - name: "Download size-gate reports"
+        uses: actions/download-artifact@v8
+        with:
+          pattern: size-gate-*
+          merge-multiple: true
+          path: reports
+
+      # Build cargo-size-gate from source. We share the linux size-gate
+      # job's rust-cache (same shared-key, same runner OS), so this is a
+      # near-instant cache hit in the common case — no upload/download of
+      # the binary required.
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install sccache and direnv"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "sccache direnv"
+
+      - name: "Verify sccache"
+        run: sccache --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          shared-key: "linux-cargo"
+          # The linux size-gate job already populated this cache; we just
+          # consume it here.
+          save-if: false
+
+      - name: "Load .envrc with direnv"
+        run: |
+          set -euo pipefail
+
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      - name: "Build cargo-size-gate"
+        run: cargo build -p cargo-size-gate
+        working-directory: baml_language
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats
+
+      - name: "Compose unified report"
+        env:
+          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BIN: baml_language/target/debug/cargo-size-gate
+          RESULT_LINUX: ${{ needs.size-gate-linux.result }}
+          RESULT_WASM: ${{ needs.size-gate-wasm.result }}
+        run: |
+          # Track which expected platforms produced a JSON report.
+          missing=()
+          json_files=()
+
+          declare -A platform_results=(
+            [linux]="$RESULT_LINUX"
+            [wasm]="$RESULT_WASM"
+          )
+
+          for platform in linux wasm; do
+            f="reports/size-gate-${platform}.json"
+            if [ -s "$f" ]; then
+              json_files+=("$f")
+            else
+              missing+=("$platform (job result: ${platform_results[$platform]:-unknown})")
+            fi
+          done
+
+          # Aggregate the JSONs we did receive.
+          "$BIN" size-gate agg \
+            "${json_files[@]}" \
+            --run-url "$RUN_URL" \
+            > unified-report.md || true
+
+          # Prepend a "Missing platforms" callout if any expected platform
+          # didn't produce a report. This fires whether the platform's job
+          # was cancelled, errored before writing JSON, or never ran.
+          if [ "${#missing[@]}" -gt 0 ]; then
+            {
+              echo "> ⚠️ **Missing size-gate report(s):**"
+              for entry in "${missing[@]}"; do
+                echo "> - \`${entry}\`"
+              done
+              echo ">"
+              echo "> The unified report below only reflects platforms that produced output."
+              echo ""
+              cat unified-report.md
+            } > unified-report.with-missing.md
+            mv unified-report.with-missing.md unified-report.md
+          fi
+
+          # Persist for the failure step to consult. Gate the write on
+          # the array length: `printf '%s\n' "${missing[@]}"` with zero
+          # arguments still emits one trailing newline, which would make
+          # the file non-empty (1 byte) and trip the `[ -s ... ]` check
+          # in the failure step even when nothing is missing.
+          : > missing-platforms.txt
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '%s\n' "${missing[@]}" > missing-platforms.txt
+          fi
+
+      # No PR-comment step in this copy: the gating workflow's comment stays
+      # the only one, and the caller grants contents: read only.
+      - name: "Print report + write job summary"
+        # Publish even when a preparation step failed - the report (or its
+        # absence) is most valuable on exactly those runs.
+        if: ${{ !cancelled() }}
+        run: |
+          if [ ! -f unified-report.md ]; then
+            echo "size-gate report was not produced (a preparation step failed before report assembly)" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # Print to the workflow console log (so the status is visible in
+          # the job output, not just the summary tab)...
+          cat unified-report.md
+          # ...and to the run's summary tab.
+          cat unified-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Fail if any platform is missing or any check failed"
+        env:
+          RESULT_LINUX: ${{ needs.size-gate-linux.result }}
+          RESULT_WASM: ${{ needs.size-gate-wasm.result }}
+        run: |
+          fail=0
+
+          if [ -s missing-platforms.txt ]; then
+            echo "::error::Missing size-gate report(s):"
+            while IFS= read -r entry; do
+              [ -n "$entry" ] && echo "::error::  - ${entry}"
+            done < missing-platforms.txt
+            fail=1
+          fi
+
+          # Each platform's job is `continue-on-error: true`, so a job-level
+          # 'failure' here means the job died before producing a report
+          # (covered above) OR the job succeeded but uploaded a JSON marked
+          # as a violation. Re-check the JSONs for the latter.
+          #
+          # jq missing must fail loudly: the per-file check redirects
+          # stderr, so exit 127 would read as "no violation" and the gate
+          # would fail open.
+          command -v jq >/dev/null || { echo "::error::jq is not on PATH; the violation re-check cannot run"; exit 1; }
+          for platform in linux wasm; do
+            f="reports/size-gate-${platform}.json"
+            if [ -f "$f" ] && jq -e '.ok == false' "$f" > /dev/null 2>&1; then
+              echo "::error::size-gate (${platform}) reported a policy violation"
+              fail=1
+            fi
+          done
+
+          exit "$fail"

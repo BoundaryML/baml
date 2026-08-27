@@ -1,0 +1,230 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.reflect_shadowing.$init_test_ns_fixtures_ns_reflect_shadowing_main(registry: testing.TestCollector) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.TestCollector // registry // param
+    let _2: void
+    let _3: () -> void throws never
+    let _4: void
+    let _5: () -> void throws never
+    let _6: void
+    let _7: () -> void throws never
+    let _8: void
+    let _9: () -> void throws never
+
+    bb0: {
+        _3 = make_closure lambda[0]();
+        _2 = call const fn testing.TestCollector.register_test_at(copy _1, const "root.fixtures.reflect_shadowing", const "user class shadows the package", copy _3, const null) -> [bb1];
+    }
+
+    bb1: {
+        _5 = make_closure lambda[1]();
+        _4 = call const fn testing.TestCollector.register_test_at(copy _1, const "root.fixtures.reflect_shadowing", const "unbound user method over the package", copy _5, const null) -> [bb2];
+    }
+
+    bb2: {
+        _7 = make_closure lambda[2]();
+        _6 = call const fn testing.TestCollector.register_test_at(copy _1, const "root.fixtures.reflect_shadowing", const "local shadows the package", copy _7, const null) -> [bb3];
+    }
+
+    bb3: {
+        _9 = make_closure lambda[3]();
+        _8 = call const fn testing.TestCollector.register_test_at(copy _1, const "root.fixtures.reflect_shadowing", const "package name still reachable", copy _9, const null) -> [bb4];
+    }
+
+    bb4: {
+        _0 = const null;
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda($init_test_ns_fixtures_ns_reflect_shadowing_main, 0)>() -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: string
+
+    bb0: {
+        _1 = call const fn user.fixtures.reflect_shadowing.user_class_shadows_package() -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn assert.equal(copy _1, const "user-shadow") -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[1]
+fn .<lambda($init_test_ns_fixtures_ns_reflect_shadowing_main, 1)>() -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: string
+
+    bb0: {
+        _1 = call const fn user.fixtures.reflect_shadowing.unbound_user_method() -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn assert.equal(copy _1, const "user-x") -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[2]
+fn .<lambda($init_test_ns_fixtures_ns_reflect_shadowing_main, 2)>() -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: int
+
+    bb0: {
+        _1 = call const fn user.fixtures.reflect_shadowing.local_shadows_package() -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn assert.equal(copy _1, const 2_i64) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[3]
+fn .<lambda($init_test_ns_fixtures_ns_reflect_shadowing_main, 3)>() -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: string
+
+    bb0: {
+        _1 = call const fn user.fixtures.reflect_shadowing.package_still_reachable() -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn assert.equal(copy _1, const "string") -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.fixtures.reflect_shadowing.reflect.describe(self: fixtures.reflect_shadowing.reflect) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.reflect_shadowing.reflect // self // param
+    let _2: string
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = const "user-" + copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.reflect_shadowing.user_class_shadows_package() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: fixtures.reflect_shadowing.reflect // r
+
+    bb0: {
+        _1 = user.fixtures.reflect_shadowing.reflect { const "shadow" };
+        _0 = call const fn user.fixtures.reflect_shadowing.reflect.describe(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.reflect_shadowing.unbound_user_method() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: (fixtures.reflect_shadowing.reflect) -> string throws never // m
+    let _2: (fixtures.reflect_shadowing.reflect) -> string throws never
+    let _3: fixtures.reflect_shadowing.reflect
+
+    bb0: {
+        _1 = const fn user.fixtures.reflect_shadowing.reflect.describe;
+        _2 = copy _1;
+        _3 = user.fixtures.reflect_shadowing.reflect { const "x" };
+        _0 = call copy _2(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.reflect_shadowing.local_shadows_package() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // reflect
+    let _2: int
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = copy _1;
+        _0 = copy _2 + const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.reflect_shadowing.helper(q: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // q // param
+
+    bb0: {
+        _0 = copy _1 + const "!";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.reflect_shadowing.package_still_reachable() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: reflect.AnyFunction<Returns = unknown, Throws = unknown> // f
+    let _2: reflect.Signature // sig
+    let _3: reflect.AnyFunction<Returns = unknown, Throws = unknown>
+    let _4: (reflect.Type) -> string throws never
+
+    bb0: {
+        _1 = const fn user.fixtures.reflect_shadowing.helper;
+        _3 = copy _1;
+        _2 = call const fn reflect.signature(copy _3) -> [bb1];
+    }
+
+    bb1: {
+        _4 = copy _2.3;
+        _0 = call const fn baml.root.ToString$for$reflect.Type.to_string(copy _4) -> [bb2];
+    }
+
+    bb2: {
+        return;
+    }
+}

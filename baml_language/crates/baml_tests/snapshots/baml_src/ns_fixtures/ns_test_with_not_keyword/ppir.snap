@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.test_with_not_keyword.Foo {
+  x: int
+}
+class user.fixtures.test_with_not_keyword.Foo$stream {
+  x: int | null
+}
+class user.fixtures.test_with_not_keyword.HasWith {
+  with: int
+}
+class user.fixtures.test_with_not_keyword.HasWith$stream {
+  with: int | null
+}
+function user.fixtures.test_with_not_keyword.$init_test_ns_fixtures_ns_test_with_not_keyword_main(registry: testing.TestCollector) -> ?  [expr] {
+  { registry.register_test_at("root.fixtures.tes...", "with as field", () -> void { { let h = user.fixtures.test_with_not_keyword.HasWith { with: 1 } } assert.equal(h.with, 1) }, null) } null
+}
+function user.fixtures.test_with_not_keyword.make_foo() -> user.fixtures.test_with_not_keyword.Foo  [expr] {
+  {  } user.fixtures.test_with_not_keyword.Foo { x: 1 }
+}
+function user.fixtures.test_with_not_keyword.use_with_as_var() -> int  [expr] {
+  { let with = 42 } with
+}

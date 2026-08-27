@@ -1,8 +1,10 @@
 //! The ring registry and per-thread ring map (plan §3.4, design D5b).
 //!
-//! The registry is an append-only, push-only Treiber list: rings are
-//! CAS-appended once and never removed (no pop ⇒ no ABA; no reclamation ⇒ no
-//! epochs). Thread death *orphans* a ring; the consumer drains it to empty
+//! The registry is an append-only FIFO list: rings are linked once and never
+//! removed (no pop ⇒ no ABA; no reclamation ⇒ no epochs). FIFO traversal
+//! preserves causal registration order, so a parent ring that creates worker
+//! rings is swept before those descendants. Thread death *orphans* a ring;
+//! the consumer drains it to empty
 //! and *pools* it; a new `(engine, os-thread)` pair *claims* a pooled ring by
 //! CAS before allocating fresh. Registry size is therefore bounded by the
 //! peak number of concurrent `(engine, os-thread)` pairs, not by churn —
@@ -31,6 +33,7 @@ struct RegNode {
 /// ([`global_registry`]); tests build their own.
 pub(crate) struct Registry {
     head: AtomicPtr<RegNode>,
+    tail: AtomicPtr<RegNode>,
 }
 
 impl Registry {
@@ -38,6 +41,7 @@ impl Registry {
     pub(crate) const fn new() -> Self {
         Self {
             head: AtomicPtr::new(null_mut()),
+            tail: AtomicPtr::new(null_mut()),
         }
     }
 
@@ -45,6 +49,7 @@ impl Registry {
     pub(crate) fn new() -> Self {
         Self {
             head: AtomicPtr::new(null_mut()),
+            tail: AtomicPtr::new(null_mut()),
         }
     }
 
@@ -60,24 +65,24 @@ impl Registry {
         seg_bytes: usize,
         freelist_cap: usize,
         engine_id: u64,
-    ) -> RingHandle {
+    ) -> Option<RingHandle> {
         let mut node = self.head.load(Ordering::Acquire);
         while !node.is_null() {
             let n = unsafe { &*node };
             let ring = unsafe { &*n.ring };
             if ring.try_claim(engine_id) {
                 // SAFETY: the CAS made this thread the unique producer.
-                return unsafe { RingHandle::new(ring) };
+                return Some(unsafe { RingHandle::new(ring) });
             }
             node = n.next.load(Ordering::Acquire);
         }
         // Keep the raw pointer (not a ref-derived copy) in the node so the
         // test-only Registry::drop deallocates with original provenance.
-        let ring_ptr = Ring::alloc(ctx, seg_bytes, freelist_cap, engine_id);
+        let ring_ptr = Ring::alloc(ctx, seg_bytes, freelist_cap, engine_id)?;
         self.push(ring_ptr);
         // SAFETY: a freshly allocated ring is Active and owned by its
         // creating thread.
-        unsafe { RingHandle::new(&*ring_ptr) }
+        Some(unsafe { RingHandle::new(&*ring_ptr) })
     }
 
     fn push(&self, ring: *mut Ring) {
@@ -85,17 +90,17 @@ impl Registry {
             ring,
             next: AtomicPtr::new(null_mut()),
         }));
-        let mut head = self.head.load(Ordering::Relaxed);
-        loop {
-            unsafe { (&*node).next.store(head, Ordering::Relaxed) };
-            // Release publishes the node fields and the fully built ring.
-            match self
-                .head
-                .compare_exchange(head, node, Ordering::Release, Ordering::Relaxed)
-            {
-                Ok(_) => return,
-                Err(observed) => head = observed,
-            }
+        // The tail exchange is the append linearization point. A concurrent
+        // consumer may miss a node whose predecessor link is not published
+        // yet, but the next sweep observes it; nodes are never removed.
+        let previous = self.tail.swap(node, Ordering::AcqRel);
+        if previous.is_null() {
+            self.head.store(node, Ordering::Release);
+        } else {
+            // SAFETY: `previous` is an append-only registry node that remains
+            // allocated for the process lifetime, and this appender uniquely
+            // owns its one transition from a null `next` pointer.
+            unsafe { (&*previous).next.store(node, Ordering::Release) };
         }
     }
 
@@ -124,14 +129,18 @@ impl Registry {
         let mut progress = false;
         self.for_each(|ring| match ring.state() {
             RingState::Active => {
-                progress |= unsafe { ring.drain(&mut |bytes| sink(ring, bytes)) };
+                progress |= unsafe { ring.drain(&mut |bytes| sink(ring, bytes)) }.progress;
             }
             RingState::Orphaned => {
                 // The state Acquire (orphan edge) made every pre-death push
-                // visible, and the producer is gone — one drain reaches
-                // empty.
-                progress |= unsafe { ring.drain(&mut |bytes| sink(ring, bytes)) };
-                unsafe { ring.mark_pooled() };
+                // visible, and the producer is gone — a caught-up drain has
+                // reached empty. A drain stopped by its segment bound leaves
+                // the ring Orphaned for the next sweep.
+                let outcome = unsafe { ring.drain(&mut |bytes| sink(ring, bytes)) };
+                progress |= outcome.progress;
+                if outcome.caught_up {
+                    unsafe { ring.mark_pooled() };
+                }
             }
             RingState::Pooled => {}
         });
@@ -154,11 +163,11 @@ impl Drop for Registry {
 }
 
 #[cfg(all(not(baml_loom), not(target_arch = "wasm32")))]
-pub(crate) use global::global_ctx;
-#[cfg(not(baml_loom))]
 pub(crate) use global::global_registry;
 #[cfg(not(baml_loom))]
 pub use global::ring_for_engine;
+#[cfg(all(not(baml_loom), not(target_arch = "wasm32")))]
+pub(crate) use global::{configure_global_transport, global_ctx};
 
 #[cfg(not(baml_loom))]
 mod global {
@@ -168,21 +177,63 @@ mod global {
 
     use super::Registry;
     use crate::prof::{
-        config::ProfConfig,
+        backend::{MeasuredLayouts, ProfilerMemoryGovernor, ProfilerSizingPolicy},
         ring::{Ring, RingCtx, RingHandle},
     };
 
     static REGISTRY: Registry = Registry::new();
 
+    #[derive(Clone)]
+    struct TransportConfig {
+        memory: ProfilerMemoryGovernor,
+        segment_bytes: usize,
+        freelist_segments: usize,
+    }
+
+    static TRANSPORT_CONFIG: OnceLock<TransportConfig> = OnceLock::new();
+
     pub(crate) fn global_registry() -> &'static Registry {
         &REGISTRY
     }
 
-    /// Process-wide ring context, sized from the environment knobs on first
-    /// use.
+    pub(crate) fn configure_global_transport(
+        memory: ProfilerMemoryGovernor,
+        segment_bytes: u64,
+        freelist_segments: u32,
+    ) {
+        let _ = TRANSPORT_CONFIG.set(TransportConfig {
+            memory,
+            segment_bytes: usize::try_from(segment_bytes).unwrap_or(usize::MAX),
+            freelist_segments: usize::try_from(freelist_segments).unwrap_or(usize::MAX),
+        });
+    }
+
+    fn transport_config() -> TransportConfig {
+        TRANSPORT_CONFIG
+            .get_or_init(|| {
+                let sizing = ProfilerSizingPolicy::derive(
+                    crate::prof::backend::ProfilerConfig::default().process_memory_bytes,
+                    MeasuredLayouts::V1,
+                )
+                .expect("default profiler sizing is valid");
+                TransportConfig {
+                    memory: ProfilerMemoryGovernor::new(sizing, MeasuredLayouts::V1),
+                    segment_bytes: usize::try_from(sizing.transport_segment_bytes)
+                        .unwrap_or(usize::MAX),
+                    freelist_segments: usize::try_from(sizing.transport_freelist_segments)
+                        .unwrap_or(usize::MAX),
+                }
+            })
+            .clone()
+    }
+
+    /// Process-wide ring context, sized from the first registered session.
     pub(crate) fn global_ctx() -> &'static RingCtx {
         static CTX: OnceLock<RingCtx> = OnceLock::new();
-        CTX.get_or_init(|| RingCtx::new(ProfConfig::global().max_overflow_bytes))
+        CTX.get_or_init(|| {
+            let config = transport_config();
+            RingCtx::with_governor(config.memory)
+        })
     }
 
     /// One entry per engine this thread has produced for. The `Drop` is the
@@ -209,29 +260,31 @@ mod global {
     /// Must run on a live thread (not from TLS destructors): the returned
     /// handle's ring is orphaned by *this thread's* TLS cleanup, which is
     /// what guarantees its events eventually reach the consumer.
-    pub fn ring_for_engine(engine_id: u64) -> RingHandle {
+    pub fn ring_for_engine(engine_id: u64) -> Option<RingHandle> {
         THREAD_RINGS.with(|tr| {
             let mut entries = tr.0.borrow_mut();
             if let Some((_, ring)) = entries.iter().find(|(id, _)| *id == engine_id) {
                 // SAFETY: this thread claimed the ring when it inserted the
                 // entry, and only this thread's death (TLS drop) releases it.
-                return unsafe { RingHandle::new(ring) };
+                return Some(unsafe { RingHandle::new(ring) });
             }
-            let cfg = ProfConfig::global();
+            let config = transport_config();
             // Pin the clock anchor (source detection + zero point — cheap,
             // no calibration). Belt-and-braces: now_ticks() also forces it,
             // which is the real every-stamp-postdates-the-anchor invariant.
             crate::prof::clock::init();
             // The consumer drains every registered ring; it must exist
-            // before the first event can pile up. No-op when profiling is
-            // off (tests drive private registries as their own consumers).
+            // before the first event can pile up.
             #[cfg(not(target_arch = "wasm32"))]
-            if cfg.is_enabled() {
-                crate::prof::consumer::ensure_started();
-            }
-            let handle = REGISTRY.acquire(global_ctx(), cfg.seg_bytes, cfg.freelist_cap, engine_id);
+            crate::prof::consumer::ensure_started();
+            let handle = REGISTRY.acquire(
+                global_ctx(),
+                config.segment_bytes,
+                config.freelist_segments,
+                engine_id,
+            )?;
             entries.push((engine_id, handle.ring()));
-            handle
+            Some(handle)
         })
     }
 }

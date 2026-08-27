@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.json_map_literal.NestedMapLiteral() -> baml.json.json  [expr] {
+  {  } map { "a": 1, "b": [2, 3], "c": map { "nested": null } }
+}

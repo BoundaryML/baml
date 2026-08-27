@@ -41,6 +41,15 @@ impl BamlClassUint8Array for PackageBamlImpl {
         uint8array.contains(&item)
     }
 
+    #[allow(clippy::cast_possible_wrap)]
+    fn index_of(uint8array: &[u8], item: i64) -> Option<i64> {
+        let item = u8::try_from(item).ok()?;
+        uint8array
+            .iter()
+            .position(|byte| *byte == item)
+            .map(|index| index as i64)
+    }
+
     fn reverse(uint8array: &[u8]) -> Vec<u8> {
         uint8array.iter().copied().rev().collect()
     }

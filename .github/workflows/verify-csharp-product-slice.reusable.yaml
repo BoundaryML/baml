@@ -121,7 +121,7 @@ jobs:
           set -euo pipefail
           product_root="$RUNNER_TEMP/csharp-product"
           package_output="$product_root/packages"
-          generated_output="$PWD/neutral-preparation/baml_client"
+          generated_output="$PWD/neutral-preparation/baml_sdk"
           mkdir -p "$package_output"
           scripts/baml-csharp-release-contract verify-generated-sources \
             --root "$generated_output" \
@@ -136,25 +136,16 @@ jobs:
             -type f -name 'baml-bridge.*.nupkg' -print)"
           test -n "$package"
           test "$(printf '%s\n' "$package" | wc -l)" -eq 1
-          baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.PrimitivePackageConsumer/verify.sh \
+          baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.NuGetPackageSmoke/verify.sh \
             "$package" \
             linux-x64 \
             libbridge_cffi.so \
             "$generated_output"
-          baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.DocumentationConsumer/verify.sh \
+          baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.NuGetPackageSmoke/verify-deployment.sh \
             "$package" \
             linux-x64 \
             libbridge_cffi.so \
             "$generated_output"
-          baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.DocumentationConsumer/verify-deployment.sh \
-            "$package" \
-            linux-x64 \
-            libbridge_cffi.so \
-            "$generated_output"
-          baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.FullSurfacePackageConsumer/verify.sh \
-            "$package" \
-            linux-x64 \
-            libbridge_cffi.so
           mkdir -p product-output
           cp "$package" product-output/
           cmp "$package" "product-output/$(basename "$package")"
@@ -163,11 +154,11 @@ jobs:
           cp release-plan.json product-output/
           cp neutral-preparation/generated-sources.sha256 product-output/
           cp -R "$generated_output" product-output/
-          mkdir -p product-output/documentation
+          mkdir -p product-output/nuget-smoke
           cp \
-            baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.DocumentationConsumer/Baml.Bridge.DocumentationConsumer.csproj \
-            baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.DocumentationConsumer/Program.cs \
-            product-output/documentation/
+            baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.NuGetPackageSmoke/Baml.Bridge.NuGetPackageSmoke.csproj \
+            baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.NuGetPackageSmoke/Program.cs \
+            product-output/nuget-smoke/
           (
             cd product-output
             sha256sum "$(basename "$package")" > product-package.sha256
@@ -215,11 +206,11 @@ jobs:
             -type f -name 'baml-bridge.*.nupkg' -print)"
           test -n "$package"
           test "$(printf '%s\n' "$package" | wc -l)" -eq 1
-          baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.PrimitivePackageConsumer/verify.sh \
+          baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.NuGetPackageSmoke/verify.sh \
             "$package" \
             "$RID" \
             "$CANONICAL" \
-            product-package/baml_client
+            product-package/baml_sdk
 
       - name: Run exact package in real musl userspace
         if: matrix.libc == 'musl'
@@ -242,9 +233,9 @@ jobs:
               test -n "$package"
               test "$(printf "%s\n" "$package" | wc -l)" -eq 1
               exec bash \
-                baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.PrimitivePackageConsumer/verify.sh \
+                baml_language/sdks/csharp/bridge_csharp/tests/Baml.Bridge.NuGetPackageSmoke/verify.sh \
                 "$package" \
                 "$RID" \
                 "$CANONICAL" \
-                product-package/baml_client
+                product-package/baml_sdk
             '

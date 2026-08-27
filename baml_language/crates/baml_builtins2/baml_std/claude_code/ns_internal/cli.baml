@@ -48,7 +48,7 @@ function transcript_text(j: ai.Journal) -> string {
 // {outcome: anyOf [T-schema, calls-schema]} — the constrained output that
 // lets one CLI run return either the final result or BAML tool calls. T's
 // $defs lift to the envelope root so its $refs stay valid.
-function envelope_schema(output_type: type) -> map<string, unknown> {
+function envelope_schema(output_type: reflect.Type) -> map<string, unknown> {
     let final_root = baml.json.from_json<map<string, unknown>>(baml.json.schema(output_type));
     let definitions = final_root.delete("$defs");
     let call_props: map<string, unknown> = {};
@@ -125,7 +125,7 @@ Application tool catalog (request via outcome.calls only):
 // terminal result event.
 function _read_result(p: baml.sys.Process) -> json {
     let result: json = null;
-    for (let line in p.stdout) {
+    for (let line in p.stdout.lines()) {
         let trimmed = line.trim();
         if (trimmed.length() > 0) {
             let raw = baml.json.parse(trimmed) catch_all (e) {
@@ -234,7 +234,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     // The CLI accepts one string rather than a chat-message array. Keep the
     // structural prompt until this transport boundary, then use its readable
     // role-headed projection.
-    let instructions = input.prompt("").text();
+    let instructions = input.prompt(ai.internal.build_output_format(input.output_type)).text();
     let has_tools = !input.toolbox.is_empty();
     let schema = if (has_tools) {
         baml.json.to_json(envelope_schema(input.output_type))
@@ -284,7 +284,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
         baml.sys.ProcessOptions { cwd: c.cwd, env: null, timeout_ms: c.timeout_ms, stdin: null },
     ) catch_all (e) {
         _ => {
-            throw ai.errors.NetworkFailure {
+            throw ai.errors.NetworkFailure { status_code: null,
                 provider: "claude-code",
                 detail: `the Claude Code CLI could not start: ${e.to_string()}`,
                 raw_body: null,
@@ -295,15 +295,27 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
         p.close()
     }
     // the CLI reads stdin when the pipe is open; deliver EOF immediately
-    let _ = p.close_stdin() catch_all (e) {
+    let _ = p.stdin.close() catch_all (e) {
         _ => null,
     };
     // events stream LIVE: each JSONL line logs as it arrives, and the last
     // relevant line is the result. Stderr inherits the parent process.
-    let result = _read_result(p);
-    let exit = p.wait() catch_all (e) {
-        _ => {
+    let result = baml.future.with_timeout(baml.time.Duration.from_milliseconds(c.timeout_ms), () -> {
+        _read_result(p)
+    }) catch (e) {
+        baml.errors.Timeout => {
             throw ai.errors.NetworkFailure {
+                status_code: null,
+                provider: "claude-code",
+                detail: `the Claude Code CLI produced no result within ${c.timeout_ms}ms`,
+                raw_body: null,
+            }
+        },
+    };
+    let exit = p.wait() catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        _ => {
+            throw ai.errors.NetworkFailure { status_code: null,
                 provider: "claude-code",
                 detail: `the Claude Code CLI did not terminate cleanly: ${e.to_string()}`,
                 raw_body: null,
@@ -381,5 +393,5 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     } else {
         content.push(ai.content.Text { text: baml.json.stringify(structured) });
     }
-    ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
+    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
 }

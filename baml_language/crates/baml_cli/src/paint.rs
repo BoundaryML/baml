@@ -3,7 +3,7 @@
 //! `baml describe`).
 //!
 //! Reuses the compiler's own semantic-token classifier
-//! (`baml_lsp2_actions::semantic_tokens`) instead of a separate TextMate/Sublime
+//! (`baml_ide::semantic_tokens`) instead of a separate TextMate/Sublime
 //! grammar. `describe` has already compiled the project by the time it renders,
 //! so classification is effectively free (it reads Salsa-cached queries) and can
 //! never drift from the language the way a hand-maintained grammar would.
@@ -15,17 +15,16 @@
 use std::{cell::RefCell, collections::HashMap, fmt::Write, path::Path, rc::Rc};
 
 use baml_db::{
-    SourceFile,
+    ProjectDatabase, SourceFile,
     baml_compiler_diagnostics::{
-        DiagnosticIdentifierKind, DiagnosticMessageHighlighter, DiagnosticMessageKind,
-        HighlightAttributes, HighlightColor, HighlightSpan,
+        DiagnosticIdentifierKind, DiagnosticMessageHighlightError, DiagnosticMessageHighlighter,
+        DiagnosticMessageKind, HighlightAttributes, HighlightColor, HighlightSpan,
     },
 };
-use baml_lsp2_actions::{
+use baml_ide::{
     DefinitionKind, ModifierSet, SemanticToken, SemanticTokenType, semantic_highlight_style,
     semantic_tokens,
 };
-use baml_project::ProjectDatabase;
 use console::Style;
 use text_size::{TextRange, TextSize};
 
@@ -75,7 +74,7 @@ fn kind_style(kind: DefinitionKind) -> Style {
         K::TypeAlias | K::AssociatedType => T::Type,
         K::Function | K::TemplateString => T::Function,
         K::Method => T::Method,
-        K::Client | K::Test | K::RetryPolicy => T::Struct,
+        K::Client | K::RetryPolicy => T::Struct,
         K::Field => T::Property,
         K::Variant => T::EnumMember,
         K::Parameter => T::Parameter,
@@ -134,34 +133,60 @@ fn highlight_name_padded(name: &str, leaf_kind: DefinitionKind, width: usize) ->
 ///
 /// Always emits color; callers go through [`Painter::fragment`], which gates.
 fn highlight_str(text: &str) -> String {
-    let toks = classify_fragment(text);
+    let toks = classify_fragment(text).unwrap_or_default();
     styled_from_tokens(text, 0, &toks)
 }
 
-fn classify_fragment(text: &str) -> Vec<SemanticToken> {
+fn classify_fragment(
+    text: &str,
+) -> Result<Vec<SemanticToken>, Vec<baml_db::baml_compiler_diagnostics::ParseError>> {
     thread_local! {
-        static SCRATCH_DB: RefCell<ProjectDatabase> = RefCell::new({
+        static SCRATCH_DB: RefCell<(ProjectDatabase, baml_db::SourceRoot)> = RefCell::new({
             let mut db = ProjectDatabase::new();
-            db.set_project_root(Path::new("/baml-fragment-scratch"));
-            db
+            db.ensure_stdlib_sources();
+            let root = db
+                .add_source_root(baml_db::SourceRootSpec {
+                    path: Path::new("/baml-fragment-scratch").to_path_buf(),
+                    package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
+                    kind: baml_db::SourceRootKind::Workspace,
+                })
+                .unwrap_or_else(|e| unreachable!("scratch workspace root must be addable: {e}"));
+            (db, root)
         });
     }
     SCRATCH_DB.with(|db| {
-        let db = &mut *db.borrow_mut();
-        let file = db.add_or_update_file(Path::new("/baml-fragment-scratch/fragment.baml"), text);
+        let (db, root) = &mut *db.borrow_mut();
+        let file = db.add_or_update_file_in(
+            *root,
+            Path::new("/baml-fragment-scratch/fragment.baml"),
+            text,
+        );
+        let errors = baml_db::baml_compiler_parser::parse_errors(db, file);
+        if !errors.is_empty() {
+            return Err(errors);
+        }
         let mut toks = semantic_tokens(db, file).clone();
         toks.sort_by_key(|t| t.range.start());
-        toks
+        Ok(toks)
     })
 }
 
+/// One memoized highlight outcome: the spans, or the classification error
+/// that made the fragment unhighlightable (cached too, so a failing fragment
+/// is not re-parsed per render).
+type CachedHighlight = Result<Vec<HighlightSpan>, DiagnosticMessageHighlightError>;
+
 #[derive(Default)]
 pub struct MessageHighlighter {
-    cache: RefCell<HashMap<(DiagnosticMessageKind, String), Vec<HighlightSpan>>>,
+    cache: RefCell<HashMap<(DiagnosticMessageKind, String), CachedHighlight>>,
 }
 
 impl DiagnosticMessageHighlighter for MessageHighlighter {
-    fn highlight(&self, kind: DiagnosticMessageKind, text: &str) -> Vec<HighlightSpan> {
+    fn highlight(
+        &self,
+        kind: DiagnosticMessageKind,
+        text: &str,
+    ) -> Result<Vec<HighlightSpan>, DiagnosticMessageHighlightError> {
         let key = (kind, text.to_string());
         if let Some(cached) = self.cache.borrow().get(&key) {
             return cached.clone();
@@ -186,13 +211,13 @@ impl DiagnosticMessageHighlighter for MessageHighlighter {
                     DiagnosticIdentifierKind::EnumVariant => SemanticTokenType::EnumMember,
                     DiagnosticIdentifierKind::Attribute => SemanticTokenType::Decorator,
                 };
-                (!text.is_empty())
+                Ok((!text.is_empty())
                     .then(|| HighlightSpan {
                         range: TextRange::new(0.into(), fragment_text_size(text.len())),
                         style: semantic_highlight_style(token_type, ModifierSet::empty()),
                     })
                     .into_iter()
-                    .collect()
+                    .collect())
             }
         };
         self.cache.borrow_mut().insert(key, highlights.clone());
@@ -200,9 +225,25 @@ impl DiagnosticMessageHighlighter for MessageHighlighter {
     }
 }
 
-fn fragment_spans(source: &str, fragment_start: usize, fragment_len: usize) -> Vec<HighlightSpan> {
+fn fragment_spans(
+    source: &str,
+    fragment_start: usize,
+    fragment_len: usize,
+) -> Result<Vec<HighlightSpan>, DiagnosticMessageHighlightError> {
     let fragment_end = fragment_start + fragment_len;
-    classify_fragment(source)
+    let tokens = match classify_fragment(source) {
+        Ok(tokens) => tokens,
+        Err(errors) => {
+            let fragment = &source[fragment_start..fragment_end];
+            report_diagnostic_highlight_error(format_args!(
+                "semantic highlighting skipped for invalid fragment {fragment:?} (parse_errors={}, first_error={:?}); rendering this diagnostic without color",
+                errors.len(),
+                errors.first(),
+            ));
+            return Err(DiagnosticMessageHighlightError);
+        }
+    };
+    Ok(tokens
         .into_iter()
         .filter_map(|token| {
             let start: usize = token.range.start().into();
@@ -217,7 +258,12 @@ fn fragment_spans(source: &str, fragment_start: usize, fragment_len: usize) -> V
                 style: semantic_highlight_style(token.token_type, token.modifiers),
             })
         })
-        .collect()
+        .collect())
+}
+
+#[allow(clippy::print_stderr)] // rendering failures must remain visible
+fn report_diagnostic_highlight_error(args: std::fmt::Arguments<'_>) {
+    eprintln!("error rendering diagnostics: {args}");
 }
 
 fn fragment_text_size(size: usize) -> TextSize {
@@ -478,11 +524,13 @@ fn push_styled(out: &mut String, seg: &str, style: &Style) {
 mod tests {
     use std::path::Path;
 
-    use baml_db::baml_compiler_diagnostics::{
-        DiagnosticMessageHighlighter, DiagnosticMessageKind, HighlightColor,
+    use baml_db::{
+        ProjectDatabase,
+        baml_compiler_diagnostics::{
+            DiagnosticMessageHighlighter, DiagnosticMessageKind, HighlightColor,
+        },
     };
-    use baml_lsp2_actions::{ModifierSet, SemanticTokenType};
-    use baml_project::ProjectDatabase;
+    use baml_ide::{ModifierSet, SemanticTokenType};
 
     use super::{Highlighter, MessageHighlighter, highlight_str, style_for};
 
@@ -578,8 +626,16 @@ mod tests {
     #[test]
     fn diagnostic_spans_use_describe_palette() {
         let mut db = ProjectDatabase::new();
-        db.set_project_root(Path::new("/test"));
-        let file = db.add_or_update_file(Path::new("/test/main.baml"), "class Foo {}\n");
+        db.ensure_stdlib_sources();
+        let workspace = db
+            .add_source_root(baml_db::SourceRootSpec {
+                path: Path::new("/test").to_path_buf(),
+                package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
+                kind: baml_db::SourceRootKind::Workspace,
+            })
+            .unwrap_or_else(|e| unreachable!("workspace root must be addable: {e}"));
+        let file =
+            db.add_or_update_file_in(workspace, Path::new("/test/main.baml"), "class Foo {}\n");
         let highlighter = Highlighter::new(&db);
         let span = highlighter
             .spans(file)
@@ -603,7 +659,14 @@ mod tests {
     #[test]
     fn rendered_body_uses_no_fixed_colors() {
         let mut db = ProjectDatabase::new();
-        db.set_project_root(Path::new("/test"));
+        db.ensure_stdlib_sources();
+        let workspace = db
+            .add_source_root(baml_db::SourceRootSpec {
+                path: Path::new("/test").to_path_buf(),
+                package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
+                kind: baml_db::SourceRootKind::Workspace,
+            })
+            .unwrap_or_else(|e| unreachable!("workspace root must be addable: {e}"));
         let src = r#"/// Doc.
 class Point { x int }
 function make(v: int) -> Point {
@@ -611,7 +674,7 @@ function make(v: int) -> Point {
   return p
 }
 "#;
-        let file = db.add_or_update_file(Path::new("/test/main.baml"), src);
+        let file = db.add_or_update_file_in(workspace, Path::new("/test/main.baml"), src);
         let hl = Highlighter::new(&db);
         let out = hl.range(
             file,
@@ -675,8 +738,12 @@ function make(v: int) -> Point {
     #[test]
     fn diagnostic_type_fragments_use_describe_highlighting() {
         let highlighter = MessageHighlighter::default();
-        let string = highlighter.highlight(DiagnosticMessageKind::TypeExpression, "\"not an int\"");
-        let int = highlighter.highlight(DiagnosticMessageKind::TypeExpression, "int");
+        let string = highlighter
+            .highlight(DiagnosticMessageKind::TypeExpression, "\"not an int\"")
+            .expect("valid string type expression");
+        let int = highlighter
+            .highlight(DiagnosticMessageKind::TypeExpression, "int")
+            .expect("valid primitive type expression");
 
         assert_eq!(string.len(), 1);
         assert_eq!(string[0].style.foreground, Some(HighlightColor::Green));
@@ -693,9 +760,23 @@ function make(v: int) -> Point {
     #[test]
     fn diagnostic_code_fragments_use_describe_highlighting() {
         let highlighter = MessageHighlighter::default();
-        let string = highlighter.highlight(DiagnosticMessageKind::Code, "\"not an int\"");
+        let string = highlighter
+            .highlight(DiagnosticMessageKind::Code, "\"not an int\"")
+            .expect("valid code fragment");
 
         assert_eq!(string.len(), 1);
         assert_eq!(string[0].style.foreground, Some(HighlightColor::Green));
+    }
+
+    #[test]
+    fn malformed_diagnostic_code_fragments_fall_back_to_plain_text() {
+        let highlighter = MessageHighlighter::default();
+
+        let spans = highlighter.highlight(DiagnosticMessageKind::Code, r"\${...}");
+
+        assert!(
+            spans.is_err(),
+            "a malformed prose fragment must request no-color diagnostic fallback"
+        );
     }
 }

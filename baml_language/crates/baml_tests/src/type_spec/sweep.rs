@@ -7,7 +7,8 @@
 
 use std::path::{Path, PathBuf};
 
-use super::harness::{NodeKind, collect_hir_ty_error_channel, collect_hir_ty_nodes};
+use super::harness::collect_hir_ty_error_channel;
+use crate::engine::TestDbExt;
 
 pub(crate) fn baml_src_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src")
@@ -56,22 +57,19 @@ fn s15_sweep_baml_src() {
     let loaded: Vec<(String, String, baml_base::SourceFile)> = files
         .into_iter()
         .map(|(rel, content)| {
-            let file = db.add_file(&rel, &content);
+            let file = db.file(&rel, &content);
             (rel, content, file)
         })
         .collect();
 
-    let mut typed_nodes = 0usize;
     let mut channel_entries: Vec<String> = Vec::new();
     let mut panics: Vec<String> = Vec::new();
 
     for (rel, content, file) in &loaded {
-        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let hir = collect_hir_ty_nodes(&db, *file, content);
-            let channel = collect_hir_ty_error_channel(&db, *file);
-            (hir, channel)
+        let channel = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            collect_hir_ty_error_channel(&db, *file)
         }));
-        let (hir, channel) = match outcome {
+        let channel = match channel {
             Ok(parts) => parts,
             Err(payload) => {
                 let msg = payload
@@ -84,10 +82,6 @@ fn s15_sweep_baml_src() {
             }
         };
 
-        typed_nodes += hir
-            .iter()
-            .filter(|node| node.kind != NodeKind::BindingName)
-            .count();
         for (&(start, end), rendered) in &channel.mismatches {
             for entry in rendered {
                 channel_entries.push(format!(
@@ -107,8 +101,6 @@ fn s15_sweep_baml_src() {
 
     let mut report = String::new();
     use std::fmt::Write as _;
-    let _ = writeln!(report, "files: {}", loaded.len());
-    let _ = writeln!(report, "typed nodes: {typed_nodes}");
     let _ = writeln!(
         report,
         "hir_ty error-channel entries: {}",

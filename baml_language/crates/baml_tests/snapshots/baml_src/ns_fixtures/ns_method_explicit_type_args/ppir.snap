@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.method_explicit_type_args.Foo {
+  tag: string
+}
+class user.fixtures.method_explicit_type_args.Foo$stream {
+  tag: string | null
+}
+function user.fixtures.method_explicit_type_args.use_method_type_args() -> int  [expr] {
+  { let f = user.fixtures.method_explicit_type_args.Foo { tag: "x" }; let v: int = f.zero() NullCoalesce 5 } v
+}
+function user.fixtures.method_explicit_type_args.zero(self: ?) -> T?  [expr] {
+  {  } null
+}

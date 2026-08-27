@@ -45,48 +45,40 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0151
 
   × function type must declare an explicit `throws` clause; add `throws never` if calling it cannot throw
-    ╭─[negative.baml:17:30]
- 17 │ function optional_param(cb: ((value: int) -> int)?) -> int {
-    ·                              ───────────────────
-    ╰────
-
-  [type] E0151
-
-  × function type must declare an explicit `throws` clause; add `throws never` if calling it cannot throw
-    ╭─[negative.baml:21:27]
- 21 │ function list_param(cbs: ((value: int) -> int)[]) -> int {
+    ╭─[negative.baml:17:27]
+ 17 │ function list_param(cbs: ((value: int) -> int)[]) -> int {
     ·                           ───────────────────
     ╰────
 
   [type] E0151
 
   × function type must declare an explicit `throws` clause; add `throws never` if calling it cannot throw
-    ╭─[negative.baml:25:26]
- 25 │ function returns_fn() -> (value: int) -> int {
+    ╭─[negative.baml:21:26]
+ 21 │ function returns_fn() -> (value: int) -> int {
     ·                          ───────────────────
     ╰────
 
   [type] E0151
 
   × function type must declare an explicit `throws` clause; add `throws never` if calling it cannot throw
-    ╭─[negative.baml:30:19]
- 30 │   let apply = (f: (value: int) -> int, x: int) -> int { f(x) };
+    ╭─[negative.baml:26:19]
+ 26 │   let apply = (f: (value: int) -> int, x: int) -> int { f(x) };
     ·                   ───────────────────
     ╰────
 
   [type] E0062
 
   × non-exhaustive match on type (int) -> int throws callback; missing: _
-    ╭─[negative.baml:35:3]
- 35 │ ╭─▶   match (cb) {
- 36 │ │       let f: (value: int) -> int => f(1)
- 37 │ ╰─▶   }
+    ╭─[negative.baml:31:3]
+ 31 │ ╭─▶   match (cb) {
+ 32 │ │       let f: (value: int) -> int => f(1)
+ 33 │ ╰─▶   }
     ╰────
 
   [type] E0151
 
   × function type must declare an explicit `throws` clause; add `throws never` if calling it cannot throw
-    ╭─[negative.baml:36:12]
- 36 │     let f: (value: int) -> int => f(1)
+    ╭─[negative.baml:32:12]
+ 32 │     let f: (value: int) -> int => f(1)
     ·            ───────────────────
     ╰────

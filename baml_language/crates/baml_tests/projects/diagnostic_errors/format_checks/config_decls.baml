@@ -104,10 +104,7 @@ client<llm> RawStringConfigClient {
     provider openai,
     options: {
         model: "gpt-4"
-        system_prompt #"
-            You are a helpful assistant.
-            Always be concise.
-        "#
+        system_prompt "You are a helpful assistant.\nAlways be concise."
     },
 }
 
@@ -120,7 +117,7 @@ client<llm> MixedValuesClient {
         temperature 0.7
         stream true
         stop ["END"]
-        inline_string #"inline raw"#
+        inline_string "inline quoted"
         "string key" "value with spaces"
     }
 }
@@ -447,52 +444,33 @@ function TestTarget() -> string {
     prompt: `Hello`
 }
 
-test BasicTest {
-    functions [TestTarget]
-    args {
-
-    }
+test "BasicTest" {
+    TestTarget()
 }
 
 // ===== Trivia on test declaration (line comments) =====
 // 1 test keyword leading
 test // 2 test keyword trailing
 // 3 name leading
-TriviaTest // 4 name trailing
+"TriviaTest" // 4 name trailing
 // 5 open brace leading
 { // 6 open brace trailing
-    // 7 functions key leading
-    functions: // 8 functions key trailing
-    // 9 functions value leading
-    [TestTarget] // 10 functions value trailing
-    // 11 args key leading
-    args // 12 args key trailing
-    // 13 args block leading
-    { // 14 args open brace trailing
-    // 15 args close brace leading
-    } // 16 args close brace trailing
-// 17 close brace leading
-} // 18 close brace trailing
+    // 7 body leading
+    TestTarget() // 8 body trailing
+// 9 close brace leading
+} // 10 close brace trailing
 
 // ===== Trivia on test declaration (block comments) =====
 /* 1 test keyword leading */
 test /* 2 test keyword trailing */
 /* 3 name leading */
-TriviaTestBlock /* 4 name trailing */
+"TriviaTestBlock" /* 4 name trailing */
 /* 5 open brace leading */
 { /* 6 open brace trailing */
-    /* 7 functions key leading */
-    functions /* 8 functions key trailing */
-    /* 9 functions value leading */
-    [TestTarget] /* 10 functions value trailing */
-    /* 11 args key leading */
-    args /* 12 args key trailing */
-    /* 13 args block leading */
-    { /* 14 args open brace trailing */
-    /* 15 args close brace leading */
-    } /* 16 args close brace trailing */
-/* 17 close brace leading */
-} /* 18 close brace trailing */
+    /* 7 body leading */
+    TestTarget() /* 8 body trailing */
+/* 9 close brace leading */
+} /* 10 close brace trailing */
 
 // ===== Short names =====
 client<llm> C {

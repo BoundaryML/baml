@@ -2,11 +2,11 @@
 source: crates/baml_tests/src/type_spec/fixtures.rs
 expression: outcome.dump
 ---
-275..276 'f': throws never
-302..368 '{\n   ...  s\n}': string
-308..313 'let s': string
-316..323 'type.of': () -> type throws never
-316..330 'type.of<int>()': type
-316..340 'type.o...string': (self: baml.TypeValue) -> string throws never
-316..342 'type.o...ring()': string
-365..366 's': string
+281..282 'f': throws never
+308..382 '{\n   ...  s\n}': string
+314..319 'let s': string
+322..337 'reflect.Type.of': () -> reflect.Type throws never
+322..344 'reflec...int>()': reflect.Type
+322..354 'reflec...string': (self: reflect.Type) -> string throws never
+322..356 'reflec...ring()': string
+379..380 's': string

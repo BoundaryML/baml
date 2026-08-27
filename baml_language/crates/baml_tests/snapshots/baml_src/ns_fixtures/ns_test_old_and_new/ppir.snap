@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.test_old_and_new.$init_test_ns_fixtures_ns_test_old_and_new_main(registry: testing.TestCollector) -> ?  [expr] {
+  { registry.register_test_at("root.fixtures.tes...", "new style", () -> void { { let result = "hello" } assert.not_null(result) }, null) } null
+}

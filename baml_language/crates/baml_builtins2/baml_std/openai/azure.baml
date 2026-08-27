@@ -54,6 +54,10 @@ class AzureClient {
     top_p: float?,
     stop: string[]?,
     seed: int?,
+    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // records delivered through on_event. Status, headers, and timing are
+    // always recorded; this flag only gates the bodies.
+    capture_wire: bool,
 
     function new(
         model: string,
@@ -71,6 +75,7 @@ class AzureClient {
         top_p: float? = null,
         stop: string[]? = null,
         seed: int? = null,
+        capture_wire: bool = true,
     ) -> AzureClient {
         AzureClient {
             model: model,
@@ -88,6 +93,7 @@ class AzureClient {
             top_p: top_p,
             stop: stop,
             seed: seed,
+            capture_wire: capture_wire,
         }
     }
 
@@ -151,35 +157,43 @@ class AzureClient {
     }
 
     function compat(self) -> root.internal.ChatCompat {
-        let query: map<string, string> = {  };
+        let query: map<string, string> = {};
         if let version: string = self.api_version {
             let _ = query.set("api-version", version);
         }
-        root.internal.ChatCompat.new(
-            provider = "azure",
-            base_url = self.resolved_base_url(),
-            auth = root.internal.ChatAuth.ApiKeyHeader,
-            api_key_env = "AZURE_OPENAI_API_KEY",
-            api_key_required = true,
-            default_max_tokens = 4096,
-            compat_query = query,
-        )
+        root.internal
+            .ChatCompat
+            .new(
+                provider = "azure",
+                base_url = self.resolved_base_url(),
+                auth = root.internal.ChatAuth.ApiKeyHeader,
+                api_key_env = "AZURE_OPENAI_API_KEY",
+                api_key_required = true,
+                default_max_tokens = 4096,
+                compat_query = query,
+            )
     }
 
-    function params(self) -> root.internal.ChatParams {
-        root.internal.ChatParams.new(
-            model = self.model,
-            api_key = self.resolved_api_key(),
-            temperature = self.temperature,
-            max_tokens = self.max_tokens,
-            max_completion_tokens = self.max_completion_tokens,
-            top_p = self.top_p,
-            stop = self.stop,
-            seed = self.seed,
-            headers = self.headers,
-            query_params = self.query_params,
-            request_body = self.request_body,
-        )
+    function params(self, preview: bool = false) -> root.internal.ChatParams {
+        root.internal
+            .ChatParams
+            .new(
+                model = self.model,
+                api_key = if (preview) {
+                    null
+                } else {
+                    self.resolved_api_key()
+                },
+                temperature = self.temperature,
+                max_tokens = self.max_tokens,
+                max_completion_tokens = self.max_completion_tokens,
+                top_p = self.top_p,
+                stop = self.stop,
+                seed = self.seed,
+                headers = self.headers,
+                query_params = self.query_params,
+                request_body = self.request_body,
+            )
     }
 
     implements ai.Client {
@@ -187,17 +201,23 @@ class AzureClient {
             `azure/${self.model}`
         }
 
-        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
-            root.internal.chat_invoke(self.compat(), self.params(), input) catch_all (e) {
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            openai.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
+            }
+        }
+
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            root.internal.chat_invoke(self.compat(), self.params(), input, capture_wire = self.capture_wire) catch_all (e) {
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }
 
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
-            root.internal.chat_invoke_stream(self.compat(), self.params(), input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+            root.internal.chat_invoke_stream(self.compat(), self.params(), input, capture_wire = self.capture_wire) catch_all (e) {
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }

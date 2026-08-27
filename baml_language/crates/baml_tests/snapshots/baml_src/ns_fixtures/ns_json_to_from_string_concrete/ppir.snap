@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.json_to_from_string_concrete.User {
+  name: string
+  age: int
+}
+class user.fixtures.json_to_from_string_concrete.User$stream {
+  name: string | null
+  age: int | null
+}
+function user.fixtures.json_to_from_string_concrete.deserialize_user(s: string) -> user.fixtures.json_to_from_string_concrete.User  [expr] {
+  {  } baml.json.from_string(s)
+}
+function user.fixtures.json_to_from_string_concrete.serialize_user(u: user.fixtures.json_to_from_string_concrete.User) -> string  [expr] {
+  {  } baml.json.to_string(u)
+}

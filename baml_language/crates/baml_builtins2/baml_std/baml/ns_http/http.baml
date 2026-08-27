@@ -22,15 +22,19 @@ class Response {
     url: string,
     _body: $rust_type,
 
-    /// Returns the response body as a UTF-8 string.
-    /// Throws an error if the body was not available or was not valid UTF-8.
-    function text(self) -> string throws root.errors.Io {
+    /// Returns the response body as a string. Live client responses are decoded
+    /// lossily as UTF-8, replacing malformed bytes with U+FFFD. Buffered `Bytes`
+    /// responses use strict UTF-8 decoding.
+    /// Throws `Timeout` if the request deadline elapses while reading the body,
+    /// or `Io` if the body was unavailable or buffered bytes were not valid UTF-8.
+    function text(self) -> string throws root.errors.Io | root.errors.Timeout {
         $rust_io_function
     }
 
     /// Returns the response body as raw bytes.
-    /// Throws an error if the body was not available.
-    function bytes(self) -> uint8array throws root.errors.Io {
+    /// Throws `Timeout` if the request deadline elapses while reading the body,
+    /// or `Io` if the body was unavailable.
+    function bytes(self) -> uint8array throws root.errors.Io | root.errors.Timeout {
         $rust_io_function
     }
 
@@ -98,11 +102,17 @@ class Response {
 /// A Server-Sent Events (SSE) stream. Created by `baml.http.fetch_sse`.
 class SseStream {
     url: string,
+    /// Status code of the opening response. `fetch_sse` throws on non-2xx,
+    /// so this is always a success status.
+    status_code: int,
+    /// Response headers at connection open — the provider request id
+    /// (`x-request-id`, `request-id`, ...) lives here.
+    headers: map<string, string>,
     _handle: $rust_type,
 
     /// Only returns `null` if the stream is done/closed.
     /// Otherwise, waits until a new event is available.
-    function next(self) -> string? throws root.errors.Io {
+    function next(self) -> string? throws root.errors.Io | root.errors.Timeout {
         $rust_io_function
     }
 
@@ -162,6 +172,26 @@ function _send(
 }
 
 /// Sends an HTTP request and returns a Server-Sent Events stream for streaming responses.
-function fetch_sse(request: Request) -> SseStream throws root.errors.Io | root.errors.Timeout {
+///
+/// On native transports, `timeout` covers the request and streaming body.
+/// `first_event_timeout` starts after open and ends on the first parsed event.
+/// Null/non-positive is unbounded; browser/Wasm does not enforce these fields.
+function fetch_sse(
+    request: Request,
+    timeout: root.time.Duration? = null,
+    first_event_timeout: root.time.Duration? = null,
+) -> SseStream throws root.errors.Io | root.errors.Timeout {
+    _fetch_sse(
+        request,
+        _timeout_nanos(timeout),
+        _timeout_nanos(first_event_timeout),
+    )
+}
+
+function _fetch_sse(
+    request: Request,
+    timeout_nanos: bigint,
+    first_event_timeout_nanos: bigint,
+) -> SseStream throws root.errors.Io | root.errors.Timeout {
     $rust_io_function
 }

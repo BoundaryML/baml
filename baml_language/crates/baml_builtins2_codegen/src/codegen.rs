@@ -2266,7 +2266,7 @@ fn media_kind_expr(class_name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::extract::extract_native_builtins;
+    use crate::extract::{extract_native_builtins, extract_native_builtins_for};
 
     #[test]
     fn test_camel_to_snake() {
@@ -2348,6 +2348,10 @@ mod tests {
     fn test_bare_method_names_on_class_traits() {
         let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
+        let (reflect_builtins, _reflect_io_builtins, reflect_class_defs) =
+            extract_native_builtins_for("reflect").unwrap();
+        let reflect_output =
+            generate_native_trait_for("reflect", &reflect_builtins, &reflect_class_defs);
 
         assert!(
             output.contains("fn length(array: ArrayView<'_>) -> i64;"),
@@ -2362,12 +2366,12 @@ mod tests {
             "BamlClassFloat should have bare `trunc` method:\n{output}"
         );
         assert!(
-            output.contains("fn type_(vm: &mut BexVm"),
-            "Rust-keyword BAML methods should use a concatenation-safe identifier:\n{output}"
+            reflect_output.contains("fn type_(vm: &mut BexVm"),
+            "Rust-keyword BAML methods should use a concatenation-safe identifier:\n{reflect_output}"
         );
         assert!(
-            output.contains("fn __glue_type_(vm: &mut BexVm"),
-            "keyword method glue should use the same escaped stem:\n{output}"
+            reflect_output.contains("fn __glue_type_(vm: &mut BexVm"),
+            "keyword method glue should use the same escaped stem:\n{reflect_output}"
         );
     }
 

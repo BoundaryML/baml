@@ -15,14 +15,14 @@ use rustc_hash::FxHashMap;
 use crate::{
     ids::{
         ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker,
-        ItemKind, LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker,
-        TypeAliasMarker, hash_impl_key, hash_name,
+        ItemKind, LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TypeAliasMarker,
+        hash_impl_key, hash_name,
     },
     item_tree::{
         Attribute, Class, ClassField, Client, DefaultExprRef, Enum, EnumVariant, Function,
         FunctionParam, ImplBlock, ImplSubject, ImplementsBlock, Interface, InterfaceFieldLink,
         ItemSpans, ItemTree, ItemTreeSourceMap, Let, MethodOwner, RetryPolicy, TemplateString,
-        Test, TypeAlias,
+        TypeAlias,
     },
 };
 
@@ -385,26 +385,6 @@ impl ItemTreeBuilder {
         id
     }
 
-    pub fn alloc_test(&mut self, t: &ast::TestDef) -> LocalItemId<TestMarker> {
-        let id = self.alloc_id(ItemKind::Test, &t.name);
-        self.source_map.test_spans.insert(
-            id,
-            ItemSpans {
-                span: t.span,
-                name_span: t.name_span,
-            },
-        );
-        self.tree.tests.insert(
-            id,
-            Test {
-                name: t.name.clone(),
-                function_refs: t.function_refs.clone(),
-                args: t.args.clone(),
-            },
-        );
-        id
-    }
-
     pub fn alloc_template_string(
         &mut self,
         ts: &ast::TemplateStringDef,
@@ -423,13 +403,11 @@ impl ItemTreeBuilder {
                 span: p.span,
             })
             .collect();
-        let body = ts.body.as_ref().map(|b| b.text.clone());
         self.tree.template_strings.insert(
             id,
             TemplateString {
                 name: ts.name.clone(),
                 params,
-                body,
                 span: ts.span,
             },
         );

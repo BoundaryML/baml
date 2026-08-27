@@ -97,7 +97,7 @@ function is_type<T>(actual: unknown) -> T throws never {
     match (actual) {
         T => actual,
         _ => {
-            let t: type = type.of<T>();
+            let t: reflect.Type = reflect.Type.of<T>();
             baml.sys.panic(`assertion failed: expected type "${t}", got "${actual}"`)
         },
     }

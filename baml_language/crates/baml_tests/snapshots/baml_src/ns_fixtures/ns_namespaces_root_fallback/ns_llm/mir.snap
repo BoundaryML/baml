@@ -1,0 +1,37 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== MIR2 ===
+fn user.fixtures.namespaces_root_fallback.llm.UseConfig(cfg: fixtures.namespaces_root_fallback.Config) -> fixtures.namespaces_root_fallback.llm.Response {
+    // Locals:
+    let _0: fixtures.namespaces_root_fallback.llm.Response // _0 // return
+    let _1: fixtures.namespaces_root_fallback.Config // cfg // param
+    let _2: string
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = user.fixtures.namespaces_root_fallback.llm.Response { copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.fixtures.namespaces_root_fallback.llm.UseRootProbe(p: RootFallbackProbe) -> fixtures.namespaces_root_fallback.llm.Response {
+    // Locals:
+    let _0: fixtures.namespaces_root_fallback.llm.Response // _0 // return
+    let _1: RootFallbackProbe // p // param
+    let _2: string
+
+    bb0: {
+        _2 = copy _1.0;
+        _0 = user.fixtures.namespaces_root_fallback.llm.Response { copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

@@ -76,13 +76,20 @@ class Prompt {
 /// structural `ai.Prompt` for the supplied low-level prompt context.
 //baml:tagged_string
 function prompt(
+    // No `throws` clause: the callback's effect is inferred per call site
+    // (rule 5); whatever a template expression throws is wrapped below.
     body: (
         role: (string) -> root.Role throws never,
         ctx: root.Context,
-    ) -> baml.TaggedString throws never,
-) -> (root.Context) -> Prompt throws never {
+    ) -> baml.TaggedString,
+) -> (root.Context) -> Prompt throws root.errors.PromptRenderError {
     let render = (ctx: root.Context) -> {
-        let tagged = body(root.internal.make_role, ctx);
+        let tagged = body(root.internal.make_role, ctx) catch_all (e) {
+            _ => throw root.errors.PromptRenderError {
+                message: "prompt template rendering threw",
+                cause: e,
+            }
+        };
         root.internal.assemble_prompt(tagged.parts, tagged.values)
     };
     render
@@ -96,9 +103,24 @@ function prompt(
 class FunctionSpec<Out> {
     spec_name: string,
     args: map<string, unknown>,
-    prompt_template: (string) -> Prompt throws never,
+    prompt_template: (OutputFormat) -> Prompt throws root.errors.PromptRenderError,
     toolbox: root.tools.Toolbox,
     default_client: Client,
+
+    // Build the provider HTTP request shape for this spec without invoking the model.
+    // A supplied client overrides the spec's default; null uses the default.
+    function build_request(self, override_client: Client? = null) -> baml.http.Request {
+        let selected = override_client ?? self.default_client;
+        selected
+            .render(
+                ModelTurnInput {
+                    prompt: self.prompt_template,
+                    journal: Journal.new(self),
+                    toolbox: self.tools(),
+                    output_type: self.output_type(),
+                },
+            )
+    }
 
     function name(self) -> string {
         self.spec_name
@@ -108,14 +130,14 @@ class FunctionSpec<Out> {
         self.args
     }
 
-    function output_type(self) -> type throws baml.reflect.errors.CompilationError {
-        let output_type = type.of<Out>();
+    function output_type(self) -> reflect.Type throws reflect.errors.CompilationError {
+        let output_type = reflect.Type.of<Out>();
         root.internal.validate_output_type(output_type);
         output_type
     }
 
-    function prompt(self, output_format: string = "") -> Prompt {
-        self.prompt_template(output_format)
+    function prompt(self) -> Prompt {
+        self.prompt_template(root.internal.build_output_format(self.output_type()))
     }
 
     function tools(self) -> root.tools.Toolbox {

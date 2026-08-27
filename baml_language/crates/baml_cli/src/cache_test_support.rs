@@ -10,8 +10,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use baml_db::{SourceFile, baml_compiler2_emit::CompileOptions};
-use baml_project::ProjectDatabase;
+use baml_db::{ProjectDatabase, SourceFile};
 
 use crate::{
     bytecode_cache::{CacheContext, compile_program},
@@ -27,20 +26,13 @@ pub(crate) fn cache_disabled() -> bool {
         || std::env::var_os("BAML_CACHE_VERIFY").is_some()
 }
 
-/// The compile options every disk-round-trip test uses.
-pub(crate) fn opts() -> CompileOptions {
-    CompileOptions {
-        emit_test_cases: false,
-    }
-}
-
 /// A unique on-disk project root named `<prefix>-<pid>-<n>`, anchored beneath
 /// the *canonical* temp base so it is already in the OS's resolved form (macOS
 /// resolves the `/var` -> `/private/var` symlink; Windows adds the `\\?\`
-/// verbatim prefix). `ProjectDatabase` canonicalizes both the project root and
+/// verbatim prefix). `ProjectDatabase` canonicalizes both the workspace root and
 /// every source path, but only when they exist on disk: db1 is built before the
 /// cache dir exists (root canonicalize is a no-op fallback), then
-/// `store_with_manifest` materializes the root, so db2's `set_project_root`
+/// `store_with_manifest` materializes the root, so db2's `add_source_root`
 /// *does* canonicalize it — while the in-memory `.baml` files never exist to
 /// canonicalize. If the base held an unresolved symlink, the root would then
 /// gain a resolved prefix the file paths lack, `strip_prefix` would fail, every
@@ -78,8 +70,8 @@ pub(crate) fn compile_and_store_v1(
     let _ = std::fs::remove_dir_all(root);
     let r1 = resolved(root, files);
     let db1 = project_load::build_db_from_sources(&r1, |_| {});
-    let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
-    let program1 = compile_program(&db1, &opts(), Some(&ctx1), None).expect("v1 compile succeeds");
+    let ctx1 = CacheContext::open(&r1).expect("cache opens");
+    let program1 = compile_program(&db1, Some(&ctx1), None).expect("v1 compile succeeds");
     let fresh1 = ctx1
         .collect_diagnostics_incremental(&db1, None)
         .fresh_by_file;

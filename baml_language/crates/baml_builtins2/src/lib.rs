@@ -5,9 +5,9 @@
 //!
 //! # Layout: folder tree = package + ns_* subfolders = namespace
 //!
-//! Everything lives under `baml_std/baml/` → package **baml**.
-//! Sub-namespaces (env, llm, http, etc.) are expressed via `ns_*` subdirectories
-//! on disk, and namespace is derived from path segments at runtime.
+//! Each directory below `baml_std/` is a package. Sub-namespaces are expressed
+//! via `ns_*` subdirectories, and namespace is derived from path segments at
+//! runtime.
 //!
 //! # Virtual path
 //!
@@ -96,7 +96,6 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "null.baml"),
     builtin!("baml", "string.baml"),
     builtin!("baml", "uint8array.baml"),
-    builtin!("baml", "type_class.baml"),
     // --- Namespaced (ns_* folders) ---
     builtin!("baml", "ns_errors/errors.baml"),
     builtin!("baml", "ns_errors/unknown_error.baml"),
@@ -105,6 +104,8 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_panics/panics.baml"),
     builtin!("baml", "ns_env/env.baml"),
     builtin!("baml", "ns_io/io.baml"),
+    builtin!("baml", "ns_io/read.baml"),
+    builtin!("baml", "ns_io/write.baml"),
     builtin!("baml", "ns_http/http.baml"),
     builtin!("baml", "ns_http/server.baml"),
     builtin!("baml", "ns_events/events.baml"),
@@ -136,25 +137,24 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_ops/index.baml"),
     builtin!("baml", "ns_ops/math.baml"),
     builtin!("baml", "ns_random/random.baml"),
-    // `baml.reflect` (BEP-066 I-9: `reflect` is a keyword shorthand for it).
-    builtin!("baml", "ns_reflect/reflect.baml"),
-    builtin!("baml", "ns_reflect/ns_class/class.baml"),
-    builtin!("baml", "ns_reflect/ns_enum/enum.baml"),
-    builtin!("baml", "ns_reflect/ns_union/union.baml"),
-    builtin!("baml", "ns_reflect/ns_literal/literal.baml"),
-    builtin!("baml", "ns_reflect/ns_array/array.baml"),
-    builtin!("baml", "ns_reflect/ns_map/map.baml"),
-    builtin!("baml", "ns_reflect/ns_interface/interface.baml"),
-    builtin!("baml", "ns_reflect/ns_primitive/primitive.baml"),
-    builtin!("baml", "ns_reflect/ns_function/function.baml"),
-    builtin!("baml", "ns_reflect/ns_errors/errors.baml"),
-    // `baml.type` (BEP-066 K-13: `type.of` / `type.of_value` resolve here).
-    builtin!("baml", "ns_type/type.baml"),
     builtin!("baml", "ns_crypto/errors.baml"),
     builtin!("baml", "ns_crypto/interfaces.baml"),
     builtin!("baml", "ns_crypto/aes_gcm_siv.baml"),
     builtin!("baml", "ns_crypto/chacha20poly1305.baml"),
     builtin!("baml", "ns_crypto/sha2.baml"),
+    // --- reflect package ---
+    builtin!("reflect", "reflect.baml"),
+    builtin!("reflect", "type.baml"),
+    builtin!("reflect", "ns_class/class.baml"),
+    builtin!("reflect", "ns_enum/enum.baml"),
+    builtin!("reflect", "ns_union/union.baml"),
+    builtin!("reflect", "ns_literal/literal.baml"),
+    builtin!("reflect", "ns_array/array.baml"),
+    builtin!("reflect", "ns_map/map.baml"),
+    builtin!("reflect", "ns_interface/interface.baml"),
+    builtin!("reflect", "ns_primitive/primitive.baml"),
+    builtin!("reflect", "ns_function/function.baml"),
+    builtin!("reflect", "ns_errors/errors.baml"),
     // --- boundary package ---
     builtin!("boundary", "core.baml"),
     builtin!("boundary", "ns_id/id.baml"),

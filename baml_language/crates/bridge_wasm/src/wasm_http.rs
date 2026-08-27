@@ -66,7 +66,7 @@ impl WasmHttp {
         let run_store = self.run_store.clone();
         let notification_callback = self.notification_callback.clone();
         let fetch_id = self.next_fetch_id.fetch_add(1, Ordering::Relaxed);
-        let host_call_id = crate::wasm_host_call_id(call_id);
+        let host_call_id = crate::runs::wasm_host_call_id(call_id);
         if let Some(host_call_id) = &host_call_id
             && let Some(patch) = self.run_store.ingest_fetch_started(
                 host_call_id,
@@ -77,7 +77,7 @@ impl WasmHttp {
                 Some(request.body.len()),
             )
         {
-            crate::send_run_patch(&self.notification_callback, &patch);
+            crate::runs::send_run_patch(&self.notification_callback, &patch);
         }
 
         SysOpOutput::async_op(SendFuture(async move {
@@ -128,7 +128,7 @@ impl WasmHttp {
                             Some(msg.clone()),
                         )
                     {
-                        crate::send_run_patch(&notification_callback, &patch);
+                        crate::runs::send_run_patch(&notification_callback, &patch);
                     }
                     return Err(VmRustFnError::from(VmBamlError::Io {
                         message: format!("HTTP request failed: {msg}"),
@@ -207,7 +207,7 @@ impl WasmHttp {
                     None,
                 )
             {
-                crate::send_run_patch(&notification_callback, &patch);
+                crate::runs::send_run_patch(&notification_callback, &patch);
             }
 
             let key = registry.store_body_promise(body_promise);
@@ -676,11 +676,13 @@ impl IoNamespaceHttp for WasmHttp {
         self.do_send(call_id, request)
     }
 
-    fn fetch_sse(
+    fn _fetch_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         request: io::owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
         SysOpOutput::async_op(SendFuture(async move {
@@ -717,6 +719,12 @@ impl IoNamespaceHttp for WasmHttp {
             }
 
             let url = response.url().to_string();
+            let status_code = i64::from(response.status().as_u16());
+            let headers: indexmap::IndexMap<String, String> = response
+                .headers()
+                .iter()
+                .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
+                .collect();
             let byte_stream = Box::pin(response.bytes_stream());
 
             // Create channel and spawn background task to parse SSE events.
@@ -728,6 +736,8 @@ impl IoNamespaceHttp for WasmHttp {
 
             Ok(io::owned::http::SseStream {
                 url,
+                status_code,
+                headers,
                 _handle: handle,
             })
         }))

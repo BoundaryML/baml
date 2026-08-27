@@ -35,4 +35,4 @@ pub use utils::DecodeFromBuffer;
 pub use value_decode::{
     inbound_to_external, kwargs_to_bex_values, playground_run_args_to_bex_values,
 };
-pub use value_encode::{build_to_host_call, external_to_outbound};
+pub use value_encode::{artifact_safe_outbound_bytes, build_to_host_call, external_to_outbound};

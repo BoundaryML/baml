@@ -20,7 +20,7 @@ client TestClient = openai.ResponsesClient.new(
 
 function GenericList<T>(topic: string) -> T[] {
     client: TestClient
-    prompt: `List ${topic}.\n${ctx.output_format}`
+    prompt: `List ${topic}.\n${ctx.output_format()}`
 }
 "#;
 
@@ -33,7 +33,7 @@ client TestClient = openai.ResponsesClient.new(
 
 function GenericValue<T>(topic: string) -> T {
     client: TestClient
-    prompt: `Describe ${topic}.\n${ctx.output_format}`
+    prompt: `Describe ${topic}.\n${ctx.output_format()}`
 }
 "#;
 
@@ -45,7 +45,7 @@ async fn static_never_specialization_throws_compilation_error() {
 
             function main() -> string throws never {{
                 let rendered = GenericList$render_prompt<never>("items") catch (e) {{
-                    baml.reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+                    reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
                 if rendered is string {{
@@ -70,9 +70,9 @@ async fn runtime_never_specialization_uses_the_same_diagnostic() {
             {GENERIC_LIST}
 
             function main() -> string throws never {{
-                let runtime_t = type.of<never>()
+                let runtime_t = reflect.Type.of<never>()
                 let rendered = GenericList$render_prompt<unreflect(runtime_t)>("items") catch (e) {{
-                    baml.reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+                    reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
                 if rendered is string {{
@@ -98,7 +98,7 @@ async fn direct_llm_execution_fails_before_network_io() {
 
             function main() -> string throws never {{
                 let result = GenericList<never>("items") catch (e) {{
-                    baml.reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+                    reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
                 if result is string {{
@@ -157,7 +157,7 @@ async fn unknown_class_field_reports_its_path() {
 
             function main() -> string throws never {{
                 let rendered = GenericValue$render_prompt<Payload>("payload") catch (e) {{
-                    baml.reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+                    reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
                 if rendered is string {{
@@ -182,7 +182,7 @@ async fn nested_non_data_class_field_reports_the_full_path() {
             {GENERIC_VALUE}
 
             class Inner {{
-                payload type
+                payload reflect.Type
             }}
 
             class Envelope {{
@@ -191,7 +191,7 @@ async fn nested_non_data_class_field_reports_the_full_path() {
 
             function main() -> string throws never {{
                 let rendered = GenericValue$render_prompt<Envelope>("envelope") catch (e) {{
-                    baml.reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+                    reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
                 if rendered is string {{
@@ -205,7 +205,7 @@ async fn nested_non_data_class_field_reports_the_full_path() {
 
     assert_eq!(
         result_string(output),
-        "E0164|field `Envelope.inner.payload` has non-data type `type`, which cannot be rendered as an LLM output schema"
+        "E0164|field `Envelope.inner.payload` has non-data type `reflect.Type`, which cannot be rendered as an LLM output schema"
     );
 }
 
@@ -217,13 +217,13 @@ async fn runtime_minted_nested_non_data_field_is_rejected() {
 
             function main() -> string throws unknown {{
                 let inner = reflect.class.new("RuntimeInner", {{
-                    "payload": type.of<unknown>(),
+                    "payload": reflect.Type.of<unknown>(),
                 }})
                 let outer = reflect.class.new("RuntimeOuter", {{
                     "inner": inner.as_type(),
                 }})
                 let rendered = GenericValue$render_prompt<unreflect(outer.as_type())>("runtime") catch (e) {{
-                    baml.reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+                    reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
                 if rendered is string {{
@@ -276,8 +276,12 @@ async fn skipped_non_data_and_open_interface_fields_do_not_block_rendering() {
     }
 }
 
+/// Generic DATA classes render: `Wrapper<Item>` substitutes `T` and produces
+/// a real schema. (Canary temporarily rejected every generic instantiation
+/// because its formatter could not substitute class generics; this branch's
+/// field-template substitution is the fix that comment deferred to.)
 #[tokio::test]
-async fn generic_class_output_fails_before_provider_io() {
+async fn generic_data_class_output_renders() {
     let source = format!(
         r#"
             {GENERIC_VALUE}
@@ -290,9 +294,40 @@ async fn generic_class_output_fails_before_provider_io() {
                 value T
             }}
 
+            function main() -> string throws unknown {{
+                GenericValue$render_prompt<Wrapper<Item>>("wrapped item").text()
+            }}
+            "#
+    );
+    let output = baml_test!(&source);
+    let rendered = result_string(output);
+    assert!(
+        rendered.contains("name"),
+        "schema missing Item field: {rendered}"
+    );
+    assert!(
+        rendered.contains("value"),
+        "schema missing Wrapper field: {rendered}"
+    );
+}
+
+/// A generic instantiation whose argument is genuinely non-data still fails
+/// before provider IO, through the substituted field.
+#[tokio::test]
+async fn generic_class_output_fails_before_provider_io() {
+    let source = format!(
+        r#"
+            {GENERIC_VALUE}
+
+            class Wrapper<T> {{
+                value T
+            }}
+
+            type Callback = (int) -> int throws never;
+
             function main() -> string throws never {{
-                let result = GenericValue<Wrapper<Item>>("wrapped item") catch (e) {{
-                    baml.reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+                let result = GenericValue<Wrapper<Callback>>("wrapped fn") catch (e) {{
+                    reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                     _ => "wrong error",
                 }}
                 if result is string {{
@@ -304,9 +339,10 @@ async fn generic_class_output_fails_before_provider_io() {
     );
     let output = baml_test!(&source);
 
-    assert_eq!(
-        result_string(output),
-        "E0164|non-data type `Wrapper<Item>` cannot be rendered as an LLM output schema"
+    let got = result_string(output);
+    assert!(
+        got.starts_with("E0164|") && got.contains("non-data"),
+        "expected an E0164 non-data rejection, got: {got}"
     );
 }
 
@@ -322,13 +358,13 @@ async fn never_nested_in_a_runtime_class_field_is_rejected_not_panicked() {
 
             function main() -> string throws never {{
                 let outer = reflect.class.new("RuntimeOuter", {{
-                    "items": type.of<never>().array().as_type(),
+                    "items": reflect.Type.of<never>().array().as_type(),
                 }}) catch (e) {{
                     _ => return "class.new threw",
                 }}
                 let rendered = GenericValue$render_prompt<unreflect(outer.as_type())>("runtime")
                     catch (e) {{
-                        baml.reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+                        reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
                         _ => "wrong error",
                     }}
                 if rendered is string {{

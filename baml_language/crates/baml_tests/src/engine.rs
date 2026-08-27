@@ -20,11 +20,12 @@
 //! }
 //! ```
 
-use std::sync::Arc;
-
-pub use baml_project::testing::{
-    OptLevel, compile_multi_file, compile_source, compile_source_with_opt,
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
 };
+
+use baml_db::{Name, ProjectDatabase, SourceFile, SourceRoot, SourceRootKind, SourceRootSpec};
 use bex_engine::{BexCallArg, BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm::debug::{BytecodeFormat, display_program};
 use bex_vm_types::{Function, Object, Program};
@@ -32,6 +33,14 @@ pub use indexmap::IndexMap;
 #[cfg(test)]
 use insta::{assert_snapshot, with_settings};
 use sys_native::SysOpsExt;
+
+// The stdlib slice these helpers splice in is compiled once at build time
+// rather than once per test; see `crate::stdlib_prefix`. Output is byte-identical
+// to `baml_db::testing`'s honest helpers, pinned by the
+// `stdlib_prefix_equivalence` oracle.
+pub use crate::stdlib_prefix::{
+    OptLevel, compile_multi_file, compile_source, compile_source_with_opt,
+};
 
 #[cfg(test)]
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/engine");
@@ -88,6 +97,77 @@ pub fn display_user_functions_with_options(program: &Program, show_auto_derive: 
                 Some((display_name, &**f))
             }
             _ => None,
+        })
+        .collect();
+    functions.sort_by(|(a, _), (b, _)| a.cmp(b));
+    display_program(&functions, BytecodeFormat::Textual)
+}
+
+/// Build the pool into an (unsealed) heap and bind every head, so rendered
+/// metadata reflects what the runtime shows: the loader always binds before
+/// anything can display a type, and an unbound head renders as its tag
+/// (`<unresolved type #…>`).
+///
+/// Float constants are boxed into the pool first, exactly as the engine's
+/// load path does — `resolve_function_constants` (inside the heap build)
+/// refuses a raw `ConstValue::Float`.
+pub fn bound_pool(program: &Program) -> bex_heap::BexHeap {
+    let mut objects = program.objects.0.clone();
+    for index in 0..objects.len() {
+        let Object::Function(function) = &objects[index] else {
+            continue;
+        };
+        let floats: Vec<(usize, f64)> = function
+            .bytecode
+            .constants
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, constant)| match constant {
+                bex_vm_types::ConstValue::Float(value) => Some((slot, *value)),
+                _ => None,
+            })
+            .collect();
+        for (slot, value) in floats {
+            let boxed = objects.len();
+            objects.push(Object::Float(value));
+            let Object::Function(function) = &mut objects[index] else {
+                unreachable!("the object at `index` was a function above");
+            };
+            function.bytecode.constants[slot] =
+                bex_vm_types::ConstValue::Object(bex_vm_types::ObjectIndex::from_raw(boxed));
+        }
+    }
+    let mut heap = bex_heap::BexHeap::build_unsealed_default(objects);
+    heap.bind_type_heads();
+    heap
+}
+
+/// Read the function at pool index `idx` out of a heap built by
+/// [`bound_pool`], or `None` if the slot holds something else.
+pub fn bound_function(heap: &bex_heap::BexHeap, idx: usize) -> Option<&Function> {
+    let ptr = heap.compile_time_ptr(idx);
+    // SAFETY: `ptr` indexes the pool the heap was built from, and the returned
+    // borrow is tied to `heap`, which owns that pool for the borrow's lifetime.
+    match unsafe { ptr.get() } {
+        Object::Function(f) => Some(&**f),
+        _ => None,
+    }
+}
+
+/// [`display_user_functions`] over a [`bound_pool`], so type positions in the
+/// rendered bytecode show declaration names instead of raw head tags.
+pub fn display_user_functions_bound(program: &Program) -> String {
+    let heap = bound_pool(program);
+    let mut functions: Vec<(String, &Function)> = program
+        .function_indices
+        .iter()
+        .filter_map(|(name, idx)| {
+            let f = bound_function(&heap, *idx)?;
+            if !f.origin.is_user_callable() {
+                return None;
+            }
+            let display_name = name.strip_prefix("user.").unwrap_or(name).to_owned();
+            Some((display_name, f))
         })
         .collect();
     functions.sort_by(|(a, _), (b, _)| a.cmp(b));
@@ -248,6 +328,100 @@ pub async fn run_compiled(
         .await;
 
     TestOutput { bytecode, result }
+}
+
+/// Test-database conveniences over [`ProjectDatabase`]'s source-root API.
+///
+/// Test fixtures overwhelmingly want one thing: a stdlib-equipped database
+/// with a single `Workspace` root that files are dropped into by path, plus
+/// the occasional source-bearing dependency package. This trait spells that
+/// out once so fixtures read `db.workspace(root)` / `db.file(path, text)`
+/// instead of repeating the root bookkeeping. It is test support only —
+/// production code adds roots and files explicitly.
+pub trait TestDbExt {
+    /// Install the stdlib sources and add the `Workspace` root at `root` for
+    /// the reserved `user` package.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the database already has a `Workspace` root (or `root` is
+    /// otherwise rejected — see [`baml_db::SourceRootError`]).
+    fn workspace(&mut self, root: &Path) -> SourceRoot;
+
+    /// Add a source-bearing `Dependency` root for `package` at
+    /// `<builtin>/<package>`.
+    ///
+    /// The `<builtin>/` prefix is deliberate: it is the emit layer's wire
+    /// contract for non-workspace units, so files added under this root
+    /// (`db.file("<builtin>/<package>/lib.baml", ...)`) ride the same emit
+    /// group as the stdlib and can be captured as a mountable
+    /// `PackageInterface` blob plus symbolic compilation units.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `package` is already served by another root or a mounted
+    /// blob (see [`baml_db::SourceRootError`]).
+    fn dependency(&mut self, package: &str) -> SourceRoot;
+
+    /// Add or update the file at `path`, owned by the live root whose path is
+    /// the longest prefix of `path`; a path under no root (e.g. the bare
+    /// `test.baml` most fixtures use) goes to the `Workspace` root.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `path` is under no root and the database has no `Workspace`
+    /// root — call [`TestDbExt::workspace`] first.
+    fn file(&mut self, path: impl AsRef<Path>, text: &str) -> SourceFile;
+}
+
+impl TestDbExt for ProjectDatabase {
+    fn workspace(&mut self, root: &Path) -> SourceRoot {
+        self.ensure_stdlib_sources();
+        self.add_source_root(SourceRootSpec {
+            path: root.to_path_buf(),
+            package: Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: SourceRootKind::Workspace,
+        })
+        .unwrap_or_else(|err| {
+            panic!(
+                "cannot add the workspace source root at `{}`: {err}",
+                root.display()
+            )
+        })
+    }
+
+    fn dependency(&mut self, package: &str) -> SourceRoot {
+        self.add_source_root(SourceRootSpec {
+            path: PathBuf::from(format!("<builtin>/{package}")),
+            package: Name::new(package),
+            kind: SourceRootKind::Dependency,
+        })
+        .unwrap_or_else(|err| panic!("cannot add the dependency source root `{package}`: {err}"))
+    }
+
+    fn file(&mut self, path: impl AsRef<Path>, text: &str) -> SourceFile {
+        let path = path.as_ref();
+        let root = self
+            .source_root_for_path(path)
+            .or_else(|| self.workspace_root())
+            .unwrap_or_else(|| {
+                panic!(
+                    "no source root owns `{}` and the database has no workspace root; \
+                     call `TestDbExt::workspace` (or `db_with_root`) first",
+                    path.display()
+                )
+            });
+        self.add_or_update_file_in(root, path, text)
+    }
+}
+
+/// A fresh database with the stdlib installed and one `Workspace` root at
+/// `root` (package `user`) — [`ProjectDatabase::new`] followed by
+/// [`TestDbExt::workspace`].
+pub fn db_with_root(root: &Path) -> ProjectDatabase {
+    let mut db = ProjectDatabase::new();
+    db.workspace(root);
+    db
 }
 
 /// Like `run_test` but at `OptLevel::Two` (includes MIR constant folding).

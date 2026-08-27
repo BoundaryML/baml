@@ -16,6 +16,9 @@
 use std::fmt;
 
 use baml_base::{FileId, Name, SourceFile};
+use baml_compiler_diagnostics::runtime_type::{
+    RuntimeTypeEscape, RuntimeTypeNameRewrite, runtime_type_must_be_named_help,
+};
 use baml_compiler2_ast::{AstSourceMap, ExprId, StmtId, TypeAnnotId};
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -133,6 +136,17 @@ pub enum TirTypeError {
     /// A value name was written bare in a generic slot. Runtime-computed
     /// slots require the whole-slot `unreflect(value)` marker.
     ComputedGenericArgumentRequiresUnreflect { name: Name },
+    /// An inline `unreflect(value)` type argument would escape its call: the
+    /// runtime parameter is rigid for that one call, but a type the call
+    /// publishes still mentions it, so the value or error that comes back
+    /// would carry a name that no longer means anything. The lexical
+    /// `type T = unreflect(v)` binding is the spelling that outlives a call.
+    /// `escape` picks the note; the headline and the fix are the same either
+    /// way.
+    RuntimeTypeMustBeNamed { escape: RuntimeTypeEscape },
+    /// `unreflect(...)` in a declaration signature has no executable scope
+    /// in which to allocate its runtime type slot.
+    RuntimeTypeHasNoScope,
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
@@ -235,6 +249,20 @@ pub enum TirTypeError {
         /// "Did you mean" candidates, each a fully qualified `root.…` path.
         suggestions: Box<[Name]>,
     },
+    /// A spelling that reflection used before it became its own package:
+    /// `baml.reflect.X`, `type.of<T>()`, or a bare `type` annotation. These
+    /// resolve nowhere now, so say what replaces them instead of reporting an
+    /// ordinary unknown name.
+    RemovedReflectSpelling {
+        /// What the source wrote.
+        written: Name,
+        /// What it should say now.
+        replacement: Name,
+        /// Set when the message should add that the `type` keyword itself is
+        /// still around — only the `type.` value prefix and the bare `type`
+        /// annotation went away.
+        mentions_type_keyword: bool,
+    },
     /// An associated-type projection's explicit `as X` qualifier resolved to a
     /// non-interface type (a class, alias, etc.). The qualifier must name an
     /// interface; without one the projection cannot be resolved, so it must not
@@ -245,6 +273,8 @@ pub enum TirTypeError {
     /// Lowered to `Ty::Error` so it never reaches the canonical normalizer, which treats
     /// `Ty::Infer` as `unreachable!`.
     CannotInferType,
+    /// An ordinary inference variable remained unresolved at writeback.
+    TypeMustBeKnown { full_type: Ty },
     /// An associated-type projection references `member`, but the subject it
     /// projects through does not declare (or cannot declare) it as an
     /// associated type.
@@ -463,9 +493,14 @@ pub enum TirTypeError {
     /// implicit `.to_string()` can't run on a possibly-null value; the user
     /// must coalesce (`${x ?? "…"}`) or unwrap first.
     InterpolatedValueMaybeNull { ty: Ty },
+    /// The output-format method was referenced without being called.
+    OutputFormatNotCalled,
     /// BEP-049 §11: an untagged `${expr}` interpolates a value whose type has
     /// no `to_string` method, so it can't be implicitly stringified.
     TypeNotInterpolatable { ty: Ty },
+    /// B-1563 truthiness: a non-literal condition whose static type decides
+    /// the branch - the test is constant, so one arm is dead.
+    ConditionAlwaysConstant { ty: Ty, always_true: bool },
 
     /// BEP-044 §"Method Disambiguation": an unqualified call resolves to
     /// a method declared by two or more interfaces — the receiver carries
@@ -528,6 +563,35 @@ pub enum TirTypeError {
         position: SelfCallPosition,
     },
 
+    /// A `self`-less interface method referenced with an erased `Self` (an
+    /// interface-existential or union). There is no receiver value to derive
+    /// a concrete implementor from — dispatch is keyed on the `Self` TYPE —
+    /// and an erased type names no single impl.
+    SelflessMethodNeedsConcreteSelf {
+        interface_name: Name,
+        method_name: Name,
+        self_ty: baml_type::Ty,
+    },
+
+    /// A `self`-less interface method reached through a VALUE receiver
+    /// (`f.make(5)`, `f.as<I>.make()`): an associated function, not an
+    /// instance member — the receiver spellings pass the receiver as `self`,
+    /// which the callee has no slot for. Rust's E0599 split.
+    SelflessInstanceMember {
+        /// The declaring interface, when statically known.
+        interface_name: Option<Name>,
+        method_name: Name,
+    },
+
+    /// A receiver method reified as a VALUE with an erased `Self` (an
+    /// interface-existential or union). A direct call dispatches off the
+    /// receiver argument, but an uncalled value has no resolution moment.
+    ErasedSelfMethodValue {
+        interface_name: Name,
+        method_name: Name,
+        self_ty: baml_type::Ty,
+    },
+
     /// BEP-044 §"default keyword scoping rules": `default.method()` on a
     /// required method (no default body) is a compile error.
     DefaultOnRequiredMethod {
@@ -569,11 +633,11 @@ pub enum TirTypeError {
     /// concrete non-interface type. Generic bounds must be interfaces.
     GenericBoundNotInterface { bound: Ty },
     /// BEP-062: an `implements` block targets a compiler-builtin interface
-    /// (`baml.AnyFunction`), whose conformance is derived by the compiler and
+    /// (`reflect.AnyFunction`), whose conformance is derived by the compiler and
     /// cannot be written by hand.
     BuiltinInterfaceNotImplementable { interface: QualifiedTypeName },
     /// BEP-062: a generic parameter's bound names a compiler-builtin interface
-    /// (`baml.AnyFunction`) that is only legal as a value type (an
+    /// (`reflect.AnyFunction`) that is only legal as a value type (an
     /// existential), never as a bound.
     BuiltinInterfaceNotABound { interface: QualifiedTypeName },
     /// [`TYPE_SYSTEM.md` § Generics on Functions](TYPE_SYSTEM.md#generics-on-functions):
@@ -852,7 +916,7 @@ impl fmt::Display for TirTypeError {
                 )
             }
             TirTypeError::UnresolvedMember { base_type, member } => {
-                if matches!(base_type, Ty::BuiltinUnknown { .. }) {
+                if matches!(base_type, Ty::Unknown { .. }) {
                     write!(f, "cannot access field `{member}` on `unknown`")
                 } else {
                     write!(
@@ -878,6 +942,16 @@ impl fmt::Display for TirTypeError {
                     baml_compiler_diagnostics::runtime_type::computed_generic_argument_requires_unreflect(
                         name.as_str(),
                     );
+                f.write_str(diagnostic.message.as_str())
+            }
+            TirTypeError::RuntimeTypeMustBeNamed { .. } => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::runtime_type_must_be_named();
+                f.write_str(diagnostic.message.as_str())
+            }
+            TirTypeError::RuntimeTypeHasNoScope => {
+                let diagnostic =
+                    baml_compiler_diagnostics::runtime_type::runtime_type_has_no_scope();
                 f.write_str(diagnostic.message.as_str())
             }
             TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
@@ -1106,6 +1180,13 @@ impl fmt::Display for TirTypeError {
             TirTypeError::CannotInferType => {
                 write!(f, "type inference failed; write the type explicitly")
             }
+            TirTypeError::TypeMustBeKnown { full_type } => {
+                write!(
+                    f,
+                    "type annotations needed\nfull type: `{}`",
+                    full_type.render_user_facing()
+                )
+            }
             TirTypeError::UnknownAssociatedType { member, container } => {
                 write!(f, "unknown associated type `{member}` for {container}")
             }
@@ -1120,6 +1201,31 @@ impl fmt::Display for TirTypeError {
                     "ambiguous associated type `{member}`: declared by multiple interfaces \
                      ({names}); qualify the projection with `(... as Interface).{member}`"
                 )
+            }
+            TirTypeError::RemovedReflectSpelling {
+                written,
+                replacement,
+                mentions_type_keyword,
+            } => {
+                if *mentions_type_keyword {
+                    if written.as_str() == "type" {
+                        write!(f, "`type` no longer names a runtime type value — ")?;
+                    } else {
+                        write!(f, "`{written}` no longer exists — ")?;
+                    }
+                    write!(
+                        f,
+                        "write `{replacement}` instead. The `type` keyword itself is unchanged: \
+                         it still names aliases (`type UserId = string`) and scoped type \
+                         bindings (`type T = unreflect(t)`)"
+                    )
+                } else {
+                    write!(
+                        f,
+                        "`{written}` no longer exists — reflection is its own package now, so \
+                         write `{replacement}` instead"
+                    )
+                }
             }
             TirTypeError::UnresolvedType { name, suggestions } => {
                 if suggestions.is_empty() {
@@ -1468,6 +1574,21 @@ impl fmt::Display for TirTypeError {
                 "cannot interpolate a value of type `{}` — it may be null; coalesce with `?? \"…\"` or unwrap it first",
                 ty.render_user_facing()
             ),
+            TirTypeError::OutputFormatNotCalled => {
+                write!(f, "`output_format` must be called; use `output_format()`")
+            }
+            TirTypeError::ConditionAlwaysConstant { ty, always_true } => {
+                let (always, never) = if *always_true {
+                    ("truthy", "falsy")
+                } else {
+                    ("falsy", "truthy")
+                };
+                write!(
+                    f,
+                    "this condition is always {always}: a value of type `{}` can never be {never}",
+                    ty.render_user_facing()
+                )
+            }
             TirTypeError::TypeNotInterpolatable { ty } => write!(
                 f,
                 "cannot interpolate a value of type `{}` — it has no `to_string` method",
@@ -1531,7 +1652,11 @@ impl fmt::Display for TirTypeError {
                 "interface-qualified field `{field_name}` cannot be used in a class constructor; use class field `{qualified_name}`"
             ),
             TirTypeError::InvalidInterfaceUpcastTarget { target } => {
-                write!(f, "`.as<T>` target must be an interface, got `{target}`")
+                write!(
+                    f,
+                    "`.as<T>` target must be an interface, got `{}`",
+                    target.render_user_facing()
+                )
             }
             TirTypeError::InterfaceMemberRequiresReceiver {
                 interface_name,
@@ -1539,6 +1664,47 @@ impl fmt::Display for TirTypeError {
             } => write!(
                 f,
                 "interface member `{member_name}` on `{interface_name}` must be accessed through a value; use value.as<{interface_name}>.{member_name}"
+            ),
+            TirTypeError::SelflessInstanceMember {
+                interface_name,
+                method_name,
+            } => match interface_name {
+                Some(interface_name) => write!(
+                    f,
+                    "method `{method_name}` on interface `{interface_name}` has no `self` \
+                     receiver, so it cannot be called on a value — qualify the type instead: \
+                     `(SomeImplementor as {interface_name}).{method_name}(...)`"
+                ),
+                // No interface: a class-INHERENT static, whose spelling is the
+                // owning type, not a qualifier.
+                None => write!(
+                    f,
+                    "method `{method_name}` has no `self` receiver, so it cannot be called on \
+                     a value — qualify the type instead: `TypeName.{method_name}(...)`"
+                ),
+            },
+            TirTypeError::ErasedSelfMethodValue {
+                interface_name,
+                method_name,
+                self_ty,
+            } => write!(
+                f,
+                "cannot take `{interface_name}.{method_name}` as a function value with `Self` = \
+                 `{}`: the implementation is only known from a receiver at each call — \
+                 call the method directly, or name a concrete implementor \
+                 (`(SomeImplementor as {interface_name}).{method_name}`)",
+                self_ty.render_user_facing()
+            ),
+            TirTypeError::SelflessMethodNeedsConcreteSelf {
+                interface_name,
+                method_name,
+                self_ty,
+            } => write!(
+                f,
+                "method `{method_name}` on interface `{interface_name}` has no `self` receiver, \
+                 so `Self` must be a concrete implementor type — `{}` does not name one; \
+                 write `(SomeImplementor as {interface_name}).{method_name}`",
+                self_ty.render_user_facing()
             ),
             TirTypeError::InvalidSelfCallThroughInterface {
                 interface_name,
@@ -2027,6 +2193,36 @@ impl<'db> RelatedNote<'db> {
     }
 }
 
+/// Recognize a path that reflection used to answer to and no longer does.
+///
+/// `reflect` used to sit inside the `baml` stdlib, and runtime type values
+/// used to hang off a bare `type` prefix. Both moved: reflection is a root
+/// package, and the type-value API is `reflect.Type`. Every old spelling now
+/// resolves nowhere, which would otherwise read as an ordinary typo. Returns
+/// the error that names the replacement, or `None` for a genuinely unknown
+/// name.
+///
+/// Only failed lookups reach this: a local, parameter, or field actually named
+/// `type` still resolves normally and never gets here.
+pub fn removed_reflect_spelling(name: &Name) -> Option<TirTypeError> {
+    let written = name.as_str();
+    let (replacement, mentions_type_keyword) = if written == "type" {
+        ("reflect.Type".to_string(), true)
+    } else if let Some(rest) = written.strip_prefix("type.") {
+        (format!("reflect.Type.{rest}"), true)
+    } else if written == "baml.reflect" {
+        ("reflect".to_string(), false)
+    } else {
+        let rest = written.strip_prefix("baml.reflect.")?;
+        (format!("reflect.{rest}"), false)
+    };
+    Some(TirTypeError::RemovedReflectSpelling {
+        written: name.clone(),
+        replacement: Name::new(replacement),
+        mentions_type_keyword,
+    })
+}
+
 /// Primary location for a diagnostic — either an expression, a statement,
 /// or a raw source span (for type annotations that lack an `ExprId`).
 /// "Did you mean" candidates for an unknown member/field name: fuzzy-scored
@@ -2070,18 +2266,29 @@ pub enum DiagnosticLocation {
     /// A specific segment of a multi-segment `Path` expression.
     /// `ExprSegment(path_id, segment_idx)` resolves to `path_segment_span(path_id, segment_idx)`.
     ExprSegment(ExprId, usize),
+    /// A lambda parameter name, keyed by its lambda expression and declaration index.
+    LambdaParameter(ExprId, usize),
     Stmt(StmtId),
     TypeAnnot(TypeAnnotId),
     /// A pattern's span (`hir_ty`'s emissions stay arena-anchored; TIR
     /// resolved pattern spans eagerly through its held source map).
     Pat(baml_compiler2_ast::PatId),
-    /// A written type reference (body annotation), resolved through the
-    /// body's `TypeRefSourceMap` at render time.
-    TypeRef(baml_compiler2_hir::type_ref::TypeRefId),
+    /// A written body type reference, resolved through the owning body's
+    /// source map at render time. Declaration type-reference ids have a
+    /// distinct type and cannot inhabit this location.
+    BodyTypeRef(baml_compiler2_hir::body_type_refs::BodyTypeRefId),
     /// The field-NAME portion of an object-literal entry:
     /// `(object_expr, field_value_expr)` resolves through
     /// `object_field_name_span` at render time.
     ObjectFieldName(ExprId, ExprId),
+    /// A whole `unreflect(carrier)` type-argument slot, named by its carrier
+    /// expression, inside the expression that wrote it. E0168 reports at the
+    /// slot and quotes `enclosing` back with the slot renamed, so both spans
+    /// travel together to the renderer, which is where the file text lives.
+    UnreflectArg {
+        carrier: ExprId,
+        enclosing: ExprId,
+    },
     Span(TextRange),
 }
 
@@ -2110,17 +2317,17 @@ impl<'db> TirDiagnostic<'db> {
         scope_file: SourceFile,
         source_map: Option<&AstSourceMap>,
     ) -> RenderedTirDiagnostic {
-        self.render_with_type_refs(db, scope_file, source_map, None)
+        self.render_with_body_type_refs(db, scope_file, source_map, None)
     }
 
     /// [`Self::render`] with the body's type-ref span map, for the
-    /// annotation-anchored diagnostics (`DiagnosticLocation::TypeRef`).
-    pub fn render_with_type_refs(
+    /// annotation-anchored diagnostics (`DiagnosticLocation::BodyTypeRef`).
+    pub fn render_with_body_type_refs(
         &self,
         db: &'db dyn baml_compiler2_ppir::Db,
         scope_file: SourceFile,
         source_map: Option<&AstSourceMap>,
-        type_ref_spans: Option<&baml_compiler2_hir::type_ref::TypeRefSourceMap>,
+        type_ref_spans: Option<&baml_compiler2_hir::body_type_refs::BodyTypeRefSourceMap>,
     ) -> RenderedTirDiagnostic {
         let primary_range = match &self.primary {
             DiagnosticLocation::Expr(id) => {
@@ -2135,6 +2342,9 @@ impl<'db> TirDiagnostic<'db> {
             DiagnosticLocation::ExprSegment(id, seg_idx) => source_map
                 .map(|sm| sm.path_segment_span(*id, *seg_idx))
                 .unwrap_or_default(),
+            DiagnosticLocation::LambdaParameter(id, parameter_index) => source_map
+                .map(|sm| sm.lambda_parameter_span(*id, *parameter_index))
+                .unwrap_or_default(),
             DiagnosticLocation::Stmt(id) => {
                 source_map.map(|sm| sm.stmt_span(*id)).unwrap_or_default()
             }
@@ -2144,13 +2354,16 @@ impl<'db> TirDiagnostic<'db> {
             DiagnosticLocation::Pat(id) => source_map
                 .map(|sm| sm.pattern_span(*id))
                 .unwrap_or_default(),
-            DiagnosticLocation::TypeRef(id) => type_ref_spans
+            DiagnosticLocation::BodyTypeRef(id) => type_ref_spans
                 .map(|spans| spans.span(*id))
+                .unwrap_or_default(),
+            DiagnosticLocation::UnreflectArg { carrier, .. } => source_map
+                .map(|sm| sm.unreflect_arg_span(*carrier))
                 .unwrap_or_default(),
             DiagnosticLocation::Span(range) => *range,
         };
 
-        let related = self
+        let mut related: Vec<RenderedRelatedInformation> = self
             .related
             .iter()
             .filter_map(|note| {
@@ -2163,6 +2376,36 @@ impl<'db> TirDiagnostic<'db> {
                 )
             })
             .collect();
+
+        // E0168's suggestion quotes the author's own line back at them. This
+        // is the first point that holds both the file text and the resolved
+        // spans, so the rewrite is assembled here rather than in inference,
+        // which sees arena ids and no source at all.
+        if let DiagnosticLocation::UnreflectArg { enclosing, .. } = &self.primary
+            && let Some(source_map) = source_map
+        {
+            let enclosing = source_map.expr_span(*enclosing);
+            let rewrite = if enclosing.contains_range(primary_range) {
+                let text = scope_file.text(db);
+                let start = usize::from(enclosing.start());
+                text.get(start..usize::from(enclosing.end()))
+                    .map(|written| {
+                        RuntimeTypeNameRewrite::from_source(
+                            written,
+                            usize::from(primary_range.start()) - start
+                                ..usize::from(primary_range.end()) - start,
+                        )
+                    })
+                    .unwrap_or_default()
+            } else {
+                RuntimeTypeNameRewrite::default()
+            };
+            related.push(RenderedRelatedInformation {
+                file_id: scope_file.file_id(db),
+                range: primary_range,
+                message: runtime_type_must_be_named_help(&rewrite),
+            });
+        }
 
         RenderedTirDiagnostic {
             error: self.error.clone(),

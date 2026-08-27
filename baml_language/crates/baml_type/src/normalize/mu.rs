@@ -82,8 +82,8 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use super::{MuDisplay, NormalParam, NormalTy, TypeContext};
-use crate::{FunctionParamMode, Name, QualifiedTypeName, Ty, TyAttr};
+use super::{Head, MuDisplay, NormalParam, NormalTy, TypeContext};
+use crate::{FunctionParamMode, Name, Ty, TyAttr};
 
 /// Canonicalize a term containing at least one μ-binder.
 ///
@@ -93,7 +93,10 @@ use crate::{FunctionParamMode, Name, QualifiedTypeName, Ty, TyAttr};
 /// display must never reach a fact oracle. The fallback degrades only
 /// *completeness* (two such spellings may miss an equivalence), never
 /// soundness.
-pub(super) fn canonicalize_mu<C: TypeContext>(term: NormalTy, ctx: &C) -> NormalTy {
+pub(super) fn canonicalize_mu<H: Head, C: TypeContext<H>>(
+    term: NormalTy<H>,
+    ctx: &C,
+) -> NormalTy<H> {
     let out = Builder::default()
         .build(&term)
         .epsilon_close()
@@ -106,10 +109,10 @@ pub(super) fn canonicalize_mu<C: TypeContext>(term: NormalTy, ctx: &C) -> Normal
 /// (a recursive alias exposes its head constructor; nested recursion folds to
 /// alias names). The bail fallback renders the input term via its interim
 /// (legacy) displays — a correct, merely less-canonical spelling.
-pub(super) fn canonicalize_mu_with_render<C: TypeContext>(
-    term: NormalTy,
+pub(super) fn canonicalize_mu_with_render<H: Head, C: TypeContext<H>>(
+    term: NormalTy<H>,
     ctx: &C,
-) -> (NormalTy, Ty) {
+) -> (NormalTy<H>, Ty<H>) {
     let minimal = Builder::default()
         .build(&term)
         .epsilon_close()
@@ -213,20 +216,43 @@ struct State {
     names: BTreeSet<NameId>,
 }
 
-const NEVER: NormalTy = NormalTy::Never;
-const UNKNOWN_TOP: NormalTy = NormalTy::BuiltinUnknown;
-const BOOL: NormalTy = NormalTy::Bool;
-const LIT_TRUE: NormalTy = NormalTy::Literal(crate::Literal::Bool(true));
-const LIT_FALSE: NormalTy = NormalTy::Literal(crate::Literal::Bool(false));
+/// The special leaves, pre-interned by [`Automaton::new`] so the hot
+/// special-case probes are id compares.
+///
+/// Functions wrapping an inline `const` block, not `const` items: a `const` item
+/// cannot name an enclosing generic parameter, and `&SOME_CONST` of a generic
+/// type will not promote to `'static` either — rustc cannot prove
+/// `NormalTy` is drop-free for an arbitrary `H`. An inline `const` block
+/// *does* inherit the generics and *does* promote, which is what lets these stay
+/// `'static` and keeps [`Interner`] borrowing rather than cloning.
+fn never<H: Head>() -> &'static NormalTy<H> {
+    &const { NormalTy::Never }
+}
 
-struct Automaton<'a> {
+fn unknown_top<H: Head>() -> &'static NormalTy<H> {
+    &const { NormalTy::Unknown }
+}
+
+fn bool_leaf<H: Head>() -> &'static NormalTy<H> {
+    &const { NormalTy::Bool }
+}
+
+fn lit_true<H: Head>() -> &'static NormalTy<H> {
+    &const { NormalTy::Literal(crate::Literal::Bool(true)) }
+}
+
+fn lit_false<H: Head>() -> &'static NormalTy<H> {
+    &const { NormalTy::Literal(crate::Literal::Bool(false)) }
+}
+
+struct Automaton<'a, H: Head> {
     states: Vec<State>,
     /// Redirect chains from ε singleton collapses, minimization merges, and
     /// binder knot-tying; [`Self::resolve`] follows them to the live state.
     redirect: Vec<StateId>,
-    names: Interner<'a, QualifiedTypeName>,
+    names: Interner<'a, H>,
     strs: Interner<'a, Name>,
-    leaves: Interner<'a, NormalTy>,
+    leaves: Interner<'a, NormalTy<H>>,
     /// Pre-interned specials, so the hot special-case probes are id compares.
     never: LeafId,
     unknown_top: LeafId,
@@ -235,14 +261,14 @@ struct Automaton<'a> {
     lit_false: LeafId,
 }
 
-impl<'a> Automaton<'a> {
+impl<'a, H: Head> Automaton<'a, H> {
     fn new() -> Self {
         let mut leaves = Interner::default();
-        let never = LeafId(leaves.intern(&NEVER));
-        let unknown_top = LeafId(leaves.intern(&UNKNOWN_TOP));
-        let bool_leaf = LeafId(leaves.intern(&BOOL));
-        let lit_true = LeafId(leaves.intern(&LIT_TRUE));
-        let lit_false = LeafId(leaves.intern(&LIT_FALSE));
+        let never = LeafId(leaves.intern(never()));
+        let unknown_top = LeafId(leaves.intern(unknown_top()));
+        let bool_leaf = LeafId(leaves.intern(bool_leaf()));
+        let lit_true = LeafId(leaves.intern(lit_true()));
+        let lit_false = LeafId(leaves.intern(lit_false()));
         Self {
             states: Vec::new(),
             redirect: Vec::new(),
@@ -298,7 +324,7 @@ impl<'a> Automaton<'a> {
     /// The lexicographically least alias name of `s`, if any — the
     /// deterministic representative for rendering. (State name sets are keyed
     /// by id; representative selection orders by the *names*.)
-    fn representative_name(&self, s: StateId) -> Option<&'a QualifiedTypeName> {
+    fn representative_name(&self, s: StateId) -> Option<&'a H> {
         self.states[self.resolve(s)]
             .names
             .iter()
@@ -363,7 +389,7 @@ struct Builder {
 }
 
 impl Builder {
-    fn build<'a>(mut self, term: &'a NormalTy) -> Built<'a> {
+    fn build<'a, H: Head>(mut self, term: &'a NormalTy<H>) -> Built<'a, H> {
         let mut auto = Automaton::new();
         let root = self.intern_term(&mut auto, term);
         debug_assert!(self.binders.is_empty());
@@ -375,7 +401,11 @@ impl Builder {
     /// `Union([s])`, resolved to `never` by closure) or redirects to the body's
     /// state, carrying the alias name either way. A recursion variable is an
     /// edge to the binder state `index` levels up the stack.
-    fn intern_term<'a>(&mut self, auto: &mut Automaton<'a>, term: &'a NormalTy) -> StateId {
+    fn intern_term<'a, H: Head>(
+        &mut self,
+        auto: &mut Automaton<'a, H>,
+        term: &'a NormalTy<H>,
+    ) -> StateId {
         match term {
             NormalTy::Mu { binder, body } => {
                 let s = auto.alloc(Node::Union(Vec::new()));
@@ -490,13 +520,13 @@ impl Builder {
 /// Stage invariant: a faithful term-graph of the input — knots tied (every
 /// back-edge targets its binder's state, which carries the alias name), no
 /// transformation applied yet.
-struct Built<'a> {
-    auto: Automaton<'a>,
+struct Built<'a, H: Head> {
+    auto: Automaton<'a, H>,
     root: StateId,
 }
 
-impl<'a> Built<'a> {
-    fn epsilon_close(mut self) -> Closed<'a> {
+impl<'a, H: Head> Built<'a, H> {
+    fn epsilon_close(mut self) -> Closed<'a, H> {
         epsilon_close(&mut self.auto, self.root);
         Closed {
             auto: self.auto,
@@ -509,16 +539,16 @@ impl<'a> Built<'a> {
 /// or an unguarded spine; every μ body is constructor-headed (contractive), so
 /// the assumption-set subtype algorithm's precondition holds for anything read
 /// back from here.
-struct Closed<'a> {
-    auto: Automaton<'a>,
+struct Closed<'a, H: Head> {
+    auto: Automaton<'a, H>,
     root: StateId,
 }
 
-impl<'a> Closed<'a> {
+impl<'a, H: Head> Closed<'a, H> {
     /// Interleave partition refinement with the per-state union algebra to a
     /// fixpoint (an absorption redirect can resurface ε-edges, hence the
     /// re-closure inside the loop).
-    fn minimize_and_absorb<C: TypeContext>(mut self, ctx: &C) -> Minimal<'a> {
+    fn minimize_and_absorb<C: TypeContext<H>>(mut self, ctx: &C) -> Minimal<'a, H> {
         loop {
             minimize(&mut self.auto, self.root);
             if !algebra_pass(&mut self.auto, self.root, ctx) {
@@ -536,13 +566,13 @@ impl<'a> Closed<'a> {
 /// Stage invariant: the canonical automaton — coarsest bisimulation, union
 /// algebra at fixpoint. Its read-back is the unique canonical μ-term of the
 /// input's equivalence class; its renders are the canonical spellings.
-struct Minimal<'a> {
-    auto: Automaton<'a>,
+struct Minimal<'a, H: Head> {
+    auto: Automaton<'a, H>,
     root: StateId,
 }
 
-impl Minimal<'_> {
-    fn read_back(&self) -> Option<NormalTy> {
+impl<H: Head> Minimal<'_, H> {
+    fn read_back(&self) -> Option<NormalTy<H>> {
         read_back(&self.auto, self.root)
     }
 
@@ -552,7 +582,7 @@ impl Minimal<'_> {
     /// pattern-matrix specialization), with nested recursion folded to alias
     /// names; every other root renders by named-cut directly. `None` when the
     /// renderer bails (see [`Renderer`]).
-    fn render_root(&self) -> Option<Ty> {
+    fn render_root(&self) -> Option<Ty<H>> {
         let auto = &self.auto;
         let cyclic = cyclic_states(auto, self.root);
         let orders = union_orders(auto, self.root)?;
@@ -577,7 +607,7 @@ impl Minimal<'_> {
 /// states). Tarjan yields ε-SCCs successors-first, so by the time a component is
 /// processed every union it can still reach through ε is already closed; the
 /// component's final members are the constructor-successors gathered across it.
-fn epsilon_close(auto: &mut Automaton<'_>, root: StateId) {
+fn epsilon_close<H: Head>(auto: &mut Automaton<'_, H>, root: StateId) {
     let sccs = epsilon_sccs(auto, root);
     for scc in sccs {
         let in_scc: BTreeSet<StateId> = scc.iter().copied().collect();
@@ -633,9 +663,9 @@ fn epsilon_close(auto: &mut Automaton<'_>, root: StateId) {
 }
 
 /// ε-SCCs over union states, in Tarjan completion order (successors first).
-fn epsilon_sccs(auto: &Automaton<'_>, root: StateId) -> Vec<Vec<StateId>> {
-    struct Tarjan<'x, 'a> {
-        auto: &'x Automaton<'a>,
+fn epsilon_sccs<H: Head>(auto: &Automaton<'_, H>, root: StateId) -> Vec<Vec<StateId>> {
+    struct Tarjan<'x, 'a, H: Head> {
+        auto: &'x Automaton<'a, H>,
         index: BTreeMap<StateId, usize>,
         low: BTreeMap<StateId, usize>,
         on_stack: BTreeSet<StateId>,
@@ -643,7 +673,7 @@ fn epsilon_sccs(auto: &Automaton<'_>, root: StateId) -> Vec<Vec<StateId>> {
         next: usize,
         sccs: Vec<Vec<StateId>>,
     }
-    impl Tarjan<'_, '_> {
+    impl<H: Head> Tarjan<'_, '_, H> {
         fn visit(&mut self, s: StateId) {
             self.index.insert(s, self.next);
             self.low.insert(s, self.next);
@@ -710,7 +740,7 @@ fn epsilon_sccs(auto: &Automaton<'_>, root: StateId) -> Vec<Vec<StateId>> {
 /// Moore-style partition refinement to the coarsest bisimulation, then merge
 /// each block into its smallest member. Union members refine as a *set* of
 /// blocks (duplicates within a block are one member of the tree).
-fn minimize(auto: &mut Automaton<'_>, root: StateId) {
+fn minimize<H: Head>(auto: &mut Automaton<'_, H>, root: StateId) {
     let reach = auto.reachable(root);
 
     // Initial partition by local shape — pure id comparisons.
@@ -790,7 +820,7 @@ enum LocalKey {
     Projection(StrId),
 }
 
-fn local_key(auto: &Automaton<'_>, s: StateId) -> LocalKey {
+fn local_key<H: Head>(auto: &Automaton<'_, H>, s: StateId) -> LocalKey {
     match auto.node(s) {
         Node::Leaf(l) => LocalKey::Leaf(*l),
         Node::Enum(qn) => LocalKey::Enum(*qn),
@@ -827,14 +857,18 @@ fn local_key(auto: &Automaton<'_>, s: StateId) -> LocalKey {
 ///   function of the minimal automaton);
 /// - a state with a member whose materialization **bailed**: no sound `Ty`
 ///   spelling exists to hand the fact oracles.
-fn algebra_pass<C: TypeContext>(auto: &mut Automaton<'_>, root: StateId, ctx: &C) -> bool {
+fn algebra_pass<H: Head, C: TypeContext<H>>(
+    auto: &mut Automaton<'_, H>,
+    root: StateId,
+    ctx: &C,
+) -> bool {
     let cyclic = cyclic_states(auto, root);
     let mut changed = false;
     // Member read-backs are pure in the automaton and members recur across
     // union states (a shared leaf sits in many unions), so memoize them while
     // the automaton is unmutated: any node rewrite or redirect below clears
     // the memo (a stale read-back would change absorption decisions).
-    let mut read_backs: BTreeMap<StateId, Option<NormalTy>> = BTreeMap::new();
+    let mut read_backs: BTreeMap<StateId, Option<NormalTy<H>>> = BTreeMap::new();
     for s in auto.reachable(root) {
         let Node::Union(raw) = auto.node(s) else {
             continue;
@@ -848,7 +882,7 @@ fn algebra_pass<C: TypeContext>(auto: &mut Automaton<'_>, root: StateId, ctx: &C
 
         let absorb = !(cyclic.contains(&s) && auto.representative_name(s).is_none());
         // Materialize members as closed terms; canonical order = term order.
-        let materialized: Option<Vec<(NormalTy, StateId)>> = if absorb {
+        let materialized: Option<Vec<(NormalTy<H>, StateId)>> = if absorb {
             members
                 .iter()
                 .map(|&m| {
@@ -937,8 +971,8 @@ fn algebra_pass<C: TypeContext>(auto: &mut Automaton<'_>, root: StateId, ctx: &C
 
 /// Replace a complete set of an enum's variant states with the enum state
 /// (`E.A | E.B | … == E`), finding or allocating it.
-fn collapse_complete_enums<C: TypeContext>(
-    auto: &mut Automaton<'_>,
+fn collapse_complete_enums<H: Head, C: TypeContext<H>>(
+    auto: &mut Automaton<'_, H>,
     members: &mut BTreeSet<StateId>,
     ctx: &C,
 ) {
@@ -978,8 +1012,8 @@ fn collapse_complete_enums<C: TypeContext>(
 /// (`true | false == bool` — the bool analogue of enum completeness,
 /// context-free because the variant family is closed). Mirrors the bottom-up
 /// pass; pre-interned leaf ids make the probes integer compares.
-fn collapse_complete_bools(auto: &mut Automaton<'_>, members: &mut BTreeSet<StateId>) {
-    let is_leaf = |auto: &Automaton<'_>, m: StateId, leaf: LeafId| matches!(auto.node(m), Node::Leaf(l) if *l == leaf);
+fn collapse_complete_bools<H: Head>(auto: &mut Automaton<'_, H>, members: &mut BTreeSet<StateId>) {
+    let is_leaf = |auto: &Automaton<'_, H>, m: StateId, leaf: LeafId| matches!(auto.node(m), Node::Leaf(l) if *l == leaf);
     let has_true = members.iter().any(|&m| is_leaf(auto, m, auto.lit_true));
     let has_false = members.iter().any(|&m| is_leaf(auto, m, auto.lit_false));
     if has_true && has_false {
@@ -1039,7 +1073,7 @@ enum RbShape {
 /// the real displays. Also used by the algebra pass to materialize union
 /// members as closed terms (every back-reference is wrapped on the way out, so
 /// the result is always closed).
-fn read_back(auto: &Automaton<'_>, root: StateId) -> Option<NormalTy> {
+fn read_back<H: Head>(auto: &Automaton<'_, H>, root: StateId) -> Option<NormalTy<H>> {
     let cyclic = cyclic_states(auto, root);
     let (rb, _) = expand(auto, root, &mut Vec::new());
 
@@ -1052,7 +1086,7 @@ fn read_back(auto: &Automaton<'_>, root: StateId) -> Option<NormalTy> {
     // Render every binder state's display while the automaton (which knows the
     // names, cycles, and covers) is in scope.
     let mut renderer = Renderer::new(auto, &cyclic, &rec.union_orders);
-    let mut displays: BTreeMap<StateId, Ty> = BTreeMap::new();
+    let mut displays: BTreeMap<StateId, Ty<H>> = BTreeMap::new();
     for &s in &rec.binder_states {
         let rendered = renderer.render(s, &mut Vec::new())?;
         displays.insert(s, rendered);
@@ -1072,7 +1106,10 @@ fn read_back(auto: &Automaton<'_>, root: StateId) -> Option<NormalTy> {
 /// The canonical union member orders of every union state in the expansion,
 /// computed by a placeholder-display read-back — the shared prerequisite of
 /// [`Renderer`] for callers that do not otherwise read back (the root render).
-fn union_orders(auto: &Automaton<'_>, root: StateId) -> Option<BTreeMap<StateId, Vec<StateId>>> {
+fn union_orders<H: Head>(
+    auto: &Automaton<'_, H>,
+    root: StateId,
+) -> Option<BTreeMap<StateId, Vec<StateId>>> {
     let (rb, _) = expand(auto, root, &mut Vec::new());
     let mut rec = Recorder::default();
     convert(auto, &rb, &mut Vec::new(), None, &mut rec);
@@ -1082,14 +1119,18 @@ fn union_orders(auto: &Automaton<'_>, root: StateId) -> Option<BTreeMap<StateId,
 /// Expand state `s` into a tree, cutting at on-path revisits. Returns the tree
 /// and the set of states it references freely (used to decide `needs_binder`
 /// bottom-up).
-fn expand(auto: &Automaton<'_>, s: StateId, path: &mut Vec<StateId>) -> (Rb, BTreeSet<StateId>) {
+fn expand<H: Head>(
+    auto: &Automaton<'_, H>,
+    s: StateId,
+    path: &mut Vec<StateId>,
+) -> (Rb, BTreeSet<StateId>) {
     let r = auto.resolve(s);
     if path.contains(&r) {
         return (Rb::Ref(r), BTreeSet::from([r]));
     }
     path.push(r);
     let mut refs = BTreeSet::new();
-    let child = |auto: &Automaton<'_>,
+    let child = |auto: &Automaton<'_, H>,
                  c: StateId,
                  path: &mut Vec<StateId>,
                  refs: &mut BTreeSet<StateId>| {
@@ -1205,13 +1246,13 @@ struct Recorder {
 /// placeholders cannot affect the member sort — and only the [`Recorder`]
 /// output matters. Owned values are cloned out of the interners here — the
 /// single clone point of the pipeline.
-fn convert(
-    auto: &Automaton<'_>,
+fn convert<H: Head>(
+    auto: &Automaton<'_, H>,
     rb: &Rb,
     binders: &mut Vec<StateId>,
-    displays: Option<&BTreeMap<StateId, Ty>>,
+    displays: Option<&BTreeMap<StateId, Ty<H>>>,
     rec: &mut Recorder,
-) -> NormalTy {
+) -> NormalTy<H> {
     match rb {
         Rb::Ref(s) => {
             let index = binders
@@ -1274,7 +1315,7 @@ fn convert(
                     Box::new(convert(auto, e, binders, displays, rec)),
                 ),
                 RbShape::Union(members) => {
-                    let mut converted: Vec<(NormalTy, StateId)> = members
+                    let mut converted: Vec<(NormalTy<H>, StateId)> = members
                         .iter()
                         .map(|m| {
                             let state = match m {
@@ -1289,7 +1330,7 @@ fn convert(
                     rec.union_orders
                         .entry(*state)
                         .or_insert_with(|| converted.iter().map(|(_, s)| *s).collect());
-                    let mut members: Vec<NormalTy> =
+                    let mut members: Vec<NormalTy<H>> =
                         converted.into_iter().map(|(t, _)| t).collect();
                     match members.len() {
                         0 => NormalTy::Never,
@@ -1354,9 +1395,9 @@ fn convert(
 
 /// States on a cycle (in a nontrivial SCC of the full edge graph, or carrying a
 /// self-edge) — the states whose alias names cut recursion in the rendering.
-fn cyclic_states(auto: &Automaton<'_>, root: StateId) -> BTreeSet<StateId> {
-    struct Tarjan<'x, 'a> {
-        auto: &'x Automaton<'a>,
+fn cyclic_states<H: Head>(auto: &Automaton<'_, H>, root: StateId) -> BTreeSet<StateId> {
+    struct Tarjan<'x, 'a, H: Head> {
+        auto: &'x Automaton<'a, H>,
         index: BTreeMap<StateId, usize>,
         low: BTreeMap<StateId, usize>,
         on_stack: BTreeSet<StateId>,
@@ -1364,7 +1405,7 @@ fn cyclic_states(auto: &Automaton<'_>, root: StateId) -> BTreeSet<StateId> {
         next: usize,
         cyclic: BTreeSet<StateId>,
     }
-    impl Tarjan<'_, '_> {
+    impl<H: Head> Tarjan<'_, '_, H> {
         fn visit(&mut self, s: StateId) {
             self.index.insert(s, self.next);
             self.low.insert(s, self.next);
@@ -1442,8 +1483,8 @@ fn cyclic_states(auto: &Automaton<'_>, root: StateId) -> BTreeSet<StateId> {
 /// no finite alias-based `Ty` spelling. A wrong display must never reach a fact
 /// oracle, so the caller degrades to the pre-automaton form instead
 /// (sound, less canonical).
-struct Renderer<'x, 'a> {
-    auto: &'x Automaton<'a>,
+struct Renderer<'x, 'a, H: Head> {
+    auto: &'x Automaton<'a, H>,
     cyclic: &'x BTreeSet<StateId>,
     orders: &'x BTreeMap<StateId, Vec<StateId>>,
     /// Named union states — the cover candidates — with their resolved member
@@ -1452,12 +1493,12 @@ struct Renderer<'x, 'a> {
     /// union *off* the surviving cycle, and its name denotes its tree either
     /// way.
     candidates: Vec<(StateId, BTreeSet<StateId>)>,
-    memo: BTreeMap<StateId, Ty>,
+    memo: BTreeMap<StateId, Ty<H>>,
 }
 
-impl<'x, 'a> Renderer<'x, 'a> {
+impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
     fn new(
-        auto: &'x Automaton<'a>,
+        auto: &'x Automaton<'a, H>,
         cyclic: &'x BTreeSet<StateId>,
         orders: &'x BTreeMap<StateId, Vec<StateId>>,
     ) -> Self {
@@ -1490,7 +1531,7 @@ impl<'x, 'a> Renderer<'x, 'a> {
         }
     }
 
-    fn render(&mut self, s: StateId, path: &mut Vec<StateId>) -> Option<Ty> {
+    fn render(&mut self, s: StateId, path: &mut Vec<StateId>) -> Option<Ty<H>> {
         let r = self.auto.resolve(s);
         if let Some(t) = self.memo.get(&r) {
             return Some(t.clone());
@@ -1538,7 +1579,7 @@ impl<'x, 'a> Renderer<'x, 'a> {
 
     /// Render an on-path unnamed state via covers alone: exact only when the
     /// covers leave nothing uncovered.
-    fn cover_only(&mut self, r: StateId) -> Option<Ty> {
+    fn cover_only(&mut self, r: StateId) -> Option<Ty<H>> {
         if !matches!(self.auto.node(r), Node::Union(_)) {
             return None;
         }
@@ -1555,9 +1596,9 @@ impl<'x, 'a> Renderer<'x, 'a> {
         covers: &[StateId],
         extras: &[StateId],
         path: &mut Vec<StateId>,
-    ) -> Option<Ty> {
+    ) -> Option<Ty<H>> {
         let attr = TyAttr::default;
-        let mut parts: Vec<Ty> = Vec::new();
+        let mut parts: Vec<Ty<H>> = Vec::new();
         for &u in covers {
             let name = self
                 .auto
@@ -1579,7 +1620,7 @@ impl<'x, 'a> Renderer<'x, 'a> {
     /// to the module so the root render can unfold a *named* root once
     /// (exposing its head constructor) while nested occurrences fold to the
     /// name.
-    fn structural(&mut self, r: StateId, path: &mut Vec<StateId>) -> Option<Ty> {
+    fn structural(&mut self, r: StateId, path: &mut Vec<StateId>) -> Option<Ty<H>> {
         let attr = TyAttr::default;
         let auto = self.auto;
         Some(match auto.node(r) {

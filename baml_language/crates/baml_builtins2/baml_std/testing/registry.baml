@@ -221,7 +221,8 @@ class TestRegistry {
     function run_testset(self, name: string) -> TestSetReport {
         for (let ts in self.collector.testsets) {
             if (ts.name == name) {
-                return root.run_testset(root.testset_children(self.expand_testset_registry(ts)), ts.runner);
+                let pool = root.test_pool(0);
+                return root.run_testset(root.testset_children(self.expand_testset_registry(ts), pool), ts.runner, pool);
             }
         }
         for (let k in self.expansions.keys()) {
@@ -234,11 +235,19 @@ class TestRegistry {
     }
 
     function run_all(self) -> TestSetReport {
-        root.run_testset(root.testset_children(self), null)
+        self.run_all_pooled(root.test_pool(0))
+    }
+
+    function run_all_pooled(self, pool: TestPool) -> TestSetReport {
+        root.run_testset(root.testset_children(self, pool), null, pool)
     }
 
     function run_selected(self, names: string[]) -> TestSetReport {
-        root.run_testset(root.testset_children_selected(self, names), null)
+        self.run_selected_pooled(names, root.test_pool(0))
+    }
+
+    function run_selected_pooled(self, names: string[], pool: TestPool) -> TestSetReport {
+        root.run_testset(root.testset_children_selected(self, names, pool), null, pool)
     }
 
     // CLI entry point: glob-filter in BAML, run (honoring testset runners), and
@@ -252,20 +261,22 @@ class TestRegistry {
         profile_exclude: string[],
         cli_include: string[],
         cli_exclude: string[],
+        max_concurrency: int,
     ) -> FlatTestReport {
         // Always discover the selected leaf IDs first. Besides supplying canonical
         // console identities, this makes structural registration errors actionable
         // even when the unfiltered execution path preserves run_all semantics.
         let selected_names = root.select_names_layered(self, profile_include, profile_exclude, cli_include, cli_exclude);
+        let pool = root.test_pool(max_concurrency);
         let report = if (
             profile_include.length() == 0
                 && profile_exclude.length() == 0
                 && cli_include.length() == 0
                 && cli_exclude.length() == 0
         ) {
-            self.run_all()
+            self.run_all_pooled(pool)
         } else {
-            self.run_selected(selected_names)
+            self.run_selected_pooled(selected_names, pool)
         };
         root.flatten_with_tolerated(report, selected_names)
     }
@@ -325,18 +336,18 @@ class TestRegistry {
     }
 }
 
-function testset_children(registry: TestRegistry) -> TestSetChild[] {
+function testset_children(registry: TestRegistry, pool: TestPool) -> TestSetChild[] {
     let children: TestSetChild[] = [];
     for (let t in registry.collector.tests) {
         children.push(root.test_child(t.name, t.body, t.runner))
     }
     for (let ts in registry.collector.testsets) {
-        children.push(root.testset_child(registry, ts))
+        children.push(root.testset_child(registry, ts, pool))
     }
     children
 }
 
-function testset_children_selected(registry: TestRegistry, names: string[]) -> TestSetChild[] {
+function testset_children_selected(registry: TestRegistry, names: string[], pool: TestPool) -> TestSetChild[] {
     let children: TestSetChild[] = [];
     for (let t in registry.collector.tests) {
         if (root._name_selected(t.name, names)) {
@@ -352,7 +363,7 @@ function testset_children_selected(registry: TestRegistry, names: string[]) -> T
         // was selected (tests and testsets dedupe in separate collections, so the
         // names can collide). Honoring that would wrongly run the whole testset.
         if (root._has_selected_descendant(ts.name, names)) {
-            children.push(root.testset_child_selected(registry, ts, names))
+            children.push(root.testset_child_selected(registry, ts, names, pool))
         } else {
             null
         }
@@ -366,14 +377,16 @@ function test_child(name: string, body: TestBody, runner: TestRunner?) -> TestSe
         run: () -> ChildReport {
             root.run_test(body, runner)
         },
+        is_container: false,
     }
 }
 
-function testset_child(registry: TestRegistry, ts: TestSetRegistration) -> TestSetChild {
+function testset_child(registry: TestRegistry, ts: TestSetRegistration, pool: TestPool) -> TestSetChild {
     TestSetChild {
         name: ts.name,
+        is_container: true,
         run: () -> ChildReport {
-            root.run_testset(root.testset_children(registry.expand_testset_registry(ts)), ts.runner) catch_all (e) {
+            root.run_testset(root.testset_children(registry.expand_testset_registry(ts), pool), ts.runner, pool) catch_all (e) {
                 baml.panics.Panic => root.expansion_error_report(ts.name),
                 _ => root.expansion_error_report(ts.name),
             }
@@ -385,13 +398,16 @@ function testset_child_selected(
     registry: TestRegistry,
     ts: TestSetRegistration,
     names: string[],
+    pool: TestPool,
 ) -> TestSetChild {
     TestSetChild {
         name: ts.name,
+        is_container: true,
         run: () -> ChildReport {
             root.run_testset(
-                root.testset_children_selected(registry.expand_testset_registry(ts), names),
+                root.testset_children_selected(registry.expand_testset_registry(ts), names, pool),
                 ts.runner,
+                pool,
             ) catch_all (e) {
                 baml.panics.Panic => root.expansion_error_report(ts.name),
                 _ => root.expansion_error_report(ts.name),
@@ -480,10 +496,71 @@ function aggregate_reports(named_results: NamedChildReport[]) -> TestSetReport {
     }
 }
 
-function run_children_parallel(children: TestSetChild[]) -> TestSetReport throws never {
+// Global gate on concurrently RUNNING leaf test bodies. A leaf acquires a
+// slot BEFORE its body is spawned, so a gated test costs nothing — no VM
+// thread, no watchdog timer — until a slot frees. One pool is shared by the
+// whole run (threaded down through every nested testset), so the limit is a
+// run-wide invariant rather than a per-testset one.
+class TestPool {
+    // Token bucket. `pop` and `push` are single locked array operations, so
+    // concurrent dispatchers race safely; an empty `pop` means "no slot free".
+    tokens: int[],
+
+    function acquire(self) -> null throws never {
+        while (true) {
+            if let _slot: int = self.tokens.pop() {
+                return null;
+            }
+            // Saturated: park briefly rather than spin. Only starved
+            // dispatchers poll, and there is at most one dispatcher per
+            // currently-expanding testset, so the wakeup load is bounded by
+            // testset nesting, not by test count.
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10)) catch (e) { _ => null };
+        }
+    }
+
+    function release(self) -> null throws never {
+        self.tokens.push(1);
+        null
+    }
+}
+
+// A pool admitting `max_concurrency` leaves at once. Zero or negative means
+// "no explicit budget": fall back to a bound that keeps a pathological
+// fan-out from creating thousands of live VM threads while staying above any
+// real machine's core count (the CLI always passes an explicit budget).
+function test_pool(max_concurrency: int) -> TestPool {
+    let limit = if (max_concurrency > 0) { max_concurrency } else { 64 };
+    let tokens: int[] = [];
+    let i = 0;
+    while (i < limit) {
+        tokens.push(1);
+        i = i + 1;
+    }
+    TestPool { tokens: tokens }
+}
+
+function run_children_parallel(children: TestSetChild[], pool: TestPool) -> TestSetReport throws never {
     let futures: baml.future.Future<NamedChildReport, never>[] = [];
     for (let child in children) {
-        futures.push(spawn { NamedChildReport { name: child.name, report: child.run() } })
+        if (child.is_container) {
+            // Containers only spawn and await; admitting them freely cannot
+            // oversubscribe the machine, and gating them could deadlock the
+            // slots their own leaves need.
+            futures.push(spawn { NamedChildReport { name: child.name, report: child.run() } })
+        } else {
+            // Acquire on the dispatcher, before the spawn exists: the whole
+            // point is that an inadmissible leaf has no thread yet.
+            pool.acquire();
+            futures.push(spawn {
+                let named = NamedChildReport { name: child.name, report: child.run() };
+                // `run` is total: a leaf is `run_test`, whose runner arm
+                // catches middleware panics precisely so this release is
+                // reached on every outcome.
+                pool.release();
+                named
+            })
+        }
     }
     // No catch: the children's bodies cannot throw, so the futures are
     // `Future<NamedChildReport, never>` and awaiting them is infallible.
@@ -492,25 +569,51 @@ function run_children_parallel(children: TestSetChild[]) -> TestSetReport throws
 }
 
 // Run a single test with error handling and optional runner middleware.
+// Every test races against a deadline (default 5 minutes; override with the
+// BAML_TEST_TIMEOUT_MS env var): a hung test — a stalled network read, a
+// deadlocked await — becomes a FAIL with a "timed out" message instead of
+// hanging the whole run. `baml.future.race` cancels the losers when one
+// side settles (BEP-034), so a timed-out body is actively cancelled and a
+// finished test's leftover timer doesn't linger.
 function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
     let base_run: TestReportThunk = () -> TestReport {
         let start = baml.time.Instant.now();
-        let result = {
-            body();
-            RunReport { outcome: "pass", duration_ms: 0, message: null }
-        } catch_all (e, ctx) {
-            let p: baml.panics.UserPanic => {
-                RunReport { outcome: "fail", duration_ms: 0, message: p.message }
-            },
-            let p: baml.panics.AssertionFailed => {
-                RunReport { outcome: "fail", duration_ms: 0, message: p.message }
-            },
-            baml.panics.Panic => {
-                RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
-            },
-            _ => {
-                RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
+        let timeout_ms = match (baml.env.get("BAML_TEST_TIMEOUT_MS") catch (e) { _ => null }) {
+            let t: string => int.parse(t) catch (e) { _ => 300000 },
+            _ => 300000,
+        };
+        let work: baml.future.Future<RunReport, never> = spawn {
+            {
+                body();
+                RunReport { outcome: "pass", duration_ms: 0, message: null }
+            } catch_all (e, ctx) {
+                let p: baml.panics.UserPanic => {
+                    RunReport { outcome: "fail", duration_ms: 0, message: p.message }
+                },
+                let p: baml.panics.AssertionFailed => {
+                    RunReport { outcome: "fail", duration_ms: 0, message: p.message }
+                },
+                baml.panics.Panic => {
+                    RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
+                },
+                _ => {
+                    RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
+                }
             }
+        };
+        let timer: baml.future.Future<RunReport, never> = spawn {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(timeout_ms)) catch (e) { _ => null };
+            RunReport {
+                outcome: "fail",
+                duration_ms: 0,
+                message: "test timed out after " + timeout_ms.to_string() + "ms (override with BAML_TEST_TIMEOUT_MS)",
+            }
+        };
+        // Race the body against the deadline; race cancels the loser on settle
+        // (BEP-034), so a timed-out body is actively cancelled and a finished
+        // test's timer does not linger.
+        let result = (await baml.future.race([work, timer])) catch_all (e) {
+            _ => RunReport { outcome: "fail", duration_ms: 0, message: "test task failed unexpectedly" }
         };
         // `duration_ms` is an `int`; see the note in expand_testset_registry for
         // why narrowing the bigint millisecond count cannot fail here.
@@ -527,16 +630,36 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
     match (runner) {
         null => base_run(),
         let r: TestRunner => {
-            let wrapped: TestReportThunk = r(base_run);
-            wrapped()
+            // Runner middleware is user code with no totality contract of its
+            // own. Catching here is what makes `run_test` total — the leaf
+            // dispatcher's pool slot is released after this returns, so a
+            // panicking runner must become a failed report, never an escaped
+            // throw that strands the slot.
+            {
+                let wrapped: TestReportThunk = r(base_run);
+                wrapped()
+            } catch_all (e, ctx) {
+                _ => TestReport {
+                    outcome: "fail",
+                    runs: [RunReport {
+                        outcome: "fail",
+                        duration_ms: 0,
+                        message: "test runner middleware failed: " + ctx.to_string(),
+                    }],
+                }
+            }
         },
     }
 }
 
 // Run all children of a testset with optional runner middleware.
-function run_testset(children: TestSetChild[], runner: TestSetRunner?) -> TestSetReport {
+//
+// A custom `TestSetRunner` receives the children as a plain closure and runs
+// them however it likes, outside the pool's budget — the built-in runners are
+// sequential (inherently capped) or take a local fallback pool (`PassRate`).
+function run_testset(children: TestSetChild[], runner: TestSetRunner?, pool: TestPool) -> TestSetReport {
     match (runner) {
-        null => root.run_children_parallel(children),
+        null => root.run_children_parallel(children, pool),
         let r: TestSetRunner => r(children),
     }
 }
@@ -829,6 +952,12 @@ class LeafIdentities {
     passed: string[],
     failed: string[],
     tolerated: string[],
+    // Durations in milliseconds, parallel to the arrays above; `-1` for a
+    // leaf with no measured run. Left EMPTY by the fallback classifiers,
+    // which have names but no reports.
+    passed_ms: int[],
+    failed_ms: int[],
+    tolerated_ms: int[],
 }
 
 // Classify each leaf in a child-report list as passed / hard-failed /
@@ -906,7 +1035,14 @@ function flatten_with_tolerated(report: TestSetReport, selected_names: string[])
     root.collect_leaf_messages(report.results, messages);
     let all_failed_names: string[] = [];
     root.collect_all_failed_names(report, all_failed_names);
-    let executed = LeafIdentities { passed: [], failed: [], tolerated: [] };
+    let executed = LeafIdentities {
+        passed: [],
+        failed: [],
+        tolerated: [],
+        passed_ms: [],
+        failed_ms: [],
+        tolerated_ms: [],
+    };
     root.collect_leaf_identities(report, top_tolerated, selected_names, executed);
     // Built-in reports carry names parallel to their executed child results.
     // Custom runners written before result_names existed may not; fall back to
@@ -935,6 +1071,9 @@ function flatten_with_tolerated(report: TestSetReport, selected_names: string[])
         passed_names: identities.passed,
         failed_names: identities.failed,
         tolerated_names: identities.tolerated,
+        passed_ms: identities.passed_ms,
+        failed_ms: identities.failed_ms,
+        tolerated_ms: identities.tolerated_ms,
         messages: messages,
     }
 }
@@ -944,7 +1083,14 @@ function classify_selected_names(
     hard_failed_names: string[],
     all_failed_names: string[],
 ) -> LeafIdentities {
-    let out = LeafIdentities { passed: [], failed: [], tolerated: [] };
+    let out = LeafIdentities {
+        passed: [],
+        failed: [],
+        tolerated: [],
+        passed_ms: [],
+        failed_ms: [],
+        tolerated_ms: [],
+    };
     for (let name in selected_names) {
         if (root.failure_matches_selected(name, all_failed_names)) {
             if (root.failure_matches_selected(name, hard_failed_names)) {
@@ -1002,12 +1148,20 @@ function collect_leaf_identities(
                 let name = names[i];
                 match (report.results[i]) {
                     let leaf: TestReport => {
-                        if (leaf.outcome == "pass") {
-                            out.passed.push(name)
-                        } else if (tolerated_by_parent) {
-                            out.tolerated.push(name)
+                        let leaf_ms = if (leaf.runs.length() > 0) {
+                            leaf.runs[0].duration_ms
                         } else {
-                            out.failed.push(name)
+                            -1
+                        };
+                        if (leaf.outcome == "pass") {
+                            out.passed.push(name);
+                            out.passed_ms.push(leaf_ms)
+                        } else if (tolerated_by_parent) {
+                            out.tolerated.push(name);
+                            out.tolerated_ms.push(leaf_ms)
+                        } else {
+                            out.failed.push(name);
+                            out.failed_ms.push(leaf_ms)
                         }
                     },
                     let nested: TestSetReport => {
@@ -1029,9 +1183,11 @@ function collect_leaf_identities(
                                 name + "::(testset error)"
                             };
                             if (nested_tolerated) {
-                                out.tolerated.push(identity)
+                                out.tolerated.push(identity);
+                                out.tolerated_ms.push(-1)
                             } else {
-                                out.failed.push(identity)
+                                out.failed.push(identity);
+                                out.failed_ms.push(-1)
                             }
                         } else {
                             null

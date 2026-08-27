@@ -6,12 +6,19 @@ name = "baml_tests"
 # argv, parsed by the real clap grammar.
 #
 # `default` is what a bare `baml-cli test` uses — including the corpus runner in
-# crates/baml_tests/tests/baml_src.rs:155-183 and therefore CI, which has no
+# crates/baml_tests/tests/baml_src.rs and therefore CI, which has no
 # provider keys. It must keep selecting the whole offline corpus, so it only
-# drops the opt-in `::live::` testsets. `--exclude` beats `--include`, and an
-# excluded testset subtree is pruned *before* its body runs
-# (baml_std/testing/registry.baml:644-659), so an offline run never constructs a
-# provider client or reads an API key.
+# drops the opt-in `::live::` testsets and the compile-only `ns_fixtures/`
+# subtree. `--exclude` beats `--include`, and an excluded testset subtree is
+# pruned *before* its body runs (baml_std/testing/registry.baml:644-659), so an
+# offline run never constructs a provider client or reads an API key.
+#
+# `root.fixtures.` drops every test under `ns_fixtures/`: those namespaces are
+# compiler-phase snapshot fixtures (see crates/baml_tests/src/corpus.rs), and
+# some of their test blocks fail by design when executed (e.g. a test whose
+# body throws, kept to pin the compiled shape of a throwing test body). Both
+# canonical-id forms carry the prefix: `root.fixtures.<ns>::<test>` (testset
+# leaves) and `root.fixtures.<ns>.<Function>::<Test>` (legacy tests).
 #
 #   offline (default):
 #     target/debug/baml-cli test --from crates/baml_tests/baml_src
@@ -24,7 +31,7 @@ name = "baml_tests"
 default = "offline"
 
 [test.profiles.offline]
-args = ["-x", "::live::"]
+args = ["-x", "::live::", "-x", "root.fixtures."]
 
 [test.profiles.live]
 args = ["-i", "::live::"]

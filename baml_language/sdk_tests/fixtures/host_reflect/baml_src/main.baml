@@ -23,7 +23,7 @@ function HostReadNamed(value: StaticNamed) -> string {
 
 function HostExtract<T>(input: string) -> T {
   client HostReflectParser
-  prompt `Extract a value from ${input}.\n${ctx.output_format}`
+  prompt `Extract a value from ${input}.\n${ctx.output_format()}`
 }
 
 // Pure, offline entry point used by the Python host-boundary tests.
@@ -32,9 +32,9 @@ function HostParse<T>(raw: string) -> T {
 }
 
 function HostTypeEqual<A, B>() -> bool {
-  type.of<A>() == type.of<B>()
+  reflect.Type.of<A>() == reflect.Type.of<B>()
 }
 
 function HostTypeName<T>() -> string {
-  type.of<T>().to_string()
+  reflect.Type.of<T>().to_string()
 }

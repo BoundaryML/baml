@@ -11,10 +11,9 @@ mod common;
 
 use std::path::Path;
 
-use baml_compiler2_emit::{
-    CompileOptions, OptLevel, emit_units, generate_project_bytecode_with_opt,
-};
-use baml_project::ProjectDatabase;
+use baml_compiler2_emit::{OptLevel, emit_units, generate_project_bytecode_with_opt};
+use baml_db::ProjectDatabase;
+use baml_tests::engine::TestDbExt;
 use bex_vm_types::link::link;
 use common::{A_BAML, B_BAML, C_BAML, assert_programs_byte_identical, build_db};
 
@@ -37,13 +36,11 @@ function greet(name: string) -> string {
 /// Assert `link(emit_units(project)) == generate_project_bytecode(project)` for
 /// the project `build` produces. Two fresh databases are built (one per side) so
 /// `emit_units` and the full compile share no salsa state.
-fn assert_link_matches(label: &str, build: impl Fn() -> ProjectDatabase, emit_test_cases: bool) {
-    let options = CompileOptions { emit_test_cases };
-
-    let full = generate_project_bytecode_with_opt(&build(), &options, OptLevel::Two)
+fn assert_link_matches(label: &str, build: impl Fn() -> ProjectDatabase) {
+    let full = generate_project_bytecode_with_opt(&build(), OptLevel::Two)
         .unwrap_or_else(|e| panic!("{label}: full compile: {e:?}"));
 
-    let units = emit_units(&build(), &options, OptLevel::Two)
+    let units = emit_units(&build(), OptLevel::Two)
         .unwrap_or_else(|e| panic!("{label}: emit_units: {e:?}"));
     let linked = link(&units).unwrap_or_else(|e| panic!("{label}: link failed: {e}"));
 
@@ -53,17 +50,15 @@ fn assert_link_matches(label: &str, build: impl Fn() -> ProjectDatabase, emit_te
 /// Simplest case: stdlib-only (empty user project) — just the builtin group.
 #[test]
 fn stdlib_only_links_byte_identical() {
-    assert_link_matches("stdlib-only", || build_db(ROOT, &[]), false);
+    assert_link_matches("stdlib-only", || build_db(ROOT, &[]));
 }
 
 /// Single user file over the stdlib.
 #[test]
 fn single_file_links_byte_identical() {
-    assert_link_matches(
-        "single-file",
-        || build_db(ROOT, &[("single.baml", SINGLE_BAML)]),
-        false,
-    );
+    assert_link_matches("single-file", || {
+        build_db(ROOT, &[("single.baml", SINGLE_BAML)])
+    });
 }
 
 /// The A/B/C multi-file fixture: cross-file class + function references
@@ -72,7 +67,7 @@ fn single_file_links_byte_identical() {
 #[test]
 fn abc_fixture_links_byte_identical() {
     let files = [("a.baml", A_BAML), ("b.baml", B_BAML), ("c.baml", C_BAML)];
-    assert_link_matches("abc-fixture", || build_db(ROOT, &files), false);
+    assert_link_matches("abc-fixture", || build_db(ROOT, &files));
 }
 
 /// A file with a client-synthesized global exercises the `$init` synthesis path
@@ -92,11 +87,9 @@ function shout() -> string {
   TestClient.name
 }
 "#;
-    assert_link_matches(
-        "client-init",
-        || build_db(ROOT, &[("client.baml", CLIENT_BAML)]),
-        false,
-    );
+    assert_link_matches("client-init", || {
+        build_db(ROOT, &[("client.baml", CLIENT_BAML)])
+    });
 }
 
 /// Realistic project: the full `baml_src/` corpus (synthesized globals →
@@ -107,7 +100,7 @@ function shout() -> string {
 /// discovery).
 #[test]
 fn baml_src_links_byte_identical() {
-    use baml_workspace::discover_baml_files;
+    use baml_db::discover_baml_files;
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src");
     let sources: Vec<(std::path::PathBuf, String)> = discover_baml_files(&root)
@@ -121,11 +114,11 @@ fn baml_src_links_byte_identical() {
 
     let build = || {
         let mut db = ProjectDatabase::new();
-        db.set_project_root(&root);
+        db.workspace(&root);
         for (p, c) in &sources {
-            db.add_or_update_file(p, c);
+            db.file(p, c);
         }
         db
     };
-    assert_link_matches("baml_src", build, true);
+    assert_link_matches("baml_src", build);
 }

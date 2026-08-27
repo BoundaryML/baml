@@ -1,12 +1,14 @@
 //! BEP-066 constructor-correctness and removed-reader regression tests.
 
 use baml_compiler_diagnostics::Severity;
-use baml_project::{collect_diagnostics, testing::setup_test_db};
-use baml_tests::baml_test;
+use baml_tests::{
+    baml_test,
+    stdlib_prefix::{check_user_files, setup_test_db},
+};
 use bex_engine::BexExternalValue;
 
 fn compile_errors(source: &str) -> Vec<(String, String)> {
-    collect_diagnostics(&setup_test_db(source))
+    check_user_files(&setup_test_db(source))
         .into_iter()
         .filter(|diagnostic| diagnostic.severity == Severity::Error)
         .map(|diagnostic| (diagnostic.code().to_string(), diagnostic.message))
@@ -22,7 +24,7 @@ function main() -> string {
     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message
   }
   let field_name = reflect.class.new("ValidClass", {
-    "test": type.of<string>(),
+    "test": reflect.Type.of<string>(),
   }) catch (e) {
     reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message
   }
@@ -83,11 +85,11 @@ function use_precise_enum_as_runtime_type() -> string {
 fn removed_reader_spellings_are_ordinary_unresolved_names() {
     let errors = compile_errors(
         r#"
-function old_type_reader() -> type {
+function old_type_reader() -> reflect.Type {
   reflect.type_of<int>()
 }
 
-function old_value_reader(value: unknown) -> type {
+function old_value_reader(value: unknown) -> reflect.Type {
   reflect.type_of_value(value)
 }
 "#,

@@ -11,6 +11,7 @@ use std::{
 };
 
 use bex_resource_types::{ResourceHandle, ResourceRegistryRef, ResourceType};
+use sys_ops::io::VmBamlError;
 use sys_types::sse::SseEvent;
 use tokio::sync::Mutex as TokioMutex;
 #[cfg(feature = "bundle-http")]
@@ -20,7 +21,7 @@ use tokio::{sync::Notify, task::AbortHandle};
 pub struct SseBuffer {
     pub events: Vec<SseEvent>,
     pub done: bool,
-    pub error: Option<String>,
+    pub error: Option<VmBamlError>,
 }
 
 /// An SSE stream resource with buffered events.

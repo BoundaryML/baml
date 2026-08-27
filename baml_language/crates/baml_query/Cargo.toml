@@ -1,0 +1,38 @@
+[package]
+name = "baml_query"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Backend-neutral SQL core for BAML profiles: versioned catalog + profiles, DataFusion planning, virtual value lowering, budgets, and terminal query outcomes"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+# Dependency rules (TASK/baml-query-scope.md §3.1, enforced by a test):
+# this crate must never name the engine, the events transport, the CLI, or
+# a concrete storage/cloud client. A hosted provider is a separate crate
+# implementing the same traits.
+[package.metadata.ci]
+wasm_support = false
+
+[dependencies]
+async-trait = { workspace = true }
+datafusion = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true, features = [ "derive" ] }
+serde_json = { workspace = true }
+strsim = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "sync" ] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = [ "macros", "rt-multi-thread" ] }

@@ -2,6 +2,19 @@
 //!
 //! This module provides common infrastructure for testing async execution
 //! of BAML programs through `bex_engine`.
+//!
+//! # Do not add plain behavior tests here
+//!
+//! An [`EngineProgram`] with an empty `fs`, empty `inputs`, and
+//! `expected: Ok(value)` is just a BAML `test` block written in Rust — and it
+//! pays a full compile per test to run. Those belong in
+//! `crates/baml_tests/baml_src/` instead; see
+//! `baml_language/TEST_INSTRUCTIONS.md` ("Where does a new test go?").
+//!
+//! This harness earns its keep only when the test needs something BAML cannot
+//! express: host argument injection via `inputs`, a virtual filesystem via
+//! `fs`, cancellation tokens, GC/heap observation, wall-clock timing, or a
+//! host-level `EngineError` (as opposed to a BAML-catchable throw).
 
 // Allow dead code since not all test files use all utilities
 #![allow(dead_code)]
@@ -9,7 +22,7 @@
 use std::{io::Write, sync::Arc};
 
 use baml_builtins2::{PromptAst as BuiltinPromptAst, PromptAstSimple};
-use baml_project::testing::compile_source;
+use baml_db::testing::compile_source;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_external_types::BexExternalAdt;
 use bex_vm_types::Program;
@@ -171,7 +184,7 @@ function TestFunc(input: string) -> {return_type} {{
     client: "openai/gpt-4o"
     prompt: `
         ${{input}}
-        ${{ctx.output_format}}
+        ${{ctx.output_format()}}
     `
 }}
 
@@ -185,9 +198,9 @@ function get_prompt() -> string {{
 
 /// Like `render_output_format` but with custom kwargs on the output format.
 ///
-/// `kwargs` is inserted into `ctx.output_format_with(...)` on the
+/// `kwargs` is inserted into `ctx.output_format(...)` on the
 /// standalone `prompt` tag path (the ai-world LLM-function prompt
-/// only binds plain `ctx.output_format`), e.g. `render_null_as = "omit"`.
+/// only binds plain `ctx.output_format()`), e.g. `render_null_as = "omit"`.
 pub(crate) async fn render_output_format_with_opts(
     baml_types: &str,
     return_type: &str,
@@ -199,15 +212,14 @@ pub(crate) async fn render_output_format_with_opts(
 
 function get_prompt() -> string {{
     let cc = ai.ContextClient {{ name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }};
-    let rt = type.of<{return_type}>();
+    let rt = reflect.Type.of<{return_type}>();
     let render_ctx = ai.Context {{
         client: cc,
         tags: {{}},
-        output_format: ai.internal.render_output_format(rt),
         _output_format: ai.internal.build_output_format(rt),
     }};
     let render = ai.prompt`test
-${{render_ctx.output_format_with({kwargs})}}`;
+${{render_ctx.output_format({kwargs})}}`;
     render(render_ctx).text()
 }}
 "##

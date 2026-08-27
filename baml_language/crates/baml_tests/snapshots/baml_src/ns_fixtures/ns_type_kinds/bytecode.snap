@@ -1,0 +1,133 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.type_kinds.classify(t: reflect.Type) -> string {
+    load_var t
+    call reflect.Type.kind
+    type_tag
+    dense_tag [Type, Type, Type, Type, Type, Type, Type, Type, Type]
+    jump_table [L8, L7, L6, L5, L4, L3, L2, L1, L0], default L10
+
+  L0: Type
+    load_const "function"
+    jump L9
+
+  L1: Type
+    load_const "primitive"
+    jump L9
+
+  L2: Type
+    load_const "interface"
+    jump L9
+
+  L3: Type
+    load_const "map"
+    jump L9
+
+  L4: Type
+    load_const "array"
+    jump L9
+
+  L5: Type
+    load_const "literal"
+    jump L9
+
+  L6: Type
+    load_const "union"
+    jump L9
+
+  L7: Type
+    load_const "enum"
+    jump L9
+
+  L8: Type
+    load_const "class"
+
+  L9:
+    return
+
+  L10:
+    unreachable
+}
+
+function fixtures.type_kinds.exercise_all_kinds() -> bool {
+    load_type fixtures.type_kinds.Foo
+    call user.fixtures.type_kinds.classify
+    load_const "class"
+    cmp_op ==
+    jump_if_false L0
+    pop 1
+    load_type fixtures.type_kinds.Color
+    call user.fixtures.type_kinds.classify
+    load_const "enum"
+    cmp_op ==
+
+  L0:
+    jump_if_false L1
+    pop 1
+    load_type int | string
+    call user.fixtures.type_kinds.classify
+    load_const "union"
+    cmp_op ==
+
+  L1:
+    jump_if_false L2
+    pop 1
+    load_type "fixed"
+    call user.fixtures.type_kinds.classify
+    load_const "literal"
+    cmp_op ==
+
+  L2:
+    jump_if_false L3
+    pop 1
+    load_type fixtures.type_kinds.Foo[]
+    call user.fixtures.type_kinds.classify
+    load_const "array"
+    cmp_op ==
+
+  L3:
+    jump_if_false L4
+    pop 1
+    load_type map<string, fixtures.type_kinds.Foo>
+    call user.fixtures.type_kinds.classify
+    load_const "map"
+    cmp_op ==
+
+  L4:
+    jump_if_false L5
+    pop 1
+    load_type fixtures.type_kinds.Marker
+    call user.fixtures.type_kinds.classify
+    load_const "interface"
+    cmp_op ==
+
+  L5:
+    jump_if_false L6
+    pop 1
+    load_type int
+    call user.fixtures.type_kinds.classify
+    load_const "primitive"
+    cmp_op ==
+
+  L6:
+    jump_if_false L7
+    pop 1
+    load_type (int) -> bool throws never
+    call user.fixtures.type_kinds.classify
+    load_const "function"
+    cmp_op ==
+
+  L7:
+    return
+}
+
+function fixtures.type_kinds.read_class(view: reflect.class.Type) -> reflect.Type {
+    load_var view
+    load_type reflect.TypeView
+    load_const "as_type"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}

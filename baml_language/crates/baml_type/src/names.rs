@@ -97,26 +97,6 @@ impl QualifiedTypeName {
         Self::new(Name::new(RESERVED_USER_PACKAGE), Vec::new(), name)
     }
 
-    /// A runtime-minted local type. The hidden namespace makes the canonical
-    /// name unique per mint while user-facing rendering remains the requested
-    /// source name. `$dyn` is not a legal user namespace segment, so this
-    /// convention cannot collide with a static declaration.
-    pub fn runtime_local(name: Name, mint: u64) -> Self {
-        Self::new(
-            Name::new(RESERVED_USER_PACKAGE),
-            vec![Name::new("$dyn"), Name::new(mint.to_string())],
-            name,
-        )
-    }
-
-    pub fn is_runtime_minted(&self) -> bool {
-        self.is_local()
-            && self
-                .namespace
-                .first()
-                .is_some_and(|segment| segment.as_str() == "$dyn")
-    }
-
     pub fn package(&self) -> &Name {
         self.pkg.as_name()
     }
@@ -158,6 +138,14 @@ impl QualifiedTypeName {
         self.package().as_str() == "baml" && self.namespace.is_empty() && self.name.as_str() == name
     }
 
+    /// [`Self::is_builtin_root_type`] for the `reflect` package's root
+    /// namespace (`reflect.AnyFunction`, `reflect.AnyClass`, …).
+    pub fn is_reflect_root_type(&self, name: &str) -> bool {
+        self.package().as_str() == "reflect"
+            && self.namespace.is_empty()
+            && self.name.as_str() == name
+    }
+
     /// Returns `true` if this type lives in the `baml.panics` namespace
     /// (i.e. it is a panic class or the `Panic` type alias).
     pub fn is_panic_type(&self) -> bool {
@@ -179,9 +167,6 @@ impl QualifiedTypeName {
     /// reserved `user` package is elided for local types, dependency packages
     /// are kept.
     pub fn display_name(&self) -> Name {
-        if self.is_runtime_minted() {
-            return self.name.clone();
-        }
         if self.is_local() {
             let parts: Vec<String> = self
                 .namespace
@@ -221,9 +206,6 @@ impl QualifiedTypeName {
     /// "no `user.` in names" rule. The canonical form (`user_facing = false`)
     /// keeps the package for dumps/identity.
     pub fn render_dotted(&self, user_facing: bool) -> String {
-        if user_facing && self.is_runtime_minted() {
-            return self.name.to_string();
-        }
         let namespace = self
             .namespace
             .iter()
@@ -280,6 +262,58 @@ impl QualifiedTypeName {
             .chain(std::iter::once(self.name.as_str()))
             .collect();
         BuiltinTypeName::from_builtin_definition_path(&path).map(BuiltinTypeName::alias)
+    }
+
+    /// The addressable spelling: the shortest form that pastes back into
+    /// `baml describe` (and name resolution generally) and finds this type
+    /// again from any scope. The single source of describe's paste-back
+    /// addressing convention:
+    ///
+    /// - builtin companion class with a lowercase alias → the alias
+    ///   (`string`);
+    /// - workspace type at package root → its bare name (`Foo`);
+    /// - workspace type in a namespace → `root.<ns>.<Name>` (the workspace
+    ///   package is addressed as `root` — its literal name would read as an
+    ///   item *named* that, which is nothing);
+    /// - other dependency type → `<pkg>.<path>` (`baml.json.JsonObject`).
+    pub fn render_addressable(&self) -> String {
+        if let Some(alias) = self.builtin_alias() {
+            return alias.to_string();
+        }
+        if self.is_local() {
+            // Runtime-minted declarations no longer thread a discriminator
+            // through the namespace (their identity is the type tag), so
+            // the written namespace is the address.
+            if self.namespace().is_empty() {
+                self.name.to_string()
+            } else {
+                let path = self
+                    .namespace()
+                    .iter()
+                    .chain(std::iter::once(&self.name))
+                    .map(Name::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                format!("{ADDRESSABLE_USER_PACKAGE}.{path}")
+            }
+        } else {
+            self.render_user_facing()
+        }
+    }
+}
+
+/// How the workspace package is spelled in addressable paths (`root.ns.Foo`):
+/// the counterpart of [`RESERVED_USER_PACKAGE`] for paste-back output. The
+/// literal package name would read as an item named `user`, which is nothing.
+pub const ADDRESSABLE_USER_PACKAGE: &str = "root";
+
+/// The package-name prefix for addressable paths: the workspace package is
+/// spelled [`ADDRESSABLE_USER_PACKAGE`], every other package by its own name.
+pub fn addressable_package(package: &Name) -> &str {
+    if package.as_str() == RESERVED_USER_PACKAGE {
+        ADDRESSABLE_USER_PACKAGE
+    } else {
+        package.as_str()
     }
 }
 

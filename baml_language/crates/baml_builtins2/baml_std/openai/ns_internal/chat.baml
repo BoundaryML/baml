@@ -125,7 +125,7 @@ class ChatCompat {
         default_role: string = "user",
         compat_query: map<string, string>? = null,
     ) -> ChatCompat {
-        let empty: map<string, string> = {  };
+        let empty: map<string, string> = {};
         ChatCompat {
             provider: provider,
             base_url: base_url,
@@ -263,7 +263,7 @@ class ChatExtraPart {
             let base = baml.json.to_json(self.part);
             match (base) {
                 let object: map<string, baml.json.json> => {
-                    let out: map<string, baml.json.json> = {  };
+                    let out: map<string, baml.json.json> = {};
                     for (let key in object.keys()) {
                         let _ = out.set(key, object.get(key));
                     }
@@ -285,11 +285,7 @@ function _chat_directives_key() -> string {
     "__baml_directives"
 }
 
-type ChatContentPart = ChatTextPart
-    | ChatImagePart
-    | ChatAudioPart
-    | ChatFilePart
-    | ChatExtraPart;
+type ChatContentPart = ChatTextPart | ChatImagePart | ChatAudioPart | ChatFilePart | ChatExtraPart;
 
 // Chat completions accepts either a bare string or an array of typed parts.
 type ChatMessageContent = string | ChatContentPart[];
@@ -307,7 +303,7 @@ class ChatToolCall {
 
     implements baml.ToJson {
         function to_json(self) -> baml.json.json {
-            let out: map<string, baml.json.json> = {  };
+            let out: map<string, baml.json.json> = {};
             let _ = out.set("id", self.id);
             let _ = out.set("type", self.type);
             let _ = out.set("function", baml.json.to_json(self.fn));
@@ -337,7 +333,7 @@ class ChatTool {
 
     implements baml.ToJson {
         function to_json(self) -> baml.json.json {
-            let out: map<string, baml.json.json> = {  };
+            let out: map<string, baml.json.json> = {};
             let _ = out.set("type", self.type);
             let _ = out.set("function", baml.json.to_json(self.fn));
             out
@@ -520,10 +516,24 @@ function _chat_audio_output_mime(request_body: baml.json.json?) -> string {
 // One media prompt part -> one typed content part. Media is allowed in any
 // role: the chat endpoint imposes no role restriction (the engine imposes none
 // either; sys_llm's hard error was stricter than the API).
-function _chat_media_part(media: ai.MediaPart, compat: ChatCompat) -> ChatContentPart {
+function _chat_media_part(
+    media: ai.MediaPart,
+    compat: ChatCompat,
+    preview: bool = false,
+) -> ChatContentPart {
     match (media) {
         let image: baml.media.Image => {
-            let resolved = ai.wire.resolve_media(image, compat.inline_image_urls);
+            let resolved = if (preview) {
+                ai.wire.resolve_media_preview(image)
+            } else {
+                ai.wire.resolve_media(image, compat.inline_image_urls)
+            };
+            if (preview && compat.inline_image_urls && resolved.url != null) {
+                throw ai.errors.PreviewUnsupported {
+                    provider: compat.provider,
+                    detail: "this chat endpoint requires downloaded image bytes during request preview",
+                }
+            }
             ChatImagePart {
                 type: "image_url",
                 image_url: ChatImageUrl { url: _chat_media_url(resolved) },
@@ -532,7 +542,17 @@ function _chat_media_part(media: ai.MediaPart, compat: ChatCompat) -> ChatConten
         let audio: baml.media.Audio => {
             // `input_audio` has no URL form, so remote audio is fetched and
             // inlined. The engine put the URL in `data`, which the API rejects.
-            let resolved = ai.wire.resolve_media(audio, true);
+            let resolved = if (preview) {
+                ai.wire.resolve_media_preview(audio)
+            } else {
+                ai.wire.resolve_media(audio, true)
+            };
+            if (preview && resolved.url != null) {
+                throw ai.errors.PreviewUnsupported {
+                    provider: compat.provider,
+                    detail: "chat audio input requires downloaded bytes during request preview",
+                }
+            }
             ChatAudioPart {
                 type: "input_audio",
                 input_audio: ChatInputAudio {
@@ -549,16 +569,28 @@ function _chat_media_part(media: ai.MediaPart, compat: ChatCompat) -> ChatConten
             // So a remote PDF is fetched and inlined, exactly like audio. A
             // scheme the HTTP client cannot fetch (`gs://…`) surfaces as a
             // media-resolution failure rather than a malformed request.
-            let resolved = ai.wire.resolve_media(pdf, true);
+            let resolved = if (preview) {
+                ai.wire.resolve_media_preview(pdf)
+            } else {
+                ai.wire.resolve_media(pdf, true)
+            };
+            if (preview && resolved.url != null) {
+                throw ai.errors.PreviewUnsupported {
+                    provider: compat.provider,
+                    detail: "chat PDF input requires downloaded bytes during request preview",
+                }
+            }
             // `resolve_media` hands back a bare URL for a scheme it will not
             // fetch (`gs://`). There is nowhere to put it, and an empty
             // `file_data` would be a silently blank document, so say so.
             let data = match (resolved.base64) {
                 let inline: string => inline,
-                null => throw _reject(
+                null => {
+                    throw _reject(
                     compat.provider,
                     `OpenAI Chat Completions has no document-by-URL content part, so a PDF must be inlined, and ${resolved.url ?? "this document"} is not a URL this client can fetch (gs:// and other non-HTTP schemes are not supported here). Pass the PDF as base64 or a local file.`,
-                ),
+                )
+                },
             };
             ChatFilePart {
                 type: "file",
@@ -581,7 +613,11 @@ function _chat_media_part(media: ai.MediaPart, compat: ChatCompat) -> ChatConten
     }
 }
 
-function _chat_prompt_parts(message: ai.PromptMessage, compat: ChatCompat) -> ChatContentPart[] {
+function _chat_prompt_parts(
+    message: ai.PromptMessage,
+    compat: ChatCompat,
+    preview: bool = false,
+) -> ChatContentPart[] {
     let parts: ChatContentPart[] = [];
     for (let part in message.parts) {
         match (part) {
@@ -590,19 +626,19 @@ function _chat_prompt_parts(message: ai.PromptMessage, compat: ChatCompat) -> Ch
                 null
             },
             let image: baml.media.Image => {
-                parts.push(_chat_media_part(image, compat));
+                parts.push(_chat_media_part(image, compat, preview = preview));
                 null
             },
             let audio: baml.media.Audio => {
-                parts.push(_chat_media_part(audio, compat));
+                parts.push(_chat_media_part(audio, compat, preview = preview));
                 null
             },
             let pdf: baml.media.Pdf => {
-                parts.push(_chat_media_part(pdf, compat));
+                parts.push(_chat_media_part(pdf, compat, preview = preview));
                 null
             },
             let video: baml.media.Video => {
-                parts.push(_chat_media_part(video, compat));
+                parts.push(_chat_media_part(video, compat, preview = preview));
                 null
             },
         };
@@ -666,7 +702,11 @@ function _chat_content(parts: ChatContentPart[], collapse: bool) -> ChatMessageC
 /// and only the journal path has one. Adjacent same-role messages merge, as both
 /// prior implementations did. A message's authored `metadata` rides on its last
 /// content part (see `ChatExtraPart`).
-function chat_lower_prompt(prompt: ai.Prompt, compat: ChatCompat) -> ChatMessage[] {
+function chat_lower_prompt(
+    prompt: ai.Prompt,
+    compat: ChatCompat,
+    preview: bool = false,
+) -> ChatMessage[] {
     let lowered: ChatPromptMessage[] = [];
     for (let message in prompt.messages()) {
         let role = match (message.role) {
@@ -674,7 +714,7 @@ function chat_lower_prompt(prompt: ai.Prompt, compat: ChatCompat) -> ChatMessage
             "tool" => "user",
             _ => message.role,
         };
-        let parts = _chat_prompt_parts(message, compat);
+        let parts = _chat_prompt_parts(message, compat, preview = preview);
         // Placement happens BEFORE the adjacent-same-role merge, so a directive
         // stays on the part it was authored after even when this message is
         // folded into the previous one.
@@ -834,7 +874,7 @@ function _chat_is_opaque_key(key: string) -> bool {
 function _chat_apply_directives(j: baml.json.json) -> baml.json.json {
     match (j) {
         let object: map<string, baml.json.json> => {
-            let out: map<string, baml.json.json> = {  };
+            let out: map<string, baml.json.json> = {};
             for (let key in object.keys()) {
                 if (key != _chat_directives_key()) {
                     let _ = out.set(key, _chat_apply_directives(object.get(key)));
@@ -851,7 +891,11 @@ function _chat_apply_directives(j: baml.json.json) -> baml.json.json {
             };
             out
         },
-        let items: baml.json.json[] => items.map((item) -> { _chat_apply_directives(item) }),
+        let items: baml.json.json[] => {
+            items.map((item) -> {
+                _chat_apply_directives(item)
+            })
+        },
         _ => j,
     }
 }
@@ -864,7 +908,7 @@ function _chat_apply_directives(j: baml.json.json) -> baml.json.json {
 function _chat_prune_nulls(j: baml.json.json) -> baml.json.json {
     match (j) {
         let object: map<string, baml.json.json> => {
-            let out: map<string, baml.json.json> = {  };
+            let out: map<string, baml.json.json> = {};
             for (let key in object.keys()) {
                 let value = object.get(key);
                 match (value) {
@@ -882,7 +926,11 @@ function _chat_prune_nulls(j: baml.json.json) -> baml.json.json {
             }
             out
         },
-        let items: baml.json.json[] => items.map((item) -> { _chat_prune_nulls(item) }),
+        let items: baml.json.json[] => {
+            items.map((item) -> {
+                _chat_prune_nulls(item)
+            })
+        },
         _ => j,
     }
 }
@@ -921,7 +969,7 @@ function _chat_percent_encode(value: string) -> string {
 
 // Endpoint-required query params first, user params merged over them.
 function _chat_url(compat: ChatCompat, params: ChatParams) -> string {
-    let query: map<string, string> = {  };
+    let query: map<string, string> = {};
     for (let key in compat.compat_query.keys()) {
         let _ = query.set(key, compat.compat_query.get(key) ?? "");
     }
@@ -943,32 +991,38 @@ function _chat_url(compat: ChatCompat, params: ChatParams) -> string {
 
 // content-type, then the caller's headers, then the credential — so the
 // endpoint's own auth header always wins over a user override of the same name.
-function _chat_headers(compat: ChatCompat, params: ChatParams) -> map<string, string> {
+function _chat_headers(
+    compat: ChatCompat,
+    params: ChatParams,
+    preview: bool = false,
+) -> map<string, string> {
     let headers: map<string, string> = { "content-type": "application/json" };
     if let user_headers: map<string, string> = params.headers {
         for (let name in user_headers.keys()) {
             let _ = headers.set(name.to_lower_case(), user_headers.get(name) ?? "");
         }
     }
-    let key = params.api_key;
-    if (key == null && compat.api_key_required) {
-        throw _reject(
-            compat.provider,
-            `${compat.provider} needs an API key: pass api_key, or set ${compat.api_key_env ?? "the provider's environment variable"}`,
-        )
-    }
-    if let credential: string = key {
-        match (compat.auth) {
-            ChatAuth.Bearer => {
-                let _ = headers.set("authorization", `Bearer ${credential}`);
-                null
-            },
-            ChatAuth.ApiKeyHeader => {
-                let _ = headers.set("api-key", credential);
-                null
-            },
-            ChatAuth.NoAuth => null,
-        };
+    if (!preview) {
+        let key = params.api_key;
+        if (key == null && compat.api_key_required) {
+            throw _reject(
+                compat.provider,
+                `${compat.provider} needs an API key: pass api_key, or set ${compat.api_key_env ?? "the provider's environment variable"}`,
+            )
+        }
+        if let credential: string = key {
+            match (compat.auth) {
+                ChatAuth.Bearer => {
+                    let _ = headers.set("authorization", `Bearer ${credential}`);
+                    null
+                },
+                ChatAuth.ApiKeyHeader => {
+                    let _ = headers.set("api-key", credential);
+                    null
+                },
+                ChatAuth.NoAuth => null,
+            };
+        }
     }
     headers
 }
@@ -1001,9 +1055,10 @@ function chat_build_request(
     params: ChatParams,
     input: ai.ModelTurnInput,
     stream: bool,
+    preview: bool = false,
 ) -> ChatRequest {
-    let prompt = input.prompt(ai.wire.render_output_format(input.output_type));
-    let messages = chat_lower_prompt(prompt, compat);
+    let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
+    let messages = chat_lower_prompt(prompt, compat, preview = preview);
     let journal = ai.wire.sanitize_for_client(input.journal, chat_client_id(compat, params));
     for (let message in chat_lower_journal(journal)) {
         messages.push(message);
@@ -1088,11 +1143,27 @@ function chat_render(
     input: ai.ModelTurnInput,
     stream: bool,
 ) -> baml.http.Request {
-    let request = chat_build_request(compat, params, input, stream);
+    let request = chat_build_request(compat, params, input, stream, preview = false);
     baml.http.Request {
         method: "POST",
         url: _chat_url(compat, params),
         headers: _chat_headers(compat, params),
+        body: chat_render_body(compat, params, request),
+    }
+}
+
+/// The request one chat `render` would send. Media is lowered through the
+/// preview-only resolver and never reads files or downloads URLs.
+function chat_preview(
+    compat: ChatCompat,
+    params: ChatParams,
+    input: ai.ModelTurnInput,
+) -> baml.http.Request {
+    let request = chat_build_request(compat, params, input, false, preview = true);
+    baml.http.Request {
+        method: "POST",
+        url: _chat_url(compat, params),
+        headers: _chat_headers(compat, params, preview = true),
         body: chat_render_body(compat, params, request),
     }
 }
@@ -1131,10 +1202,7 @@ function _chat_media_block(url: string) -> ai.content.Media {
 // would hand the runner an empty-argument invocation of a real tool and tell
 // nobody the arguments were discarded, so an undecodable payload is a
 // `ParseFailed` carrying the raw string.
-function _chat_tool_args(
-    raw: string,
-    provider: string,
-) -> map<string, unknown> {
+function _chat_tool_args(raw: string, provider: string) -> map<string, unknown> {
     baml.json.from_string<map<string, unknown>>(raw) catch_all (e) {
         _ => throw ai.errors.ParseFailed { provider: provider, raw_output: raw },
     }
@@ -1146,7 +1214,7 @@ function _chat_push_tool_uses(
     provider: string,
 ) -> void {
     for (let call in calls) {
-        let empty: map<string, unknown> = {  };
+        let empty: map<string, unknown> = {};
         let args = match (call.fn?.arguments) {
             let raw: string => {
                 if (raw.trim() == "") {
@@ -1273,20 +1341,27 @@ function chat_parse(
         null => null,
     };
 
-    ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
+    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
 }
 
 // Transport + classification for the non-streaming path. This mirrors
-// `ai.wire.send_as` but decodes through `baml.json.to`, which honours the
-// `baml.FromJson` override that maps the `function` wire key onto `CcToolCall.fn`.
+// `ai.wire.send_as_with_wire` but decodes through `baml.json.to`, which honours
+// the `baml.FromJson` override that maps the `function` wire key onto
+// `CcToolCall.fn` — so the LLMCall wire record is built inline here with the
+// same shape `send_as_with_wire` produces.
 function _chat_send(
     request: baml.http.Request,
     provider: string,
+    client_name: string,
+    capture_wire: bool = true,
     audio_mime: string = "audio/wav",
+    request_timeout_ms: int? = null,
 ) -> ai.ModelTurn {
-    let response = baml.http.send(request) catch_all (e) {
+    let started = baml.time.Instant.now();
+    let response = baml.http.send(request, timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0)) catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw ai.errors.NetworkFailure {
+            throw ai.errors.NetworkFailure { status_code: null,
                 provider: provider,
                 detail: `transport failed before a response arrived: ${e.to_string()}`,
                 raw_body: null,
@@ -1294,8 +1369,9 @@ function _chat_send(
         },
     };
     let text = response.text() catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw ai.errors.NetworkFailure {
+            throw ai.errors.NetworkFailure { status_code: null,
                 provider: provider,
                 detail: "the response body could not be read completely",
                 raw_body: null,
@@ -1316,7 +1392,39 @@ function _chat_send(
     let decoded = baml.json.to<CcResponse>(baml.json.parse(text)) catch_all (e) {
         _ => throw ai.errors.ParseFailed { provider: provider, raw_output: text },
     };
-    chat_parse(decoded, provider, text, audio_mime = audio_mime)
+    let turn = chat_parse(decoded, provider, text, audio_mime = audio_mime);
+    let call = ai.events.LLMCall {
+        client_name: client_name,
+        provider: provider,
+        timing: ai.events.Timing {
+            start_time_utc_ms: started.to_timestamp_milliseconds(),
+            duration_ms: started.elapsed().to_milliseconds(),
+            ttft_ms: null,
+        },
+        http_request: if (capture_wire) {
+            baml.http.Request {
+                method: request.method,
+                url: ai.wire.redact_url_secrets(request.url),
+                headers: ai.wire.redact_request_headers(request.headers),
+                body: request.body,
+            }
+        } else {
+            null
+        },
+        http_response: ai.events.HttpResponse {
+            status: response.status_code,
+            headers: response.headers,
+            body: if (capture_wire) {
+                ai.wire.redact_url_secrets(text)
+            } else {
+                null
+            },
+        },
+        usage: null,
+        selected: true,
+        sse_responses: null,
+    };
+    ai.ModelTurn { ...turn, calls: [call] }
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.
@@ -1324,12 +1432,17 @@ function chat_invoke(
     compat: ChatCompat,
     params: ChatParams,
     input: ai.ModelTurnInput,
+    capture_wire: bool = true,
+    request_timeout_ms: int? = null,
 ) -> ai.ModelTurn {
     let request = chat_render(compat, params, input, false);
     _chat_send(
         request,
         compat.provider,
+        chat_client_id(compat, params),
+        capture_wire = capture_wire,
         audio_mime = _chat_audio_output_mime(params.request_body),
+        request_timeout_ms = request_timeout_ms,
     )
 }
 
@@ -1394,11 +1507,9 @@ class ChatStreamDecoder {
     // Extend (or open) the buffer for one tool-call delta.
     function _absorb_call(self, delta: CcToolCall, position: int) -> void {
         let index = delta.index ?? position;
-        let existing: ChatToolCallBuffer? = self.calls.find(
-            (call) -> {
-                call.index == index
-            },
-        );
+        let existing: ChatToolCallBuffer? = self.calls.find((call) -> {
+            call.index == index
+        });
         let buffer = match (existing) {
             let found: ChatToolCallBuffer => found,
             null => {
@@ -1426,9 +1537,7 @@ class ChatStreamDecoder {
                 if (data.trim() == "[DONE]") {
                     out.push(ai.stream.TurnDone {  });
                 } else {
-                    let parsed: CcStreamChunk? = baml.json.to<CcStreamChunk>(
-                        baml.json.parse(data),
-                    ) catch_all (e) {
+                    let parsed: CcStreamChunk? = baml.json.to<CcStreamChunk>(baml.json.parse(data)) catch_all (e) {
                         _ => null,
                     };
                     // A payload that claims to be a chunk (`{…}`) but does not
@@ -1488,7 +1597,7 @@ class ChatStreamDecoder {
     function tool_uses(self) -> ai.content.ToolUse[] {
         let out: ai.content.ToolUse[] = [];
         for (let buffer in self.calls) {
-            let empty: map<string, unknown> = {  };
+            let empty: map<string, unknown> = {};
             let args = if (buffer.arguments.trim() == "") {
                 empty
             } else {
@@ -1514,18 +1623,22 @@ function _chat_stream_failure(provider: string, detail: string) -> ai.errors.Fai
                 _ => 0,
             };
             if (code > 0) {
-                return ai.errors.classify_http(
-                    provider,
-                    code,
-                    rest.slice(colon + 1, rest.length()).trim(),
-                );
+                return ai.errors.classify_http(provider, code, rest.slice(colon + 1, rest.length()).trim());
             }
         }
     }
-    ai.errors.NetworkFailure {
+    ai.errors.NetworkFailure { status_code: null,
         provider: provider,
         detail: `transport failed before a response arrived: ${detail}`,
         raw_body: null,
+    }
+}
+
+function _chat_stream_open_failure(provider: string, error: unknown) -> never {
+    match (error) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        let cancelled: baml.panics.Cancelled => throw cancelled,
+        _ => throw _chat_stream_failure(provider, error.to_string()),
     }
 }
 
@@ -1535,20 +1648,69 @@ function chat_invoke_stream(
     compat: ChatCompat,
     params: ChatParams,
     input: ai.ModelTurnInput,
+    capture_wire: bool = true,
+    request_timeout_ms: int? = null,
+    time_to_first_token_timeout_ms: int? = null,
 ) -> ai.stream.TurnStream {
     let request = chat_render(compat, params, input, true);
     let decoder = ChatStreamDecoder.new(provider = compat.provider);
-    let sse = baml.http.fetch_sse(request) catch_all (e) {
-        _ => throw _chat_stream_failure(compat.provider, e.to_string()),
+    let started = baml.time.Instant.now();
+    let sse = baml.http.fetch_sse(
+        request,
+        timeout = baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
+        first_event_timeout = baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
+    ) catch_all (e) {
+        _ => _chat_stream_open_failure(compat.provider, e),
     };
     // Chat completions has an explicit terminator — the literal `data: [DONE]`
     // — so a connection that ends without it lost data. `require_terminal` makes
     // the stream throw `ai.errors.NetworkFailure` there instead of reporting the
     // partial text as a completed turn, which is what silently fed truncated
     // answers to `require_done` / `Retry`.
-    ai.stream.TurnStream.from_sse(
+    let stream = ai.stream.TurnStream.from_sse(
         sse,
-        (batch) -> { decoder.decode(batch) },
+        (batch) -> {
+            decoder.decode(batch) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        },
         require_terminal = compat.provider,
-    )
+    );
+    let call = ai.events.LLMCall {
+        client_name: chat_client_id(compat, params),
+        provider: compat.provider,
+        timing: ai.events.Timing {
+            start_time_utc_ms: started.to_timestamp_milliseconds(),
+            duration_ms: null,
+            ttft_ms: null,
+        },
+        http_request: if (capture_wire) {
+            baml.http.Request {
+                method: request.method,
+                url: ai.wire.redact_url_secrets(request.url),
+                headers: ai.wire.redact_request_headers(request.headers),
+                body: request.body,
+            }
+        } else {
+            null
+        },
+        http_response: ai.events.HttpResponse {
+            status: sse.status_code,
+            headers: sse.headers,
+            body: null,
+        },
+        usage: null,
+        selected: true,
+        sse_responses: if (capture_wire) {
+            []
+        } else {
+            null
+        },
+    };
+    stream._calls = [call];
+    stream._wire_call = call;
+    stream._call_started = started;
+    stream._ttft_from = baml.time.Instant.now();
+    stream._capture_sse = capture_wire;
+    stream
 }

@@ -68,6 +68,10 @@ class ImageClient {
     request_body: baml.json.json?,
     headers: map<string, string>?,
     query_params: map<string, string>?,
+    // Record request/response bodies on the LLMCall wire records delivered
+    // through on_event. Status, headers, and timing are always recorded; this
+    // flag only gates the bodies.
+    capture_wire: bool,
 
     function new(
         model: string = "gpt-image-1",
@@ -86,6 +90,7 @@ class ImageClient {
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
+        capture_wire: bool = true,
     ) -> ImageClient {
         ImageClient {
             model: model,
@@ -104,6 +109,7 @@ class ImageClient {
             request_body: request_body,
             headers: headers,
             query_params: query_params,
+            capture_wire: capture_wire,
         }
     }
 
@@ -133,9 +139,15 @@ class ImageClient {
             root.internal._oai_images_client_id(self)
         }
 
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            openai.internal.images_render(self, input, preview = true) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        }
+
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             root.internal.images_invoke(self, input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }

@@ -1,0 +1,49 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+type user.fixtures.type_annotation.MetaAlias = reflect.Type
+type user.fixtures.type_annotation.MetaAlias$stream = unknown
+type user.fixtures.type_annotation.MetaList = reflect.Type[]
+type user.fixtures.type_annotation.MetaList$stream = unknown[]
+type user.fixtures.type_annotation.MetaUnion = reflect.Type | string
+type user.fixtures.type_annotation.MetaUnion$stream = unknown | string
+function user.fixtures.type_annotation.test_type_annotation(function_name: string) -> string  [expr] {
+  { let t: reflect.Type = ai.internal.get_return_type(function_name); return "ok" }
+}
+class user.fixtures.type_annotation.MetaField {
+  type: reflect.Type
+}
+class user.fixtures.type_annotation.MetaField$stream {
+  type: unknown
+}
+class user.fixtures.type_annotation.RiskFactor {
+  type: string
+  severity: float
+}
+class user.fixtures.type_annotation.RiskFactor$stream {
+  type: string | null
+  severity: float | null
+}
+enum user.fixtures.type_annotation.Kind {type, other}
+function user.fixtures.type_annotation.test_let_binding(function_name: string) -> string  [expr] {
+  { let t: reflect.Type = ai.internal.get_return_type(function_name); return "ok" }
+}
+function user.fixtures.type_annotation.test_list(function_name: string) -> string  [expr] {
+  { let ts: reflect.Type[] = []; return "ok" }
+}
+function user.fixtures.type_annotation.test_map(function_name: string) -> string  [expr] {
+  { let m: map<string, reflect.Type> = map {  }; return "ok" }
+}
+function user.fixtures.type_annotation.test_optional(function_name: string) -> string  [expr] {
+  { let t: reflect.Type? = null; return "ok" }
+}
+function user.fixtures.type_annotation.test_param(t: reflect.Type) -> string  [expr] {
+  { return "ok" }
+}
+function user.fixtures.type_annotation.test_return_type(function_name: string) -> reflect.Type  [expr] {
+  { return ai.internal.get_return_type(function_name) }
+}
+function user.fixtures.type_annotation.test_union(function_name: string) -> string  [expr] {
+  { let t: reflect.Type | string = "hello"; return "ok" }
+}

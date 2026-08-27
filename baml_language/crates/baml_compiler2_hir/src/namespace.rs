@@ -8,11 +8,9 @@
 //! `NamespaceItems::conflicts` but do not prevent resolution — downstream
 //! layers always see a resolved symbol (the first one).
 
-use std::collections::BTreeSet;
-
 use baml_base::{Name, SourceFile, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
-use rustc_hash::FxHashMap;
+use indexmap::{IndexMap, IndexSet};
 use text_size::TextRange;
 
 use crate::contributions::{Contribution, Definition};
@@ -109,10 +107,10 @@ pub struct NamespaceItemsExtra<'db> {
 pub struct NamespaceItems<'db> {
     /// Type-namespace items (classes, enums, type aliases).
     /// First definition (alphabetically by file path) wins.
-    pub types: FxHashMap<Name, Definition<'db>>,
+    pub types: IndexMap<Name, Definition<'db>>,
     /// Value-namespace items (functions, clients, etc.).
     /// First definition (alphabetically by file path) wins.
-    pub values: FxHashMap<Name, Definition<'db>>,
+    pub values: IndexMap<Name, Definition<'db>>,
     /// Conflicts and other rare data. `None` when no conflicts exist.
     pub extra: Option<Box<NamespaceItemsExtra<'db>>>,
 }
@@ -169,22 +167,23 @@ pub fn namespace_items<'db>(
     let package = namespace_id.package(db);
     let ns_path = namespace_id.path(db);
 
-    // Collect matching files, then sort alphabetically by path.
-    // Use compiler2_all_files() so that compiler2-only builtin stubs (e.g.
-    // Array<T>, Map<K,V>) are visible here without being added to the v1
-    // compiler's project.files() list.
-    let mut matching_files: Vec<SourceFile> = crate::compiler2_all_files(db)
-        .into_iter()
+    // Collect matching files from the package's own roots
+    // (`package_files`), then sort alphabetically by path — so edits to
+    // another package's file set never invalidate this namespace.
+    let package_id = crate::package::PackageId::new(db, package);
+    let mut matching_files: Vec<SourceFile> = crate::package::package_files(db, package_id)
+        .iter()
+        .copied()
         .filter(|file| {
             let pkg_info = crate::file_package::file_package(db, *file);
-            pkg_info.package == *package && pkg_info.namespace_path == *ns_path
+            pkg_info.namespace_path == *ns_path
         })
         .collect();
     matching_files.sort_by_key(|a| a.path(db));
 
     // Accumulate all contributions per name (preserving file order).
-    let mut type_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();
-    let mut value_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();
+    let mut type_defs: IndexMap<Name, Vec<Contribution<'db>>> = IndexMap::new();
+    let mut value_defs: IndexMap<Name, Vec<Contribution<'db>>> = IndexMap::new();
 
     for file in &matching_files {
         let contributions = crate::file_symbol_contributions(db, *file);
@@ -200,11 +199,11 @@ pub fn namespace_items<'db>(
     // not: all namespace-level declarations with the same spelling contribute
     // to one conflict. Build that conflict once so mixed declaration kinds do
     // not also produce redundant type-only or value-only diagnostics.
-    let mut types: FxHashMap<Name, Definition<'db>> = FxHashMap::default();
-    let mut values: FxHashMap<Name, Definition<'db>> = FxHashMap::default();
+    let mut types: IndexMap<Name, Definition<'db>> = IndexMap::new();
+    let mut values: IndexMap<Name, Definition<'db>> = IndexMap::new();
     let mut conflicts: Vec<NameConflict<'db>> = Vec::new();
 
-    let declaration_names: BTreeSet<_> =
+    let declaration_names: IndexSet<_> =
         type_defs.keys().chain(value_defs.keys()).cloned().collect();
     for name in declaration_names {
         let mut entries: Vec<_> = type_defs
@@ -215,12 +214,7 @@ pub fn namespace_items<'db>(
             .copied()
             .collect();
 
-        // Tests are function-scoped (identity is functionName/testName), so
-        // same-named tests for different functions remain legal.
-        let all_tests = entries
-            .iter()
-            .all(|entry| matches!(entry.definition, Definition::Test(_)));
-        if entries.len() < 2 || all_tests {
+        if entries.len() < 2 {
             continue;
         }
 

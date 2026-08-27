@@ -1,0 +1,124 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function spawn_semantics.$init_test_ns_spawn_semantics_spawn_semantics(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.spawn_semantics"
+    load_const "multiple_awaits_on_same_future_return_cached_value"
+    make_closure .<lambda($init_test_ns_spawn_semantics_spawn_semantics, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.spawn_semantics"
+    load_const "three_level_nested_spawn_sum"
+    make_closure .<lambda($init_test_ns_spawn_semantics_spawn_semantics, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.spawn_semantics"
+    load_const "function_can_return_future_typed_value"
+    make_closure .<lambda($init_test_ns_spawn_semantics_spawn_semantics, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function spawn_semantics.compute() -> int {
+    load_const 42
+    return
+}
+
+function spawn_semantics.function_can_return_future_typed_value_fn() -> int {
+    call user.spawn_semantics.spawn_child
+    await
+    return
+}
+
+function spawn_semantics.leaf() -> int {
+    load_const 1
+    return
+}
+
+function spawn_semantics.mid() -> int {
+    make_closure .<lambda(mid, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type never
+    spawn
+    store_var _3
+    load_var _3
+    await
+    load_const 10
+    add_int
+    return
+}
+
+function spawn_semantics.multiple_awaits_on_same_future_return_cached_value_fn() -> int {
+    make_closure .<lambda(multiple_awaits_on_same_future_return_cached_value_fn, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type never
+    spawn
+    store_var _3
+    load_var _3
+    store_var_load_var f
+    await
+    store_var a
+    load_var f
+    await
+    store_var b
+    load_var f
+    await
+    store_var c
+    load_var2 3 4
+    add_int
+    load_var c
+    add_int
+    return
+}
+
+function spawn_semantics.spawn_child() -> baml.future.Future<int, never> {
+    make_closure .<lambda(spawn_child, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type never
+    spawn
+    store_var _2
+    load_var _2
+    return
+}
+
+function spawn_semantics.three_level_nested_spawn_sum_fn() -> int {
+    make_closure .<lambda(three_level_nested_spawn_sum_fn, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type never
+    spawn
+    store_var _3
+    load_var _3
+    await
+    return
+}
+
+function spawn_semantics.top() -> int {
+    make_closure .<lambda(top, 0)>, 0
+    load_const null
+    load_const null
+    load_type int
+    load_type never
+    spawn
+    store_var _3
+    load_var _3
+    await
+    load_const 100
+    add_int
+    return
+}

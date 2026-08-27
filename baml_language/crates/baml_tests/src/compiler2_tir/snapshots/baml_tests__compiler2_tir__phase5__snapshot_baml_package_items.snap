@@ -3,27 +3,24 @@ source: crates/baml_tests/src/compiler2_tir/phase5.rs
 expression: output
 ---
 namespace baml:
-  type AnyClass
-  type AnyFunction
   class Array<T> { methods: [filled, generate, length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice] }
-  class Bigint { methods: [abs, min, max, clamp, isqrt, pow, ilog, to_int, parse, random] }
-  class Bool { methods: [] }
+  class Bigint { methods: [abs, min, max, clamp, isqrt, pow, ilog, to_int, parse, random, _random_byte_count, _random_in_range] }
+  class Bool { methods: [random] }
   type Comparable
   type Concrete
-  class Float { methods: [is_nan, is_infinite, is_finite, abs, min, max, clamp, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, pi, e, golden_ratio, nan, inf] }
+  class Float { methods: [is_nan, is_infinite, is_finite, abs, min, max, clamp, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, _unit_from_draw, pi, e, golden_ratio, nan, inf] }
   type FloatStats
   type FromJson
-  class Int { methods: [abs, min, max, clamp, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, max_value, min_value] }
+  class Int { methods: [abs, min, max, clamp, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, _random_in_range, max_value, min_value] }
   class Map<K, V> { methods: [length, has, keys, values, set, get, delete, get_or_insert, clear] }
   class Null { methods: [] }
   type Sortable
-  class String { methods: [from, length, char_count, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, chars, lines, slice, replace, index_of, last_index_of, at, code_point_at, repeat, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, to_code_points, from_code_points] }
+  class String { methods: [from, length, char_count, is_empty, byte_length, to_lower_case, to_upper_case, trim, trim_start, trim_end, includes, starts_with, ends_with, split, chars, lines, slice, replace, index_of, last_index_of, at, code_point_at, repeat, replace_all, is_numeric, is_alphabetic, is_alphanumeric, is_uppercase, is_lowercase, is_whitespace, is_control, is_graphic, is_ascii, is_ascii_numeric, is_ascii_alphabetic, is_ascii_alphanumeric, is_ascii_uppercase, is_ascii_lowercase, is_ascii_whitespace, is_ascii_control, is_ascii_graphic, is_ascii_hex, to_utf8, from_utf8, to_code_points, from_code_points] }
   type Summable
   class TaggedString { methods: [] }
   type ToJson
   type ToString
-  class TypeValue { methods: [array, optional, to_baml, kind, as_class, as_enum, as_union, as_literal, as_array, as_map, as_interface, as_primitive, as_function, _validate_renderable, meta, _to_string_impl, implements, implemented_by, to_string] }
-  class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, to_string] }
+  class Uint8Array { methods: [length, at, push, pop, concat, includes, index_of, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort, to_string] }
   function _cleanup_begin<T>
   function _compare_shim<T>
   function _float_total_cmp
@@ -115,12 +112,12 @@ namespace baml.errors:
   class StackTrace { methods: [_to_string_impl, to_string] }
   class Timeout { methods: [] }
   class TypeMismatch { methods: [] }
-  class UnknownError { methods: [] }
+  class UnknownError { methods: [from, with_message, _preserve_context, to_string] }
   class Unsupported { methods: [] }
 namespace baml.events:
 namespace baml.fs:
   class DirEntry { methods: [] }
-  class File { methods: [text, bytes, read, read_bytes, close, seek_from, write, write_bytes] }
+  class File { methods: [text, bytes, close, seek_from, write, read, write_some, flush] }
   class MkdirOptions { methods: [] }
   function chmod
   function exists
@@ -144,6 +141,7 @@ namespace baml.future:
   function all_complete<T, E>
   function any<T, Err>
   function race<T, E>
+  function with_timeout<T, E>
 namespace baml.glob:
   class Glob { methods: [scan, matches] }
   class ScanOptions { methods: [] }
@@ -158,6 +156,7 @@ namespace baml.http:
   class SseStream { methods: [next, close] }
   class TlsConfig { methods: [new, _new] }
   function _fetch
+  function _fetch_sse
   function _send
   function _timeout_nanos
   function fetch
@@ -168,6 +167,9 @@ namespace baml.id:
   function new
   function set
 namespace baml.io:
+  type Read
+  type Write
+  function _decode_utf8
   function eprint
   function eprintln
   function input
@@ -187,7 +189,11 @@ namespace baml.iter:
   class Peekable<T, E> { methods: [peek, iter, next] }
   class Range { methods: [new, iter, next] }
   class Repeat<T> { methods: [new, iter, next] }
+  class Skip<T, E> { methods: [iter, next] }
+  class SkipWhile<T, E, E2> { methods: [iter, next] }
   class StepBy<T, E> { methods: [iter, next] }
+  class Take<T, E> { methods: [iter, next] }
+  class TakeWhile<T, E, E2> { methods: [iter, next] }
   function flatten<R, E, E3, I>
 namespace baml.json:
   class JsonDecodeError { methods: [] }
@@ -198,7 +204,6 @@ namespace baml.json:
   function _path_field
   function _path_index
   function deserialize<T>
-  function encode<T>
   function field
   function from<T>
   function from_json<T>
@@ -211,8 +216,8 @@ namespace baml.json:
   function stringify
   function stringify_pretty
   function to<T>
-  function to_json<T>
-  function to_string<T>
+  function to_json
+  function to_string
 namespace baml.media:
   class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
   class Image { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
@@ -221,7 +226,7 @@ namespace baml.media:
 namespace baml.net:
   class Datagram { methods: [] }
   class TcpListener { methods: [bind, accept, close] }
-  class TcpStream { methods: [connect, _connect, read, _read, write, _write, close] }
+  class TcpStream { methods: [connect, _connect, close, read, write_some, flush] }
   class UdpSocket { methods: [bind, send_to, _send_to, recv_from, _recv_from, close] }
   function _timeout_nanos
 namespace baml.ops:
@@ -269,59 +274,6 @@ namespace baml.random:
   type Rng
   class SystemRandom { methods: [get, random, random_int] }
   class Xoshiro256PlusPlus { methods: [new, _new, random, random_int] }
-namespace baml.reflect:
-  class Arg { methods: [] }
-  class Diagnostic { methods: [] }
-  class InvalidArgumentError { methods: [] }
-  class Meta { methods: [] }
-  class Package { methods: [current, compile, _compile, _finish, get_class, get_enum, get_interface, with_types, get_function, classes, enums, interfaces, functions, tests, diagnostics] }
-  class Session { methods: [new, _new, eval, _compile, _finish, diagnostics] }
-  class Signature { methods: [] }
-  class Span { methods: [] }
-  type TypeKind
-  type TypeView
-  class WithMeta<T> { methods: [] }
-  function call_any<R, E>
-  function signature
-namespace baml.reflect.array:
-  class Type { methods: [element_type, as_type] }
-namespace baml.reflect.class:
-  class Builder { methods: [field, type, build, _build] }
-  class Field { methods: [metadata, value] }
-  class PendingType { methods: [array, optional, union, resolved, meta] }
-  class Type { methods: [fields, meta, as_type] }
-  function _new
-  function builder
-  function get_field<T>
-  function new
-namespace baml.reflect.enum:
-  class Type { methods: [values, meta, as_type] }
-  class Value { methods: [] }
-  function get_value
-  function new
-  function value
-namespace baml.reflect.errors:
-  class CompilationError { methods: [] }
-  class EvaluationError { methods: [] }
-  class SessionBusy { methods: [] }
-namespace baml.reflect.function:
-  class Parameter { methods: [] }
-  class Type { methods: [params, return_type, as_type] }
-namespace baml.reflect.interface:
-  class Implementation { methods: [field] }
-  class Type { methods: [implemented_by, as_type] }
-  function implementation<I>
-namespace baml.reflect.literal:
-  class Type { methods: [as_type] }
-  function new
-namespace baml.reflect.map:
-  class Type { methods: [key_type, value_type, as_type] }
-  function new
-namespace baml.reflect.primitive:
-  class Type { methods: [as_type] }
-namespace baml.reflect.union:
-  class Type { methods: [member_types, as_type] }
-  function new
 namespace baml.sap:
   class NoYield { methods: [] }
   class ParseCache<TStream, TFinal> { methods: [new] }
@@ -336,11 +288,15 @@ namespace baml.spawn:
   class TaskGroup { methods: [new, cancel, set_limit, limit, name, active_count, queued_count] }
   function options<T, E>
 namespace baml.sys:
-  class Process { methods: [write_stdin, close_stdin, wait, kill, close] }
+  class Process { methods: [wait, kill, close] }
   class ProcessExit { methods: [ok] }
-  class ProcessLineStream { methods: [_next, close, iter, next] }
   class ProcessOptions { methods: [] }
+  class ReadPipe { methods: [close, lines, read] }
+  class ReadPipeLines { methods: [iter, next] }
   class ShellOutput { methods: [ok] }
+  enum StderrMode
+  class WritePipe { methods: [close, write_some, flush] }
+  function _strip_carriage_return
   function argv
   function collect_garbage
   function exec
@@ -373,9 +329,6 @@ namespace baml.toml:
   function item_from_json
   function item_to_json
   function table_from_json
-namespace baml.type:
-  function of<T>
-  function of_value
 namespace baml.ws:
   class WsStream { methods: [send, next, close] }
   function _connect

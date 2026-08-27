@@ -1,9 +1,8 @@
-//! C# primitive-slice build setup.
+//! C# fixture build setup.
 
 use std::{env, fs, path::PathBuf};
 
-use baml_db::baml_compiler_diagnostics::Severity;
-use baml_project::ProjectDatabase;
+use baml_db::{ProjectDatabase, SourceRootSpec, baml_compiler_diagnostics::Severity};
 
 use crate::{emit_cargo_line, watch_dir};
 
@@ -11,69 +10,69 @@ pub fn run_all() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     generate_fixture(
         &manifest_dir,
-        "primitive_slice",
-        "sdk_test_csharp.primitive_slice",
-        "PrimitiveSlice.csproj",
+        "basic_calls",
+        "sdk_test_csharp.basic_calls",
+        "BasicCalls.csproj",
     );
     generate_fixture(
         &manifest_dir,
-        "phase5_slice",
-        "sdk_test_csharp.phase5_slice",
-        "Phase5Slice.csproj",
+        "type_roundtrips",
+        "sdk_test_csharp.type_roundtrips",
+        "TypeRoundtrips.csproj",
     );
     generate_fixture(
         &manifest_dir,
-        "phase6_slice",
-        "sdk_test_csharp.phase6_slice",
-        "Phase6Slice.csproj",
+        "generics",
+        "sdk_test_csharp.generics",
+        "Generics.csproj",
     );
     generate_fixture(
         &manifest_dir,
-        "phase7_failures",
-        "sdk_test_csharp.phase7_failures",
-        "Phase7Failures.csproj",
+        "failures_and_cancellation",
+        "sdk_test_csharp.failures_and_cancellation",
+        "FailuresAndCancellation.csproj",
     );
     generate_fixture(
         &manifest_dir,
-        "phase9_media",
-        "sdk_test_csharp.phase9_media",
-        "Phase9Media.csproj",
+        "media",
+        "sdk_test_csharp.media",
+        "Media.csproj",
     );
     generate_fixture(
         &manifest_dir,
-        "phase10_stream",
-        "sdk_test_csharp.phase10_stream",
-        "Phase10Stream.csproj",
+        "streaming",
+        "sdk_test_csharp.streaming",
+        "Streaming.csproj",
     );
     generate_fixture(
         &manifest_dir,
-        "phase11_host_callable",
-        "sdk_test_csharp.phase11_host_callable",
-        "Phase11HostCallable.csproj",
+        "host_callables",
+        "sdk_test_csharp.host_callables",
+        "HostCallables.csproj",
     );
     generate_fixture(
         &manifest_dir,
-        "phase12_resources",
-        "sdk_test_csharp.phase12_resources",
-        "Phase12Resources.csproj",
+        "stdlib_resources",
+        "sdk_test_csharp.stdlib_resources",
+        "StdlibResources.csproj",
     );
     generate_fixture(
         &manifest_dir,
-        "phase15_dynamic_values",
-        "sdk_test_csharp.phase15_dynamic_values",
-        "Phase15DynamicValues.csproj",
+        "dynamic_values",
+        "sdk_test_csharp.dynamic_values",
+        "DynamicValues.csproj",
     );
     generate_fixture(
         &manifest_dir,
-        "phase13_primitive_edges",
-        "sdk_test_csharp.phase13_primitive_edges",
-        "Phase13PrimitiveEdges.csproj",
+        "primitive_edges",
+        "sdk_test_csharp.primitive_edges",
+        "PrimitiveEdges.csproj",
     );
     generate_fixture(
         &manifest_dir,
-        "phase14_stdlib_structurals",
-        "sdk_test_csharp.phase14_stdlib_structurals",
-        "Phase14StdlibStructurals.csproj",
+        "stdlib_structurals",
+        "sdk_test_csharp.stdlib_structurals",
+        "StdlibStructurals.csproj",
     );
     emit_cargo_line(format_args!("cargo:rerun-if-changed=build.rs"));
 }
@@ -90,8 +89,15 @@ fn generate_fixture(
         .unwrap_or_else(|error| panic!("failed to locate {}: {error}", baml_src.display()));
 
     let mut db = ProjectDatabase::new();
-    db.set_project_root(&canonical);
-    let baml_files = baml_workspace::discover_baml_files(&canonical);
+    db.ensure_stdlib_sources();
+    let root = db
+        .add_source_root(SourceRootSpec {
+            path: canonical.clone(),
+            package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: baml_db::SourceRootKind::Workspace,
+        })
+        .unwrap_or_else(|error| panic!("C# {fixture_name}: cannot add workspace root: {error}"));
+    let baml_files = baml_db::discover_baml_files(&canonical);
     assert!(
         !baml_files.is_empty(),
         "C# {fixture_name} fixture has no BAML files"
@@ -99,10 +105,10 @@ fn generate_fixture(
     for path in &baml_files {
         let source = fs::read_to_string(path)
             .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-        db.add_or_update_file(path, &source);
+        db.add_or_update_file_in(root, path, &source);
     }
 
-    let diagnostics = baml_project::collect_diagnostics(&db);
+    let diagnostics = baml_db::collect_diagnostics(&db);
     let errors = diagnostics
         .iter()
         .filter(|diagnostic| diagnostic.severity == Severity::Error)
@@ -112,13 +118,14 @@ fn generate_fixture(
         "C# {fixture_name} fixture diagnostics: {errors:#?}"
     );
 
-    let symbols = baml_project::build_symbol_pool(&db);
-    let bytecode = borsh::to_vec(
+    let symbols = baml_ide::build_symbol_pool(&db);
+    let bytecode = baml_artifact::encode(
+        baml_artifact::ArtifactKind::Program,
         &db.get_bytecode()
             .unwrap_or_else(|error| panic!("C# bytecode compilation failed: {error:?}")),
     )
     .expect("C# fixture bytecode serialization failed");
-    let output_directory = fixture.join("baml_client");
+    let output_directory = fixture.join("baml_sdk");
     let embedded_baml_toml = format!(
         "[__baml_codegen]\nmetadata_version = 1\n\n[__baml_codegen.toolchain]\nversion = {:?}\n",
         baml_version::CANONICAL_VERSION
@@ -142,14 +149,14 @@ fn generate_fixture(
         first.manifest, second.manifest,
         "C# repeat generation manifest changed"
     );
-    if fixture_name == "phase6_slice" {
-        verify_phase6_surface(&fixture);
+    if fixture_name == "generics" {
+        verify_generics_surface(&fixture);
     }
-    if fixture_name == "phase11_host_callable" {
-        verify_phase11_surface(&fixture);
+    if fixture_name == "host_callables" {
+        verify_host_callables_surface(&fixture);
     }
-    if fixture_name == "phase12_resources" {
-        verify_phase12_surface(&fixture);
+    if fixture_name == "stdlib_resources" {
+        verify_stdlib_resources_surface(&fixture);
     }
 
     watch_dir(&baml_src);
@@ -161,16 +168,16 @@ fn generate_fixture(
     }
 }
 
-fn verify_phase6_surface(fixture: &std::path::Path) {
-    let generated = fixture.join("baml_client").join("CsharpPhase6");
+fn verify_generics_surface(fixture: &std::path::Path) {
+    let generated = fixture.join("baml_sdk").join("CsharpGenerics");
     let functions = fs::read_to_string(generated.join("Functions.g.cs"))
-        .expect("failed to read generated Phase 6 function surface");
+        .expect("failed to read generated generics function surface");
     let box_source = fs::read_to_string(generated.join("Box.g.cs"))
-        .expect("failed to read generated Phase 6 generic class surface");
+        .expect("failed to read generated generics generic class surface");
     let counter = fs::read_to_string(generated.join("Counter.g.cs"))
-        .expect("failed to read generated Phase 6 nongeneric method surface");
+        .expect("failed to read generated generics nongeneric method surface");
     let pair = fs::read_to_string(generated.join("Pair.g.cs"))
-        .expect("failed to read generated Phase 6 multi-generic surface");
+        .expect("failed to read generated generics multi-generic surface");
 
     for expected in [
         "public static T Identity<T>(",
@@ -180,40 +187,40 @@ fn verify_phase6_surface(fixture: &std::path::Path) {
     ] {
         assert!(
             functions.contains(expected),
-            "generated Phase 6 function surface omitted `{expected}`"
+            "generated generics function surface omitted `{expected}`"
         );
     }
     for forbidden in ["_types", "Type[]", "object? value"] {
         assert!(
             !functions.contains(forbidden),
-            "generated Phase 6 public function surface exposed `{forbidden}`"
+            "generated generics public function surface exposed `{forbidden}`"
         );
     }
     for expected in [
         "public T Get(",
         "Replace<U>(",
-        "public static global::CsharpPhase6.Box<V> New<V>(",
+        "public static global::CsharpGenerics.Box<V> New<V>(",
         "this);",
     ] {
         assert!(
             box_source.contains(expected),
-            "generated Phase 6 generic method surface omitted `{expected}`"
+            "generated generics generic method surface omitted `{expected}`"
         );
     }
     assert!(counter.contains("public long Add("));
-    assert!(counter.contains("public static global::CsharpPhase6.Counter New("));
+    assert!(counter.contains("public static global::CsharpGenerics.Counter New("));
     assert!(pair.contains("public B GetSecond("));
     assert!(pair.contains("ReplaceSecond<C>("));
 }
 
-fn verify_phase11_surface(fixture: &std::path::Path) {
-    let generated = fixture.join("baml_client").join("CsharpPhase11");
+fn verify_host_callables_surface(fixture: &std::path::Path) {
+    let generated = fixture.join("baml_sdk").join("CsharpHostCallables");
     let functions = fs::read_to_string(generated.join("Functions.g.cs"))
-        .expect("failed to read generated Phase 11 function surface");
+        .expect("failed to read generated host-callable function surface");
     let callback_box = fs::read_to_string(generated.join("CallbackBox.g.cs"))
-        .expect("failed to read generated Phase 11 generic callback method surface");
+        .expect("failed to read generated host-callable generic callback method surface");
     let callback_host = fs::read_to_string(generated.join("CallbackHost.g.cs"))
-        .expect("failed to read generated Phase 11 static generic callback surface");
+        .expect("failed to read generated host-callable static generic callback surface");
 
     for expected in [
         "Task<R> ApplyAsync<T, R>(",
@@ -227,12 +234,12 @@ fn verify_phase11_surface(fixture: &std::path::Path) {
     ] {
         assert!(
             functions.contains(expected),
-            "generated Phase 11 generic callback surface omitted `{expected}`"
+            "generated host-callable generic callback surface omitted `{expected}`"
         );
     }
     assert!(
         !functions.contains("ResolveType<global::System.Func<"),
-        "generated Phase 11 callback attempted to infer wire metadata from CLR Func"
+        "generated host-callable callback attempted to infer wire metadata from CLR Func"
     );
     assert!(callback_box.contains("TransformAsync<R>("));
     assert!(callback_box.contains(".AddHostCallable("));
@@ -245,12 +252,12 @@ fn verify_phase11_surface(fixture: &std::path::Path) {
         !functions.contains("global::System.Threading.Tasks.ValueTask")
             && !functions.contains("global::System.Action<")
             && !functions.contains("global::Baml.BamlCallback"),
-        "generated Phase 11 surface introduced an alternate callback family instead of retaining the canonical Task-based Func"
+        "generated host-callable surface introduced an alternate callback family instead of retaining the canonical Task-based Func"
     );
 }
 
-fn verify_phase12_surface(fixture: &std::path::Path) {
-    let generated = fixture.join("baml_client").join("Baml");
+fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
+    let generated = fixture.join("baml_sdk").join("Baml");
     let file = fs::read_to_string(generated.join("Fs").join("File.g.cs"))
         .expect("failed to read generated typed File resource surface");
     let fs_functions = fs::read_to_string(generated.join("Fs").join("Functions.g.cs"))
@@ -260,7 +267,6 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
 
     for expected in [
         "public sealed partial class File : global::System.IDisposable",
-        "public string Read(",
         "public long SeekFrom(\n        string whence,",
         "public string Text(",
         "public File Clone() => new(\n        resource.Clone());",
@@ -285,6 +291,41 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
     assert!(!file.contains("public global::Baml.BamlHandle Handle"));
     assert!(!file.contains("private readonly global::Baml.BamlHandle"));
 
+    for absent in [
+        " Read(",
+        " ReadAsync(",
+        " ReadBytes(",
+        " ReadBytesAsync(",
+        " Flush(",
+        " FlushAsync(",
+    ] {
+        assert!(
+            !file.contains(absent),
+            "generated File resource exposed interface member `{absent}`"
+        );
+    }
+    assert_eq!(
+        file.matches(" Write(").count(),
+        1,
+        "expected exactly one concrete File.Write method"
+    );
+
+    let tcp_stream = fs::read_to_string(generated.join("Net").join("TcpStream.g.cs"))
+        .expect("failed to read generated typed TcpStream resource surface");
+    for absent in [
+        " Read(",
+        " ReadAsync(",
+        " Write(",
+        " WriteAsync(",
+        " Flush(",
+        " FlushAsync(",
+    ] {
+        assert!(
+            !tcp_stream.contains(absent),
+            "generated TcpStream resource exposed interface member `{absent}`"
+        );
+    }
+
     let resource_surfaces = [
         (
             "Fs/File.g.cs",
@@ -293,18 +334,12 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
                 " TextAsync(",
                 " Bytes(",
                 " BytesAsync(",
-                " Read(",
-                " ReadAsync(",
-                " ReadBytes(",
-                " ReadBytesAsync(",
                 " Close(",
                 " CloseAsync(",
                 " SeekFrom(",
                 " SeekFromAsync(",
                 " Write(",
                 " WriteAsync(",
-                " WriteBytes(",
-                " WriteBytesAsync(",
             ],
         ),
         (
@@ -359,16 +394,7 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
         ),
         (
             "Net/TcpStream.g.cs",
-            vec![
-                " Connect(",
-                " ConnectAsync(",
-                " Read(",
-                " ReadAsync(",
-                " Write(",
-                " WriteAsync(",
-                " Close(",
-                " CloseAsync(",
-            ],
+            vec![" Connect(", " ConnectAsync(", " Close(", " CloseAsync("],
         ),
         (
             "Net/TcpListener.g.cs",
@@ -519,7 +545,7 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
 
     let local_id = fs::read_to_string(
         fixture
-            .join("baml_client")
+            .join("baml_sdk")
             .join("Boundary")
             .join("LocalId.g.cs"),
     )
@@ -622,7 +648,7 @@ fn verify_phase12_surface(fixture: &std::path::Path) {
 
     let boundary_functions = fs::read_to_string(
         fixture
-            .join("baml_client")
+            .join("baml_sdk")
             .join("Boundary")
             .join("Functions.g.cs"),
     )

@@ -20,7 +20,7 @@ class VertexClient {
     model: string,
     // null resolves from GOOGLE_CLOUD_PROJECT / the credential document at
     // request time; construction never touches env or the filesystem.
-    project_id: string?,
+    project_id: ai.Credential?,
     // null resolves from GOOGLE_CLOUD_LOCATION / GOOGLE_CLOUD_REGION, else
     // the multi-region `global` endpoint.
     location: string?,
@@ -37,6 +37,11 @@ class VertexClient {
     // Replaces the whole `…/publishers/google/models` prefix; the caller owns
     // the path from there on.
     base_url: ai.Credential?,
+    // Native request deadline, including a streaming response body. Null or a
+    // non-positive value is unbounded; browser/Wasm does not enforce it.
+    request_timeout_ms: int?,
+    // Native streaming deadline from SSE open until the first parsed event.
+    time_to_first_token_timeout_ms: int?,
 
     // ── passthrough (PLAN P0.3) ──────────────────────────────────────────
     request_body: baml.json.json?,
@@ -53,14 +58,21 @@ class VertexClient {
 
     safety_settings: SafetySetting[]?,
 
+    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // records delivered through on_event. Status, headers, and timing are
+    // always recorded; this flag only gates the bodies.
+    capture_wire: bool,
+
     function new(
         model: string = "gemini-2.5-flash",
-        project_id: string? = null,
+        project_id: ai.Credential? = null,
         location: string? = null,
         credentials_json: string? = null,
         credentials_file: string? = null,
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
+        request_timeout_ms: int? = null,
+        time_to_first_token_timeout_ms: int? = null,
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
@@ -71,6 +83,7 @@ class VertexClient {
         stop_sequences: string[]? = null,
         response_modalities: string[]? = null,
         safety_settings: SafetySetting[]? = null,
+        capture_wire: bool = true,
     ) -> VertexClient {
         VertexClient {
             model: model,
@@ -80,6 +93,8 @@ class VertexClient {
             credentials_file: credentials_file,
             api_key: api_key,
             base_url: base_url,
+            request_timeout_ms: request_timeout_ms,
+            time_to_first_token_timeout_ms: time_to_first_token_timeout_ms,
             request_body: request_body,
             headers: headers,
             query_params: query_params,
@@ -90,6 +105,7 @@ class VertexClient {
             stop_sequences: stop_sequences,
             response_modalities: response_modalities,
             safety_settings: safety_settings,
+            capture_wire: capture_wire,
         }
     }
 
@@ -109,9 +125,15 @@ class VertexClient {
             `vertex/${self.model}`
         }
 
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            google.internal.vertex_preview(self, input) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        }
+
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             root.internal.vertex_invoke(self, input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }
@@ -119,7 +141,7 @@ class VertexClient {
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
             root.internal.vertex_invoke_stream(self, input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }

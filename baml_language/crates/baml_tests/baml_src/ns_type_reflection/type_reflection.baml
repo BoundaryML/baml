@@ -69,10 +69,10 @@ test "neq_type_values_different" {
     assert.is_true(neq_type_values_different_fn())
 }
 
-// BEP-066: all type equality sites use the canonical mint, so union order is
+// Type equality is equivalence of canonical forms, so union order is
 // irrelevant in both function and test-block contexts.
 function union_order_eq_fn() -> bool {
-    type.of<int | string>() == type.of<string | int>()
+    reflect.Type.of<int | string>() == reflect.Type.of<string | int>()
 }
 
 test "union_order_eq_canonical_in_function" {
@@ -80,7 +80,7 @@ test "union_order_eq_canonical_in_function" {
 }
 
 test "union_order_eq_canonical_in_test_block" {
-    let a = type.of<int | string>();
-    let b = type.of<string | int>();
+    let a = reflect.Type.of<int | string>();
+    let b = reflect.Type.of<string | int>();
     assert.is_true(a == b)
 }

@@ -108,6 +108,10 @@ pub struct InferenceTable {
     /// their own sites, where an ordinary var (a call instantiation)
     /// fails resolution instead (ruling 1).
     establishment_vars: FxHashSet<u32>,
+    /// Variables whose source expression is monomorphic but initially has no
+    /// type. The first ground demand commits their type, so a later
+    /// incompatible demand is diagnosed at that later use.
+    first_demand_vars: FxHashSet<u32>,
 }
 
 impl InferenceTable {
@@ -131,13 +135,39 @@ impl InferenceTable {
     pub fn new_establishment_var_ty(&mut self) -> Ty {
         let var = self.new_var();
         self.establishment_vars.insert(var.index());
+        self.first_demand_vars.insert(var.index());
         Ty::infer_var(var)
+    }
+
+    /// [`InferenceTable::new_var`] for a monomorphic source expression whose
+    /// first ground demand determines its type.
+    pub fn new_first_demand_var_ty(&mut self) -> Ty {
+        let var = self.new_var();
+        self.first_demand_vars.insert(var.index());
+        Ty::infer_var(var)
+    }
+
+    /// Returns the canonical representative when `var`'s equivalence class
+    /// still lacks a solution.
+    pub fn unsolved_root_var(&mut self, var: InferVar) -> Option<InferVar> {
+        let root = self.vars.find(VarKey(var));
+        matches!(self.vars.probe_value(root), VarValue::Unknown).then_some(root.0)
     }
 
     /// Whether `var`'s equivalence class contains an establishment var.
     pub fn is_establishment_var(&mut self, var: InferVar) -> bool {
         let root = self.vars.find(VarKey(var));
         let indices: Vec<u32> = self.establishment_vars.iter().copied().collect();
+        indices
+            .into_iter()
+            .any(|index| self.vars.find(VarKey(InferVar::new(index))) == root)
+    }
+
+    /// Whether `var`'s equivalence class is committed by its first ground
+    /// demand.
+    pub fn is_first_demand_var(&mut self, var: InferVar) -> bool {
+        let root = self.vars.find(VarKey(var));
+        let indices: Vec<u32> = self.first_demand_vars.iter().copied().collect();
         indices
             .into_iter()
             .any(|index| self.vars.find(VarKey(InferVar::new(index))) == root)
@@ -524,6 +554,21 @@ mod tests {
         let b = table.new_var_ty();
         assert_ne!(a, b);
         assert_eq!(table.shallow_resolve(&a), a);
+    }
+
+    #[test]
+    fn unsolved_root_var_tracks_equivalence_classes() {
+        let mut table = InferenceTable::new();
+        let a = table.new_var();
+        let b = table.new_var();
+        assert_ne!(table.unsolved_root_var(a), table.unsolved_root_var(b));
+
+        table.unify(&Ty::infer_var(a), &Ty::infer_var(b)).unwrap();
+        assert_eq!(table.unsolved_root_var(a), table.unsolved_root_var(b));
+
+        table.unify(&Ty::infer_var(a), &Ty::int()).unwrap();
+        assert_eq!(table.unsolved_root_var(a), None);
+        assert_eq!(table.unsolved_root_var(b), None);
     }
 
     #[test]

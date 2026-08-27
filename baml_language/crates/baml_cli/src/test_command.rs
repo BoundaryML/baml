@@ -9,12 +9,11 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
-use baml_project::ProjectDatabase;
+use baml_db::baml_compiler_diagnostics::Severity;
 use baml_type::RuntimeTy;
 use bex_engine::{
-    BexCallArg, BexEngine, BexExternalValue, CancellationToken, FunctionCallContext,
-    FunctionCallContextBuilder, test_arg_to_external, value_capture::TraceCaptureProducer,
+    BexEngine, BexExternalValue, CancellationToken, FunctionCallContext,
+    FunctionCallContextBuilder, logger::TraceLogger,
 };
 use clap::{Args, FromArgMatches};
 use sys_native::{CallId, SysOpsExt};
@@ -230,48 +229,6 @@ impl TestInvocation {
     }
 }
 
-/// A legacy `test "name" { functions [Foo] args {…} }` attached to an LLM
-/// function, discovered from HIR. Executed by calling the function directly
-/// with the test args. New-style `testset`/`test` blocks are discovered and run
-/// entirely inside the `testing` stdlib package (see `run_filtered`), so they
-/// have no Rust-side representation.
-struct LegacyTest {
-    /// Engine lookup name (the compiler's `user`-package spelling).
-    function_name: String,
-    test_name: String,
-    /// Public, stable selector/report id.
-    canonical_id: String,
-    file_path: PathBuf,
-}
-
-fn canonical_legacy_id(function_name: &str, test_name: &str) -> String {
-    let function = function_name.strip_prefix("user.").unwrap_or(function_name);
-    format!("root.{function}::{test_name}")
-}
-
-fn qualify_function_from_source(function_name: &str, source_file: &std::path::Path) -> String {
-    if function_name.contains('.') {
-        return function_name.to_string();
-    }
-    let namespace = source_file
-        .parent()
-        .into_iter()
-        .flat_map(std::path::Path::components)
-        .filter_map(|component| {
-            let std::path::Component::Normal(component) = component else {
-                return None;
-            };
-            component.to_str()?.strip_prefix("ns_").map(str::to_string)
-        })
-        .collect::<Vec<_>>()
-        .join(".");
-    if namespace.is_empty() {
-        function_name.to_string()
-    } else {
-        format!("{namespace}.{function_name}")
-    }
-}
-
 fn validate_selectors<'a>(selectors: impl Iterator<Item = &'a String>) -> Result<()> {
     for selector in selectors {
         let is_canonical_root =
@@ -305,7 +262,7 @@ struct RunCtx<'a> {
 }
 
 impl RunCtx<'_> {
-    fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceCaptureProducer>) {
+    fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceLogger>) {
         let builder =
             FunctionCallContextBuilder::new(call_id).with_cancel_token(self.cancel.clone());
         LogOutput::new(self.logs, "test").call_context(builder)
@@ -314,7 +271,7 @@ impl RunCtx<'_> {
     fn block_on_with_logs<T>(
         &self,
         future: impl std::future::Future<Output = T>,
-        producer: Option<&TraceCaptureProducer>,
+        producer: Option<&TraceLogger>,
     ) -> T {
         LogOutput::new(self.logs, "test").block_on(self.rt, future, producer)
     }
@@ -331,7 +288,7 @@ impl TestArgs {
         // ── 1. Load project ────────────────────────────────────────────────
         let mut session = crate::project_session::ProjectSession::open(
             self.from.as_deref(),
-            crate::project_session::CacheUse::ReadWriteTests,
+            crate::project_session::CacheUse::ReadWrite,
         )?;
         let invocation =
             self.resolve_invocation(session.resolved.manifest.as_deref(), session.root())?;
@@ -345,8 +302,8 @@ impl TestArgs {
             return Ok(crate::ExitCode::NoTestsRun);
         }
 
-        // Warm `--list` fast path. The flattened test list (legacy tests +
-        // fully-expanded testset leaf names) is a pure function of the compiled
+        // Warm `--list` fast path. The fully-expanded test leaf names are a pure
+        // function of the compiled
         // Program, cached under its key. On a hit we render + select directly
         // and skip engine boot, `$init`/`$init_test`, and in-VM testset
         // expansion entirely — the whole `--list` discovery floor. Gated off
@@ -363,13 +320,10 @@ impl TestArgs {
         let cached_program = session.try_cached_program();
 
         let cached_engine = cached_program.and_then(|program| {
-            // Bytecode-cache hit: the Program carries everything the test run
-            // needs — compiled test cases for the legacy runner, testset code
-            // for the in-VM registry — so the database (typecheck, HIR
-            // discovery, emit) is skipped entirely.
-            let legacy = legacy_tests_from_program(&program);
+            // Bytecode-cache hit: the Program carries the in-VM test registry,
+            // so the database (typecheck, HIR discovery, emit) is skipped.
             match BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new()) {
-                Ok(engine) => Some((Arc::new(engine), legacy)),
+                Ok(engine) => Some(Arc::new(engine)),
                 Err(error) => {
                     crate::bytecode_cache::cache_debug(format_args!(
                         "cached program rejected by VM; recompiling: {error:?}"
@@ -379,7 +333,7 @@ impl TestArgs {
             }
         });
 
-        let (engine, legacy) = if let Some(hit) = cached_engine {
+        let engine = if let Some(hit) = cached_engine {
             hit
         } else {
             let warmth = session.warm_prep();
@@ -387,10 +341,6 @@ impl TestArgs {
                 (warmth.reuse_plan, warmth.stdlib_interface_hit);
             let db = &session.db;
             let cache = &session.cache;
-            let project = db
-                .get_project()
-                .ok_or_else(|| anyhow!("no project context"))?;
-
             // ── 2. Diagnostics ─────────────────────────────────────────────
             // Keep `baml test` quiet during the compile phase. `baml check`
             // and `baml generate` own the compile/count progress lines. With a
@@ -402,7 +352,7 @@ impl TestArgs {
                 let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
                 (incremental.merged, Some(incremental.fresh_by_file))
             } else {
-                (baml_project::collect_diagnostics(db), None)
+                (baml_db::collect_diagnostics(db), None)
             };
             let errors: Vec<_> = diagnostics
                 .iter()
@@ -420,16 +370,9 @@ impl TestArgs {
                 return Ok(crate::ExitCode::Other);
             }
 
-            // ── 3. Discover legacy tests from HIR ──────────────────────────
-            let legacy = discover_legacy_tests(db, project);
-
-            // ── 4. Compile + engine + runtime ──────────────────────────────
-            let compile_options = baml_compiler2_emit::CompileOptions {
-                emit_test_cases: true,
-            };
+            // 3. Compile + engine + runtime
             let compiled = crate::bytecode_cache::compile_program_artifacts(
                 db,
-                &compile_options,
                 cache.as_ref(),
                 reuse_plan.as_ref(),
             )
@@ -460,12 +403,14 @@ impl TestArgs {
                 baml_db::baml_compiler2_hir_ty::infer::body_inferences()
             ));
 
-            let bytecode = compiled.program;
-            let engine = Arc::new(
-                BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), Vec::new())
-                    .map_err(|e| anyhow!("failed to create engine: {e:?}"))?,
-            );
-            (engine, legacy)
+            Arc::new(
+                BexEngine::new(
+                    compiled.program,
+                    Arc::new(sys_native::SysOps::native()),
+                    Vec::new(),
+                )
+                .map_err(|e| anyhow!("failed to create engine: {e:?}"))?,
+            )
         };
         let unhandled_spawn_failures = Arc::new(AtomicUsize::new(0));
         let unhandled_spawn_failures_for_handler = Arc::clone(&unhandled_spawn_failures);
@@ -496,6 +441,7 @@ impl TestArgs {
         // discovery/filtering/execution then happens inside that package via
         // `run_filtered` / `list_filtered`.
         reporter.spin("Discovering", "tests");
+        let discovery_started = std::time::Instant::now();
         let registry =
             match rt.block_on(engine.collect_tests("user", CallId::next(), cancel.clone())) {
                 Ok(BexExternalValue::Null) => None,
@@ -521,13 +467,17 @@ impl TestArgs {
                 }
             };
 
-        // ── 6. Filter legacy tests (testset filtering happens in BAML) ──────
-        let legacy_selected: Vec<&LegacyTest> = legacy
-            .iter()
-            .filter(|t| invocation.includes_id(&t.canonical_id))
-            .collect();
+        crate::reporter::print_verbose(format_args!(
+            "discovered tests in {:.2?} (test registry: {})",
+            discovery_started.elapsed(),
+            if registry.is_some() {
+                "present"
+            } else {
+                "none"
+            },
+        ));
 
-        // ── 7. List mode ───────────────────────────────────────────────────
+        // 5. List mode
         if invocation.list {
             let testset_names = match &registry {
                 Some(reg) => match list_selected_testset_names(&run_ctx, reg, &invocation) {
@@ -567,22 +517,16 @@ impl TestArgs {
                     .any(|name| name.ends_with("::(failed to expand)"))
             {
                 let disco = crate::bytecode_cache::TestDiscovery {
-                    legacy: legacy.iter().map(cached_legacy_test).collect(),
                     testset_leaf_names: testset_names.clone(),
                 };
                 ctx.verify_test_discovery(&disco)?;
                 ctx.store_test_discovery(&disco);
             }
 
-            let legacy_lines: Vec<crate::bytecode_cache::CachedLegacyTest> = legacy_selected
-                .iter()
-                .copied()
-                .map(cached_legacy_test)
-                .collect();
-            return Ok(render_test_list(&reporter, &legacy_lines, &testset_names));
+            return Ok(render_test_list(&reporter, &testset_names));
         }
 
-        // ── 8. Execute ─────────────────────────────────────────────────────
+        // 6. Execute
         // Test execution writes per-test PASS/FAIL lines to stdout; clear the
         // spinner so those lines don't fight with the ticks.
         reporter.abandon();
@@ -593,16 +537,7 @@ impl TestArgs {
         let mut total = 0usize;
         let mut command_failed = false;
 
-        // Legacy tests run individually in Rust (they invoke an LLM function
-        // directly with bound args).
-        for t in &legacy_selected {
-            let failed_before = failed;
-            run_legacy_test(&run_ctx, t, &mut passed, &mut failed);
-            total += 1;
-            command_failed |= failed > failed_before;
-        }
-
-        // Testset tests run inside the stdlib: a single `run_filtered` call
+        // Tests run inside the stdlib: a single `run_filtered` call
         // expands, filters, runs (concurrently via spawn/await), and aggregates
         // (honoring testset runners), returning a tolerated-aware flat report.
         if let Some(reg) = &registry {
@@ -834,23 +769,16 @@ impl TestArgs {
             return None;
         }
         let disco = cache?.load_test_discovery()?;
-        let legacy_selected: Vec<crate::bytecode_cache::CachedLegacyTest> = disco
-            .legacy
-            .into_iter()
-            .filter(|t| invocation.includes_id(&t.canonical_id))
-            .collect();
         let testset_names: Vec<String> = disco
             .testset_leaf_names
             .into_iter()
             .filter(|name| invocation.includes_id(name))
             .collect();
         crate::bytecode_cache::cache_debug(format_args!(
-            "served `test --list` from discovery cache ({} legacy + {} testset leaf(s) selected); \
-             engine boot skipped",
-            legacy_selected.len(),
+            "served `test --list` from discovery cache ({} test leaf(s) selected); engine boot skipped",
             testset_names.len(),
         ));
-        Some(render_test_list(reporter, &legacy_selected, &testset_names))
+        Some(render_test_list(reporter, &testset_names))
     }
 }
 
@@ -858,216 +786,22 @@ impl TestArgs {
 /// Shared by the honest path and the warm discovery-cache path so both produce
 /// byte-identical stdout. Status/`Selected` lines go to stderr (via the
 /// reporter); only the list itself is stdout content.
-fn render_test_list(
-    reporter: &Reporter,
-    legacy_selected: &[crate::bytecode_cache::CachedLegacyTest],
-    testset_names: &[String],
-) -> crate::ExitCode {
-    if legacy_selected.is_empty() && testset_names.is_empty() {
+fn render_test_list(reporter: &Reporter, testset_names: &[String]) -> crate::ExitCode {
+    if testset_names.is_empty() {
         reporter.finish("Finished", "no tests selected");
         return crate::ExitCode::NoTestsRun;
     }
-    reporter.status(
-        "Selected",
-        format!("{} test(s)", legacy_selected.len() + testset_names.len()),
-    );
+    reporter.status("Selected", format!("{} test(s)", testset_names.len()));
     // Indented list under the cargo-style status line. These are content (the
     // actual list), not status updates, so they go to stdout as plain prints.
     //
     // Canonicalize the order at this single render point — both the fresh-compile
     // and bytecode-cache paths flow through here — so `--list` output is
     // byte-identical between them regardless of upstream map/enumeration order.
-    // Sort by canonical id, with the path as a deterministic tiebreak.
-    let mut legacy_sorted: Vec<&crate::bytecode_cache::CachedLegacyTest> =
-        legacy_selected.iter().collect();
-    legacy_sorted.sort_by(|a, b| {
-        a.canonical_id
-            .cmp(&b.canonical_id)
-            .then_with(|| a.file_path.cmp(&b.file_path))
-    });
-    for t in legacy_sorted {
-        println!("  {}  ({})", t.canonical_id, t.file_path);
-    }
     for name in testset_names {
         println!("  {name}  (<testset>)");
     }
     crate::ExitCode::Success
-}
-
-/// Project a Rust-side [`LegacyTest`] into the cache/render payload shape (its
-/// root-relative `file_path` rendered to the display string `--list` prints).
-fn cached_legacy_test(t: &LegacyTest) -> crate::bytecode_cache::CachedLegacyTest {
-    crate::bytecode_cache::CachedLegacyTest {
-        function_name: t.function_name.clone(),
-        test_name: t.test_name.clone(),
-        canonical_id: t.canonical_id.clone(),
-        file_path: t.file_path.display().to_string(),
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Legacy test discovery + execution (unchanged behavior, narrowed types)
-// ---------------------------------------------------------------------------
-
-#[allow(unused_variables)]
-// BUG: test discovery is duplicated with different semantics in
-// `baml_project::symbols::list_tests_with_metadata`. This copy iterates files
-// (sees duplicate-named tests) and qualifies function refs unconditionally
-// with the *test's* namespace; the playground copy iterates resolved
-// namespace items (keep-first winner) and qualifies only when the ref
-// resolves in the same namespace. Neither handles a cross-namespace ref by
-// the *resolved function's* namespace, which is the correct rule. Unify on
-// one `baml_surface`-side derivation once that rule is ratified.
-fn discover_legacy_tests(
-    db: &ProjectDatabase,
-    project: baml_workspace::Project,
-) -> Vec<LegacyTest> {
-    use baml_db::baml_compiler2_ppir::item_data::{file_tests, test_data};
-
-    let mut tests = Vec::new();
-    let root = project.root(db);
-
-    for source_file in db.get_source_files() {
-        // Root-relative for display, matching how emit records source paths —
-        // keeps `--list` output identical between compiled and
-        // bytecode-cache-served runs.
-        let file_path = source_file.path(db);
-        let file_path = file_path.strip_prefix(&root).unwrap_or(&file_path);
-        let namespace = baml_db::baml_compiler2_hir::file_package::file_package(db, source_file)
-            .namespace_path
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(".");
-
-        for test_loc in file_tests(db, source_file) {
-            let test = test_data(db, *test_loc);
-            for func_ref in &test.function_refs {
-                let function_name = if namespace.is_empty() {
-                    func_ref.to_string()
-                } else {
-                    format!("{namespace}.{func_ref}")
-                };
-                tests.push(LegacyTest {
-                    function_name: function_name.clone(),
-                    test_name: test.name.to_string(),
-                    canonical_id: canonical_legacy_id(&function_name, test.name.as_ref()),
-                    file_path: file_path.to_path_buf(),
-                });
-            }
-        }
-    }
-
-    tests
-}
-
-/// Derive the legacy-test list from a compiled [`bex_vm_types::Program`]
-/// (bytecode-cache hit path).
-///
-/// `Program::test_cases` holds the same (test, target functions) pairs that
-/// HIR discovery yields — `run_legacy_test` already resolves each test against
-/// the engine's copy by name — so no database is needed for execution.
-///
-/// Each test's `file_path` comes from [`bex_vm_types::TestCase::source_file`] —
-/// the test-defining file recorded at emit (`baml_compiler2_emit` Pass 8 via
-/// `relative_source_path`) in the same project-root-relative form
-/// [`discover_legacy_tests`] derives — so `--list` output is byte-identical
-/// between a fresh compile and a bytecode-cache hit.
-fn legacy_tests_from_program(program: &bex_vm_types::Program) -> Vec<LegacyTest> {
-    let mut tests = Vec::new();
-    for tc in &program.test_cases {
-        // `source_file` is empty only for a blob predating the field, which the
-        // cache format version already gates out, so the `<unknown>` fallback is
-        // unreachable in practice.
-        let file_path = if tc.source_file.is_empty() {
-            PathBuf::from("<unknown>")
-        } else {
-            PathBuf::from(&tc.source_file)
-        };
-        for func in &tc.function_names {
-            let function_name = qualify_function_from_source(func, &file_path);
-            tests.push(LegacyTest {
-                function_name: function_name.clone(),
-                test_name: tc.name.clone(),
-                canonical_id: canonical_legacy_id(&function_name, &tc.name),
-                file_path: file_path.clone(),
-            });
-        }
-    }
-    tests
-}
-
-/// Execute one legacy (`function + test block`) test case.
-///
-/// Results are emitted to stdout/stderr and reflected in the counters; this
-/// never returns an error or panics under normal operation.
-fn run_legacy_test(ctx: &RunCtx, t: &LegacyTest, passed: &mut usize, failed: &mut usize) {
-    let test_case = match ctx.engine.test_case(&t.function_name, &t.test_name) {
-        Some(tc) => tc,
-        None => {
-            eprintln!(
-                "FAIL {} - test case not found in compiled program",
-                t.canonical_id
-            );
-            *failed += 1;
-            return;
-        }
-    };
-
-    let ordered_args = match build_ordered_args(ctx.engine, &t.function_name, test_case) {
-        Ok(args) => args,
-        Err(e) => {
-            eprintln!("FAIL {} - {e}", t.canonical_id);
-            *failed += 1;
-            return;
-        }
-    };
-
-    let (call_ctx, logs) = ctx.call_context(CallId::next());
-    let result = ctx.block_on_with_logs(
-        ctx.engine
-            .call_function_bound_args(&t.function_name, ordered_args, call_ctx, true),
-        logs.as_ref(),
-    );
-    match result {
-        Ok(result) => {
-            println!("PASS {}", t.canonical_id);
-            println!("  => {result:?}");
-            *passed += 1;
-        }
-        Err(e) => {
-            eprintln!("FAIL {}", t.canonical_id);
-            eprintln!("  => {e}");
-            *failed += 1;
-        }
-    }
-}
-
-fn build_ordered_args(
-    engine: &BexEngine,
-    function_name: &str,
-    test_case: &bex_vm_types::TestCase,
-) -> Result<Vec<BexCallArg>> {
-    let params = engine
-        .function_params(function_name)
-        .map_err(|e| anyhow!("failed to get params for {function_name}: {e:?}"))?;
-
-    let ordered: Vec<BexCallArg> = params
-        .into_iter()
-        .map(|(name, _ty, has_default)| {
-            if let Some(value) = test_case.args.get(name) {
-                Ok(BexCallArg::Provided(Box::new(test_arg_to_external(value))))
-            } else if has_default {
-                Ok(BexCallArg::OmittedDefault)
-            } else {
-                Err(anyhow!(
-                    "missing argument '{name}' for function {function_name}"
-                ))
-            }
-        })
-        .collect::<Result<_>>()?;
-
-    Ok(ordered)
 }
 
 // ---------------------------------------------------------------------------
@@ -1086,6 +820,14 @@ fn run_filtered_report(
     invocation: &TestInvocation,
 ) -> Result<BexExternalValue> {
     let (call_ctx, logs) = ctx.call_context(CallId::next());
+    // Cap concurrently RUNNING test bodies at twice the core count. The
+    // runner admits a leaf only when a slot is free, so a five-thousand-test
+    // corpus holds ~2N live VM threads instead of five thousand — which keeps
+    // per-thread GC costs bounded and keeps wall-clock timing assertions
+    // meaningful under full-corpus load.
+    let max_concurrency =
+        i64::try_from(std::thread::available_parallelism().map_or(8, std::num::NonZero::get) * 2)
+            .unwrap_or(16);
     let result = ctx.block_on_with_logs(
         ctx.engine.call_function(
             "testing.TestRegistry.run_filtered",
@@ -1095,6 +837,7 @@ fn run_filtered_report(
                 string_array(&invocation.profile_exclude),
                 string_array(&invocation.cli_include),
                 string_array(&invocation.cli_exclude),
+                BexExternalValue::Int(max_concurrency),
             ],
             call_ctx,
             true,
@@ -1166,14 +909,23 @@ fn consume_flat_report(
         return;
     }
 
-    for name in &flat.passed_names {
-        println!("PASS {name}");
+    // Duration suffixes come from the parallel `*_ms` arrays; a missing or
+    // negative entry (fallback-correlated identities, expansion sentinels)
+    // prints the bare line the output always had.
+    let with_ms = |ms: &[i64], i: usize| -> String {
+        match ms.get(i) {
+            Some(ms) if *ms >= 0 => format!(" ({ms}ms)"),
+            _ => String::new(),
+        }
+    };
+    for (i, name) in flat.passed_names.iter().enumerate() {
+        println!("PASS {name}{}", with_ms(&flat.passed_ms, i));
     }
-    for name in &flat.tolerated_names {
-        println!("TOLERATED {name}");
+    for (i, name) in flat.tolerated_names.iter().enumerate() {
+        println!("TOLERATED {name}{}", with_ms(&flat.tolerated_ms, i));
     }
-    for name in &flat.failed_names {
-        println!("FAIL {name}");
+    for (i, name) in flat.failed_names.iter().enumerate() {
+        println!("FAIL {name}{}", with_ms(&flat.failed_ms, i));
     }
 
     if flat.outcome == "pass" {
@@ -1226,6 +978,13 @@ struct FlatReport {
     passed_names: Vec<String>,
     failed_names: Vec<String>,
     tolerated_names: Vec<String>,
+    /// Per-leaf durations parallel to the matching name arrays; may be
+    /// shorter (or empty) when identities came from the registry's fallback
+    /// correlation, and `-1` marks a leaf with no measured run — print the
+    /// duration only when a non-negative entry exists at the name's index.
+    passed_ms: Vec<i64>,
+    failed_ms: Vec<i64>,
+    tolerated_ms: Vec<i64>,
     messages: Vec<String>,
 }
 
@@ -1255,6 +1014,18 @@ fn parse_flat_report(value: &BexExternalValue) -> Option<FlatReport> {
         .get("tolerated_names")
         .map(string_array_values)
         .unwrap_or_default();
+    let passed_ms = fields
+        .get("passed_ms")
+        .map(int_array_values)
+        .unwrap_or_default();
+    let failed_ms = fields
+        .get("failed_ms")
+        .map(int_array_values)
+        .unwrap_or_default();
+    let tolerated_ms = fields
+        .get("tolerated_ms")
+        .map(int_array_values)
+        .unwrap_or_default();
     let messages = fields
         .get("messages")
         .map(string_array_values)
@@ -1268,6 +1039,9 @@ fn parse_flat_report(value: &BexExternalValue) -> Option<FlatReport> {
         passed_names,
         failed_names,
         tolerated_names,
+        passed_ms,
+        failed_ms,
+        tolerated_ms,
         messages,
     })
 }
@@ -1283,6 +1057,19 @@ fn string_array(items: &[String]) -> BexExternalValue {
             .iter()
             .map(|s| BexExternalValue::String(s.as_str().into()))
             .collect(),
+    }
+}
+
+fn int_array_values(value: &BexExternalValue) -> Vec<i64> {
+    match unwrap_union(value) {
+        BexExternalValue::Array { items, .. } => items
+            .iter()
+            .filter_map(|item| match unwrap_union(item) {
+                BexExternalValue::Int(i) => Some(*i),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
     }
 }
 

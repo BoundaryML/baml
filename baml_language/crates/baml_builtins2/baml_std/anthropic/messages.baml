@@ -49,7 +49,11 @@ class ToolChoice {
     /// The model must call exactly this tool.
     function tool(name: string, disable_parallel_tool_use: bool? = null) -> ToolChoice {
         let chosen = name;
-        ToolChoice { type: "tool", name: chosen, disable_parallel_tool_use: disable_parallel_tool_use }
+        ToolChoice {
+            type: "tool",
+            name: chosen,
+            disable_parallel_tool_use: disable_parallel_tool_use,
+        }
     }
 
     /// The model may not call a tool this turn.
@@ -67,6 +71,11 @@ class AnthropicClient {
     // and a `Ref` keeps the secret out of the client value entirely.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
+    // Native request deadline, including a streaming response body. Null or a
+    // non-positive value is unbounded; browser/Wasm does not enforce it.
+    request_timeout_ms: int?,
+    // Native streaming deadline from SSE open until the first parsed event.
+    time_to_first_token_timeout_ms: int?,
 
     // First-class typed parameters. Each is lowered into the typed request
     // ONLY when non-null, so an unset option never reaches the wire.
@@ -91,6 +100,10 @@ class AnthropicClient {
     // Extra URL query parameters, appended verbatim (no percent-encoding —
     // there is no encoder in the stdlib yet; keep values URL-safe).
     query_params: map<string, string>?,
+    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // records delivered through on_event. Status, headers, and timing are
+    // always recorded; this flag only gates the bodies.
+    capture_wire: bool,
 
     // NOTE: the task spec named "claude-3-5-haiku-latest" as the default, but
     // that model was retired (the API 404s on it); claude-haiku-4-5 is the
@@ -103,6 +116,8 @@ class AnthropicClient {
         model: string = "claude-haiku-4-5",
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
+        request_timeout_ms: int? = null,
+        time_to_first_token_timeout_ms: int? = null,
         max_tokens: int = 8192,
         temperature: float? = null,
         top_p: float? = null,
@@ -113,11 +128,14 @@ class AnthropicClient {
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
+        capture_wire: bool = true,
     ) -> AnthropicClient {
         AnthropicClient {
             model: model,
             api_key: api_key,
             base_url: base_url,
+            request_timeout_ms: request_timeout_ms,
+            time_to_first_token_timeout_ms: time_to_first_token_timeout_ms,
             max_tokens: max_tokens,
             temperature: temperature,
             top_p: top_p,
@@ -128,6 +146,7 @@ class AnthropicClient {
             request_body: request_body,
             headers: headers,
             query_params: query_params,
+            capture_wire: capture_wire,
         }
     }
 
@@ -158,9 +177,15 @@ class AnthropicClient {
             `anthropic/${self.model}`
         }
 
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            anthropic.internal.anthropic_preview(self, input) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        }
+
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             root.internal.invoke(self, input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }
@@ -168,7 +193,7 @@ class AnthropicClient {
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
             root.internal.invoke_stream(self, input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }

@@ -1,0 +1,52 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function fixtures.bigint_arith.AddBigints() -> bigint {
+    load_const 5n
+    return
+}
+
+function fixtures.bigint_arith.BitAndBigints() -> bigint {
+    load_const 0n
+    return
+}
+
+function fixtures.bigint_arith.BitOrBigints() -> bigint {
+    load_const 255n
+    return
+}
+
+function fixtures.bigint_arith.BitXorBigints() -> bigint {
+    load_const 85n
+    return
+}
+
+function fixtures.bigint_arith.DivBigints() -> bigint {
+    load_const 3n
+    return
+}
+
+function fixtures.bigint_arith.ModBigints() -> bigint {
+    load_const 1n
+    return
+}
+
+function fixtures.bigint_arith.MulBigints() -> bigint {
+    load_const 6n
+    return
+}
+
+function fixtures.bigint_arith.ShlBigints() -> bigint {
+    load_const 16n
+    return
+}
+
+function fixtures.bigint_arith.ShrBigints() -> bigint {
+    load_const 16n
+    return
+}
+
+function fixtures.bigint_arith.SubBigints() -> bigint {
+    load_const 2n
+    return
+}

@@ -595,7 +595,7 @@ type BamlOutboundValue_BigintValue struct {
 }
 
 type BamlOutboundValue_TyValue struct {
-	// A reflected BAML type returned as a value (e.g. `reflect.type_of<T>()`).
+	// A reflected BAML type returned as a value (e.g. `reflect.Type.of<T>()`).
 	// Shares the `BamlTy` representation with the inbound side.
 	TyValue *BamlTy `protobuf:"bytes,21,opt,name=ty_value,json=tyValue,proto3,oneof"`
 }

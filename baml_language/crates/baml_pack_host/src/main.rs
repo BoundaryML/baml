@@ -1,7 +1,7 @@
 // Runtime host for binaries produced by `baml pack`.
 //
 // Startup:
-//   1. Extract `PackEnvelope` (borsh) from the OS-native embedded section.
+//   1. Extract the versioned `PackEnvelope` from the OS-native embedded section.
 //   2. Decide single-target vs multi-subcommand dispatch from
 //      `envelope.mode`.
 //   3. Initialize the BAML engine with the embedded program and the
@@ -36,7 +36,8 @@ fn extract_envelope() -> Result<PackEnvelope, String> {
         .map_err(|e| format!("Failed to read embedded section: {e}"))?
         .ok_or("No embedded BAML package found. This binary must be built with `baml pack`.")?;
 
-    borsh::from_slice(section).map_err(|e| format!("Failed to deserialize pack envelope: {e}"))
+    baml_artifact::decode(baml_artifact::ArtifactKind::PackedProgram, section)
+        .map_err(|e| format!("Failed to deserialize pack envelope: {e}"))
 }
 
 /// Build `baml.argv` per BEP-027 §"baml.argv in packaged binaries".
@@ -276,9 +277,8 @@ fn finalize_dispatch(
         }
     }
 
-    // Drain the profiling rings to .bamlprof before exit (no-op when
-    // BAML_PROFILE is off). NB: `baml.sys.exit()` paths bypass this — same
-    // caveat as the legacy event sink.
+    // Drain the direct profiling consumer before exit (no-op when profiling
+    // is off). `baml.sys.exit()` paths bypass this explicit host flush.
     bex_events::prof::flush_and_join(std::time::Duration::from_secs(10));
 
     match result {

@@ -65,7 +65,7 @@ homebrew/AUR). npm uses OIDC trusted publishing with channel→dist-tag
 ## Where generated code goes in a Java project
 
 `baml generate` config lives in `baml.toml` `[generator.<name>]`
-(`output_type`, `naming_convention`, `output_dir` — default `".."`,
+(`output_type`, `naming_convention`, `output_dir` — default `"."`,
 with `baml_sdk` always appended). Generated files declare
 `package baml_sdk.*`, so **the registered source root must be the
 parent of the `baml_sdk/` directory** — which composes exactly with

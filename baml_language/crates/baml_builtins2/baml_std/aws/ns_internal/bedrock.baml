@@ -460,7 +460,11 @@ function _audio_format(mime: string) -> string {
 
 // base64 bytes, else an s3:// location. Any other URL is a hard error: Bedrock
 // reads media from the request body or from S3, never from an arbitrary host.
-function _media_source(resolved: ai.wire.ResolvedMedia, kind: string) -> MediaSource {
+function _media_source(
+    resolved: ai.wire.ResolvedMedia,
+    kind: string,
+    preview: bool = false,
+) -> MediaSource {
     if let data: string = resolved.base64 {
         return MediaSource { bytes: data, s3Location: null };
     }
@@ -468,35 +472,53 @@ function _media_source(resolved: ai.wire.ResolvedMedia, kind: string) -> MediaSo
         if (url.starts_with("s3://")) {
             return MediaSource { bytes: null, s3Location: S3Location { uri: url, bucketOwner: null } };
         }
+        if (preview) {
+            throw ai.errors.PreviewUnsupported {
+                provider: "aws-bedrock",
+                detail: `Bedrock request preview only supports s3:// ${kind} URLs; it cannot download ${url}`,
+            }
+        }
         throw _reject(`Bedrock requires s3:// URIs for ${kind} URLs, got: ${url}`)
     }
     throw _reject(`Bedrock ${kind} content could not be resolved`)
 }
 
-function _image_block(image: baml.media.Image) -> ContentBlock {
-    let resolved = ai.wire.resolve_media(image, !_is_s3_url(image.url()));
+function _image_block(image: baml.media.Image, preview: bool = false) -> ContentBlock {
+    let resolved = if (preview) {
+        ai.wire.resolve_media_preview(image)
+    } else {
+        ai.wire.resolve_media(image, !_is_s3_url(image.url()))
+    };
     ContentBlock.of_image(
         ImageBlock {
             format: _image_format(resolved.mime_type),
-            source: _media_source(resolved, "image"),
+            source: _media_source(resolved, "image", preview = preview),
         },
     )
 }
 
-function _video_block(video: baml.media.Video) -> ContentBlock {
+function _video_block(video: baml.media.Video, preview: bool = false) -> ContentBlock {
     // fetch_url = false: a video is far too large to inline, so Bedrock reads
     // it from S3 and a non-s3 URL is rejected below.
-    let resolved = ai.wire.resolve_media(video, false);
+    let resolved = if (preview) {
+        ai.wire.resolve_media_preview(video)
+    } else {
+        ai.wire.resolve_media(video, false)
+    };
     ContentBlock.of_video(
         VideoBlock {
             format: _video_format(resolved.mime_type),
-            source: _media_source(resolved, "video"),
+            source: _media_source(resolved, "video", preview = preview),
         },
     )
 }
 
-function _document_block(pdf: baml.media.Pdf) -> ContentBlock {
-    let resolved = ai.wire.resolve_media(pdf, !_is_s3_url(pdf.url()));
+function _document_block(pdf: baml.media.Pdf, preview: bool = false) -> ContentBlock {
+    let resolved = if (preview) {
+        ai.wire.resolve_media_preview(pdf)
+    } else {
+        ai.wire.resolve_media(pdf, !_is_s3_url(pdf.url()))
+    };
     if (resolved.mime_type != "application/pdf") {
         throw _reject(`unsupported document format for Bedrock: ${resolved.mime_type}`)
     }
@@ -506,20 +528,24 @@ function _document_block(pdf: baml.media.Pdf) -> ContentBlock {
             // Bedrock requires a name; the SDK path used this constant too
             // (`build_request/bedrock.rs:323`).
             name: "document",
-            source: _media_source(resolved, "document"),
+            source: _media_source(resolved, "document", preview = preview),
         },
     )
 }
 
-function _audio_block(audio: baml.media.Audio) -> ContentBlock {
+function _audio_block(audio: baml.media.Audio, preview: bool = false) -> ContentBlock {
     // `AudioSource` is `bytes | s3Location` like every other media union, so
     // audio takes exactly the image path: inline an http(s) URL, hand an
     // `s3://` one to Bedrock.
-    let resolved = ai.wire.resolve_media(audio, !_is_s3_url(audio.url()));
+    let resolved = if (preview) {
+        ai.wire.resolve_media_preview(audio)
+    } else {
+        ai.wire.resolve_media(audio, !_is_s3_url(audio.url()))
+    };
     ContentBlock.of_audio(
         AudioBlock {
             format: _audio_format(resolved.mime_type),
-            source: _media_source(resolved, "audio"),
+            source: _media_source(resolved, "audio", preview = preview),
         },
     )
 }
@@ -536,7 +562,7 @@ class BedrockPrompt {
 }
 
 // One rendered prompt message -> Converse content blocks.
-function _prompt_content(message: ai.PromptMessage) -> ContentBlock[] {
+function _prompt_content(message: ai.PromptMessage, preview: bool = false) -> ContentBlock[] {
     let blocks: ContentBlock[] = [];
     for (let part in message.parts) {
         match (part) {
@@ -551,19 +577,19 @@ function _prompt_content(message: ai.PromptMessage) -> ContentBlock[] {
                 null
             },
             let image: baml.media.Image => {
-                blocks.push(_image_block(image));
+                blocks.push(_image_block(image, preview = preview));
                 null
             },
             let audio: baml.media.Audio => {
-                blocks.push(_audio_block(audio));
+                blocks.push(_audio_block(audio, preview = preview));
                 null
             },
             let video: baml.media.Video => {
-                blocks.push(_video_block(video));
+                blocks.push(_video_block(video, preview = preview));
                 null
             },
             let pdf: baml.media.Pdf => {
-                blocks.push(_document_block(pdf));
+                blocks.push(_document_block(pdf, preview = preview));
                 null
             },
         };
@@ -636,7 +662,7 @@ function _conversation_role(role: string) -> string {
 // demoting would silently move authored instructions into the conversation.
 // The native Anthropic client (`messages.baml:308-337`) merges for the same
 // reason.
-function _lower_prompt(prompt: ai.Prompt) -> BedrockPrompt {
+function _lower_prompt(prompt: ai.Prompt, preview: bool = false) -> BedrockPrompt {
     let system: SystemContentBlock[] = [];
     let messages: Message[] = [];
     for (let message in prompt.messages()) {
@@ -649,7 +675,7 @@ function _lower_prompt(prompt: ai.Prompt) -> BedrockPrompt {
             }
             null
         } else {
-            let content = _prompt_content(message);
+            let content = _prompt_content(message, preview = preview);
             // A message that lowered to nothing (all-whitespace text) is
             // dropped: `content: []` is a ValidationException, and a lone
             // `cachePoint` with nothing to cache is no better.
@@ -947,8 +973,12 @@ function _merge_adjacent_roles(messages: Message[]) -> Message[] {
 function converse_request(
     client: root.BedrockClient,
     input: ai.ModelTurnInput,
+    preview: bool = false,
 ) -> ConverseRequest {
-    let prompt = _lower_prompt(input.prompt(ai.wire.render_output_format(input.output_type)));
+    let prompt = _lower_prompt(
+        input.prompt(ai.internal.build_output_format(input.output_type)),
+        preview = preview,
+    );
     let system = prompt.system;
     if (client.cache_system_prompt && system.length() > 0) {
         system.push(SystemContentBlock.of_cache_point());
@@ -1006,7 +1036,7 @@ function converse_request(
 /// The Converse endpoint for this client: the `endpoint_url` override when set
 /// (which bypasses region resolution entirely), else
 /// `https://bedrock-runtime.<region>.amazonaws.com`.
-function converse_url(client: root.BedrockClient) -> string {
+function converse_url(client: root.BedrockClient, preview: bool = false) -> string {
     let path = converse_model_path(client.model);
     if let endpoint: string = client.resolved_endpoint_url() {
         // A trailing slash on the override would double up with the path.
@@ -1022,6 +1052,9 @@ function converse_url(client: root.BedrockClient) -> string {
     // it keeps URL construction free of io when the caller was explicit.
     if let explicit: string = client.region {
         return `https://bedrock-runtime.${explicit}.amazonaws.com${path}`;
+    }
+    if (preview) {
+        return `https://bedrock-runtime.preview-region.amazonaws.com${path}`;
     }
     // Reading the profile can fail on io; that is a configuration problem, not
     // a transport one, so it stays a typed InvalidRequest rather than becoming
@@ -1097,12 +1130,16 @@ function _apply_query(url: string, params: map<string, string>?) -> string {
 /// -> `request_body` passthrough merged in, plus the user's headers and query
 /// parameters. Signing must come after this and nothing may touch the request
 /// afterwards, so this is the seam request-shape tests assert on.
-function build_request(client: root.BedrockClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    let body = _prune_nulls(baml.json.to_json(converse_request(client, input)));
+function build_request(
+    client: root.BedrockClient,
+    input: ai.ModelTurnInput,
+    preview: bool = false,
+) -> baml.http.Request {
+    let body = _prune_nulls(baml.json.to_json(converse_request(client, input, preview = preview)));
     let merged = ai.wire.merge_request_body(body, client.request_body);
     baml.http.Request {
         method: "POST",
-        url: _apply_query(converse_url(client), client.query_params),
+        url: _apply_query(converse_url(client, preview = preview), client.query_params),
         headers: _merge_headers(
             { "content-type": "application/json", "accept": "application/json" },
             client.headers,
@@ -1317,7 +1354,7 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
         },
     };
 
-    ai.ModelTurn { content: content, stop_reason: stop, usage: usage }
+    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
 }
 
 // ---------------------------------------------------------------------------
@@ -1325,6 +1362,13 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
 // ---------------------------------------------------------------------------
 
 function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let request = sign(client, build_request(client, input));
-    parse_response(ai.wire.send_as<ConverseResponse>(request, "aws-bedrock"))
+    let request = sign(client, build_request(client, input, preview = false));
+    let sent = ai.wire.send_as_with_wire<ConverseResponse>(
+        request,
+        "aws-bedrock",
+        client.id(),
+        capture_wire = client.capture_wire,
+    );
+    let turn = parse_response(sent.value);
+    ai.ModelTurn { ...turn, calls: [sent.call] }
 }

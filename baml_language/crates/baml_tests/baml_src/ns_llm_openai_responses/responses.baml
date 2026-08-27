@@ -35,6 +35,7 @@ function OaiPicture(subject: string) -> image {
 function OaiLook(pic: image, clip: audio, doc: pdf) -> string {
     client: "openai/gpt-4o-mini"
     prompt: `
+        ${role("user")}
         Look: ${pic} ${clip} ${doc}
     `
 }
@@ -158,7 +159,7 @@ function oai_request_shape() -> string {
                 verbosity = "low",
                 parallel_tool_calls = true,
             );
-            let result = ai.Agent<string>.new(client = cl).run(OaiEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
             let sent = mock.last_request();
             [
                 result.value,
@@ -178,7 +179,7 @@ test "oai_request_shape" {
     // typed request fields, in the request class's declaration order
     assert.contains(got, `"model":"gpt-4o-mini"`);
     assert.contains(got, `"store":false`);
-    assert.contains(got, `"input":[{"role":"user","content":[{"type":"input_text","text":`);
+    assert.contains(got, `"input":[{"role":"system","content":[{"type":"input_text","text":`);
     assert.contains(got, "Say pong.");
     assert.contains(got, `"temperature":0.25`);
     assert.contains(got, `"top_p":0.5`);
@@ -191,6 +192,30 @@ test "oai_request_shape" {
     assert.is_true(!got.includes(`"tools"`));
     assert.is_true(!got.includes(`"tool_choice"`));
     assert.is_true(!got.includes(`"stream"`))
+}
+
+function oai_request_timeout_ms() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_oai_text_response())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                request_timeout_ms = 20,
+            );
+            let outcome = `turn:${cl.invoke(_oai_input(OaiEcho@spec("Say pong."), ai.Journal { log: [] }, ai.tools.Toolbox.new([]))).terminal_text() ?? ""}` catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.request_timeout_ms ?? -1}|${outcome}`
+        },
+        response_delay_ms = 200,
+    )
+}
+
+test "oai_request_timeout_ms" {
+    assert.equal(oai_request_timeout_ms(), "20|Timeout")
 }
 
 // request_body deep-merges over the serialized typed request: a scalar
@@ -214,7 +239,7 @@ function oai_passthrough() -> string {
                 headers = { "X-Trace": "abc", "authorization": "Bearer overridden" },
                 query_params = { "api-version": "2024 05" },
             );
-            let result = ai.Agent<string>.new(client = cl).run(OaiEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
             let sent = mock.last_request();
             [
                 result.value,
@@ -328,22 +353,21 @@ test "oai_media_input" {
     )
 }
 
-// Media outside a user message is refused as a typed InvalidRequest before any
-// HTTP call — sys_llm's pre-flight check, in the native taxonomy.
-function oai_media_role_rejected() -> string {
+// Responses compatibility permits image input in a system message. This is
+// important for role-less prompts, which the compiler lowers to system for
+// legacy parity, and for explicitly authored system prompts alike.
+function oai_system_image_input() -> string {
     let spec = OaiSystemLook@spec(baml.media.Image.from_base64("aW1n", "image/png"));
     let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
     let empty = ai.tools.Toolbox.new([]);
-    let rendered = _oai_render_body(cl, _oai_input(spec, ai.Journal.new(spec), empty)) catch_all (e) {
-        _ => _oai_error_name(e),
-    };
-    rendered
+    _oai_render_body(cl, _oai_input(spec, ai.Journal.new(spec), empty))
 }
 
-test "oai_media_role_rejected" {
-    assert.equal(
-        oai_media_role_rejected(),
-        "invalid_request:OpenAI Responses only supports image input in user messages, found system",
+test "oai_system_image_input" {
+    let got = oai_system_image_input();
+    assert.contains(
+        got,
+        `{"role":"system","content":[{"type":"input_text","text":"Look:"},{"type":"input_image","image_url":"data:image/png;base64,aW1n","detail":"auto"}]}`,
     )
 }
 
@@ -359,7 +383,7 @@ function oai_image_generation() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<image>.new(client = cl).run(OaiPicture@spec("a red apple"));
+            let result = ai.Agent.new(client = cl).run(OaiPicture@spec("a red apple"));
             let sent = mock.last_request();
             [
                 result.value.base64(),
@@ -455,7 +479,7 @@ function oai_usage_details() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(OaiEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
             [
                 result.usage.input_tokens.to_string(),
                 result.usage.output_tokens.to_string(),
@@ -481,7 +505,7 @@ function oai_sparse_usage() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(OaiEcho@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
             `${result.value}|${result.usage.input_tokens}|${result.usage.output_tokens}`
         },
     )
@@ -523,7 +547,7 @@ test "oai_bad_tool_arguments" {
 
 // A provider error status is classified, never reported as a transport failure.
 function _oai_run(cl: openai.ResponsesClient) -> string {
-    let result = ai.Agent<string>.new(client = cl).run(OaiEcho@spec("Say pong."));
+    let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
     result.value
 }
 
@@ -608,6 +632,32 @@ function _oai_stream_final(cl: openai.ResponsesClient) -> string {
         client = cl,
     );
     stream.final()
+}
+
+function oai_stream_time_to_first_token_timeout_ms() -> string {
+    let completed = `{"type":"response.completed","response":{"status":"completed","output":[],"usage":{"input_tokens":3,"output_tokens":1}}}`;
+    root.llm_mock.mock_sse_serve(
+        [root.llm_mock.sse_data(completed)],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                request_timeout_ms = 1000,
+                time_to_first_token_timeout_ms = 20,
+            );
+            let outcome = _oai_stream_final(cl) catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
+        },
+        first_event_delay_ms = 200,
+    )
+}
+
+test "oai_stream_time_to_first_token_timeout_ms" {
+    assert.equal(oai_stream_time_to_first_token_timeout_ms(), "20|Timeout")
 }
 
 // A stream whose text arrives ONLY as `output_text.done` still yields it.
@@ -1016,7 +1066,7 @@ function _oai_live_client() -> openai.ResponsesClient {
 
 // The whole wire path against the real endpoint: typed body, auth, parse.
 function oai_live_answers() -> bool {
-    let result = ai.Agent<string>.new(client = _oai_live_client())
+    let result = ai.Agent.new(client = _oai_live_client())
         .run(OaiEcho@spec("Say pong."));
     result.value.trim().length() > 0 && result.usage.output_tokens > 0
 }
@@ -1033,7 +1083,7 @@ function oai_live_streams() -> bool {
 // gate: OPENAI_LIVE_IMAGE=1.
 function oai_live_generates_image() -> bool {
     let cl = openai.ResponsesClient.new(model = "gpt-4o-mini");
-    let picture = ai.Agent<image>.new(client = cl).run(OaiPicture@spec("a single red apple"));
+    let picture = ai.Agent.new(client = cl).run(OaiPicture@spec("a single red apple"));
     picture.value.base64().length() > 0
 }
 

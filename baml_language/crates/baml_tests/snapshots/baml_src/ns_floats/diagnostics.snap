@@ -1,0 +1,67 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0004
+
+  ⚠ `null` and `2.0` share no value, so this comparison is always false
+     ╭─[floats.baml:845:21]
+ 845 │     assert.is_true((null == 2.0) == false)
+     ·                     ───────────
+     ╰────
+
+  [type] E0004
+
+  ⚠ `float` and `null` share no value, so this comparison is always false
+     ╭─[floats.baml:869:21]
+ 869 │     assert.is_true((float.parse("1.5") == null) == false)
+     ·                     ──────────────────────────
+     ╰────
+
+  [type] E0004
+
+  ⚠ `float` and `null` share no value, so this comparison is always true
+     ╭─[floats.baml:873:20]
+ 873 │     assert.is_true(float.parse("1.5") != null)
+     ·                    ──────────────────────────
+     ╰────
+
+  [type] E0004
+
+  ⚠ `float` and `null` share no value, so this comparison is always false
+     ╭─[floats.baml:913:21]
+ 913 │     assert.is_true((float.nan() == null) == false)
+     ·                     ───────────────────
+     ╰────
+
+  [type] E0004
+
+  ⚠ `float` and `2` share no value, so this comparison is always false
+     ╭─[floats.baml:985:21]
+ 985 │     assert.is_true((float.parse("2") == 2) == false)
+     ·                     ─────────────────────
+     ╰────
+
+  [type] E0004
+
+  ⚠ `float` and `2` share no value, so this comparison is always true
+     ╭─[floats.baml:989:20]
+ 989 │     assert.is_true(float.parse("2.5") != 2)
+     ·                    ───────────────────────
+     ╰────
+
+  [type] E0004
+
+  ⚠ `5` and `float` share no value, so this comparison is always false
+     ╭─[floats.baml:993:21]
+ 993 │     assert.is_true((5 == float.parse("5.0")) == false)
+     ·                     ───────────────────────
+     ╰────
+
+  [type] E0004
+
+  ⚠ `3` and `float` share no value, so this comparison is always true
+     ╭─[floats.baml:997:20]
+ 997 │     assert.is_true(3 != float.parse("3.5"))
+     ·                    ───────────────────────
+     ╰────

@@ -76,8 +76,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0166
 
-  × companion class `baml.TypeValue` cannot be constructed; it only carries the methods of `type`, whose values come from `type.of<T>()` and reflection
+  × companion class `reflect.Type` cannot be constructed; it only carries the methods of `reflect.Type`, whose values come from `reflect.Type.of<T>()` and reflection
     ╭─[main.baml:26:11]
- 26 │   let t = baml.TypeValue {};
-    ·           ─────────────────
+ 26 │   let t = reflect.Type {};
+    ·           ───────────────
     ╰────

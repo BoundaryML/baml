@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+class user.fixtures.type_kinds.Foo {
+  value: int
+}
+class user.fixtures.type_kinds.Foo$stream {
+  value: int | null
+}
+enum user.fixtures.type_kinds.Color {Red, Blue}
+type user.fixtures.type_kinds.Callback = (value: int) -> bool throws never
+type user.fixtures.type_kinds.Callback$stream = unknown
+function user.fixtures.type_kinds.classify(t: reflect.Type) -> string  [expr] {
+  {  } match (t.kind()) { reflect.class.Type => "class", reflect.enum.Type => "enum", reflect.union.Type => "union", reflect.literal.Type => "literal", reflect.array.Type => "array", reflect.map.Type => "map", reflect.interface.Type => "interface", reflect.primitive.Type => "primitive", reflect.function.Type => "function" }
+}
+function user.fixtures.type_kinds.exercise_all_kinds() -> bool  [expr] {
+  {  } classify(reflect.Type.of()) Eq "class" And classify(reflect.Type.of()) Eq "enum" And classify(reflect.Type.of()) Eq "union" And classify(reflect.Type.of()) Eq "literal" And classify(reflect.Type.of()) Eq "array" And classify(reflect.Type.of()) Eq "map" And classify(reflect.Type.of()) Eq "interface" And classify(reflect.Type.of()) Eq "primitive" And classify(reflect.Type.of()) Eq "function"
+}
+function user.fixtures.type_kinds.read_class(view: reflect.class.Type) -> reflect.Type  [expr] {
+  {  } view.as_type()
+}

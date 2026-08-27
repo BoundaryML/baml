@@ -239,7 +239,7 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                 )))
             }
         }
-        Ty::BuiltinUnknown { .. } => Err(unsupported("unknown")),
+        Ty::Unknown { .. } => Err(unsupported("unknown")),
         Ty::Function {
             params,
             ret,

@@ -8,7 +8,7 @@ use text_size::{TextRange, TextSize};
 ///
 /// The lexer recognizes keywords as distinct tokens per the BAML specification.
 ///
-/// # Note on Unquoted Strings and Raw Strings
+/// # Note on Unquoted Strings and Legacy Hash Strings
 ///
 /// **Unquoted Strings**: BAML supports unquoted strings in config contexts like:
 /// ```baml
@@ -18,7 +18,8 @@ use text_size::{TextRange, TextSize};
 /// The lexer tokenizes normally: `"gpt-4o"` → `WORD("gpt"), MINUS, INTEGER("4"), WORD("o")`
 /// The parser assembles these into unquoted strings in appropriate contexts.
 ///
-/// **Raw Strings**: Raw strings like `#"..."#` and `##"..."##` are assembled by the parser:
+/// **Legacy Hash Strings**: Removed hash strings are still assembled by the parser for
+/// lossless error recovery:
 /// ```baml
 /// #"Hello {{name}}"#  → Hash, Quote, Word("Hello"), ..., Quote, Hash
 /// ##"Contains "#""##  → Hash, Hash, Quote, Word("Contains"), ..., Quote, Hash, Hash
@@ -130,8 +131,8 @@ pub enum TokenKind {
     #[token("\"")]
     Quote,
 
-    /// Hash symbol - used for raw string delimiters
-    /// Parser combines Hash + Quote + tokens + Quote + Hash to form raw strings
+    /// Hash symbol - retained for removed hash string delimiter recovery
+    /// Parser combines Hash + Quote + tokens + Quote + Hash for diagnostics
     /// E.g., #"hello"# → Hash, Quote, Word("hello"), Quote, Hash
     #[token("#")]
     Hash,
@@ -801,7 +802,7 @@ mod tests {
 
     #[test]
     fn test_raw_string_unclosed() {
-        // Unclosed raw string - lexer just emits Hash, Quote, and words
+        // Unclosed legacy hash string - lexer just emits Hash, Quote, and words
         // Parser will detect the error
         let source = r##"#"Unclosed"##;
         let file_id = FileId::new(0);

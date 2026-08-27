@@ -4,7 +4,7 @@
 //! # The two-database linking harness
 //!
 //! The LIBRARY database compiles the library's source under
-//! `<builtin>/app/…` (the `Compiler2ExtraFiles` channel, so `file_package`
+//! `<builtin>/app/…` (a source-bearing `Dependency` root, so `file_package`
 //! assigns the files the package name `app`). Two artifacts are captured:
 //!
 //!   1. the CHECK artifact — `borsh(PackageInterface)`, the typed surface a
@@ -27,13 +27,11 @@
 //! The resulting single `Program` runs on the ordinary engine harness.
 
 use baml_base::Name;
-use baml_compiler2_emit::{
-    CompileOptions, OptLevel, emit_units, generate_project_bytecode_with_mounted_units,
-};
+use baml_compiler2_emit::{OptLevel, emit_units, generate_project_bytecode_with_mounted_units};
 use baml_compiler2_hir::package::PackageId;
 use baml_compiler2_hir_ty::package_interface::package_interface;
-use baml_project::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
-use baml_tests::engine::run_compiled;
+use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
+use baml_tests::engine::{TestDbExt, run_compiled};
 use bex_engine::BexExternalValue;
 use bex_vm_types::{CompilationUnit, Program};
 use indexmap::IndexMap;
@@ -131,20 +129,15 @@ function parse_positive(n: int) -> int throws ParseError {
 
 const OPT: OptLevel = OptLevel::One;
 
-fn compile_options() -> CompileOptions {
-    CompileOptions {
-        emit_test_cases: false,
-    }
-}
-
 /// Compile the library under `<builtin>/app/` and capture both
 /// artifacts — the `borsh(PackageInterface)` blob (check surface) and the
 /// symbolic `CompilationUnit` set (run surface; links to `stdlib ++ app`, a
 /// user-independent prefix image).
 fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("/mounted-calls"));
-    db.add_compiler2_virtual_file("<builtin>/app/lib.baml", LIB);
+    db.workspace(std::path::Path::new("/mounted-calls"));
+    db.dependency("app");
+    db.file("<builtin>/app/lib.baml", LIB);
     assert_no_diagnostic_errors(&db);
 
     let iface = package_interface(&db, PackageId::new(&db, Name::new("app")));
@@ -155,9 +148,10 @@ fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
         ),
         "canonical PPIR companions must be part of the mounted export surface"
     );
-    let blob = borsh::to_vec(iface).expect("serialize app interface");
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, iface)
+        .expect("serialize app interface");
 
-    let units = emit_units(&db, &compile_options(), OPT).expect("library fixture emits units");
+    let units = emit_units(&db, OPT).expect("library fixture emits units");
     (blob, units)
 }
 
@@ -166,12 +160,13 @@ fn compile_library() -> (Vec<u8>, Vec<CompilationUnit>) {
 fn consumer_program(user_src: &str) -> Program {
     let (blob, lib_units) = compile_library();
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("/mounted-calls"));
-    db.set_mounted_packages([("app".to_string(), blob)].into());
-    db.add_file("main.baml", user_src);
+    db.workspace(std::path::Path::new("/mounted-calls"));
+    db.set_mounted_packages([("app".to_string(), blob)].into())
+        .unwrap();
+    db.file("main.baml", user_src);
     assert_no_diagnostic_errors(&db);
 
-    generate_project_bytecode_with_mounted_units(&db, &compile_options(), OPT, &lib_units)
+    generate_project_bytecode_with_mounted_units(&db, OPT, &lib_units)
         .expect("consumer compiles against the mounted blob")
 }
 
@@ -408,9 +403,10 @@ function main() -> string throws never {
 fn mounted_stream_companion_supports_consumer_llm_expansion() {
     let (blob, _) = compile_library();
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("/mounted-calls"));
-    db.set_mounted_packages([("app".to_string(), blob)].into());
-    db.add_file(
+    db.workspace(std::path::Path::new("/mounted-calls"));
+    db.set_mounted_packages([("app".to_string(), blob)].into())
+        .unwrap();
+    db.file(
         "main.baml",
         r##"
 client Dummy = openai.ResponsesClient.new(
@@ -502,27 +498,30 @@ function main() -> string throws never {
 #[test]
 fn mounted_builtin_call_stays_reserved() {
     let mut lib_db = ProjectDatabase::new();
-    lib_db.set_project_root(std::path::Path::new("/mounted-calls"));
-    lib_db.add_compiler2_virtual_file(
+    lib_db.workspace(std::path::Path::new("/mounted-calls"));
+    lib_db.dependency("app");
+    lib_db.file(
         "<builtin>/app/native.baml",
         r#"
 function native_value() -> int throws never {
     $rust_function
 }
 
-function intrinsic_type<T>() -> type throws never {
+function intrinsic_type<T>() -> reflect.Type throws never {
     $compiler_intrinsic
 }
 "#,
     );
     assert_no_diagnostic_errors(&lib_db);
     let iface = package_interface(&lib_db, PackageId::new(&lib_db, Name::new("app")));
-    let blob = borsh::to_vec(iface).expect("serialize builtin app interface");
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, iface)
+        .expect("serialize builtin app interface");
 
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("/mounted-calls"));
-    db.set_mounted_packages([("app".to_string(), blob)].into());
-    db.add_file(
+    db.workspace(std::path::Path::new("/mounted-calls"));
+    db.set_mounted_packages([("app".to_string(), blob)].into())
+        .unwrap();
+    db.file(
         "main.baml",
         r#"
 function main() -> int throws never {

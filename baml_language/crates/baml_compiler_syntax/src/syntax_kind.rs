@@ -64,7 +64,7 @@ pub enum SyntaxKind {
 
     // String delimiters (parser assembles strings)
     QUOTE,    // "
-    HASH,     // # (for raw strings)
+    HASH,     // # (for removed hash string recovery)
     BACKTICK, // ` (for BEP-049 interpolated strings)
 
     // Brackets
@@ -160,7 +160,6 @@ pub enum SyntaxKind {
     INTERFACE_DEF,
     CLIENT_DEF,
     GENERATOR_DEF,
-    TEST_DEF,
     TEST_EXPR_DEF,
     TESTSET_DEF,
     RETRY_POLICY_DEF,
@@ -259,6 +258,16 @@ pub enum SyntaxKind {
     FIELD_ACCESS_EXPR,
     /// Explicit interface/static upcast projection: `<expr>.as<T>`.
     UPCAST_EXPR,
+    /// Fully-qualified item reference: `(Base as Interface).item`.
+    ///
+    /// Structure: `L_PAREN TYPE_EXPR KW_AS TYPE_EXPR R_PAREN DOT WORD` — the
+    /// value-namespace twin of the associated-type projection the same
+    /// spelling denotes in type position, and the only spelling that pins
+    /// BOTH halves of the `(Self type, interface, item)` triple. Needed
+    /// wherever neither half can be inferred: a method declared by two
+    /// implemented interfaces, or one whose `Self` appears only in return
+    /// position.
+    QUALIFIED_PATH_EXPR,
     /// LLM function spec reference: `MyFunc@spec` (postfix `@spec` on a path).
     ///
     /// Structure: `<PATH_EXPR> AT WORD("spec")`. Lowered by renaming the
@@ -344,8 +353,6 @@ pub enum SyntaxKind {
     /// Bare type expression as a pattern (literals, paths, generics, arrays, …).
     /// Does NOT consume `|` — that belongs to `UNION_PATTERN` at the pattern level.
     TYPE_PATTERN,
-    /// Contextual runtime identity pattern: `unreflect(expr)`.
-    UNREFLECT_PATTERN,
     /// `'(' PATTERN ')'` — explicit grouping.
     PAREN_PATTERN,
     /// `'_'` (bare) or `'let' '_'` — wildcard / discard. Distinct from
@@ -407,9 +414,8 @@ pub enum SyntaxKind {
     CALL_ARGS,
     CALL_ARG,
     GENERIC_ARGS,
-    /// Contextual runtime type argument: `unreflect(expr)`. This is deliberately
-    /// a whole generic-argument node rather than a type-expression atom.
-    UNREFLECT_ARG,
+    /// Contextual runtime type atom: `unreflect(expr)`.
+    UNREFLECT_TYPE,
     /// Declaration-site generic type parameter list: `<T>` or `<K, V>` on class/function defs.
     GENERIC_PARAM_LIST,
     /// A single type parameter name inside a `GENERIC_PARAM_LIST`.

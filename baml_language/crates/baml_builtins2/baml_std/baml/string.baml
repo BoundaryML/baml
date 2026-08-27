@@ -1,6 +1,6 @@
 /// A UTF-8 encoded string.
 ///
-/// String literals use double quotes: `"hello"`. Multiline strings use the `#"..."#` syntax.
+/// Quoted strings may span multiple lines. Backtick strings support interpolation.
 /// All methods returning a new string do not mutate `self` unless noted otherwise.
 class String {
     /// Renders any value as a human-readable string.
@@ -60,6 +60,17 @@ class String {
     /// Alias for `length()`.
     function char_count(self) -> int throws never {
         $rust_function
+    }
+
+    /// Returns true if the string has no characters.
+    ///
+    /// # Examples
+    /// ```
+    /// "".is_empty()       // true
+    /// "hello".is_empty()  // false
+    /// ```
+    function is_empty(self) -> bool throws never {
+        self.byte_length() == 0
     }
 
     /// Returns the length of the string in **UTF-8 bytes**.

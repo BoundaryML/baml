@@ -255,7 +255,7 @@ class TestGenericCalls {
 
     @Test
     void test_generic_calls_extract_explicit() {
-        // Nested generic; body is `type.of<A|B|C|D>()`.
+        // Nested generic; body is `reflect.Type.of<A|B|C|D>()`.
         GenericPair<GenericPair<Long, String>, GenericPair<Boolean, Double>> pair =
                 GenericPair.of(
                         BamlType.of(GenericPair.class, BamlType.INT, BamlType.STRING),

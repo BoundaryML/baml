@@ -12,6 +12,8 @@ pub(crate) mod method;
 pub(crate) mod type_alias;
 pub(crate) mod typemap_file;
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use baml_codegen_types::{FunctionArgument, FunctionArgumentDefault, Name, Symbol, SymbolPool, Ty};
 
 use crate::{
@@ -57,6 +59,14 @@ pub(crate) type SortKey = (String, u32);
 /// emission. Function symbols fan out into up to 6 `PyFunction` stubs
 /// per §4.4 of the G2 plan; all other variants are 1:1.
 pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, SortKey)> {
+    let aliases: BTreeMap<Name, Ty> = pool
+        .iter()
+        .filter_map(|(name, symbol)| match symbol {
+            Symbol::TypeAlias(alias) => Some((name.clone(), alias.resolves_to.clone())),
+            _ => None,
+        })
+        .collect();
+
     // Determinism: SymbolPool is a HashMap, so iteration order is
     // nondeterministic. Sort pool entries by Name before the walk so
     // triples with identical sort keys (shouldn't happen in practice,
@@ -79,6 +89,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                     .map(|p| PyClassProperty {
                         name: p.name.as_str().to_string(),
                         ty: p.ty.clone(),
+                        nullable: is_nullable(&p.ty, &aliases, &mut BTreeSet::new()),
                         docstring: p.docstring.clone(),
                     })
                     .collect();
@@ -153,6 +164,27 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
     }
 
     out
+}
+
+fn is_nullable(ty: &Ty, aliases: &BTreeMap<Name, Ty>, visiting: &mut BTreeSet<Name>) -> bool {
+    match ty {
+        Ty::Null { .. } => true,
+        Ty::Union(items, _) => items
+            .iter()
+            .any(|item| is_nullable(item, aliases, visiting)),
+        Ty::TypeAlias(name, _) => {
+            let Some(resolved) = aliases.get(name) else {
+                return false;
+            };
+            if !visiting.insert(name.clone()) {
+                return false;
+            }
+            let nullable = is_nullable(resolved, aliases, visiting);
+            visiting.remove(name);
+            nullable
+        }
+        _ => false,
+    }
 }
 
 /// Fan out a `Symbol::Function` into its sync and async bindings.

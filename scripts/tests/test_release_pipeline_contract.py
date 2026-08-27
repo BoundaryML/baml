@@ -30,6 +30,9 @@ NUGET_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-csharp-sdk.yaml"
 NODE_NPM_PUBLISHER = (
     ROOT / ".github" / "workflows" / "publish2-nodejs-sdk.yaml"
 )
+NODE_BUILDER = (
+    ROOT / ".github" / "workflows" / "build2-nodejs-sdk.reusable.yaml"
+)
 WEB_NPM_PUBLISHER = ROOT / ".github" / "workflows" / "publish2-web-sdk.yaml"
 CSHARP_PREPARER = (
     ROOT / ".github" / "workflows" / "prepare-csharp-sdk.reusable.yaml"
@@ -69,14 +72,14 @@ NUGET_NORMALIZER = (
     / "Baml.NuGetNormalizer"
     / "Program.cs"
 )
-PRIMITIVE_CONSUMER = (
+NUGET_PACKAGE_SMOKE = (
     ROOT
     / "baml_language"
     / "sdks"
     / "csharp"
     / "bridge_csharp"
     / "tests"
-    / "Baml.Bridge.PrimitivePackageConsumer"
+    / "Baml.Bridge.NuGetPackageSmoke"
     / "verify.sh"
 )
 PKG_BOUNDARYML_COM_STACK = (
@@ -109,11 +112,11 @@ class CSharpReleaseContractTests(unittest.TestCase):
         return json.loads(PLATFORMS.read_text(encoding="utf-8"))
 
     def write_generated_sources(self, root: Path) -> Path:
-        generated = root / "baml_client"
+        generated = root / "baml_sdk"
         sources = {
             "Baml/Generated/BamlProgram.g.cs": "program",
             "Baml/Http/Request.g.cs": "request",
-            "CsharpSlice/Functions.g.cs": "functions",
+            "CsharpBasicCalls/Functions.g.cs": "functions",
         }
         for relative, content in sources.items():
             path = generated / relative
@@ -148,7 +151,7 @@ class CSharpReleaseContractTests(unittest.TestCase):
                 [
                     "Baml/Generated/BamlProgram.g.cs",
                     "Baml/Http/Request.g.cs",
-                    "CsharpSlice/Functions.g.cs",
+                    "CsharpBasicCalls/Functions.g.cs",
                 ],
             )
 
@@ -198,7 +201,7 @@ class CSharpReleaseContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             generated = self.write_generated_sources(root)
-            (generated / "CsharpSlice/Functions.g.cs").unlink()
+            (generated / "CsharpBasicCalls/Functions.g.cs").unlink()
             result = self.run_tool(
                 "write-generated-manifest",
                 "--root",
@@ -703,6 +706,17 @@ class WorkflowGraphTests(unittest.TestCase):
             workflow.index("scripts/baml-language-version stamp"),
             workflow.index("cmake -S baml_language/sdks/cpp/bridge_cpp/tests"),
         )
+
+    def test_node_musl_abi_check_uses_runtime_dependencies(self) -> None:
+        workflow = NODE_BUILDER.read_text(encoding="utf-8")
+        verify = step_block(workflow, "Verify musl native addon ABI")
+
+        self.assertIn('readelf --wide --dynamic "$native"', verify)
+        self.assertIn('needed="$(grep NEEDED <<<"$dynamic")"', verify)
+        self.assertIn("'\\[libc\\.so\\]'", verify)
+        self.assertIn("'libc\\.so\\.6'", verify)
+        self.assertNotIn("readelf --version-info", verify)
+        self.assertNotIn("grep -q 'GLIBC_'", verify)
 
     def test_cargo_jobs_name_targets_and_run_pack_e2e_on_musl(self) -> None:
         workflow = CARGO_TESTS.read_text(encoding="utf-8")
@@ -1210,7 +1224,7 @@ class WorkflowGraphTests(unittest.TestCase):
         publisher = NUGET_PUBLISHER.read_text(encoding="utf-8")
         preparer = CSHARP_PREPARER.read_text(encoding="utf-8")
         verifier = CSHARP_VERIFIER.read_text(encoding="utf-8")
-        primitive_consumer = PRIMITIVE_CONSUMER.read_text(encoding="utf-8")
+        nuget_package_smoke = NUGET_PACKAGE_SMOKE.read_text(encoding="utf-8")
         release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         cargo_tests = CARGO_TESTS.read_text(encoding="utf-8")
         pack = PACK_PRODUCT.read_text(encoding="utf-8")
@@ -1239,9 +1253,9 @@ class WorkflowGraphTests(unittest.TestCase):
         self.assertIn("verify-generated-sources", publisher)
         self.assertNotIn("Baml/Csv/CsvError.g.cs", preparer)
         self.assertNotIn("Baml/Csv/CsvError.g.cs", verifier)
-        self.assertNotIn("Baml/Csv/CsvError.g.cs", primitive_consumer)
-        self.assertIn("list_generated_sources", primitive_consumer)
-        self.assertNotIn("-printf", primitive_consumer)
+        self.assertNotIn("Baml/Csv/CsvError.g.cs", nuget_package_smoke)
+        self.assertIn("list_generated_sources", nuget_package_smoke)
+        self.assertNotIn("-printf", nuget_package_smoke)
 
         self.assertIn(".registry_versions.nuget", pack)
         self.assertIn('-p:PackageVersion="$nuget_version"', pack)
@@ -1273,20 +1287,20 @@ class WorkflowGraphTests(unittest.TestCase):
                 self.assertNotEqual(inputs.get("cache"), "pnpm")
 
     def test_csharp_consumer_repository_path_scan_requires_a_separator(self) -> None:
-        primitive_consumer = PRIMITIVE_CONSUMER.read_text(encoding="utf-8")
+        nuget_package_smoke = NUGET_PACKAGE_SMOKE.read_text(encoding="utf-8")
         self.assertIn(
             'repository_path_prefix="${repository_root%/}/"',
-            primitive_consumer,
+            nuget_package_smoke,
         )
         self.assertIn(
             'grep -r -a -F -l -- "$repository_path_prefix" "$publish"',
-            primitive_consumer,
+            nuget_package_smoke,
         )
         self.assertNotIn(
             'grep -r -a -F -l -- "$repository_root" "$publish"',
-            primitive_consumer,
+            nuget_package_smoke,
         )
-        self.assertNotIn("rg -a", primitive_consumer)
+        self.assertNotIn("rg -a", nuget_package_smoke)
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -1303,7 +1317,7 @@ class WorkflowGraphTests(unittest.TestCase):
 
             benign_result = subprocess.run(
                 [
-                    str(PRIMITIVE_CONSUMER),
+                    str(NUGET_PACKAGE_SMOKE),
                     "--verify-repository-paths",
                     "/work",
                     str(benign_publish),
@@ -1317,7 +1331,7 @@ class WorkflowGraphTests(unittest.TestCase):
 
             leaked_result = subprocess.run(
                 [
-                    str(PRIMITIVE_CONSUMER),
+                    str(NUGET_PACKAGE_SMOKE),
                     "--verify-repository-paths",
                     "/work",
                     str(leaked_publish),

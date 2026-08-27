@@ -56,7 +56,7 @@ function AnthMockTools(question: string) -> string {
 }
 
 // A leading literal keeps the media part at a known index: the rendered parts
-// are ["Look at ", <media>].
+// are ["Look at", <media>].
 function AnthMockVision(picture: image) -> string {
     client: "anthropic/claude-haiku-4-5"
     prompt: `${role("user")}Look at ${picture}`
@@ -83,6 +83,9 @@ function anth_failure_label(e: unknown) -> string {
         let n: ai.errors.NetworkFailure => `NetworkFailure:${n.detail}`,
         let i: ai.errors.InvalidRequest => `InvalidRequest:${i.detail}`,
         let p: ai.errors.ParseFailed => `ParseFailed:${p.raw_output}`,
+        let f: ai.errors.FinishReasonError => {
+            `FinishReasonError:${f.finish_reason.to_string()}:${f.raw_output}`
+        },
         let f: ai.errors.Refused => "Refused",
         _ => `other:${e.to_string()}`,
     }
@@ -162,7 +165,7 @@ function anthropic_request_shape() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(AnthMockAsk@spec("Say pong."));
+            let result = ai.Agent.new(client = cl).run(AnthMockAsk@spec("Say pong."));
             let sent = mock.last_request();
             let body = sent.json();
             [
@@ -210,6 +213,30 @@ test "anthropic_request_shape" {
     assert.contains(got, "input=9")
 }
 
+function anthropic_request_timeout_ms() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(anth_canned_text("pong", "end_turn"))],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = anthropic.AnthropicClient.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                request_timeout_ms = 20,
+            );
+            let outcome = anth_invoke_label(cl, anth_turn_input(AnthMockPlain@spec())) catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.request_timeout_ms ?? -1}|${outcome}`
+        },
+        response_delay_ms = 200,
+    )
+}
+
+test "anthropic_request_timeout_ms" {
+    assert.equal(anthropic_request_timeout_ms(), "20|Timeout")
+}
+
 // Typed first-class parameters lower into the typed request; `headers` are
 // applied BEFORE the auth header (so anthropic-beta is reachable and
 // anthropic-version is overridable, while x-api-key still wins);
@@ -242,7 +269,7 @@ function anthropic_params_and_passthrough() -> string {
                 },
                 query_params = { "beta": "true" },
             );
-            let result = ai.Agent<string>.new(client = cl).run(AnthMockAsk@spec("hi"));
+            let result = ai.Agent.new(client = cl).run(AnthMockAsk@spec("hi"));
             let sent = mock.last_request();
             let body = sent.json();
             [
@@ -296,7 +323,7 @@ function anthropic_cache_control_placement() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let _ = ai.Agent<string>.new(client = cl).run(AnthMockCached@spec("hi"));
+            let _ = ai.Agent.new(client = cl).run(AnthMockCached@spec("hi"));
             let body = mock.last_request().json();
             [
                 `system_cc=${baml.json.path_or<string>(body, ".system[0].cache_control.type", "-")}`,
@@ -453,7 +480,7 @@ function anthropic_tool_round_trip() -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let result = ai.Agent<string>.new(client = cl).run(AnthMockTools@spec("weather?"));
+            let result = ai.Agent.new(client = cl).run(AnthMockTools@spec("weather?"));
             let body = mock.last_request().json();
             [
                 `value=${result.value}`,
@@ -506,7 +533,7 @@ function anthropic_stop_reason_outcome(stop_reason: string) -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let outcome = ai.Agent<string>.new(client = cl).run(AnthMockAsk@spec("hi")).value catch_all (e) {
+            let outcome = ai.Agent.new(client = cl).run(AnthMockAsk@spec("hi")).value catch_all (e) {
                 _ => anth_failure_label(e),
             };
             outcome
@@ -523,15 +550,18 @@ test "anthropic_stop_reason_stop_sequence" {
 }
 
 test "anthropic_stop_reason_max_tokens" {
-    assert.equal(anthropic_stop_reason_outcome("max_tokens"), "ParseFailed:pong")
+    assert.equal(anthropic_stop_reason_outcome("max_tokens"), "FinishReasonError:MaxTokens:pong")
 }
 
 test "anthropic_stop_reason_pause_turn" {
-    assert.equal(anthropic_stop_reason_outcome("pause_turn"), "ParseFailed:pong")
+    assert.equal(anthropic_stop_reason_outcome("pause_turn"), "FinishReasonError:MaxTokens:pong")
 }
 
 test "anthropic_stop_reason_unknown" {
-    assert.equal(anthropic_stop_reason_outcome("model_context_window_exceeded"), "ParseFailed:pong")
+    assert.equal(
+        anthropic_stop_reason_outcome("model_context_window_exceeded"),
+        "FinishReasonError:MaxTokens:pong",
+    )
 }
 
 test "anthropic_stop_reason_refusal" {
@@ -550,7 +580,7 @@ function anthropic_http_error(status: int) -> string {
                 api_key = "test-key",
                 base_url = mock.base_url(),
             );
-            let outcome = ai.Agent<string>.new(client = cl).run(AnthMockAsk@spec("hi")).value catch_all (e) {
+            let outcome = ai.Agent.new(client = cl).run(AnthMockAsk@spec("hi")).value catch_all (e) {
                 _ => anth_failure_label(e),
             };
             outcome
@@ -578,30 +608,30 @@ function anthropic_stream_text() -> string {
     let events = [
         root.llm_mock.sse_event(
             "message_start",
-            #"{"type":"message_start","message":{"id":"m","model":"claude-haiku-4-5","usage":{"input_tokens":5,"cache_read_input_tokens":2}}}"#,
+            `{"type":"message_start","message":{"id":"m","model":"claude-haiku-4-5","usage":{"input_tokens":5,"cache_read_input_tokens":2}}}`,
         ),
         root.llm_mock.sse_event(
             "content_block_start",
-            #"{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}"#,
+            `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
         ),
         root.llm_mock.sse_event(
             "content_block_delta",
-            #"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"po"}}"#,
+            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"po"}}`,
         ),
         root.llm_mock.sse_event(
             "content_block_delta",
-            #"{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"SECRET"}}"#,
+            `{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"SECRET"}}`,
         ),
         root.llm_mock.sse_event(
             "content_block_delta",
-            #"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ng"}}"#,
+            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ng"}}`,
         ),
-        root.llm_mock.sse_event("ping", #"{"type":"ping"}"#),
+        root.llm_mock.sse_event("ping", `{"type":"ping"}`),
         root.llm_mock.sse_event(
             "message_delta",
-            #"{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":7}}"#,
+            `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":7}}`,
         ),
-        root.llm_mock.sse_event("message_stop", #"{"type":"message_stop"}"#),
+        root.llm_mock.sse_event("message_stop", `{"type":"message_stop"}`),
     ];
     root.llm_mock.mock_sse_serve(
         events,
@@ -624,6 +654,36 @@ test "anthropic_stream_text" {
     assert.contains(got, "stream=true")
 }
 
+function anthropic_stream_time_to_first_token_timeout_ms() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_event(
+                "message_start",
+                `{"type":"message_start","message":{"id":"m","model":"claude-haiku-4-5","usage":{"input_tokens":5}}}`,
+            ),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = anthropic.AnthropicClient.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                request_timeout_ms = 1000,
+                time_to_first_token_timeout_ms = 20,
+            );
+            let outcome = anth_stream_value(cl) catch_all (e) {
+                let timeout: baml.errors.Timeout => "Timeout",
+                _ => `other:${e.to_string()}`,
+            };
+            `${cl.time_to_first_token_timeout_ms ?? -1}|${outcome}`
+        },
+        first_event_delay_ms = 200,
+    )
+}
+
+test "anthropic_stream_time_to_first_token_timeout_ms" {
+    assert.equal(anthropic_stream_time_to_first_token_timeout_ms(), "20|Timeout")
+}
+
 // A connection that ends BEFORE `message_stop` is a truncated turn, not a
 // short successful one: the mock serves a message_start and one text delta and
 // then closes. Without the decoder's `require_terminal` opt-in this returned
@@ -633,11 +693,11 @@ function anthropic_stream_truncated() -> string {
     let events = [
         root.llm_mock.sse_event(
             "message_start",
-            #"{"type":"message_start","message":{"id":"m","model":"claude-haiku-4-5","usage":{"input_tokens":5}}}"#,
+            `{"type":"message_start","message":{"id":"m","model":"claude-haiku-4-5","usage":{"input_tokens":5}}}`,
         ),
         root.llm_mock.sse_event(
             "content_block_delta",
-            #"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"par"}}"#,
+            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"par"}}`,
         ),
     ];
     root.llm_mock.mock_sse_serve(
@@ -668,11 +728,11 @@ function anthropic_stream_error_event(payload: string) -> string {
     let events = [
         root.llm_mock.sse_event(
             "message_start",
-            #"{"type":"message_start","message":{"id":"m","usage":{"input_tokens":5}}}"#,
+            `{"type":"message_start","message":{"id":"m","usage":{"input_tokens":5}}}`,
         ),
         root.llm_mock.sse_event(
             "content_block_delta",
-            #"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"par"}}"#,
+            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"par"}}`,
         ),
         root.llm_mock.sse_event("error", payload),
     ];
@@ -694,7 +754,7 @@ function anthropic_stream_error_event(payload: string) -> string {
 test "anthropic_stream_error_overloaded" {
     assert.equal(
         anthropic_stream_error_event(
-            #"{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#,
+            `{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`,
         ),
         "NetworkFailure:overloaded_error: Overloaded",
     )
@@ -703,7 +763,7 @@ test "anthropic_stream_error_overloaded" {
 test "anthropic_stream_error_rate_limit" {
     assert.equal(
         anthropic_stream_error_event(
-            #"{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}"#,
+            `{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}`,
         ),
         "RateLimited",
     )
@@ -712,7 +772,7 @@ test "anthropic_stream_error_rate_limit" {
 test "anthropic_stream_error_auth" {
     assert.equal(
         anthropic_stream_error_event(
-            #"{"type":"error","error":{"type":"authentication_error","message":"bad key"}}"#,
+            `{"type":"error","error":{"type":"authentication_error","message":"bad key"}}`,
         ),
         "InvalidRequest:authentication_error: bad key",
     )
@@ -760,17 +820,17 @@ function anthropic_decode_tool_stream() -> string {
     let state = anthropic.internal.AnthStreamState.new();
     let batch = anth_batch(
         [
-            #"{"type":"message_start","message":{"id":"m1","model":"claude-haiku-4-5","usage":{"input_tokens":11,"cache_read_input_tokens":7,"cache_creation_input_tokens":3}}}"#,
-            #"{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"Hel"}}"#,
-            #"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"lo"}}"#,
-            #"{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_1","name":"anth_weather"}}"#,
-            #"{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"city\":"}}"#,
-            #"{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\"SF\"}"}}"#,
-            #"{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hmm"}}"#,
-            #"{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig1"}}"#,
-            #"{"type":"ping"}"#,
-            #"{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":42,"cache_read_input_tokens":9,"output_tokens_details":{"thinking_tokens":13}}}"#,
-            #"{"type":"message_stop"}"#,
+            `{"type":"message_start","message":{"id":"m1","model":"claude-haiku-4-5","usage":{"input_tokens":11,"cache_read_input_tokens":7,"cache_creation_input_tokens":3}}}`,
+            `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"Hel"}}`,
+            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"lo"}}`,
+            `{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_1","name":"anth_weather"}}`,
+            `{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\\"city\\\":"}}`,
+            `{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\\\"SF\\\"}"}}`,
+            `{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hmm"}}`,
+            `{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig1"}}`,
+            `{"type":"ping"}`,
+            `{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":42,"cache_read_input_tokens":9,"output_tokens_details":{"thinking_tokens":13}}}`,
+            `{"type":"message_stop"}`,
         ],
     );
     let seen: string[] = [];
@@ -828,7 +888,7 @@ function anthropic_decode_skips_garbage() -> string {
     let batch = anth_batch(
         [
             "not json at all",
-            #"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}"#,
+            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}`,
         ],
     );
     let seen: string[] = [];
@@ -1027,7 +1087,7 @@ function anthropic_reasoning_tokens() -> string {
                 base_url = mock.base_url(),
                 thinking = anthropic.ThinkingConfig.enabled(1024),
             );
-            let result = ai.Agent<string>.new(client = cl).run(AnthMockAsk@spec("hi"));
+            let result = ai.Agent.new(client = cl).run(AnthMockAsk@spec("hi"));
             [
                 `value=${result.value}`,
                 `output=${result.usage.output_tokens}`,

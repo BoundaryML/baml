@@ -118,13 +118,13 @@ async fn typed_arm_on_enclosing_typevar_matches() {
 // 01pt3: inbound (host-call) generics — named `_types=` channel
 // ===========================================================================
 
-/// A body-only `TypeVar` (`T` appears only via `type.of<T>()`, never in
+/// A body-only `TypeVar` (`T` appears only via `reflect.Type.of<T>()`, never in
 /// the signature) is bound through the named channel and threads into the
 /// frame. Proves the path doesn't rely on argument inference.
 #[tokio::test]
 async fn inbound_named_binding_threads_to_reflect() {
     let source = r#"
-        function one_type_arg<T>() -> string { type.of<T>().to_string() }
+        function one_type_arg<T>() -> string { reflect.Type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let out = call_named(
@@ -143,7 +143,7 @@ async fn inbound_named_binding_threads_to_reflect() {
 #[tokio::test]
 async fn inbound_missing_binding_rejected() {
     let source = r#"
-        function one_type_arg<T>() -> string { type.of<T>().to_string() }
+        function one_type_arg<T>() -> string { reflect.Type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
     let err = call_named(source, "one_type_arg", vec![], vec![])

@@ -134,9 +134,6 @@ export function Navbar() {
           <Link className="nav-link" href="/changelog">
             Changelog
           </Link>
-          <Link className="nav-link" href="/atb">
-            agent tries baml
-          </Link>
         </div>
         <div className="nav-desktop-actions">
           <NavDiscord />
@@ -198,15 +195,6 @@ export function Navbar() {
             onClick={() => setOpen(false)}
           >
             Changelog
-          </Link>
-          <Link
-            className="nav-mobile-link"
-            href="/atb"
-            onClick={() => setOpen(false)}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            agent tries baml
           </Link>
           <div className="nav-mobile-footer">
             <NavDiscord />

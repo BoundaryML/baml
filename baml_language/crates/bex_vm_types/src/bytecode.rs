@@ -707,7 +707,7 @@ pub enum Instruction {
     LoadType(usize),
 
     /// Pop an exact `Object::Type` and bind it to a frame type-argument slot.
-    /// Later `LoadType(TypeArgRef(slot))` reproduces the same mint and defs.
+    /// Later `LoadType(TypeArgRef(slot))` reproduces the same type and defs.
     BindType(usize),
 
     /// Remap a sparse type tag to a dense index via perfect hash lookup.
@@ -795,6 +795,24 @@ pub enum Instruction {
     ///
     /// Stack: `[receiver, type_args…, iface_type, method_name]` -> `[bound_method]`
     MakeVirtualBoundMethod {
+        /// Number of method-level `Object::Type` args on the stack (below the
+        /// interface type), appended to the resolved impl frame.
+        ntypeargs: u16,
+    },
+
+    /// Resolve an *interface* method to a callable value from a written `Self`
+    /// TYPE — the type-keyed analogue of `MakeVirtualBoundMethod`, and the only
+    /// dispatch form for a method with no `self` receiver (there is no value to
+    /// derive `Self` from). Pops the method name, the interface type
+    /// (`Object::Type`), `ntypeargs` method-level type args, and the `Self`
+    /// type (`Object::Type`, in the receiver's stack slot); resolves `Self`'s
+    /// `implements` rule (coherence guarantees at most one) and pushes a
+    /// capture-less `Object::Closure` over the resolved method, whose
+    /// `captured_type_args` carry the callee's complete frame — the impl's
+    /// realized frame followed by the method-level args.
+    ///
+    /// Stack: `[self_type, type_args…, iface_type, method_name]` -> `[closure]`
+    MakeVirtualFunction {
         /// Number of method-level `Object::Type` args on the stack (below the
         /// interface type), appended to the resolved impl frame.
         ntypeargs: u16,
@@ -893,7 +911,7 @@ pub enum Instruction {
     /// (`CPython` `STORE_FAST_STORE_FAST`.)
     StoreVar2(usize, usize),
 
-    /// Compare a value's runtime nominal mint with an `Object::Type` mint.
+    /// Test whether a value's declaration is the one an `Object::Type` names.
     /// Stack: `[value, type_value] -> [bool]`.
     ///
     /// Appended to preserve the serialized discriminants of existing
@@ -1094,6 +1112,17 @@ pub enum OpCode {
 
     // Lexical Package.current(): u32 constant-pool string index.
     LoadCurrentPackage,
+
+    // Truthiness coercion (B-1563), appended to preserve discriminants:
+    // pop a value, push its truthiness (`false`, `null`, zero, and empty
+    // string/list/map/bytes are falsy; everything else is truthy).
+    Truthy,
+
+    // Virtual interface-method value resolved from a written `Self` TYPE (the
+    // type-keyed analogue of `MakeVirtualBoundMethod`): u16 method-level type
+    // arg count; `Self` type, interface type, and method name come off the
+    // stack and the resolved capture-less closure is pushed.
+    MakeVirtualFunction,
 }
 
 impl OpCode {
@@ -1119,6 +1148,7 @@ impl OpCode {
             | Self::MakeCell
             | Self::SendEvent
             | Self::ContainerLen
+            | Self::Truthy
             | Self::Spawn
             | Self::AwaitAny
             | Self::Add
@@ -1223,7 +1253,9 @@ impl OpCode {
             Self::LoadCurrentPackage => 5,
 
             // 3-byte: opcode + u16
-            Self::MakeGenericFunctionFromValue | Self::MakeVirtualBoundMethod => 3,
+            Self::MakeGenericFunctionFromValue
+            | Self::MakeVirtualBoundMethod
+            | Self::MakeVirtualFunction => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
             Self::AllocInstance
@@ -1254,6 +1286,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Throw as u8 => Ok(Self::Throw),
             x if x == Self::Rethrow as u8 => Ok(Self::Rethrow),
             x if x == Self::MakeVirtualBoundMethod as u8 => Ok(Self::MakeVirtualBoundMethod),
+            x if x == Self::MakeVirtualFunction as u8 => Ok(Self::MakeVirtualFunction),
             x if x == Self::LoadArrayElement as u8 => Ok(Self::LoadArrayElement),
             x if x == Self::LoadMapElement as u8 => Ok(Self::LoadMapElement),
             x if x == Self::StoreArrayElement as u8 => Ok(Self::StoreArrayElement),
@@ -1376,6 +1409,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::CallWithRuntimeId as u8 => Ok(Self::CallWithRuntimeId),
             x if x == Self::VirtualCallWithRuntimeId as u8 => Ok(Self::VirtualCallWithRuntimeId),
             x if x == Self::NarrowBind as u8 => Ok(Self::NarrowBind),
+            x if x == Self::Truthy as u8 => Ok(Self::Truthy),
             _ => Err(byte),
         }
     }
@@ -1394,6 +1428,7 @@ impl std::fmt::Display for OpCode {
             Self::Throw => "THROW",
             Self::Rethrow => "RETHROW",
             Self::MakeVirtualBoundMethod => "MAKE_VIRTUAL_BOUND_METHOD",
+            Self::MakeVirtualFunction => "MAKE_VIRTUAL_FUNCTION",
             Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
             Self::LoadMapElement => "LOAD_MAP_ELEMENT",
             Self::StoreArrayElement => "STORE_ARRAY_ELEMENT",
@@ -1404,6 +1439,7 @@ impl std::fmt::Display for OpCode {
             Self::TypeTag => "TYPE_TAG",
             Self::RuntimeIsType => "RUNTIME_IS_TYPE",
             Self::LoadCurrentPackage => "LOAD_CURRENT_PACKAGE",
+            Self::Truthy => "TRUTHY",
             Self::ThrowIfPanic => "THROW_IF_PANIC",
             Self::Unreachable => "UNREACHABLE",
             Self::MakeCell => "MAKE_CELL",
@@ -1576,6 +1612,8 @@ pub enum CmpOp {
 pub enum UnaryOp {
     Not,
     Neg,
+    /// Truthiness coercion (B-1563). Appended to preserve Borsh indices.
+    Truthy,
 }
 
 impl std::fmt::Display for BinOp {
@@ -1613,6 +1651,7 @@ impl std::fmt::Display for UnaryOp {
         f.write_str(match self {
             UnaryOp::Not => "!",
             UnaryOp::Neg => "-",
+            UnaryOp::Truthy => "truthy",
         })
     }
 }
@@ -1712,6 +1751,9 @@ impl std::fmt::Display for Instruction {
             Instruction::Rethrow => f.write_str("RETHROW"),
             Instruction::MakeVirtualBoundMethod { ntypeargs } => {
                 write!(f, "MAKE_VIRTUAL_BOUND_METHOD {ntypeargs}")
+            }
+            Instruction::MakeVirtualFunction { ntypeargs } => {
+                write!(f, "MAKE_VIRTUAL_FUNCTION {ntypeargs}")
             }
 
             Instruction::Return => f.write_str("RETURN"),
@@ -1844,8 +1886,12 @@ pub struct DebugLocalScope {
 /// transfers control to `handler_pc`, with the exception value stored
 /// in the frame-local slot `error_slot`.
 ///
-/// Entries are sorted by `start_pc`. For nested catch blocks the innermost
-/// (narrowest range) entry appears first.
+/// One catch region contributes one entry per coalesced run of its protected
+/// blocks (block layout can fragment a region across non-contiguous PCs), so
+/// several entries may share a `handler_pc`. Entries are stably sorted by
+/// `start_pc`; the VM picks the innermost covering entry by largest
+/// `start_pc`, then smallest `end_pc`, then latest table order (identical
+/// ranges are emitted outer-region-first).
 ///
 /// All exceptions (user-thrown values and VM panics) are routed to the
 /// handler. The handler bytecode is responsible for filtering: a
@@ -2299,7 +2345,8 @@ impl Bytecode {
 
                 // ── MakeGenericFunctionFromValue: u16 ntypeargs ──────
                 Instruction::MakeGenericFunctionFromValue { ntypeargs }
-                | Instruction::MakeVirtualBoundMethod { ntypeargs } => {
+                | Instruction::MakeVirtualBoundMethod { ntypeargs }
+                | Instruction::MakeVirtualFunction { ntypeargs } => {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
@@ -2526,6 +2573,7 @@ impl Bytecode {
             Instruction::Throw => OpCode::Throw,
             Instruction::Rethrow => OpCode::Rethrow,
             Instruction::MakeVirtualBoundMethod { .. } => OpCode::MakeVirtualBoundMethod,
+            Instruction::MakeVirtualFunction { .. } => OpCode::MakeVirtualFunction,
             Instruction::LoadArrayElement => OpCode::LoadArrayElement,
             Instruction::LoadMapElement => OpCode::LoadMapElement,
             Instruction::StoreArrayElement => OpCode::StoreArrayElement,
@@ -2567,6 +2615,7 @@ impl Bytecode {
             Instruction::UnaryOp(op) => match op {
                 UnaryOp::Not => OpCode::Not,
                 UnaryOp::Neg => OpCode::Neg,
+                UnaryOp::Truthy => OpCode::Truthy,
             },
 
             // Constant specialization
@@ -2759,6 +2808,7 @@ mod compact_tests {
     #[test]
     fn encoded_size_matches_emitted_bytes_for_every_opcode() {
         for (instruction, expected) in [
+            (Instruction::UnaryOp(UnaryOp::Truthy), OpCode::Truthy),
             (Instruction::VirtualLoadField(1), OpCode::VirtualLoadField),
             (Instruction::VirtualStoreField(1), OpCode::VirtualStoreField),
             (Instruction::LoadField(1), OpCode::LoadField),

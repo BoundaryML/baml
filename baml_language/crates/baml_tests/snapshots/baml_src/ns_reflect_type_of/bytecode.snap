@@ -1,0 +1,234 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function reflect_type_of.$init_test_ns_reflect_type_of_reflect_type_of(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_class_to_string"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_int_to_string"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_string_to_string"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_bool_to_string"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_array_to_string"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_optional_to_string"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_map_to_string"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_generic_class_runs_without_crash"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_generic_class_to_string_matches_source"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_map_eq"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_generic_class_eq"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_generic_class_neq_different_arg"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 11)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "wrap_in_container_to_string"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 12)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_same_class_eq"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 13)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_different_class_neq"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 14)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_assign_and_compare"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 15)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_enum_to_string"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 16)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_enum_eq"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 17)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_enum_neq_class"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 18)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_union_eq"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 19)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_union_neq_different_member"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 20)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "type_of_to_string_works_as_map_key"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 21)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_int"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 22)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_never_yields_a_literal_type"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 23)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_string_and_bool"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_class_instance"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 25)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_array_reports_element_type"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 26)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_of_a_type_value_is_the_carrier"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 27)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_widened_unknown_slot"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "of_value_function_value_reports_function_type"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.reflect_type_of"
+    load_const "reflect_signature_reports_the_declared_types"
+    make_closure .<lambda($init_test_ns_reflect_type_of_reflect_type_of, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function reflect_type_of.of_value_helper(q: string) -> string {
+    load_var q
+    return
+}
+
+function reflect_type_of.wrap_in_container() -> reflect.Type {
+    load_type reflect_type_of.Container<#0>
+    return
+}

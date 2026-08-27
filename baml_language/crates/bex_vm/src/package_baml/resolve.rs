@@ -8,28 +8,27 @@
 //! impl applies (the caller decides the fallback).
 //!
 //! This mirrors the compiler's selection (`match_ty_pattern` + bound validation
-//! in `baml_compiler2_hir_ty::interfaces`), run on `baml_type::RealizedTy`: unify the rule's
+//! in `baml_compiler2_hir_ty::interfaces`), run on `bex_vm_types::RealizedTy`: unify the rule's
 //! `for_ty_pattern` against the concrete type (binding the impl's generic
 //! params), then discharge each param's declared bound as a nested obligation.
 
 use std::borrow::Cow;
 
-use baml_type::{
-    Literal, Name, RealizedTy, TyTemplate, TypeName,
-    normalize::TypeContext,
-    type_kind::{class_inhabits_any_class, is_type_kind_class},
+use baml_type::{Literal, Name, normalize::TypeContext};
+use bex_vm_types::{
+    RealizedTy, TyTemplate, TypeHead, errors::VmInternalError, types::RuntimeImplRule,
 };
-use bex_vm_types::{errors::VmInternalError, types::RuntimeImplRule};
 
 use crate::{BexVm, type_context::StructuralEquivCtx};
 
-/// A resolver candidate borrows immutable package rules and owns only rules
-/// copied out of the lock-protected dynamic side table. Static virtual calls
-/// must not deep-clone their rule metadata on every dispatch.
+/// A resolver candidate borrows an immutable rule from the heap. Every rule —
+/// compiled into the static image, owned by a runtime package, or registered
+/// as an anonymous class's witness — is an `Object::ImplRule`, so no candidate
+/// ever copies rule metadata. The two variants differ only in cacheability:
+/// a `Static` rule lives in the never-moving compile-time region.
 pub(crate) enum RuntimeImplRuleCandidate<'vm> {
     Static(&'vm RuntimeImplRule),
     Borrowed(&'vm RuntimeImplRule),
-    Owned(Box<RuntimeImplRule>),
 }
 
 impl RuntimeImplRuleCandidate<'_> {
@@ -44,7 +43,6 @@ impl std::ops::Deref for RuntimeImplRuleCandidate<'_> {
     fn deref(&self) -> &Self::Target {
         match self {
             Self::Static(rule) | Self::Borrowed(rule) => rule,
-            Self::Owned(rule) => rule,
         }
     }
 }
@@ -97,10 +95,17 @@ impl<'vm> ImplResolver<'vm> {
     /// one O(1) lookup over a table that already spans every package — see that
     /// type's docs for why a per-package search cannot be narrowed correctly. An
     /// unknown interface (not loaded) has no impls anywhere.
-    fn rules_for(self, iface: &TypeName) -> Vec<RuntimeImplRuleCandidate<'vm>> {
-        let Some(iface_ptr) = self.vm.lookup_interface(iface) else {
-            return Vec::new();
-        };
+    fn rules_for(self, iface: TypeHead) -> Vec<RuntimeImplRuleCandidate<'vm>> {
+        // The head *is* the canonical `Object::Interface` pointer that keys
+        // every package's `impl_rules` — no name lookup on the dispatch path.
+        //
+        // This is also why a rooted resolver needs no viewpoint choice here. A
+        // goal can name an interface the inspected package declares itself or
+        // one it borrowed from a mounted dependency; resolving that *name*
+        // would have to pick which of two same-named interfaces to key on. The
+        // head carries the identity the goal was built from, so there is
+        // nothing left to disambiguate.
+        let iface_ptr = iface.ptr();
         let mut pointers = Vec::new();
         pointers.extend(self.vm.packages.impl_rules_of(iface_ptr));
         let mut packages = vec![
@@ -118,7 +123,7 @@ impl<'vm> ImplResolver<'vm> {
             if let Some(rules) = package.impl_rules.get(&iface_ptr) {
                 pointers.extend(rules);
             }
-            if let Some(runtime) = &package.runtime {
+            if let Some(runtime) = package.runtime() {
                 packages.extend(runtime.dependencies.iter().copied());
             }
         }
@@ -136,7 +141,12 @@ impl<'vm> ImplResolver<'vm> {
                 .dynamic_dispatch
                 .rules_of(iface_ptr)
                 .into_iter()
-                .map(|rule| RuntimeImplRuleCandidate::Owned(Box::new(rule))),
+                .filter_map(|rule_ptr| {
+                    self.vm
+                        .get_object(rule_ptr)
+                        .as_impl_rule()
+                        .map(RuntimeImplRuleCandidate::Borrowed)
+                }),
         );
         rules
     }
@@ -158,7 +168,7 @@ const MAX_OBLIGATION_DEPTH: usize = 128;
 /// is detected and rejected rather than spun on until the depth backstop.
 type Obligation = (
     RealizedTy,
-    TypeName,
+    TypeHead,
     Vec<RealizedTy>,
     Vec<(Name, RealizedTy)>,
 );
@@ -182,9 +192,7 @@ fn concrete_base(ty: &RealizedTy) -> Cow<'_, RealizedTy> {
             Literal::String(_) => RealizedTy::String { attr: attr.clone() },
             Literal::Bool(_) => RealizedTy::Bool { attr: attr.clone() },
         }),
-        RealizedTy::EnumVariant(name, _, attr) => {
-            Cow::Owned(RealizedTy::Enum(name.clone(), attr.clone()))
-        }
+        RealizedTy::EnumVariant(name, _, attr) => Cow::Owned(RealizedTy::Enum(*name, attr.clone())),
         _ => Cow::Borrowed(ty),
     }
 }
@@ -218,14 +226,15 @@ impl<'vm> ImplResolver<'vm> {
     pub(crate) fn resolve_implements_rule(
         self,
         concrete_ty: &RealizedTy,
-        iface: &TypeName,
+        iface: TypeHead,
         iface_args: &[RealizedTy],
     ) -> Option<(RuntimeImplRuleCandidate<'vm>, Vec<RealizedTy>)> {
         // Static/package-image rules are immutable and already indexed by the
         // canonical interface pointer. Try that slice directly: this is the
         // overwhelmingly common virtual-call path and avoids candidate Vecs,
         // runtime-package graph walks, and dynamic-table locking.
-        if let Some(iface_ptr) = self.vm.lookup_interface(iface) {
+        {
+            let iface_ptr = iface.ptr();
             for &rule_ptr in self.vm.packages.impl_rules_of(iface_ptr) {
                 let Some(rule) = self.vm.get_object(rule_ptr).as_impl_rule() else {
                     continue;
@@ -296,7 +305,7 @@ impl<'vm> ImplResolver<'vm> {
     pub(crate) fn type_implements(
         self,
         concrete_ty: &RealizedTy,
-        iface: &TypeName,
+        iface: TypeHead,
         requested_args: &[RealizedTy],
         requested_assoc: &[(Name, RealizedTy)],
     ) -> bool {
@@ -317,28 +326,29 @@ impl<'vm> ImplResolver<'vm> {
     fn prove(
         self,
         concrete_ty: &RealizedTy,
-        iface: &TypeName,
+        iface: TypeHead,
         requested_args: &[RealizedTy],
         requested_assoc: &[(Name, RealizedTy)],
         stack: &mut Vec<Obligation>,
     ) -> bool {
         // The blanket stdlib impl exists to supply AnyClass's default-method
-        // dispatch. Membership is narrower: class values only, and among the
-        // sealed reflection-kind views only `reflect.class.Type`. Keep the
-        // carve-out at the recursive proof seam so nested bounds cannot observe
-        // the blanket rule's broader receiver.
-        if iface.is_builtin_root_type("AnyClass") {
-            return matches!(
-                concrete_ty,
-                RealizedTy::Class(name, _, _) if class_inhabits_any_class(name)
-            );
+        // dispatch. Membership is narrower: class values only. Keep the
+        // narrowing at the recursive proof seam so nested bounds cannot
+        // observe the blanket rule's broader receiver.
+        let any_class = self
+            .vm
+            .declaration_head(&baml_type::QualifiedTypeName::from_dotted_path(
+                "reflect.AnyClass",
+            ));
+        if any_class.is_some_and(|head| head == iface) {
+            return matches!(concrete_ty, RealizedTy::Class(..));
         }
 
         // Key on the normalized (literal/enum-variant → base) type so `1` and `int`
         // are the same goal for cycle purposes.
         let goal: Obligation = (
             concrete_base(concrete_ty).into_owned(),
-            iface.clone(),
+            iface,
             requested_args.to_vec(),
             requested_assoc.to_vec(),
         );
@@ -414,7 +424,7 @@ impl<'vm> ImplResolver<'vm> {
                 // the interface's `requires` closure; not handled here.)
                 if self.interface_existential_satisfies_bound(
                     &type_args[param],
-                    &bound.interface,
+                    bound.interface,
                     &req_args,
                     &req_assoc,
                 ) {
@@ -422,7 +432,7 @@ impl<'vm> ImplResolver<'vm> {
                 }
                 if !self.prove(
                     &type_args[param],
-                    &bound.interface,
+                    bound.interface,
                     &req_args,
                     &req_assoc,
                     stack,
@@ -443,7 +453,7 @@ impl<'vm> ImplResolver<'vm> {
     fn interface_existential_satisfies_bound(
         self,
         concrete_ty: &RealizedTy,
-        iface: &TypeName,
+        iface: TypeHead,
         requested_args: &[RealizedTy],
         requested_assoc: &[(Name, RealizedTy)],
     ) -> bool {
@@ -451,7 +461,7 @@ impl<'vm> ImplResolver<'vm> {
         let RealizedTy::Interface(ex_qtn, ex_args, ex_assoc, _) = base.as_ref() else {
             return false;
         };
-        ex_qtn == iface
+        *ex_qtn == iface
             && (requested_args.is_empty() || self.ty_args_equivalent(ex_args, requested_args))
             && self.associated_bindings_equivalent(ex_assoc, requested_assoc)
     }
@@ -464,15 +474,6 @@ impl<'vm> ImplResolver<'vm> {
         concrete: &RealizedTy,
         bindings: &mut [Option<RealizedTy>],
     ) -> bool {
-        // Reflection kind classes are the sealed runtime refinements of `type`.
-        // Keep `implement I for type` rules applicable when the dynamic receiver
-        // is one of those refinements (notably TypeValue's tostring override).
-        if matches!(pattern, TyTemplate::Type { .. })
-            && matches!(concrete, RealizedTy::Class(name, _, _) if is_type_kind_class(name))
-        {
-            return true;
-        }
-
         // A fully-realized pattern carries no frame refs or holes: compare it to the
         // concrete type semantically (union-order-insensitive, matching the type
         // checker) through the canonical fact-opaque `StructuralEquivCtx`. The

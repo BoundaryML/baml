@@ -53,6 +53,33 @@ function redact_url_secrets(text: string) -> string {
     root.internal._redact_after(tokens, "secret=")
 }
 
+/// Replace credential-bearing request headers with "REDACTED" before a
+/// request snapshot rides an `ai.events.LLMCall`. Unlike previews, the
+/// request `invoke` actually sends DOES carry auth headers (`x-api-key`,
+/// `authorization`, Azure's `api-key`, ...), so captured requests must be
+/// scrubbed. Matching is case-insensitive; values are replaced, names kept.
+function redact_request_headers(headers: map<string, string>) -> map<string, string> {
+    let out: map<string, string> = {};
+    for (let name in headers.keys()) {
+        let lower = name.to_lower_case();
+        let sensitive = lower == "authorization"
+            || lower == "proxy-authorization"
+            || lower == "x-api-key"
+            || lower == "api-key"
+            || lower == "x-goog-api-key"
+            || lower == "x-amz-security-token"
+            || lower == "cookie";
+        if (sensitive) {
+            let _ = out.set(name, "REDACTED");
+        } else {
+            if let value: string = headers.get(name) {
+                let _ = out.set(name, value);
+            }
+        }
+    }
+    out
+}
+
 /// The environment variables a credential chain consulted, as a readable list,
 /// for the "no credential configured" error a client raises when the whole
 /// chain came back empty.
@@ -79,10 +106,20 @@ function credential_sources(cred: root.Credential?, canonical_env: string?) -> s
 
 // Send, classify non-2xx via root.errors.classify_http, decode the body as T.
 // T = json-shaped envelope class; unknown fields are ignored by the decoder.
-function send_as<T>(req: baml.http.Request, provider: string) -> T {
-    let resp = baml.http.send(req) catch_all (e) {
+// A null or non-positive timeout preserves the transport's unbounded default.
+function send_as<T>(
+    req: baml.http.Request,
+    provider: string,
+    request_timeout_ms: int? = null,
+) -> T {
+    let timeout = match (request_timeout_ms) {
+        let milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds),
+        null => null,
+    };
+    let resp = baml.http.send(req, timeout = timeout) catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw root.errors.NetworkFailure {
+            throw root.errors.NetworkFailure { status_code: null,
             provider: provider,
             // redacted: the rendered transport error can embed the request URL,
             // and some providers authenticate through a query parameter.
@@ -92,8 +129,9 @@ function send_as<T>(req: baml.http.Request, provider: string) -> T {
         },
     };
     let text = resp.text() catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw root.errors.NetworkFailure {
+            throw root.errors.NetworkFailure { status_code: null,
             provider: provider,
             detail: "the response body could not be read completely",
             raw_body: null,
@@ -109,9 +147,96 @@ function send_as<T>(req: baml.http.Request, provider: string) -> T {
     }
 }
 
+/// `send_as_with_wire`'s result: the decoded envelope plus the wire record.
+class SentAs<T> {
+    value: T,
+    call: root.events.LLMCall,
+}
+
+/// Same contract as `send_as`, plus the LLMCall wire record. On a non-2xx or
+/// transport failure this still throws the same classified error `send_as`
+/// throws — composite clients build failed-leg records from the error itself
+/// (`_failed_leg_call`), so no record accompanies a throw. `capture_wire`
+/// gates the request/response bodies; status, headers, and timing are always
+/// recorded. The request URL and captured response body are redacted with
+/// `redact_url_secrets` before storing.
+function send_as_with_wire<T>(
+    req: baml.http.Request,
+    provider: string,
+    client_name: string,
+    capture_wire: bool = true,
+    request_timeout_ms: int? = null,
+) -> SentAs<T> {
+    let started = baml.time.Instant.now();
+    let timeout = match (request_timeout_ms) {
+        let milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds),
+        null => null,
+    };
+    let resp = baml.http.send(req, timeout = timeout) catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        _ => {
+            throw root.errors.NetworkFailure { status_code: null,
+            provider: provider,
+            detail: `transport failed before a response arrived: ${redact_url_secrets(e.to_string())}`,
+            raw_body: null,
+        }
+        },
+    };
+    let text = resp.text() catch_all (e) {
+        let timeout: baml.errors.Timeout => throw timeout,
+        _ => {
+            throw root.errors.NetworkFailure { status_code: null,
+            provider: provider,
+            detail: "the response body could not be read completely",
+            raw_body: null,
+        }
+        },
+    };
+    if (!resp.ok()) {
+        throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers)
+    }
+    let value = baml.json.from_string<T>(text) catch_all (e) {
+        _ => throw root.errors.ParseFailed { provider: provider, raw_output: text },
+    };
+    let call = root.events.LLMCall {
+        client_name: client_name,
+        provider: provider,
+        timing: root.events.Timing {
+            start_time_utc_ms: started.to_timestamp_milliseconds(),
+            duration_ms: started.elapsed().to_milliseconds(),
+            ttft_ms: null,
+        },
+        http_request: if (capture_wire) {
+            baml.http.Request {
+                method: req.method,
+                url: redact_url_secrets(req.url),
+                headers: redact_request_headers(req.headers),
+                body: req.body,
+            }
+        } else {
+            null
+        },
+        http_response: root.events.HttpResponse {
+            status: resp.status_code,
+            headers: resp.headers,
+            body: if (capture_wire) {
+                redact_url_secrets(text)
+            } else {
+                null
+            },
+        },
+        // The provider parse fills the turn-level usage; the wire record does
+        // not re-derive it here.
+        usage: null,
+        selected: true,
+        sse_responses: null,
+    };
+    SentAs { value: value, call: call }
+}
+
 // The return type's schema as prompt text, in the standard dialect —
-// exactly what ${ctx.output_format} renders in an LLM function block.
-function render_output_format(t: type) -> string throws baml.reflect.errors.CompilationError {
+// exactly what ${ctx.output_format()} renders in an LLM function block.
+function render_output_format(t: reflect.Type) -> string throws reflect.errors.CompilationError {
     root.internal.validate_output_type(t);
     root.internal.render_output_format(t)
 }
@@ -131,43 +256,95 @@ function resolve_media(media: ai.MediaPart, fetch_url: bool) -> ResolvedMedia {
     match (media) {
         let image: baml.media.Image => {
             let source = image.file() ?? image.url() ?? "";
-            root.internal._resolve_media_content(
-                image.url(),
-                image.file(),
-                image.base64(),
-                root.internal._media_mime_type(image.mime_type(), source, "image"),
-                fetch_url,
-            )
+            root.internal
+                ._resolve_media_content(
+                    image.url(),
+                    image.file(),
+                    image.base64(),
+                    root.internal._media_mime_type(image.mime_type(), source, "image"),
+                    fetch_url,
+                )
         },
         let audio: baml.media.Audio => {
             let source = audio.file() ?? audio.url() ?? "";
-            root.internal._resolve_media_content(
-                audio.url(),
-                audio.file(),
-                audio.base64(),
-                root.internal._media_mime_type(audio.mime_type(), source, "audio"),
-                fetch_url,
-            )
+            root.internal
+                ._resolve_media_content(
+                    audio.url(),
+                    audio.file(),
+                    audio.base64(),
+                    root.internal._media_mime_type(audio.mime_type(), source, "audio"),
+                    fetch_url,
+                )
         },
         let video: baml.media.Video => {
             let source = video.file() ?? video.url() ?? "";
-            root.internal._resolve_media_content(
-                video.url(),
-                video.file(),
-                video.base64(),
-                root.internal._media_mime_type(video.mime_type(), source, "video"),
-                fetch_url,
-            )
+            root.internal
+                ._resolve_media_content(
+                    video.url(),
+                    video.file(),
+                    video.base64(),
+                    root.internal._media_mime_type(video.mime_type(), source, "video"),
+                    fetch_url,
+                )
         },
         let pdf: baml.media.Pdf => {
             let source = pdf.file() ?? pdf.url() ?? "";
-            root.internal._resolve_media_content(
-                pdf.url(),
-                pdf.file(),
-                pdf.base64(),
-                root.internal._media_mime_type(pdf.mime_type(), source, "pdf"),
-                fetch_url,
-            )
+            root.internal
+                ._resolve_media_content(
+                    pdf.url(),
+                    pdf.file(),
+                    pdf.base64(),
+                    root.internal._media_mime_type(pdf.mime_type(), source, "pdf"),
+                    fetch_url,
+                )
+        },
+    }
+}
+
+/// Resolve media for a request preview without reading a file or fetching a
+/// URL. Existing base64 and `data:` payloads are preserved; provider-specific
+/// renderers decide whether an ordinary URL is supported on their wire form.
+function resolve_media_preview(media: ai.MediaPart) -> ResolvedMedia {
+    match (media) {
+        let image: baml.media.Image => {
+            let source = image.file() ?? image.url() ?? "";
+            root.internal
+                ._resolve_media_preview_content(
+                    image.url(),
+                    image.file(),
+                    image.base64(),
+                    root.internal._media_mime_type(image.mime_type(), source, "image"),
+                )
+        },
+        let audio: baml.media.Audio => {
+            let source = audio.file() ?? audio.url() ?? "";
+            root.internal
+                ._resolve_media_preview_content(
+                    audio.url(),
+                    audio.file(),
+                    audio.base64(),
+                    root.internal._media_mime_type(audio.mime_type(), source, "audio"),
+                )
+        },
+        let video: baml.media.Video => {
+            let source = video.file() ?? video.url() ?? "";
+            root.internal
+                ._resolve_media_preview_content(
+                    video.url(),
+                    video.file(),
+                    video.base64(),
+                    root.internal._media_mime_type(video.mime_type(), source, "video"),
+                )
+        },
+        let pdf: baml.media.Pdf => {
+            let source = pdf.file() ?? pdf.url() ?? "";
+            root.internal
+                ._resolve_media_preview_content(
+                    pdf.url(),
+                    pdf.file(),
+                    pdf.base64(),
+                    root.internal._media_mime_type(pdf.mime_type(), source, "pdf"),
+                )
         },
     }
 }

@@ -15,7 +15,7 @@
 //!     comparison that could miss a §13 change.
 
 use baml_db::baml_compiler_syntax::{SyntaxKind, SyntaxNode};
-use baml_project::ProjectDatabase;
+use baml_tests::engine::{TestDbExt, db_with_root};
 
 /// Apply the BEP-049 §12 dedent and then decode escapes, as the compiler does
 /// for a backtick literal's value (treating `${...}` as literal text — only
@@ -31,8 +31,8 @@ fn backtick_value(node_text: &str) -> String {
 
 /// Map `f` over every backtick literal in `src`, in source order.
 fn backtick_map(src: &str, f: impl Fn(&str) -> String) -> Vec<String> {
-    let mut db = ProjectDatabase::new();
-    let file = db.add_file("main.baml", src);
+    let mut db = db_with_root(std::path::Path::new("."));
+    let file = db.file("main.baml", src);
     let tree: SyntaxNode = baml_db::baml_compiler_parser::syntax_tree(&db, file);
     tree.descendants()
         .filter(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)

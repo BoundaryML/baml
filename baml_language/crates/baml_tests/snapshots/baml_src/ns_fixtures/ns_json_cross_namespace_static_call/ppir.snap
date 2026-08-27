@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== PPIR ===
+function user.fixtures.json_cross_namespace_static_call.decode_auto(j: baml.json.json) -> root.fixtures.json_cross_namespace_static_call.pkg.inner.AutoBox<int>  [expr] {
+  {  } root.fixtures.json_cross_namespace_static_call.pkg.inner.AutoBox.from_json(j)
+}
+function user.fixtures.json_cross_namespace_static_call.decode_plain(j: baml.json.json) -> root.fixtures.json_cross_namespace_static_call.pkg.inner.Plain  [expr] {
+  {  } root.fixtures.json_cross_namespace_static_call.pkg.inner.Plain.from_json(j)
+}
+function user.fixtures.json_cross_namespace_static_call.decode_root(j: baml.json.json) -> root.fixtures.json_cross_namespace_static_call.pkg.inner.Box<int>  [expr] {
+  {  } root.fixtures.json_cross_namespace_static_call.pkg.inner.Box.from_json(j)
+}

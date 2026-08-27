@@ -56,7 +56,41 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 5: `FunctionMeta::Llm` removed the Borsh-serialized
 /// `prompt_template` field.
-pub const FORMAT_VERSION: u32 = 5;
+///
+/// Version 6: `Enum` and `InterfaceDef` gained a borsh-serialized `type_tag`,
+/// so every declaration that can head a nominal type now carries its identity
+/// (previously only `Class` did). `Class::type_tag` changed from `i64` to the
+/// `TypeTag` newtype, which is wire-identical — that part needed no bump.
+/// Also: type aliases became `Object::TypeAlias` declarations, so `Package` /
+/// `ProgramPackage` replaced the inline `recursive_type_aliases` map with a
+/// `type_aliases` map of references to them. And `InterfaceMethodDef` replaced
+/// the (never-populated) `default_fqn: Option<String>` with `default:
+/// Option<ObjectIndex>` — a default method's pooled body, relocated by the
+/// linker like any other object operand and bound to a pointer at load, so
+/// runtime implementors inherit defaults without naming anything.
+///
+/// Version 7: every type-bearing wire field is head-inline rather than
+/// name-headed, and the bytecode gained `OpCode::Truthy` plus
+/// `ConstValue::Literal`. Both landed while 6 was current — on different
+/// branches — so a 6 image can be either shape and neither can be told from
+/// the other. The bump is what makes the ambiguity unreachable.
+///
+/// Version 8: `Class.name` / `Enum.name` are `DeclarationName` (an enum over
+/// declared and anonymous), so both gained a leading discriminant byte. A 7
+/// image would decode that discriminant out of the old `TypeName` bytes.
+///
+/// Version 9: the bytecode gained `OpCode::MakeVirtualFunction` (appended, so
+/// discriminants did not shift), which landed on canary while 8 was current on
+/// a branch — the same both-sides-of-a-merge ambiguity version 7 records. An
+/// 8 image without the opcode would decode fine, but one version must mean one
+/// format.
+///
+/// Version 10: the `Ty` wire format retired the TIR-era compiler-only variants
+/// — `EvolvingList`/`EvolvingMap` (31/32) and the `Unknown` error-recovery
+/// sentinel (29). The slots are tombstoned rather than reused, so a 9 image
+/// carrying one in a persisted throw fact would now fail to decode instead of
+/// silently landing on whatever occupies the slot later.
+pub const FORMAT_VERSION: u32 = 10;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -91,8 +125,6 @@ pub struct KeyInputs<'a> {
     pub compiler_fingerprint: [u8; 32],
     /// `OptLevel` as a stable discriminant.
     pub opt_level: u8,
-    /// `CompileOptions::emit_test_cases`.
-    pub emit_test_cases: bool,
     /// `baml.toml` content, if the project has one.
     pub manifest: Option<&'a str>,
     /// `(project-root-relative path, content)` for every source file,
@@ -145,7 +177,7 @@ pub fn compute_key(inputs: &KeyInputs<'_>) -> CacheKey {
     h.update(MAGIC);
     h.update(FORMAT_VERSION.to_le_bytes());
     h.update(inputs.compiler_fingerprint);
-    h.update([inputs.opt_level, u8::from(inputs.emit_test_cases)]);
+    h.update([inputs.opt_level]);
     hash_opt_str(&mut h, inputs.manifest);
     h.update((inputs.files.len() as u64).to_le_bytes());
     // Sort defensively rather than trusting the documented precondition: an
@@ -243,20 +275,19 @@ pub struct ManifestFile {
 
 /// Fixed per-project key for the [`ProjectManifest`].
 ///
-/// Keyed by compiler fingerprint + opt + options + the project root path:
+/// Keyed by compiler fingerprint + opt level + the project root path:
 /// a different compiler build gets a fresh manifest (its previous Program
 /// would not be relink-compatible), and two checkouts of the same project
 /// don't fight over one entry.
 pub fn manifest_key(
     compiler_fingerprint: &[u8; 32],
     opt_level: u8,
-    emit_test_cases: bool,
     project_root: &Path,
     project_manifest_toml: Option<&str>,
 ) -> CacheKey {
     let mut h = keyed_hasher(b"project-manifest");
     h.update(compiler_fingerprint);
-    h.update([opt_level, u8::from(emit_test_cases)]);
+    h.update([opt_level]);
     update_framed(&mut h, project_root.as_os_str().as_encoded_bytes());
     // baml.toml is a compile input of the program key, so it must gate the
     // manifest too: a config-only change must not let plan_reuse splice
@@ -765,7 +796,6 @@ mod tests {
         KeyInputs {
             compiler_fingerprint: [7u8; 32],
             opt_level: 2,
-            emit_test_cases: false,
             manifest: None,
             files,
         }
@@ -785,10 +815,6 @@ mod tests {
         let mut inputs = dummy_inputs(&files);
         inputs.opt_level = 0;
         assert_ne!(base, compute_key(&inputs), "opt level");
-
-        let mut inputs = dummy_inputs(&files);
-        inputs.emit_test_cases = true;
-        assert_ne!(base, compute_key(&inputs), "emit_test_cases");
 
         let mut inputs = dummy_inputs(&files);
         inputs.manifest = Some("[package]\nname = \"x\"");
@@ -915,7 +941,7 @@ mod tests {
 
         let dir = tempfile::tempdir().expect("tempdir");
         let cache = BytecodeCache::open(dir.path().to_path_buf());
-        let key = manifest_key(&[7u8; 32], 2, false, Path::new("/project"), None);
+        let key = manifest_key(&[7u8; 32], 2, Path::new("/project"), None);
         let payload = borsh::to_vec(&LegacyManifest {
             program_key: [8u8; 32],
             files: vec![LegacyManifestFile {
@@ -1332,7 +1358,6 @@ mod remote_tests {
         let key = compute_key(&KeyInputs {
             compiler_fingerprint: [9u8; 32],
             opt_level: 2,
-            emit_test_cases: false,
             manifest: None,
             files: &files,
         });
@@ -1378,7 +1403,6 @@ mod remote_tests {
         let key2 = compute_key(&KeyInputs {
             compiler_fingerprint: [10u8; 32],
             opt_level: 2,
-            emit_test_cases: false,
             manifest: None,
             files: &files,
         });

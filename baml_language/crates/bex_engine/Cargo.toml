@@ -39,7 +39,7 @@ tokio = { workspace = true, features = [ "sync", "rt", "macros", "time" ] }
 wasm-bindgen-futures = { workspace = true }
 
 [dev-dependencies]
-baml_project = { workspace = true, features = [ "testing" ] }
+baml_db = { workspace = true }
 bex_resource_types = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }
@@ -66,3 +66,6 @@ heap_debug = [
   "bex_heap/heap_debug",
   "bex_vm_types/heap_debug",
 ]
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }

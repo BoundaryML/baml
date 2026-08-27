@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use baml_tests::baml_test;
 use bex_engine::{
-    BexEngine, BexExternalValue, CaptureDefaults, EngineError, FunctionCallContextBuilder,
-    value_capture::{TraceCaptureConfig, TraceCaptureProducer, TraceLogDrainReport},
+    BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder,
+    logger::{TraceLogDrainReport, TraceLogger},
 };
 use sys_native::SysOpsExt;
 
@@ -17,21 +17,21 @@ client TestClient = openai.ResponsesClient.new(
 
 function Extract<T>(document: string) -> T {
   client: TestClient
-  prompt: `Extract the document using this schema:\n${ctx.output_format}`
+  prompt: `Extract the document using this schema:\n${ctx.output_format()}`
 }
 
 function main() -> string throws unknown {
-  let source = #"
+  let source = `
 class ExtractedRecord {
   account string
   amount int
 }
-"#
+`
   let pkg = reflect.Package.compile({ "schema.baml": source })
   let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
-  let document_text = #"{"account":"AC-1","amount":42}"#
+  let document_text = `{"account":"AC-1","amount":42}`
   let record = Extract$parse<unreflect(record_t.as_type())>(document_text)
-  json.encode(record)
+  json.to_string(record)
 }
 
 function rendered_schema() -> string throws unknown {
@@ -42,7 +42,7 @@ function rendered_schema() -> string throws unknown {
   Extract$render_prompt<unreflect(record_t.as_type())>("sample document").text()
 }
 
-function mint_properties() -> bool throws unknown {
+function declaration_identity_properties() -> bool throws unknown {
   let files = { "schema.baml": "class ExtractedRecord { account string amount int }" }
   let first = reflect.Package.compile(files)
   let second = reflect.Package.compile(files)
@@ -77,13 +77,13 @@ function namespace_and_dependency_mounts() -> bool throws unknown {
 
 function mounted_runtime_interface_and_return_types_stay_hidden() -> bool throws unknown {
   let runtime_minted = reflect.class.new("RuntimeMinted", {
-    "value": type.of<string>(),
+    "value": reflect.Type.of<string>(),
   })
   let app = reflect.Package.current().with_types({
     "RuntimeMinted": runtime_minted,
   })
   let dependency = reflect.Package.compile({
-    "dependency.baml": #"
+    "dependency.baml": `
 interface CarriesRuntimeMint {
   item app.RuntimeMinted
 }
@@ -91,7 +91,7 @@ interface CarriesRuntimeMint {
 function make_runtime_minted() -> app.RuntimeMinted {
   app.RuntimeMinted { value: "ok" }
 }
-"#
+`
   }, packages = { "app": app })
   let consumer = reflect.Package.compile(
     { "consumer.baml": "function ready() -> bool { true }" },
@@ -103,7 +103,7 @@ function make_runtime_minted() -> app.RuntimeMinted {
 
 const SUCCESSFUL_INIT_SOURCE: &str = r####"
 function main() -> bool throws unknown {
-  let pkg = reflect.Package.compile({ "schema.baml": #"
+  let pkg = reflect.Package.compile({ "schema.baml": `
 client InitClient = openai.ResponsesClient.new(
     model = "unused-network-free-init-check",
     api_key = "unused",
@@ -112,7 +112,7 @@ function init_ready() -> bool {
   InitClient != null
 }
 class Ready { value string }
-"# })
+` })
   let init_ready = pkg.get_function<() -> bool>("root.init_ready")
     ?? throw "missing init_ready"
   pkg.get_class("root.Ready") != null && init_ready()
@@ -121,16 +121,34 @@ class Ready { value string }
 
 const REJECTED_INIT_SOURCE: &str = r####"
 function main() -> null throws unknown {
-  reflect.Package.compile({ "schema.baml": #"
+  reflect.Package.compile({ "schema.baml": `
 client InitClient = openai.ResponsesClient.new(
     model = "unused-network-free-init-check",
     api_key = "unused",
 );
 class Broken { value MissingType }
-"# })
+` })
   null
 }
 "####;
+
+#[tokio::test]
+async fn package_finish_refuses_session_compile_artifact() {
+    let output = baml_test!(
+        r####"
+function main() -> bool throws unknown {
+  let session = reflect.Session.new()
+  let artifact = session._compile<int>(`1`)
+  let rejected = false
+  let _ = reflect.Package._finish(artifact, {}) catch (_) {
+    _ => { rejected = true },
+  }
+  rejected && session.eval<int>(`2`) == 2
+}
+"####
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+}
 
 const SCENARIO_6_SOURCE: &str = r####"
 class AgentState {
@@ -148,7 +166,7 @@ function Plan(state: AgentState) -> string {
 }
 
 function main() -> string throws unknown {
-  let skill_source = #"
+  let skill_source = `
 class PlanThenAct {
   summary string
   steps string[]
@@ -161,7 +179,7 @@ function Run(state: app.AgentState) -> PlanThenAct {
     steps: [],
   }
 }
-"#
+`
   let skill = reflect.Package.compile(
     { "skill.baml": skill_source },
     packages = { "app": reflect.Package.current() },
@@ -191,17 +209,15 @@ function mismatched_function_contract() -> null throws unknown {
 
 function unspecialized_generic_function_cannot_be_extracted() -> null throws unknown {
   let pkg = reflect.Package.compile({
-    "main.baml": #"
-client Dummy = openai.ResponsesClient.new(
+    "main.baml": `client Dummy = openai.ResponsesClient.new(
   model = "unused-reflection-only",
   api_key = "unused",
 )
 
 function Extract<T>(document: string) -> T {
   client: Dummy
-  prompt: `Extract ${document}`
-}
-"#
+  prompt: "Extract document"
+}`
   })
   let _ = pkg.get_function<(string) -> string>("root.Extract")
   null
@@ -209,10 +225,10 @@ function Extract<T>(document: string) -> T {
 
 function function_listing_omits_unspecialized_generics() -> bool throws unknown {
   let pkg = reflect.Package.compile({
-    "main.baml": #"
+    "main.baml": `
 function identity<T>(value: T) -> T { value }
 function Present(value: string) -> string { value }
-"#
+`
   })
   let functions = pkg.functions()
   functions.get("root.identity") == null && functions.get("root.Present") != null
@@ -220,20 +236,18 @@ function Present(value: string) -> string { value }
 
 function generic_function_companion_extraction_is_refused() -> string throws unknown {
   let pkg = reflect.Package.compile({
-    "main.baml": #"
-client Dummy = openai.ResponsesClient.new(
+    "main.baml": `client Dummy = openai.ResponsesClient.new(
   model = "unused-reflection-only",
   api_key = "unused",
 )
 
 function Extract<T>(document: string) -> T {
   client: Dummy
-  prompt: `Extract ${document}`
-}
-"#
+  prompt: "Extract document"
+}`
   })
   let extracted = pkg.get_function<(string) -> ai.Prompt>("root.Extract$render_prompt") catch (e) {
-    baml.reflect.errors.CompilationError => {
+    reflect.errors.CompilationError => {
       return e.diagnostics[0].code
     },
     _ => return "wrong error",
@@ -246,17 +260,15 @@ function Extract<T>(document: string) -> T {
 
 function generic_function_companion_is_listed() -> bool throws unknown {
   let pkg = reflect.Package.compile({
-    "main.baml": #"
-client Dummy = openai.ResponsesClient.new(
+    "main.baml": `client Dummy = openai.ResponsesClient.new(
   model = "unused-reflection-only",
   api_key = "unused",
 )
 
 function Extract<T>(document: string) -> T {
   client: Dummy
-  prompt: `Extract ${document}`
-}
-"#
+  prompt: "Extract document"
+}`
   })
   pkg.functions().get("root.Extract$render_prompt") != null
 }
@@ -264,11 +276,11 @@ function Extract<T>(document: string) -> T {
 function alias_order_and_reserved_names() -> bool throws unknown {
   let root_package = reflect.Package.current()
   let generated = reflect.Package.compile(
-    { "main.baml": #"
+    { "main.baml": `
 function Read(state: app.AgentState) -> string {
   app.Plan(state) + ":" + baml.Array.length(["o", "k"]).to_string()
 }
-"# },
+` },
     packages = { "z_last": root_package, "app": root_package },
   )
   let read = generated.get_function<(AgentState) -> string>("root.Read")
@@ -280,7 +292,7 @@ function Read(state: app.AgentState) -> string {
     { "main.baml": "function main() -> int { 1 }" },
     packages = { "baml": root_package },
   ) catch (e) {
-    baml.reflect.errors.CompilationError => { rejected = true },
+    reflect.errors.CompilationError => { rejected = true },
     _ => throw e,
   }
   ordered && rejected
@@ -301,7 +313,7 @@ function enumerated_test_runs() -> bool throws unknown {
 async fn run_main_with_logs(
     source: &str,
 ) -> (Result<BexExternalValue, EngineError>, TraceLogDrainReport) {
-    let program = baml_project::testing::compile_source(source);
+    let program = baml_db::testing::compile_source(source);
     let engine = Arc::new(
         BexEngine::new_with_runtime_compiler(
             program,
@@ -311,17 +323,13 @@ async fn run_main_with_logs(
         )
         .expect("runtime-package test engine"),
     );
-    let logs = TraceCaptureProducer::new(TraceCaptureConfig::logs_only(16));
+    let logs = TraceLogger::bounded(16);
     let result = engine
         .call_function(
             "user.main",
             Vec::new(),
             FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .with_capture_defaults(CaptureDefaults {
-                    values_enabled: false,
-                    logs_enabled: true,
-                })
-                .with_value_capture(logs.clone())
+                .with_logger(logs.clone())
                 .build(),
             true,
         )
@@ -356,7 +364,7 @@ function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws
 }
 
 function main() -> bool throws unknown {
-  let package = reflect.Package.compile({ "dispatch.baml": #"
+  let package = reflect.Package.compile({ "dispatch.baml": `
 function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws never {
   let count = 0
   for (let i = 0; i < n; i += 1) {
@@ -365,7 +373,7 @@ function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws
   count
 }
 function run(n: int) -> int throws never { compare_hot<int>(7, n) }
-"# })
+` })
   let run = package.get_function<(int) -> int>("root.run") ?? throw "missing run"
   let before_gc = run(100)
   baml.sys.collect_garbage()
@@ -407,13 +415,13 @@ async fn render_prompt_uses_runtime_package_schema() {
 }
 
 #[tokio::test]
-async fn package_mints_are_created_once_and_compiles_are_generative() {
-    let output = baml_test!(baml: SCENARIO_SOURCE, entry: "mint_properties");
+async fn package_declarations_are_created_once_and_compiles_are_generative() {
+    let output = baml_test!(baml: SCENARIO_SOURCE, entry: "declaration_identity_properties");
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
 #[tokio::test]
-async fn runtime_package_and_mint_survive_major_collection() {
+async fn runtime_package_and_declarations_survive_major_collection() {
     let output = baml_test!(baml: SCENARIO_SOURCE, entry: "package_survives_gc");
     assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
@@ -456,7 +464,7 @@ async fn rejected_compile_returns_real_diagnostic_without_running_init() {
     else {
         panic!("CompilationError throw was not an instance: {value:?}")
     };
-    assert_eq!(class_name, "baml.reflect.errors.CompilationError");
+    assert_eq!(class_name, "reflect.errors.CompilationError");
     let Some(BexExternalValue::Array { items, .. }) = fields.get("diagnostics") else {
         panic!("CompilationError did not contain diagnostics: {fields:?}")
     };
@@ -511,7 +519,7 @@ async fn get_function_mismatch_throws_compiler_subtyping_diagnostic() {
     else {
         panic!("expected CompilationError instance")
     };
-    assert_eq!(class_name, "baml.reflect.errors.CompilationError");
+    assert_eq!(class_name, "reflect.errors.CompilationError");
     let Some(BexExternalValue::Array { items, .. }) = fields.get("diagnostics") else {
         panic!("missing diagnostics: {fields:?}")
     };
@@ -538,7 +546,7 @@ async fn unspecialized_generic_get_function_reports_reflection_limit() {
     else {
         panic!("expected CompilationError instance")
     };
-    assert_eq!(class_name, "baml.reflect.errors.CompilationError");
+    assert_eq!(class_name, "reflect.errors.CompilationError");
     let Some(BexExternalValue::Array { items, .. }) = fields.get("diagnostics") else {
         panic!("missing diagnostics: {fields:?}")
     };
@@ -547,11 +555,16 @@ async fn unspecialized_generic_get_function_reports_reflection_limit() {
         BexExternalValue::Instance { fields, .. }
             if fields.get("code") == Some(&BexExternalValue::String("E0165".into()))
                 && fields.get("message") == Some(&BexExternalValue::String(
-                    "generic function `root.Extract` cannot be extracted through reflection: reflected packages cannot supply type arguments yet".into()
+                    "generic function `root.Extract` cannot be extracted through reflection: its signature still mentions its own type parameters".into()
                 ))
     )));
 }
 
+/// An unspecialized generic has no realized signature, so `functions()` has
+/// no `function.Type` to list it as and it is omitted — the pre-descriptor
+/// behavior, back in force since the descriptor surface was removed. When
+/// specialization returns on the reflection kind views, listing generics
+/// (as entries that take type arguments) should return with it.
 #[tokio::test]
 async fn function_listing_omits_unspecialized_generics() {
     let output = baml_test!(
@@ -565,8 +578,8 @@ async fn function_listing_omits_unspecialized_generics() {
 /// declared surface mentions no `T`. B-1582 showed what that value is worth: its
 /// body still materializes `T`, so calling it dies inside `LoadType` as an
 /// internal error no `catch` can see. The companion is still *listed* — see the
-/// test below — but extracting it now reports the same reflection limit its
-/// parent does.
+/// test below — but extracting it **by name** still reports the same reflection
+/// limit its parent does: a name lookup has nowhere to put type arguments.
 #[tokio::test]
 async fn generic_function_companion_extraction_reports_reflection_limit() {
     let output = baml_test!(

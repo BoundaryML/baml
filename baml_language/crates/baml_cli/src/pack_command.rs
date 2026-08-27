@@ -30,9 +30,8 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
+use baml_db::{ProjectDatabase, baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_exec::{OutputFormat, PACK_SECTION_NAME, PackEnvelope, validate_help_param};
-use baml_project::ProjectDatabase;
 use bex_engine::BexEngine;
 use bex_vm_types::types::Program;
 use clap::Args;
@@ -40,7 +39,7 @@ use sys_native::SysOpsExt;
 
 use crate::{
     commands::release_version,
-    project_load::{resolve_standalone_file, validate_file_project_flags},
+    project_load::{resolve_standalone_file, validate_file_project_flags, workspace_db},
     reporter::Reporter,
 };
 
@@ -183,8 +182,9 @@ impl PackArgs {
                 .collect(),
             output_format: self.output_format,
         };
-        let serialized = borsh::to_vec(&envelope)
-            .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
+        let serialized =
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope)
+                .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
 
         let target_triple = self.resolved_target_triple()?;
         let host_bytes = read_host_binary(target_triple, reporter)?;
@@ -271,13 +271,8 @@ impl PackArgs {
             // cache seam — always a cold compile, same as `baml run --file`.
             let (db, needs_format_hint) = self.load_standalone(file)?;
             check_diagnostics(&db, "cannot pack: compilation errors found", reporter)?;
-            let program = baml_compiler2_emit::generate_project_bytecode(
-                &db,
-                &baml_compiler2_emit::CompileOptions {
-                    emit_test_cases: false,
-                },
-            )
-            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+            let program = baml_compiler2_emit::generate_project_bytecode(&db)
+                .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
             return Ok((db, program, needs_format_hint));
         }
         self.load_and_compile_project(reporter)
@@ -286,8 +281,8 @@ impl PackArgs {
     /// Project-mode load + compile through the bytecode cache — the same warm
     /// flow as `baml run` (`run_command::load_and_compile`): whole-program hit
     /// when nothing changed, per-file unit reuse on a dirty edit, full compile
-    /// otherwise. Pack compiles with `emit_test_cases: false`, so it shares
-    /// run/check's exact cache key space — a pack right after a run (or a
+    /// otherwise. Pack shares run/check's exact cache key space, so a pack
+    /// right after a run (or a
     /// re-pack) serves the identical `Program`. The packaged bytecode is
     /// target-independent (the `--target` triple only selects the host binary
     /// bytes), and emit determinism guarantees a reused image is byte-identical
@@ -345,9 +340,6 @@ impl PackArgs {
 
         let compiled = crate::bytecode_cache::compile_program_artifacts(
             db,
-            &baml_compiler2_emit::CompileOptions {
-                emit_test_cases: false,
-            },
             cache.as_ref(),
             reuse_plan.as_ref(),
         )
@@ -374,9 +366,8 @@ impl PackArgs {
             .with_context(|| format!("failed to read {}", canonical.display()))?;
         let needs_format_hint = crate::run_command::source_needs_format_hint(&content);
         let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
-        let mut db = ProjectDatabase::new();
-        db.set_project_root(parent);
-        db.add_or_update_file(&canonical, &content);
+        let (mut db, workspace) = workspace_db(parent);
+        db.add_or_update_file_in(workspace, &canonical, &content);
         Ok((db, needs_format_hint))
     }
 
@@ -497,7 +488,7 @@ fn label_for(targets: &[ResolvedPackTarget]) -> String {
 
 /// Collect diagnostics; render errors to stderr and bail with `ctx`.
 fn check_diagnostics(db: &ProjectDatabase, ctx: &str, reporter: &Reporter) -> Result<()> {
-    let diagnostics = baml_project::collect_diagnostics(db);
+    let diagnostics = baml_db::collect_diagnostics(db);
     bail_on_error_diagnostics(db, &diagnostics, ctx, reporter)
 }
 
@@ -698,7 +689,7 @@ mod tests {
     /// namespaced functions (`ns_<name>/foo.baml` → `<name>.foo`). Single
     /// `engine_from_source` can't express folder-based namespaces.
     fn engine_from_files(files: &[(&str, &str)]) -> BexEngine {
-        let snapshot = baml_project::testing::compile_multi_file(files);
+        let snapshot = baml_db::testing::compile_multi_file(files);
         BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("BexEngine::new should succeed")
     }
@@ -1185,9 +1176,9 @@ mod tests {
 
     // ── Envelope roundtrip ────────────────────────────────────────────
 
-    /// The PackEnvelope borsh roundtrip is the wire contract between
-    /// pack and the host. A regression here breaks every packaged binary,
-    /// so it gets its own test.
+    /// The versioned `PackedProgram` artifact envelope is the wire contract
+    /// between `baml pack` and the pack host. A regression here breaks every
+    /// packaged binary, so it gets its own roundtrip test.
     #[test]
     fn test_pack_envelope_roundtrip() {
         let snapshot = baml_tests::engine::compile_source("function main() -> int { 1 }");
@@ -1201,8 +1192,10 @@ mod tests {
             }],
             output_format: OutputFormat::Json,
         };
-        let bytes = borsh::to_vec(&envelope).unwrap();
-        let decoded: PackEnvelope = borsh::from_slice(&bytes).unwrap();
+        let bytes =
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope).unwrap();
+        let decoded: PackEnvelope =
+            baml_artifact::decode(baml_artifact::ArtifactKind::PackedProgram, &bytes).unwrap();
         assert!(matches!(decoded.mode, baml_exec::PackMode::Single));
         assert_eq!(decoded.targets.len(), 1);
         assert_eq!(decoded.targets[0].qualified_name, "user.main");

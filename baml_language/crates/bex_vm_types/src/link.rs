@@ -306,12 +306,14 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
         classes,
         enums,
         interfaces,
+        // The synthetic import stub declares nothing of its own, so it pools no
+        // `Object::TypeAlias`.
+        type_alias_objects: Vec::new(),
         code,
         object_imports: Vec::new(),
         global_imports: stub_global_imports,
         exports,
         package_fragment: ProgramPackageFrag::default(),
-        test_cases: Vec::new(),
         callable_throws_fragment: Vec::new(),
         init_tail: None,
     };
@@ -446,6 +448,7 @@ struct UnitLayout {
     class_base: usize,
     enum_base: usize,
     iface_base: usize,
+    alias_base: usize,
     code_base: usize,
     /// Number of the unit's globals owned by functions (the rest are `let`s).
     func_count: usize,
@@ -482,6 +485,7 @@ fn export_object_abs(layout: &UnitLayout, local_ref: LocalRef) -> usize {
         LocalRef::Class(k) => layout.class_base + k as usize,
         LocalRef::Enum(k) => layout.enum_base + k as usize,
         LocalRef::Interface(k) => layout.iface_base + k as usize,
+        LocalRef::TypeAlias(k) => layout.alias_base + k as usize,
         LocalRef::Code(k) => layout.code_base + k as usize,
     }
 }
@@ -491,6 +495,7 @@ fn local_ref_in_bounds(unit: &CompilationUnit, local_ref: LocalRef) -> bool {
         LocalRef::Class(k) => (k as usize) < unit.classes.len(),
         LocalRef::Enum(k) => (k as usize) < unit.enums.len(),
         LocalRef::Interface(k) => (k as usize) < unit.interfaces.len(),
+        LocalRef::TypeAlias(k) => (k as usize) < unit.type_alias_objects.len(),
         LocalRef::Code(k) => (k as usize) < unit.code.len(),
     }
 }
@@ -573,7 +578,7 @@ fn generic_base_name(
 fn resolve_object_import(
     sym: &Symbol,
     obj_by_name: &HashMap<String, usize>,
-    canonical_pos: &HashMap<String, HashMap<Vec<baml_type::RealizedTy>, usize>>,
+    canonical_pos: &HashMap<String, HashMap<Vec<crate::RealizedTy>, usize>>,
 ) -> Result<usize, LinkError> {
     match sym.kind {
         SymbolKind::GenericFn => {
@@ -691,8 +696,7 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
         .map(|unit| vec![false; unit.code.len()])
         .collect();
     let mut code_abs: Vec<Vec<usize>> = units.iter().map(|u| vec![0usize; u.code.len()]).collect();
-    let mut canonical_pos: HashMap<String, HashMap<Vec<baml_type::RealizedTy>, usize>> =
-        HashMap::new();
+    let mut canonical_pos: HashMap<String, HashMap<Vec<crate::RealizedTy>, usize>> = HashMap::new();
 
     // ---- Object bucket bases (pass-major, group-major) ----------------------
     let mut layout = vec![UnitLayout::default(); units.len()];
@@ -709,6 +713,10 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
         for &u in *group {
             layout[u].iface_base = obj_cursor;
             obj_cursor += units[u].interfaces.len();
+        }
+        for &u in *group {
+            layout[u].alias_base = obj_cursor;
+            obj_cursor += units[u].type_alias_objects.len();
         }
         for &u in *group {
             layout[u].code_base = obj_cursor;
@@ -913,21 +921,72 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
             }
         }
         for &u in *group {
-            for object in &units[u].interfaces {
+            let unit = &units[u];
+            // An interface's only operands are its default methods' pooled
+            // bodies: code-bucket locals or object imports. Relocate them
+            // through the same maps code objects use.
+            let n_local_objects = unit.classes.len()
+                + unit.enums.len()
+                + unit.interfaces.len()
+                + unit.type_alias_objects.len()
+                + unit.code.len();
+            let lay = layout[u];
+            let c = unit.classes.len();
+            let e = unit.enums.len();
+            let i = unit.interfaces.len();
+            let a = unit.type_alias_objects.len();
+            let mut obj_imports = Vec::with_capacity(unit.object_imports.len());
+            for sym in &unit.object_imports {
+                obj_imports.push(resolve_object_import(sym, &obj_by_name, &canonical_pos)?);
+            }
+            for object in &unit.interfaces {
+                let mut object = object.clone();
+                relocate_object_operands(
+                    &mut object,
+                    |raw| {
+                        if raw < n_local_objects {
+                            if raw < c {
+                                Some(lay.class_base + raw)
+                            } else if raw < c + e {
+                                Some(lay.enum_base + (raw - c))
+                            } else if raw < c + e + i {
+                                Some(lay.iface_base + (raw - c - e))
+                            } else if raw < c + e + i + a {
+                                Some(lay.alias_base + (raw - c - e - i))
+                            } else {
+                                code_abs[u].get(raw - c - e - i - a).copied()
+                            }
+                        } else {
+                            obj_imports.get(raw - n_local_objects).copied()
+                        }
+                    },
+                    // An interface holds no global-slot operands.
+                    |_| None,
+                    |space, raw| invalid_index(u, space, raw),
+                )?;
+                program.objects.push(object);
+            }
+        }
+        for &u in *group {
+            for object in &units[u].type_alias_objects {
                 program.objects.push(object.clone());
             }
         }
         // ---- Code placement (design §3b step 3) -----------------------------
         for &u in *group {
             let unit = &units[u];
-            let n_local_objects =
-                unit.classes.len() + unit.enums.len() + unit.interfaces.len() + unit.code.len();
+            let n_local_objects = unit.classes.len()
+                + unit.enums.len()
+                + unit.interfaces.len()
+                + unit.type_alias_objects.len()
+                + unit.code.len();
             let n_local_globals = func_count[u] + let_count[u];
             let lay = layout[u];
             let glob_imports = &resolved_glob_imports[u];
             let c = unit.classes.len();
             let e = unit.enums.len();
             let i = unit.interfaces.len();
+            let a = unit.type_alias_objects.len();
 
             // Resolve this unit's object imports: non-generic against the name map,
             // generic against the whole-program intern map (`canonical_pos`).
@@ -953,11 +1012,13 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
                                 Some(lay.enum_base + (raw - c))
                             } else if raw < c + e + i {
                                 Some(lay.iface_base + (raw - c - e))
+                            } else if raw < c + e + i + a {
+                                Some(lay.alias_base + (raw - c - e - i))
                             } else {
                                 // A code-bucket ref: use the shadow-aware map so a
                                 // reference to a deduped generic value hits the
                                 // canonical pool position.
-                                code_abs[u].get(raw - c - e - i).copied()
+                                code_abs[u].get(raw - c - e - i - a).copied()
                             }
                         } else {
                             obj_imports.get(raw - n_local_objects).copied()
@@ -1053,8 +1114,8 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     // ---- Package merge (design §3b step 5) ----------------------------------
     // Each package's fragment is carried by exactly one unit (its first unit).
     // Merge every fragment into the image's `packages`, resolving each symbolic
-    // fully-qualified name to an absolute object index, then re-sort exactly as
-    // `build_packages` does so the serialized order is content-determined.
+    // fully-qualified name to an absolute object index, then canonicalize the
+    // implementation-rule tables exactly as `build_packages` does.
     for unit in units {
         merge_package_fragment(
             &mut program,
@@ -1064,11 +1125,6 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
         )?;
     }
     sort_packages(&mut program);
-
-    // ---- Whole-program tails (design §3b step 5) ----------------------------
-    for unit in units {
-        program.test_cases.extend(unit.test_cases.iter().cloned());
-    }
 
     Ok(program)
 }
@@ -1087,7 +1143,7 @@ fn merge_package_fragment(
         && frag.interfaces.is_empty()
         && frag.functions.is_empty()
         && frag.impl_rules.is_empty()
-        && frag.recursive_type_aliases.is_empty()
+        && frag.type_aliases.is_empty()
         && frag.interface_blob.is_empty()
         && frag.test_init.is_none()
     {
@@ -1123,8 +1179,9 @@ fn merge_package_fragment(
         let abs = resolve(fq)?;
         pkg.functions.insert(local.clone(), abs);
     }
-    for (local, ty) in &frag.recursive_type_aliases {
-        pkg.recursive_type_aliases.insert(local.clone(), ty.clone());
+    for (local, fq) in &frag.type_aliases {
+        let abs = resolve(fq)?;
+        pkg.type_aliases.insert(local.clone(), abs);
     }
     if !frag.interface_blob.is_empty() {
         pkg.interface_blob.clone_from(&frag.interface_blob);
@@ -1165,14 +1222,12 @@ fn merge_package_fragment(
     Ok(())
 }
 
-/// Re-sort every per-package map and the top-level `packages` map exactly as the
-/// full compile's `build_packages` tail does, so the serialized order is
-/// content-determined regardless of merge order. Per-package sorting is shared
-/// with the full compile through [`ProgramPackage::sort_maps`] so the two paths
-/// cannot drift.
+/// Canonicalize implementation rules exactly as the full compile's
+/// `build_packages` tail does. Declaration maps retain the fragment's source
+/// order; the top-level package map remains content-sorted.
 fn sort_packages(program: &mut Program) {
     for pkg in program.packages.values_mut() {
-        pkg.sort_maps();
+        pkg.canonicalize_impl_rules();
     }
     program.packages.sort_keys();
 }
@@ -1204,7 +1259,7 @@ mod tests {
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_base::Span::fake(),
-            return_type: baml_type::TyTemplate::BuiltinUnknown {
+            return_type: crate::TyTemplate::Unknown {
                 attr: baml_type::TyAttr::default(),
             },
             param_names: Vec::new(),
@@ -1214,7 +1269,7 @@ mod tests {
             generic_param_bounds: Vec::new(),
             display_param_types: Vec::new(),
             display_return_type: String::new(),
-            throws_type: baml_type::TyTemplate::Never {
+            throws_type: crate::TyTemplate::Never {
                 attr: baml_type::TyAttr::default(),
             },
             origin: FunctionOrigin::UserDefined,
@@ -1227,17 +1282,19 @@ mod tests {
 
     fn class(name: &str, type_tag: i64) -> Object {
         Object::Class(Box::new(Class {
-            name: baml_type::TypeName::local(baml_base::Name::new(name)),
+            name: crate::DeclarationName::Declared(baml_type::TypeName::local(
+                baml_base::Name::new(name),
+            )),
             fields: Vec::new(),
             description: None,
             alias: None,
             docstring: None,
             other: indexmap::IndexMap::new(),
-            type_tag,
+            type_tag: baml_type::typetag::TypeTag::from_i64(type_tag),
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: None,
+            owner: crate::HeapPtr::null(),
         }))
     }
 
@@ -1251,6 +1308,7 @@ mod tests {
             classes: vec![class("MyClass", 100)],
             enums: Vec::new(),
             interfaces: Vec::new(),
+            type_alias_objects: Vec::new(),
             code: vec![
                 func(
                     "user.foo",
@@ -1282,7 +1340,6 @@ mod tests {
                 globals: vec![("user.foo".to_string(), 0), ("user.bar".to_string(), 1)],
             },
             package_fragment: ProgramPackageFrag::default(),
-            test_cases: Vec::new(),
             callable_throws_fragment: Vec::new(),
             init_tail: None,
         }
@@ -1360,6 +1417,7 @@ mod tests {
             classes: vec![class("a.C", 100)],
             enums: Vec::new(),
             interfaces: Vec::new(),
+            type_alias_objects: Vec::new(),
             // code[0] = a.f. n_local_objects = 1 class + 1 code = 2.
             // Object import 0 -> b.D at raw 2. Global import 0 -> b.g at raw 1.
             code: vec![func(
@@ -1398,7 +1456,6 @@ mod tests {
                 globals: vec![("a.f".to_string(), 0)],
             },
             package_fragment: ProgramPackageFrag::default(),
-            test_cases: Vec::new(),
             callable_throws_fragment: Vec::new(),
             init_tail: None,
         };
@@ -1409,6 +1466,7 @@ mod tests {
             classes: vec![class("b.D", 101)],
             enums: Vec::new(),
             interfaces: Vec::new(),
+            type_alias_objects: Vec::new(),
             code: vec![func("b.g", vec![I::Return])],
             object_imports: Vec::new(),
             global_imports: Vec::new(),
@@ -1420,7 +1478,6 @@ mod tests {
                 globals: vec![("b.g".to_string(), 0)],
             },
             package_fragment: ProgramPackageFrag::default(),
-            test_cases: Vec::new(),
             callable_throws_fragment: Vec::new(),
             init_tail: None,
         };

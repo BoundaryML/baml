@@ -33,8 +33,7 @@ use std::{
 };
 
 use baml_codegen_types::{GeneratedOutputFile, SymbolPool, write_generated_output};
-use baml_db::baml_compiler_diagnostics::Severity;
-use baml_project::ProjectDatabase;
+use baml_db::{ProjectDatabase, SourceRootSpec, baml_compiler_diagnostics::Severity};
 
 pub mod cpp;
 pub mod csharp;
@@ -201,8 +200,15 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
         .unwrap_or_else(|_| panic!("baml_src not found at {}", baml_src.display()));
 
     let mut db = ProjectDatabase::new();
-    db.set_project_root(&canonical);
-    let baml_files = baml_workspace::discover_baml_files(&canonical);
+    db.ensure_stdlib_sources();
+    let root = db
+        .add_source_root(SourceRootSpec {
+            path: canonical.clone(),
+            package: baml_db::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: baml_db::SourceRootKind::Workspace,
+        })
+        .unwrap_or_else(|e| panic!("fixture `{fixture}`: cannot add workspace root: {e}"));
+    let baml_files = baml_db::discover_baml_files(&canonical);
     assert!(
         !baml_files.is_empty(),
         "fixture `{fixture}`: no .baml files under {}",
@@ -211,11 +217,11 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
     for file_path in &baml_files {
         let content = fs::read_to_string(file_path)
             .unwrap_or_else(|_| panic!("failed to read {}", file_path.display()));
-        db.add_or_update_file(file_path, &content);
+        db.add_or_update_file_in(root, file_path, &content);
     }
 
-    let source_files = db.get_source_files();
-    let diagnostics = baml_project::collect_diagnostics(&db);
+    let source_files = db.workspace_files();
+    let diagnostics = baml_db::collect_diagnostics(&db);
     let errors: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.severity == Severity::Error)
@@ -228,11 +234,11 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
         );
     }
 
-    let pool = baml_project::build_symbol_pool(&db);
+    let pool = baml_ide::build_symbol_pool(&db);
     let program = db
         .get_bytecode()
         .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode compilation failed: {e:?}"));
-    let baml_bytecode = borsh::to_vec(&program)
+    let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)
         .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode serialization failed: {e}"));
     let user_baml_files: Vec<UserBamlFile> = source_files
         .iter()

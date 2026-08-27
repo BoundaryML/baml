@@ -27,7 +27,10 @@
 
 use std::{cell::UnsafeCell, collections::HashMap};
 
-use bex_vm_types::{FutureRead, HeapPtr, Object, Value, types::Future};
+use bex_vm_types::{
+    FutureRead, HeapPtr, Object, Value,
+    types::{Future, PackageKind},
+};
 
 use crate::{
     BexHeap,
@@ -199,8 +202,12 @@ impl BexHeap {
                 if class.has_cleanup {
                     // Resolve the `cleanup` function name here, while the class
                     // is in hand: methods register as `{class_fqn}.cleanup`
-                    // (matching `make_to_json_callee`'s `{fqn}.to_json`).
-                    let cleanup_fn = format!("{}.cleanup", class.name.render_dotted(false));
+                    // (matching `make_to_json_callee`'s `{fqn}.to_json`). Only
+                    // emit sets `has_cleanup`, so the class is always declared.
+                    let qtn = class.name.declared().unwrap_or_else(|| {
+                        unreachable!("`has_cleanup` on an anonymous class: only emit sets it")
+                    });
+                    let cleanup_fn = format!("{}.cleanup", qtn.render_dotted(false));
                     seeds.push((ptr, cleanup_fn));
                 }
             }
@@ -668,25 +675,29 @@ impl BexHeap {
                 worklist.extend(package.enums.values().copied());
                 worklist.extend(package.interfaces.values().copied());
                 worklist.extend(package.functions.values().copied());
+                worklist.extend(package.type_aliases.values().copied());
                 worklist.extend(package.mounted_types.values().copied());
                 worklist.extend(package.test_init);
                 for (interface, rules) in &package.impl_rules {
                     worklist.push(*interface);
                     worklist.extend(rules.iter().copied());
                 }
-                if let Some(runtime) = &package.runtime {
-                    worklist.extend(runtime.objects.iter().copied());
-                    worklist.extend(runtime.object_names.values().copied());
-                    worklist.extend(runtime.type_values.values().copied());
-                    worklist.extend(runtime.dependencies.iter().copied());
-                    worklist.extend(runtime.dependency_names.values().copied());
-                    worklist.extend(runtime.init);
-                    worklist.extend(
-                        runtime
-                            .globals
-                            .iter()
-                            .filter_map(|slot| slot.load().as_object_ptr()),
-                    );
+                match &package.kind {
+                    PackageKind::Static => {}
+                    PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => {
+                        worklist.extend(runtime.objects.iter().copied());
+                        worklist.extend(runtime.object_names.values().copied());
+                        worklist.extend(runtime.type_values.values().copied());
+                        worklist.extend(runtime.dependencies.iter().copied());
+                        worklist.extend(runtime.dependency_names.values().copied());
+                        worklist.extend(runtime.init);
+                        worklist.extend(
+                            runtime
+                                .globals
+                                .iter()
+                                .filter_map(|slot| slot.load().as_object_ptr()),
+                        );
+                    }
                 }
             }
             Object::Function(function) => {
@@ -706,35 +717,18 @@ impl BexHeap {
                     worklist.push(function.runtime_package);
                 }
             }
-            Object::Type(value) => {
-                if !value.owner.as_ptr().is_null() {
-                    worklist.push(value.owner);
-                }
-                worklist.extend(value.defs().classes.values().copied());
-                worklist.extend(value.defs().enums.values().copied());
-            }
+            // A declaration's own type edges are its heads, traced below for
+            // every object kind; what these two arms add is the back-edge to the
+            // package that owns them, so reaching a member keeps its package —
+            // and so its globals and dependencies — alive.
             Object::Class(class) => {
-                if let Some(runtime) = &class.runtime_type {
-                    if !runtime.owner.as_ptr().is_null() {
-                        worklist.push(runtime.owner);
-                    }
-                    worklist.extend(runtime.defs.classes.values().copied());
-                    worklist.extend(runtime.defs.enums.values().copied());
-                }
-                for field in &class.fields {
-                    if let Some(type_value) = &field.runtime_type {
-                        worklist.extend(type_value.defs().classes.values().copied());
-                        worklist.extend(type_value.defs().enums.values().copied());
-                    }
+                if !class.owner.as_ptr().is_null() {
+                    worklist.push(class.owner);
                 }
             }
             Object::Enum(enm) => {
-                if let Some(runtime) = &enm.runtime_type {
-                    if !runtime.owner.as_ptr().is_null() {
-                        worklist.push(runtime.owner);
-                    }
-                    worklist.extend(runtime.defs.classes.values().copied());
-                    worklist.extend(runtime.defs.enums.values().copied());
+                if !enm.owner.as_ptr().is_null() {
+                    worklist.push(enm.owner);
                 }
             }
             // Primitives have no references
@@ -745,15 +739,53 @@ impl BexHeap {
             Object::HostClosure(_) => {}
             // `GenericFunction` references its base function by `GlobalIndex`
             // (not a `HeapPtr`) and holds only inline `RuntimeTy`s — nothing to trace.
+            // An impl rule points at its interface and at each method body. For
+            // the static image those are compile-time pointers, but a rule a
+            // runtime package or an anonymous-class witness allocated points at
+            // moving objects, so the edges are traced like any other.
+            Object::ImplRule(rule) => {
+                worklist.push(rule.interface_head);
+                worklist.extend(rule.methods.values().map(|method| method.fqn));
+            }
+            // Runtime-declared interfaces/aliases back-reference their owning
+            // package (null for static declarations), and an interface's
+            // default-method bodies are direct pointers.
+            Object::Interface(interface) => {
+                if !interface.owner.as_ptr().is_null() {
+                    worklist.push(interface.owner);
+                }
+                worklist.extend(
+                    interface
+                        .methods
+                        .iter()
+                        .map(|method| method.default_fn)
+                        .filter(|ptr| !ptr.as_ptr().is_null()),
+                );
+            }
+            Object::TypeAlias(alias) => {
+                if !alias.owner.as_ptr().is_null() {
+                    worklist.push(alias.owner);
+                }
+            }
             Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::Interface(_)
-            | Object::ImplRule(_)
             | Object::RustData(_)
+            // A `type` value is exactly the type it denotes: every edge it has
+            // is a head, walked below.
+            | Object::Type(_)
             | Object::Collector(_)
             | Object::Float(_) => {}
         }
+
+        // Heads are ordinary references: a type naming a declaration keeps that
+        // declaration alive. An unresolved head has no pointer to trace — emit
+        // mints those, and the loader binds them before the VM exists.
+        bex_vm_types::head_walk::visit_object_heads(obj, &mut |head| {
+            if head.is_resolved() {
+                worklist.push(head.ptr());
+            }
+        });
     }
 
     /// Bug H, check 2 (heap_debug only): after a Major GC, every Gen2
@@ -889,6 +921,7 @@ impl BexHeap {
                     .chain(package.enums.values_mut())
                     .chain(package.interfaces.values_mut())
                     .chain(package.functions.values_mut())
+                    .chain(package.type_aliases.values_mut())
                     .chain(package.mounted_types.values_mut())
                 {
                     if let Some(&new_ptr) = forwarding.get(ptr) {
@@ -912,41 +945,52 @@ impl BexHeap {
                         (interface, rules)
                     })
                     .collect();
-                if let Some(runtime) = &mut package.runtime {
-                    for ptr in runtime.objects.iter_mut() {
-                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                match &mut package.kind {
+                    PackageKind::Static => {}
+                    PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => {
+                        for ptr in runtime.objects.iter_mut() {
+                            if let Some(&new_ptr) = forwarding.get(ptr) {
+                                *ptr = new_ptr;
+                            }
+                        }
+                        for ptr in runtime.object_names.values_mut() {
+                            if let Some(&new_ptr) = forwarding.get(ptr) {
+                                *ptr = new_ptr;
+                            }
+                        }
+                        // Keyed by the declaration each value names, so the keys
+                        // move too — rebuilt through the forwarding map rather than
+                        // mutated in place, as `impl_rules` above is.
+                        let old_type_values = std::mem::take(&mut runtime.type_values);
+                        runtime.type_values = old_type_values
+                            .into_iter()
+                            .map(|(declaration, value)| {
+                                (
+                                    forwarding.get(&declaration).copied().unwrap_or(declaration),
+                                    forwarding.get(&value).copied().unwrap_or(value),
+                                )
+                            })
+                            .collect();
+                        for ptr in runtime.dependencies.iter_mut() {
+                            if let Some(&new_ptr) = forwarding.get(ptr) {
+                                *ptr = new_ptr;
+                            }
+                        }
+                        for ptr in runtime.dependency_names.values_mut() {
+                            if let Some(&new_ptr) = forwarding.get(ptr) {
+                                *ptr = new_ptr;
+                            }
+                        }
+                        if let Some(ptr) = &mut runtime.init
+                            && let Some(&new_ptr) = forwarding.get(ptr)
+                        {
                             *ptr = new_ptr;
                         }
-                    }
-                    for ptr in runtime.object_names.values_mut() {
-                        if let Some(&new_ptr) = forwarding.get(ptr) {
-                            *ptr = new_ptr;
+                        for slot in &runtime.globals {
+                            let mut value = slot.load();
+                            self.fixup_value(&mut value, forwarding);
+                            slot.store(value);
                         }
-                    }
-                    for ptr in runtime.type_values.values_mut() {
-                        if let Some(&new_ptr) = forwarding.get(ptr) {
-                            *ptr = new_ptr;
-                        }
-                    }
-                    for ptr in runtime.dependencies.iter_mut() {
-                        if let Some(&new_ptr) = forwarding.get(ptr) {
-                            *ptr = new_ptr;
-                        }
-                    }
-                    for ptr in runtime.dependency_names.values_mut() {
-                        if let Some(&new_ptr) = forwarding.get(ptr) {
-                            *ptr = new_ptr;
-                        }
-                    }
-                    if let Some(ptr) = &mut runtime.init
-                        && let Some(&new_ptr) = forwarding.get(ptr)
-                    {
-                        *ptr = new_ptr;
-                    }
-                    for slot in &runtime.globals {
-                        let mut value = slot.load();
-                        self.fixup_value(&mut value, forwarding);
-                        slot.store(value);
                     }
                 }
             }
@@ -965,54 +1009,16 @@ impl BexHeap {
                     function.runtime_package = new_ptr;
                 }
             }
-            Object::Type(value) => {
-                if let Some(&new_ptr) = forwarding.get(&value.owner) {
-                    value.owner = new_ptr;
-                }
-                for ptr in value.defs_mut().classes.values_mut() {
-                    *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                }
-                for ptr in value.defs_mut().enums.values_mut() {
-                    *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                }
-            }
+            // Owner back-edges; heads are repointed for every object kind
+            // below, by the same walk that traced them.
             Object::Class(class) => {
-                if let Some(runtime) = &mut class.runtime_type {
-                    runtime.owner = forwarding
-                        .get(&runtime.owner)
-                        .copied()
-                        .unwrap_or(runtime.owner);
-                    for ptr in runtime.defs.classes.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
-                    for ptr in runtime.defs.enums.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
-                }
-                for field in &mut class.fields {
-                    let Some(type_value) = &mut field.runtime_type else {
-                        continue;
-                    };
-                    for ptr in type_value.defs_mut().classes.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
-                    for ptr in type_value.defs_mut().enums.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
+                if let Some(&new_ptr) = forwarding.get(&class.owner) {
+                    class.owner = new_ptr;
                 }
             }
             Object::Enum(enm) => {
-                if let Some(runtime) = &mut enm.runtime_type {
-                    runtime.owner = forwarding
-                        .get(&runtime.owner)
-                        .copied()
-                        .unwrap_or(runtime.owner);
-                    for ptr in runtime.defs.classes.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
-                    for ptr in runtime.defs.enums.values_mut() {
-                        *ptr = forwarding.get(ptr).copied().unwrap_or(*ptr);
-                    }
+                if let Some(&new_ptr) = forwarding.get(&enm.owner) {
+                    enm.owner = new_ptr;
                 }
             }
             // Primitives have no references
@@ -1021,15 +1027,51 @@ impl BexHeap {
             // `HostClosure` carries no heap references; see
             // `add_references_to_worklist`.
             Object::HostClosure(_) => {}
-            Object::String(_)
+            Object::ImplRule(rule) => {
+                if let Some(&new_ptr) = forwarding.get(&rule.interface_head) {
+                    rule.interface_head = new_ptr;
+                }
+                for method in rule.methods.values_mut() {
+                    if let Some(&new_ptr) = forwarding.get(&method.fqn) {
+                        method.fqn = new_ptr;
+                    }
+                }
+            }
+            Object::Interface(interface) => {
+                if let Some(&new_ptr) = forwarding.get(&interface.owner) {
+                    interface.owner = new_ptr;
+                }
+                for method in &mut interface.methods {
+                    if let Some(&new_ptr) = forwarding.get(&method.default_fn) {
+                        method.default_fn = new_ptr;
+                    }
+                }
+            }
+            Object::TypeAlias(alias) => {
+                if let Some(&new_ptr) = forwarding.get(&alias.owner) {
+                    alias.owner = new_ptr;
+                }
+            }
+            // A `type` value is exactly the type it denotes: every edge it has
+            // is a head, walked below.
+            Object::Type(_)
+            | Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::Interface(_)
-            | Object::ImplRule(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_) => {}
         }
+
+        // Repoint every head whose declaration moved. Identity is untouched —
+        // only the access path — so nothing rehashes or reorders.
+        bex_vm_types::head_walk::visit_object_heads_mut(obj, &mut |head| {
+            if head.is_resolved()
+                && let Some(&moved) = forwarding.get(&head.ptr())
+            {
+                head.forward_to(moved);
+            }
+        });
     }
 
     /// Fix up a single Value reference.
@@ -1286,6 +1328,7 @@ impl BexHeap {
                     .chain(package.enums.values())
                     .chain(package.interfaces.values())
                     .chain(package.functions.values())
+                    .chain(package.type_aliases.values())
                     .chain(package.mounted_types.values())
                     .copied();
                 worklist.extend(refs.filter(|ptr| self.generation_of(*ptr).is_young()));
@@ -1303,30 +1346,33 @@ impl BexHeap {
                 {
                     worklist.push(ptr);
                 }
-                if let Some(runtime) = &package.runtime {
-                    worklist.extend(
-                        runtime
-                            .objects
-                            .iter()
-                            .chain(runtime.object_names.values())
-                            .chain(runtime.type_values.values())
-                            .chain(runtime.dependencies.iter())
-                            .chain(runtime.dependency_names.values())
-                            .copied()
-                            .filter(|ptr| self.generation_of(*ptr).is_young()),
-                    );
-                    if let Some(ptr) = runtime.init
-                        && self.generation_of(ptr).is_young()
-                    {
-                        worklist.push(ptr);
+                match &package.kind {
+                    PackageKind::Static => {}
+                    PackageKind::Runtime(runtime) | PackageKind::Session { runtime, .. } => {
+                        worklist.extend(
+                            runtime
+                                .objects
+                                .iter()
+                                .chain(runtime.object_names.values())
+                                .chain(runtime.type_values.values())
+                                .chain(runtime.dependencies.iter())
+                                .chain(runtime.dependency_names.values())
+                                .copied()
+                                .filter(|ptr| self.generation_of(*ptr).is_young()),
+                        );
+                        if let Some(ptr) = runtime.init
+                            && self.generation_of(ptr).is_young()
+                        {
+                            worklist.push(ptr);
+                        }
+                        worklist.extend(
+                            runtime
+                                .globals
+                                .iter()
+                                .filter_map(|slot| slot.load().as_object_ptr())
+                                .filter(|ptr| self.generation_of(*ptr).is_young()),
+                        );
                     }
-                    worklist.extend(
-                        runtime
-                            .globals
-                            .iter()
-                            .filter_map(|slot| slot.load().as_object_ptr())
-                            .filter(|ptr| self.generation_of(*ptr).is_young()),
-                    );
                 }
             }
             Object::Function(function) => {
@@ -1353,67 +1399,15 @@ impl BexHeap {
                     worklist.push(function.runtime_package);
                 }
             }
-            Object::Type(value) => {
-                if !value.owner.as_ptr().is_null() && self.generation_of(value.owner).is_young() {
-                    worklist.push(value.owner);
-                }
-                worklist.extend(
-                    value
-                        .defs()
-                        .classes
-                        .values()
-                        .chain(value.defs().enums.values())
-                        .copied()
-                        .filter(|ptr| self.generation_of(*ptr).is_young()),
-                );
-            }
+            // Owner back-edges; heads are scanned for every object kind below.
             Object::Class(class) => {
-                if let Some(runtime) = &class.runtime_type {
-                    if !runtime.owner.as_ptr().is_null()
-                        && self.generation_of(runtime.owner).is_young()
-                    {
-                        worklist.push(runtime.owner);
-                    }
-                    worklist.extend(
-                        runtime
-                            .defs
-                            .classes
-                            .values()
-                            .chain(runtime.defs.enums.values())
-                            .copied()
-                            .filter(|ptr| self.generation_of(*ptr).is_young()),
-                    );
-                }
-                for field in &class.fields {
-                    if let Some(type_value) = &field.runtime_type {
-                        worklist.extend(
-                            type_value
-                                .defs()
-                                .classes
-                                .values()
-                                .chain(type_value.defs().enums.values())
-                                .copied()
-                                .filter(|ptr| self.generation_of(*ptr).is_young()),
-                        );
-                    }
+                if !class.owner.as_ptr().is_null() && self.generation_of(class.owner).is_young() {
+                    worklist.push(class.owner);
                 }
             }
             Object::Enum(enm) => {
-                if let Some(runtime) = &enm.runtime_type {
-                    if !runtime.owner.as_ptr().is_null()
-                        && self.generation_of(runtime.owner).is_young()
-                    {
-                        worklist.push(runtime.owner);
-                    }
-                    worklist.extend(
-                        runtime
-                            .defs
-                            .classes
-                            .values()
-                            .chain(runtime.defs.enums.values())
-                            .copied()
-                            .filter(|ptr| self.generation_of(*ptr).is_young()),
-                    );
+                if !enm.owner.as_ptr().is_null() && self.generation_of(enm.owner).is_young() {
+                    worklist.push(enm.owner);
                 }
             }
             // Primitives/leaf variants have no heap references.
@@ -1421,15 +1415,54 @@ impl BexHeap {
             Object::Sentinel(_) => {}
             // `HostClosure` carries no heap references.
             Object::HostClosure(_) => {}
-            Object::String(_)
+            Object::ImplRule(rule) => {
+                if self.generation_of(rule.interface_head).is_young() {
+                    worklist.push(rule.interface_head);
+                }
+                worklist.extend(
+                    rule.methods
+                        .values()
+                        .map(|method| method.fqn)
+                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
+            }
+            Object::Interface(interface) => {
+                if !interface.owner.as_ptr().is_null()
+                    && self.generation_of(interface.owner).is_young()
+                {
+                    worklist.push(interface.owner);
+                }
+                worklist.extend(
+                    interface
+                        .methods
+                        .iter()
+                        .map(|method| method.default_fn)
+                        .filter(|ptr| {
+                            !ptr.as_ptr().is_null() && self.generation_of(*ptr).is_young()
+                        }),
+                );
+            }
+            Object::TypeAlias(alias) => {
+                if !alias.owner.as_ptr().is_null() && self.generation_of(alias.owner).is_young() {
+                    worklist.push(alias.owner);
+                }
+            }
+            // A `type` value is exactly the type it denotes: every edge it has
+            // is a head, walked below.
+            Object::Type(_)
+            | Object::String(_)
             | Object::Bigint(_)
             | Object::Uint8Array(_)
-            | Object::Interface(_)
-            | Object::ImplRule(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Float(_) => {}
         }
+
+        bex_vm_types::head_walk::visit_object_heads(obj, &mut |head| {
+            if head.is_resolved() && self.generation_of(head.ptr()).is_young() {
+                worklist.push(head.ptr());
+            }
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -1711,7 +1744,10 @@ mod tests {
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
         let compile_time = vec![Object::Enum(Box::new(bex_vm_types::Enum {
-            name: baml_type::TypeName::local(baml_type::Name::new("E")),
+            name: baml_type::DeclarationName::Declared(baml_type::TypeName::local(
+                baml_type::Name::new("E"),
+            )),
+            type_tag: baml_type::typetag::TypeTag::from_i64(200),
             variants: vec![bex_vm_types::EnumVariant {
                 name: "A".to_string(),
                 description: None,
@@ -1725,7 +1761,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             ty_attr: baml_type::TyAttr::default(),
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -1754,7 +1790,9 @@ mod tests {
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
         let compile_time = vec![Object::Class(Box::new(bex_vm_types::Class {
-            name: baml_type::TypeName::local(baml_type::Name::new("C")),
+            name: baml_type::DeclarationName::Declared(baml_type::TypeName::local(
+                baml_type::Name::new("C"),
+            )),
             fields: vec![bex_vm_types::ClassField {
                 name: "x".to_string(),
                 field_type: baml_type::RuntimeTy::Int {
@@ -1774,11 +1812,11 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            type_tag: 100,
+            type_tag: baml_type::typetag::TypeTag::from_i64(100),
             ty_attr: baml_type::TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -2412,17 +2450,17 @@ mod tests {
 
         // Allocate a class (leaf), a string (leaf), then an instance referencing both
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: TypeName::local(Name::new("TestClass")),
+            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("TestClass"))),
             fields: vec![],
             description: None,
             alias: None,
             docstring: None,
             other: Default::default(),
-            type_tag: 0,
+            type_tag: baml_type::typetag::TypeTag::from_i64(0),
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
         let field_str = tlab.alloc_string("field_value".to_string());
         let inst_ptr =
@@ -2446,7 +2484,7 @@ mod tests {
         let Object::Class(c) = (unsafe { inst.class.get() }) else {
             panic!("not class")
         };
-        assert_eq!(c.name.name().as_str(), "TestClass");
+        assert_eq!(c.name.item_name().as_str(), "TestClass");
     }
 
     #[test]
@@ -2458,14 +2496,15 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
-            name: TypeName::local(Name::new("Color")),
+            type_tag: baml_type::typetag::TypeTag::from_i64(200),
+            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("Color"))),
             variants: vec![],
             description: None,
             alias: None,
             docstring: None,
             other: Default::default(),
             ty_attr: TyAttr::default(),
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
         let var_ptr = tlab.alloc_variant(enum_ptr, 1);
 
@@ -2481,7 +2520,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { v.enm.get() }) else {
             panic!("not enum")
         };
-        assert_eq!(e.name.name().as_str(), "Color");
+        assert_eq!(e.name.item_name().as_str(), "Color");
     }
 
     #[test]
@@ -2686,25 +2725,25 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: TypeName::local(Name::new("MyClass")),
+            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("MyClass"))),
             fields: vec![],
             description: None,
             alias: None,
             docstring: None,
             other: Default::default(),
-            type_tag: 42,
+            type_tag: baml_type::typetag::TypeTag::from_i64(42),
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
         let Object::Class(c) = (unsafe { new_roots[0].get() }) else {
             panic!("not class")
         };
-        assert_eq!(c.name.name().as_str(), "MyClass");
-        assert_eq!(c.type_tag, 42);
+        assert_eq!(c.name.item_name().as_str(), "MyClass");
+        assert_eq!(c.type_tag, baml_type::typetag::TypeTag::from_i64(42));
     }
 
     #[test]
@@ -2715,53 +2754,50 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let ptr = tlab.alloc(Object::Enum(Box::new(Enum {
-            name: TypeName::local(Name::new("Status")),
+            type_tag: baml_type::typetag::TypeTag::from_i64(200),
+            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("Status"))),
             variants: vec![],
             description: None,
             alias: None,
             docstring: None,
             other: Default::default(),
             ty_attr: TyAttr::default(),
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
         let Object::Enum(e) = (unsafe { new_roots[0].get() }) else {
             panic!("not enum")
         };
-        assert_eq!(e.name.name().as_str(), "Status");
+        assert_eq!(e.name.item_name().as_str(), "Status");
     }
 
     #[test]
     fn test_gc_leaf_type_preserved() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let minted = bex_vm_types::types::TypeValue::from_parts(
-            baml_type::RealizedTy::int(),
-            bex_vm_types::types::MintId::Static(0xC0FFEE),
-        );
-        let ptr = tlab.alloc(Object::Type(Box::new(minted.clone())));
+        let value = bex_vm_types::types::TypeValue::new(baml_type::RealizedTy::int());
+        let ptr = tlab.alloc(Object::Type(Box::new(value.clone())));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
         let Object::Type(tv) = (unsafe { new_roots[0].get() }) else {
             panic!("not type")
         };
-        assert!(matches!(tv.ty, baml_type::RealizedTy::Int { .. }));
-        // The mint is inline data, so a GC copy preserves identity (I-4).
-        assert_eq!(**tv, minted);
+        // The described type is inline data, so a GC copy preserves it verbatim.
+        assert_eq!(tv.ty, value.ty);
     }
 
+    /// A runtime enum reached only through a `type` value's head survives, and
+    /// the head is repointed as both objects move.
     #[test]
-    fn test_gc_traces_runtime_enum_definition_owned_by_type_value() {
-        use baml_type::{Name, QualifiedTypeName, TyAttr};
-        use bex_vm_types::{
-            Enum, EnumVariant,
-            types::{DynTypeDefs, MintId, TypeValue},
-        };
+    fn test_gc_traces_runtime_enum_definition_reached_through_a_head() {
+        use baml_type::{Name, TyAttr};
+        use bex_vm_types::{Enum, EnumVariant, TypeHead, types::TypeValue};
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let type_name = QualifiedTypeName::runtime_local(Name::new("Category"), 41);
+        let type_name = bex_vm_types::DeclarationName::Anonymous(Name::new("Category"));
+        let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             name: type_name.clone(),
             variants: vec![EnumVariant {
@@ -2776,18 +2812,18 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
+            type_tag,
             ty_attr: TyAttr::default(),
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
-        let type_ptr = tlab.alloc_type(TypeValue::from_parts_with_defs(
-            RealizedTy::Enum(type_name.clone(), TyAttr::default()),
-            MintId::Runtime(41),
-            DynTypeDefs::with_enum(type_name.clone(), enum_ptr),
-        ));
+        let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Enum(
+            TypeHead::new(enum_ptr, type_tag),
+            TyAttr::default(),
+        )));
 
-        // Root only the type. Its side-table edge must keep the authoritative
-        // enum alive and be fixed up as both objects move Gen0 → Gen1 → Gen2,
-        // then once more through a compacting major collection.
+        // Root only the type. Its head is the sole edge keeping the enum alive,
+        // and must be traced and repointed as both objects move Gen0 → Gen1 →
+        // Gen2, then once more through a compacting major collection.
         let (_, roots, _) =
             unsafe { heap.collect_garbage_generational(&[type_ptr], CollectionLevel::Minor) };
         let (_, roots, _) =
@@ -2799,39 +2835,36 @@ mod tests {
         let Object::Type(type_value) = (unsafe { roots[0].get() }) else {
             panic!("root was not the runtime type value")
         };
-        assert_eq!(type_value.mint(), MintId::Runtime(41));
-        let enum_ptr = *type_value
-            .defs()
-            .enums
-            .get(&type_name)
-            .expect("runtime definition side table was lost");
-        let Object::Enum(enm) = (unsafe { enum_ptr.get() }) else {
-            panic!("runtime definition did not land on an enum")
+        let RealizedTy::Enum(head, _) = &type_value.ty else {
+            panic!("the type value no longer wraps an enum type")
         };
-        assert_eq!(enm.name, type_name);
+        assert_eq!(head.tag(), type_tag, "a move must not change identity");
+        let Object::Enum(enm) = (unsafe { head.ptr().get() }) else {
+            panic!("the head did not land on an enum")
+        };
+        assert_eq!(enm.name.item_name(), type_name.item_name());
         assert_eq!(enm.variants[0].name, "RED");
         assert_eq!(enm.variants[0].alias.as_deref(), Some("k7"));
     }
 
+    /// The same for a class, whose fields carry heads of their own.
     #[test]
-    fn test_gc_traces_runtime_class_definition_owned_only_by_type_value() {
-        use baml_type::{Name, QualifiedTypeName, TyAttr};
-        use bex_vm_types::{
-            Class, ClassField,
-            types::{DynTypeDefs, MintId, RuntimeTypeProvenance, TypeValue},
-        };
+    fn test_gc_traces_runtime_class_definition_reached_through_a_head() {
+        use baml_type::{Name, TyAttr};
+        use bex_vm_types::{Class, ClassField, TypeHead, types::TypeValue};
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let type_name = QualifiedTypeName::runtime_local(Name::new("VisitNote"), 42);
+        let type_name = bex_vm_types::DeclarationName::Anonymous(Name::new("VisitNote"));
+        let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             name: type_name.clone(),
             fields: vec![ClassField {
                 name: "height_cm".to_string(),
-                field_type: baml_type::RuntimeTy::Int {
+                field_type: bex_vm_types::RuntimeTy::Int {
                     attr: TyAttr::default(),
                 },
-                field_template: baml_type::TyTemplate::from(RealizedTy::int()),
+                field_template: bex_vm_types::TyTemplate::from(RealizedTy::int()),
                 description: Some("height in centimeters".to_string()),
                 alias: None,
                 docstring: None,
@@ -2843,24 +2876,20 @@ mod tests {
             alias: None,
             docstring: None,
             other: Default::default(),
-            type_tag: 142,
+            type_tag,
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: Some(RuntimeTypeProvenance {
-                mint: MintId::Runtime(42),
-                defs: DynTypeDefs::default(),
-                owner: bex_vm_types::HeapPtr::null(),
-            }),
+            owner: bex_vm_types::HeapPtr::null(),
         })));
-        let type_ptr = tlab.alloc_type(TypeValue::from_parts_with_defs(
-            RealizedTy::Class(type_name.clone(), vec![], TyAttr::default()),
-            MintId::Runtime(42),
-            DynTypeDefs::with_class(type_name.clone(), class_ptr),
-        ));
+        let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Class(
+            TypeHead::new(class_ptr, type_tag),
+            vec![],
+            TyAttr::default(),
+        )));
 
-        // No instance and no independently-rooted class exist: the sole edge
-        // keeping the authoritative definition alive is Object::Type.defs.
+        // No instance and no independently-rooted class exists: the sole edge
+        // keeping the declaration alive is the type's head.
         let (_, roots, _) =
             unsafe { heap.collect_garbage_generational(&[type_ptr], CollectionLevel::Minor) };
         let (_, roots, _) =
@@ -2875,15 +2904,14 @@ mod tests {
         let Object::Type(type_value) = (unsafe { roots[0].get() }) else {
             panic!("root was not the runtime type value")
         };
-        let class_ptr = *type_value
-            .defs()
-            .classes
-            .get(&type_name)
-            .expect("runtime class definition side table was lost");
-        let Object::Class(class) = (unsafe { class_ptr.get() }) else {
-            panic!("runtime definition did not land on a class")
+        let RealizedTy::Class(head, _, _) = &type_value.ty else {
+            panic!("the type value no longer wraps a class type")
         };
-        assert_eq!(class.name, type_name);
+        assert_eq!(head.tag(), type_tag, "a move must not change identity");
+        let Object::Class(class) = (unsafe { head.ptr().get() }) else {
+            panic!("the head did not land on a class")
+        };
+        assert_eq!(class.name.item_name(), type_name.item_name());
         assert_eq!(class.fields[0].name, "height_cm");
         assert_eq!(
             class.fields[0].description.as_deref(),
@@ -3283,17 +3311,17 @@ mod tests {
         // --- Container: Object::Instance ---
         // Instance requires a class pointer.
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: TypeName::local(Name::new("T")),
+            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("T"))),
             fields: vec![],
             description: None,
             alias: None,
             docstring: None,
             other: Default::default(),
-            type_tag: 0,
+            type_tag: baml_type::typetag::TypeTag::from_i64(0),
             ty_attr: TyAttr::default(),
             has_cleanup: false,
             generic_param_count: 0,
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
         let instance_container = tlab.alloc(Object::Instance(Instance::new(
             class_ptr,
@@ -3303,14 +3331,15 @@ mod tests {
 
         // --- Container: Object::Variant ---
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
-            name: TypeName::local(Name::new("E")),
+            type_tag: baml_type::typetag::TypeTag::from_i64(200),
+            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("E"))),
             variants: vec![],
             description: None,
             alias: None,
             docstring: None,
             other: Default::default(),
             ty_attr: TyAttr::default(),
-            runtime_type: None,
+            owner: bex_vm_types::HeapPtr::null(),
         })));
         let variant_container = tlab.alloc(Object::Variant(Variant {
             enm: enum_ptr,
@@ -3422,7 +3451,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { var.enm.get() }) else {
             panic!("variant.enm not Enum")
         };
-        assert_eq!(e.name.name().as_str(), "E");
+        assert_eq!(e.name.item_name().as_str(), "E");
     }
 
     // ========================================================================

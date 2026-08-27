@@ -64,7 +64,7 @@ class PkArrayIterator<T> {
         }
     }
 }
-function pk_main() -> int[] throws unknown {
+function pk_main() -> int[] {
     let p = PkArrayIterator.new([4, 5]).peekable()
      // ^ user.PkPeekable<int, never>
     let out: int[] = []

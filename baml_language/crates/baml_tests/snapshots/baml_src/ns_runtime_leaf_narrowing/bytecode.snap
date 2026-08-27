@@ -1,0 +1,366 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function runtime_leaf_narrowing.$init_test_ns_runtime_leaf_narrowing_runtime_leaf_narrowing(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.runtime_leaf_narrowing"
+    load_const "is recognizes type runtime values"
+    make_closure .<lambda($init_test_ns_runtime_leaf_narrowing_runtime_leaf_narrowing, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.runtime_leaf_narrowing"
+    load_const "is rejects non-type runtime values"
+    make_closure .<lambda($init_test_ns_runtime_leaf_narrowing_runtime_leaf_narrowing, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.runtime_leaf_narrowing"
+    load_const "if let binds type runtime values"
+    make_closure .<lambda($init_test_ns_runtime_leaf_narrowing_runtime_leaf_narrowing, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.runtime_leaf_narrowing"
+    load_const "is distinguishes media runtime values"
+    make_closure .<lambda($init_test_ns_runtime_leaf_narrowing_runtime_leaf_narrowing, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.runtime_leaf_narrowing"
+    load_const "match recognizes type runtime values"
+    make_closure .<lambda($init_test_ns_runtime_leaf_narrowing_runtime_leaf_narrowing, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.runtime_leaf_narrowing"
+    load_const "match distinguishes media runtime values"
+    make_closure .<lambda($init_test_ns_runtime_leaf_narrowing_runtime_leaf_narrowing, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function runtime_leaf_narrowing.classify_media_runtime_value(value: image | audio | video | pdf) -> string {
+    load_var value
+    is_type image
+    pop_jump_if_false L0
+    jump L5
+
+  L0:
+    load_var value
+    is_type audio
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var value
+    is_type video
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_const "pdf"
+    jump L6
+
+  L3:
+    load_const "video"
+    jump L6
+
+  L4:
+    load_const "audio"
+    jump L6
+
+  L5:
+    load_const "image"
+
+  L6:
+    return
+}
+
+function runtime_leaf_narrowing.classify_type_runtime_value(value: reflect.Type | int) -> string {
+    load_var value
+    store_var _2
+    load_var _2
+    narrow_bind reflect.Type, slot=2
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "int"
+    jump L2
+
+  L1:
+    load_var _2
+    call baml.root.ToString$for$reflect.Type.to_string
+
+  L2:
+    return
+}
+
+function runtime_leaf_narrowing.if_let_binds_type_runtime_value() -> string {
+    load_type string
+    store_var _2
+    load_var _2
+    narrow_bind reflect.Type, slot=1
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "not type"
+    jump L2
+
+  L1:
+    load_var _2
+    call baml.root.ToString$for$reflect.Type.to_string
+
+  L2:
+    return
+}
+
+function runtime_leaf_narrowing.is_distinguishes_media_runtime_values() -> bool {
+    load_const "aGk="
+    load_const "image/png"
+    call baml.media.Image.from_base64
+    store_var image_value
+    load_const "aGk="
+    load_const "audio/mpeg"
+    call baml.media.Audio.from_base64
+    store_var audio_value
+    load_const "aGk="
+    load_const "video/mp4"
+    call baml.media.Video.from_base64
+    store_var video_value
+    load_const "aGk="
+    load_const "application/pdf"
+    call baml.media.Pdf.from_base64
+    store_var pdf_value
+    load_var image_value
+    is_type image
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    jump_if_false L6
+    pop 1
+    load_var image_value
+    is_type audio
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_const false
+    jump L5
+
+  L4:
+    load_const true
+
+  L5:
+    unary_op !
+
+  L6:
+    jump_if_false L9
+    pop 1
+    load_var audio_value
+    is_type audio
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_const false
+    jump L9
+
+  L8:
+    load_const true
+
+  L9:
+    jump_if_false L13
+    pop 1
+    load_var audio_value
+    is_type video
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_const false
+    jump L12
+
+  L11:
+    load_const true
+
+  L12:
+    unary_op !
+
+  L13:
+    jump_if_false L16
+    pop 1
+    load_var video_value
+    is_type video
+    pop_jump_if_false L14
+    jump L15
+
+  L14:
+    load_const false
+    jump L16
+
+  L15:
+    load_const true
+
+  L16:
+    jump_if_false L20
+    pop 1
+    load_var video_value
+    is_type pdf
+    pop_jump_if_false L17
+    jump L18
+
+  L17:
+    load_const false
+    jump L19
+
+  L18:
+    load_const true
+
+  L19:
+    unary_op !
+
+  L20:
+    jump_if_false L23
+    pop 1
+    load_var pdf_value
+    is_type pdf
+    pop_jump_if_false L21
+    jump L22
+
+  L21:
+    load_const false
+    jump L23
+
+  L22:
+    load_const true
+
+  L23:
+    jump_if_false L27
+    pop 1
+    load_var pdf_value
+    is_type image
+    pop_jump_if_false L24
+    jump L25
+
+  L24:
+    load_const false
+    jump L26
+
+  L25:
+    load_const true
+
+  L26:
+    unary_op !
+
+  L27:
+    return
+}
+
+function runtime_leaf_narrowing.is_type_rejects_non_type() -> bool {
+    load_const 7
+    is_type reflect.Type
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function runtime_leaf_narrowing.is_type_runtime_value() -> bool {
+    load_type int
+    is_type reflect.Type
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    jump L2
+
+  L1:
+    load_const true
+
+  L2:
+    return
+}
+
+function runtime_leaf_narrowing.match_distinguishes_media_runtime_values() -> bool {
+    load_const "aGk="
+    load_const "image/png"
+    call baml.media.Image.from_base64
+    call user.runtime_leaf_narrowing.classify_media_runtime_value
+    load_const "image"
+    cmp_op ==
+    jump_if_false L0
+    pop 1
+    load_const "aGk="
+    load_const "audio/mpeg"
+    call baml.media.Audio.from_base64
+    call user.runtime_leaf_narrowing.classify_media_runtime_value
+    load_const "audio"
+    cmp_op ==
+
+  L0:
+    jump_if_false L1
+    pop 1
+    load_const "aGk="
+    load_const "video/mp4"
+    call baml.media.Video.from_base64
+    call user.runtime_leaf_narrowing.classify_media_runtime_value
+    load_const "video"
+    cmp_op ==
+
+  L1:
+    jump_if_false L2
+    pop 1
+    load_const "aGk="
+    load_const "application/pdf"
+    call baml.media.Pdf.from_base64
+    call user.runtime_leaf_narrowing.classify_media_runtime_value
+    load_const "pdf"
+    cmp_op ==
+
+  L2:
+    return
+}
+
+function runtime_leaf_narrowing.match_recognizes_type_runtime_values() -> bool {
+    load_type string
+    call user.runtime_leaf_narrowing.classify_type_runtime_value
+    load_const "string"
+    cmp_op ==
+    jump_if_false L0
+    pop 1
+    load_const 7
+    call user.runtime_leaf_narrowing.classify_type_runtime_value
+    load_const "int"
+    cmp_op ==
+
+  L0:
+    return
+}

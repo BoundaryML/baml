@@ -51,6 +51,10 @@ class AiGatewayImageClient {
     request_body: baml.json.json?,
     headers: map<string, string>?,
     query_params: map<string, string>?,
+    // Record request/response bodies on the LLMCall wire records delivered
+    // through on_event. Status, headers, and timing are always recorded; this
+    // flag only gates the bodies.
+    capture_wire: bool,
 
     function new(
         model: string = "openai/gpt-image-1",
@@ -63,6 +67,7 @@ class AiGatewayImageClient {
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
+        capture_wire: bool = true,
     ) -> AiGatewayImageClient {
         AiGatewayImageClient {
             model: model,
@@ -75,6 +80,7 @@ class AiGatewayImageClient {
             request_body: request_body,
             headers: headers,
             query_params: query_params,
+            capture_wire: capture_wire,
         }
     }
 
@@ -105,9 +111,15 @@ class AiGatewayImageClient {
             root.internal._gw_images_client_id(self)
         }
 
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            vercel.internal.gateway_images_render(self, input, preview = true) catch_all (e) {
+                _ => throw ai.errors.normalize(e),
+            }
+        }
+
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             root.internal.gateway_images_invoke(self, input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
+                _ => throw ai.errors.normalize_invoke(e),
             }
         }
     }

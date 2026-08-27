@@ -18,9 +18,9 @@
 
 use std::path::{Path, PathBuf};
 
-use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
-use baml_project::ProjectDatabase;
-use baml_workspace::discover_baml_files;
+use baml_compiler2_emit::generate_project_bytecode;
+use baml_db::{ProjectDatabase, discover_baml_files};
+use baml_tests::engine::TestDbExt;
 use divan::{Bencher, black_box};
 
 fn main() {
@@ -64,26 +64,20 @@ fn read_project(root: &Path) -> ProjectSources {
 }
 
 /// Build a fresh [`ProjectDatabase`] rooted at `root` and populated with
-/// `sources`. Mirrors how the CLI loads a project (`set_project_root` first,
+/// `sources`. Mirrors how the CLI loads a project (the workspace root first,
 /// then add each discovered file) so the compiler sees the same project shape.
 fn build_db(root: &Path, sources: &ProjectSources) -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(root);
+    db.workspace(root);
     for (path, content) in sources {
-        db.add_or_update_file(path, content);
+        db.file(path, content);
     }
     db
 }
 
 /// Compile a populated database to bytecode, measuring only the compile step.
 fn compile(db: &ProjectDatabase) {
-    let program = generate_project_bytecode(
-        db,
-        &CompileOptions {
-            emit_test_cases: true,
-        },
-    )
-    .expect("benchmark compilation failed");
+    let program = generate_project_bytecode(db).expect("benchmark compilation failed");
     black_box(program);
 }
 
@@ -102,12 +96,12 @@ fn bench_compile_project(bencher: Bencher, root: &Path) {
 // Benchmarks
 // ============================================================================
 
-/// Constant-overhead baseline: an empty project (the `__baml_std__` fixture,
+/// Constant-overhead baseline: an empty project (the `projects/empty` fixture,
 /// whose only file is a comment). With no user code to compile, the measured
 /// time is the compiler's fixed cost (builtin stubs, Salsa setup, empty emit).
 #[divan::bench]
 fn compile_empty_project(bencher: Bencher) {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("projects/compiles/__baml_std__");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("projects/empty");
     bench_compile_project(bencher, &root);
 }
 

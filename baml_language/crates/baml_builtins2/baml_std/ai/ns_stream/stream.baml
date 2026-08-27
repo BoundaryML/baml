@@ -46,7 +46,9 @@
 // A client that can render the same request as `invoke` but streamed.
 // Implementors must also implement Client (`requires`).
 interface StreamingClient requires root.Client {
-    function invoke_stream(self, input: root.ModelTurnInput) -> TurnStream throws unknown
+    // InvokeError, not just Failure | UnknownError: a streaming invocation
+    // preserves Timeout/Cancelled/CompilationError exactly like Client.invoke.
+    function invoke_stream(self, input: root.ModelTurnInput) -> TurnStream throws root.errors.InvokeError
 }
 
 // One decoded raw SSE event, as produced by `baml.http.SseStream.next()`:
@@ -100,6 +102,8 @@ type StreamEvent = TextDelta | TurnMeta | TurnDone;
 class Done {
 }
 
+type EventSource = () -> StreamEvent | Done throws root.errors.InvokeError;
+
 // The raw text-delta stream of ONE model turn. Pull-based: nothing is read
 // from the wire until `next()` or `final_turn()` is called.
 //
@@ -109,10 +113,13 @@ class Done {
 // turn: the accumulated text as one Text block, the folded stop_reason, and
 // usage where the wire provided token counts.
 class TurnStream {
+    // callback-backed streams: composite clients use this to relay normalized
+    // events from a selected member without exposing provider wire details.
+    _event_source: EventSource?,
     // wire-backed streams: the SSE connection plus a per-provider decoder
     // that turns one `SseStream.next()` batch into StreamEvents.
     _sse: baml.http.SseStream?,
-    _decode: ((string) -> StreamEvent[] throws unknown)?,
+    _decode: ((string) -> StreamEvent[] throws root.errors.InvokeError)?,
     // scripted streams (tests): literal delta chunks, no network.
     _chunks: string[],
     _cursor: int,
@@ -131,6 +138,18 @@ class TurnStream {
     _require_terminal: string?,
     // whether a TurnDone was actually decoded before the stream ended.
     _saw_terminal: bool,
+    // Wire telemetry (LLMCall records), surfaced by final_turn().calls.
+    // _calls is the full oldest-first list; composite relays share it by
+    // reference to prepend failed legs. _wire_call is THIS stream's own
+    // exchange record (set by provider invoke_stream implementations), which
+    // ttft/duration stamping and SSE capture mutate in place.
+    _calls: root.events.LLMCall[],
+    _wire_call: root.events.LLMCall?,
+    _call_started: baml.time.Instant?,
+    // TTFT base: stamped when the SSE response opened (legacy TTFT semantics);
+    // falls back to _call_started when a provider did not set it.
+    _ttft_from: baml.time.Instant?,
+    _capture_sse: bool,
 
     // A turn stream over a live SSE connection. `decode` receives the raw
     // batch string from `sse.next()` (a JSON array of SseEvent objects; see
@@ -145,10 +164,11 @@ class TurnStream {
     // sole end-of-turn signal IS the socket closing.
     function from_sse(
         sse: baml.http.SseStream,
-        decode: (string) -> StreamEvent[] throws unknown,
+        decode: (string) -> StreamEvent[] throws root.errors.InvokeError,
         require_terminal: string? = null,
     ) -> TurnStream {
         TurnStream {
+            _event_source: null,
             _sse: sse,
             _decode: decode,
             _chunks: [],
@@ -162,6 +182,11 @@ class TurnStream {
             _done: false,
             _require_terminal: require_terminal,
             _saw_terminal: false,
+            _calls: [],
+            _wire_call: null,
+            _call_started: null,
+            _ttft_from: null,
+            _capture_sse: false,
         }
     }
 
@@ -171,6 +196,7 @@ class TurnStream {
     // the last chunk.
     function from_chunks(chunks: string[]) -> TurnStream {
         TurnStream {
+            _event_source: null,
             _sse: null,
             _decode: null,
             _chunks: chunks,
@@ -184,6 +210,70 @@ class TurnStream {
             _done: false,
             _require_terminal: null,
             _saw_terminal: false,
+            _calls: [],
+            _wire_call: null,
+            _call_started: null,
+            _ttft_from: null,
+            _capture_sse: false,
+        }
+    }
+
+    // A stream backed by one normalized-event callback. Reliability clients
+    // use this to relay a chosen member's deltas and final metadata while
+    // retaining TurnStream's ordinary accumulation and termination behavior.
+    // The source itself owns any retry/fallback policy; once it returns a
+    // TextDelta, that delta is immediately visible to the caller.
+    function from_event_source(next_event: EventSource) -> TurnStream {
+        TurnStream {
+            _event_source: next_event,
+            _sse: null,
+            _decode: null,
+            _chunks: [],
+            _cursor: 0,
+            _pending: [],
+            _pcursor: 0,
+            _text: "",
+            _stop_reason: null,
+            _input_tokens: null,
+            _output_tokens: null,
+            _done: false,
+            _require_terminal: null,
+            _saw_terminal: false,
+            _calls: [],
+            _wire_call: null,
+            _call_started: null,
+            _ttft_from: null,
+            _capture_sse: false,
+        }
+    }
+
+    // Stamp time-to-first-token on this stream's wire record, once.
+    function _stamp_first_delta(self) -> void {
+        if let call: root.events.LLMCall = self._wire_call {
+            if (call.timing.ttft_ms == null) {
+                if let base: baml.time.Instant = self._ttft_from ?? self._call_started {
+                    call.timing.ttft_ms = base.elapsed().to_milliseconds();
+                }
+            }
+        }
+    }
+
+    // Append a raw SSE batch to the wire record when capture is on. Telemetry
+    // must never fail the stream, so a malformed batch is skipped.
+    function _capture_batch(self, batch: string) -> void {
+        if (!self._capture_sse) {
+            return;
+        }
+        if let call: root.events.LLMCall = self._wire_call {
+            let none: SseEvent[] = [];
+            let decoded = decode_sse_batch(batch) catch_all (e) {
+                _ => none,
+            };
+            let records = call.sse_responses ?? [];
+            for (let e in decoded) {
+                records.push(root.events.SseEventRecord { event: e.event, data: e.data, id: e.id });
+            }
+            call.sse_responses = records;
         }
     }
 
@@ -206,7 +296,7 @@ class TurnStream {
                 } else {
                     self._text
                 };
-                throw root.errors.NetworkFailure {
+                throw root.errors.NetworkFailure { status_code: null,
                     provider: provider,
                     detail: `stream ended before the provider's terminal event: the connection closed after ${self._text.length()} characters of assistant text with no end-of-turn event, so the turn is truncated`,
                     raw_body: partial,
@@ -215,21 +305,35 @@ class TurnStream {
         }
     }
 
-    // The next text DELTA, or Done when the turn is over. Metadata events are
-    // folded silently; calling next() after Done keeps returning Done.
-    function next(self) -> string | Done {
+    // All READY text deltas, or Done when the turn is over. Metadata events
+    // are folded silently; calling next() after Done keeps returning Done.
+    //
+    // Drain-ready-then-deliver: every event already decoded (the wire layer
+    // returns whole batches — everything that queued while the caller was
+    // busy) is returned as ONE batch, and the wire is only pulled when no
+    // deliverable text is in hand. Delta boundaries are preserved — every
+    // element is one provider text delta, so consumers that want each SSE
+    // delta individually iterate the batch. A consumer that keeps up sees
+    // one-element batches; a consumer that falls behind (e.g. a partial
+    // parse slower than the token interval) gets the whole backlog in one
+    // return instead of replaying it delta by delta — the pull-model
+    // equivalent of the legacy engine's latest-snapshot watch channel.
+    function next(self) -> string[] | Done {
+        let ready: string[] = [];
         while (true) {
             if (self._done) {
                 return Done {  };
             }
-            // deliver decoded events before pulling more from the wire
-            if (self._pcursor < self._pending.length()) {
+            // deliver every decoded event before pulling more from the wire
+            while (self._pcursor < self._pending.length()) {
                 let e = self._pending.at(self._pcursor);
                 self._pcursor += 1;
                 match (e) {
                     let d: TextDelta => {
+                        self._stamp_first_delta();
                         self._text = `${self._text}${d.text}`;
-                        return d.text;
+                        ready.push(d.text);
+                        null
                     },
                     let m: TurnMeta => {
                         if let s: root.content.StopReason = m.stop_reason {
@@ -246,9 +350,30 @@ class TurnStream {
                     let d: TurnDone => {
                         self._saw_terminal = true;
                         self._finish();
+                        // text decoded ahead of the terminal is delivered
+                        // now; Done follows on the next call (_done is set).
+                        if (ready.length() > 0) {
+                            return ready;
+                        }
                         return Done {  };
                     },
                     null => null,
+                };
+            }
+            // never block on the wire while holding deliverable text
+            if (ready.length() > 0) {
+                return ready;
+            }
+            if let source: EventSource = self._event_source {
+                match (source()) {
+                    let event: StreamEvent => {
+                        self._pending.push(event);
+                        null
+                    },
+                    let done: Done => {
+                        self._finish();
+                        return done;
+                    },
                 };
                 continue;
             }
@@ -264,7 +389,8 @@ class TurnStream {
                             return Done {  };
                         },
                         let batch: string => {
-                            if let decode: (string) -> StreamEvent[] throws unknown = self._decode {
+                            self._capture_batch(batch);
+                            if let decode: (string) -> StreamEvent[] throws root.errors.InvokeError = self._decode {
                                 for (let e in decode(batch)) {
                                     self._pending.push(e);
                                 }
@@ -281,9 +407,10 @@ class TurnStream {
                     // scripted: each chunk is one delta
                     match (self._chunks.at(self._cursor)) {
                         let c: string => {
+                            self._stamp_first_delta();
                             self._cursor += 1;
                             self._text = `${self._text}${c}`;
-                            return c;
+                            return [c];
                         },
                         null => {
                             self._finish();
@@ -326,10 +453,18 @@ class TurnStream {
         } else {
             null
         };
+        if let call: root.events.LLMCall = self._wire_call {
+            if (call.timing.duration_ms == null) {
+                if let started: baml.time.Instant = self._call_started {
+                    call.timing.duration_ms = started.elapsed().to_milliseconds();
+                }
+            }
+        }
         root.ModelTurn {
             content: [root.content.Text { text: self._text }],
             stop_reason: self._stop_reason ?? root.content.StopReason.Complete,
             usage: usage,
+            calls: self._calls,
         }
     }
 }
@@ -338,7 +473,7 @@ class TurnStream {
 // companion. This is the one canonical host-stream class; tagged handles carry
 // its FQN across FFI so host bridges do not need to hardcode a namespace.
 class Stream<TStream, TFinal> {
-    _next_text: () -> string? throws unknown,
+    _next_text: () -> string? throws root.errors.InvokeError,
     _cache: baml.sap.ParseCache<TStream, TFinal>,
     _text: string,
     _finished: bool,
@@ -398,6 +533,7 @@ class Stream<TStream, TFinal> {
 function from_spec<TStream, TFinal>(
     spec: root.FunctionSpec<TFinal>,
     client: StreamingClient? = null,
+    on_event: ((root.events.Event) -> void)? = null,
 ) -> Stream<TStream, TFinal> {
     if (!spec.tools().is_empty()) {
         throw baml.errors.InvalidArgument {
@@ -421,6 +557,14 @@ function from_spec<TStream, TFinal>(
     let provider = match (selected) {
         let c: root.Client => c.id(),
     };
+    let emit = root.events.guard(on_event);
+    let settled = false;
+    if let cb: (root.events.Event) -> void throws never = emit {
+        cb(root.events.RunStarted {
+            spec_name: spec.name(),
+            arguments: spec.arguments(),
+        });
+    }
     let turns = selected.invoke_stream(
         root.ModelTurnInput {
             prompt: spec.prompt_template,
@@ -431,12 +575,36 @@ function from_spec<TStream, TFinal>(
     );
     // The host-facing stream is `ai.stream.Stream`. It is provider-agnostic:
     // all it needs is a way to pull the next text delta from TurnStream.
-    let _ = provider;
     Stream {
         _next_text: () -> {
             match (turns.next()) {
-                let d: Done => null,
-                let s: string => s,
+                let d: Done => {
+                    // Settle: fold the completed turn (this is where the
+                    // previously-discarded streamed usage is recovered) and
+                    // emit the same events the Agent path emits. The flag
+                    // guards re-entry: a listener that pulls this same stream
+                    // (e.g. calls final() mid-callback) must not re-settle.
+                    if (!settled) {
+                        settled = true;
+                        if let cb: (root.events.Event) -> void throws never = emit {
+                            let turn = turns.final_turn();
+                            cb(root.events.AssistantMessage {
+                                content: turn.content,
+                                client_id: provider,
+                            });
+                            if let u: root.events.Usage = turn.usage {
+                                cb(u);
+                            }
+                            for (let call in turn.calls) {
+                                cb(call);
+                            }
+                        }
+                    }
+                    null
+                },
+                let batch: string[] => batch.join(""),
+            } catch_all (e) {
+                _ => throw root.errors.normalize(e),
             }
         },
         _cache: baml.sap.__new_parse_cache<TStream, TFinal>(),

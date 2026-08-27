@@ -1,0 +1,92 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function runtime_type_binding_generic_calls.$init_test_ns_runtime_type_binding_generic_calls_runtime_type_binding_generic_calls(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "root.runtime_type_binding_generic_calls"
+    load_const "non-closure generic list ops over a runtime-bound element type"
+    make_closure .<lambda($init_test_ns_runtime_type_binding_generic_calls_runtime_type_binding_generic_calls, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.runtime_type_binding_generic_calls"
+    load_const "closure generic list ops over a runtime-bound element type"
+    make_closure .<lambda($init_test_ns_runtime_type_binding_generic_calls_runtime_type_binding_generic_calls, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_var registry
+    load_const "root.runtime_type_binding_generic_calls"
+    load_const "method calls on a generic class receiver with a runtime-bound argument"
+    make_closure .<lambda($init_test_ns_runtime_type_binding_generic_calls_runtime_type_binding_generic_calls, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
+    load_const null
+    return
+}
+
+function runtime_type_binding_generic_calls.ClosureOverRuntimeBoundElement() -> int {
+    load_const "BoundPredicate"
+    load_type string
+    load_const "value"
+    load_type string
+    load_type reflect.Type | reflect.WithMeta<reflect.Type>
+    alloc_map 1
+    load_const <omitted>
+    call reflect.class.new
+    load_type reflect.TypeView
+    load_const "as_type"
+    virtual_call nargs=1 ntypeargs=0
+    store_var item_t
+    load_var item_t
+    bind_type 0
+    load_type #0
+    call user.runtime_type_binding_generic_calls.EmptyOf
+    store_var items
+    load_type #0
+    load_type never
+    load_var items
+    load_type #0
+    make_closure .<lambda(ClosureOverRuntimeBoundElement, 0)>, captures=0, ntypeargs=1
+    call baml.Array.filter
+    container_len
+    return
+}
+
+function runtime_type_binding_generic_calls.EmptyOf() -> #0[] {
+    load_type #0
+    alloc_array 0
+    return
+}
+
+function runtime_type_binding_generic_calls.Holder.count(self: runtime_type_binding_generic_calls.Holder<#0>) -> int {
+    load_var self
+    load_field .items
+    container_len
+    return
+}
+
+function runtime_type_binding_generic_calls.Holder.first_or_null(self: runtime_type_binding_generic_calls.Holder<#0>) -> #0 | null {
+    load_type #0
+    load_var self
+    load_field .items
+    load_const 0
+    call baml.Array.at
+    return
+}
+
+function runtime_type_binding_generic_calls.Holder.matches_type(self: runtime_type_binding_generic_calls.Holder<#0>, expected: reflect.Type) -> bool {
+    load_type #0
+    load_var expected
+    call baml.ops.equals_equals
+    return
+}
+
+function runtime_type_binding_generic_calls.Holder.new(items: #0[]) -> runtime_type_binding_generic_calls.Holder<#0> {
+    load_var items
+    load_type #0
+    init_instance<1> user.runtime_type_binding_generic_calls.Holder .items
+    return
+}
