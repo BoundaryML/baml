@@ -42,7 +42,7 @@ sdkgen_python_pydantic2 = { workspace = true }
 sdkgen_rust = { workspace = true }
 sdkgen_swift = { workspace = true }
 sdkgen_typescript_shared = { workspace = true }
-sys_native = { workspace = true }
+sys_native = { workspace = true, features = [ "bundle-http" ] }
 anyhow = { workspace = true }
 base64 = { workspace = true }
 borsh = { workspace = true }
