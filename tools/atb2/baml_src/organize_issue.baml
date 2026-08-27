@@ -69,6 +69,7 @@ function organize_issue(issue: Issue) -> Issue {
         status: issue.status,
         comments: issue.comments,
         resolution_plan: issue.resolution_plan,
+        difficulty: issue.difficulty,
     }
 }
 
@@ -86,6 +87,7 @@ function issue_in(subsystem: Subsystem, shepherd: string?) -> Issue {
         status: Open { state: "open" },
         comments: [],
         resolution_plan: null,
+        difficulty: null,
     }
 }
 

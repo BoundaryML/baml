@@ -30,6 +30,7 @@ function create_issue(fb: Feedback) -> Issue? {
         status: Open { state: "open" },
         comments: [],
         resolution_plan: draft.resolution_plan,
+        difficulty: null,
     }
 }
 
