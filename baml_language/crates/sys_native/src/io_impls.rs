@@ -4,12 +4,16 @@
 //! `sys_types::io`. They coexist with the legacy `SysOp*` trait impls in
 //! `lib.rs` during the transition.
 
-use std::sync::{Arc, OnceLock};
+use std::{
+    any::{Any, TypeId},
+    sync::{Arc, OnceLock},
+};
 
 use bex_heap::{BexExternalValue, BexHeap};
 use sys_ops::io::{
     self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError, owned,
 };
+use sys_types::VmInternalError;
 
 const MAX_READ_CHUNK: usize = 64 * 1024;
 
@@ -37,7 +41,8 @@ impl io::IoClassReflectPackage for NativeSysOps {
         _packages: indexmap::IndexMap<String, io::owned::reflect::Package>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "runtime-compiler".to_string(),
             message: "runtime compiler is not installed".to_string(),
         })
     }
@@ -53,7 +58,8 @@ impl io::IoClassReflectSession for NativeSysOps {
         _type_arg_0: ::sys_types::SapTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "runtime-compiler".to_string(),
             message: "runtime compiler is not installed".to_string(),
         })
     }
@@ -402,22 +408,17 @@ impl io::IoNamespaceIo for NativeSysOps {
 
 type FsFileHandle = tokio::sync::Mutex<Option<tokio::fs::File>>;
 
-fn downcast_handle(file: &owned::fs::File) -> Result<Arc<FsFileHandle>, VmBamlError> {
+fn downcast_handle(file: &owned::fs::File) -> Result<Arc<FsFileHandle>, VmInternalError> {
     file._handle
         .clone()
         .downcast::<FsFileHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid file handle type".into(),
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<FsFileHandle>(),
+            got: file._handle.type_id(),
         })
 }
 
 fn closed_err() -> VmBamlError {
-    VmBamlError::InvalidArgument {
-        message: "File is closed".into(),
-    }
-}
-
-fn closed_io_err() -> VmBamlError {
     VmBamlError::Io {
         message: "File is closed".into(),
     }
@@ -432,9 +433,32 @@ impl io::IoClassFsFile for NativeSysOps {
         limit: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Vec<u8>>> {
-        SysOpOutput::async_op(
-            async move { read_up_to(&file, limit).await.map_err(VmRustFnError::from) },
-        )
+        let limit = match limit {
+            ..=0 => return SysOpOutput::Ready(Ok(Some(Vec::new()))),
+            1.. => usize::try_from(limit)
+                .unwrap_or(MAX_READ_CHUNK)
+                .min(MAX_READ_CHUNK),
+        };
+        SysOpOutput::async_op(async move {
+            use tokio::io::AsyncReadExt;
+
+            let mut buf = Vec::new();
+            buf.try_reserve(limit).map_err(|e| VmPanic::AllocFailure {
+                message: e.to_string(),
+            })?;
+            buf.resize(limit, 0);
+
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
+            let len = f.read(&mut buf).await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to read file: {e}"),
+            })?;
+            match len {
+                0 => Ok(None),
+                _ => Ok(Some(buf)),
+            }
+        })
     }
 
     fn close(
@@ -508,9 +532,17 @@ impl io::IoClassFsFile for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
         SysOpOutput::async_op(async move {
-            write_all_bytes(&file, data)
-                .await
-                .map_err(VmRustFnError::from)
+            use tokio::io::AsyncWriteExt;
+
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
+            let len = f.write(&data).await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to write: {e}"),
+            })?;
+            let len = i64::try_from(len)
+                .unwrap_or_else(|_| unreachable!("There are no systems with this much memory"));
+            Ok(len)
         })
     }
 
@@ -526,53 +558,13 @@ impl io::IoClassFsFile for NativeSysOps {
         SysOpOutput::async_op(async move {
             let handle = downcast_handle(&file)?;
             let mut guard = handle.lock().await;
-            let f = guard.as_mut().ok_or_else(closed_io_err)?;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
             f.flush().await.map_err(|e| VmBamlError::Io {
                 message: format!("Failed to flush: {e}"),
             })?;
             Ok(())
         })
     }
-}
-
-async fn read_up_to(file: &owned::fs::File, limit: i64) -> Result<Option<Vec<u8>>, VmBamlError> {
-    use tokio::io::AsyncReadExt;
-
-    let limit = usize::try_from(limit)
-        .ok()
-        .filter(|limit| *limit > 0)
-        .ok_or_else(|| VmBamlError::Io {
-            message: "read limit must be greater than zero".to_string(),
-        })?;
-    let cap = limit.min(MAX_READ_CHUNK) as u64;
-    let handle = downcast_handle(file)?;
-    let mut guard = handle.lock().await;
-    let f = guard.as_mut().ok_or_else(closed_io_err)?;
-    let mut buf = Vec::new();
-    f.take(cap)
-        .read_to_end(&mut buf)
-        .await
-        .map_err(|e| VmBamlError::Io {
-            message: format!("Failed to read file: {e}"),
-        })?;
-    Ok((!buf.is_empty()).then_some(buf))
-}
-
-async fn write_all_bytes(file: &owned::fs::File, data: Vec<u8>) -> Result<i64, VmBamlError> {
-    use tokio::io::AsyncWriteExt;
-
-    let handle = downcast_handle(file)?;
-    let mut guard = handle.lock().await;
-    let f = guard.as_mut().ok_or_else(closed_io_err)?;
-    #[allow(clippy::cast_possible_wrap)]
-    let len = data.len() as i64;
-    f.write_all(&data).await.map_err(|e| VmBamlError::Io {
-        message: format!("Failed to write: {e}"),
-    })?;
-    f.flush().await.map_err(|e| VmBamlError::Io {
-        message: format!("Failed to write: {e}"),
-    })?;
-    Ok(len)
 }
 
 impl io::IoNamespaceFs for NativeSysOps {
@@ -1378,13 +1370,11 @@ impl io::IoClassSysReadPipe for NativeSysOps {
     ) -> SysOpOutput<Option<Vec<u8>>> {
         use tokio::io::AsyncReadExt as _;
 
-        let limit = match usize::try_from(limit).ok().filter(|limit| *limit > 0) {
-            Some(limit) => limit.min(MAX_READ_CHUNK),
-            None => {
-                return SysOpOutput::err(VmBamlError::Io {
-                    message: "read limit must be greater than zero".to_string(),
-                });
-            }
+        let limit = match limit {
+            ..=0 => return SysOpOutput::Ready(Ok(Some(Vec::new()))),
+            1.. => usize::try_from(limit)
+                .unwrap_or(MAX_READ_CHUNK)
+                .min(MAX_READ_CHUNK),
         };
         SysOpOutput::async_op(async move {
             let handle = downcast_read_pipe(&readpipe)?;
@@ -2020,13 +2010,11 @@ impl io::IoClassNetTcpStream for NativeSysOps {
     ) -> SysOpOutput<Option<Vec<u8>>> {
         use tokio::io::AsyncReadExt;
 
-        let limit = match usize::try_from(limit).ok().filter(|limit| *limit > 0) {
-            Some(limit) => limit.min(MAX_READ_CHUNK),
-            None => {
-                return SysOpOutput::err(VmBamlError::Io {
-                    message: "read limit must be greater than zero".to_string(),
-                });
-            }
+        let limit = match limit {
+            ..=0 => return SysOpOutput::Ready(Ok(Some(Vec::new()))),
+            1.. => usize::try_from(limit)
+                .unwrap_or(MAX_READ_CHUNK)
+                .min(MAX_READ_CHUNK),
         };
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;

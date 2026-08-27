@@ -64,7 +64,6 @@ class baml.Map {
 }
 class baml.Map$stream {
 }
-function baml._mean_float(values: float[]) -> float  [builtin]
 function baml._median_float(values: float[]) -> float  [builtin]
 function baml._sum_float(values: float[]) -> float  [builtin]
 function baml._sum_int(values: int[]) -> int  [builtin]
@@ -106,7 +105,7 @@ function baml.length(self: ?) -> int  [builtin]
 function baml.map(self: ?, f: (T) -> U throws E) -> U[]  [builtin]
 function baml.mean(self: ?) -> float  [missing]
 function baml.mean(self: ?) -> float  [expr] {
-  {  } root._mean_float(self)
+  { if (self.length() Eq 0) { throw root.errors.InvalidArgument { message: "float[].mean: can..." } } } Summable.sum(self) Div self.length()
 }
 function baml.median(self: ?) -> float  [missing]
 function baml.median(self: ?) -> float  [expr] {
@@ -145,7 +144,6 @@ function baml._from_json_shim(j: baml.json.json) -> T  [builtin]
 function baml._to_json_default(value: T) -> baml.json.json  [builtin]
 function baml._to_json_shim(value: T) -> baml.json.json  [builtin]
 function baml._to_string_default(value: T) -> string  [builtin]
-function baml._to_string_shim(value: T) -> string  [builtin]
 function baml.from_json(j: baml.json.json) -> Self  [missing]
 function baml.to_json(self: ?) -> baml.json.json  [expr] {
   {  } root._to_json_default(self)
@@ -519,10 +517,10 @@ function baml.csv.buffer(options: baml.csv.WriterOptions? = null) -> baml.csv.Cs
   {  } _buffer(options = options)
 }
 function baml.csv.close(self: ?) -> null  [expr] {
-  { self._mark_closed() } match (self._file) { null => null, f: root.fs.File => { if (self._owns_file) { f.close() catch (_) { root.errors.InvalidArgument => null } } } null }
+  { self._mark_closed() } match (self._file) { null => null, f: root.fs.File => { if (self._owns_file) { f.close() } } null }
 }
 function baml.csv.close(self: ?) -> null  [expr] {
-  { self._mark_closed() } match (self._file) { null => null, f: root.fs.File => { if (self._owns_file) { f.close() catch (_) { root.errors.InvalidArgument => null } } } null }
+  { self._mark_closed() } match (self._file) { null => null, f: root.fs.File => { if (self._owns_file) { f.close() } } null }
 }
 function baml.csv.create(path: string, options: baml.csv.WriterOptions? = null) -> baml.csv.CsvWriter  [expr] {
   { let f = baml.fs.open(path, "w") catch (_) { root.errors.InvalidArgument { message: message } => throw root.errors.Io { message: message } } } _writer(f, options, true)
@@ -1043,15 +1041,12 @@ function baml.io.print(s: string) -> null  [builtin]
 function baml.io.println(s: string) -> null  [builtin]
 
 --- <builtin>/baml/ns_io/read.baml ---
-function baml.io._decode_utf8(data: uint8array) -> string  [expr] {
-  {  } string.from_utf8(data) catch (e) { root.errors.InvalidArgument => { throw root.errors.ParseError { message: "invalid utf-8" } } }
-}
 function baml.io.bytes(self: ?) -> uint8array  [expr] {
   { let result = b"<0 bytes>"; while let chunk: uint8array = self.read(65536) { result = result.concat(chunk) } } result
 }
 function baml.io.read(self: ?, limit: int) -> uint8array?  [missing]
 function baml.io.text(self: ?) -> string  [expr] {
-  { let data = self.bytes() } _decode_utf8(data)
+  { let data = self.bytes() } string.from_utf8(data) catch (e) { root.errors.InvalidArgument => { throw root.errors.ParseError { message: "invalid utf-8" } } }
 }
 
 --- <builtin>/baml/ns_io/write.baml ---
@@ -2491,7 +2486,7 @@ function baml.chars(self: ?) -> string[]  [builtin]
 function baml.code_point_at(self: ?, index: int) -> int?  [builtin]
 function baml.ends_with(self: ?, suffix: string) -> bool  [builtin]
 function baml.from(value: T) -> string  [expr] {
-  {  } root._to_string_shim(value)
+  {  } match (value) { baml.ToString => value.to_string(), _ => root._to_string_default(value) }
 }
 function baml.from_code_points(unicode: int[]) -> string  [builtin]
 function baml.from_utf8(utf8: uint8array) -> string  [builtin]
@@ -2519,7 +2514,9 @@ function baml.is_numeric(self: ?) -> bool  [builtin]
 function baml.is_uppercase(self: ?) -> bool  [builtin]
 function baml.is_whitespace(self: ?) -> bool  [builtin]
 function baml.last_index_of(self: ?, search: string) -> int?  [builtin]
-function baml.length(self: ?) -> int  [builtin]
+function baml.length(self: ?) -> int  [expr] {
+  {  } self.char_count()
+}
 function baml.lines(self: ?) -> string[]  [builtin]
 function baml.repeat(self: ?, count: int) -> string  [builtin]
 function baml.replace(self: ?, search: string, replacement: string) -> string  [builtin]

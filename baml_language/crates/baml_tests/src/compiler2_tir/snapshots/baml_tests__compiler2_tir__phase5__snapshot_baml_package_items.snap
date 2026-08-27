@@ -26,7 +26,6 @@ namespace baml:
   function _float_total_cmp
   function _from_json_shim<T>
   function _is_primitive_array<T>
-  function _mean_float
   function _median_float
   function _rust_sort<A>
   function _sum_float
@@ -34,7 +33,6 @@ namespace baml:
   function _to_json_default<T>
   function _to_json_shim<T>
   function _to_string_default<T>
-  function _to_string_shim<T>
   function _trunc_to_int
   function deep_copy<T>
 namespace baml.crypto:
@@ -169,7 +167,6 @@ namespace baml.id:
 namespace baml.io:
   type Read
   type Write
-  function _decode_utf8
   function eprint
   function eprintln
   function input

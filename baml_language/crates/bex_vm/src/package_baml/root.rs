@@ -122,34 +122,28 @@ impl BamlPackageBaml for PackageBamlImpl {
         }
     }
 
-    /// `baml._to_string_default(value)` and `baml._to_string_shim(value)` both
-    /// render `value` for `string.from`, honoring `baml.ToString` overrides at
-    /// every depth: `value`'s own override (if any) wins, and any *nested* value
+    /// `baml._to_string_default(value)` renders `value` for `string.from`,
+    /// honoring `baml.ToString` overrides at every depth: `value`'s own override (if any) wins, and any *nested* value
     /// whose runtime class overrides `to_string` is rendered via that override
     /// rather than structurally. Everything else renders structurally (primitives
     /// naturally; containers/instances as `[a, b]` / `Class { f: v }`, with nested
     /// strings quoted). Total — `string.from` is `throws never`.
     ///
     /// `_to_string_default` is the `baml.ToString` interface's default body and
-    /// the structural fallback; `_to_string_shim` backs `string.from`. They are
-    /// identical: the walker already applies `value`'s own override when present,
-    /// so an empty `implements baml.ToString {}` (whose runtime class carries no
-    /// in-body override) still serializes structurally with nested overrides
-    /// honored.
+    /// the structural fallback: the walker already applies `value`'s own
+    /// override when present, so an empty `implements baml.ToString {}` (whose
+    /// runtime class carries no in-body override) still serializes
+    /// structurally with nested overrides honored.
     fn _to_string_default(vm: &mut BexVm, value: &Value) -> NativeCallResult {
-        render_to_string_honoring_overrides(vm, *value)
-    }
-
-    fn _to_string_shim(vm: &mut BexVm, value: &Value) -> NativeCallResult {
         render_to_string_honoring_overrides(vm, *value)
     }
 
     /// `baml._to_json_default(value)` and `baml._to_json_shim(value)` both render
     /// `value` to a `json` value for `baml.json.from`, honoring `baml.ToJson`
-    /// overrides at every depth. The json analog of `_to_string_default` /
-    /// `_to_string_shim`; both delegate to the override-honoring walker in
-    /// `json.rs`. Unlike the string shims, this can throw `JsonSerializationError`
-    /// for values with no json representation.
+    /// overrides at every depth. The json analog of `_to_string_default`; both
+    /// delegate to the override-honoring walker in `json.rs`. Unlike the string
+    /// renderer, this can throw `JsonSerializationError` for values with no json
+    /// representation.
     fn _to_json_default(vm: &mut BexVm, value: &Value) -> NativeCallResult {
         super::json::render_to_json_honoring_overrides(vm, *value)
     }
@@ -226,21 +220,6 @@ impl BamlPackageBaml for PackageBamlImpl {
             .enumerate()
             .map(|(index, value)| expect_float(vm, *value, "_sum_float", index))
             .sum()
-    }
-
-    /// `baml._mean_float(values)` — native backing for `float[].mean()`.
-    ///
-    /// Throws `InvalidArgument` when `values` is empty.
-    #[allow(clippy::cast_precision_loss)]
-    fn _mean_float(vm: &BexVm, values: &[Value]) -> Result<f64, VmRustFnError> {
-        if values.is_empty() {
-            return Err(VmBamlError::InvalidArgument {
-                message: "float[].mean: cannot take the mean of an empty array".to_string(),
-            }
-            .into());
-        }
-        let n = values.len() as f64;
-        Ok(Self::_sum_float(vm, values) / n)
     }
 
     /// `baml._median_float(values)` — native backing for `float[].median()`.
@@ -320,7 +299,7 @@ pub(super) fn collect_to_string_overrides(vm: &BexVm, value: Value, out: &mut Ve
     }
 }
 
-/// Entry point shared by `_to_string_default` and `_to_string_shim`. Collects the
+/// Entry point for `_to_string_default`. Collects the
 /// override-bearing sub-values (pass 1, sync), dispatches `to_string` on each in
 /// order (pass 2, one `YieldToCall` per override via [`ToStringWalkContinuation`]),
 /// then renders structurally splicing in the override results (pass 3). When the

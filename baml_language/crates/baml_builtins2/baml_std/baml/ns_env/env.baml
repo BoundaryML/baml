@@ -1,8 +1,8 @@
 /// Returns the value of the environment variable `key`, or `null` if not set.
 ///
-/// Throws `ParseError` if the variable is set but its value is not valid
-/// UTF-8 (the native bridge surfaces `std::env::VarError::NotUnicode` as a
-/// catchable parse error).
+/// # Throws
+/// - `Io` if environment variable access is not available.
+/// - `ParseError` if the variable is set but its value is not valid UTF-8.
 function get(key: string) -> string? throws root.errors.Io | root.errors.ParseError {
     $rust_io_function
 }
@@ -12,8 +12,9 @@ function get_or_panic(key: string) -> string {
     get(key) ?? root.sys.panic("env var not found: " + key)
 }
 
-/// A LATE-BOUND reference to an environment variable: pure data carrying the
-/// variable's NAME, never its value.
+/// A lazy reference to an environment variable.
+///
+/// Holds the variable's name, not its value. The value is not read until `get()` is called.
 ///
 /// `env.SOME_VAR` desugars to `baml.env.ref("SOME_VAR")`, which constructs one
 /// of these. Nothing is read at construction time, so a `client Foo = ...`

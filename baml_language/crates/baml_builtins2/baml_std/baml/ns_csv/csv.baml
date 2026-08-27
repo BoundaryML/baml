@@ -357,9 +357,7 @@ class CsvReader {
             null => null,
             let f: root.fs.File => {
                 if (self._owns_file) {
-                    f.close() catch (_) {
-                        root.errors.InvalidArgument => null,
-                    };
+                    f.close();
                 }
                 null
             },
@@ -535,9 +533,7 @@ class CsvWriter {
             null => null,
             let f: root.fs.File => {
                 if (self._owns_file) {
-                    f.close() catch (_) {
-                        root.errors.InvalidArgument => null,
-                    };
+                    f.close();
                 }
                 null
             },

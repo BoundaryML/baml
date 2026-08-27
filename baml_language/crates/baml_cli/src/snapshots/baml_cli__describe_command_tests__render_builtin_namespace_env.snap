@@ -4,6 +4,6 @@ expression: output
 ---
 function         baml.env.get                     <builtin>/baml/ns_env/env.baml:6
 function         baml.env.get_or_panic            <builtin>/baml/ns_env/env.baml:11
-class            baml.env.Ref                     <builtin>/baml/ns_env/env.baml:29
-function         baml.env.ref                     <builtin>/baml/ns_env/env.baml:53
-function         baml.env.get_or_panic_lenient    <builtin>/baml/ns_env/env.baml:65
+class            baml.env.Ref                     <builtin>/baml/ns_env/env.baml:30
+function         baml.env.ref                     <builtin>/baml/ns_env/env.baml:54
+function         baml.env.get_or_panic_lenient    <builtin>/baml/ns_env/env.baml:66

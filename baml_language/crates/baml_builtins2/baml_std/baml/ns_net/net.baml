@@ -61,6 +61,18 @@ class TcpStream {
 /// A bound TCP listener. Created by `baml.net.TcpListener.bind`. Calling `accept`
 /// suspends the current BAML thread until an incoming connection arrives (or the
 /// thread is cancelled). Modeled on Rust's `std::net::TcpListener`.
+///
+/// # Example
+///
+/// ```baml
+/// let listener = baml.net.TcpListener.bind("127.0.0.1:8080");
+/// while (true) {
+///     let conn = listener.accept();
+///     spawn {
+///         connection_handler(conn);
+///     }
+/// }
+/// ```
 class TcpListener {
     _handle: $rust_type,
 
@@ -105,6 +117,7 @@ class UdpSocket {
         self._send_to(data, addr, _timeout_nanos(timeout))
     }
 
+    /// (internal)
     function _send_to(
         self,
         data: uint8array,
@@ -127,6 +140,7 @@ class UdpSocket {
         self._recv_from(_timeout_nanos(timeout))
     }
 
+    /// (internal)
     function _recv_from(
         self,
         timeout_nanos: bigint,

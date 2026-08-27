@@ -17,16 +17,12 @@ interface Read {
         self,
     ) -> string throws root.errors.Io | root.errors.ParseError {
         let data = self.bytes();
-        _decode_utf8(data)
-    }
-}
-
-function _decode_utf8(data: uint8array) -> string throws root.errors.ParseError {
-    string.from_utf8(data) catch (e) {
-        root.errors.InvalidArgument => {
-            throw root.errors.ParseError {
-            message: "invalid utf-8",
+        string.from_utf8(data) catch (e) {
+            root.errors.InvalidArgument => {
+                throw root.errors.ParseError {
+                    message: "invalid utf-8",
+                }
+            }
         }
-        },
     }
 }

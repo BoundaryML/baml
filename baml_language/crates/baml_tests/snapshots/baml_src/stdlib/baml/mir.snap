@@ -1088,13 +1088,43 @@ fn baml.FloatStats$for$float[].mean(self: float[]) -> float {
     // Locals:
     let _0: float // _0 // return
     let _1: float[] // self // param
+    let _2: bool
+    let _3: int
+    let _4: baml.errors.InvalidArgument
+    let _5: float
+    let _6: int
 
     bb0: {
-        _0 = call const fn baml._mean_float(copy _1) -> [bb1];
+        _3 = len(_1);
+        goto -> bb1;
     }
 
     bb1: {
+        _2 = copy _3 == const 0_i64;
+        branch copy _2 -> [bb6, bb2];
+    }
+
+    bb2: {
+        _5 = virtual_call sum as baml.Summable<Sum = float>(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        _6 = len(_1);
+        goto -> bb4;
+    }
+
+    bb4: {
+        _0 = copy _5 / copy _6;
+        goto -> bb5;
+    }
+
+    bb5: {
         return;
+    }
+
+    bb6: {
+        _4 = baml.errors.InvalidArgument { const "float[].mean: cannot take the mean of an empty array" };
+        throw copy _4;
     }
 }
 
@@ -1115,8 +1145,6 @@ fn baml.FloatStats$for$float[].median(self: float[]) -> float {
 fn baml._sum_int = builtin(vm)
 
 fn baml._sum_float = builtin(vm)
-
-fn baml._mean_float = builtin(vm)
 
 fn baml._median_float = builtin(vm)
 
@@ -1151,8 +1179,6 @@ fn baml.root.ToString$for$reflect.Type.to_string(self: reflect.Type) -> string {
 }
 
 fn baml._to_string_default = builtin(vm)
-
-fn baml._to_string_shim = builtin(vm)
 
 fn baml._cleanup_begin = builtin(vm)
 
@@ -1914,8 +1940,6 @@ fn baml.csv.CsvReader.close(self: baml.csv.CsvReader) -> null {
     let _5: baml.fs.File // f
     let _6: bool
     let _7: null
-    let _8: unknown // _
-    let _9: bool
 
     bb0: {
         _2 = call const fn baml.csv.CsvReader._mark_closed(copy _1) -> [bb1];
@@ -1924,44 +1948,30 @@ fn baml.csv.CsvReader.close(self: baml.csv.CsvReader) -> null {
     bb1: {
         _3 = copy _1.1;
         _4 = copy _3 == const null;
-        branch copy _4 -> [bb4, bb2];
+        branch copy _4 -> [bb5, bb2];
     }
 
     bb2: {
         _5 = copy _3;
         _6 = copy _1.3;
-        branch copy _6 -> [bb3, bb8];
+        branch copy _6 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = sys_op const fn baml.fs.File.close(copy _5) -> bb8 unwind bb5;
+        _7 = sys_op const fn baml.fs.File.close(copy _5) -> bb4;
     }
 
     bb4: {
         _0 = const null;
-        goto -> bb9;
+        goto -> bb6;
     }
 
     bb5: {
-        _9 = is_type(copy _8, baml.errors.InvalidArgument);
-        branch copy _9 -> [bb7, bb6];
+        _0 = const null;
+        goto -> bb6;
     }
 
     bb6: {
-        rethrow copy _8;
-    }
-
-    bb7: {
-        _7 = const null;
-        goto -> bb8;
-    }
-
-    bb8: {
-        _0 = const null;
-        goto -> bb9;
-    }
-
-    bb9: {
         return;
     }
 }
@@ -2280,8 +2290,6 @@ fn baml.csv.CsvWriter.close(self: baml.csv.CsvWriter) -> null {
     let _5: baml.fs.File // f
     let _6: bool
     let _7: null
-    let _8: unknown // _
-    let _9: bool
 
     bb0: {
         _2 = call const fn baml.csv.CsvWriter._mark_closed(copy _1) -> [bb1];
@@ -2290,44 +2298,30 @@ fn baml.csv.CsvWriter.close(self: baml.csv.CsvWriter) -> null {
     bb1: {
         _3 = copy _1.1;
         _4 = copy _3 == const null;
-        branch copy _4 -> [bb4, bb2];
+        branch copy _4 -> [bb5, bb2];
     }
 
     bb2: {
         _5 = copy _3;
         _6 = copy _1.2;
-        branch copy _6 -> [bb3, bb8];
+        branch copy _6 -> [bb3, bb4];
     }
 
     bb3: {
-        _7 = sys_op const fn baml.fs.File.close(copy _5) -> bb8 unwind bb5;
+        _7 = sys_op const fn baml.fs.File.close(copy _5) -> bb4;
     }
 
     bb4: {
         _0 = const null;
-        goto -> bb9;
+        goto -> bb6;
     }
 
     bb5: {
-        _9 = is_type(copy _8, baml.errors.InvalidArgument);
-        branch copy _9 -> [bb7, bb6];
+        _0 = const null;
+        goto -> bb6;
     }
 
     bb6: {
-        rethrow copy _8;
-    }
-
-    bb7: {
-        _7 = const null;
-        goto -> bb8;
-    }
-
-    bb8: {
-        _0 = const null;
-        goto -> bb9;
-    }
-
-    bb9: {
         return;
     }
 }
@@ -5027,50 +5021,36 @@ fn baml.io.Read.text(self: baml.io.Read) -> string {
     let _0: string // _0 // return
     let _1: baml.io.Read // self // param
     let _2: uint8array // data
-    let _3: uint8array
+    let _3: unknown // e
+    let _4: uint8array
+    let _5: bool
+    let _6: baml.errors.ParseError
 
     bb0: {
         _2 = virtual_call bytes as baml.io.Read(copy _1) -> [bb1];
     }
 
     bb1: {
-        _3 = copy _2;
-        _0 = call const fn baml.io._decode_utf8(copy _3) -> [bb2];
+        _4 = copy _2;
+        _0 = call const fn baml.String.from_utf8(copy _4) -> [bb2, unwind: bb3];
     }
 
     bb2: {
         return;
-    }
-}
-
-fn baml.io._decode_utf8(data: uint8array) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: uint8array // data // param
-    let _2: unknown // e
-    let _3: bool
-    let _4: baml.errors.ParseError
-
-    bb0: {
-        _0 = call const fn baml.String.from_utf8(copy _1) -> [bb1, unwind: bb2];
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        _3 = is_type(copy _2, baml.errors.InvalidArgument);
-        branch copy _3 -> [bb4, bb3];
     }
 
     bb3: {
-        rethrow copy _2;
+        _5 = is_type(copy _3, baml.errors.InvalidArgument);
+        branch copy _5 -> [bb5, bb4];
     }
 
     bb4: {
-        _4 = baml.errors.ParseError { const "invalid utf-8" };
-        throw copy _4;
+        rethrow copy _3;
+    }
+
+    bb5: {
+        _6 = baml.errors.ParseError { const "invalid utf-8" };
+        throw copy _6;
     }
 }
 
@@ -12838,19 +12818,41 @@ fn baml.String.from(value: T) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: T // value // param
-    let _2: reflect.Type
+    let _2: bool
+    let _3: reflect.Type
 
     bb0: {
-        _2 = load_type(#0);
-        _0 = call const fn baml._to_string_shim<copy _2>(copy _1) -> [bb1];
+        _2 = is_type(copy _1, baml.ToString);
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _3 = load_type(#0);
+        _0 = call const fn baml._to_string_default<copy _3>(copy _1) -> [bb3];
+    }
+
+    bb2: {
+        _0 = virtual_call to_string as baml.ToString(copy _1) -> [bb3];
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.String.length(self: baml.String) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: baml.String // self // param
+
+    bb0: {
+        _0 = call const fn baml.String.char_count(copy _1) -> [bb1];
     }
 
     bb1: {
         return;
     }
 }
-
-fn baml.String.length = builtin(vm)
 
 fn baml.String.char_count = builtin(vm)
 

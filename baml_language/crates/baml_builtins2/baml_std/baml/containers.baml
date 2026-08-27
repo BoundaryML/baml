@@ -166,17 +166,17 @@ class Array<T> {
     }
 
     /// Returns a new array with the elements in reverse order. Does not mutate `self`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let arr = [1, 2, 3];
+    /// let reversed = arr.reverse();
+    /// assert.equal(reversed, [3, 2, 1]);
+    /// ```
     function reverse(self) -> T[] throws never {
         $rust_function
     }
-
-    // `sort()` is no longer a method of `Array<T>`: it is provided by the
-    // `Sortable` interface (`baml/comparable.baml`), blanket-implemented for
-    // `T[]` where `T implements Comparable`. This makes `sort()` reject
-    // non-orderable element types at compile time (with a `sort_by` pointer)
-    // and infallible (`throws never`) for `int`/`bigint`/`string`, instead of
-    // the old unconditional `throws InvalidArgument`. `sort_by`/`sort_by_key`
-    // remain here.
 
     /// Sorts this array in place using a comparator, then returns `self`.
     ///
@@ -274,6 +274,13 @@ class Array<T> {
     }
 
     /// Joins all elements into a string, separated by `separator`. Each element is converted to a string via its `to_string` representation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// [1, 2, 3].join(",")  // "1,2,3"
+    /// [true, false, true].join("||")  // "true||false||true"
+    /// ```
     function join(self, separator: string) -> string throws never {
         match (self) {
             [] => "",
@@ -288,6 +295,16 @@ class Array<T> {
     }
 
     /// Applies `f` to each element and returns an array of the results.
+    ///
+    /// Does not mutate `self` (unless `f` does).
+    /// For an lazy version, use `.iter().map(...)`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// [1, 2, 3].map((x) -> { x * 2 })  // [2, 4, 6]
+    /// ["a", "bb", "ccc"].map((x) -> { x.length() })  // [1, 2, 3]
+    /// ```
     //baml:mut_vm
     //baml:may_yield
     function map<U, E>(self, f: (T) -> U throws E) -> U[] throws E {
@@ -391,6 +408,9 @@ class Array<T> {
     /// Equality matches BAML's `==` operator: by-value for primitives, by-content
     /// for strings / uint8arrays / variants, by-reference for other objects.
     ///
+    /// Equivalent to `self.some((x) -> { x == item })`.
+    /// Does not mutate `self`.
+    ///
     /// # Examples
     /// ```
     /// [1, 2, 3].includes(2)              // true
@@ -405,6 +425,9 @@ class Array<T> {
     /// Returns the index of the first element equal to `item`, or `null` if
     /// not found. Equality semantics match `includes`.
     ///
+    /// Equivalent to `self.find_index((x) -> { x == item })`.
+    /// Does not mutate `self`.
+    ///
     /// # Examples
     /// ```
     /// [10, 20, 30].index_of(20)   // 1
@@ -417,6 +440,9 @@ class Array<T> {
 
     /// Returns the index of the last element equal to `item`, or `null` if
     /// not found. Equality semantics match `includes`.
+    ///
+    /// Equivalent to `self.find_last_index((x) -> { x == item })`.
+    /// Does not mutate `self`.
     ///
     /// # Examples
     /// ```
@@ -679,9 +705,13 @@ class Map<K, V> {
 /// The method form `xs.sum()` is the only public surface; it delegates to the
 /// private native `_sum_int` / `_sum_float` helpers declared below.
 interface Summable {
-  type Sum
+    /// The result of summing `self`.
+    type Sum
 
-  function sum(self) -> Self.Sum throws never
+    /// Adds every element left-to-right.
+    ///
+    /// Equivalent to `reduce((acc, x) -> acc + x, id)` where `id` is the additive identity.
+    function sum(self) -> Self.Sum throws never
 }
 
 /// Sums an `int[]` and returns an `int`.
@@ -736,40 +766,43 @@ interface FloatStats {
 
 /// Statistical reductions over a `float[]` — see `FloatStats`.
 implements FloatStats for float[] {
-  /// Returns the arithmetic mean (average) of `self`.
-  ///
-  /// Computed as `self.sum() / self.length()`. Throws
-  /// `root.errors.InvalidArgument` when `self` is empty, because the mean of
-  /// no elements is undefined.
-  ///
-  /// # Examples
-  /// ```
-  /// [1.0, 2.0, 3.0, 4.0].mean()   // 2.5
-  /// [5.0].mean()                  // 5.0
-  /// [].mean()                     // throws InvalidArgument
-  /// ```
-  function mean(self) -> float throws root.errors.InvalidArgument {
-    root._mean_float(self)
-  }
+    /// Returns the arithmetic mean (average) of `self`.
+    ///
+    /// Computed as `self.sum() / self.length()`. Throws
+    /// `root.errors.InvalidArgument` when `self` is empty, because the mean of
+    /// no elements is undefined.
+    ///
+    /// # Examples
+    /// ```
+    /// [1.0, 2.0, 3.0, 4.0].mean()   // 2.5
+    /// [5.0].mean()                  // 5.0
+    /// [].mean()                     // throws InvalidArgument
+    /// ```
+    function mean(self) -> float throws root.errors.InvalidArgument {
+        if (self.length() == 0) {
+            throw root.errors.InvalidArgument { message: "float[].mean: cannot take the mean of an empty array" };
+        }
+        Summable.sum(self) / self.length()
+    }
 
-  /// Returns the median (the middle value) of `self`.
-  ///
-  /// The elements are copied and sorted ascending (IEEE 754 `totalOrder`,
-  /// matching `float[].sort()`) before the middle is taken, so the caller's
-  /// array is left untouched. With an odd element count the single middle
-  /// element is returned; with an even count the arithmetic mean of the two
-  /// middle elements is returned. Throws `root.errors.InvalidArgument` when
-  /// `self` is empty.
-  ///
-  /// # Examples
-  /// ```
-  /// [3.0, 1.0, 2.0].median()        // 2.0  (odd count)
-  /// [1.0, 2.0, 3.0, 4.0].median()   // 2.5  (mean of the two middles)
-  /// [].median()                     // throws InvalidArgument
-  /// ```
-  function median(self) -> float throws root.errors.InvalidArgument {
-    root._median_float(self)
-  }
+    /// Returns the median (the middle value) of `self`.
+    ///
+    /// The elements are copied and sorted ascending (IEEE 754 `totalOrder`,
+    /// matching `float[].sort()`) before the middle is taken, so the caller's
+    /// array is left untouched. With an odd element count the single middle
+    /// element is returned; with an even count the arithmetic mean of the two
+    /// middle elements is returned. Throws `root.errors.InvalidArgument` when
+    /// `self` is empty.
+    ///
+    /// # Examples
+    /// ```
+    /// [3.0, 1.0, 2.0].median()        // 2.0  (odd count)
+    /// [1.0, 2.0, 3.0, 4.0].median()   // 2.5  (mean of the two middles)
+    /// [].median()                     // throws InvalidArgument
+    /// ```
+    function median(self) -> float throws root.errors.InvalidArgument {
+        root._median_float(self)
+    }
 }
 
 // ─── Native backings for the numeric-array reductions ─────────────────────────
@@ -777,7 +810,7 @@ implements FloatStats for float[] {
 // aggregation builtins. The method forms above and `Summable.sum` are now the
 // only public surface; these are the thin native shims they delegate to.
 
-/// Native backing for `int[].sum()`. Adds every element left-to-right starting
+/// (internal) Native backing for `int[].sum()`. Adds every element left-to-right starting
 /// from `0`; a running total that leaves the `int` range raises
 /// `baml.panics.IntegerOverflow`. The empty array sums to `0`.
 //baml:fallible
@@ -785,21 +818,14 @@ function _sum_int(values: int[]) -> int throws never {
     $rust_function
 }
 
-/// Native backing for `float[].sum()`. Adds every element left-to-right
+/// (internal) Native backing for `float[].sum()`. Adds every element left-to-right
 /// starting from `0.0`; the empty array sums to `0.0`. Never throws.
 //baml:vm
 function _sum_float(values: float[]) -> float throws never {
     $rust_function
 }
 
-/// Native backing for `float[].mean()`. Throws `root.errors.InvalidArgument`
-/// when `values` is empty.
-//baml:vm
-function _mean_float(values: float[]) -> float throws root.errors.InvalidArgument {
-    $rust_function
-}
-
-/// Native backing for `float[].median()`. Throws `root.errors.InvalidArgument`
+/// (internal) Native backing for `float[].median()`. Throws `root.errors.InvalidArgument`
 /// when `values` is empty.
 //baml:vm
 function _median_float(values: float[]) -> float throws root.errors.InvalidArgument {

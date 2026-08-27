@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-class String  (string)  <builtin>/baml/string.baml:5-584
+class String  (string)  <builtin>/baml/string.baml:5-596
 
 /// A UTF-8 encoded string.
 ///
@@ -12,27 +12,27 @@ class String {}
 
 methods:
   /// Returns the number of **Unicode code points** (characters) in the string.
-  function length(self) -> int throws never  <builtin>/baml/string.baml:56-58
+  function length(self) -> int throws never  <builtin>/baml/string.baml:38-40
   /// Alias for `length()`.
-  function char_count(self) -> int throws never  <builtin>/baml/string.baml:61-63
+  function char_count(self) -> int throws never  <builtin>/baml/string.baml:43-45
   /// Returns true if the string has no characters.
-  function is_empty(self) -> bool throws never  <builtin>/baml/string.baml:72-74
+  function is_empty(self) -> bool throws never  <builtin>/baml/string.baml:54-56
   /// Returns the length of the string in **UTF-8 bytes**.
-  function byte_length(self) -> int throws never  <builtin>/baml/string.baml:87-89
+  function byte_length(self) -> int throws never  <builtin>/baml/string.baml:69-71
   /// Returns the string with all Unicode characters converted to lowercase.
-  function to_lower_case(self) -> string throws never  <builtin>/baml/string.baml:92-94
+  function to_lower_case(self) -> string throws never  <builtin>/baml/string.baml:74-76
   /// Returns the string with all Unicode characters converted to uppercase.
-  function to_upper_case(self) -> string throws never  <builtin>/baml/string.baml:97-99
+  function to_upper_case(self) -> string throws never  <builtin>/baml/string.baml:79-81
   /// Returns the string with leading and trailing whitespace removed.
-  function trim(self) -> string throws never  <builtin>/baml/string.baml:112-114
+  function trim(self) -> string throws never  <builtin>/baml/string.baml:94-96
   /// Returns the string with leading whitespace removed (trailing whitespace
-  function trim_start(self) -> string throws never  <builtin>/baml/string.baml:124-126
+  function trim_start(self) -> string throws never  <builtin>/baml/string.baml:106-108
   /// Returns the string with trailing whitespace removed (leading whitespace
-  function trim_end(self) -> string throws never  <builtin>/baml/string.baml:136-138
+  function trim_end(self) -> string throws never  <builtin>/baml/string.baml:118-120
   /// Returns true if `search` appears anywhere in the string.
-  function includes(self, search: string) -> bool throws never  <builtin>/baml/string.baml:141-143
+  function includes(self, search: string) -> bool throws never  <builtin>/baml/string.baml:129-131
   /// Returns true if the string starts with `prefix`.
-  function starts_with(self, prefix: string) -> bool throws never  <builtin>/baml/string.baml:146-148
+  function starts_with(self, prefix: string) -> bool throws never  <builtin>/baml/string.baml:140-142
   … 64 more lines (re-run with a higher `--budget` to see more; use `--budget 101` for full output)
 
 static_methods:

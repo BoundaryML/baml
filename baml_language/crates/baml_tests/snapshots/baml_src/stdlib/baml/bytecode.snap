@@ -837,8 +837,31 @@ function baml.Float.trunc(self: baml.Float) -> float {
 
 function baml.FloatStats$for$float[].mean(self: float[]) -> float {
     load_var self
-    call baml._mean_float
+    container_len
+    store_var _3
+    load_var _3
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var self
+    load_type baml.Summable<Sum = float>
+    load_const "sum"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _5
+    load_var self
+    container_len
+    store_var _6
+    load_var2 3 4
+    bin_op /
     return
+
+  L1:
+    load_const "float[].mean: cannot take the mean of an empty array"
+    init_instance baml.errors.InvalidArgument .message
+    throw
 }
 
 function baml.FloatStats$for$float[].median(self: float[]) -> float {
@@ -1042,9 +1065,24 @@ function baml.String.ends_with(self: baml.String, suffix: string) -> bool {
 }
 
 function baml.String.from(value: #0) -> string {
+    load_var value
+    is_type baml.ToString
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
     load_type #0
     load_var value
-    call baml._to_string_shim
+    call baml._to_string_default
+    jump L2
+
+  L1:
+    load_var value
+    load_type baml.ToString
+    load_const "to_string"
+    virtual_call nargs=1 ntypeargs=0
+
+  L2:
     return
 }
 
@@ -1126,6 +1164,9 @@ function baml.String.last_index_of(self: baml.String, search: string) -> int | n
 }
 
 function baml.String.length(self: baml.String) -> int {
+    load_var self
+    call baml.String.char_count
+    return
 }
 
 function baml.String.lines(self: baml.String) -> string[] {
@@ -1271,9 +1312,6 @@ function baml._from_json_shim(j: baml.json.json) -> #0 {
 function baml._is_primitive_array(arr: #0[]) -> bool {
 }
 
-function baml._mean_float(values: float[]) -> float {
-}
-
 function baml._median_float(values: float[]) -> float {
 }
 
@@ -1293,9 +1331,6 @@ function baml._to_json_shim(value: #0) -> baml.json.json {
 }
 
 function baml._to_string_default(value: #0) -> string {
-}
-
-function baml._to_string_shim(value: #0) -> string {
 }
 
 function baml._trunc_to_int(value: float) -> int {
@@ -1479,33 +1514,24 @@ function baml.csv.CsvReader.close(self: baml.csv.CsvReader) -> null {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L3
+    jump L2
 
   L0:
     load_var self
     load_field ._owns_file
-    pop_jump_if_false L2
+    pop_jump_if_false L1
     load_var _3
     sys_op baml.fs.File.close
     pop 1
-    jump L2
-    load_var _
-    is_type baml.errors.InvalidArgument
-    pop_jump_if_false L1
-    jump L2
 
   L1:
-    load_var _
-    rethrow
+    load_const null
+    jump L3
 
   L2:
     load_const null
-    jump L4
 
   L3:
-    load_const null
-
-  L4:
     return
 }
 
@@ -1806,33 +1832,24 @@ function baml.csv.CsvWriter.close(self: baml.csv.CsvWriter) -> null {
     load_const null
     cmp_op ==
     pop_jump_if_false L0
-    jump L3
+    jump L2
 
   L0:
     load_var self
     load_field ._owns_file
-    pop_jump_if_false L2
+    pop_jump_if_false L1
     load_var _3
     sys_op baml.fs.File.close
     pop 1
-    jump L2
-    load_var _
-    is_type baml.errors.InvalidArgument
-    pop_jump_if_false L1
-    jump L2
 
   L1:
-    load_var _
-    rethrow
+    load_const null
+    jump L3
 
   L2:
     load_const null
-    jump L4
 
   L3:
-    load_const null
-
-  L4:
     return
 }
 
@@ -3376,7 +3393,23 @@ function baml.io.Read.text(self: baml.io.Read) -> string {
     virtual_call nargs=1 ntypeargs=0
     store_var data
     load_var data
-    call baml.io._decode_utf8
+    call baml.String.from_utf8
+    jump L2
+    load_var e
+    is_type baml.errors.InvalidArgument
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const "invalid utf-8"
+    init_instance baml.errors.ParseError .message
+    throw
+
+  L2:
     return
 }
 
@@ -3455,28 +3488,6 @@ function baml.io.Write.write(self: baml.io.Write, data: string | uint8array) -> 
     load_const "writer made invalid progress"
     init_instance baml.errors.Io .message
     throw
-}
-
-function baml.io._decode_utf8(data: uint8array) -> string {
-    load_var data
-    call baml.String.from_utf8
-    jump L2
-    load_var e
-    is_type baml.errors.InvalidArgument
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var e
-    rethrow
-
-  L1:
-    load_const "invalid utf-8"
-    init_instance baml.errors.ParseError .message
-    throw
-
-  L2:
-    return
 }
 
 function baml.io.eprint(s: string) -> null {

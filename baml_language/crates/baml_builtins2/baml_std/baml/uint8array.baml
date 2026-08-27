@@ -28,12 +28,23 @@ class Uint8Array {
     }
 
     /// Returns a new `uint8array` containing the concatenation of the two arrays.
+    /// Does not mutate either array.
+    ///
+    /// # Examples
+    /// ```
+    /// b"abc".concat(b"def")  // [97, 98, 99, 100, 101, 102]
+    /// ```
     function concat(self, other: uint8array) -> uint8array throws never {
         $rust_function
     }
 
     /// Returns `true` if the array contains the given number.
     /// If the item is not a `u8`, this will always return `false`.
+    ///
+    /// # Examples
+    /// ```
+    /// b"abc".includes(98)  // true
+    /// ```
     function includes(self, item: int) -> bool throws never {
         $rust_function
     }
@@ -45,12 +56,19 @@ class Uint8Array {
     }
 
     /// Returns a new `uint8array` with the bytes in reverse order.
+    /// Does not mutate the original array.
+    ///
+    /// # Examples
+    /// ```
+    /// b"abc".reverse()  // b"cba"
+    /// ```
     function reverse(self) -> uint8array throws never {
         $rust_function
     }
 
     /// Returns a new `uint8array` with the bytes from `start` (inclusive) to
     /// `end` (exclusive).
+    /// Does not mutate the original array.
     ///
     /// Negative indices count from the end. Out-of-range indices are clamped, and
     /// an `end` that resolves at or before `start` yields an empty array.
@@ -60,7 +78,7 @@ class Uint8Array {
 
     /// Creates a new `uint8array` of the given size, filled with zeros.
     ///
-    /// Throws an error if the `size` is out of range (e.g. negative).
+    /// Throws an error if the `size` is negative.
     /// Panics if the allocation would cause an OOM.
     function zeroes(size: int) -> uint8array throws root.errors.InvalidArgument {
         $rust_function
@@ -80,12 +98,23 @@ class Uint8Array {
 
     /// Decodes a hexadecimal string (e.g. `"deadbeef"`) into bytes.
     ///
+    /// # Throws
     /// Throws `InvalidArgument` if the input contains non-hex characters or has an odd length.
+    ///
+    /// # Examples
+    /// ```
+    /// uint8array.from_hex("deadbeef")  // [222, 173, 190, 239]
+    /// ```
     function from_hex(hex: string) -> uint8array throws root.errors.InvalidArgument {
         $rust_function
     }
 
     /// Encodes the bytes as a lowercase hexadecimal string (e.g. `"deadbeef"`).
+    ///
+    /// # Examples
+    /// ```
+    /// uint8array.from_hex("deadbeef").to_hex()  // "deadbeef"
+    /// ```
     function to_hex(self) -> string throws never {
         $rust_function
     }
@@ -114,8 +143,15 @@ class Uint8Array {
         $rust_function
     }
 
-    /// Decodes the bytes as a UTF-8 string.
+    /// Lossily decodes the bytes as a UTF-8 string.
     /// Invalid UTF-8 sequences are replaced with U+FFFD (replacement character).
+    ///
+    /// # Examples
+    /// ```
+    /// b"hello".to_string()  // "hello"
+    /// b"".to_string()  // ""
+    /// b"\x80".to_string()  // "�"
+    /// ```
     implements baml.ToString {
         function to_string(self) -> string throws never {
             self._to_string_impl()

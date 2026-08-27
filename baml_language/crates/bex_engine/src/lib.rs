@@ -7440,9 +7440,13 @@ impl BexEngine {
         let compiler = self.runtime_compiler.clone();
         SysOpResult::Async(Box::pin(async move {
             let Some(compiler) = compiler else {
+                // `reflect.*._compile` declares only `CompilationError`
+                // (and `SessionBusy`), so an absent compiler is not an error
+                // value either can carry: it is a missing host facility.
                 return Err(OpError::new(
                     operation,
-                    bex_vm_types::errors::VmBamlError::Unsupported {
+                    bex_vm_types::errors::VmPanic::HostUnavailable {
+                        resource: "runtime-compiler".to_string(),
                         message: "runtime compiler was not installed by the host".to_string(),
                     },
                 ));

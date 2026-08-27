@@ -8,7 +8,7 @@
 //! - Class traits (`IoClass{Ns}{Class}`) with clean methods, glue, dispatch
 //! - Namespace traits (`IoNamespace{Ns}`) composing class traits + free functions
 //! - Root trait (`IoPackageBaml`) composing all namespace traits
-//! - `SysOps` struct with `get()`, `unsupported()`, `all_unsupported()`, `from_impl()`
+//! - `SysOps` struct with `get()`, `host_unavailable()`, `all_host_unavailable()`, `from_impl()`
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -2150,7 +2150,8 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
                         t.get_sys_op_fn(#path_str, heap, permit, args, ctx, call_id)
                             .unwrap_or_else(|| SysOpResult::Ready(Err(OpError::new(
                                 SysOp::#variant_ident,
-                                bex_vm_types::errors::VmBamlError::Unsupported {
+                                bex_vm_types::errors::VmPanic::HostUnavailable {
+                                    resource: SysOp::#variant_ident.path().to_string(),
                                     message: "Operation not supported on this platform".to_string(),
                                 },
                             ))))
@@ -2173,20 +2174,29 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
                 }
             }
 
-            pub fn unsupported(operation: SysOp) -> SysOpFn {
+            /// A stand-in for `operation` on a host that cannot perform it.
+            ///
+            /// An absent host facility is not a recoverable error value: no
+            /// sysop's `throws` clause declares "this platform has no
+            /// filesystem", so surfacing it as a `baml.errors.*` would escape
+            /// every typed `catch` arm the caller can write. It panics with
+            /// `baml.panics.HostUnavailable` instead, naming the operation as
+            /// the missing resource.
+            pub fn host_unavailable(operation: SysOp) -> SysOpFn {
                 std::sync::Arc::new(move |_, _, _, _, _| {
                     SysOpResult::Ready(Err(OpError::new(
                         operation,
-                        bex_vm_types::errors::VmBamlError::Unsupported {
+                        bex_vm_types::errors::VmPanic::HostUnavailable {
+                            resource: operation.path().to_string(),
                             message: "Operation not supported on this platform".to_string(),
                         },
                     )))
                 })
             }
 
-            pub fn all_unsupported() -> Self {
+            pub fn all_host_unavailable() -> Self {
                 Self {
-                    #(#field_idents: Self::unsupported(SysOp::#variant_idents),)*
+                    #(#field_idents: Self::host_unavailable(SysOp::#variant_idents),)*
                 }
             }
 

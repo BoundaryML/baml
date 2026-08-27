@@ -51,24 +51,6 @@ function _to_string_default<T>(value: T) -> string throws never {
     $rust_function
 }
 
-/// Internal: dispatch `to_string` on `value`'s *runtime* class, honoring a
-/// user-defined override. `string.from` routes through this rather than a static
-/// `match (value) { baml.ToString => value.to_string() }`, for the same reason
-/// `Sortable.sort` uses [`_compare_shim`]: static interface dispatch from this
-/// (stdlib) package can only see implementors visible here, not downstream user
-/// classes. Resolving on the receiver's runtime class instead picks up a user
-/// `implements baml.ToString { function to_string ... }` override; a class that
-/// inherits the structural default body falls back to [`_to_string_default`].
-///
-/// TODO: temporary. Once Kai's TIR rework moves interface conformance checks to
-/// runtime, `string.from` can use the literal `is baml.ToString` form and this
-/// shim can be removed.
-//baml:mut_vm
-//baml:may_yield
-function _to_string_shim<T>(value: T) -> string throws never {
-    $rust_function
-}
-
 /// Internal: BEP-042 `cleanup` run-once guard. Compiled into the prologue of a
 /// user class's magic `cleanup(self) -> void` method as
 /// `if (baml._cleanup_begin(self)) { <body> }`. Atomically test-and-sets the

@@ -6,7 +6,7 @@ use num_traits::ToPrimitive as _;
 use sys_ops::io::{self, IoClassHttpResponse, IoNamespaceFs, IoNamespaceHttp};
 use sys_types::{
     BexHeap, CallId, OpErrorBody, SysOp, SysOpContext, SysOpOutput, VmBamlError, VmInternalError,
-    VmRustFnError,
+    VmPanic, VmRustFnError,
 };
 
 use crate::host_value::WasmHost;
@@ -132,7 +132,7 @@ impl IoClassHttpResponse for WebHttp {
         _body: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
-        unsupported()
+        host_unavailable("http")
     }
 
     fn new_streaming(
@@ -143,7 +143,7 @@ impl IoClassHttpResponse for WebHttp {
         _headers: IndexMap<String, String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
-        unsupported()
+        host_unavailable("http")
     }
 
     fn write(
@@ -154,7 +154,7 @@ impl IoClassHttpResponse for WebHttp {
         _data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        unsupported()
+        host_unavailable("http")
     }
 
     fn end(
@@ -164,7 +164,7 @@ impl IoClassHttpResponse for WebHttp {
         _response: io::owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        unsupported()
+        host_unavailable("http")
     }
 }
 
@@ -179,7 +179,7 @@ impl io::IoClassHttpTlsConfig for WebHttp {
         _handshake_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::TlsConfig> {
-        unsupported()
+        host_unavailable("http")
     }
 }
 
@@ -191,7 +191,7 @@ impl io::IoClassHttpServer for WebHttp {
         _addr: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Server> {
-        unsupported()
+        host_unavailable("http")
     }
 
     fn _serve(
@@ -208,7 +208,7 @@ impl io::IoClassHttpServer for WebHttp {
         _header_read_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        unsupported()
+        host_unavailable("http")
     }
 }
 
@@ -220,7 +220,7 @@ impl io::IoClassHttpSseStream for WebHttp {
         _stream: io::owned::http::SseStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        unsupported()
+        host_unavailable("http")
     }
 
     fn close(
@@ -230,7 +230,7 @@ impl io::IoClassHttpSseStream for WebHttp {
         _stream: io::owned::http::SseStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        unsupported()
+        host_unavailable("http")
     }
 }
 
@@ -275,7 +275,7 @@ impl IoNamespaceHttp for WebHttp {
         _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
-        unsupported()
+        host_unavailable("http")
     }
 }
 
@@ -302,7 +302,7 @@ impl io::IoClassFsFile for WebFs {
         _n: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Vec<u8>>> {
-        unsupported()
+        host_unavailable("filesystem")
     }
     fn close(
         &self,
@@ -311,7 +311,7 @@ impl io::IoClassFsFile for WebFs {
         _f: io::owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        unsupported()
+        host_unavailable("filesystem")
     }
     fn seek_from(
         &self,
@@ -322,7 +322,7 @@ impl io::IoClassFsFile for WebFs {
         _offset: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        unsupported()
+        host_unavailable("filesystem")
     }
     fn write_some(
         &self,
@@ -332,7 +332,7 @@ impl io::IoClassFsFile for WebFs {
         _data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        unsupported()
+        host_unavailable("filesystem")
     }
     fn flush(
         &self,
@@ -341,7 +341,7 @@ impl io::IoClassFsFile for WebFs {
         _f: io::owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        unsupported()
+        host_unavailable("filesystem")
     }
 }
 
@@ -354,7 +354,7 @@ impl IoNamespaceFs for WebFs {
         _mode: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::fs::File> {
-        unsupported()
+        host_unavailable("filesystem")
     }
     fn exists(
         &self,
@@ -363,7 +363,7 @@ impl IoNamespaceFs for WebFs {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<bool> {
-        unsupported()
+        host_unavailable("filesystem")
     }
     fn remove(
         &self,
@@ -372,7 +372,7 @@ impl IoNamespaceFs for WebFs {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        unsupported()
+        host_unavailable("filesystem")
     }
     fn remove_dir(
         &self,
@@ -381,7 +381,7 @@ impl IoNamespaceFs for WebFs {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        unsupported()
+        host_unavailable("filesystem")
     }
     fn remove_dir_all(
         &self,
@@ -390,7 +390,7 @@ impl IoNamespaceFs for WebFs {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        unsupported()
+        host_unavailable("filesystem")
     }
     fn size(
         &self,
@@ -399,7 +399,7 @@ impl IoNamespaceFs for WebFs {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        unsupported()
+        host_unavailable("filesystem")
     }
 
     fn read(
@@ -428,7 +428,7 @@ impl IoNamespaceFs for WebFs {
         _content: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        unsupported()
+        host_unavailable("filesystem")
     }
     fn write_bytes(
         &self,
@@ -438,7 +438,7 @@ impl IoNamespaceFs for WebFs {
         _content: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        unsupported()
+        host_unavailable("filesystem")
     }
     fn read_dir(
         &self,
@@ -447,7 +447,7 @@ impl IoNamespaceFs for WebFs {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<io::owned::fs::DirEntry>> {
-        unsupported()
+        host_unavailable("filesystem")
     }
     fn mkdir(
         &self,
@@ -457,13 +457,9 @@ impl IoNamespaceFs for WebFs {
         _options: io::owned::fs::MkdirOptions,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        unsupported()
+        host_unavailable("filesystem")
     }
 
-    // These two declare `throws root.errors.Io`, which cannot carry the
-    // `Unsupported` that `unsupported()` builds — an off-contract error escapes
-    // every typed `catch` arm the caller can write — so the browser's lack of a
-    // permission model and of symbolic links is reported as `Io`.
     fn chmod(
         &self,
         _h: &Arc<BexHeap>,
@@ -472,7 +468,8 @@ impl IoNamespaceFs for WebFs {
         _mode: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Io {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "File permissions are not supported in the browser".to_string(),
         })
     }
@@ -485,7 +482,8 @@ impl IoNamespaceFs for WebFs {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Io {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Symbolic links are not supported in the browser".to_string(),
         })
     }
@@ -545,7 +543,8 @@ fn parse_read_file_result(value: BexExternalValue) -> Result<String, VmRustFnErr
             message: take_string(&mut result, "message", "readFileSync error")?,
         }
         .into()),
-        "unavailable" => Err(VmBamlError::Unsupported {
+        "unavailable" => Err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: take_string(&mut result, "message", "readFileSync unavailable")?,
         }
         .into()),
@@ -690,8 +689,15 @@ where
     }
 }
 
-fn unsupported<T>() -> SysOpOutput<T> {
-    SysOpOutput::err(VmBamlError::Unsupported {
+/// The Web runtime cannot perform this operation.
+///
+/// An absent host facility is not a recoverable error value: no sysop's
+/// `throws` clause declares "this platform has no filesystem", so surfacing it
+/// as a `baml.errors.*` would escape every typed `catch` arm the caller can
+/// write. It panics with `baml.panics.HostUnavailable` instead.
+fn host_unavailable<T>(resource: &str) -> SysOpOutput<T> {
+    SysOpOutput::err(VmPanic::HostUnavailable {
+        resource: resource.to_string(),
         message: UNSUPPORTED.to_string(),
     })
 }

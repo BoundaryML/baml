@@ -1,6 +1,12 @@
 // Hard assertions — throw and stop execution on failure.
 
 /// Asserts that `condition` is `true`. Panics with a failure message if not.
+///
+/// # Examples
+/// ```
+/// assert.is_true(true)  // no panic
+/// assert.is_true(false)  // panic
+/// ```
 function is_true(condition: bool) -> void {
     if (!condition) {
         baml.sys.panic("assertion failed: expected true")
@@ -8,6 +14,12 @@ function is_true(condition: bool) -> void {
 }
 
 /// Asserts that `value` is not `null`. Panics if it is.
+///
+/// # Examples
+/// ```
+/// assert.not_null(1)  // no panic
+/// assert.not_null(null)  // panic
+/// ```
 function not_null(value: unknown?) -> void {
     if (value == null) {
         baml.sys.panic("assertion failed: expected non-null value")

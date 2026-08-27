@@ -1,4 +1,4 @@
-/// A 64-bit IEEE 754 floating-point number (f64).
+/// A 64-bit floating-point number (f64).
 ///
 /// Note: division by zero (`x / 0.0`) does not follow raw IEEE — it throws a
 /// catchable `baml.panics.DivisionByZero` rather than yielding `±inf`/`NaN`,

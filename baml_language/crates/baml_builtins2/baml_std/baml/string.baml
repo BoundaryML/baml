@@ -15,29 +15,11 @@ class String {
     /// string.from([1, 2, 3])     // "[1, 2, 3]"
     /// ```
     ///
-    /// Ideally this would read:
-    ///
-    /// ```
-    /// if (value is baml.ToString) { value.to_string() }
-    /// else { root._to_string_default(value) }
-    /// ```
-    ///
-    /// but that does not work from the stdlib today. `is <interface>` and
-    /// interface method dispatch are resolved at *compile time* by expanding the
-    /// interface to its known implementor classes, and that implementor set is
-    /// per-package: it is built from the package's dependencies + itself, never
-    /// its dependents. `string.from` lives in the `baml` package, which a user's
-    /// `implements baml.ToString` sits *above*, so from here the implementor set
-    /// for `baml.ToString` is empty — the `is` test folds to constant `false` and
-    /// the override never dispatches. (Same boundary `Sortable.sort`'s
-    /// `_compare_shim` and `baml.json.to_json` work around.)
-    ///
-    /// So dispatch is resolved on `value`'s *runtime* class via
-    /// `baml._to_string_shim` instead. TODO: once Kai's TIR rework lands (it moves
-    /// interface conformance checks to runtime), replace this with the literal
-    /// `is baml.ToString` form above and drop `_to_string_shim`.
     function from<T>(value: T) -> string throws never {
-        root._to_string_shim(value)
+        match (value) {
+            baml.ToString => value.to_string()
+            _ => root._to_string_default(value)
+        }
     }
 
     /// Returns the number of **Unicode code points** (characters) in the string.
@@ -54,7 +36,7 @@ class String {
     /// "".length()       // 0
     /// ```
     function length(self) -> int throws never {
-        $rust_function
+        self.char_count()
     }
 
     /// Alias for `length()`.
@@ -138,16 +120,34 @@ class String {
     }
 
     /// Returns true if `search` appears anywhere in the string.
+    ///
+    /// # Examples
+    /// ```
+    /// "hello".includes("ll")  // true
+    /// "hello".includes("world")  // false
+    /// ```
     function includes(self, search: string) -> bool throws never {
         $rust_function
     }
 
     /// Returns true if the string starts with `prefix`.
+    ///
+    /// # Examples
+    /// ```
+    /// "hello".starts_with("h")  // true
+    /// "hello".starts_with("world")  // false
+    /// ```
     function starts_with(self, prefix: string) -> bool throws never {
         $rust_function
     }
 
     /// Returns true if the string ends with `suffix`.
+    ///
+    /// # Examples
+    /// ```
+    /// "hello".ends_with("o")  // true
+    /// "hello".ends_with("world")  // false
+    /// ```
     function ends_with(self, suffix: string) -> bool throws never {
         $rust_function
     }
@@ -212,6 +212,12 @@ class String {
     }
 
     /// Replaces the first occurrence of `search` with `replacement`.
+    /// Returns a new string (strings are immutable in BAML).
+    ///
+    /// # Examples
+    /// ```
+    /// "hello world".replace("world", "universe")  // "hello universe"
+    /// ```
     function replace(self, search: string, replacement: string) -> string throws never {
         $rust_function
     }
@@ -299,6 +305,12 @@ class String {
     }
 
     /// Replaces all occurrences of `search` with `replacement`.
+    /// Returns a new string (strings are immutable in BAML).
+    ///
+    /// # Examples
+    /// ```
+    /// "hello world".replace_all("l", "L")  // "heLLo worLd"
+    /// ```
     function replace_all(self, search: string, replacement: string) -> string throws never {
         $rust_function
     }

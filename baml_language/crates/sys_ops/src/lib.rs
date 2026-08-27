@@ -3,7 +3,7 @@
 // ============================================================================
 
 // SysOps struct, IO traits (IoClassFsFile, IoNamespaceFs, etc.),
-// view/owned types, from_impl, all_unsupported — all generated from
+// view/owned types, from_impl, all_host_unavailable — all generated from
 // `.baml` `$rust_io_function` definitions by `baml_builtins2_codegen`.
 #[allow(
     dead_code,
@@ -993,7 +993,8 @@ impl io::IoClassReflectPackage for DefaultIoOps {
     ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
         // BexEngine intercepts this operation and delegates to its injected
         // RuntimeCompiler before the provider table is consulted.
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "runtime-compiler".to_string(),
             message: "runtime compiler is not installed".to_string(),
         })
     }
@@ -1011,7 +1012,8 @@ impl io::IoClassReflectSession for DefaultIoOps {
     ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
         // BexEngine intercepts Session compilation for the same reason as
         // Package.compile: the concrete compiler is injected above sys_ops.
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "runtime-compiler".to_string(),
             message: "runtime compiler is not installed".to_string(),
         })
     }
@@ -1028,7 +1030,8 @@ impl io::IoClassFsFile for DefaultIoOps {
         _n: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Vec<u8>>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1039,7 +1042,8 @@ impl io::IoClassFsFile for DefaultIoOps {
         _f: io::owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1052,7 +1056,8 @@ impl io::IoClassFsFile for DefaultIoOps {
         _offset: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1064,7 +1069,8 @@ impl io::IoClassFsFile for DefaultIoOps {
         _data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1075,7 +1081,8 @@ impl io::IoClassFsFile for DefaultIoOps {
         _f: io::owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1090,7 +1097,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _mode: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::fs::File> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1102,7 +1110,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<bool> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1114,7 +1123,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1126,7 +1136,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1138,7 +1149,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1150,7 +1162,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1162,7 +1175,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1175,7 +1189,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _content: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1188,7 +1203,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _content: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1200,7 +1216,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<io::owned::fs::DirEntry>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1213,16 +1230,12 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _options: io::owned::fs::MkdirOptions,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
 
-    // `chmod` and `symlink` declare `throws root.errors.Io`, so — unlike their
-    // siblings above — they report an absent platform facility as `Io` rather
-    // than `Unsupported`. An `Unsupported` here would be off-contract: nothing
-    // in the declared throw set can hold it, so it would escape every typed
-    // `catch` arm the caller can write.
     fn chmod(
         &self,
         _h: &Arc<BexHeap>,
@@ -1231,7 +1244,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _mode: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Io {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "File permissions are not supported on this platform".to_string(),
         })
     }
@@ -1244,7 +1258,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Io {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Symbolic links are not supported on this platform".to_string(),
         })
     }
@@ -1258,7 +1273,8 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _r: io::owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1269,7 +1285,8 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _r: io::owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1282,7 +1299,8 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _body: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1294,7 +1312,8 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _headers: indexmap::IndexMap<String, String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1306,7 +1325,8 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1317,7 +1337,8 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _r: io::owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1334,7 +1355,8 @@ impl io::IoClassHttpTlsConfig for DefaultIoOps {
         _handshake_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::TlsConfig> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1348,7 +1370,8 @@ impl io::IoClassHttpServer for DefaultIoOps {
         _addr: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Server> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1367,7 +1390,8 @@ impl io::IoClassHttpServer for DefaultIoOps {
         _header_read_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1381,7 +1405,8 @@ impl io::IoClassHttpSseStream for DefaultIoOps {
         _s: io::owned::http::SseStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1392,7 +1417,8 @@ impl io::IoClassHttpSseStream for DefaultIoOps {
         _s: io::owned::http::SseStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1407,7 +1433,8 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1419,7 +1446,8 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1432,7 +1460,8 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _first_event_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1447,7 +1476,8 @@ impl io::IoClassWsWsStream for DefaultIoOps {
         _text: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "websocket".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1459,7 +1489,8 @@ impl io::IoClassWsWsStream for DefaultIoOps {
         _stream: io::owned::ws::WsStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "websocket".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1471,7 +1502,8 @@ impl io::IoClassWsWsStream for DefaultIoOps {
         _stream: io::owned::ws::WsStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "websocket".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1487,7 +1519,8 @@ impl io::IoNamespaceWs for DefaultIoOps {
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::ws::WsStream> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "websocket".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1502,7 +1535,8 @@ impl io::IoClassNetTcpStream for DefaultIoOps {
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::TcpStream> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1514,7 +1548,8 @@ impl io::IoClassNetTcpStream for DefaultIoOps {
         _limit: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Vec<u8>>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1526,7 +1561,8 @@ impl io::IoClassNetTcpStream for DefaultIoOps {
         _data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1537,7 +1573,8 @@ impl io::IoClassNetTcpStream for DefaultIoOps {
         _s: io::owned::net::TcpStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1551,7 +1588,8 @@ impl io::IoClassNetTcpListener for DefaultIoOps {
         _addr: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::TcpListener> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1562,7 +1600,8 @@ impl io::IoClassNetTcpListener for DefaultIoOps {
         _l: io::owned::net::TcpListener,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::TcpStream> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1573,7 +1612,8 @@ impl io::IoClassNetTcpListener for DefaultIoOps {
         _l: io::owned::net::TcpListener,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1587,7 +1627,8 @@ impl io::IoClassNetUdpSocket for DefaultIoOps {
         _addr: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::UdpSocket> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1601,7 +1642,8 @@ impl io::IoClassNetUdpSocket for DefaultIoOps {
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1613,7 +1655,8 @@ impl io::IoClassNetUdpSocket for DefaultIoOps {
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::Datagram> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1624,7 +1667,8 @@ impl io::IoClassNetUdpSocket for DefaultIoOps {
         _s: io::owned::net::UdpSocket,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1640,7 +1684,8 @@ impl io::IoNamespaceEnv for DefaultIoOps {
         _key: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "environment".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1654,7 +1699,8 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _prompt: Option<String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "stdio".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1665,7 +1711,8 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "stdio".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1676,7 +1723,8 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "stdio".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1687,7 +1735,8 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "stdio".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1698,7 +1747,8 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "stdio".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1712,7 +1762,8 @@ impl io::IoClassSysProcess for DefaultIoOps {
         _process: io::owned::sys::Process,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessExit> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1724,7 +1775,8 @@ impl io::IoClassSysProcess for DefaultIoOps {
         _process: io::owned::sys::Process,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1749,7 +1801,8 @@ impl io::IoClassSysReadPipe for DefaultIoOps {
         _limit: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Vec<u8>>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1761,7 +1814,8 @@ impl io::IoClassSysReadPipe for DefaultIoOps {
         _readpipe: io::owned::sys::ReadPipe,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1776,7 +1830,8 @@ impl io::IoClassSysWritePipe for DefaultIoOps {
         _data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1788,7 +1843,8 @@ impl io::IoClassSysWritePipe for DefaultIoOps {
         _writepipe: io::owned::sys::WritePipe,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1800,7 +1856,8 @@ impl io::IoClassSysWritePipe for DefaultIoOps {
         _writepipe: io::owned::sys::WritePipe,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1827,7 +1884,8 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ShellOutput> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1841,7 +1899,8 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::Process> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1854,7 +1913,8 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ShellOutput> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1866,15 +1926,12 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _delay: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "timer".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
 
-    // `baml.sys.pid` declares `throws never`, so a platform without process
-    // IDs cannot report `Unsupported` as a catchable error — it panics with
-    // `baml.panics.HostUnavailable`, exactly as `SystemRandom` does when no
-    // entropy source is reachable.
     fn pid(&self, _h: &Arc<BexHeap>, _c: CallId, _ctx: &SysOpContext) -> SysOpOutput<i64> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "process-id".to_string(),
@@ -1892,7 +1949,8 @@ impl io::IoClassGlobGlob for DefaultIoOps {
         _root: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1905,7 +1963,8 @@ impl io::IoClassGlobGlob for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<bool> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1919,7 +1978,8 @@ impl io::IoNamespaceGlob for DefaultIoOps {
         _pattern: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::glob::Glob> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1936,7 +1996,8 @@ impl io::IoNamespaceHost for DefaultIoOps {
         _type_arg_1: ::sys_types::SapTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "host-callable".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1949,7 +2010,8 @@ impl io::IoClassTimeInstant for DefaultIoOps {
         _c: CallId,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::time::Instant> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "clock".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1962,7 +2024,8 @@ impl io::IoNamespaceTime for DefaultIoOps {
         _c: CallId,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "timezone-database".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1975,7 +2038,8 @@ impl io::IoNamespaceTime for DefaultIoOps {
         _at_ns: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<i64>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "timezone-database".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1989,7 +2053,8 @@ impl io::IoNamespaceTime for DefaultIoOps {
         _disambiguation: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Arc<num_bigint::BigInt>>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "timezone-database".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -2054,7 +2119,8 @@ impl io::IoNamespaceAiInternal for DefaultIoOps {
         _scope: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "gcp-credentials".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -2065,7 +2131,8 @@ impl io::IoNamespaceAiInternal for DefaultIoOps {
         _credentials_json: Option<String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "gcp-credentials".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -2076,7 +2143,8 @@ impl io::IoNamespaceAiInternal for DefaultIoOps {
         _credentials_json: Option<String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "gcp-credentials".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -2093,7 +2161,8 @@ impl io::IoNamespaceAiInternal for DefaultIoOps {
         _session_token: Option<String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "aws-credentials".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -2105,7 +2174,8 @@ impl io::IoNamespaceAiInternal for DefaultIoOps {
         _profile: Option<String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "aws-credentials".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -2115,8 +2185,9 @@ impl io::IoPackageBaml for DefaultIoOps {}
 
 /// Builder for composing an [`io::SysOps`] table by overriding namespaces.
 ///
-/// Starts with all operations returning `Unsupported` (except LLM, which uses
-/// the blanket implementation), and allows selectively overriding namespaces:
+/// Starts with every operation panicking with `baml.panics.HostUnavailable`
+/// (except LLM, which uses the blanket implementation), and allows selectively
+/// overriding namespaces:
 ///
 /// ```ignore
 /// let ops = IoSysOpsBuilder::new()
@@ -2129,10 +2200,11 @@ pub struct IoSysOpsBuilder {
 }
 
 impl IoSysOpsBuilder {
-    /// Create a new builder with all operations defaulting to `Unsupported`,
-    /// except LLM ops which use the real blanket implementation.
+    /// Create a new builder with all operations defaulting to a
+    /// `baml.panics.HostUnavailable` panic, except LLM ops which use the real
+    /// blanket implementation.
     ///
-    /// Every operation not overridden afterwards throws — including ones a
+    /// Every operation not overridden afterwards panics — including ones a
     /// host may never think about (`baml.time.Instant.now`, `random`, the
     /// per-class `fs::File`/`http::Response` readers). A host that wants a
     /// working platform with a few operations *intercepted* wants
@@ -2760,8 +2832,9 @@ pub use io::SysOps;
 
 /// Builder for composing a [`SysOps`] table by overriding namespaces.
 ///
-/// Starts with the built-in prompt/SAP implementations and otherwise returns
-/// `Unsupported`, then allows selectively overriding namespaces.
+/// Starts with the built-in prompt/SAP implementations and otherwise panics
+/// with `baml.panics.HostUnavailable`, then allows selectively overriding
+/// namespaces.
 pub type SysOpsBuilder = IoSysOpsBuilder;
 
 #[cfg(test)]
@@ -2788,59 +2861,59 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_unsupported_returns_error() {
-        use bex_vm_types::errors::{VmBamlError, VmRustFnError};
+    async fn test_host_unavailable_returns_panic() {
+        use bex_vm_types::errors::{VmPanic, VmRustFnError};
         use sys_types::SysOpResult;
 
         let heap = test_heap();
         let ctx = test_ctx();
-        let op = SysOps::unsupported(SysOp::BamlSysShell);
+        let op = SysOps::host_unavailable(SysOp::BamlSysShell);
         let permit = test_permit().await;
         let result = op(&heap, permit.proof(), vec![], &ctx, CallId::next());
         match result {
             SysOpResult::Ready(Err(e)) => {
                 assert!(matches!(
                     e.payload,
-                    sys_types::OpErrorPayload::Vm(VmRustFnError::BamlError(
-                        VmBamlError::Unsupported { .. }
+                    sys_types::OpErrorPayload::Vm(VmRustFnError::Panic(
+                        VmPanic::HostUnavailable { .. }
                     ))
                 ));
                 assert_eq!(e.fn_name, SysOp::BamlSysShell);
             }
-            _ => panic!("Expected Unsupported error"),
+            _ => panic!("Expected HostUnavailable panic"),
         }
     }
 
     #[tokio::test]
-    async fn test_all_unsupported() {
-        use bex_vm_types::errors::{VmBamlError, VmRustFnError};
+    async fn test_all_host_unavailable() {
+        use bex_vm_types::errors::{VmPanic, VmRustFnError};
         use sys_types::{OpError, SysOpResult};
 
         let heap = test_heap();
         let ctx = test_ctx();
-        let ops = SysOps::all_unsupported();
+        let ops = SysOps::all_host_unavailable();
         let permit = test_permit().await;
 
-        // Test fs_open returns Unsupported
+        // Test fs_open panics with HostUnavailable
         let result = (ops.baml_fs_open)(&heap, permit.proof(), vec![], &ctx, CallId::next());
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {
                 fn_name: SysOp::BamlFsOpen,
-                payload: sys_types::OpErrorPayload::Vm(VmRustFnError::BamlError(
-                    VmBamlError::Unsupported { .. }
+                payload: sys_types::OpErrorPayload::Vm(VmRustFnError::Panic(
+                    VmPanic::HostUnavailable { .. }
                 )),
             }))
         ));
 
-        // Test shell returns Unsupported
+        // Test shell panics with HostUnavailable
         let result = (ops.baml_sys_shell)(&heap, permit.proof(), vec![], &ctx, CallId::next());
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {
                 fn_name: SysOp::BamlSysShell,
-                payload: sys_types::OpErrorPayload::Vm(VmRustFnError::BamlError(
-                    VmBamlError::Unsupported { .. }
+                payload: sys_types::OpErrorPayload::Vm(VmRustFnError::Panic(
+                    VmPanic::HostUnavailable { .. }
                 )),
             }))
         ));
@@ -2850,7 +2923,7 @@ mod tests {
     async fn test_sys_ops_get() {
         use sys_types::SysOpResult;
 
-        let ops = SysOps::all_unsupported();
+        let ops = SysOps::all_host_unavailable();
         let heap = test_heap();
         let ctx = test_ctx();
         let permit = test_permit().await;
