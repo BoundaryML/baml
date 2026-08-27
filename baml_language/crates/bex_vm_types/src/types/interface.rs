@@ -154,10 +154,13 @@ pub struct RuntimeImplRule {
     /// Associated-type bindings of the implemented interface.
     pub interface_assoc: Vec<(baml_type::Name, crate::TyTemplate)>,
     /// Method name → its [`MethodImpl`] (the callee's `Object::Function` pointer +
-    /// invocation frame), resolved at dispatch time. Complete: the methods this
-    /// impl provides *plus* the interface's default methods it adopts (the bake
-    /// merges them in, a provided method winning over the default), so a lookup
-    /// resolves any interface method.
+    /// invocation frame), resolved at dispatch time. PROVIDED-ONLY: exactly the
+    /// methods this impl block declares. A method the impl does not provide is
+    /// ADOPTED from the interface at resolution — the resolver falls back to
+    /// the interface's bound [`InterfaceMethodDef::default_fn`] with the
+    /// adopted-default frame `[Self, interface args..]` (spelled over this
+    /// rule's `for_ty_pattern` ++ `interface_args`) — so the table is a pure
+    /// function of the impl block, stable under interface evolution.
     pub methods: IndexMap<baml_type::Name, MethodImpl>,
     /// Interface field index → the implementor's physical slot in
     /// [`Instance::fields`](super::Instance::fields). Indexed by position in the

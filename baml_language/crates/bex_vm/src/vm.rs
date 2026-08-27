@@ -3096,11 +3096,12 @@ impl BexVm {
             .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                 method: method_name.to_string(),
             })?;
-        let method = rule.methods.get(method_name).ok_or_else(|| {
-            VmInternalError::UnresolvedVirtualCall {
+        let method = resolver
+            .rule_method_impl(&rule, method_name)
+            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                 method: method_name.to_string(),
-            }
-        })?;
+            })?
+            .method;
         let mut frame = resolver.realize_frame(&method.frame, &bound_args)?;
         // Only `.tys` reaches the callee frame. `method_type_args.values` (the
         // exact `TypeValue`s) is dropped, which is sound here: a type argument
@@ -8550,13 +8551,14 @@ impl BexVm {
                             .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
                             })?;
-                        let method = rule.methods.get(method_name.as_str()).ok_or_else(|| {
-                            VmInternalError::UnresolvedVirtualCall {
+                        let method = resolver
+                            .rule_method_impl(&rule, method_name.as_str())
+                            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
-                            }
-                        })?;
-                        // `fqn` is the resolved callee's heap pointer, baked at
-                        // emit time — invoke it directly.
+                            })?
+                            .method;
+                        // `fqn` is the resolved callee's heap pointer (provided
+                        // row or adopted interface default) — invoke it directly.
                         let callee = method.fqn;
                         // Seed the callee frame: the impl's frame realized against
                         // its bound args (the impl's own generics for an impl method,

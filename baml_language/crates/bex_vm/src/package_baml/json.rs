@@ -1777,25 +1777,18 @@ fn try_yield_interface_from_json(
         _ => super::resolve::ImplResolver::new(vm),
     };
     let (rule, bound_args) = resolver.resolve_implements_rule(ty, from_json_head, &[])?;
-    let method_impl = rule.methods.get("from_json")?;
-    let default_fn = match vm.get_object(from_json_head.ptr()) {
-        Object::Interface(iface) => iface
-            .methods
-            .iter()
-            .find(|m| m.name.as_str() == "from_json")
-            .map(|m| m.default_fn)
-            .unwrap_or_else(bex_vm_types::HeapPtr::null),
-        _ => bex_vm_types::HeapPtr::null(),
-    };
-    if !default_fn.is_null() && method_impl.fqn == default_fn {
+    let resolved = resolver.rule_method_impl(&rule, "from_json")?;
+    if resolved.is_default {
+        // The rule adopts the structural default body: the caller renders the
+        // structural conversion itself.
         return None;
     }
-    let type_args = match resolver.realize_frame(&method_impl.frame, &bound_args) {
+    let type_args = match resolver.realize_frame(&resolved.method.frame, &bound_args) {
         Ok(type_args) => type_args,
         Err(e) => return Some(NativeCallResult::Error(e.into())),
     };
     Some(NativeCallResult::YieldToCall {
-        callee: method_impl.fqn,
+        callee: resolved.method.fqn,
         args: vec![j],
         type_args,
         continuation: Box::new(IdentityFromJsonCont),

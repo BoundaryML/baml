@@ -8,8 +8,8 @@ use baml_compiler_diagnostics::{
 };
 use bex_heap::TlabHolder;
 use bex_vm_types::types::{
-    Class, ClassField, Enum, EnumVariant, InterfaceDef, MethodImpl, Object, PortableTypeDef,
-    RuntimeImplRule, TypeValue, Value,
+    Class, ClassField, Enum, EnumVariant, InterfaceDef, Object, PortableTypeDef, RuntimeImplRule,
+    TypeValue, Value,
 };
 use indexmap::IndexMap;
 
@@ -342,44 +342,12 @@ pub(super) fn register_class_witnesses(
     witnesses: Vec<ValidatedClassWitness>,
 ) {
     for witness in witnesses {
-        let Object::Interface(interface) = vm.get_object(witness.interface_ptr) else {
-            unreachable!("witness interface validated before allocation")
-        };
-        let mut methods = IndexMap::new();
         let for_ty_pattern = bex_vm_types::TyTemplate::from(ty.clone());
-        // The default-body frame is `[Self, iface args..]` — associated types
-        // are not frame slots; the body's `Self.X` projection templates reduce
-        // through this rule's `interface_assoc` bindings at realization.
-        let mut default_frame = vec![for_ty_pattern.clone()];
-        default_frame.extend(
-            witness
-                .interface_args
-                .iter()
-                .cloned()
-                .map(bex_vm_types::TyTemplate::from),
-        );
-        for method in &interface.methods {
-            // A witness supplies fields only; every method comes from the
-            // interface's default body, which the loader bound to a pointer.
-            // (The gate above rejected any interface with a required method.)
-            if method.default.is_none() {
-                continue;
-            }
-            let callee = method.default_fn;
-            debug_assert!(
-                !callee.is_null(),
-                "interface `{}` default `{}` was pooled but never bound",
-                interface.name,
-                method.name
-            );
-            methods.insert(
-                method.name.clone(),
-                MethodImpl {
-                    fqn: callee,
-                    frame: default_frame.clone(),
-                },
-            );
-        }
+        // A witness supplies fields only, so its method table is EMPTY: every
+        // method is the interface's default body, adopted at resolution
+        // (`ImplResolver::rule_method_impl` falls back to the interface's
+        // bound `default_fn` with the `[Self, iface args..]` frame). The gate
+        // above rejected any interface with a required method.
         // The witness is an ordinary heap `Object::ImplRule` — the resolver
         // borrows it exactly like a package-owned rule and the collector keeps
         // its `interface_head`/`methods[].fqn` current — so the side table
@@ -398,7 +366,7 @@ pub(super) fn register_class_witnesses(
                 .into_iter()
                 .map(|(name, ty)| (name, bex_vm_types::TyTemplate::from(ty)))
                 .collect(),
-            methods,
+            methods: IndexMap::new(),
             field_links: witness.field_links.into_boxed_slice(),
         })));
         vm.dynamic_dispatch.register_rule(

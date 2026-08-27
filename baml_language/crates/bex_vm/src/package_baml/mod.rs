@@ -292,23 +292,14 @@ pub(super) fn shim_rule_method(
     else {
         return Ok(None);
     };
-    let Some(method_impl) = rule.methods.get(method) else {
+    let Some(resolved) = resolver.rule_method_impl(&rule, method) else {
         return Ok(None);
     };
-    let type_args = resolver.realize_frame(&method_impl.frame, &bound_args)?;
-    let default_fn = match vm.get_object(iface_head.ptr()) {
-        Object::Interface(iface) => iface
-            .methods
-            .iter()
-            .find(|m| m.name.as_str() == method)
-            .map(|m| m.default_fn)
-            .unwrap_or_else(HeapPtr::null),
-        _ => HeapPtr::null(),
-    };
+    let type_args = resolver.realize_frame(&resolved.method.frame, &bound_args)?;
     Ok(Some(ShimRuleMethod {
-        callee: method_impl.fqn,
+        callee: resolved.method.fqn,
         type_args,
-        is_default: !default_fn.is_null() && method_impl.fqn == default_fn,
+        is_default: resolved.is_default,
     }))
 }
 

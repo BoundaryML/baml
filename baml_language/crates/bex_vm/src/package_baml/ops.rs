@@ -229,18 +229,19 @@ fn dispatch_op(
     else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };
-    let Some(method_impl) = rule.methods.get(method) else {
+    let Some(resolved) = resolver.rule_method_impl(&rule, method) else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };
     // The resolved impl's frame realizes fully against its bound args; a failure
     // is a broken compiler/VM invariant, surfaced rather than swallowed.
-    let type_args = match resolver.realize_frame(&method_impl.frame, &bound_args) {
+    let type_args = match resolver.realize_frame(&resolved.method.frame, &bound_args) {
         Ok(type_args) => type_args,
         Err(e) => return NativeCallResult::from(e),
     };
     NativeCallResult::YieldToCall {
-        // `fqn` is the resolved callee's heap pointer, baked at emit time.
-        callee: method_impl.fqn,
+        // `fqn` is the resolved callee's heap pointer (provided row or adopted
+        // interface default).
+        callee: resolved.method.fqn,
         args,
         type_args,
         // The operator's value *is* the impl method's return value — forward it.
@@ -701,9 +702,9 @@ fn resolve_equals_eq(
     let equals_head = vm.declaration_head(&equals_qtn())?;
     let resolver = resolve::ImplResolver::for_value(vm, value);
     let (rule, bound_args) = resolver.resolve_implements_rule(concrete, equals_head, &[])?;
-    let method = rule.methods.get("eq")?;
-    // `fqn` is the resolved callee's heap pointer (the impl method or merged
-    // default), baked at emit time — invoke it directly.
+    let method = resolver.rule_method_impl(&rule, "eq")?.method;
+    // `fqn` is the resolved callee's heap pointer (the impl method or adopted
+    // default) — invoke it directly.
     let callee = method.fqn;
     // The resolved impl's frame realizes fully against its bound args (every
     // projection reduced through the impl registry). A failure is a broken

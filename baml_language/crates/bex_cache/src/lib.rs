@@ -95,7 +95,13 @@ use sha2::{Digest, Sha256};
 /// gained `is_interface_body` + `native_key` (wire fields), and `Program`
 /// gained `body_indices` while `function_indices` / `function_global_indices`
 /// stopped carrying impl-block methods and interface default bodies.
-pub const FORMAT_VERSION: u32 = 11;
+///
+/// Version 12: impl-rule method tables became PROVIDED-ONLY (an adopted
+/// interface default resolves at dispatch through the interface's
+/// `default_fn`, never through a baked row), rule fragments moved onto their
+/// declaring unit, and `ProgramMethodImplFrag` dropped its `fqn` string for
+/// the body's code-bucket offset in that unit.
+pub const FORMAT_VERSION: u32 = 12;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

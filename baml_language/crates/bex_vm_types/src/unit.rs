@@ -133,8 +133,11 @@ pub struct ProgramPackageFrag {
     pub interfaces: Vec<(LocalName, String)>,
     /// Local exported free-function name to its fully-qualified symbol.
     pub functions: Vec<(LocalName, String)>,
-    /// Implemented-interface fully-qualified name to the impl rules declared for
-    /// it in this unit (the interface may live in a dependency package).
+    /// Implemented-interface fully-qualified name to the impl rules THIS
+    /// UNIT'S FILE declares for it (the interface may live in another file or
+    /// a dependency package). Rules ride their declaring unit — never a
+    /// package carrier — so each rule's provided-method bodies are objects in
+    /// this unit's own `code` bucket ([`ProgramMethodImplFrag::body`]).
     pub impl_rules: Vec<(String, Vec<ProgramImplRuleFrag>)>,
     /// Recursive type aliases defined in this unit, by fully-qualified name of
     /// the emitted `Object::TypeAlias`. Non-recursive aliases are expanded at
@@ -168,12 +171,16 @@ pub struct ProgramImplRuleFrag {
     pub field_links: Box<[u32]>,
 }
 
-/// Symbolic twin of `ProgramMethodImpl`: `fqn` is the callee function's
-/// fully-qualified name (resolved to an `ObjectIndex` at link).
+/// Symbolic twin of `ProgramMethodImpl`. Rule method tables are
+/// PROVIDED-ONLY, and a provided body is declared by the same file as its
+/// `implements` block — so the callee is always an object in the DECLARING
+/// unit's own `code` bucket, referenced by offset. A body has no name on any
+/// wire: an adopted interface default is not in this table at all (the
+/// resolver adopts it at dispatch through the interface's `default_fn`).
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct ProgramMethodImplFrag {
-    /// Fully-qualified name of the callee function.
-    pub fqn: String,
+    /// Offset of the callee body in the declaring unit's `code` bucket.
+    pub body: u32,
     /// The callee's type-argument frame at the impl site.
     pub frame: Vec<TyTemplate>,
 }

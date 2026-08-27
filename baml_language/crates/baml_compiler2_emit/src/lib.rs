@@ -484,6 +484,116 @@ impl<'db> BodyStore<'_, 'db> {
     }
 }
 
+/// Generic-parameter bound sets, keyed by the declared parameter.
+type ImplBoundsMap =
+    rustc_hash::FxHashMap<baml_type::ParamTy, Vec<baml_type::interned::InterfaceRef>>;
+
+type IfaceParts = (
+    baml_type::TypeName,
+    Vec<bex_vm_types::TyTemplate>,
+    Vec<(Name, bex_vm_types::TyTemplate)>,
+);
+
+/// Split a lowered interface type into its base `TypeName` plus its args /
+/// associated bindings as `TyTemplate`s (generic params → `TypeArgRef`).
+fn split_interface(
+    iface_ty: &baml_type::Ty,
+    resolved: &ResolvedAliases,
+    generics: &[ParamTy],
+) -> Option<IfaceParts> {
+    let baml_type::Ty::Interface(qtn, args, assoc, _) = iface_ty else {
+        return None;
+    };
+    let arg_templates = args
+        .iter()
+        .map(|a| {
+            bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
+                a, resolved, generics,
+            ))
+        })
+        .collect();
+    let assoc_templates = assoc
+        .iter()
+        .map(|(n, t)| {
+            (
+                n.clone(),
+                bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
+                    t, resolved, generics,
+                )),
+            )
+        })
+        .collect();
+    Some((qtn.clone(), arg_templates, assoc_templates))
+}
+
+/// The lowered head of one `implements` block's baked rule — the pieces that
+/// identify the rule. `(iface_tn, for_ty_pattern, interface_args)` is the
+/// rule's COHERENCE KEY (unique per interface for accepted programs).
+///
+/// Shared by `build_packages` (which bakes the rule from it) and
+/// `decompose_units` (which pairs each baked rule back to its declaring file
+/// through the same key), so the two can never drift.
+struct ImplRuleTarget {
+    iface_tn: baml_type::TypeName,
+    /// The full lowered target (`Ty::Interface`), for the bake's
+    /// argument/associated-binding work.
+    iface_ty: baml_type::Ty,
+    interface_args: Vec<bex_vm_types::TyTemplate>,
+    /// The target's WRITTEN associated pins only (block-level pins are folded
+    /// in by the bake).
+    interface_assoc: Vec<(Name, bex_vm_types::TyTemplate)>,
+    for_ty: baml_type::Ty,
+    for_ty_pattern: bex_vm_types::TyTemplate,
+    impl_params: Vec<ParamTy>,
+    impl_bounds: ImplBoundsMap,
+}
+
+/// Lower one `implements` block's target and for-type. `None` when the target
+/// does not lower to an interface (already diagnosed upstream).
+fn impl_rule_target<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    file: baml_base::SourceFile,
+    impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
+    resolved: &ResolvedAliases,
+) -> Option<ImplRuleTarget> {
+    let block = baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc);
+    let store = &block.type_refs;
+    let impl_params = baml_compiler2_hir_ty::lower::impl_frame(db, impl_loc);
+    let impl_bounds = baml_compiler2_hir_ty::lower::impl_generic_bounds(db, impl_loc);
+    // The target is a constraint, not an existential: it carries only its
+    // written inline pins (unwritten members bake their declared defaults).
+    let iface_ty = baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, file)
+        .with_frame(impl_params.clone())
+        .with_bounds(impl_bounds.clone())
+        .lower_type_ref_at(
+            store,
+            block.interface_target,
+            baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
+        )
+        .to_plain();
+    let (iface_tn, interface_args, interface_assoc) =
+        split_interface(&iface_ty, resolved, &impl_params)?;
+    // The implementor: `Self` in `Ty` space, off the UNIFORM impl surface —
+    // `impl_self_ty` (with `impl_frame`/`impl_generic_bounds` above) owns the
+    // in-body-vs-free distinction; emit never matches the subject.
+    let for_ty = baml_compiler2_hir_ty::lower::impl_self_ty(db, impl_loc).to_plain();
+    let for_ty_pattern = bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
+        &for_ty,
+        resolved,
+        &impl_params,
+    ));
+    Some(ImplRuleTarget {
+        iface_tn,
+        iface_ty,
+        interface_args,
+        interface_assoc,
+        for_ty,
+        for_ty_pattern,
+        impl_params,
+        impl_bounds,
+    })
+}
+
 fn build_packages<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
@@ -501,49 +611,11 @@ fn build_packages<'db>(
     use baml_compiler2_hir_ty::lower::qualify_def;
     use baml_compiler2_ppir::item_data::AssociatedTypeBindingData;
     use baml_type as ty;
-    use rustc_hash::FxHashMap;
-    type BoundsMap = FxHashMap<ty::ParamTy, Vec<baml_type::interned::InterfaceRef>>;
     use bex_vm_types::{
         ObjectIndex,
         types::{InterfaceBound, ProgramImplRule, ProgramMethodImpl},
     };
-
-    type IfaceParts = (
-        baml_type::TypeName,
-        Vec<bex_vm_types::TyTemplate>,
-        Vec<(Name, bex_vm_types::TyTemplate)>,
-    );
-    // Split a lowered interface type into its base `TypeName` plus its args /
-    // associated bindings as `TyTemplate`s (generic params → `TypeArgRef`).
-    fn split_interface(
-        iface_ty: &ty::Ty,
-        resolved: &ResolvedAliases,
-        generics: &[ParamTy],
-    ) -> Option<IfaceParts> {
-        let ty::Ty::Interface(qtn, args, assoc, _) = iface_ty else {
-            return None;
-        };
-        let arg_templates = args
-            .iter()
-            .map(|a| {
-                bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
-                    a, resolved, generics,
-                ))
-            })
-            .collect();
-        let assoc_templates = assoc
-            .iter()
-            .map(|(n, t)| {
-                (
-                    n.clone(),
-                    bex_vm_types::anchor_template(&baml_compiler2_mir::tir2_to_template(
-                        t, resolved, generics,
-                    )),
-                )
-            })
-            .collect();
-        Some((qtn.clone(), arg_templates, assoc_templates))
-    }
+    type BoundsMap = ImplBoundsMap;
 
     let class_field_indices = metadata.class_field_indices;
     let package_exports = metadata.package_exports;
@@ -555,16 +627,17 @@ fn build_packages<'db>(
         objects: metadata.objects,
     };
 
-    // Per interface, its default methods (`name → fn FQN`). An implementing rule
-    // adopts these for any method it doesn't provide, so each baked rule's
-    // method table is complete (the resolver needs no separate default lookup; a
-    // default body is generic over `Self`, so calling it on the concrete value
-    // dispatches its inner `self.m()` calls back to the impl). Built across all
-    // files first since an impl may live in a different file/package than its
-    // interface.
-    // Per interface, its default methods; the value is the declaration when
-    // this emit sees one, `None` for an interface known only as a mounted
-    // surface (its default resolves through the pooled interface object).
+    // Per interface, its default methods, feeding ONLY the interface-side
+    // backfill (`InterfaceMethodDef.default`): rule method tables are
+    // PROVIDED-ONLY — an implementing rule adopts a default at RESOLUTION
+    // time, through the interface object's bound `default_fn`, never through
+    // a baked row (a default body is generic over `Self`, so calling it on
+    // the concrete value dispatches its inner `self.m()` calls back to the
+    // impl). Built across all files since an interface may live in a
+    // different file/package than its consumers.
+    // The value is the declaration when this emit sees one, `None` for an
+    // interface known only as a mounted surface (whose pooled object already
+    // carries its own `default` operands).
     let mut iface_defaults: indexmap::IndexMap<
         baml_type::TypeName,
         indexmap::IndexMap<Name, Option<baml_compiler2_hir::loc::FunctionLoc<'db>>>,
@@ -689,25 +762,6 @@ fn build_packages<'db>(
             }
         }
     }
-    // The frame an adopted default of `iface_tn` is invoked with, for a rule
-    // implementing it at `for_ty_pattern` / `interface_args`: the implementor
-    // type (`Self`) at slot 0, then the interface's generic args (all
-    // templates over the impl's generics). Associated types are NOT frame
-    // slots — a default body references them as `Self.X` projection templates
-    // over slot 0, which the runtime reduces through this same rule's
-    // `interface_assoc` bindings at realization time. `realize_frame`
-    // substitutes the rule's bound args — recovered by matching
-    // `for_ty_pattern` against the receiver's concrete type — so slot 0
-    // realizes to exactly that concrete type. A non-generic interface
-    // (`Equals`/`Compare`) yields just the `Self` slot.
-    let interface_frame = |for_ty_pattern: &bex_vm_types::TyTemplate,
-                           interface_args: &[bex_vm_types::TyTemplate]|
-     -> Vec<bex_vm_types::TyTemplate> {
-        let mut frame: Vec<bex_vm_types::TyTemplate> = Vec::with_capacity(1 + interface_args.len());
-        frame.push(for_ty_pattern.clone());
-        frame.extend(interface_args.iter().cloned());
-        frame
-    };
     // Complete a rule's associated bindings: every declared member the impl
     // leaves unpinned is baked from the interface's declared default,
     // substituted at this impl — `Self` := the for-type, the interface's
@@ -746,25 +800,6 @@ fn build_packages<'db>(
                     &completed, resolved, generics,
                 )),
             ));
-        }
-    };
-    // Fill a rule's method table with the interface's defaults (a provided
-    // method winning), each carrying the interface frame it is invoked with.
-    let merge_defaults = |methods: &mut indexmap::IndexMap<Name, ProgramMethodImpl>,
-                          iface_tn: &baml_type::TypeName,
-                          interface_frame: &[bex_vm_types::TyTemplate]| {
-        if let Some(defaults) = iface_defaults.get(iface_tn) {
-            for (name, &live) in defaults {
-                let Some(fqn_idx) = bodies.interface_default(live, iface_tn, name) else {
-                    continue;
-                };
-                methods
-                    .entry(name.clone())
-                    .or_insert_with(|| ProgramMethodImpl {
-                        fqn: fqn_idx,
-                        frame: interface_frame.to_vec(),
-                    });
-            }
         }
     };
     // The interface objects themselves were pooled before their default bodies
@@ -810,25 +845,6 @@ fn build_packages<'db>(
                 .lower_type_ref(store, id)
                 .to_plain()
         };
-        // [`lower`] for a constraint head — a generic bound or an `implements`
-        // target pins only the associated members it writes (unwritten members
-        // bake their declared defaults into the rule; a pinning impl can still
-        // discharge a bare bound at runtime).
-        let lower_constraint_head = |store: &TypeRefStore,
-                                     id: TypeRefId,
-                                     generics: &[ParamTy],
-                                     bounds: &BoundsMap|
-         -> ty::Ty {
-            baml_compiler2_hir_ty::lower::lower_ctx_for_file(db, *file)
-                .with_frame(generics.to_vec())
-                .with_bounds(bounds.clone())
-                .lower_type_ref_at(
-                    store,
-                    id,
-                    baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
-                )
-                .to_plain()
-        };
         // Associated-type bindings written in an `implements` block body
         // (`type Item = int`) live beside the target, not in it (`split_interface`
         // only sees the target), so lower them here to fold into the implemented
@@ -865,15 +881,18 @@ fn build_packages<'db>(
         for &impl_loc in file_impls(db, *file) {
             let block = impl_block_data(db, impl_loc);
             let store = &block.type_refs;
-            let impl_params = baml_compiler2_hir_ty::lower::impl_frame(db, impl_loc);
-            let impl_bounds = baml_compiler2_hir_ty::lower::impl_generic_bounds(db, impl_loc);
-            // The target is a constraint, not an existential: it carries only
-            // its written inline pins (block-level pins append below; unpinned
-            // members bake their declared defaults).
-            let iface_ty =
-                lower_constraint_head(store, block.interface_target, &impl_params, &impl_bounds);
-            let Some((iface_tn, interface_args, mut interface_assoc)) =
-                split_interface(&iface_ty, resolved, &impl_params)
+            // The rule's identity + lowering context, from the ONE helper the
+            // decomposition's rule-attribution replay also uses.
+            let Some(ImplRuleTarget {
+                iface_tn,
+                iface_ty,
+                interface_args,
+                mut interface_assoc,
+                for_ty,
+                for_ty_pattern,
+                impl_params,
+                impl_bounds,
+            }) = impl_rule_target(db, *file, impl_loc, resolved)
             else {
                 continue;
             };
@@ -883,14 +902,6 @@ fn build_packages<'db>(
                 &impl_params,
                 &impl_bounds,
             ));
-            // The implementor: `Self` in `Ty` space, off the UNIFORM impl
-            // surface — `impl_self_ty` (with `impl_frame`/`impl_generic_bounds`
-            // above) owns the in-body-vs-free distinction; emit never matches
-            // the subject.
-            let for_ty = baml_compiler2_hir_ty::lower::impl_self_ty(db, impl_loc).to_plain();
-            let for_ty_pattern = bex_vm_types::anchor_template(
-                &baml_compiler2_mir::tir2_to_template(&for_ty, resolved, &impl_params),
-            );
             let iface_arg_tys = match &iface_ty {
                 ty::Ty::Interface(_, args, _, _) => args.clone(),
                 _ => unreachable!("split_interface matched an interface"),
@@ -975,8 +986,6 @@ fn build_packages<'db>(
                     },
                 );
             }
-            let iface_frame = interface_frame(&for_ty_pattern, &interface_args);
-            merge_defaults(&mut methods, &iface_tn, &iface_frame);
             // The field table for this block, positional over the interface's
             // own declared fields. Each entry is the class slot the interface
             // field reads: the block's explicit `field as class_field` link,
@@ -1643,10 +1652,13 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
         ));
     }
 
-    // Assemble: clean files verbatim from `prev_units`, dirty files fresh. The
-    // per-package fragment is always recomputed (it reflects every file in the
-    // package), so a clean carrier unit never carries a stale fragment. The tail
-    // is placed once, below.
+    // Assemble: clean files verbatim from `prev_units`, dirty files fresh. A
+    // clean unit's PACKAGE-LEVEL fragment (declaration maps, interface blob —
+    // whole-package products on the carrier) is recomputed so a clean carrier
+    // never goes stale, but its IMPL RULES stay the cached unit's own: a rule
+    // is a pure function of its declaring file (provided-only method tables),
+    // and its body offsets index the cached unit's `code` bucket, which a
+    // fresh dirty-only emit cannot see. The tail is placed once, below.
     let prev_by_source: HashMap<&str, &CompilationUnit> = prev_units
         .iter()
         .map(|u| (u.source_file.as_str(), u))
@@ -1663,7 +1675,9 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
                     ))
                 })?;
             let mut unit = (*prev).clone();
+            let cached_rules = std::mem::take(&mut unit.package_fragment.impl_rules);
             unit.package_fragment = std::mem::take(&mut fresh.package_fragment);
+            unit.package_fragment.impl_rules = cached_rules;
             unit
         } else {
             std::mem::take(fresh)
@@ -2321,6 +2335,145 @@ fn decompose_units_after_prefix(
         units[carrier].package_fragment = frag;
     }
 
+    // ---- Impl-rule fragments (per DECLARING unit) ---------------------------
+    // A rule rides the unit whose file declares its `implements` block: its
+    // provided-method bodies are that unit's own `code` objects, referenced by
+    // bucket offset — a body has no name on any wire. Pairing each baked rule
+    // back to its block replays the same per-block lowering `build_packages`
+    // bakes from (`impl_rule_target`) and matches on the rule's COHERENCE KEY
+    // — per interface head, `(for_ty_pattern, interface_args)` — so
+    // canonicalized rule order and same-package sibling churn cannot skew the
+    // attribution.
+    {
+        // Per pooled interface: each declaring block's coherence key + file.
+        type RuleOwner = (
+            bex_vm_types::TyTemplate,
+            Vec<bex_vm_types::TyTemplate>,
+            usize,
+        );
+        let alias_caches = build_alias_caches(db, &all_files);
+        // Pooled interface object index by declared type name (the bake's
+        // `interface_indices` reconstructed from the pool, exactly as
+        // `EmitTables::from_stdlib_program` does).
+        let mut iface_idx_by_tn: HashMap<baml_type::TypeName, usize> = HashMap::new();
+        for (idx, obj) in program.objects.iter().enumerate() {
+            if let Object::Interface(def) = obj {
+                iface_idx_by_tn.insert(def.name.clone(), idx);
+            }
+        }
+        let mut rule_owners: HashMap<usize, Vec<RuleOwner>> = HashMap::new();
+        for (fi, file) in all_files.iter().enumerate() {
+            let resolved = &alias_caches[&file_package(db, *file).package];
+            for &impl_loc in baml_compiler2_ppir::item_data::file_impls(db, *file) {
+                let Some(target) = impl_rule_target(db, *file, impl_loc, resolved) else {
+                    continue;
+                };
+                let Some(&iface_idx) = iface_idx_by_tn.get(&target.iface_tn) else {
+                    continue;
+                };
+                rule_owners.entry(iface_idx).or_default().push((
+                    target.for_ty_pattern,
+                    target.interface_args,
+                    fi,
+                ));
+            }
+        }
+        // Per unit, rules grouped by interface (insertion order = package/
+        // interface iteration order, deterministic).
+        let mut unit_rules: Vec<indexmap::IndexMap<String, Vec<ProgramImplRuleFrag>>> =
+            vec![indexmap::IndexMap::new(); n_files];
+        for (pkg_name, pkg) in &program.packages {
+            if !package_first_unit.contains_key(pkg_name) {
+                // Source-less dependency package: its rules live in the
+                // immutable prefix image, not in these units.
+                continue;
+            }
+            for (&iface_idx, rules) in &pkg.impl_rules {
+                let iface_fq = match &program.objects[iface_idx] {
+                    Object::Interface(def) => def.name.to_string(),
+                    other => {
+                        return Err(LoweringError::Internal(format!(
+                            "impl rule keyed by a non-interface object ({})",
+                            obj_variant_name(other)
+                        )));
+                    }
+                };
+                let owners = rule_owners.get(&iface_idx.raw());
+                for rule in rules {
+                    let fi = owners
+                        .and_then(|owners| {
+                            owners.iter().find_map(|(pattern, args, fi)| {
+                                (*pattern == rule.for_ty_pattern
+                                    && args == &rule.interface_args)
+                                    .then_some(*fi)
+                            })
+                        })
+                        .ok_or_else(|| {
+                            LoweringError::Internal(format!(
+                                "impl rule for `{iface_fq}` matches no declaring                                  `implements` block"
+                            ))
+                        })?;
+                    // Provided-method bodies must be this unit's own pooled
+                    // code objects. A placeholder index (Stage 6 clean file)
+                    // means the declaring unit is not re-emitted: its CACHED
+                    // unit already carries this rule, so the fresh fragment
+                    // skips it (the reuse assembly keeps cached rules for
+                    // clean units).
+                    let mut methods = Vec::with_capacity(rule.methods.len());
+                    let mut clean_body = false;
+                    for (name, method) in &rule.methods {
+                        let idx = method.fqn.raw();
+                        let local = idx
+                            .checked_sub(prefix_objects)
+                            .and_then(|i| obj_localref.get(i));
+                        match local {
+                            Some(LocalRef::Code(k)) => {
+                                debug_assert_eq!(
+                                    obj_owner[idx], fi,
+                                    "provided body owned by a different file                                      than its rule's `implements` block",
+                                );
+                                methods.push((
+                                    name.clone(),
+                                    ProgramMethodImplFrag {
+                                        body: *k,
+                                        frame: method.frame.clone(),
+                                    },
+                                ));
+                            }
+                            Some(other) => {
+                                return Err(LoweringError::Internal(format!(
+                                    "provided body of `{iface_fq}` rule is a                                      non-code object ({other:?})"
+                                )));
+                            }
+                            None => {
+                                clean_body = true;
+                                break;
+                            }
+                        }
+                    }
+                    if clean_body {
+                        continue;
+                    }
+                    unit_rules[fi]
+                        .entry(iface_fq.clone())
+                        .or_default()
+                        .push(ProgramImplRuleFrag {
+                            interface_head: iface_fq.clone(),
+                            for_ty_pattern: rule.for_ty_pattern.clone(),
+                            generic_param_bounds: rule.generic_param_bounds.clone(),
+                            interface_args: rule.interface_args.clone(),
+                            interface_assoc: rule.interface_assoc.clone(),
+                            methods,
+                            field_links: rule.field_links.clone(),
+                        });
+                }
+            }
+        }
+        for (fi, rules) in unit_rules.into_iter().enumerate() {
+            units[fi].package_fragment.impl_rules = rules.into_iter().collect();
+        }
+    }
+
     // ---- Test cases (Pass 8 fragment, per file by source path) --------------
     if options.emit_test_cases {
         for test in &program.test_cases {
@@ -2624,32 +2777,9 @@ fn build_package_fragment(
     for (local, &idx) in &pkg.type_aliases {
         frag.type_aliases.push((local.clone(), obj_fq(idx)?));
     }
-    for (&iface_idx, rules) in &pkg.impl_rules {
-        let iface_fq = obj_fq(iface_idx)?;
-        let mut rule_frags = Vec::with_capacity(rules.len());
-        for rule in rules {
-            let mut methods = Vec::with_capacity(rule.methods.len());
-            for (name, method) in &rule.methods {
-                methods.push((
-                    name.clone(),
-                    ProgramMethodImplFrag {
-                        fqn: obj_fq(method.fqn)?,
-                        frame: method.frame.clone(),
-                    },
-                ));
-            }
-            rule_frags.push(ProgramImplRuleFrag {
-                interface_head: obj_fq(rule.interface_head)?,
-                for_ty_pattern: rule.for_ty_pattern.clone(),
-                generic_param_bounds: rule.generic_param_bounds.clone(),
-                interface_args: rule.interface_args.clone(),
-                interface_assoc: rule.interface_assoc.clone(),
-                methods,
-                field_links: rule.field_links.clone(),
-            });
-        }
-        frag.impl_rules.push((iface_fq, rule_frags));
-    }
+    // Impl rules do NOT ride the carrier: each rule rides its DECLARING unit
+    // (`attach_impl_rule_fragments`), where its provided-method bodies are
+    // local `code` objects.
     frag.interface_blob.clone_from(&pkg.interface_blob);
     frag.test_init = pkg.test_init.map(obj_fq).transpose()?;
     Ok(frag)

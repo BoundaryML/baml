@@ -168,19 +168,15 @@ pub fn link_dynamic(units: &[CompilationUnit]) -> Result<DynamicLinkPlan, LinkEr
                 fq_name: interface.clone(),
                 generic: None,
             });
+            // Rule method tables are provided-only and their bodies live in
+            // the declaring unit's own `code` bucket — never imports. Adopted
+            // defaults resolve at dispatch through the interface object.
             for rule in rules {
                 consider_object(&Symbol {
                     kind: SymbolKind::Interface,
                     fq_name: rule.interface_head.clone(),
                     generic: None,
                 });
-                for (_, method) in &rule.methods {
-                    consider_object(&Symbol {
-                        kind: SymbolKind::Function,
-                        fq_name: method.fqn.clone(),
-                        generic: None,
-                    });
-                }
             }
         }
         if let Some(test_init) = &fragment.test_init {
@@ -1113,16 +1109,20 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     }
 
     // ---- Package merge (design §3b step 5) ----------------------------------
-    // Each package's fragment is carried by exactly one unit (its first unit).
-    // Merge every fragment into the image's `packages`, resolving each symbolic
-    // fully-qualified name to an absolute object index, then canonicalize the
-    // implementation-rule tables exactly as `build_packages` does.
-    for unit in units {
+    // Package-level maps ride one carrier unit per package; impl rules ride
+    // their DECLARING unit (each rule's provided-method bodies are that unit's
+    // own `code` objects). Merge every fragment into the image's `packages`,
+    // resolving each symbolic fully-qualified name to an absolute object index
+    // and each rule body through the declaring unit's code placement, then
+    // canonicalize the implementation-rule tables exactly as `build_packages`
+    // does.
+    for (u, unit) in units.iter().enumerate() {
         merge_package_fragment(
             &mut program,
             &unit.package,
             &unit.package_fragment,
             &obj_by_name,
+            &code_abs[u],
         )?;
     }
     sort_packages(&mut program);
@@ -1179,6 +1179,7 @@ fn merge_package_fragment(
     package: &Name,
     frag: &ProgramPackageFrag,
     obj_by_name: &HashMap<String, usize>,
+    code_abs: &[usize],
 ) -> Result<(), LinkError> {
     if frag.exported_names.is_empty()
         && frag.classes.is_empty()
@@ -1239,10 +1240,19 @@ fn merge_package_fragment(
             let head = resolve(&rule.interface_head)?;
             let mut methods = indexmap::IndexMap::new();
             for (name, method) in &rule.methods {
+                // A provided body lives in the DECLARING unit's own `code`
+                // bucket; its absolute index is that bucket's placement
+                // (shadow-aware, like a `Code` export).
+                let abs = *code_abs.get(method.body as usize).ok_or_else(|| {
+                    LinkError::InvalidUnit(format!(
+                        "impl rule for `{iface_fq}` references code offset {}                          outside its declaring unit",
+                        method.body
+                    ))
+                })?;
                 methods.insert(
                     name.clone(),
                     ProgramMethodImpl {
-                        fqn: resolve(&method.fqn)?,
+                        fqn: ObjectIndex::from_raw(abs),
                         frame: method.frame.clone(),
                     },
                 );
