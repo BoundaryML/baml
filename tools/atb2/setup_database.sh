@@ -22,7 +22,7 @@ command -v infisical >/dev/null || die "infisical CLI not found — brew install
 # Infisical project "boundary-tools"
 project="${FEEDBACK_INFISICAL_PROJECT_ID:-bdd280e2-259c-4750-9b16-a8597a67214c}"
 env="${FEEDBACK_INFISICAL_ENV:-dev}"
-inf() { infisical "$@" --env="$env" --projectId="$project"; }
+inf() { infisical "$@" --env="$env" --projectId="$project" --silent; }
 
 # The two secrets the testsets need — and ONLY those. `infisical run` would
 # inject the whole environment, and an ANTHROPIC_API_KEY in there makes the
@@ -33,9 +33,11 @@ inf() { infisical "$@" --env="$env" --projectId="$project"; }
 # the dataset. (`infisical user get` succeeds without a session, so the
 # session is checked by actually fetching.)
 for name in FEEDBACK_SUPABASE_URL FEEDBACK_SUPABASE_KEY; do
-    if out="$(inf secrets get "$name" --plain --path=/ 2>&1 </dev/null)"; then
-        export "$name=$out"
+    # stdout is the value; stderr (banners, errors) must never leak into it
+    if val="$(inf secrets get "$name" --plain --path=/ 2>/dev/null </dev/null)" && [ -n "$val" ]; then
+        export "$name=$val"
     else
+        out="$(inf secrets get "$name" --plain --path=/ 2>&1 </dev/null || true)"
         case "$out" in
             *"not a member"*|*"status-code=403"*)
                 die "your Infisical account is not a member of project $project — ask for access, or set FEEDBACK_INFISICAL_PROJECT_ID to the project holding the secrets" ;;
