@@ -2,7 +2,7 @@
 # Run the atb2 eval metrics locally against the shared Supabase dataset.
 #
 # The dataset (triage_issues / triage_feedback) lives in Supabase; the
-# testsets read it through SUPABASE_URL + SUPABASE_KEY. Those come from
+# testsets read it through FEEDBACK_SUPABASE_URL + FEEDBACK_SUPABASE_KEY. Those come from
 # Infisical (workspace in the repo-root .infisical.json, env "test"), the
 # same way the rest of the repo gets its secrets — nothing is written to
 # disk.
@@ -25,11 +25,11 @@ infisical user get >/dev/null 2>&1 || die "not logged in — run 'infisical logi
 
 # The two secrets the testsets need. Fails loudly if either is missing so a
 # run never silently skips the dataset.
-for name in SUPABASE_URL SUPABASE_KEY; do
+for name in FEEDBACK_SUPABASE_URL FEEDBACK_SUPABASE_KEY; do
     infisical secrets get "$name" --env=test --plain --path=/ >/dev/null 2>&1 \
         || die "secret $name is not in Infisical env 'test' — ask a maintainer to add it"
 done
-echo "setup_database: infisical linked; SUPABASE_URL and SUPABASE_KEY resolve (env=test)"
+echo "setup_database: infisical linked; FEEDBACK_SUPABASE_URL and FEEDBACK_SUPABASE_KEY resolve (env=test)"
 
 case "${1:-}" in
     --check) exit 0 ;;

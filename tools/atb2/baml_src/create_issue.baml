@@ -378,7 +378,7 @@ function format_files(files: map<string, string>) -> string {
 // eval/supabase/schema.sql): feedback is what agent sessions passed to
 // `baml feedback`; reference repros come from the issue when it has one
 // (repro_source = github) and are LLM-authored otherwise (generated).
-// SUPABASE_URL + SUPABASE_KEY (anon, read-only) select it; without them the
+// FEEDBACK_SUPABASE_URL + FEEDBACK_SUPABASE_KEY (anon, read-only) select it; without them the
 // testsets have no tests.
 //   baml test -i "root::repro_match::*" -i "root::issue_enrichment::*"
 
@@ -435,13 +435,13 @@ function to_feedback(r: FeedbackRow) -> Feedback {
 }
 
 function supabase_configured() -> bool {
-    baml.env.get("SUPABASE_URL") != null && baml.env.get("SUPABASE_KEY") != null
+    baml.env.get("FEEDBACK_SUPABASE_URL") != null && baml.env.get("FEEDBACK_SUPABASE_KEY") != null
 }
 
 /// GET a PostgREST query and return the JSON body.
 function supabase_get(query: string) -> string {
-    let url = (baml.env.get("SUPABASE_URL") ?? "") + "/rest/v1/" + query;
-    let key = baml.env.get("SUPABASE_KEY") ?? "";
+    let url = (baml.env.get("FEEDBACK_SUPABASE_URL") ?? "") + "/rest/v1/" + query;
+    let key = baml.env.get("FEEDBACK_SUPABASE_KEY") ?? "";
     let res = baml.http.send(
         baml.http.Request {
             method: "GET",
