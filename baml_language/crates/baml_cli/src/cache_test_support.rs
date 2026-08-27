@@ -10,7 +10,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use baml_db::{ProjectDatabase, SourceFile, baml_compiler2_emit::CompileOptions};
+use baml_db::{ProjectDatabase, SourceFile};
 
 use crate::{
     bytecode_cache::{CacheContext, CompiledUnits, compile_program_artifacts},
@@ -24,13 +24,6 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 pub(crate) fn cache_disabled() -> bool {
     std::env::var_os("BAML_NO_BYTECODE_CACHE").is_some()
         || std::env::var_os("BAML_CACHE_VERIFY").is_some()
-}
-
-/// The compile options every disk-round-trip test uses.
-pub(crate) fn opts() -> CompileOptions {
-    CompileOptions {
-        emit_test_cases: false,
-    }
 }
 
 /// A unique on-disk project root named `<prefix>-<pid>-<n>`, anchored beneath
@@ -77,9 +70,8 @@ pub(crate) fn compile_and_store_v1(
     let _ = std::fs::remove_dir_all(root);
     let r1 = resolved(root, files);
     let db1 = project_load::build_db_from_sources(&r1, |_| {});
-    let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
-    let compiled =
-        compile_program_artifacts(&db1, &opts(), Some(&ctx1), None).expect("v1 compile succeeds");
+    let ctx1 = CacheContext::open(&r1).expect("cache opens");
+    let compiled = compile_program_artifacts(&db1, Some(&ctx1), None).expect("v1 compile succeeds");
     let (CompiledUnits::Fresh(units) | CompiledUnits::Reused(units)) = &compiled.units else {
         panic!("cached compile assembles units");
     };

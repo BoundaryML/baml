@@ -11,6 +11,17 @@ pub enum BuiltinPipeline {
 pub struct NativeBuiltin {
     /// Dotted path: e.g. `"baml.Array.length"`, `"baml.deep_copy"`, `"baml.sys.argv"`
     pub path: String,
+    /// The declaring namespace (no package, no class): `"fs"` for
+    /// `baml.fs.FileHandle.read`, `""` for a top-level class or item.
+    /// Carried STRUCTURALLY from extraction — the `path` alone cannot be
+    /// split, because an impl-block class segment embeds the WRITTEN
+    /// interface target, which may itself be dotted
+    /// (`root.io.Read$for$FileHandle`).
+    pub namespace: String,
+    /// The full class segment (`Class` or `{iface}$for${Class}`) for a
+    /// method; `None` for a free item. Same structural-carry rationale as
+    /// [`Self::namespace`].
+    pub class_segment: Option<String>,
     /// Rust function name derived from path (dots → underscores, lowercased):
     /// e.g. `"baml_array_length"`, `"baml_deep_copy"`, `"baml_sys_argv"`
     pub fn_name: String,

@@ -13,7 +13,7 @@ use baml_base::SourceFile;
 
 use crate::ids::{
     ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, LetMarker,
-    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
+    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TypeAliasMarker,
 };
 
 #[salsa::interned]
@@ -50,12 +50,6 @@ pub struct TypeAliasLoc<'db> {
 pub struct ClientLoc<'db> {
     pub file: SourceFile,
     pub id: LocalItemId<ClientMarker>,
-}
-
-#[salsa::interned]
-pub struct TestLoc<'db> {
-    pub file: SourceFile,
-    pub id: LocalItemId<TestMarker>,
 }
 
 #[salsa::interned]
@@ -175,12 +169,6 @@ impl std::fmt::Debug for ClientLoc<'_> {
     }
 }
 
-impl std::fmt::Debug for TestLoc<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TestLoc(..)")
-    }
-}
-
 impl std::fmt::Debug for TemplateStringLoc<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TemplateStringLoc(..)")
@@ -216,7 +204,6 @@ pub enum ItemId<'db> {
     Interface(InterfaceLoc<'db>),
     TypeAlias(TypeAliasLoc<'db>),
     Client(ClientLoc<'db>),
-    Test(TestLoc<'db>),
     TemplateString(TemplateStringLoc<'db>),
     RetryPolicy(RetryPolicyLoc<'db>),
     Let(LetLoc<'db>),
@@ -231,7 +218,6 @@ impl std::fmt::Debug for ItemId<'_> {
             ItemId::Interface(_) => write!(f, "ItemId::Interface(..)"),
             ItemId::TypeAlias(_) => write!(f, "ItemId::TypeAlias(..)"),
             ItemId::Client(_) => write!(f, "ItemId::Client(..)"),
-            ItemId::Test(_) => write!(f, "ItemId::Test(..)"),
             ItemId::TemplateString(_) => write!(f, "ItemId::TemplateString(..)"),
             ItemId::RetryPolicy(_) => write!(f, "ItemId::RetryPolicy(..)"),
             ItemId::Let(_) => write!(f, "ItemId::Let(..)"),

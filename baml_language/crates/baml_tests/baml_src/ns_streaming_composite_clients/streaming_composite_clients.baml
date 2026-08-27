@@ -281,7 +281,7 @@ function retry_stream_does_not_retry_after_delta_case() -> string {
     );
     let stream = retry.invoke_stream(composite_input());
     let first = match (stream.next()) {
-        let text: string => text,
+        let batch: string[] => batch.join(""),
         let done: ai.stream.Done => "done",
     };
     let second = stream.next() catch_all (e) {
@@ -319,7 +319,7 @@ function fallback_stream_does_not_advance_after_delta_case() -> string {
     let fallback = ai.clients.Fallback { members: [first, second] };
     let stream = fallback.invoke_stream(composite_input());
     let first_delta = match (stream.next()) {
-        let text: string => text,
+        let batch: string[] => batch.join(""),
         let done: ai.stream.Done => "done",
     };
     let outcome = stream.next() catch_all (e) {

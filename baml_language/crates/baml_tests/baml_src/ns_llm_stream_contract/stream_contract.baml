@@ -225,8 +225,10 @@ function contract_deltas_then_outcome(base_url: string) -> string {
             let d: ai.stream.Done => {
                 break;
             },
-            let s: string => {
-                let _ = chunks.push(s);
+            let batch: string[] => {
+                for (let s in batch) {
+                    let _ = chunks.push(s);
+                }
                 null
             },
         };

@@ -18,7 +18,7 @@ use bex_project::BexEngine;
 
 use crate::playground_notify::{
     FunctionInfo, FunctionKind, FunctionOrigin, FunctionSourcePosition, LlmCapabilities,
-    ProjectDiagnostic, ProjectUpdate, TestInfo,
+    ProjectDiagnostic, ProjectUpdate,
 };
 
 /// The engine currently installed, and what it was built from.
@@ -264,19 +264,10 @@ pub(crate) fn project_update(
                     .map(|params| params.into_iter().map(Into::into).collect()),
             })
             .collect();
-        let tests = baml_ide::list_tests_with_metadata(db)
-            .into_iter()
-            .map(|test| TestInfo {
-                name: test.name,
-                function_name: test.function_name,
-                args_json: test.args_json,
-            })
-            .collect();
         ProjectUpdate {
             is_bex_current,
             generation,
             functions,
-            tests,
             types: Some(
                 listing
                     .types

@@ -538,10 +538,67 @@ pub(crate) fn synthesize_llm_spec_body(
         },
         prompt_start,
     );
-    let lambda_body = ctx.alloc_expr(
+    let block_body = ctx.alloc_expr(
         Expr::Block {
             stmts: vec![let_ctx, let_tagged],
             tail_expr: Some(prompt_ast),
+        },
+        prompt_lambda_span,
+    );
+    // Wrap the whole template body: a user expression inside the prompt may
+    // throw (e.g. `${value.to_json()}`); the stored `prompt_template`
+    // boundary is typed `throws ai.errors.PromptRenderError`, so anything
+    // raised while rendering is wrapped into that one typed failure here.
+    let err_name = Name::new(" __prompt_render_err");
+    let err_binding = ctx.alloc_pattern(
+        Pattern::Bind {
+            name: err_name.clone(),
+            subpat: None,
+        },
+        prompt_start,
+    );
+    let wildcard = ctx.alloc_pattern(Pattern::Wildcard, prompt_start);
+    let message = ctx.alloc_expr(
+        Expr::Literal(Literal::String(
+            "prompt template rendering threw".to_string(),
+        )),
+        prompt_start,
+    );
+    let cause = ctx.alloc_expr(Expr::Path(vec![err_name]), prompt_start);
+    let render_error = ctx.alloc_expr(
+        Expr::Object {
+            type_name: baml_base::TypePath::from_dotted("ai.errors.PromptRenderError"),
+            type_args: vec![],
+            fields: vec![
+                ObjectExprField::explicit(Name::new("message"), message),
+                ObjectExprField::explicit(Name::new("cause"), cause),
+            ],
+            spreads: vec![],
+        },
+        prompt_start,
+    );
+    let throw_wrapped = ctx.alloc_expr(
+        Expr::Throw {
+            value: render_error,
+        },
+        prompt_start,
+    );
+    let wrap_arm = ctx.alloc_catch_arm(
+        CatchArm {
+            pattern: wildcard,
+            body: throw_wrapped,
+        },
+        prompt_start,
+    );
+    let lambda_body = ctx.alloc_expr(
+        Expr::Catch {
+            base: block_body,
+            clauses: vec![CatchClause {
+                kind: CatchClauseKind::CatchAll,
+                binding: err_binding,
+                stack_trace_binding: None,
+                arms: vec![wrap_arm],
+            }],
         },
         prompt_lambda_span,
     );
@@ -1274,8 +1331,21 @@ impl LoweringContext {
     }
 
     fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
+        let lambda_parameter_spans = match &expr {
+            Expr::Lambda(lambda) => Some(
+                lambda
+                    .params
+                    .iter()
+                    .map(|param| param.name_span)
+                    .collect::<Vec<_>>(),
+            ),
+            _ => None,
+        };
         let id = self.exprs.alloc(expr);
         self.source_map.expr_spans.alloc(range);
+        if let Some(spans) = lambda_parameter_spans {
+            self.source_map.lambda_parameter_spans.insert(id, spans);
+        }
         if self.synthesizing {
             self.source_map.synthetic_exprs.insert(id);
         }

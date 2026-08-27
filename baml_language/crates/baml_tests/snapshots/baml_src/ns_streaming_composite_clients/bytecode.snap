@@ -421,8 +421,12 @@ function streaming_composite_clients.CompositeStreamSpec(client: ai.Client | nul
     call user.streaming_composite_clients.CompositeStreamSpec$spec
     store_var _8
     load_type string
-    load_var2 3 4
-    call ai.Agent.run
+    load_var2 4 5
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _5
+    load_var _5
     load_field .value
     return
 }
@@ -762,7 +766,7 @@ function streaming_composite_clients.fallback_stream_does_not_advance_after_delt
     call ai.stream.TurnStream.next
     store_var _17
     load_var _17
-    narrow_bind string, slot=7
+    narrow_bind string[], slot=7
     pop_jump_if_false L0
     jump L1
 
@@ -772,7 +776,10 @@ function streaming_composite_clients.fallback_stream_does_not_advance_after_delt
     jump L2
 
   L1:
+    load_type string
     load_var _17
+    load_const ""
+    call baml.Array.join
     store_var first_delta
 
   L2:
@@ -790,33 +797,33 @@ function streaming_composite_clients.fallback_stream_does_not_advance_after_delt
     load_type string
     load_var first_delta
     call baml.String.from
-    store_var _25
-    load_type string | ai.stream.Done
+    store_var _26
+    load_type string | ai.stream.Done | string[]
     load_var outcome
     call baml.String.from
-    store_var _29
+    store_var _30
     load_type string
-    load_var _29
+    load_var _30
     call baml.String.from
-    store_var _28
+    store_var _29
     load_type string
     load_var probe
     load_field .events
     load_const ","
     call baml.Array.join
-    store_var _33
+    store_var _34
     load_type string
-    load_var _33
+    load_var _34
     call baml.String.from
-    store_var _32
-    load_var _25
+    store_var _33
+    load_var _26
     load_const "|"
     bin_op +
-    load_var _28
+    load_var _29
     bin_op +
     load_const "|"
     bin_op +
-    load_var _32
+    load_var _33
     bin_op +
     return
 }
@@ -1039,7 +1046,7 @@ function streaming_composite_clients.retry_stream_does_not_retry_after_delta_cas
     call ai.stream.TurnStream.next
     store_var _13
     load_var _13
-    narrow_bind string, slot=8
+    narrow_bind string[], slot=8
     pop_jump_if_false L0
     jump L1
 
@@ -1049,7 +1056,10 @@ function streaming_composite_clients.retry_stream_does_not_retry_after_delta_cas
     jump L2
 
   L1:
+    load_type string
     load_var _13
+    load_const ""
+    call baml.Array.join
     store_var first
 
   L2:
@@ -1067,33 +1077,33 @@ function streaming_composite_clients.retry_stream_does_not_retry_after_delta_cas
     load_type string
     load_var first
     call baml.String.from
-    store_var _21
-    load_type string | ai.stream.Done
+    store_var _22
+    load_type string | ai.stream.Done | string[]
     load_var second
     call baml.String.from
-    store_var _25
+    store_var _26
     load_type string
-    load_var _25
+    load_var _26
     call baml.String.from
-    store_var _24
+    store_var _25
     load_type string
     load_var probe
     load_field .events
     load_const ","
     call baml.Array.join
-    store_var _29
+    store_var _30
     load_type string
-    load_var _29
+    load_var _30
     call baml.String.from
-    store_var _28
-    load_var _21
+    store_var _29
+    load_var _22
     load_const "|"
     bin_op +
-    load_var _24
+    load_var _25
     bin_op +
     load_const "|"
     bin_op +
-    load_var _28
+    load_var _29
     bin_op +
     return
 }

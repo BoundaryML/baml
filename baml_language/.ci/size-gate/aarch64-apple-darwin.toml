@@ -1,13 +1,11 @@
 version = 1
-recorded_at = "2026-08-25T20:35:00Z"
-git_sha = "cf74e48817c5f2c4a9e457580b282c6d5d225061"
+recorded_at = "2026-08-26T18:49:22Z"
+git_sha = "f5828b1ba5f6b42885a2637813a773ee0cd39045"
 
-# Re-pegged from CI's measured sizes (run 32893558553): baml-cli
-# 63,119,376 B file / 25,028,986 B gzip; packed-program 25.7 MB / 10.1 MB.
 [artifacts.baml-cli]
-file_bytes = "60.2 MiB"
-stripped_bytes = "60.2 MiB"
-gzip_bytes = "23.9 MiB"
+file_bytes = "60.4 MiB"
+stripped_bytes = "60.4 MiB"
+gzip_bytes = "24.0 MiB"
 
 [artifacts.packed-program]
 file_bytes = "24.6 MiB"

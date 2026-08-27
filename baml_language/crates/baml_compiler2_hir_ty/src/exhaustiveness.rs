@@ -28,50 +28,8 @@
 use std::fmt;
 
 use baml_base::Literal;
-use baml_type::{PrimitiveType, QualifiedTypeName, Ty, TyAttr};
+use baml_type::{PrimitiveType, QualifiedTypeName, Ty, TyAttr, contains_error_recovery};
 use rustc_hash::FxHashSet;
-
-/// Does `ty` carry an error-recovery sentinel (`Ty::Error`)
-/// anywhere in its structure? Inlined from TIR's `generics.rs` - the one
-/// crate-internal dependency the lifted algorithm had.
-fn contains_error_recovery(ty: &Ty) -> bool {
-    if matches!(ty, Ty::Error { .. }) {
-        return true;
-    }
-    match ty {
-        Ty::AssociatedTypeProjection {
-            base, interface, ..
-        } => contains_error_recovery(base) || interface.tys().any(contains_error_recovery),
-        Ty::List(inner, _) => contains_error_recovery(inner),
-        Ty::Map {
-            key: k, value: v, ..
-        } => contains_error_recovery(k) || contains_error_recovery(v),
-        Ty::Union(tys, _) => tys.iter().any(contains_error_recovery),
-        Ty::Future(value, error, _) => {
-            contains_error_recovery(value) || contains_error_recovery(error)
-        }
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            params
-                .iter()
-                .any(|param| contains_error_recovery(&param.ty))
-                || contains_error_recovery(ret)
-                || contains_error_recovery(throws)
-        }
-        Ty::Class(_, type_args, _) => type_args.iter().any(contains_error_recovery),
-        Ty::Interface(_, type_args, associated_bindings, _) => {
-            type_args.iter().any(contains_error_recovery)
-                || associated_bindings
-                    .iter()
-                    .any(|(_, ty)| contains_error_recovery(ty))
-        }
-        _ => false,
-    }
-}
 
 // ── Constructors ─────────────────────────────────────────────────────────────
 

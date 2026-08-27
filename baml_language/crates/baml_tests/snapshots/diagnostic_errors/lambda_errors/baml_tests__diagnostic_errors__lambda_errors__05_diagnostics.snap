@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 35998
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
@@ -12,11 +11,35 @@ assertion_line: 35998
    ·                                      ╰── expected `string`, found `int`
    ╰────
 
+  [type] E0002
+
+  × cannot infer type of lambda parameter `x` — add a type annotation or provide context
+   ╭─[lambda_errors.baml:9:16]
+ 9 │     let bad = (x) -> { x * 2 }
+   ·                ─
+   ╰────
+
+  [type] E0005
+
+  × expected 1 argument(s), got 2
+    ╭─[lambda_errors.baml:16:15]
+ 16 │     items.map((x, y) -> { x })
+    ·               ───────────────
+    ╰────
+
+  [type] E0005
+
+  × expected 2 argument(s), got 1
+    ╭─[lambda_errors.baml:21:47]
+ 21 │     let f: (int, int) -> int[] throws never = (x) -> { [x] }
+    ·                                               ──────────────
+    ╰────
+
   [type] E0001
 
   × mismatched types
-    ╭─[lambda_errors.baml:22:15]
- 22 │     items.map((x: string) -> { x })
+    ╭─[lambda_errors.baml:28:15]
+ 28 │     items.map((x: string) -> { x })
     ·               ──────────┬─────────
     ·                         ╰── expected `(int) -> int throws never`, found `(x: string) -> int throws never`
     ╰────
@@ -24,8 +47,8 @@ assertion_line: 35998
   [type] E0001
 
   × mismatched types
-    ╭─[lambda_errors.baml:22:30]
- 22 │     items.map((x: string) -> { x })
+    ╭─[lambda_errors.baml:28:30]
+ 28 │     items.map((x: string) -> { x })
     ·                              ──┬──
     ·                                ╰── expected `int`, found `string`
     ╰────
@@ -33,15 +56,24 @@ assertion_line: 35998
   [type] E0002
 
   × unresolved type: NonExistentType
-    ╭─[lambda_errors.baml:27:17]
- 27 │     let f = (x: NonExistentType) -> { 0 }
+    ╭─[lambda_errors.baml:33:17]
+ 33 │     let f = (x: NonExistentType) -> { 0 }
     ·                 ───────────────
     ╰────
 
   [type] E0002
 
   × unresolved type: NonExistentType
-    ╭─[lambda_errors.baml:33:25]
- 33 │     let f = (x: int) -> NonExistentType { x }
+    ╭─[lambda_errors.baml:39:25]
+ 39 │     let f = (x: int) -> NonExistentType { x }
     ·                         ───────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[lambda_errors.baml:47:60]
+ 47 │     let string_identity: (string) -> string throws never = f
+    ·                                                            ┬
+    ·                                                            ╰── expected `(string) -> string throws never`, found `(x: int) -> int throws never`
     ╰────

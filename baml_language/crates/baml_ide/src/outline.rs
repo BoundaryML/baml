@@ -32,8 +32,7 @@ use baml_compiler2_hir::{
 use baml_compiler2_ppir::item_data::{
     class_data, class_impls, class_source_map, client_source_map, enum_data, enum_source_map,
     function_data, function_source_map, impl_block_data, interface_source_map, let_data,
-    let_source_map, retry_policy_source_map, template_string_source_map, test_source_map,
-    type_alias_source_map,
+    let_source_map, retry_policy_source_map, template_string_source_map, type_alias_source_map,
 };
 use text_size::TextRange;
 
@@ -84,7 +83,6 @@ pub fn file_outline(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<O
             Definition::Function(_)
             | Definition::TemplateString(_)
             | Definition::Client(_)
-            | Definition::Test(_)
             | Definition::RetryPolicy(_)
             | Definition::Let(_) => Vec::new(),
         };
@@ -112,7 +110,6 @@ pub fn file_outline(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<O
             | Definition::TypeAlias(_)
             | Definition::TemplateString(_)
             | Definition::Client(_)
-            | Definition::Test(_)
             | Definition::RetryPolicy(_)
             | Definition::Let(_) => false,
         };
@@ -140,7 +137,6 @@ pub fn file_outline(db: &dyn baml_compiler2_ppir::Db, file: SourceFile) -> Vec<O
             | Definition::Function(_)
             | Definition::TemplateString(_)
             | Definition::Client(_)
-            | Definition::Test(_)
             | Definition::RetryPolicy(_) => contrib.definition.kind(),
         };
         items.push(OutlineItem {
@@ -174,7 +170,6 @@ fn definition_full_span<'db>(
         Definition::Function(loc) => function_source_map(db, loc).span,
         Definition::TemplateString(loc) => template_string_source_map(db, loc).span,
         Definition::Client(loc) => client_source_map(db, loc).span,
-        Definition::Test(loc) => test_source_map(db, loc).span,
         Definition::RetryPolicy(loc) => retry_policy_source_map(db, loc).span,
         Definition::Let(loc) => let_source_map(db, loc).span,
     }

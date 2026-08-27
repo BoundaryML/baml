@@ -238,3 +238,34 @@ function any<T, Err>(
         winners[0]
     }
 }
+
+/// Run `body` under a deadline.
+function with_timeout<T, E>(
+    limit: baml.time.Duration,
+    body: () -> T throws E,
+) -> T throws E | baml.errors.Timeout | baml.panics.Cancelled {
+    let token = baml.spawn.CancelToken.new();
+    let work = spawn with baml.spawn.options(cancel = token) { body() };
+    let deadline = spawn {
+        baml.sys.sleep(limit);
+        token.cancel()
+    };
+    defer {
+        deadline.cancel()
+    }
+    (await work) catch (e) {
+        baml.panics.Cancelled => {
+            if (!token.is_cancelled()) {
+                throw e;
+            }
+            let limit_ms = limit.to_milliseconds();
+            let reported = limit_ms.to_int() catch (conversion) {
+                baml.errors.InvalidArgument => null,
+            };
+            throw baml.errors.Timeout {
+                message: `operation timed out after ${limit_ms}ms`,
+                duration_ms: reported,
+            }
+        },
+    }
+}

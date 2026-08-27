@@ -206,7 +206,7 @@ test "fs_file_rw_write_and_read_back" {
 }
 
 // ============================================================================
-// write_bytes to open file handle
+// write bytes to open file handle
 // ============================================================================
 
 function fs_file_rw_write_bytes_fn() -> bool {
@@ -219,7 +219,7 @@ function fs_file_rw_write_bytes_fn() -> bool {
     let bytes = baml.fs.open(src, "r").bytes();
     let file = baml.fs.open(dst, "r+");
     file.seek_from("start", 0);
-    let n = file.write_bytes(bytes);
+    let n = file.write(bytes);
     baml.fs.remove(src);
     baml.fs.remove(dst);
     // "AB" is 2 bytes
@@ -292,48 +292,48 @@ test "fs_size_returns_length" {
 }
 
 // ============================================================================
-// file.read(n) reads up to n bytes as a string
+// file.read(n) reads up to n bytes
 // ============================================================================
 
-function fs_file_read_n_bytes_fn() -> string {
+function fs_file_read_n_bytes_fn() -> uint8array {
     let path = fs_tmp("read_n.txt");
     baml.fs.write(path, "Hello, world!");
     let f = baml.fs.open(path, "r");
-    let result = f.read(5);
+    let result = f.read(5) ?? b"";
     baml.fs.remove(path);
     result
 }
 
 test "fs_file_read_n_bytes" {
-    assert.equal(fs_file_read_n_bytes_fn(), "Hello")
+    assert.equal(fs_file_read_n_bytes_fn(), "Hello".to_utf8())
 }
 
 // ============================================================================
 // file.read(n) truncates at EOF (doesn't error when n > file size)
 // ============================================================================
 
-function fs_file_read_truncates_at_eof_fn() -> string {
+function fs_file_read_truncates_at_eof_fn() -> uint8array {
     let path = fs_tmp("read_eof.txt");
     baml.fs.write(path, "abc");
     let f = baml.fs.open(path, "r");
-    let result = f.read(100);
+    let result = f.read(100) ?? b"";
     baml.fs.remove(path);
     result
 }
 
 test "fs_file_read_truncates_at_eof" {
-    assert.equal(fs_file_read_truncates_at_eof_fn(), "abc")
+    assert.equal(fs_file_read_truncates_at_eof_fn(), "abc".to_utf8())
 }
 
 // ============================================================================
-// file.read_bytes(n) reads n raw bytes — verified by length
+// file.read(n) reads raw bytes, verified by length
 // ============================================================================
 
 function fs_file_read_bytes_n_fn() -> bool {
     let path = fs_tmp("read_bytes_n.bin");
     baml.fs.write(path, "ABCDE");
     let f = baml.fs.open(path, "r");
-    let data = f.read_bytes(3);
+    let data = f.read(3) ?? b"";
     baml.fs.remove(path);
     // should have read exactly 3 bytes
     data.length() == 3
@@ -347,18 +347,18 @@ test "fs_file_read_bytes_n" {
 // file.read advances the cursor (sequential reads)
 // ============================================================================
 
-function fs_file_read_advances_cursor_fn() -> string {
+function fs_file_read_advances_cursor_fn() -> uint8array {
     let path = fs_tmp("read_advances.txt");
     baml.fs.write(path, "ABCDEFGH");
     let f = baml.fs.open(path, "r");
     f.read(3);
-    let result = f.read(3);
+    let result = f.read(3) ?? b"";
     baml.fs.remove(path);
     result
 }
 
 test "fs_file_read_advances_cursor" {
-    assert.equal(fs_file_read_advances_cursor_fn(), "DEF")
+    assert.equal(fs_file_read_advances_cursor_fn(), "DEF".to_utf8())
 }
 
 // ============================================================================
@@ -544,9 +544,15 @@ function fs_read_dir_returns_entries_fn() -> bool {
     baml.fs.remove(dir + "/b.txt");
     // 3 entries: a.txt, b.txt, subdir
     let count_ok = entries.length() == 3;
-    let has_a = entries.some((e: baml.fs.DirEntry) -> bool { e.name == "a.txt" });
-    let has_b = entries.some((e: baml.fs.DirEntry) -> bool { e.name == "b.txt" });
-    let has_sub = entries.some((e: baml.fs.DirEntry) -> bool { e.name == "subdir" });
+    let has_a = entries.some((e: baml.fs.DirEntry) -> bool {
+        e.name == "a.txt"
+    });
+    let has_b = entries.some((e: baml.fs.DirEntry) -> bool {
+        e.name == "b.txt"
+    });
+    let has_sub = entries.some((e: baml.fs.DirEntry) -> bool {
+        e.name == "subdir"
+    });
     count_ok && has_a && has_b && has_sub
 }
 

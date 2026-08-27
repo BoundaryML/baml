@@ -89,23 +89,11 @@ fn io_package_name(builtin: &NativeBuiltin) -> &str {
 /// - `"ai.internal._gcp_access_token"` → `"internal"`
 /// - `"ai.OutputFormat._render"` -> `""` (top-level class method)
 fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
-    let after_package = builtin
-        .path
-        .split_once('.')
-        .map_or(builtin.path.as_str(), |(_, rest)| rest);
-    if builtin.receiver.is_some() {
-        // The namespace is everything before the class segment (the
-        // second-to-last path segment — for an impl-block method that segment
-        // is the synthetic `{iface}$for${Class}`, so it cannot be found by
-        // searching for the receiver's class name); a top-level class
-        // (`ai.Context`) has an empty namespace.
-        let mut parts = after_package.rsplitn(3, '.');
-        let _method = parts.next();
-        let _class_segment = parts.next();
-        parts.next().unwrap_or("")
-    } else {
-        after_package.split('.').next().unwrap_or("")
-    }
+    // Carried structurally from extraction ([`NativeBuiltin::namespace`]):
+    // the path alone cannot be split, because an impl-block class segment
+    // embeds the WRITTEN interface target, which may itself be dotted
+    // (`root.io.Read$for$FileHandle`).
+    &builtin.namespace
 }
 
 /// Key a namespace node (and every identifier derived from it) by package +
@@ -150,9 +138,9 @@ fn io_class_dispatch_key(builtin: &NativeBuiltin) -> String {
 /// The namespace router matches the routed path segment against these, so a
 /// class reached through both spellings needs every one as an arm key.
 fn io_class_segment(builtin: &NativeBuiltin) -> &str {
-    let mut parts = builtin.path.rsplitn(3, '.');
-    let _method = parts.next();
-    parts.next().unwrap_or("")
+    // Structural, like [`io_namespace_name`] — a dotted interface qualifier
+    // makes the path unsplittable.
+    builtin.class_segment.as_deref().unwrap_or("")
 }
 
 fn build_io_namespace_tree<'a>(
@@ -1803,18 +1791,31 @@ fn emit_one_namespace_trait(
             }
         }
     } else {
-        // Mix of classes and free functions — use split_once to route. A
-        // class's arm matches every class-segment spelling its methods carry:
-        // the bare class name for direct methods, `{Iface}$for${Class}` for
-        // implements-block methods.
-        let class_arms: Vec<TokenStream> = node
-            .classes
+        // Mix of classes and free functions. A class's methods route by
+        // stripping the class-segment prefix (with its trailing dot): the
+        // bare class name for direct methods, `{Iface}$for${Class}` for
+        // implements-block methods — the latter may itself be DOTTED
+        // (`root.io.Read$for$File`), so a `split_once('.')` peel can never
+        // match it and prefix-stripping is the one correct route. Longer
+        // segments strip first so a segment that extends another
+        // dot-for-dot cannot be shadowed.
+        let mut segment_routes: Vec<(String, &str)> = Vec::new();
+        for (cn, methods) in &node.classes {
+            let segments: BTreeSet<&str> = methods.iter().map(|m| io_class_segment(m)).collect();
+            for seg in segments {
+                segment_routes.push((format!("{seg}."), cn.as_str()));
+            }
+        }
+        segment_routes.sort_by(|a, b| b.0.len().cmp(&a.0.len()).then(a.0.cmp(&b.0)));
+        let class_routes: Vec<TokenStream> = segment_routes
             .iter()
-            .map(|(cn, methods)| {
-                let segments: BTreeSet<&str> = methods.iter().map(|m| io_class_segment(m)).collect();
-                let seg_strs = segments.iter();
+            .map(|(prefix, cn)| {
                 let dispatch = format_ident!("__dispatch_{}_{}", ns_key, cn.to_lowercase());
-                quote! { Some((#(#seg_strs)|*, method)) => self.#dispatch(method, heap, permit, args, ctx, call_id) }
+                quote! {
+                    if let Some(method) = rest.strip_prefix(#prefix) {
+                        return self.#dispatch(method, heap, permit, args, ctx, call_id);
+                    }
+                }
             })
             .collect();
 
@@ -1829,12 +1830,9 @@ fn emit_one_namespace_trait(
             .collect();
 
         quote! {
-            match rest.split_once('.') {
-                #(#class_arms,)*
-                None => match rest {
-                    #(#free_fn_arms,)*
-                    _ => None,
-                },
+            #(#class_routes)*
+            match rest {
+                #(#free_fn_arms,)*
                 _ => None,
             }
         }

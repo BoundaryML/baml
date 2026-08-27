@@ -268,7 +268,7 @@ async fn start_process_yields_stdout_before_exit() {
                 );
                 defer { process.close() }
 
-                let first = match (process.stdout.next()) {
+                let first = match (process.stdout.lines().next()) {
                     let line: string => line,
                     baml.iter.Done => "",
                 };
@@ -295,7 +295,7 @@ async fn start_process_iterates_lines_and_final_unterminated_line() {
                 );
                 defer { process.close() }
 
-                let lines = process.stdout.collect();
+                let lines = process.stdout.lines().collect();
                 let exit = process.wait();
                 if (!exit.ok()) {
                     return "bad exit";
@@ -313,22 +313,54 @@ async fn start_process_iterates_lines_and_final_unterminated_line() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
+async fn start_process_reads_complete_stdout_as_text() {
+    let output = baml_test!(
+        r#"
+            function main() -> string throws baml.errors.Io | baml.errors.ParseError | baml.errors.Timeout {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "printf 'hello'"],
+                    null,
+                );
+                defer { process.close() }
+
+                let stdout = process.stdout.text();
+                let exit = process.wait();
+                if (!exit.ok()) {
+                    return "bad exit";
+                }
+                stdout
+            }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hello".to_string().into()))
+    );
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
 async fn start_process_supports_incremental_stdin() {
     let output = baml_test!(
         r#"
             function main() -> string throws baml.errors.Io | baml.errors.Timeout {
-                let process = baml.sys.start_process(
-                    "cat",
-                    [],
-                    baml.sys.ProcessOptions { keep_stdin_open: true },
-                );
+                let process = baml.sys.start_process("cat", [], null);
                 defer { process.close() }
 
-                process.write_stdin("one\n");
-                let one = process.stdout._next() ?? "";
-                process.write_stdin("two\n");
-                let two = process.stdout._next() ?? "";
-                process.close_stdin();
+                let out = process.stdout.lines();
+                process.stdin.write("one\n");
+                let one = match (out.next()) {
+                    let line: string => line,
+                    baml.iter.Done => "",
+                };
+                process.stdin.write("two\n");
+                let two = match (out.next()) {
+                    let line: string => line,
+                    baml.iter.Done => "",
+                };
+                process.stdin.close();
                 let exit = process.wait();
                 if (!exit.ok()) {
                     return "bad exit";
@@ -346,27 +378,67 @@ async fn start_process_supports_incremental_stdin() {
 
 #[tokio::test]
 #[cfg(not(target_os = "windows"))]
-async fn start_process_stdout_read_honors_process_timeout() {
+async fn start_process_stdout_read_is_cancellable() {
     let output = baml_test!(
         r#"
-            function main() -> bool {
+            function main() -> string {
                 let process = baml.sys.start_process(
                     "sh",
                     ["-c", "while :; do :; done"],
-                    baml.sys.ProcessOptions { timeout_ms: 25 },
+                    null,
                 );
                 defer { process.close() }
 
-                process.stdout.next() catch (e) {
-                    let timeout: baml.errors.Timeout => { return true; },
-                    _ => { return false; },
+                let tok = baml.spawn.CancelToken.new();
+                let read = spawn with baml.spawn.options(cancel = tok) {
+                    process.stdout.lines().next()
                 };
-                false
+                let deadline = spawn {
+                    baml.sys.sleep(baml.time.Duration.from_milliseconds(25n));
+                    tok.cancel()
+                };
+                let outcome = (await read) catch (e) {
+                    baml.panics.Cancelled => "cancelled"
+                };
+                match (outcome) {
+                    let line: string => line,
+                    baml.iter.Done => "eof",
+                }
             }
         "#
     );
 
-    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("cancelled".into()))
+    );
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_stdout_close_cancels_pending_read() {
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "while :; do :; done"],
+                    null,
+                );
+                defer { process.close() }
+
+                let read = spawn { process.stdout.read(1024) };
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(25n));
+                process.stdout.close();
+                (await read) catch (e) {
+                    baml.errors.Io => { return "closed"; }
+                };
+                "completed"
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::String("closed".into())));
 }
 
 #[tokio::test]
@@ -511,4 +583,57 @@ async fn shell_stderr_bytes() {
     } else {
         panic!("expected Uint8Array, got {:?}", output.result);
     }
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_stderr_pipe_is_readable() {
+    let output = baml_test!(
+        r#"
+            function main() -> string {
+                let process = baml.sys.start_process(
+                    "sh",
+                    ["-c", "printf 'boom\n' >&2"],
+                    baml.sys.ProcessOptions { stderr: baml.sys.StderrMode.Pipe },
+                );
+                defer { process.close() }
+
+                match (process.stderr) {
+                    null => "no pipe",
+                    let err: baml.sys.ReadPipe => match (err.lines().next()) {
+                        let line: string => line,
+                        baml.iter.Done => "eof",
+                    },
+                }
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::String("boom".into())));
+}
+
+#[tokio::test]
+#[cfg(not(target_os = "windows"))]
+async fn start_process_stderr_modes_without_pipe() {
+    let output = baml_test!(
+        r#"
+            function main() -> bool {
+                let inherited = baml.sys.start_process("sh", ["-c", "printf 'x' >&2"], null);
+                defer { inherited.close() }
+                let discarded = baml.sys.start_process(
+                    "sh",
+                    ["-c", "printf 'x' >&2"],
+                    baml.sys.ProcessOptions { stderr: baml.sys.StderrMode.Discard },
+                );
+                defer { discarded.close() }
+
+                inherited.stderr == null &&
+                    discarded.stderr == null &&
+                    inherited.wait().ok() &&
+                    discarded.wait().ok()
+            }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }

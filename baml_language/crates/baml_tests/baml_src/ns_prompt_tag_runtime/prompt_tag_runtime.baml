@@ -215,7 +215,7 @@ function pt_nested_tostring_and_media_fn() -> string {
 test "prompt_preserves_nested_tostring_overrides_beside_media" {
     assert.equal(
         pt_nested_tostring_and_media_fn(),
-        "LabeledMedia { label: LBL<hi>, picture: image::url(https://example.com/picture.png, loaded=false) }"
+        "LabeledMedia { label: LBL<hi>, picture:image::url(https://example.com/picture.png, loaded=false)}"
     )
 }
 

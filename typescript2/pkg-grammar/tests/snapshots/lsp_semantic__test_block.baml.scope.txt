@@ -45,19 +45,19 @@
 16:4-5       "#"                source.baml meta.function.baml meta.block.function.baml meta.field.llm.prompt.baml string.quoted.raw.template.baml punctuation.definition.string.end.baml
 17:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
 19:1-5       "test"             source.baml meta.test.baml keyword.declaration.test.baml
-19:6-15      "BasicTest"        source.baml meta.test.baml meta.test.header.baml meta.dotted-expression.baml variable.other.readwrite.baml
-19:16-17     "{"                source.baml meta.test.baml meta.block.code.baml punctuation.definition.block.begin.baml
-20:3-12      "functions"        source.baml meta.test.baml meta.block.code.baml meta.dotted-expression.baml variable.other.readwrite.baml
-20:13-14     "["                source.baml meta.test.baml meta.block.code.baml meta.expression.array.baml punctuation.definition.array.begin.baml
-20:14-23     "Summarize"        source.baml meta.test.baml meta.block.code.baml meta.expression.array.baml meta.dotted-expression.baml variable.other.readwrite.baml
-20:23-24     "]"                source.baml meta.test.baml meta.block.code.baml meta.expression.array.baml punctuation.definition.array.end.baml
-21:3-7       "args"             source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml entity.name.type.baml
-21:8-9       "{"                source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.begin.baml
-22:1-12      "    input {"      source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml
-23:7-11      "text"             source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml variable.other.property.baml
-23:12-13     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-23:13-24     "Hello world"      source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml
-23:24-25     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
-24:5-6       "}"                source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.end.baml
-25:3-4       "}"                source.baml meta.test.baml meta.block.code.baml punctuation.definition.block.end.baml
-26:1-2       "}"                source.baml
+19:6-7       "\""               source.baml meta.test.baml meta.test.header.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+19:7-16      "BasicTest"        source.baml meta.test.baml meta.test.header.baml string.quoted.double.baml
+19:16-17     "\""               source.baml meta.test.baml meta.test.header.baml string.quoted.double.baml punctuation.definition.string.end.baml
+19:18-19     "{"                source.baml meta.test.baml meta.block.code.baml punctuation.definition.block.begin.baml
+20:3-12      "Summarize"        source.baml meta.test.baml meta.block.code.baml meta.function-call.baml entity.name.function.baml
+20:12-13     "("                source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+20:13-18     "Input"            source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml meta.constructor.expression.baml entity.name.type.baml
+20:19-20     "{"                source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.begin.baml
+20:21-25     "text"             source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml variable.other.property.baml
+20:25-26     ":"                source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml punctuation.separator.colon.baml
+20:27-28     "\""               source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+20:28-39     "Hello world"      source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml
+20:39-40     "\""               source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+20:41-42     "}"                source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.end.baml
+20:42-43     ")"                source.baml meta.test.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+21:1-2       "}"                source.baml meta.test.baml meta.block.code.baml punctuation.definition.block.end.baml

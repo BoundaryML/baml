@@ -397,6 +397,11 @@ fn extract_from_class(
 
         let builtin = NativeBuiltin {
             path,
+            namespace: namespace_only(namespace_prefix),
+            class_segment: Some(match &iface_qualifier {
+                Some(iface) => format!("{iface}$for${class_name}"),
+                None => class_name.to_string(),
+            }),
             fn_name,
             params,
             return_type,
@@ -536,6 +541,8 @@ fn extract_from_free_function(
 
     let builtin = NativeBuiltin {
         path,
+        namespace: namespace_only(namespace_prefix),
+        class_segment: None,
         fn_name,
         params,
         return_type,
@@ -690,6 +697,8 @@ fn extract_from_implements_for(
 
         let builtin = NativeBuiltin {
             path,
+            namespace: namespace_only(namespace_prefix),
+            class_segment: Some(synthetic_class.clone()),
             fn_name,
             params,
             return_type,
@@ -818,6 +827,13 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
         }
         _ => vec![],
     }
+}
+
+/// The namespace-only part of a `{package}` or `{package}.{ns…}` prefix.
+fn namespace_only(namespace_prefix: &str) -> String {
+    namespace_prefix
+        .split_once('.')
+        .map_or(String::new(), |(_, rest)| rest.to_string())
 }
 
 /// Convert a dotted path to a Rust function name.
@@ -1227,6 +1243,8 @@ mod tests {
     fn test_sys_op_variant_name() {
         let make = |path: &str| NativeBuiltin {
             path: path.to_string(),
+            namespace: String::new(),
+            class_segment: None,
             fn_name: String::new(),
             params: vec![],
             return_type: BamlType::Null,

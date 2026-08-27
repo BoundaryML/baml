@@ -1577,7 +1577,6 @@ fn def_to_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, def: Definition<'db>) ->
         Definition::Function(_)
         | Definition::TemplateString(_)
         | Definition::Client(_)
-        | Definition::Test(_)
         | Definition::RetryPolicy(_)
         | Definition::Let(_) => return None,
     };
@@ -1611,7 +1610,6 @@ fn def_to_ty<'db>(db: &'db dyn baml_compiler2_ppir::Db, def: Definition<'db>) ->
         Definition::Function(_)
         | Definition::TemplateString(_)
         | Definition::Client(_)
-        | Definition::Test(_)
         | Definition::RetryPolicy(_)
         | Definition::Let(_) => None,
     }

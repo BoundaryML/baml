@@ -53,7 +53,7 @@ pub(super) fn token_type_for_kind(kind: DefinitionKind) -> SemanticTokenType {
         K::TypeAlias | K::AssociatedType => T::Type,
         K::Function | K::TemplateString => T::Function,
         K::Method => T::Method,
-        K::Client | K::Test | K::RetryPolicy => T::Struct,
+        K::Client | K::RetryPolicy => T::Struct,
         K::Field => T::Property,
         K::Variant => T::EnumMember,
         K::Parameter => T::Parameter,

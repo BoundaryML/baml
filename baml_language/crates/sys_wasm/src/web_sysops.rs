@@ -294,24 +294,6 @@ impl WebFs {
 }
 
 impl io::IoClassFsFile for WebFs {
-    fn text(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        unsupported()
-    }
-    fn bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        unsupported()
-    }
     fn read(
         &self,
         _h: &Arc<BexHeap>,
@@ -319,17 +301,7 @@ impl io::IoClassFsFile for WebFs {
         _f: io::owned::fs::File,
         _n: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        unsupported()
-    }
-    fn read_bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _n: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
         unsupported()
     }
     fn close(
@@ -352,17 +324,7 @@ impl io::IoClassFsFile for WebFs {
     ) -> SysOpOutput<i64> {
         unsupported()
     }
-    fn write(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _data: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        unsupported()
-    }
-    fn write_bytes(
+    fn write_some(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
@@ -370,6 +332,15 @@ impl io::IoClassFsFile for WebFs {
         _data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
+        unsupported()
+    }
+    fn flush(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
         unsupported()
     }
 }

@@ -67,7 +67,7 @@ fn run_scenario_with(
     // v2 served path: reuse plan + seed + incremental gate.
     let r2 = resolved(&root, edited);
     let mut db2 = project_load::build_db_from_sources(&r2, |_| {});
-    let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+    let ctx2 = CacheContext::open(&r2).expect("cache reopens");
     let pending_plan = ctx2.plan_reuse(&db2);
     let plan = prepare_reuse_plan(&mut db2, pending_plan);
     let served = match serve_path {
@@ -450,7 +450,7 @@ fn with_stored_manifest(
 
     let r1 = resolved(&root, files);
     let mut db2 = project_load::build_db_from_sources(&r1, |_| {});
-    let ctx2 = CacheContext::open(&r1, false).expect("cache reopens");
+    let ctx2 = CacheContext::open(&r1).expect("cache reopens");
     check(&ctx2, &mut db2);
     let _ = std::fs::remove_dir_all(&root);
 }

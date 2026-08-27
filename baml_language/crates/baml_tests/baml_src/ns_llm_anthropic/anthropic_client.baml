@@ -56,7 +56,7 @@ function AnthMockTools(question: string) -> string {
 }
 
 // A leading literal keeps the media part at a known index: the rendered parts
-// are ["Look at ", <media>].
+// are ["Look at", <media>].
 function AnthMockVision(picture: image) -> string {
     client: "anthropic/claude-haiku-4-5"
     prompt: `${role("user")}Look at ${picture}`

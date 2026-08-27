@@ -20,7 +20,7 @@ namespace baml:
   class TaggedString { methods: [] }
   type ToJson
   type ToString
-  class Uint8Array { methods: [length, at, push, pop, concat, includes, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort] }
+  class Uint8Array { methods: [length, at, push, pop, concat, includes, index_of, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort] }
   function _cleanup_begin<T>
   function _compare_shim<T>
   function _float_total_cmp
@@ -117,7 +117,7 @@ namespace baml.errors:
 namespace baml.events:
 namespace baml.fs:
   class DirEntry { methods: [] }
-  class File { methods: [text, bytes, read, read_bytes, close, seek_from, write, write_bytes] }
+  class File { methods: [text, bytes, close, seek_from, write] }
   class MkdirOptions { methods: [] }
   function chmod
   function exists
@@ -141,6 +141,7 @@ namespace baml.future:
   function all_complete<T, E>
   function any<T, Err>
   function race<T, E>
+  function with_timeout<T, E>
 namespace baml.glob:
   class Glob { methods: [scan, matches] }
   class ScanOptions { methods: [] }
@@ -166,6 +167,9 @@ namespace baml.id:
   function new
   function set
 namespace baml.io:
+  type Read
+  type Write
+  function _decode_utf8
   function eprint
   function eprintln
   function input
@@ -222,7 +226,7 @@ namespace baml.media:
 namespace baml.net:
   class Datagram { methods: [] }
   class TcpListener { methods: [bind, accept, close] }
-  class TcpStream { methods: [connect, _connect, read, _read, write, _write, close] }
+  class TcpStream { methods: [connect, _connect, close] }
   class UdpSocket { methods: [bind, send_to, _send_to, recv_from, _recv_from, close] }
   function _timeout_nanos
 namespace baml.ops:
@@ -284,11 +288,15 @@ namespace baml.spawn:
   class TaskGroup { methods: [new, cancel, set_limit, limit, name, active_count, queued_count] }
   function options<T, E>
 namespace baml.sys:
-  class Process { methods: [write_stdin, close_stdin, wait, kill, close] }
+  class Process { methods: [wait, kill, close] }
   class ProcessExit { methods: [ok] }
-  class ProcessLineStream { methods: [_next, close] }
   class ProcessOptions { methods: [] }
+  class ReadPipe { methods: [close, lines] }
+  class ReadPipeLines { methods: [] }
   class ShellOutput { methods: [ok] }
+  enum StderrMode
+  class WritePipe { methods: [close] }
+  function _strip_carriage_return
   function argv
   function collect_garbage
   function exec

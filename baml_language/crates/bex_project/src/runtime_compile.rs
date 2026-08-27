@@ -12,7 +12,7 @@ use baml_base::Name;
 use baml_compiler_diagnostics::{DiagnosticId, Severity};
 use baml_compiler_lexer::{TokenKind, lex_lossless};
 use baml_compiler_syntax::{BlockElement, BlockExpr, SyntaxKind, SyntaxNode};
-use baml_compiler2_emit::{CompileOptions, emit_units_with_stdlib};
+use baml_compiler2_emit::emit_units_with_stdlib;
 use baml_compiler2_hir::{
     body::{BodyOwnerId, LetBody, let_body},
     contributions::Definition,
@@ -2102,12 +2102,8 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                         span: None,
                     }]
                 })?;
-        let options = CompileOptions {
-            emit_test_cases: crate::precompiled_stdlib_config::EMIT_TEST_CASES,
-        };
         let emitted = emit_units_with_stdlib(
             &db,
-            &options,
             crate::precompiled_stdlib_config::OPT_LEVEL,
             &stdlib.program,
         )

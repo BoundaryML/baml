@@ -31,8 +31,8 @@ use baml_compiler2_ppir::{
     function_body,
     item_data::{
         GenericParamData, class_data, enum_data, file_classes, file_enums, file_functions,
-        file_impls, file_interfaces, file_lets, file_tests, function_data, function_llm_meta,
-        impl_block_data, interface_data, test_data,
+        file_impls, file_interfaces, file_lets, function_data, function_llm_meta, impl_block_data,
+        interface_data,
     },
 };
 use baml_type::{ParamTy, RuntimeTy, TyAttr};
@@ -1253,11 +1253,6 @@ pub trait Db: baml_compiler2_mir::Db {
     }
 }
 
-/// Compile options.
-pub struct CompileOptions {
-    pub emit_test_cases: bool,
-}
-
 /// Errors that can occur during bytecode generation.
 #[derive(Debug)]
 pub enum LoweringError {
@@ -1460,30 +1455,25 @@ fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
 }
 
 /// Generate bytecode for the entire project (default: `OptLevel::Two`).
-pub fn generate_project_bytecode(
-    db: &dyn crate::Db,
-    options: &CompileOptions,
-) -> Result<Program, LoweringError> {
-    generate_project_bytecode_with_opt(db, options, OptLevel::Two)
+pub fn generate_project_bytecode(db: &dyn crate::Db) -> Result<Program, LoweringError> {
+    generate_project_bytecode_with_opt(db, OptLevel::Two)
 }
 
 /// Generate bytecode for the entire project with a specific optimization level.
 pub fn generate_project_bytecode_with_opt(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_with_opt_coords(db, options, opt).map(|(program, _)| program)
+    generate_with_opt_coords(db, opt).map(|(program, _)| program)
 }
 
 /// [`generate_project_bytecode_with_opt`] plus the emit's
 /// [`FunctionCoordinates`], for callers that go on to decompose.
-fn generate_with_opt_coords<'db>(
-    db: &'db dyn crate::Db,
-    options: &CompileOptions,
+fn generate_with_opt_coords(
+    db: &dyn crate::Db,
     opt: OptLevel,
-) -> Result<(Program, FunctionCoordinates<'db>), LoweringError> {
-    let (mut program, coords) = generate_impl(db, options, opt, None, false, None)?;
+) -> Result<(Program, FunctionCoordinates<'_>), LoweringError> {
+    let (mut program, coords) = generate_impl(db, opt, None, false, None)?;
     program.source_content_hash = Some(project_source_content_hash(db));
     Ok((program, coords))
 }
@@ -1526,17 +1516,7 @@ pub fn generate_stdlib_program(
     db: &dyn crate::Db,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    generate_impl(
-        db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-        opt,
-        None,
-        true,
-        None,
-    )
-    .map(|(program, _)| program)
+    generate_impl(db, opt, None, true, None).map(|(program, _)| program)
 }
 
 /// Generate project bytecode on top of a precompiled stdlib `Program` slice
@@ -1549,11 +1529,10 @@ pub fn generate_stdlib_program(
 /// `emit_determinism` integration tests).
 pub fn generate_project_bytecode_with_stdlib(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     base: &Program,
 ) -> Result<Program, LoweringError> {
-    generate_with_stdlib_coords(db, options, opt, base).map(|(program, _)| program)
+    generate_with_stdlib_coords(db, opt, base).map(|(program, _)| program)
 }
 
 /// [`generate_project_bytecode_with_stdlib`] plus the decomposed symbolic
@@ -1562,12 +1541,11 @@ pub fn generate_project_bytecode_with_stdlib(
 /// [`generate_project_bytecode_with_reuse_artifacts`]).
 pub fn generate_project_bytecode_with_stdlib_artifacts(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     base: &Program,
 ) -> Result<(Program, Vec<CompilationUnit>), LoweringError> {
-    let (program, coords) = generate_with_stdlib_coords(db, options, opt, base)?;
-    let units = decompose_units(db, options, &program, &coords)?;
+    let (program, coords) = generate_with_stdlib_coords(db, opt, base)?;
+    let units = decompose_units(db, &program, &coords)?;
     Ok((program, units))
 }
 
@@ -1575,11 +1553,10 @@ pub fn generate_project_bytecode_with_stdlib_artifacts(
 /// [`FunctionCoordinates`], for callers that go on to decompose.
 fn generate_with_stdlib_coords<'db>(
     db: &'db dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     base: &Program,
 ) -> Result<(Program, FunctionCoordinates<'db>), LoweringError> {
-    let (mut program, coords) = generate_impl(db, options, opt, Some(base), false, None)?;
+    let (mut program, coords) = generate_impl(db, opt, Some(base), false, None)?;
     program.source_content_hash = Some(project_source_content_hash(db));
     Ok((program, coords))
 }
@@ -1589,13 +1566,12 @@ fn generate_with_stdlib_coords<'db>(
 /// resolution; `dependency_units` provide the matching runtime symbols.
 pub fn generate_project_bytecode_with_mounted_units(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     dependency_units: &[CompilationUnit],
 ) -> Result<Program, MountedPackageLinkError> {
     let base = bex_vm_types::link::link(dependency_units)
         .map_err(MountedPackageLinkError::DependencyLink)?;
-    generate_impl(db, options, opt, Some(&base), false, None)
+    generate_impl(db, opt, Some(&base), false, None)
         .map(|(program, _)| program)
         .map_err(MountedPackageLinkError::Consumer)
 }
@@ -1607,15 +1583,14 @@ pub fn generate_project_bytecode_with_mounted_units(
 /// into it becomes a symbolic import, exactly as on the stdlib-prefix path.
 pub fn generate_project_bytecode_with_mounted_units_artifacts(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     dependency_units: &[CompilationUnit],
 ) -> Result<(Program, Vec<CompilationUnit>), MountedPackageLinkError> {
     let base = bex_vm_types::link::link(dependency_units)
         .map_err(MountedPackageLinkError::DependencyLink)?;
-    let (program, coords) = generate_impl(db, options, opt, Some(&base), false, None)
+    let (program, coords) = generate_impl(db, opt, Some(&base), false, None)
         .map_err(MountedPackageLinkError::Consumer)?;
-    let units = decompose_units_after_prefix(db, options, &program, &coords, base.objects.len())
+    let units = decompose_units_after_prefix(db, &program, &coords, base.objects.len())
         .map_err(MountedPackageLinkError::Consumer)?;
     Ok((program, units))
 }
@@ -1635,7 +1610,7 @@ pub fn generate_project_bytecode_with_mounted_units_artifacts(
 /// `clean_files` is the caller's optimistic clean set; a file is only truly
 /// reused when its inferred transitive `throws` still match the previous compile
 /// (design §4 — the throws gate). `prev_units` must come from the same compiler
-/// build / options / stdlib base.
+/// build and stdlib base.
 ///
 /// # Errors
 ///
@@ -1644,13 +1619,12 @@ pub fn generate_project_bytecode_with_mounted_units_artifacts(
 /// dirty-file emit.
 pub fn generate_project_bytecode_with_reuse_units(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     base: &Program,
     prev_units: &[CompilationUnit],
     clean_files: &HashSet<String>,
 ) -> Result<Program, LoweringError> {
-    generate_project_bytecode_with_reuse_artifacts(db, options, opt, base, prev_units, clean_files)
+    generate_project_bytecode_with_reuse_artifacts(db, opt, base, prev_units, clean_files)
         .map(|(program, _)| program)
 }
 
@@ -1659,7 +1633,6 @@ pub fn generate_project_bytecode_with_reuse_units(
 /// the linked program a second time.
 pub fn generate_project_bytecode_with_reuse_artifacts(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     base: &Program,
     prev_units: &[CompilationUnit],
@@ -1684,9 +1657,9 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
     // `$init_test` tail (design §9 R2): it is rebuilt from every file's `let`s /
     // `test` blocks (clean `let` initializers re-lowered off salsa-cached MIR),
     // so a dirty tail-producing file no longer aborts reuse.
-    let (partial, coords) = generate_impl(db, options, opt, Some(base), false, Some(clean_files))?;
+    let (partial, coords) = generate_impl(db, opt, Some(base), false, Some(clean_files))?;
 
-    let mut fresh_units = decompose_units(db, options, &partial, &coords)?;
+    let mut fresh_units = decompose_units(db, &partial, &coords)?;
 
     // The freshly-synthesized (symbolic) tail: whichever fresh unit the
     // decomposition placed it on. It reflects the *current* project's lets/tests
@@ -1825,11 +1798,10 @@ pub fn reuse_throws_mismatches(
 /// tail — see design §9 R1/R2 — or an unattributable pool object).
 pub fn emit_units(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    let (program, coords) = generate_with_opt_coords(db, options, opt)?;
-    decompose_units(db, options, &program, &coords)
+    let (program, coords) = generate_with_opt_coords(db, opt)?;
+    decompose_units(db, &program, &coords)
 }
 
 /// Emit relocatable source units on top of a compiler-built stdlib prefix.
@@ -1841,12 +1813,11 @@ pub fn emit_units(
 /// objects and impl rules instead of copying them into a runtime package.
 pub fn emit_units_with_stdlib(
     db: &dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     stdlib: &Program,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    let (program, coords) = generate_with_stdlib_coords(db, options, opt, stdlib)?;
-    decompose_units_after_prefix(db, options, &program, &coords, stdlib.objects.len())
+    let (program, coords) = generate_with_stdlib_coords(db, opt, stdlib)?;
+    decompose_units_after_prefix(db, &program, &coords, stdlib.objects.len())
 }
 
 /// Per-object attribution kind, computed during the pool walk.
@@ -1866,8 +1837,8 @@ enum PoolObjKind {
 ///
 /// Used by the CLI to persist content-addressed units after a compile so the
 /// next incremental compile can reuse clean files independently.
-/// `program` must be the output of a compile over `db` with `options` (a full
-/// compile, a stdlib splice, or a reuse relink — all byte-identical), so the
+/// `program` must be the output of a compile over `db` (a full compile, a
+/// stdlib splice, or a reuse relink - all byte-identical), so the
 /// decomposition's file-attribution invariants hold.
 ///
 /// # Errors
@@ -1877,17 +1848,15 @@ enum PoolObjKind {
 #[allow(clippy::too_many_lines)]
 fn decompose_units<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
-    options: &CompileOptions,
     program: &Program,
     coords: &FunctionCoordinates<'db>,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
-    decompose_units_after_prefix(db, options, program, coords, 0)
+    decompose_units_after_prefix(db, program, coords, 0)
 }
 
 #[allow(clippy::too_many_lines)]
 fn decompose_units_after_prefix<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
-    options: &CompileOptions,
     program: &Program,
     coords: &FunctionCoordinates<'db>,
     prefix_objects: usize,
@@ -2548,20 +2517,6 @@ fn decompose_units_after_prefix<'db>(
         }
         for (fi, rules) in unit_rules.into_iter().enumerate() {
             units[fi].package_fragment.impl_rules = rules.into_iter().collect();
-        }
-    }
-
-    // ---- Test cases (Pass 8 fragment, per file by source path) --------------
-    if options.emit_test_cases {
-        for test in &program.test_cases {
-            if let Some(&fi) = rel_to_file.get(test.source_file.as_str()) {
-                units[fi].test_cases.push(test.clone());
-            } else {
-                return Err(LoweringError::Internal(format!(
-                    "test case `{}` has source_file `{}` matching no file",
-                    test.name, test.source_file
-                )));
-            }
         }
     }
 
@@ -3232,7 +3187,6 @@ struct FunctionCoordinates<'db> {
 
 fn generate_impl<'db>(
     db: &'db dyn crate::Db,
-    options: &CompileOptions,
     opt: OptLevel,
     base: Option<&Program>,
     stdlib_only: bool,
@@ -3411,28 +3365,6 @@ fn generate_impl<'db>(
     }
     tables.program_packages.sort_keys();
     program.packages = tables.program_packages;
-
-    // --- Pass 8: Test cases (only when requested) ---
-    if options.emit_test_cases {
-        for file in &all_files {
-            for &test_loc in file_tests(db, *file) {
-                let test = test_data(db, test_loc);
-                let function_names: Vec<String> =
-                    test.function_refs.iter().map(ToString::to_string).collect();
-                let args: indexmap::IndexMap<String, bex_vm_types::TestArgValue> = test
-                    .args
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), convert_test_arg_value(v)))
-                    .collect();
-                program.test_cases.push(bex_vm_types::TestCase {
-                    name: test.name.to_string(),
-                    function_names,
-                    args,
-                    source_file: relative_source_path(db, *file),
-                });
-            }
-        }
-    }
 
     Ok((
         program,
@@ -4402,44 +4334,6 @@ fn emit_file_group<'db>(
     }
 
     Ok(())
-}
-
-/// Convert a compiler2 `TestArgValue` to a `bex_vm_types::TestArgValue`.
-fn convert_test_arg_value(
-    v: &baml_compiler2_hir::item_tree::TestArgValue,
-) -> bex_vm_types::TestArgValue {
-    use baml_compiler2_hir::item_tree::TestArgValue as Hir2Arg;
-    match v {
-        Hir2Arg::Null => bex_vm_types::TestArgValue::Null,
-        Hir2Arg::Int(i) => bex_vm_types::TestArgValue::Int(*i),
-        Hir2Arg::FloatBits(bits) => bex_vm_types::TestArgValue::Float(f64::from_bits(*bits)),
-        Hir2Arg::Bool(b) => bex_vm_types::TestArgValue::Bool(*b),
-        Hir2Arg::String(s) => bex_vm_types::TestArgValue::String(s.clone()),
-        Hir2Arg::Array(items) => {
-            // Use Null element type as placeholder — full type inference not run yet
-            bex_vm_types::TestArgValue::Array {
-                element_type: baml_type::RuntimeTy::Null {
-                    attr: baml_type::TyAttr::default(),
-                },
-                items: items.iter().map(convert_test_arg_value).collect(),
-            }
-        }
-        Hir2Arg::Map(entries) => {
-            let converted: indexmap::IndexMap<String, bex_vm_types::TestArgValue> = entries
-                .iter()
-                .map(|(k, v)| (k.clone(), convert_test_arg_value(v)))
-                .collect();
-            bex_vm_types::TestArgValue::Map {
-                key_type: baml_type::RuntimeTy::String {
-                    attr: baml_type::TyAttr::default(),
-                },
-                value_type: baml_type::RuntimeTy::Null {
-                    attr: baml_type::TyAttr::default(),
-                },
-                entries: converted,
-            }
-        }
-    }
 }
 
 /// Compute the inferred throws type for a function by querying TIR throw inference.

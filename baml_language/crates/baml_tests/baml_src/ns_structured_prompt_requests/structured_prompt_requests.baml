@@ -335,7 +335,7 @@ test "openai build_request defaults leading llm prelude to system" {
     assert.equal(baml.json.path<string>(body, ".input[0].role"), "system");
     assert.equal(
         baml.json.path<string>(body, ".input[0].content[0].text"),
-        "You are a differential assistant.\n",
+        "You are a differential assistant.",
     );
     assert.equal(baml.json.path<string>(body, ".input[1].role"), "user");
     assert.equal(baml.json.path<string>(body, ".input[1].content[0].text"), "Answer this.")

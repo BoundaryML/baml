@@ -313,8 +313,6 @@ fn definition_kind(kind: DefinitionKind) -> CompletionKind {
         DefinitionKind::Variant => CompletionKind::EnumVariant,
         DefinitionKind::Parameter => CompletionKind::Parameter,
         DefinitionKind::Binding => CompletionKind::Local,
-        DefinitionKind::TemplateString | DefinitionKind::Test | DefinitionKind::AssociatedType => {
-            CompletionKind::Other
-        }
+        DefinitionKind::TemplateString | DefinitionKind::AssociatedType => CompletionKind::Other,
     }
 }
