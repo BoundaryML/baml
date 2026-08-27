@@ -108,6 +108,10 @@ pub struct InferenceTable {
     /// their own sites, where an ordinary var (a call instantiation)
     /// fails resolution instead (ruling 1).
     establishment_vars: FxHashSet<u32>,
+    /// Variables whose source expression is monomorphic but initially has no
+    /// type. The first ground demand commits their type, so a later
+    /// incompatible demand is diagnosed at that later use.
+    first_demand_vars: FxHashSet<u32>,
 }
 
 impl InferenceTable {
@@ -131,6 +135,15 @@ impl InferenceTable {
     pub fn new_establishment_var_ty(&mut self) -> Ty {
         let var = self.new_var();
         self.establishment_vars.insert(var.index());
+        self.first_demand_vars.insert(var.index());
+        Ty::infer_var(var)
+    }
+
+    /// [`InferenceTable::new_var`] for a monomorphic source expression whose
+    /// first ground demand determines its type.
+    pub fn new_first_demand_var_ty(&mut self) -> Ty {
+        let var = self.new_var();
+        self.first_demand_vars.insert(var.index());
         Ty::infer_var(var)
     }
 
@@ -145,6 +158,16 @@ impl InferenceTable {
     pub fn is_establishment_var(&mut self, var: InferVar) -> bool {
         let root = self.vars.find(VarKey(var));
         let indices: Vec<u32> = self.establishment_vars.iter().copied().collect();
+        indices
+            .into_iter()
+            .any(|index| self.vars.find(VarKey(InferVar::new(index))) == root)
+    }
+
+    /// Whether `var`'s equivalence class is committed by its first ground
+    /// demand.
+    pub fn is_first_demand_var(&mut self, var: InferVar) -> bool {
+        let root = self.vars.find(VarKey(var));
+        let indices: Vec<u32> = self.first_demand_vars.iter().copied().collect();
         indices
             .into_iter()
             .any(|index| self.vars.find(VarKey(InferVar::new(index))) == root)

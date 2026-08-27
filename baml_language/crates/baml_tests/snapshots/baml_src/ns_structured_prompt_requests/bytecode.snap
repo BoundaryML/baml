@@ -182,8 +182,12 @@ function structured_prompt_requests.AudioShape(sound: audio, client: ai.Client |
     call user.structured_prompt_requests.AudioShape$spec
     store_var _9
     load_type string
-    load_var2 4 5
-    call ai.Agent.run
+    load_var2 5 6
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _6
+    load_var _6
     load_field .value
     return
 }
@@ -318,8 +322,12 @@ function structured_prompt_requests.ChatMediaShape(photo: image, client: ai.Clie
     call user.structured_prompt_requests.ChatMediaShape$spec
     store_var _9
     load_type string
-    load_var2 4 5
-    call ai.Agent.run
+    load_var2 5 6
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _6
+    load_var _6
     load_field .value
     return
 }
@@ -440,8 +448,12 @@ function structured_prompt_requests.ExplicitRolesShape(client: ai.Client | null,
     call user.structured_prompt_requests.ExplicitRolesShape$spec
     store_var _8
     load_type string
-    load_var2 3 4
-    call ai.Agent.run
+    load_var2 4 5
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _5
+    load_var _5
     load_field .value
     return
 }
@@ -553,8 +565,12 @@ function structured_prompt_requests.FirstShape(client: ai.Client | null, on_even
     call user.structured_prompt_requests.FirstShape$spec
     store_var _8
     load_type string
-    load_var2 3 4
-    call ai.Agent.run
+    load_var2 4 5
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _5
+    load_var _5
     load_field .value
     return
 }
@@ -667,8 +683,12 @@ function structured_prompt_requests.GenericShape(client: ai.Client | null, on_ev
     call user.structured_prompt_requests.GenericShape$spec
     store_var _8
     load_type structured_prompt_requests.Outer<#0>
-    load_var2 3 4
-    call ai.Agent.run
+    load_var2 4 5
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _5
+    load_var _5
     load_field .value
     return
 }
@@ -793,8 +813,12 @@ function structured_prompt_requests.Greet(name: string, suffix: string, client: 
     call user.structured_prompt_requests.Greet$spec
     store_var _11
     load_type string
-    load_var2 5 6
-    call ai.Agent.run
+    load_var2 6 7
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _8
+    load_var _8
     load_field .value
     return
 }
@@ -957,8 +981,12 @@ function structured_prompt_requests.MediaAll(photo: image, sound: audio, documen
     call user.structured_prompt_requests.MediaAll$spec
     store_var _12
     load_type string
-    load_var2 7 8
-    call ai.Agent.run
+    load_var2 8 9
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _9
+    load_var _9
     load_field .value
     return
 }
@@ -1113,8 +1141,12 @@ function structured_prompt_requests.MediaImageAudioPdf(photo: image, sound: audi
     call user.structured_prompt_requests.MediaImageAudioPdf$spec
     store_var _11
     load_type string
-    load_var2 6 7
-    call ai.Agent.run
+    load_var2 7 8
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _8
+    load_var _8
     load_field .value
     return
 }
@@ -1263,8 +1295,12 @@ function structured_prompt_requests.MediaImagePdf(photo: image, document: pdf, c
     call user.structured_prompt_requests.MediaImagePdf$spec
     store_var _10
     load_type string
-    load_var2 5 6
-    call ai.Agent.run
+    load_var2 6 7
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _7
+    load_var _7
     load_field .value
     return
 }
@@ -1404,8 +1440,12 @@ function structured_prompt_requests.MediaShape(photo: image, client: ai.Client |
     call user.structured_prompt_requests.MediaShape$spec
     store_var _9
     load_type string
-    load_var2 4 5
-    call ai.Agent.run
+    load_var2 5 6
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _6
+    load_var _6
     load_field .value
     return
 }
@@ -1526,8 +1566,12 @@ function structured_prompt_requests.PreludeShape(client: ai.Client | null, on_ev
     call user.structured_prompt_requests.PreludeShape$spec
     store_var _8
     load_type string
-    load_var2 3 4
-    call ai.Agent.run
+    load_var2 4 5
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _5
+    load_var _5
     load_field .value
     return
 }
@@ -1640,8 +1684,12 @@ function structured_prompt_requests.RequestShape(input: string, client: ai.Clien
     call user.structured_prompt_requests.RequestShape$spec
     store_var _9
     load_type string
-    load_var2 4 5
-    call ai.Agent.run
+    load_var2 5 6
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _6
+    load_var _6
     load_field .value
     return
 }
@@ -1778,8 +1826,12 @@ function structured_prompt_requests.RoledShape(client: ai.Client | null, on_even
     call user.structured_prompt_requests.RoledShape$spec
     store_var _8
     load_type string
-    load_var2 3 4
-    call ai.Agent.run
+    load_var2 4 5
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _5
+    load_var _5
     load_field .value
     return
 }
@@ -1908,8 +1960,12 @@ function structured_prompt_requests.RolelessImageShape(photo: image, client: ai.
     call user.structured_prompt_requests.RolelessImageShape$spec
     store_var _9
     load_type string
-    load_var2 4 5
-    call ai.Agent.run
+    load_var2 5 6
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _6
+    load_var _6
     load_field .value
     return
 }
@@ -2030,8 +2086,12 @@ function structured_prompt_requests.RolelessShape(client: ai.Client | null, on_e
     call user.structured_prompt_requests.RolelessShape$spec
     store_var _8
     load_type string
-    load_var2 3 4
-    call ai.Agent.run
+    load_var2 4 5
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _5
+    load_var _5
     load_field .value
     return
 }
@@ -2143,8 +2203,12 @@ function structured_prompt_requests.WhitespaceShape(client: ai.Client | null, on
     call user.structured_prompt_requests.WhitespaceShape$spec
     store_var _8
     load_type string
-    load_var2 3 4
-    call ai.Agent.run
+    load_var2 4 5
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _5
+    load_var _5
     load_field .value
     return
 }

@@ -578,8 +578,8 @@ fn cross_namespace_type_resolution_via_root() {
         diags
     );
     assert!(
-        !matches!(ty, baml_type::Ty::Unknown { .. }),
-        "root.llm.Response should not resolve to Unknown"
+        !matches!(ty, baml_type::Ty::Error { .. }),
+        "root.llm.Response should not resolve to an error sentinel"
     );
 
     // From llm namespace: resolve root.Config
@@ -601,8 +601,8 @@ fn cross_namespace_type_resolution_via_root() {
         diags
     );
     assert!(
-        !matches!(ty, baml_type::Ty::Unknown { .. }),
-        "root.Config should not resolve to Unknown from llm namespace"
+        !matches!(ty, baml_type::Ty::Error { .. }),
+        "root.Config should not resolve to an error sentinel from llm namespace"
     );
 }
 
@@ -635,8 +635,8 @@ fn same_namespace_resolution_no_prefix() {
         diags
     );
     assert!(
-        !matches!(ty, baml_type::Ty::Unknown { .. }),
-        "LLMConfig should not resolve to Unknown within same namespace"
+        !matches!(ty, baml_type::Ty::Error { .. }),
+        "LLMConfig should not resolve to an error sentinel within same namespace"
     );
 }
 
@@ -687,8 +687,8 @@ fn nested_namespace_resolution() {
         diags
     );
     assert!(
-        !matches!(ty, baml_type::Ty::Unknown { .. }),
-        "root.llm.openai.ResponsesClient should not resolve to Unknown"
+        !matches!(ty, baml_type::Ty::Error { .. }),
+        "root.llm.openai.ResponsesClient should not resolve to an error sentinel"
     );
 }
 

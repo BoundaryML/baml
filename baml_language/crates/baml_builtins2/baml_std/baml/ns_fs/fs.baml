@@ -1,37 +1,25 @@
 /// A handle to an open file. Use `baml.fs.open` to obtain one.
 ///
-/// Every `File.*` method can throw `InvalidArgument` when the underlying
-/// handle has already been closed (e.g. by a prior `close()`); read-string
-/// methods can additionally throw `ParseError` on non-UTF-8 input.
+/// Read and write operations on a closed handle throw `Io`. `text()`
+/// additionally throws `ParseError` when the remaining bytes are not valid
+/// UTF-8.
 class File {
     _handle: $rust_type,
 
     /// Reads the entire remaining file contents as a UTF-8 string.
-    function text(
-        self,
-    ) -> string throws root.errors.Io | root.errors.InvalidArgument | root.errors.ParseError {
-        $rust_io_function
+    function text(self) -> string throws root.errors.Io | root.errors.ParseError {
+        self.as<root.io.Read>.text()
     }
 
     /// Reads the entire remaining file contents as raw bytes.
-    function bytes(self) -> uint8array throws root.errors.Io | root.errors.InvalidArgument {
-        $rust_io_function
+    function bytes(self) -> uint8array throws root.errors.Io {
+        self.as<root.io.Read>.bytes()
     }
 
-    /// Reads up to `n` bytes from the file and returns them as a UTF-8 string.
-    function read(
-        self,
-        n: int,
-    ) -> string throws root.errors.Io | root.errors.InvalidArgument | root.errors.ParseError {
-        $rust_io_function
-    }
-
-    /// Reads up to `n` bytes from the file and returns them as raw bytes.
-    function read_bytes(
-        self,
-        n: int,
-    ) -> uint8array throws root.errors.Io | root.errors.InvalidArgument {
-        $rust_io_function
+    implements root.io.Read {
+        function read(self, limit: int) -> uint8array? throws root.errors.Io {
+            $rust_io_function
+        }
     }
 
     /// Closes the file handle, flushing any pending writes.
@@ -51,17 +39,20 @@ class File {
         $rust_io_function
     }
 
-    /// Writes `data` to the file at the current cursor position. Returns the number of bytes written.
-    function write(self, data: string) -> int throws root.errors.Io | root.errors.InvalidArgument {
-        $rust_io_function
+    implements root.io.Write {
+        function write_some(self, data: uint8array) -> int throws root.errors.Io {
+            $rust_io_function
+        }
+
+        function flush(self) -> void throws root.errors.Io {
+            $rust_io_function
+        }
     }
 
-    /// Writes raw bytes `data` to the file at the current cursor position. Returns the number of bytes written.
-    function write_bytes(
-        self,
-        data: uint8array,
-    ) -> int throws root.errors.Io | root.errors.InvalidArgument {
-        $rust_io_function
+    /// Writes all of `data` to the file at the current cursor position.
+    /// Returns the encoded byte count.
+    function write(self, data: string | uint8array) -> int throws root.errors.Io {
+        self.as<root.io.Write>.write(data)
     }
 }
 

@@ -76,13 +76,20 @@ class Prompt {
 /// structural `ai.Prompt` for the supplied low-level prompt context.
 //baml:tagged_string
 function prompt(
+    // No `throws` clause: the callback's effect is inferred per call site
+    // (rule 5); whatever a template expression throws is wrapped below.
     body: (
         role: (string) -> root.Role throws never,
         ctx: root.Context,
-    ) -> baml.TaggedString throws never,
-) -> (root.Context) -> Prompt throws never {
+    ) -> baml.TaggedString,
+) -> (root.Context) -> Prompt throws root.errors.PromptRenderError {
     let render = (ctx: root.Context) -> {
-        let tagged = body(root.internal.make_role, ctx);
+        let tagged = body(root.internal.make_role, ctx) catch_all (e) {
+            _ => throw root.errors.PromptRenderError {
+                message: "prompt template rendering threw",
+                cause: e,
+            }
+        };
         root.internal.assemble_prompt(tagged.parts, tagged.values)
     };
     render
@@ -96,7 +103,7 @@ function prompt(
 class FunctionSpec<Out> {
     spec_name: string,
     args: map<string, unknown>,
-    prompt_template: (OutputFormat) -> Prompt throws never,
+    prompt_template: (OutputFormat) -> Prompt throws root.errors.PromptRenderError,
     toolbox: root.tools.Toolbox,
     default_client: Client,
 

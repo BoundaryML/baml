@@ -339,7 +339,7 @@ fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
         | Ty::Void { .. }
         | Ty::Literal(..)
         | Ty::Media(..)
-        | Ty::BuiltinUnknown { .. }
+        | Ty::Unknown { .. }
         | Ty::Function { .. }
         | Ty::Future(..)
         | Ty::Interface(..)
@@ -394,7 +394,7 @@ fn variant_name(arm: &Ty) -> Option<String> {
         | Ty::Void { .. }
         | Ty::Literal(..)
         | Ty::Media(..)
-        | Ty::BuiltinUnknown { .. }
+        | Ty::Unknown { .. }
         | Ty::Function { .. }
         | Ty::Future(..)
         | Ty::Interface(..)

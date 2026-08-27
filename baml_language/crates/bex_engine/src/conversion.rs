@@ -739,6 +739,23 @@ impl BexEngine {
                         })
                         .collect();
 
+                let mut fields = fields?;
+
+                // Media wrapper instances flatten to the canonical
+                // `Adt(Media(_))` on the wire: the host bridges construct and
+                // decode media through the ADT (media_roundtrip.rs pins this),
+                // while the VM-internal form is the stdlib wrapper class.
+                if matches!(
+                    class.name.to_string().as_str(),
+                    "baml.media.Image" | "baml.media.Audio" | "baml.media.Video" | "baml.media.Pdf"
+                ) {
+                    if let Some(BexExternalValue::Adt(BexExternalAdt::Media(arc))) =
+                        fields.shift_remove(bex_external_types::MEDIA_WRAPPER_DATA_FIELD)
+                    {
+                        return Ok(BexExternalValue::Adt(BexExternalAdt::Media(arc)));
+                    }
+                }
+
                 Ok(BexExternalValue::Instance {
                     class_name: class.name.to_string(),
                     type_args: instance
@@ -746,7 +763,7 @@ impl BexEngine {
                         .iter()
                         .map(|arg| overlay_wire_ty(&bex_vm_types::RuntimeTy::from(arg)))
                         .collect::<Result<Vec<_>, _>>()?,
-                    fields: fields?,
+                    fields,
                 })
             }
 
@@ -1057,7 +1074,7 @@ impl BexEngine {
     /// Reconstruct the type-args of an *unbound* generic instance from its field
     /// VALUES, by synthesizing the value of each field whose template is a direct
     /// `TypeArgRef(N)` into slot `N`. Slots with no directly-typed field stay
-    /// `BuiltinUnknown` (the unifier skips them). Returns `None` for a
+    /// `Unknown` (the unifier skips them). Returns `None` for a
     /// non-generic / unresolvable class. This is the call-time recovery a forcing
     /// formal needs to bind a var from an unbound instance (03b G1); it does NOT
     /// run for bound instances (they read the wire args) or bare-`T` formals
@@ -1079,7 +1096,7 @@ impl BexEngine {
         if arity == 0 {
             return None;
         }
-        let unknown = || RuntimeTy::BuiltinUnknown {
+        let unknown = || RuntimeTy::Unknown {
             attr: baml_type::TyAttr::default(),
         };
         let mut args: Vec<RuntimeTy> = (0..arity).map(|_| unknown()).collect();
@@ -1661,7 +1678,52 @@ impl BexEngine {
                 });
             }
             BexExternalValue::Adt(BexExternalAdt::Media(arc)) => {
-                Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
+                // A bare rust_data is only correct when the destination slot
+                // IS the wrapper's `_data: $rust_type` field. Anywhere else
+                // (a declared `image`/`audio`/... parameter, a media slot in
+                // a container, or no context at all) the usable value is the
+                // stdlib wrapper class instance — methods and the prompt
+                // renderer dispatch on that instance, so a bare rust_data
+                // panics `mime_type()` and silently drops media parts from
+                // rendered requests (renders as literal `<rust_data>`).
+                // The OUTBOUND path flattens the wrapper back to the
+                // canonical `Adt(Media(_))`, so the engine's wire contract
+                // (media_roundtrip.rs) is ADT in both directions while the
+                // VM-internal form matches BAML-constructed media.
+                if matches!(expected_ty, Some(RuntimeTy::RustType { .. })) {
+                    Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(arc))
+                } else {
+                    let class_name = match arc.kind {
+                        baml_type::MediaKind::Image => "baml.media.Image",
+                        baml_type::MediaKind::Audio => "baml.media.Audio",
+                        baml_type::MediaKind::Video => "baml.media.Video",
+                        baml_type::MediaKind::Pdf => "baml.media.Pdf",
+                        baml_type::MediaKind::Generic => {
+                            return Err(EngineError::TypeMismatch {
+                                message:
+                                    "cannot materialize a generic media value as a wrapper instance"
+                                        .to_string(),
+                            });
+                        }
+                    };
+                    let mut fields = indexmap::IndexMap::new();
+                    fields.insert(
+                        bex_external_types::MEDIA_WRAPPER_DATA_FIELD.to_string(),
+                        BexExternalValue::Adt(BexExternalAdt::Media(arc)),
+                    );
+                    return self.convert_external_to_vm_value_with_ty_and_runtime(
+                        holder,
+                        BexExternalValue::Instance {
+                            class_name: class_name.to_string(),
+                            type_args: vec![],
+                            fields,
+                        },
+                        None,
+                        dynamic_classes,
+                        dynamic_enums,
+                        runtime_named_objects,
+                    );
+                }
             }
             BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { heap_handle, .. }) => {
                 Value::object(self.resolve_handle(holder.proof(), &heap_handle).expect(
@@ -1748,7 +1810,7 @@ impl BexEngine {
                 };
                 // The host's returned value is validated against `ret` when the
                 // call completes. A generic return type erases to
-                // `BuiltinUnknown` at runtime, which the return validator treats
+                // `Unknown` at runtime, which the return validator treats
                 // as "accept anything" — letting the host inject a value of any
                 // type into a position BAML treats as the instantiated type
                 // variable. Reject such a callable at bind time rather than
@@ -1776,13 +1838,13 @@ impl BexEngine {
                 // honor — and the host is foreign code that may surface a
                 // native exception regardless (materialized as
                 // `baml.errors.HostCallable`). Normalize both to
-                // `BuiltinUnknown` so such a throw is accepted opaquely and an
+                // `Unknown` so such a throw is accepted opaquely and an
                 // in-BAML `catch` can match it, rather than being rejected as a
                 // `HostContractViolation`. Concrete throws (e.g.
                 // `throws ParseError`) pass through unchanged and stay enforced.
                 let normalized_throws = match throws {
                     RuntimeTy::Void { attr } | RuntimeTy::Never { attr } => {
-                        RuntimeTy::BuiltinUnknown { attr }
+                        RuntimeTy::Unknown { attr }
                     }
                     other => other,
                 };
@@ -2658,7 +2720,7 @@ fn peel_single_container_member<'a>(
 }
 
 /// Whether a host-callable's declared return type contains a position the
-/// host-return validator cannot check, such as `RuntimeTy::BuiltinUnknown`.
+/// host-return validator cannot check, such as `RuntimeTy::Unknown`.
 /// Recurses through `Optional` / `List` / `Map`-value /
 /// `Union` / `Class`-generic-args so a nested erased position (`(T)[]`,
 /// `Box<T>`) is caught too. A host callable with such a return type cannot have
@@ -2669,13 +2731,13 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
         // against these declared types (the host-return validator has no
         // positive discriminator for them), so a host could inject a value that
         // violates the declared type. Reject binding such a callable.
-        //   - `BuiltinUnknown`: accept-anything top.
+        //   - `Unknown`: accept-anything top.
         //   - `TypeVar`/`AssociatedTypeProjection`: faithful (un-erased) generic
         //     positions whose instantiation can't be validated.
         //   - `Interface`: implementation can't be checked at the FFI boundary.
         //   - `Future`: the host cannot produce a VM future, and nothing
         //     validates one.
-        RuntimeTy::BuiltinUnknown { .. }
+        RuntimeTy::Unknown { .. }
         | RuntimeTy::TypeVar(..)
         | RuntimeTy::AssociatedTypeProjection { .. }
         | RuntimeTy::Interface(..)
@@ -2721,10 +2783,10 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
 
 /// Find which union member matches a value.
 ///
-/// `BuiltinUnknown` arms match any value (see `value_matches_type`) and are
+/// `Unknown` arms match any value (see `value_matches_type`) and are
 /// considered last so a more-specific arm wins. This keeps the union
 /// metadata's `selected_option` faithful when concrete arms (e.g.
-/// `Done` in `BuiltinUnknown | Done`) actually fit.
+/// `Done` in `Unknown | Done`) actually fit.
 fn find_matching_member(
     value: &BexExternalValue,
     members: &[RuntimeTy],
@@ -2780,7 +2842,7 @@ fn find_matching_member(
     for member in members.iter().filter(|member| {
         !matches!(
             member,
-            RuntimeTy::Literal(..) | RuntimeTy::EnumVariant(..) | RuntimeTy::BuiltinUnknown { .. }
+            RuntimeTy::Literal(..) | RuntimeTy::EnumVariant(..) | RuntimeTy::Unknown { .. }
         ) && value_matches_type(value, member)
     }) {
         if matching
@@ -2803,7 +2865,7 @@ fn find_matching_member(
         }
     }
     for member in members {
-        if matches!(member, RuntimeTy::BuiltinUnknown { .. }) {
+        if matches!(member, RuntimeTy::Unknown { .. }) {
             return Ok(member.clone());
         }
     }
@@ -2842,7 +2904,7 @@ fn find_unannotated_inbound_member_with_aliases(
 ) -> Result<RuntimeTy, EngineError> {
     let mut matching: Vec<&RuntimeTy> = Vec::new();
     for member in members.iter().filter(|member| {
-        !matches!(member, RuntimeTy::BuiltinUnknown { .. })
+        !matches!(member, RuntimeTy::Unknown { .. })
             && value_matches_type_with_definitions(value, member, aliases, classes)
     }) {
         if matching
@@ -2871,7 +2933,7 @@ fn find_unannotated_inbound_member_with_aliases(
         [member] => Ok((*member).clone()),
         [] => members
             .iter()
-            .find(|member| matches!(member, RuntimeTy::BuiltinUnknown { .. }))
+            .find(|member| matches!(member, RuntimeTy::Unknown { .. }))
             .cloned()
             .ok_or_else(|| EngineError::TypeMismatch {
                 message: format!(
@@ -3040,12 +3102,12 @@ fn value_matches_type_with_definitions(
     }
 
     match (value, ty) {
-        // `BuiltinUnknown` is the engine's "any value matches" sentinel
-        // (TypeScript `unknown` semantics — see `baml_type::RuntimeTy::BuiltinUnknown`).
+        // `Unknown` is the engine's "any value matches" sentinel
+        // (TypeScript `unknown` semantics — see `baml_type::RuntimeTy::Unknown`).
         // Used by the stdlib generics hardcode in `baml_compiler2_mir::lower`
         // so e.g. `Stream<TStream, TFinal>.next() -> TStream | Done`
         // accepts any partial-stream payload as the `TStream` arm.
-        (_, RuntimeTy::BuiltinUnknown { .. }) => true,
+        (_, RuntimeTy::Unknown { .. }) => true,
         (BexExternalValue::Null, RuntimeTy::Null { .. }) => true,
         (BexExternalValue::Null, RuntimeTy::Void { .. }) => true,
         (BexExternalValue::Int(_), RuntimeTy::Int { .. }) => true,
@@ -3138,10 +3200,15 @@ fn value_matches_type_with_definitions(
             BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_)),
             RuntimeTy::Type { .. },
         ) => true,
-        (BexExternalValue::Union { value, metadata }, RuntimeTy::Union(members, _)) => {
+        (union_value @ BexExternalValue::Union { metadata, .. }, RuntimeTy::Union(members, _)) => {
             members.iter().any(|member| {
+                // Recurse with the ANNOTATED carrier, not the unwrapped
+                // payload: sparse inbound annotations are the value's
+                // identity for media members (the wrapper's shape never
+                // matches `Media` structurally), and the per-member arms
+                // below unwrap for every non-annotation-dependent case.
                 selected_arm_equal(member, &metadata.selected_option)
-                    && value_matches_type_with_definitions(value, member, aliases, classes)
+                    && value_matches_type_with_definitions(union_value, member, aliases, classes)
             })
         }
         // `value_satisfies_json` peels sparse inbound leaf annotations (the
@@ -3151,6 +3218,23 @@ fn value_matches_type_with_definitions(
             if is_canonical_json_alias(name) =>
         {
             value_satisfies_json(union_value)
+        }
+        // A media value crosses the FFI as a class-shaped `{_data: handle}`
+        // wrap carrying a sparse `Media(kind)` annotation. The annotation is
+        // the value's identity — the payload shape never matches `Media`
+        // structurally — so honor it before unwrapping (otherwise media
+        // items inside union-typed containers, e.g. `image[]?`, are
+        // rejected while the direct-typed path accepts them).
+        (BexExternalValue::Union { metadata, .. }, RuntimeTy::Media(expected_kind, _))
+            if metadata.is_inbound_type_annotation
+                && matches!(
+                    &metadata.selected_option,
+                    RuntimeTy::Media(kind, _)
+                        if *expected_kind == baml_type::MediaKind::Generic
+                            || kind == expected_kind
+                ) =>
+        {
+            true
         }
         (BexExternalValue::Union { value, .. }, ty) => {
             value_matches_type_with_definitions(value, ty, aliases, classes)
@@ -3177,11 +3261,11 @@ fn value_matches_type_with_definitions(
 ///   there is nothing to check (fall back to name-only).
 /// - `wire_args` empty against a non-empty `expected_args`: reject only if the
 ///   expected args are concrete. If they are still erased/unconcretized
-///   wildcards (`TypeVar`/`BuiltinUnknown` — e.g. an instance method's class
+///   wildcards (`TypeVar`/`Unknown` — e.g. an instance method's class
 ///   param that couldn't be bound, lowered to runtime `unknown`), there is
 ///   nothing concrete to contradict, so stay lenient.
 /// - differing (non-zero) arity → reject.
-/// - per-arg: an expected `TypeVar`/`BuiltinUnknown` is a wildcard; otherwise the
+/// - per-arg: an expected `TypeVar`/`Unknown` is a wildcard; otherwise the
 ///   wire arg must be compatible with the expected arg.
 fn class_type_args_compatible(wire_args: &[RuntimeTy], expected_args: &[RuntimeTy]) -> bool {
     if expected_args.is_empty() {
@@ -3203,10 +3287,7 @@ fn class_type_args_compatible(wire_args: &[RuntimeTy], expected_args: &[RuntimeT
 /// `TypeVar` or the `unknown` sentinel. Such a position can't positively
 /// contradict a wire arg, so the structural matcher treats it as a wildcard.
 fn is_wildcard_ty(ty: &RuntimeTy) -> bool {
-    matches!(
-        ty,
-        RuntimeTy::TypeVar(..) | RuntimeTy::BuiltinUnknown { .. }
-    )
+    matches!(ty, RuntimeTy::TypeVar(..) | RuntimeTy::Unknown { .. })
 }
 
 /// Structural compatibility of a wire-supplied type against a declared
@@ -3214,7 +3295,7 @@ fn is_wildcard_ty(ty: &RuntimeTy) -> bool {
 /// boundary without depending on `TyAttr` equality or full subtyping. Lenient:
 /// only a *positive* leaf/shape mismatch returns `false`.
 ///
-/// - an expected `TypeVar`/`BuiltinUnknown` is a wildcard;
+/// - an expected `TypeVar`/`Unknown` is a wildcard;
 /// - two primitives must be the same primitive (this is what separates
 ///   `Foo<int>` from `Foo<string>`);
 /// - matching containers recurse; class names must match, then args recurse;
@@ -3222,8 +3303,8 @@ fn is_wildcard_ty(ty: &RuntimeTy) -> bool {
 fn runtime_ty_compatible(wire: &RuntimeTy, expected: &RuntimeTy) -> bool {
     use RuntimeTy as T;
     match (wire, expected) {
-        (_, T::TypeVar(..) | T::BuiltinUnknown { .. }) => true,
-        (T::TypeVar(..) | T::BuiltinUnknown { .. }, _) => true,
+        (_, T::TypeVar(..) | T::Unknown { .. }) => true,
+        (T::TypeVar(..) | T::Unknown { .. }, _) => true,
         (T::Int { .. }, T::Int { .. })
         | (T::String { .. }, T::String { .. })
         | (T::Bool { .. }, T::Bool { .. })
@@ -3441,7 +3522,7 @@ impl BexEngine {
         match expected {
             // `unknown` / opaque-any: accept (defensive — concrete at the FFI
             // boundary).
-            RuntimeTy::BuiltinUnknown { .. } => Ok(()),
+            RuntimeTy::Unknown { .. } => Ok(()),
 
             // Union (including nullable `T | null`): must satisfy at least one
             // member (schema-aware).
@@ -4770,36 +4851,6 @@ fn coerce_numeric_to_declared_type(
         }
 
         (v, _) => Ok(v),
-    }
-}
-
-/// Convert a compiled `TestArgValue` to a `BexExternalValue` for function calls.
-pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue {
-    match v {
-        bex_vm_types::TestArgValue::Null => BexExternalValue::Null,
-        bex_vm_types::TestArgValue::Int(i) => BexExternalValue::Int(*i),
-        bex_vm_types::TestArgValue::Float(f) => BexExternalValue::Float(*f),
-        bex_vm_types::TestArgValue::Bool(b) => BexExternalValue::Bool(*b),
-        bex_vm_types::TestArgValue::String(s) => BexExternalValue::String(s.as_str().into()),
-        bex_vm_types::TestArgValue::Array {
-            element_type,
-            items,
-        } => BexExternalValue::Array {
-            element_type: overlay_wire_ty(element_type).unwrap_or_else(|_| RuntimeTy::unknown()),
-            items: items.iter().map(test_arg_to_external).collect(),
-        },
-        bex_vm_types::TestArgValue::Map {
-            key_type,
-            value_type,
-            entries,
-        } => BexExternalValue::Map {
-            key_type: overlay_wire_ty(key_type).unwrap_or_else(|_| RuntimeTy::unknown()),
-            value_type: overlay_wire_ty(value_type).unwrap_or_else(|_| RuntimeTy::unknown()),
-            entries: entries
-                .iter()
-                .map(|(k, v)| (k.clone(), test_arg_to_external(v)))
-                .collect(),
-        },
     }
 }
 
@@ -6342,5 +6393,56 @@ mod inference_unifier_tests {
         let actual = union(vec![int(), string()]);
         let out = infer(&formal, &actual);
         assert_eq!(out.get("T"), Some(&string()));
+    }
+}
+
+#[cfg(test)]
+mod union_media_annotation_tests {
+    use super::*;
+
+    /// An inbound media value annotated `image` must satisfy a DECLARED
+    /// union containing that media kind (`image | string`). The wrapper
+    /// payload's shape never matches `Media` structurally — the sparse
+    /// annotation is the value's identity — so the union-member check must
+    /// recurse with the annotated carrier, not the unwrapped payload.
+    #[test]
+    fn annotated_media_matches_declared_media_or_string_union() {
+        let media_ty = RuntimeTy::Media(baml_type::MediaKind::Image, baml_type::TyAttr::default());
+        let declared = RuntimeTy::Union(
+            vec![
+                media_ty.clone(),
+                RuntimeTy::String {
+                    attr: baml_type::TyAttr::default(),
+                },
+            ],
+            baml_type::TyAttr::default(),
+        );
+        let wrapper = BexExternalValue::Instance {
+            class_name: "baml.media.Image".to_string(),
+            type_args: vec![],
+            fields: indexmap::IndexMap::new(),
+        };
+        let annotated = BexExternalValue::typed(wrapper, media_ty);
+        assert!(value_matches_type_with_definitions(
+            &annotated,
+            &declared,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+        ));
+
+        // control: a string-annotated payload still matches through the
+        // generic unwrap path
+        let annotated_string = BexExternalValue::typed(
+            BexExternalValue::String("hi".into()),
+            RuntimeTy::String {
+                attr: baml_type::TyAttr::default(),
+            },
+        );
+        assert!(value_matches_type_with_definitions(
+            &annotated_string,
+            &declared,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+        ));
     }
 }

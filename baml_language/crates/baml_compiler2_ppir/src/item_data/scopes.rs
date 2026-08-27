@@ -10,7 +10,7 @@
 use baml_compiler2_hir::{
     loc::{
         ClassLoc, ClientLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
-        TemplateStringLoc, TestLoc, TypeAliasLoc,
+        TemplateStringLoc, TypeAliasLoc,
     },
     scope::{ItemScopeOwner, ScopeId},
 };
@@ -25,7 +25,6 @@ pub enum ScopeOwner<'db> {
     TypeAlias(TypeAliasLoc<'db>),
     TemplateString(TemplateStringLoc<'db>),
     Client(ClientLoc<'db>),
-    Test(TestLoc<'db>),
     RetryPolicy(RetryPolicyLoc<'db>),
     Let(LetLoc<'db>),
     Impl(ImplLoc<'db>),
@@ -49,7 +48,6 @@ pub fn scope_owner<'db>(db: &'db dyn crate::Db, scope: ScopeId<'db>) -> Option<S
             ScopeOwner::TemplateString(TemplateStringLoc::new(db, file, id))
         }
         ItemScopeOwner::Client(id) => ScopeOwner::Client(ClientLoc::new(db, file, id)),
-        ItemScopeOwner::Test(id) => ScopeOwner::Test(TestLoc::new(db, file, id)),
         ItemScopeOwner::RetryPolicy(id) => {
             ScopeOwner::RetryPolicy(RetryPolicyLoc::new(db, file, id))
         }

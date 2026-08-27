@@ -1479,7 +1479,7 @@ pub(crate) mod support {
                         throws
                     )
                 }
-                baml_compiler2_ast::TypeExprKind::BuiltinUnknown { .. } => "unknown".into(),
+                baml_compiler2_ast::TypeExprKind::Unknown { .. } => "unknown".into(),
                 baml_compiler2_ast::TypeExprKind::AssociatedTypeProjection {
                     base,
                     interface,
@@ -1498,7 +1498,7 @@ pub(crate) mod support {
                 baml_compiler2_ast::TypeExprKind::Type { .. } => "reflect.Type".into(),
                 baml_compiler2_ast::TypeExprKind::Rust { .. } => "$rust_type".into(),
                 baml_compiler2_ast::TypeExprKind::Error { .. } => "error".into(),
-                baml_compiler2_ast::TypeExprKind::Unknown { .. } => "?".into(),
+                baml_compiler2_ast::TypeExprKind::Missing { .. } => "?".into(),
                 baml_compiler2_ast::TypeExprKind::Infer { .. } => "_".into(),
             }
         }
@@ -1636,7 +1636,7 @@ pub(crate) mod support {
                         throws
                     )
                 }
-                K::BuiltinUnknown => "unknown".into(),
+                K::Unknown => "unknown".into(),
                 K::AssociatedTypeProjection {
                     base,
                     interface,
@@ -1654,7 +1654,7 @@ pub(crate) mod support {
                 K::Type => "reflect.Type".into(),
                 K::Rust => "$rust_type".into(),
                 K::Error => "error".into(),
-                K::Unknown => "?".into(),
+                K::Missing => "?".into(),
                 K::Infer => "_".into(),
             }
         }

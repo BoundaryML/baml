@@ -479,7 +479,7 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
         Ty::Null { .. } => "null".to_string(),
         Ty::Uint8Array { .. } => "uint8array".to_string(),
         Ty::Void { .. } => "void".to_string(),
-        Ty::BuiltinUnknown { .. } => "unknown".to_string(),
+        Ty::Unknown { .. } => "unknown".to_string(),
         // A generic class carries its concrete type args in its identity token
         // (`Wrapper<int>` vs `Wrapper<string>`) — kept for parity with
         // `registry_arm_expr`, which distinguishes two instantiations so a union /

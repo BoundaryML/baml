@@ -331,13 +331,10 @@ fn process_body(
 ///
 /// We suppress:
 /// - `Ty::Error` — type-check error, nothing useful to show
-/// - `Ty::BuiltinUnknown` / `Ty::Unknown` — no useful info
+/// - `Ty::Unknown` — no useful info
 /// - `Ty::Never` — unreachable / error types
 fn should_suppress_type(ty: &Ty) -> bool {
-    matches!(
-        ty,
-        Ty::Error { .. } | Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } | Ty::Never { .. }
-    )
+    baml_type::contains_error_recovery(ty) || matches!(ty, Ty::Unknown { .. } | Ty::Never { .. })
 }
 
 /// True if `callee` names a test/testset registration method
@@ -412,6 +409,46 @@ fn scope_is_descendant_or_self(
 mod tests {
     use super::*;
     use crate::test_support::ProjectTest;
+
+    #[test]
+    fn lambda_type_hints_use_later_constraints_and_hide_unresolved_types() {
+        const SOURCE: &str = r#"
+function resolved() -> int {
+    let resolved_lambda = (b) -> { 1 }
+    let constrained: (int) -> int throws never = resolved_lambda
+    constrained(0)
+}
+
+function unresolved() -> int {
+    let unresolved_lambda = (b) -> { 1 }
+    0
+}
+"#;
+
+        let mut builder = ProjectTest::builder();
+        builder.source("main.baml", SOURCE);
+        let project = builder.build();
+        let hints = file_annotations(&project.db, project.files[0]);
+
+        let binding_offset = |name: &str| {
+            let start = SOURCE.find(name).expect("binding should exist");
+            TextSize::try_from(start + name.len()).expect("binding offset should fit in TextSize")
+        };
+        let type_hints_at = |offset| {
+            hints
+                .iter()
+                .filter(|hint| hint.kind == AnnotationKind::Type && hint.offset == offset)
+                .map(|hint| hint.label.as_str())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(
+            type_hints_at(binding_offset("resolved_lambda")),
+            vec![": (b: int) -> int throws never"]
+        );
+        assert!(type_hints_at(binding_offset("unresolved_lambda")).is_empty());
+        assert!(hints.iter().all(|hint| !hint.label.contains("!error")));
+    }
 
     #[test]
     fn annotations_skip_declarative_llm_synthetic_call_hints() {

@@ -19,7 +19,7 @@ use baml_base::Name;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
-    Object, RealizedTy, TestCase, TyTemplate,
+    Object, RealizedTy, TyTemplate,
     types::{InterfaceBound, LocalName},
 };
 
@@ -219,8 +219,6 @@ pub struct CompilationUnit {
     // --- side-table fragments the whole-program passes consume at link ---
     /// This unit's symbolic contribution to its package's structure.
     pub package_fragment: ProgramPackageFrag,
-    /// Pass-8 compiled test cases defined in this file.
-    pub test_cases: Vec<TestCase>,
     /// `borsh(CallableThrowsFragment)` for this file. Opaque bytes
     /// because `bex_vm_types` sits below `baml_compiler2_hir_ty`, which owns the
     /// typed fragment — the same decoupling as the stdlib-interface blob. Empty

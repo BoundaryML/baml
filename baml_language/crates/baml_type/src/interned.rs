@@ -27,11 +27,7 @@
 //! drift is a compile error), with deliberate spec-driven deltas: `Infer`
 //! carries an optional [`InferVar`] so inference-table variables are native
 //! (`None` is the syntactic `_` hole, exactly what the plain enum's `Infer`
-//! means today); TIR's internal recovery sentinels (plain `Unknown`,
-//! `EvolvingList`, `EvolvingMap`) are unrepresentable - see the note at the
-//! end of [`TyKind`]; and the top type takes its spec name `Unknown` here
-//! (the plain enum calls it `BuiltinUnknown` only because the sentinel had
-//! claimed the shorter name).
+//! means today).
 
 use std::{
     cmp::Ordering,
@@ -308,10 +304,7 @@ pub enum TyKind {
         attr: TyAttr,
     },
     // = 27; the spec's top type (the user-denotable `unknown` keyword,
-    // `T <: unknown` for all `T`). NAMING: the plain enum calls this
-    // `BuiltinUnknown` only because plain `Unknown` is taken by the TIR
-    // error-recovery sentinel (unrepresentable here, see below). This
-    // representation uses the spec name.
+    // `T <: unknown` for all `T`).
     Unknown {
         attr: TyAttr,
     },
@@ -319,13 +312,13 @@ pub enum TyKind {
     Never {
         attr: TyAttr,
     },
-    // = 30 (29 deliberately unrepresentable, see below); the single error
-    // sentinel: a diagnostic was already emitted for this node, downstream
-    // must not cascade further errors from it.
+    // = 30 (29 is a retired wire slot); the single error sentinel: a
+    // diagnostic was already emitted for this node, downstream must not
+    // cascade further errors from it.
     Error {
         attr: TyAttr,
     },
-    // = 33 (31/32 deliberately unrepresentable, see below); `var: None` is
+    // = 33 (31/32 are retired wire slots); `var: None` is
     // the syntactic `_` hole (the plain enum's `Infer`), `Some` is a live
     // inference-table variable (hir_ty only; must never survive
     // `resolve_all`).
@@ -334,18 +327,6 @@ pub enum TyKind {
         attr: TyAttr,
     },
     // Deliberately absent:
-    // - the plain enum's `Unknown` (= 29): TIR's second error-recovery
-    //   sentinel (NOT this enum's `Unknown`, which is the top type), which
-    //   TIR also overloads as a "no expectation" marker and a "not yet
-    //   inferred" seed. Each job has a principled home in hir_ty: unresolved
-    //   names are the single `Error` sentinel (rust-analyzer's model), "no
-    //   expectation" is `Expectation::None`, and "not yet inferred" is a
-    //   fresh `Infer` variable.
-    // - `EvolvingList` (= 31) / `EvolvingMap` (= 32): TIR-internal sentinels
-    //   for empty-container element refinement. The hir_ty engine expresses
-    //   the same thing honestly as `List`/`Map` over inference variables, so
-    //   these must not be representable here; they only ever exist
-    //   mid-TIR-inference and never cross a boundary this module imports.
     // - `TypeArgRef` (= 34): the frame axis exists only in `TyTemplate`, not
     //   in the plain `Ty` this module mirrors; it joins this representation
     //   when the family axes migrate at cutover.
@@ -626,11 +607,6 @@ fn compute_flags(kind: &TyKind) -> TypeFlags {
 impl Ty {
     /// Interns the plain enum's structure. `Infer` becomes the var-less hole.
     ///
-    /// # Panics
-    ///
-    /// On the plain `Unknown`/`EvolvingList`/`EvolvingMap`: TIR-internal
-    /// inference sentinels that must never reach this boundary (hir_ty uses
-    /// the single `Error` sentinel and inference variables instead).
     pub fn from_plain(ty: &crate::Ty) -> Ty {
         let interned_all =
             |tys: &[crate::Ty]| -> Box<[Ty]> { tys.iter().map(Ty::from_plain).collect() };
@@ -716,19 +692,9 @@ impl Ty {
                 member: member.clone(),
                 attr: attr.clone(),
             },
-            crate::Ty::BuiltinUnknown { attr } => TyKind::Unknown { attr: attr.clone() },
+            crate::Ty::Unknown { attr } => TyKind::Unknown { attr: attr.clone() },
             crate::Ty::Never { attr } => TyKind::Never { attr: attr.clone() },
             crate::Ty::Error { attr } => TyKind::Error { attr: attr.clone() },
-            crate::Ty::Unknown { .. }
-            | crate::Ty::EvolvingList(..)
-            | crate::Ty::EvolvingMap(..) => {
-                panic!(
-                    "plain Ty::Unknown/EvolvingList/EvolvingMap are TIR-internal inference \
-                     sentinels with no interned form (hir_ty uses the single Error sentinel \
-                     and inference variables instead; the interned Unknown is the TOP type, \
-                     i.e. plain BuiltinUnknown). They must never reach this boundary."
-                )
-            }
             crate::Ty::Infer { attr } => TyKind::Infer {
                 var: None,
                 attr: attr.clone(),
@@ -827,7 +793,7 @@ impl Ty {
                 member: member.clone(),
                 attr: attr.clone(),
             },
-            TyKind::Unknown { attr } => crate::Ty::BuiltinUnknown { attr: attr.clone() },
+            TyKind::Unknown { attr } => crate::Ty::Unknown { attr: attr.clone() },
             TyKind::Never { attr } => crate::Ty::Never { attr: attr.clone() },
             TyKind::Error { attr } => crate::Ty::Error { attr: attr.clone() },
             TyKind::Infer { var: _, attr } => crate::Ty::Infer { attr: attr.clone() },
@@ -979,32 +945,11 @@ mod tests {
                 member: Name::new("Item"),
                 attr: a(),
             },
-            P::BuiltinUnknown { attr: a() },
+            P::Unknown { attr: a() },
             P::Never { attr: a() },
             P::Error { attr: a() },
             P::Infer { attr: a() },
         ]
-    }
-
-    #[test]
-    #[should_panic(expected = "TIR-internal inference sentinels")]
-    fn tir_evolving_sentinels_are_unrepresentable() {
-        let plain = crate::Ty::EvolvingList(
-            Box::new(crate::Ty::Int {
-                attr: TyAttr::default(),
-            }),
-            TyAttr::default(),
-        );
-        let _ = Ty::from_plain(&plain);
-    }
-
-    #[test]
-    #[should_panic(expected = "TIR-internal inference sentinels")]
-    fn tir_unknown_sentinel_is_unrepresentable() {
-        let plain = crate::Ty::Unknown {
-            attr: TyAttr::default(),
-        };
-        let _ = Ty::from_plain(&plain);
     }
 
     #[test]

@@ -30,8 +30,12 @@ function streaming_parsing.ExtractDoc(input: string, client: ai.Client | null, o
     call user.streaming_parsing.ExtractDoc$spec
     store_var _9
     load_type streaming_parsing.Doc
-    load_var2 4 5
-    call ai.Agent.run
+    load_var2 5 6
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _6
+    load_var _6
     load_field .value
     return
 }
@@ -153,8 +157,12 @@ function streaming_parsing.SayHello(input: string, client: ai.Client | null, on_
     call user.streaming_parsing.SayHello$spec
     store_var _9
     load_type string
-    load_var2 4 5
-    call ai.Agent.run
+    load_var2 5 6
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _6
+    load_var _6
     load_field .value
     return
 }

@@ -163,7 +163,7 @@ fn pattern_pair_overlap(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> O
     // var (`unknown` implements nothing). Distinct from `unknown` in an invariant
     // *argument* position, where equality IS the question and `unify_into` keeps
     // deciding it (binding an opposing var, comparing ground pairs exactly).
-    if matches!(pat, Ty::BuiltinUnknown { .. }) || matches!(member, Ty::BuiltinUnknown { .. }) {
+    if matches!(pat, Ty::Unknown { .. }) || matches!(member, Ty::Unknown { .. }) {
         return Overlap::Yes;
     }
     // A bare in-scope rigid var meeting an interface existential is likewise
@@ -209,11 +209,12 @@ fn pattern_atom_meet(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Over
     match (pat, member) {
         // Error sentinels overlap nothing (mirrors `unify_into`): the type already
         // carries its own diagnostic, and callers suppress cascading reports.
-        (Ty::Unknown { .. } | Ty::Error { .. } | Ty::Infer { .. }, _)
-        | (_, Ty::Unknown { .. } | Ty::Error { .. } | Ty::Infer { .. }) => Overlap::No,
+        (Ty::Error { .. } | Ty::Infer { .. }, _) | (_, Ty::Error { .. } | Ty::Infer { .. }) => {
+            Overlap::No
+        }
         // `unknown` is the top type: it shares values with every inhabited type
         // (`never` was rejected before unification).
-        (Ty::BuiltinUnknown { .. }, _) | (_, Ty::BuiltinUnknown { .. }) => Overlap::Yes,
+        (Ty::Unknown { .. }, _) | (_, Ty::Unknown { .. }) => Overlap::Yes,
         // An opaque `$rust_type` could coincide with anything.
         (Ty::RustType { .. }, _) | (_, Ty::RustType { .. }) => Overlap::Yes,
         // A residual projection could stand for any type (defensive mirror of the
@@ -251,9 +252,7 @@ fn pattern_atom_meet(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Over
         (
             Ty::Class(..)
             | Ty::List(..)
-            | Ty::EvolvingList(..)
             | Ty::Map { .. }
-            | Ty::EvolvingMap(..)
             | Ty::Future(..)
             | Ty::Int { .. }
             | Ty::Bigint { .. }
@@ -703,7 +702,7 @@ mod tests {
     #[test]
     fn pattern_overlap_unknown_top_type_meets_everything() {
         let vars = params(&[]);
-        let unknown = Ty::BuiltinUnknown {
+        let unknown = Ty::Unknown {
             attr: TyAttr::default(),
         };
         assert_eq!(
@@ -721,7 +720,7 @@ mod tests {
         // invariant *argument* position the question is equality instead, and a
         // bounded var genuinely cannot realize to `unknown` — refuted.
         let vars = params(&["T"]);
-        let unknown = Ty::BuiltinUnknown {
+        let unknown = Ty::Unknown {
             attr: TyAttr::default(),
         };
         let mut bounds = TypeVarBoundsMap::default();

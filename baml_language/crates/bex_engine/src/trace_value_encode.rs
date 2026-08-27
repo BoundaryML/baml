@@ -698,7 +698,7 @@ fn runtime_ty_allocation_metric(ty: &RuntimeTy) -> AllocationMetric {
         | RuntimeTy::Resource { .. }
         | RuntimeTy::PromptAst { .. }
         | RuntimeTy::Void { .. }
-        | RuntimeTy::BuiltinUnknown { .. }
+        | RuntimeTy::Unknown { .. }
         | RuntimeTy::Never { .. } => {}
     }
     metric
@@ -946,7 +946,7 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
             ))),
             member: member.as_str().to_string(),
         }),
-        RuntimeTy::BuiltinUnknown { .. } => BamlTyVariant::Unknown(BamlTyUnknown {}),
+        RuntimeTy::Unknown { .. } => BamlTyVariant::Unknown(BamlTyUnknown {}),
         RuntimeTy::Never { .. } => BamlTyVariant::Never(BamlTyNever {}),
     }
 }

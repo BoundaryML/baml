@@ -36,3 +36,11 @@ test "annotation deduces through a nested constructor slot" {
     assert.equal(doubled.length(), 3);
     assert.equal(doubled[2][1], 6)
 }
+
+test "stored lambda parameter is inferred from a later annotation" {
+    let identity = (value) -> {
+        value
+    };
+    let constrained: (int) -> int throws never = identity;
+    assert.equal(constrained(42), 42)
+}

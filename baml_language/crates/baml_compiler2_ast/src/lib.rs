@@ -388,7 +388,7 @@ mod tests {
                 kind: *kind,
                 attrs: strip_attrs(attrs),
             },
-            TypeExprKind::BuiltinUnknown { attrs } => TypeExprKind::BuiltinUnknown {
+            TypeExprKind::Unknown { attrs } => TypeExprKind::Unknown {
                 attrs: strip_attrs(attrs),
             },
             TypeExprKind::Type { attrs } => TypeExprKind::Type {
@@ -397,7 +397,7 @@ mod tests {
             TypeExprKind::Error { attrs } => TypeExprKind::Error {
                 attrs: strip_attrs(attrs),
             },
-            TypeExprKind::Unknown { attrs } => TypeExprKind::Unknown {
+            TypeExprKind::Missing { attrs } => TypeExprKind::Missing {
                 attrs: strip_attrs(attrs),
             },
             TypeExprKind::Infer { attrs } => TypeExprKind::Infer {
@@ -1158,38 +1158,6 @@ function legacy() -> string {
             ),
             "removed hash strings must never become semantic string literals"
         );
-    }
-
-    #[test]
-    fn removed_hash_string_test_arg_lowers_to_null_recovery() {
-        let source = r##"
-function target(value: string) -> string { value }
-
-test Legacy {
-  functions [target]
-  args {
-    value #"legacy"#
-  }
-}
-"##;
-        let tokens = lex_lossless(source, FileId::new(0));
-        let (green, errors) = parse_file(&tokens);
-        assert!(!errors.is_empty(), "removed hash strings must fail parsing");
-
-        let root = SyntaxNode::new_root(green);
-        let (items, _diags, _env_var_refs) = lower_file(&root);
-        let test = items
-            .into_iter()
-            .find_map(|item| match item {
-                Item::Test(test) => Some(test),
-                _ => None,
-            })
-            .expect("expected recovered test");
-
-        assert!(matches!(
-            test.args.as_slice(),
-            [(name, crate::ast::TestArgValue::Null)] if name.as_str() == "value"
-        ));
     }
 
     #[test]

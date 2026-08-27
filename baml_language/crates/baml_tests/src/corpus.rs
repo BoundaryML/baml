@@ -343,13 +343,10 @@ fn corpus_snapshots() {
     }
 
     // ---- Bytecode: one emit, snapshotted per namespace ----
-    // `OptLevel::Two` and `emit_test_cases: false` match what the deleted
-    // per-project codegen tests used (`generate_project_bytecode` defaults),
-    // and O2 lets emit reuse the MIR memos the snapshots above populated.
-    let options = baml_compiler2_emit::CompileOptions {
-        emit_test_cases: false,
-    };
-    let program = baml_compiler2_emit::generate_project_bytecode(&db, &options)
+    // `OptLevel::Two` matches what the deleted per-project codegen tests used
+    // (`generate_project_bytecode` defaults), and O2 lets emit reuse the MIR
+    // memos the snapshots above populated.
+    let program = baml_compiler2_emit::generate_project_bytecode(&db)
         .expect("bytecode emit should succeed for an error-free corpus");
 
     // Emit mints tag-only type heads (the pointer half exists only once a heap

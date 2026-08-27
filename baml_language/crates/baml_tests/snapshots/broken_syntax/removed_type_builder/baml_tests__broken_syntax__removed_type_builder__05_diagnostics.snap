@@ -5,8 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [parse] E0098
 
   × removed language feature
-    ╭─[removed_type_builder.baml:14:3]
- 14 │   type_builder {
+    ╭─[removed_type_builder.baml:10:3]
+ 10 │   type_builder {
     ·   ──────┬─────
     ·         ╰── `type_builder` blocks were removed; runtime type construction is `reflect` (BEP-066)
     ╰────
@@ -14,53 +14,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [parse] E0098
 
   × removed language feature
-    ╭─[removed_type_builder.baml:39:3]
- 39 │   type_builder {
-    ·   ──────┬─────
-    ·         ╰── `type_builder` blocks were removed; runtime type construction is `reflect` (BEP-066)
-    ╰────
-
-  [parse] E0098
-
-  × removed language feature
-    ╭─[removed_type_builder.baml:53:3]
- 53 │   type_builder: {
-    ·   ──────┬─────
-    ·         ╰── `type_builder` blocks were removed; runtime type construction is `reflect` (BEP-066)
-    ╰────
-
-  [parse] E0098
-
-  × removed language feature
-    ╭─[removed_type_builder.baml:66:3]
- 66 │   dynamic class DirectDynamicClass {
-    ·   ───┬───
-    ·      ╰── `dynamic class` definitions were removed; runtime type construction is `reflect` (BEP-066)
-    ╰────
-
-  [parse] E0098
-
-  × removed language feature
-    ╭─[removed_type_builder.baml:69:3]
- 69 │   dynamic enum DirectDynamicEnum {
-    ·   ───┬───
-    ·      ╰── `dynamic enum` definitions were removed; runtime type construction is `reflect` (BEP-066)
-    ╰────
-
-  [parse] E0098
-
-  × removed language feature
-    ╭─[removed_type_builder.baml:81:3]
- 81 │   type_builder {
-    ·   ──────┬─────
-    ·         ╰── `type_builder` blocks were removed; runtime type construction is `reflect` (BEP-066)
-    ╰────
-
-  [parse] E0098
-
-  × removed language feature
-    ╭─[removed_type_builder.baml:92:1]
- 92 │ type_builder {
+    ╭─[removed_type_builder.baml:21:1]
+ 21 │ type_builder {
     · ──────┬─────
     ·       ╰── `type_builder` blocks were removed; runtime type construction is `reflect` (BEP-066)
     ╰────
@@ -68,8 +23,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [parse] E0098
 
   × removed language feature
-    ╭─[removed_type_builder.baml:99:1]
- 99 │ dynamic class TopLevelDynamic {
+    ╭─[removed_type_builder.baml:28:1]
+ 28 │ dynamic class TopLevelDynamic {
     · ───┬───
     ·    ╰── `dynamic class` definitions were removed; runtime type construction is `reflect` (BEP-066)
     ╰────

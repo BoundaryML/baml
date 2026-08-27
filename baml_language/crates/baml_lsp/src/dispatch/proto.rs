@@ -94,7 +94,6 @@ pub(super) fn symbol_kind(kind: DefinitionKind) -> SymbolKind {
         DefinitionKind::Function => SymbolKind::FUNCTION,
         DefinitionKind::TemplateString => SymbolKind::STRING,
         DefinitionKind::Client => SymbolKind::OBJECT,
-        DefinitionKind::Test => SymbolKind::EVENT,
         DefinitionKind::RetryPolicy => SymbolKind::OBJECT,
         DefinitionKind::Let => SymbolKind::CONSTANT,
         DefinitionKind::Field => SymbolKind::FIELD,

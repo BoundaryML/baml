@@ -648,7 +648,7 @@ fn resolve_type_ref(
 /// declared clause wins over inference inside that query, and a function that
 /// throws *without* a written clause still surfaces its inferred escaping
 /// throws. `None` when the function throws nothing (`Ty::Never`) or the
-/// contract can't be resolved (`Ty::Unknown`). Used for the `Raises:`
+/// contract can't be resolved. Used for the `Raises:`
 /// docstring block (32d).
 fn resolve_throws<'db>(
     db: &'db ProjectDatabase,
@@ -657,7 +657,7 @@ fn resolve_throws<'db>(
     recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
 ) -> Option<cg::Ty> {
     match &baml_compiler2_hir_ty::callable::callable_throws(db, func_loc).0 {
-        TirTy::Never { .. } | TirTy::Unknown { .. } => None,
+        TirTy::Never { .. } => None,
         ty => Some(convert_tir_to_codegen_ty(ty, alias_map, recursive_aliases)),
     }
 }
@@ -712,13 +712,10 @@ fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
             cg::Ty::EnumVariant(name_from_qtn(qtn), variant.clone(), attr())
         }
         TirTy::TypeAlias(qtn, _) => cg::Ty::TypeAlias(name_from_qtn(qtn), attr()),
-        TirTy::List(inner, _) | TirTy::EvolvingList(inner, _) => {
-            cg::Ty::List(Box::new(convert(inner)), attr())
-        }
+        TirTy::List(inner, _) => cg::Ty::List(Box::new(convert(inner)), attr()),
         TirTy::Map {
             key: k, value: v, ..
-        }
-        | TirTy::EvolvingMap(k, v, _) => cg::Ty::Map {
+        } => cg::Ty::Map {
             key: Box::new(convert(k)),
             value: Box::new(convert(v)),
             attr: attr(),
@@ -751,14 +748,14 @@ fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
         TirTy::PromptAst { .. } => cg::Ty::PromptAst { attr: attr() },
         TirTy::Void { .. } => cg::Ty::Void { attr: attr() },
         TirTy::TypeVar(name, _) => cg::Ty::TypeVar(name.clone(), attr()),
-        TirTy::BuiltinUnknown { .. } => cg::Ty::BuiltinUnknown { attr: attr() },
+        TirTy::Unknown { .. } => cg::Ty::Unknown { attr: attr() },
         TirTy::Never { .. } => cg::Ty::Never { attr: attr() },
 
         // These are compiler recovery/inference states, not public API types.
         // Diagnostics have already been emitted; retain the historical opaque
         // fallback so code generation remains total in error-tolerant flows.
-        TirTy::AssociatedTypeProjection { .. } | TirTy::Unknown { .. } | TirTy::Error { .. } => {
-            cg::Ty::BuiltinUnknown { attr: attr() }
+        TirTy::AssociatedTypeProjection { .. } | TirTy::Error { .. } => {
+            cg::Ty::Unknown { attr: attr() }
         }
         TirTy::Infer { .. } => cg::Ty::Void { attr: attr() },
     }

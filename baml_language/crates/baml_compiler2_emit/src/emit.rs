@@ -3584,7 +3584,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // to constant-FALSE — silently misrouting every value, not just the
             // valueless ones. (Only refutable positions reach here at all: an
             // exhaustive final `let v: unknown` arm has its test elided.)
-            TyTemplate::BuiltinUnknown { .. } => emit_true(self),
+            TyTemplate::Unknown { .. } => emit_true(self),
 
             // ── Singleton (literal) ──────────────────────────────────────────
             // A literal type is a set of one, so membership is decided against
@@ -3830,7 +3830,7 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
         | RealizedTy::PromptAst { .. }
         | RealizedTy::Void { .. }
         | RealizedTy::TypeAlias(..)
-        | RealizedTy::BuiltinUnknown { .. }
+        | RealizedTy::Unknown { .. }
         | RealizedTy::Never { .. }
         | RealizedTy::EnumVariant(..) => None,
     }

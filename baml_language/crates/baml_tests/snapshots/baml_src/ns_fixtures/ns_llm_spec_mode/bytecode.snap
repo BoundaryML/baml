@@ -30,8 +30,12 @@ function fixtures.llm_spec_mode.NamedTools(q: string, client: ai.Client | null, 
     call user.fixtures.llm_spec_mode.NamedTools$spec
     store_var _9
     load_type fixtures.llm_spec_mode.Answer
-    load_var2 4 5
-    call ai.Agent.run
+    load_var2 5 6
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _6
+    load_var _6
     load_field .value
     return
 }
@@ -139,8 +143,12 @@ function fixtures.llm_spec_mode.PlainChat(q: string, client: ai.Client | null, o
     call user.fixtures.llm_spec_mode.PlainChat$spec
     store_var _9
     load_type string
-    load_var2 4 5
-    call ai.Agent.run
+    load_var2 5 6
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _6
+    load_var _6
     load_field .value
     return
 }
@@ -278,8 +286,12 @@ function fixtures.llm_spec_mode.SpecAgent(q: string, client: ai.Client | null, o
     call user.fixtures.llm_spec_mode.SpecAgent$spec
     store_var _9
     load_type fixtures.llm_spec_mode.Answer
-    load_var2 4 5
-    call ai.Agent.run
+    load_var2 5 6
+    load_type ai.Runner<Error = baml.errors.InvalidArgument | baml.errors.Timeout | baml.errors.UnknownError | baml.panics.Cancelled | reflect.errors.CompilationError | ai.errors.Failure>
+    load_const "run"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _6
+    load_var _6
     load_field .value
     return
 }

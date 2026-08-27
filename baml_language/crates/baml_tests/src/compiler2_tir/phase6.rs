@@ -957,7 +957,7 @@ function f() -> int {
 fn assignment_nested_empty_container_adopts_declared_type() {
     // Regression (M2): reassigning a nested empty literal to a declared
     // nested-container local adopts the declared element types *recursively* —
-    // the inner `[]` must not leak `EvolvingList(Never)` under `int[][]`.
+    // the inner `[]` must not leak an unresolved element type under `int[][]`.
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -982,7 +982,7 @@ function f() -> null {
 fn catch_handler_empty_array_adopts_expected_type() {
     // Regression (M1): in a checking position a catch handler body adopts the
     // expected type — an empty `[]` handler becomes the declared element type,
-    // not `unknown`/`EvolvingList(Never)`.
+    // not `unknown`.
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -1252,7 +1252,7 @@ function f(file: baml.fs.File) -> null {
     );
     let ty = expr_type_in_function(&db, file, "f", "read");
     assert!(
-        ty.starts_with("(n: int) -> string throws "),
+        ty.starts_with("(limit: int) -> uint8array | null throws "),
         "expected builtin member value to preserve declared throws, got `{ty}`"
     );
     assert!(

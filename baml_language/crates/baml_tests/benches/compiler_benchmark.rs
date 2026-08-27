@@ -18,7 +18,7 @@
 
 use std::path::{Path, PathBuf};
 
-use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
+use baml_compiler2_emit::generate_project_bytecode;
 use baml_db::{ProjectDatabase, discover_baml_files};
 use baml_tests::engine::TestDbExt;
 use divan::{Bencher, black_box};
@@ -77,13 +77,7 @@ fn build_db(root: &Path, sources: &ProjectSources) -> ProjectDatabase {
 
 /// Compile a populated database to bytecode, measuring only the compile step.
 fn compile(db: &ProjectDatabase) {
-    let program = generate_project_bytecode(
-        db,
-        &CompileOptions {
-            emit_test_cases: true,
-        },
-    )
-    .expect("benchmark compilation failed");
+    let program = generate_project_bytecode(db).expect("benchmark compilation failed");
     black_box(program);
 }
 

@@ -12,8 +12,3 @@ function fixtures.test_old_and_new.$init_test_ns_fixtures_ns_test_old_and_new_ma
     load_const null
     return
 }
-
-function fixtures.test_old_and_new.Greet(name: string) -> string {
-    load_const "Hello, {name}!"
-    return
-}

@@ -23,6 +23,13 @@ function lambda_sig_deduction.$init_test_ns_lambda_sig_deduction_lambda_sig_dedu
     load_const null
     call testing.TestCollector.register_test_at
     pop 1
+    load_var registry
+    load_const "root.lambda_sig_deduction"
+    load_const "stored lambda parameter is inferred from a later annotation"
+    make_closure .<lambda($init_test_ns_lambda_sig_deduction_lambda_sig_deduction, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test_at
+    pop 1
     load_const null
     return
 }

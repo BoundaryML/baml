@@ -363,7 +363,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 // Dropping the cloned in-body `implements` blocks also drops the interface
                 // obligations that would otherwise require those methods. Generic params are
                 // preserved so that field types referencing them (e.g. `v: T`) round-trip
-                // through TIR as `Ty::TypeVar` instead of collapsing to `Ty::Unknown`.
+                // through as `Ty::TypeVar` instead of collapsing to `Ty::Error`.
                 stream_class.methods.clear();
                 stream_class.implements.clear();
                 // Use a dummy span so the synthetic class doesn't shadow the
@@ -861,7 +861,7 @@ pub fn function_signature<'db>(
             let type_expr = p
                 .type_expr
                 .clone()
-                .unwrap_or(ast::TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
+                .unwrap_or(ast::TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default()));
             baml_compiler2_hir::signature::SignatureParam {
                 name: p.name.clone(),
                 ty: type_expr,
@@ -896,7 +896,7 @@ pub fn elaborated_function_signature<'db>(
             let type_expr = p
                 .type_expr
                 .clone()
-                .unwrap_or(ast::TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default()));
+                .unwrap_or(ast::TypeExprKind::Missing { attrs: vec![] }.at(TextRange::default()));
             baml_compiler2_hir::signature::SignatureParam {
                 name: p.name.clone(),
                 ty: type_expr,

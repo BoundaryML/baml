@@ -116,7 +116,6 @@ use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalIndex, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
     TaskGroupInner, UnscheduledFuture, Value, ValueKind, VmGlobals,
 };
-pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{
     BoundaryContext, BoundaryStorageContext, FunctionCallContext, FunctionCallContextBuilder,
@@ -1072,8 +1071,6 @@ pub struct BexEngine {
     inbound_alias_view: indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     inbound_class_view:
         indexmap::IndexMap<baml_type::TypeName, crate::conversion::WireClassDefinition>,
-    /// Compiled test cases from the BAML program.
-    test_cases: Vec<bex_vm_types::TestCase>,
     /// Process argv passed in at engine creation. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) with each spawned VM.
     argv: Arc<[String]>,
@@ -1408,7 +1405,7 @@ struct SpawnParamsData {
 /// as its [`TypeContext`](baml_type::normalize::TypeContext)), so a thrown
 /// concrete that *implements* a declared interface contract is on-contract (the
 /// context-free `RuntimeTy::is_subtype_of` fork could not see that membership).
-/// `BuiltinUnknown` accepts everything (the "throws unknown" fallback for
+/// `Unknown` accepts everything (the "throws unknown" fallback for
 /// undeclared host contracts); concrete classes reject anything not in their
 /// subtype lattice.
 ///
@@ -1422,9 +1419,9 @@ fn enforce_host_throw_contract(
     value: Value,
     contract: &RuntimeTy,
 ) -> Value {
-    // `BuiltinUnknown` is the top type — short-circuit before any heap
+    // `Unknown` is the top type — short-circuit before any heap
     // walking.
-    if matches!(contract, RuntimeTy::BuiltinUnknown { .. }) {
+    if matches!(contract, RuntimeTy::Unknown { .. }) {
         return value;
     }
     let runtime_ty = value_runtime_baml_ty(value, thread.proof());
@@ -2031,9 +2028,6 @@ impl BexEngine {
         let bytecode =
             bex_vm::convert_program(bytecode_program).map_err(EngineError::VmInternalError)?;
 
-        // Extract test cases before consuming other bytecode fields.
-        let test_cases = bytecode.test_cases;
-
         // Extract compile-time objects for the heap
         let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
@@ -2343,7 +2337,6 @@ impl BexEngine {
             inbound_alias_view,
             inbound_class_view,
             sys_op_ctx,
-            test_cases,
             argv,
             heap_permit_manager,
             checking_gc: AtomicBool::new(false),
@@ -4955,17 +4948,6 @@ impl BexEngine {
                 }
             })
             .collect()
-    }
-
-    /// Find a test case by name.
-    pub fn test_case(
-        &self,
-        function_name: &str,
-        test_name: &str,
-    ) -> Option<&bex_vm_types::TestCase> {
-        self.test_cases
-            .iter()
-            .find(|t| t.function_names.iter().any(|n| function_name == n) && t.name == test_name)
     }
 
     // ========================================================================

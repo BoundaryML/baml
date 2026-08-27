@@ -947,10 +947,7 @@ impl ProjectDatabase {
     pub fn get_bytecode_unchecked(
         &self,
     ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
-        let opts = baml_compiler2_emit::CompileOptions {
-            emit_test_cases: false,
-        };
-        baml_compiler2_emit::generate_project_bytecode(self, &opts)
+        baml_compiler2_emit::generate_project_bytecode(self)
     }
 }
 

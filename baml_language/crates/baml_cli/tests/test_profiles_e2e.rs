@@ -36,17 +36,6 @@ testset "integration" {
   test "creates_order" { assert.is_true(true) }
 }
 
-client TestClient = openai.ResponsesClient.new(model = "gpt-4o-mini");
-
-function Summarize(input: string) -> string {
-  client: TestClient
-  prompt: `${input}`
-}
-
-test BasicTest {
-  functions [Summarize]
-  args { input "hello" }
-}
 "##,
     )
     .unwrap();
@@ -92,7 +81,6 @@ fn default_named_and_no_profile_select_expected_canonical_ids() {
         String::from_utf8_lossy(&regular.stderr)
     );
     assert!(stdout(&regular).contains("root.orders::unit::parses_order"));
-    assert!(stdout(&regular).contains("root.orders.Summarize::BasicTest"));
     assert!(!stdout(&regular).contains("integration"));
 
     let integration = run(tmp.path(), &["test", "--list", "--profile", "integration"]);
@@ -113,7 +101,6 @@ fn default_named_and_no_profile_select_expected_canonical_ids() {
     );
     assert!(stdout(&all).contains("root.orders::unit::parses_order"));
     assert!(stdout(&all).contains("root.orders::integration::hello_test"));
-    assert!(stdout(&all).contains("root.orders.Summarize::BasicTest"));
 }
 
 #[test]

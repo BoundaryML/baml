@@ -40,7 +40,7 @@ pub use type_alias::*;
 pub use type_value::*;
 pub use value::*;
 
-use crate::{RuntimeTy, heap_ptr::HeapPtr, indexable::ObjectPool};
+use crate::{heap_ptr::HeapPtr, indexable::ObjectPool};
 
 // ============================================================================
 // Type Tags for Jump Table Dispatch
@@ -91,9 +91,6 @@ pub struct Program {
     /// Client build metadata for constructing full client trees at runtime.
     /// Keyed by client name.
     pub client_metadata: HashMap<String, ClientBuildMeta>,
-
-    /// Compiled test cases.
-    pub test_cases: Vec<TestCase>,
 
     /// Ordered list of `$init` function names to run at load time.
     /// E.g., `["baml.$init", "$init"]` — builtins before user package.
@@ -398,51 +395,6 @@ include!(concat!(env!("OUT_DIR"), "/errors_generated.rs"));
 // Panic class / instance enums — generated from `panics.baml` class definitions.
 // PanicClass (tag enum), PanicInstance (with Value fields), associated methods.
 include!(concat!(env!("OUT_DIR"), "/panics_generated.rs"));
-
-// ============================================================================
-// Test Cases
-// ============================================================================
-
-/// A constant value for test arguments.
-///
-/// Self-contained type with no dependency on HIR or external types.
-/// Converted from HIR's `TestArgValue` during emission, and converted
-/// to `BexExternalValue` in the engine for function calls.
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
-pub enum TestArgValue {
-    Null,
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    String(String),
-    Array {
-        element_type: RuntimeTy,
-        items: Vec<TestArgValue>,
-    },
-    Map {
-        key_type: RuntimeTy,
-        value_type: RuntimeTy,
-        entries: IndexMap<String, TestArgValue>,
-    },
-}
-
-/// A compiled test case, ready for execution.
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
-pub struct TestCase {
-    /// Test name (e.g., "`TestAddOne`").
-    pub name: String,
-    /// Function names this test targets.
-    pub function_names: Vec<String>,
-    /// Test arguments, keyed by parameter name.
-    pub args: IndexMap<String, TestArgValue>,
-    /// Project-root-relative path of the file that *defines* this test block.
-    ///
-    /// Recorded so `baml test --list` reports the test-defining file
-    /// identically whether the program was freshly compiled or served from the
-    /// bytecode cache. Empty only for programs compiled before this field
-    /// existed.
-    pub source_file: String,
-}
 
 /// Media value.
 ///

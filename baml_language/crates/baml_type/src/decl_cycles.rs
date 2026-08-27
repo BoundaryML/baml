@@ -130,11 +130,11 @@ fn extract_type_alias_deps(
                     non_structural.insert(qn.clone());
                 }
             }
-            Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+            Ty::List(inner, _) => {
                 // List provides structural guard (can be empty)
                 visit(inner, aliases, non_structural, structural, true);
             }
-            Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
+            Ty::Map { key, value, .. } => {
                 // Map provides structural guard (can be empty)
                 visit(key, aliases, non_structural, structural, true);
                 visit(value, aliases, non_structural, structural, true);
@@ -443,7 +443,7 @@ fn extract_required_class_deps(
         // `T?` lowers to `Union([T, Null])` (canary removed the `Ty::Optional`
         // variant), so optionals are handled by the `Ty::Union` arm below —
         // which already yields no hard dependency (Null breaks it).
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+        Ty::List(inner, _) => {
             // List breaks the hard dependency (can be empty)
             extract_required_class_deps(
                 inner,
@@ -455,7 +455,7 @@ fn extract_required_class_deps(
                 visiting,
             );
         }
-        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
+        Ty::Map { key, value, .. } => {
             // Map breaks the hard dependency (can be empty)
             extract_required_class_deps(
                 key,

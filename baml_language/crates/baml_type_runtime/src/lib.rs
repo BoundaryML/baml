@@ -350,14 +350,6 @@ fn collect(
             if !opts.allow_typevar_actuals && matches!(actual_ty, Ty::TypeVar(_, _)) {
                 return;
             }
-            // An `Unknown` actual carries NO information: binding it (or
-            // unioning it into an existing binding) only poisons the result —
-            // e.g. an expected return of `SpawnParams<unknown, unknown>`
-            // driving phase-0 must not turn a param-bound `T = int` into
-            // `int | unknown`.
-            if matches!(actual_ty, Ty::Unknown { .. }) {
-                return;
-            }
             vars.entry(name.clone())
                 .or_default()
                 .push((variance, actual_ty.clone()));
@@ -673,70 +665,16 @@ pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
 
 // ── Pure `Ty` walks (substitution, typevar queries, erasure) ──────────────────
 //
-// Moved from `baml_compiler2_tir::generics` (which re-exports them) during the
-// S16 TIR retirement: they are pure walks over the shared vocabulary with no
-// compiler-database dependence, exactly this crate's charter.
-pub use baml_type::unify::{bind_type_vars, normalize_union_members, substitute_ty};
-
-/// Deep any-node predicate over a type tree: does `pred` hold for `ty` itself
-/// or for any type nested inside it? The single traversal behind the
-/// `contains_*` family; the arms cover every child position a `Ty` can carry.
-/// A function type carries no generic binders of its own (function values are
-/// realized), so recursion enters its params/ret/throws with `pred` unchanged;
-/// a projection is entered through both its base (`T::Item`) and its
-/// qualifying interface's types.
-pub fn contains_ty_where(ty: &Ty, pred: &dyn Fn(&Ty) -> bool) -> bool {
-    if pred(ty) {
-        return true;
-    }
-    match ty {
-        Ty::AssociatedTypeProjection {
-            base, interface, ..
-        } => contains_ty_where(base, pred) || interface.tys().any(|t| contains_ty_where(t, pred)),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_ty_where(inner, pred),
-        Ty::Map {
-            key: k, value: v, ..
-        }
-        | Ty::EvolvingMap(k, v, _) => contains_ty_where(k, pred) || contains_ty_where(v, pred),
-        Ty::Union(tys, _) => tys.iter().any(|t| contains_ty_where(t, pred)),
-        Ty::Future(value, error, _) => {
-            contains_ty_where(value, pred) || contains_ty_where(error, pred)
-        }
-        Ty::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            params
-                .iter()
-                .any(|param| contains_ty_where(&param.ty, pred))
-                || contains_ty_where(ret, pred)
-                || contains_ty_where(throws, pred)
-        }
-        Ty::Class(_, type_args, _) => type_args.iter().any(|t| contains_ty_where(t, pred)),
-        Ty::Interface(_, type_args, associated_bindings, _) => {
-            type_args.iter().any(|t| contains_ty_where(t, pred))
-                || associated_bindings
-                    .iter()
-                    .any(|(_, ty)| contains_ty_where(ty, pred))
-        }
-        _ => false,
-    }
-}
+// Generic tree traversal lives with the shared type vocabulary. Inference-only
+// operations remain here so vocabulary-only consumers do not pull in this crate.
+pub use baml_type::{
+    contains_error_recovery, contains_ty_where,
+    unify::{bind_type_vars, normalize_union_members, substitute_ty},
+};
 
 /// Check if a type contains any `Ty::TypeVar` anywhere in its structure.
 pub fn contains_typevar(ty: &Ty) -> bool {
     contains_ty_where(ty, &|t| matches!(t, Ty::TypeVar(_, _)))
-}
-
-/// Does `ty` carry an error-recovery sentinel (`Ty::Error` or `Ty::Unknown`)
-/// anywhere in its structure? An expression recorded with such a type already
-/// failed to compile at its own site; downstream consumers (e.g. call-site
-/// generic inference) use this to recognize an already-failed input and avoid
-/// cascading a second diagnostic off it.
-pub fn contains_error_recovery(ty: &Ty) -> bool {
-    contains_ty_where(ty, &|t| matches!(t, Ty::Error { .. } | Ty::Unknown { .. }))
 }
 
 /// Returns `true` if `ty` contains any type variable for which `pred` returns
@@ -759,7 +697,7 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&ParamTy) -> bool
     }
 
     match ty {
-        Ty::TypeVar(name, attr) if should_erase(name) => Ty::BuiltinUnknown { attr: attr.clone() },
+        Ty::TypeVar(name, attr) if should_erase(name) => Ty::Unknown { attr: attr.clone() },
         Ty::Class(qtn, args, attr) => Ty::Class(
             qtn.clone(),
             args.iter()
@@ -782,20 +720,11 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&ParamTy) -> bool
             Box::new(erase_typevars_matching(inner, should_erase)),
             attr.clone(),
         ),
-        Ty::EvolvingList(inner, attr) => Ty::EvolvingList(
-            Box::new(erase_typevars_matching(inner, should_erase)),
-            attr.clone(),
-        ),
         Ty::Map { key, value, attr } => Ty::Map {
             key: Box::new(erase_typevars_matching(key, should_erase)),
             value: Box::new(erase_typevars_matching(value, should_erase)),
             attr: attr.clone(),
         },
-        Ty::EvolvingMap(key, value, attr) => Ty::EvolvingMap(
-            Box::new(erase_typevars_matching(key, should_erase)),
-            Box::new(erase_typevars_matching(value, should_erase)),
-            attr.clone(),
-        ),
         Ty::Union(members, attr) => Ty::Union(
             members
                 .iter()

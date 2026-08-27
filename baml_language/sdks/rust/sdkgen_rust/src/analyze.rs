@@ -348,7 +348,7 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
             }
         }
         Ty::Media(kind, _) => Err(format!("unsupported type: media ({kind})")),
-        Ty::BuiltinUnknown { .. } => Err("unsupported type: unknown".to_string()),
+        Ty::Unknown { .. } => Err("unsupported type: unknown".to_string()),
         Ty::Function { .. } => Err("unsupported type: function".to_string()),
         Ty::Future(..) => Err("unsupported type: future handle".to_string()),
         Ty::Interface(..) => Err("unsupported type: interface".to_string()),

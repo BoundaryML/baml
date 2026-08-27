@@ -1,11 +1,17 @@
 // Characterization net for generic calls made in the scope of a
 // `type T = unreflect(expr)` binding.
 //
-// Such a call is deferred to a runtime gate rather than solved statically, so
-// inference finalizes its own slots to an error-recovery sentinel (a still-free
-// var erases to `Error`). MIR lowering used to hand that sentinel straight to
-// runtime lowering, which treats one as a compiler bug — so this well-typed
-// source ICEd the compiler instead of compiling at all.
+// BUG: this file pins CURRENT behavior, and the current behavior is wrong. Such
+// a call leaves its type slots unsolved, and `erase_infer` turns each into the
+// error sentinel with NO diagnostic — so the file compiles only because MIR
+// launders every `Error` to the top type, which also defeats the runtime
+// lowering guard everywhere else.
+//
+// The ruling: an unsolved inference variable owes a diagnostic whether its `_`
+// was written or implicit. These calls need type arguments they cannot get, so
+// the source below is ILLEGAL and should be rejected at compile time. When
+// unsolved variables are reported, this file becomes a diagnostic fixture
+// rather than a compiling one.
 
 function EmptyOf<T>() -> T[] {
     []
@@ -23,16 +29,9 @@ test "non-closure generic list ops over a runtime-bound element type" {
     assert.equal(items.slice(0, 0).length(), 0)
 }
 
-// The shape that ICEd, guarded at COMPILE time only — the crash was in MIR
-// lowering, which every corpus file goes through, and this function is
-// deliberately never called.
-//
-// It is not executed because the runtime gate still rejects it: the unsolved
-// slot MIR seeds is `baml.Array.filter`'s own `E`, an effect parameter whose
-// language default is `never` rather than the top type MIR widens to.
-// `default_unsolved_effects_to_never` only recognizes synthetic
-// `__effect_param_N` params, so a user-written `filter<E>(…) throws E` is
-// missed. Promote this to a `test` once that is fixed.
+// The shape that ICEd. Inferring the stored lambda parameter also lets the
+// callback's `never` effect reach `Array.filter`'s `E` slot, so this now runs
+// through the runtime gate instead of only compiling.
 function ClosureOverRuntimeBoundElement() -> int {
     let item_t = reflect.class
         .new("BoundPredicate", { "value": reflect.Type.of<string>() })
@@ -46,6 +45,10 @@ function ClosureOverRuntimeBoundElement() -> int {
             true
         })
         .length()
+}
+
+test "closure generic list ops over a runtime-bound element type" {
+    assert.equal(ClosureOverRuntimeBoundElement(), 0)
 }
 
 // The user-generic-class receiver path. `Holder<Bound>` puts a runtime-bound

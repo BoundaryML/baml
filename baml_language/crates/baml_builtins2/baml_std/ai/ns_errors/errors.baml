@@ -157,6 +157,20 @@ class InvalidRequest {
     }
 }
 
+// A user expression inside a prompt template threw while rendering (for
+// example `${value.to_json()}`). The original error rides `cause`; prompt
+// rendering is deterministic and nothing has been sent, so retrying without
+// changing the input cannot succeed — but nothing committed either.
+class PromptRenderError {
+    message: string,
+    cause: unknown,
+    implements Failure {
+        function retry_safety(self) -> RetrySafety {
+            RetrySafety.Safe
+        }
+    }
+}
+
 // A request preview cannot represent this input without performing the I/O
 // that the preview API explicitly forbids (for example, reading a local media
 // file or downloading a URL for a provider that has no URL wire form).

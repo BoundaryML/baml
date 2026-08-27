@@ -509,7 +509,7 @@ impl TypeCtx {
             | SapTy::PromptAst { .. }
             | SapTy::Function { .. }
             | SapTy::Void { .. }
-            | SapTy::BuiltinUnknown { .. }
+            | SapTy::Unknown { .. }
             | SapTy::Future(_, _, _)
             | SapTy::TypeVar(_, _)
             | SapTy::AssociatedTypeProjection { .. }
@@ -598,7 +598,7 @@ impl TypeCtx {
             | SapTy::PromptAst { .. }
             | SapTy::Function { .. }
             | SapTy::Void { .. }
-            | SapTy::BuiltinUnknown { .. }
+            | SapTy::Unknown { .. }
             | SapTy::Future(_, _, _)
             | SapTy::TypeVar(_, _)
             | SapTy::AssociatedTypeProjection { .. }
@@ -780,7 +780,7 @@ fn is_sap_parseable(ty: &SapTy) -> Result<Vec<DefKey>, ()> {
         | SapTy::PromptAst { .. }
         | SapTy::Function { .. }
         | SapTy::Void { .. }
-        | SapTy::BuiltinUnknown { .. }
+        | SapTy::Unknown { .. }
         | SapTy::Future(..)
         | SapTy::TypeVar(..)
         | SapTy::AssociatedTypeProjection { .. }

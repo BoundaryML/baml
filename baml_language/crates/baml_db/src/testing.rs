@@ -48,7 +48,7 @@ use baml_base::{Name, SourceRoot, SourceRootKind};
 use baml_compiler_diagnostics::{Diagnostic, Severity};
 pub use baml_compiler2_emit::OptLevel;
 use baml_compiler2_emit::{
-    CompileOptions, generate_project_bytecode_with_opt, generate_project_bytecode_with_stdlib,
+    generate_project_bytecode_with_opt, generate_project_bytecode_with_stdlib,
 };
 use bex_vm_types::Program;
 
@@ -123,10 +123,7 @@ pub fn compile_source_with_opt(source: &str, opt: OptLevel) -> Program {
     let db = setup_test_db(source);
     assert_no_diagnostic_errors(&db);
 
-    let opts = CompileOptions {
-        emit_test_cases: false,
-    };
-    generate_project_bytecode_with_opt(&db, &opts, opt)
+    generate_project_bytecode_with_opt(&db, opt)
         .expect("generate_project_bytecode should succeed for valid test source")
 }
 
@@ -259,10 +256,7 @@ pub fn compile_multi_file_with_prefix(
     );
     assert_no_user_diagnostic_errors(&db);
 
-    let opts = CompileOptions {
-        emit_test_cases: false,
-    };
-    generate_project_bytecode_with_stdlib(&db, &opts, opt, &prefix.program)
+    generate_project_bytecode_with_stdlib(&db, opt, &prefix.program)
         .expect("generate_project_bytecode should succeed for valid test source")
 }
 
@@ -279,9 +273,6 @@ pub fn compile_multi_file(files: &[(&str, &str)]) -> Program {
     );
     assert_no_diagnostic_errors(&db);
 
-    let opts = CompileOptions {
-        emit_test_cases: false,
-    };
-    generate_project_bytecode_with_opt(&db, &opts, OptLevel::One)
+    generate_project_bytecode_with_opt(&db, OptLevel::One)
         .expect("generate_project_bytecode should succeed for valid test source")
 }

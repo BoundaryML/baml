@@ -305,22 +305,35 @@ class TurnStream {
         }
     }
 
-    // The next text DELTA, or Done when the turn is over. Metadata events are
-    // folded silently; calling next() after Done keeps returning Done.
-    function next(self) -> string | Done {
+    // All READY text deltas, or Done when the turn is over. Metadata events
+    // are folded silently; calling next() after Done keeps returning Done.
+    //
+    // Drain-ready-then-deliver: every event already decoded (the wire layer
+    // returns whole batches — everything that queued while the caller was
+    // busy) is returned as ONE batch, and the wire is only pulled when no
+    // deliverable text is in hand. Delta boundaries are preserved — every
+    // element is one provider text delta, so consumers that want each SSE
+    // delta individually iterate the batch. A consumer that keeps up sees
+    // one-element batches; a consumer that falls behind (e.g. a partial
+    // parse slower than the token interval) gets the whole backlog in one
+    // return instead of replaying it delta by delta — the pull-model
+    // equivalent of the legacy engine's latest-snapshot watch channel.
+    function next(self) -> string[] | Done {
+        let ready: string[] = [];
         while (true) {
             if (self._done) {
                 return Done {  };
             }
-            // deliver decoded events before pulling more from the wire
-            if (self._pcursor < self._pending.length()) {
+            // deliver every decoded event before pulling more from the wire
+            while (self._pcursor < self._pending.length()) {
                 let e = self._pending.at(self._pcursor);
                 self._pcursor += 1;
                 match (e) {
                     let d: TextDelta => {
                         self._stamp_first_delta();
                         self._text = `${self._text}${d.text}`;
-                        return d.text;
+                        ready.push(d.text);
+                        null
                     },
                     let m: TurnMeta => {
                         if let s: root.content.StopReason = m.stop_reason {
@@ -337,11 +350,19 @@ class TurnStream {
                     let d: TurnDone => {
                         self._saw_terminal = true;
                         self._finish();
+                        // text decoded ahead of the terminal is delivered
+                        // now; Done follows on the next call (_done is set).
+                        if (ready.length() > 0) {
+                            return ready;
+                        }
                         return Done {  };
                     },
                     null => null,
                 };
-                continue;
+            }
+            // never block on the wire while holding deliverable text
+            if (ready.length() > 0) {
+                return ready;
             }
             if let source: EventSource = self._event_source {
                 match (source()) {
@@ -389,7 +410,7 @@ class TurnStream {
                             self._stamp_first_delta();
                             self._cursor += 1;
                             self._text = `${self._text}${c}`;
-                            return c;
+                            return [c];
                         },
                         null => {
                             self._finish();
@@ -581,7 +602,7 @@ function from_spec<TStream, TFinal>(
                     }
                     null
                 },
-                let s: string => s,
+                let batch: string[] => batch.join(""),
             } catch_all (e) {
                 _ => throw root.errors.normalize(e),
             }
