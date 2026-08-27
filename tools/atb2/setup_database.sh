@@ -24,13 +24,18 @@ project="${FEEDBACK_INFISICAL_PROJECT_ID:-bdd280e2-259c-4750-9b16-a8597a67214c}"
 env="${FEEDBACK_INFISICAL_ENV:-dev}"
 inf() { infisical "$@" --env="$env" --projectId="$project"; }
 
-# The two secrets the testsets need. Fails loudly — and says why — if the
-# CLI is not logged in, the account is not on the project, or a secret is
-# missing, so a run never silently skips the dataset. (`infisical user get`
-# succeeds without a session, so the session is checked by actually
-# fetching.)
+# The two secrets the testsets need — and ONLY those. `infisical run` would
+# inject the whole environment, and an ANTHROPIC_API_KEY in there makes the
+# Claude Code CLI drop its claude.ai login and fail; so the values are
+# fetched individually and exported to the child process, nothing else.
+# Fails loudly — and says why — if the CLI is not logged in, the account is
+# not on the project, or a secret is missing, so a run never silently skips
+# the dataset. (`infisical user get` succeeds without a session, so the
+# session is checked by actually fetching.)
 for name in FEEDBACK_SUPABASE_URL FEEDBACK_SUPABASE_KEY; do
-    if ! out="$(inf secrets get "$name" --plain --path=/ 2>&1 </dev/null)"; then
+    if out="$(inf secrets get "$name" --plain --path=/ 2>&1 </dev/null)"; then
+        export "$name=$out"
+    else
         case "$out" in
             *"not a member"*|*"status-code=403"*)
                 die "your Infisical account is not a member of project $project — ask for access, or set FEEDBACK_INFISICAL_PROJECT_ID to the project holding the secrets" ;;
@@ -45,8 +50,7 @@ echo "setup_database: infisical linked (project $project, env $env); FEEDBACK_SU
 
 case "${1:-}" in
     --check) exit 0 ;;
-    --)      shift; cd "$here" && exec infisical run --env="$env" --projectId="$project" -- "$@" ;;
-    "")      cd "$here" && exec infisical run --env="$env" --projectId="$project" -- \
-                 baml test -i "root::repro_match::*" -i "root::issue_enrichment::*" -i "root::organize_issue::*" ;;
+    --)      shift; cd "$here" && exec "$@" ;;
+    "")      cd "$here" && exec baml test -i "root::repro_match::*" -i "root::issue_enrichment::*" -i "root::organize_issue::*" ;;
     *)       die "unknown argument: $1 (use --check, or -- <cmd>)" ;;
 esac
