@@ -321,11 +321,10 @@ struct PackageBuildMetadata<'a, 'db> {
     class_field_indices: &'a HashMap<String, HashMap<String, usize>>,
     /// Typed source-less export artifacts captured before parallel codegen.
     package_exports: &'a indexmap::IndexMap<Name, PackageExportArtifact>,
-    /// Pooled object index of every function THIS emit registered (Pass 4,
-    /// plus clean-file placeholders on incremental emits), keyed by
-    /// declaration — the structural channel rule baking resolves bodies
-    /// through (a body has no runtime name to look anything up by).
-    function_objects: &'a HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
+    /// The provenance-typed placement registry — the structural channel rule
+    /// baking resolves bodies through (an interface body has no runtime name
+    /// to look anything up by). Variant law: [`PlacedFunction`].
+    placements: &'a FunctionPlacements<'db>,
     /// Runtime-addressable functions (`Program::function_indices`) — consumed
     /// only for NAMED items (exported callables, `$init_test` chainers, and
     /// mount-boundary spellings), never for bodies.
@@ -433,7 +432,7 @@ fn capture_package_exports(
 /// THE interface-body resolver: an interface body is anonymous, so it is
 /// reached through its
 /// declaration — `body()` over the one declaration-keyed index — never a
-/// name. `function_objects` is total over every declaration the database
+/// name. `placements` is total over every declaration the database
 /// sees: this run's Pass-4 registrations, the clean-file placeholders on
 /// incremental emits, and the spliced prefix (indexed by the Pass-1 replay
 /// in `generate_impl`).
@@ -449,7 +448,7 @@ fn capture_package_exports(
 /// graft, not at emit.
 #[derive(Clone, Copy)]
 struct InterfaceBodyStore<'a, 'db> {
-    function_objects: &'a HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
+    placements: &'a FunctionPlacements<'db>,
     interface_indices: &'a HashMap<baml_type::TypeName, usize>,
     objects: &'a [Object],
 }
@@ -460,10 +459,9 @@ impl<'db> InterfaceBodyStore<'_, 'db> {
         &self,
         loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     ) -> Option<ObjectIndex> {
-        self.function_objects
+        self.placements
             .get(&loc)
-            .copied()
-            .map(ObjectIndex::from_raw)
+            .map(|placement| ObjectIndex::from_raw(placement.reference_object()))
     }
 
     /// The default body of `iface_tn.method`. `live` is the declaration when
@@ -626,7 +624,7 @@ fn build_packages<'db>(
     let function_indices = metadata.function_indices;
 
     let interface_bodies = InterfaceBodyStore {
-        function_objects: metadata.function_objects,
+        placements: metadata.placements,
         interface_indices,
         objects: metadata.objects,
     };
@@ -1984,11 +1982,12 @@ fn decompose_units_after_prefix<'db>(
     // here only because the unit wire's export/import keys are strings (the
     // U1-sanctioned link-internal lane).
     let mut interface_body_slot_names: Vec<(usize, String)> = Vec::new();
-    for (&func_loc, &slot) in &coords.interface_body_slots {
+    for (&func_loc, placement) in &coords.placements {
+        let Some(slot) = placement.interface_body_slot() else {
+            continue;
+        };
         let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
-        if let Some(&obj_idx) = coords.objects.get(&func_loc) {
-            fn_obj_name.insert(obj_idx, fq.clone());
-        }
+        fn_obj_name.insert(placement.reference_object(), fq.clone());
         interface_body_slot_names.push((slot, fq));
     }
     let interface_body_names: HashSet<String> = interface_body_slot_names
@@ -3067,7 +3066,7 @@ fn inject_clean_object_placeholders<'db>(
     globals: &HashMap<String, usize>,
     interface_body_slots: &HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
     program: &mut Program,
-    function_objects: &mut HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
+    placements: &mut FunctionPlacements<'db>,
 ) {
     let mut placeholder = program.objects.len();
     for file in files {
@@ -3083,11 +3082,17 @@ fn inject_clean_object_placeholders<'db>(
             }
             if baml_compiler2_mir::function_is_interface_body(db, func_loc) {
                 // A clean body enters no table — only the declaration-keyed
-                // placeholder registration rule baking resolves through. The
+                // placement registration rule baking resolves through. The
                 // Pass-1 map gates out intrinsic/await-any bodies (no slot),
                 // like the `globals` guard does on the named path.
-                if interface_body_slots.contains_key(&func_loc) {
-                    function_objects.insert(func_loc, placeholder);
+                if let Some(&slot) = interface_body_slots.get(&func_loc) {
+                    placements.insert(
+                        func_loc,
+                        PlacedFunction::ReusedClean {
+                            placeholder_object: placeholder,
+                            interface_body_slot: Some(slot),
+                        },
+                    );
                     placeholder += 1;
                 }
             } else {
@@ -3100,7 +3105,13 @@ fn inject_clean_object_placeholders<'db>(
                     placeholder += 1;
                     idx
                 });
-                function_objects.insert(func_loc, idx);
+                placements.insert(
+                    func_loc,
+                    PlacedFunction::ReusedClean {
+                        placeholder_object: idx,
+                        interface_body_slot: None,
+                    },
+                );
             }
         }
     }
@@ -3114,6 +3125,77 @@ fn inject_clean_object_placeholders<'db>(
 /// and only the dirty files are lowered. Dirty functions are written to their
 /// whole-project (Pass-1) global slots so the decomposition reverses their
 /// operands to names identically to a full compile. `None` is a full compile.
+/// Where one source-visible function's compiled artifact lives, by
+/// provenance — the value type of [`FunctionPlacements`]. The variant IS the
+/// law (`hir::loc::DeclRef`'s emit-side mirror): only `Live` and `Spliced`
+/// functions have a pooled object here; a `ReusedClean` function's bytecode
+/// is reused per-file at link, and its "object index" is a PAST-THE-POOL
+/// placeholder that exists only so operand/name reversal and rule baking can
+/// refer to the function — asking for its pooled object answers `None` by
+/// type, not by out-of-range convention.
+#[derive(Debug, Clone, Copy)]
+enum PlacedFunction {
+    /// Lowered, compiled, and pooled by THIS emit.
+    Live {
+        object: usize,
+        /// `Some` iff the function is an interface-machinery body: its
+        /// Pass-1 global slot (a body's only slot channel — named functions'
+        /// slots live in the wire name maps).
+        interface_body_slot: Option<usize>,
+    },
+    /// Source-visible and type-checked here; the compiled object was spliced
+    /// in from the precompiled artifact at a stable pool index.
+    Spliced {
+        object: usize,
+        interface_body_slot: Option<usize>,
+    },
+    /// Stage-6 clean reuse: type-checked here, bytecode reused from the
+    /// previous compile's unit at link — NOT pooled by this emit.
+    ReusedClean {
+        /// Past-the-pool index used only in reference position.
+        placeholder_object: usize,
+        interface_body_slot: Option<usize>,
+    },
+}
+
+impl PlacedFunction {
+    /// The index this emit uses to REFERENCE the function in object-operand
+    /// position (rule tables, operand/name reversal): the pooled object, or
+    /// the clean placeholder standing in for one.
+    fn reference_object(self) -> usize {
+        match self {
+            PlacedFunction::Live { object, .. } | PlacedFunction::Spliced { object, .. } => object,
+            PlacedFunction::ReusedClean {
+                placeholder_object, ..
+            } => placeholder_object,
+        }
+    }
+
+    /// The interface-machinery body slot, when this function is one.
+    fn interface_body_slot(self) -> Option<usize> {
+        match self {
+            PlacedFunction::Live {
+                interface_body_slot,
+                ..
+            }
+            | PlacedFunction::Spliced {
+                interface_body_slot,
+                ..
+            }
+            | PlacedFunction::ReusedClean {
+                interface_body_slot,
+                ..
+            } => interface_body_slot,
+        }
+    }
+}
+
+/// The provenance-typed placement registry: every source-visible function
+/// this emit placed, by declaration. Total over the enumeration (live,
+/// spliced, and clean-reused alike); MOUNTED items have no `FunctionLoc` and
+/// are deliberately absent — see [`FunctionCoordinates`].
+type FunctionPlacements<'db> = HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, PlacedFunction>;
+
 /// Declaration-keyed coordinates of every function one emit placed: the
 /// Pass-4 pooled object per function and the Pass-1 global slot per
 /// interface-machinery body. An interface body has no name-keyed coordinates
@@ -3137,12 +3219,9 @@ fn inject_clean_object_placeholders<'db>(
 /// `ItemRef::InterfaceBody` reaching codegen is a loud panic, never a
 /// fallback.
 struct FunctionCoordinates<'db> {
-    /// Pooled object index per function (real for dirty files, placeholder
-    /// past the pool for clean ones — see `inject_clean_object_placeholders`).
-    objects: HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
-    /// Pass-1 global slot per interface-machinery body (all files, clean
-    /// included; intrinsic/await-any bodies own no slot and are absent).
-    interface_body_slots: HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
+    /// The provenance-typed placement registry (object + body slot per
+    /// declaration, variant-lawed — see [`PlacedFunction`]).
+    placements: FunctionPlacements<'db>,
     /// Number of leading `all_files` entries whose definition objects came in
     /// wholesale with the spliced `base` (the builtin group; 0 without a
     /// base). A decomposition that skips the base as a prefix must also skip
@@ -3185,10 +3264,10 @@ fn generate_impl<'db>(
     // and the globals table (`compiler2_all_files` puts builtins first for the
     // same reason). The precompiled-stdlib splice depends on that prefix.
     let (builtin_files, user_files) = all_files.split_at(builtin_count.min(all_files.len()));
-    // Pooled object index per function this emit registers — the structural
-    // channel rule baking resolves bodies through (see `PackageBuildMetadata`).
-    let mut function_objects: HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize> =
-        HashMap::new();
+    // The provenance-typed placement registry this emit fills — the
+    // structural channel rule baking and decomposition resolve functions
+    // through (see `PackageBuildMetadata` / `FunctionCoordinates`).
+    let mut placements: FunctionPlacements<'db> = HashMap::new();
     // Pass-1 global slot per interface-machinery body — the structural channel
     // codegen resolves body callees through (see `MirCodegenContext`).
     let mut interface_body_slots: HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize> =
@@ -3231,10 +3310,19 @@ fn generate_impl<'db>(
                         matches!(base.objects.get(idx.into_raw()), Some(Object::Function(_))),
                         "stdlib splice: global slot {slot} does not hold a function",
                     );
-                    function_objects.insert(func_loc, idx.into_raw());
-                    if baml_compiler2_mir::function_is_interface_body(db, func_loc) {
-                        interface_body_slots.insert(func_loc, slot);
+                    let interface_body_slot =
+                        baml_compiler2_mir::function_is_interface_body(db, func_loc)
+                            .then_some(slot);
+                    if let Some(body_slot) = interface_body_slot {
+                        interface_body_slots.insert(func_loc, body_slot);
                     }
+                    placements.insert(
+                        func_loc,
+                        PlacedFunction::Spliced {
+                            object: idx.into_raw(),
+                            interface_body_slot,
+                        },
+                    );
                     slot += 1;
                 }
             }
@@ -3249,7 +3337,7 @@ fn generate_impl<'db>(
             &mut tables,
             &mut program,
             &alias_caches,
-            &mut function_objects,
+            &mut placements,
             &mut interface_body_slots,
             opt,
             None,
@@ -3261,7 +3349,7 @@ fn generate_impl<'db>(
         &mut tables,
         &mut program,
         &alias_caches,
-        &mut function_objects,
+        &mut placements,
         &mut interface_body_slots,
         opt,
         skip_clean,
@@ -3289,7 +3377,7 @@ fn generate_impl<'db>(
         &PackageBuildMetadata {
             class_field_indices: &tables.classes,
             package_exports: &package_exports,
-            function_objects: &function_objects,
+            placements: &placements,
             function_indices: &program.function_indices,
             objects: &program.objects,
         },
@@ -3349,8 +3437,7 @@ fn generate_impl<'db>(
     Ok((
         program,
         FunctionCoordinates {
-            objects: function_objects,
-            interface_body_slots,
+            placements,
             spliced_files: if base.is_some() { builtin_count } else { 0 },
         },
     ))
@@ -3533,7 +3620,7 @@ fn emit_file_group<'db>(
     tables: &mut EmitTables,
     program: &mut Program,
     alias_caches: &HashMap<Name, ResolvedAliases>,
-    function_objects: &mut HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
+    placements: &mut FunctionPlacements<'db>,
     interface_body_slots: &mut HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
     opt: OptLevel,
     skip_clean: Option<&HashSet<String>>,
@@ -4032,7 +4119,7 @@ fn emit_file_group<'db>(
             &class_fields,
             alias_caches,
             program,
-            function_objects,
+            placements,
             opt,
         );
     } else {
@@ -4049,7 +4136,7 @@ fn emit_file_group<'db>(
             &class_fields,
             alias_caches,
             program,
-            function_objects,
+            placements,
             opt,
         );
     }
@@ -4310,7 +4397,7 @@ fn emit_file_group<'db>(
             globals,
             interface_body_slots,
             program,
-            function_objects,
+            placements,
         );
     }
 
@@ -5284,7 +5371,7 @@ fn emit_functions_serial<'db>(
     class_fields: &ClassFieldSnapshot,
     alias_caches: &HashMap<Name, ResolvedAliases>,
     program: &mut Program,
-    function_objects: &mut HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
+    placements: &mut FunctionPlacements<'db>,
     opt: OptLevel,
 ) {
     for file in files {
@@ -5386,7 +5473,8 @@ fn emit_functions_serial<'db>(
                 &fq_name,
                 &mut compiled_fn,
             );
-            let pass1_slot = if compiled_fn.is_interface_body {
+            let is_interface_body = compiled_fn.is_interface_body;
+            let pass1_slot = if is_interface_body {
                 interface_body_slots[&func_loc]
             } else {
                 globals[&fq_name]
@@ -5398,7 +5486,13 @@ fn emit_functions_serial<'db>(
                 fq_name,
                 compiled_fn,
             );
-            function_objects.insert(func_loc, obj_idx);
+            placements.insert(
+                func_loc,
+                PlacedFunction::Live {
+                    object: obj_idx,
+                    interface_body_slot: is_interface_body.then_some(pass1_slot),
+                },
+            );
         }
     }
 }
@@ -5550,7 +5644,7 @@ fn emit_functions_parallel<'db>(
     class_fields: &ClassFieldSnapshot,
     alias_caches: &HashMap<Name, ResolvedAliases>,
     program: &mut Program,
-    function_objects: &mut HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
+    placements: &mut FunctionPlacements<'db>,
     opt: OptLevel,
 ) {
     use rayon::prelude::*;
@@ -5710,7 +5804,8 @@ fn emit_functions_parallel<'db>(
             &item.fq_name,
             &mut compiled_fn,
         );
-        let pass1_slot = if compiled_fn.is_interface_body {
+        let is_interface_body = compiled_fn.is_interface_body;
+        let pass1_slot = if is_interface_body {
             interface_body_slots[&func_loc]
         } else {
             globals[&item.fq_name]
@@ -5722,7 +5817,13 @@ fn emit_functions_parallel<'db>(
             item.fq_name,
             compiled_fn,
         );
-        function_objects.insert(func_loc, obj_idx);
+        placements.insert(
+            func_loc,
+            PlacedFunction::Live {
+                object: obj_idx,
+                interface_body_slot: is_interface_body.then_some(pass1_slot),
+            },
+        );
     }
 }
 
