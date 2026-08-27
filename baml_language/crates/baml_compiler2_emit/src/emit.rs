@@ -287,7 +287,7 @@ struct SpawnCaptures {
 /// MIR to bytecode compiler with stackification.
 struct StackifyCodegen<'ctx, 'obj> {
     /// MIR body being compiled.
-    body: &'ctx MirFunctionBody,
+    body: &'ctx MirFunctionBody<'ctx>,
     /// Arity (parameter count) of the function being compiled.
     arity: usize,
     /// Line index for the MIR's source file.
@@ -295,6 +295,9 @@ struct StackifyCodegen<'ctx, 'obj> {
 
     /// Resolved global names to indices.
     globals: &'ctx HashMap<String, usize>,
+    /// Pass-1 global slot per interface-machinery body, keyed by declaration.
+    /// A body has no runtime name; this is its only resolution channel.
+    body_slots: &'ctx HashMap<baml_compiler2_hir::loc::FunctionLoc<'ctx>, usize>,
     /// Resolved class field indices.
     #[allow(dead_code)]
     classes: &'ctx HashMap<String, HashMap<String, usize>>,
@@ -320,7 +323,7 @@ struct StackifyCodegen<'ctx, 'obj> {
     objects_base: usize,
 
     /// Analysis results (classifications, def-use, etc.).
-    analysis: AnalysisResult,
+    analysis: AnalysisResult<'ctx>,
 
     /// Maps MIR Local -> stack slot index (only for Real locals).
     local_slots: HashMap<Local, usize>,
@@ -415,11 +418,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Create a new stackification codegen instance.
     #[allow(clippy::needless_pass_by_value)] // ctx is destructured into self fields
     fn new(
-        body: &'ctx MirFunctionBody,
+        body: &'ctx MirFunctionBody<'ctx>,
         arity: usize,
         line_starts: &'ctx [u32],
         ctx: MirCodegenContext<'ctx, 'obj>,
-        analysis: AnalysisResult,
+        analysis: AnalysisResult<'ctx>,
     ) -> Self {
         // Pre-size the hot output buffers from the MIR's shape. `emit` pushes
         // one instruction + one parallel `meta` entry per bytecode op, and a
@@ -442,6 +445,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             arity,
             line_starts,
             globals: ctx.globals,
+            body_slots: ctx.body_slots,
             classes: ctx.classes,
             class_object_indices: ctx.class_object_indices,
             enum_object_indices: ctx.enum_object_indices,
@@ -572,7 +576,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Resolve the compile-time type of an operand, if known.
-    fn resolve_operand_type(&self, operand: &Operand) -> Option<bex_vm_types::RuntimeTy> {
+    fn resolve_operand_type(&self, operand: &Operand<'ctx>) -> Option<bex_vm_types::RuntimeTy> {
         match operand {
             Operand::Constant(c) => match c {
                 Constant::Int(_) => Some(bex_vm_types::RuntimeTy::int()),
@@ -625,7 +629,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     fn collect_spawn_closure_captures(
         &self,
-        operand: &Operand,
+        operand: &Operand<'ctx>,
         captures: &mut SpawnCaptures,
         seen: &mut HashSet<Local>,
     ) {
@@ -645,7 +649,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     fn collect_spawn_shared_operand(
         &self,
-        operand: &Operand,
+        operand: &Operand<'ctx>,
         captures: &mut SpawnCaptures,
         seen: &mut HashSet<Local>,
     ) {
@@ -714,7 +718,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
-    fn local_def_rvalue(&self, local: Local) -> Option<&Rvalue> {
+    fn local_def_rvalue(&self, local: Local) -> Option<&Rvalue<'ctx>> {
         self.analysis
             .def_use
             .get(&local)
@@ -722,7 +726,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             .map(|def| &def.rvalue)
     }
 
-    fn local_def_rvalue_for_operand(&self, operand: &Operand) -> Option<&Rvalue> {
+    fn local_def_rvalue_for_operand(&self, operand: &Operand<'ctx>) -> Option<&Rvalue<'ctx>> {
         let place = match operand {
             Operand::Copy(place) | Operand::Move(place) => place,
             Operand::Constant(_) => return None,
@@ -777,7 +781,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     fn operand_reads_spawn_captured_local(
         &self,
-        operand: &Operand,
+        operand: &Operand<'ctx>,
         seen: &mut HashSet<Local>,
     ) -> bool {
         match operand {
@@ -790,7 +794,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     fn rvalue_reads_spawn_captured_local(
         &self,
-        rvalue: &Rvalue,
+        rvalue: &Rvalue<'ctx>,
         seen: &mut HashSet<Local>,
     ) -> bool {
         match rvalue {
@@ -848,7 +852,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
-    fn binary_operands_can_use_specialized_op(&self, left: &Operand, right: &Operand) -> bool {
+    fn binary_operands_can_use_specialized_op(
+        &self,
+        left: &Operand<'ctx>,
+        right: &Operand<'ctx>,
+    ) -> bool {
         let mut seen = HashSet::new();
         !self.operand_reads_spawn_captured_local(left, &mut seen)
             && !self.operand_reads_spawn_captured_local(right, &mut seen)
@@ -860,8 +868,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn try_specialize_binary_op(
         &self,
         op: BinOp,
-        left: &Operand,
-        right: &Operand,
+        left: &Operand<'ctx>,
+        right: &Operand<'ctx>,
     ) -> Option<Instruction> {
         if !self.binary_operands_can_use_specialized_op(left, right) {
             return None;
@@ -1105,7 +1113,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Allocate stack slots only for Real locals.
     ///
     /// Virtual locals don't get slots - they're inlined at use sites.
-    fn allocate_real_locals(&mut self, mir: &MirFunctionBody) {
+    fn allocate_real_locals(&mut self, mir: &MirFunctionBody<'ctx>) {
         self.local_slots.clear();
         self.real_local_count = 0;
         let arity = self.arity;
@@ -1397,7 +1405,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     // ========================================================================
 
     /// Emit a basic block.
-    fn emit_block(&mut self, block: &BasicBlock) {
+    fn emit_block(&mut self, block: &BasicBlock<'ctx>) {
         // Emit all statements
         for stmt in &block.statements {
             self.set_debug_span(stmt.span, true);
@@ -1412,7 +1420,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Emit a statement (with virtual assignment skipping).
-    fn emit_statement(&mut self, kind: &StatementKind) {
+    fn emit_statement(&mut self, kind: &StatementKind<'ctx>) {
         match kind {
             StatementKind::Assign { destination, value } => {
                 // Check if this is an assignment to a Virtual, PhiLike, or Dead local
@@ -1599,7 +1607,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     ///
     /// For Virtual locals, this recursively emits the definition's rvalue inline.
     /// For Real locals, this emits a `LoadVar` instruction.
-    fn emit_operand_pull(&mut self, operand: &Operand) {
+    fn emit_operand_pull(&mut self, operand: &Operand<'ctx>) {
         unwrap_infallible(pull_semantics::walk_operand_pull(self, operand));
     }
 
@@ -1642,7 +1650,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
-    fn field_copy_operand(operand: &Operand) -> Option<(&Place, usize)> {
+    fn field_copy_operand<'a>(operand: &'a Operand<'_>) -> Option<(&'a Place, usize)> {
         let place = match operand {
             Operand::Copy(place) | Operand::Move(place) => place,
             Operand::Constant(_) => return None,
@@ -1657,7 +1665,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         &mut self,
         class_name: &str,
         type_arg_templates: &[TyTemplate],
-        fields: &[Operand],
+        fields: &[Operand<'ctx>],
     ) -> bool {
         if fields.is_empty()
             || fields
@@ -1716,7 +1724,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         &mut self,
         class_name: &str,
         type_arg_templates: &[TyTemplate],
-        fields: &[Operand],
+        fields: &[Operand<'ctx>],
     ) -> bool {
         if !fields
             .iter()
@@ -1791,7 +1799,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// lowered compound assignments. Keeping the receiver on the stack and
     /// duplicating it avoids that second receiver evaluation without changing
     /// the VM's existing `StoreField` stack contract.
-    fn emit_copy_aware_field_store(&mut self, destination: &Place, value: &Rvalue) -> bool {
+    fn emit_copy_aware_field_store(&mut self, destination: &Place, value: &Rvalue<'ctx>) -> bool {
         let Place::Field { base, field } = destination else {
             return false;
         };
@@ -1816,7 +1824,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Emit an rvalue using the pull model.
-    fn emit_rvalue_pull(&mut self, rvalue: &Rvalue) {
+    fn emit_rvalue_pull(&mut self, rvalue: &Rvalue<'ctx>) {
         // MakeClosure is handled specially: capture operands must load the cell
         // pointer itself (LoadVar), not dereference through the cell (LoadDeref).
         // Set the flag so pull_local emits LoadVar for captured locals.
@@ -1884,15 +1892,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             // Emit the receiver onto the stack first.
             self.emit_operand_pull(receiver);
             // Resolve the item_ref to a GlobalIndex.
-            let func_name = item_ref.to_string();
-            let global_idx = *self
-                .globals
-                .get(&func_name)
-                .unwrap_or_else(|| panic!("MakeBoundMethod: global not found for {func_name}"));
+            let global_idx =
+                self.function_global_index(item_ref, "MakeBoundMethod: global not found");
             let inst = self.emit(Instruction::MakeBoundMethod(GlobalIndex::from_raw(
                 global_idx,
             )));
-            self.set_operand(inst, OperandMeta::Global(func_name));
+            self.set_operand(inst, OperandMeta::Global(item_ref.to_string()));
             return;
         }
         if let Rvalue::MakeVirtualBoundMethod {
@@ -1981,6 +1986,35 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
+    /// Pass-1 global slot for a function item.
+    ///
+    /// An interface-machinery body resolves by its DECLARATION
+    /// ([`baml_compiler2_mir::BodyRef::decl`]) through [`Self::body_slots`] —
+    /// its rendered spelling is display-only and keys nothing. Every other
+    /// item resolves by its rendered name through [`Self::globals`]; `None`
+    /// there means the callee is not statically addressable (the caller falls
+    /// back to an indirect call). A body missing its slot is an internal
+    /// error: `ItemRef::Body` only exists for declarations this database
+    /// sees, and Pass 1 slots every one of them.
+    fn try_function_global_index(&self, item: &baml_compiler2_mir::ItemRef<'ctx>) -> Option<usize> {
+        match item {
+            baml_compiler2_mir::ItemRef::Body(body) => Some(
+                *self
+                    .body_slots
+                    .get(&body.decl)
+                    .unwrap_or_else(|| panic!("interface body has no Pass-1 slot: {item}")),
+            ),
+            _ => self.globals.get(&item.to_string()).copied(),
+        }
+    }
+
+    /// [`Self::try_function_global_index`], panicking with `what` when the
+    /// item does not resolve.
+    fn function_global_index(&self, item: &baml_compiler2_mir::ItemRef<'ctx>, what: &str) -> usize {
+        self.try_function_global_index(item)
+            .unwrap_or_else(|| panic!("{what}: {item}"))
+    }
+
     /// Push a function reference as a value: a pooled, interned
     /// `Object::GenericFunction` wrapper over the function's global slot
     /// (empty `type_args` for a plain reference). Interning by
@@ -1995,14 +2029,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// reproducing the exact serial candidate set and pool layout.
     fn emit_pooled_function_value(
         &mut self,
-        item: &baml_compiler2_mir::ItemRef,
+        item: &baml_compiler2_mir::ItemRef<'ctx>,
         type_args: &[baml_type::RealizedTy],
     ) {
         let name_str = item.to_string();
-        let global_idx = *self
-            .globals
-            .get(&name_str)
-            .unwrap_or_else(|| panic!("undefined function: {name_str}"));
+        let global_idx = self.function_global_index(item, "undefined function");
         let gidx = GlobalIndex::from_raw(global_idx);
         // The pooled object carries runtime heads; anchor once and compare in
         // that space so an existing instantiation is actually recognized.
@@ -2036,7 +2067,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.set_operand(inst, OperandMeta::Const(meta));
     }
 
-    fn emit_constant(&mut self, constant: &Constant) {
+    fn emit_constant(&mut self, constant: &Constant<'ctx>) {
         match constant {
             Constant::Int(v) => {
                 let idx = self.add_constant(ConstValue::Int(*v));
@@ -2216,7 +2247,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Emit a terminator.
-    fn emit_terminator(&mut self, term: &Terminator) {
+    fn emit_terminator(&mut self, term: &Terminator<'ctx>) {
         match term {
             Terminator::Goto { target } => {
                 // Skip jump if target is the next block (fall-through)
@@ -2325,14 +2356,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 unwind: _,
             } => {
                 let call_span = self.current_debug_span;
-                let func_name = pull_semantics::resolve_constant_function_name(
+                let callee_item = pull_semantics::resolve_constant_function_item(
                     callee,
                     &self.analysis.classifications,
                     &self.analysis.def_use,
                 );
-                let global_callee = func_name
+                let global_callee = callee_item
                     .as_ref()
-                    .and_then(|name| self.globals.get(name).copied())
+                    .and_then(|item| self.try_function_global_index(item))
                     .map(GlobalIndex::from_raw);
 
                 if let Some(global_callee) = global_callee {
@@ -2363,8 +2394,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     // the offending call rather than its final nested operand.
                     self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
-                    if let Some(name) = &func_name {
-                        self.set_operand(inst, OperandMeta::Callable(name.clone()));
+                    if let Some(item) = &callee_item {
+                        self.set_operand(inst, OperandMeta::Callable(item.to_string()));
                     }
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
@@ -2451,14 +2482,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 target,
                 unwind: _,
             } => {
-                let func_name = pull_semantics::resolve_constant_function_name(
+                let callee_item = pull_semantics::resolve_constant_function_item(
                     callee,
                     &self.analysis.classifications,
                     &self.analysis.def_use,
                 );
-                let global_callee = func_name
+                let global_callee = callee_item
                     .as_ref()
-                    .and_then(|name| self.globals.get(name).copied())
+                    .and_then(|item| self.try_function_global_index(item))
                     .map(GlobalIndex::from_raw)
                     .unwrap_or_else(|| {
                         panic!(
@@ -2475,8 +2506,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 } else {
                     self.emit(Instruction::SysOp(global_callee))
                 };
-                if let Some(name) = &func_name {
-                    self.set_operand(inst, OperandMeta::Callable(name.clone()));
+                if let Some(item) = &callee_item {
+                    self.set_operand(inst, OperandMeta::Callable(item.to_string()));
                 }
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
@@ -2709,7 +2740,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// ranges the stable sort below preserves `catch_regions` creation order
     /// (always outer before inner), so the last matching entry is the inner
     /// handler.
-    fn build_exception_table(&mut self, mir: &MirFunctionBody) {
+    fn build_exception_table(&mut self, mir: &MirFunctionBody<'ctx>) {
         use bex_vm_types::bytecode::{ExceptionTableEntry, HandlerContextEntry};
 
         for region in &mir.catch_regions {
@@ -2817,7 +2848,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// if all previous comparisons failed, the discriminant must match.
     fn emit_switch_if_else(
         &mut self,
-        discriminant: &Operand,
+        discriminant: &Operand<'ctx>,
         arms: &[(i64, BlockId)],
         otherwise: BlockId,
         exhaustive: bool,
@@ -2862,7 +2893,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Creates a jump table for dense integer ranges.
     fn emit_switch_jump_table(
         &mut self,
-        discriminant: &Operand,
+        discriminant: &Operand<'ctx>,
         arms: &[(i64, BlockId)],
         otherwise: BlockId,
         min: i64,
@@ -2911,7 +2942,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// implementation would be complex (need to track rightmost leaf of tree).
     fn emit_switch_binary_search(
         &mut self,
-        discriminant: &Operand,
+        discriminant: &Operand<'ctx>,
         arms: &[(i64, BlockId)],
         otherwise: BlockId,
         _exhaustive: bool,
@@ -3007,7 +3038,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     #[allow(clippy::cast_possible_wrap)]
     fn emit_switch_perfect_hash(
         &mut self,
-        discriminant: &Operand,
+        discriminant: &Operand<'ctx>,
         arms: &[(i64, BlockId)],
         otherwise: BlockId,
         hash_result: PerfectHashResult,
@@ -3149,7 +3180,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     ///
     /// Returns a flat `Vec<String>` mapping slot indices to variable names.
     fn build_local_names(
-        mir: &MirFunctionBody,
+        mir: &MirFunctionBody<'ctx>,
         local_slots: &HashMap<Local, usize>,
     ) -> Vec<String> {
         let max_slot = local_slots.values().max().copied().unwrap_or(0);
@@ -3170,7 +3201,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     /// Build lexical-scope metadata for user-visible locals.
     fn build_debug_locals(
-        mir: &MirFunctionBody,
+        mir: &MirFunctionBody<'ctx>,
         local_slots: &HashMap<Local, usize>,
     ) -> Vec<DebugLocalScope> {
         let mut locals = Vec::new();
@@ -3237,15 +3268,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 }
 
-impl PullSink for StackifyCodegen<'_, '_> {
+impl<'ctx> PullSink<'ctx> for StackifyCodegen<'ctx, '_> {
     type Error = Infallible;
 
-    fn pull_constant(&mut self, constant: &Constant) -> Result<(), Self::Error> {
+    fn pull_constant(&mut self, constant: &Constant<'ctx>) -> Result<(), Self::Error> {
         self.emit_constant(constant);
         Ok(())
     }
 
-    fn pull_local(&mut self, local: Local) -> Result<LocalPullAction, Self::Error> {
+    fn pull_local(&mut self, local: Local) -> Result<LocalPullAction<'ctx>, Self::Error> {
         let classification = self.analysis.classifications[&local];
 
         let action = match classification {
@@ -3718,14 +3749,11 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
     fn make_generic_function(
         &mut self,
-        item: &baml_compiler2_mir::ItemRef,
+        item: &baml_compiler2_mir::ItemRef<'ctx>,
         ntypeargs: usize,
     ) -> Result<(), Self::Error> {
         let func_name = item.to_string();
-        let global_idx = *self
-            .globals
-            .get(&func_name)
-            .unwrap_or_else(|| panic!("MakeGenericFunction: global not found for {func_name}"));
+        let global_idx = self.function_global_index(item, "MakeGenericFunction: global not found");
         let ntypeargs = u16::try_from(ntypeargs).expect("ntypeargs fits u16");
         let inst = self.emit(Instruction::MakeGenericFunction {
             function: GlobalIndex::from_raw(global_idx),
@@ -3773,7 +3801,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 }
 
-impl StackEffectSink for StackifyCodegen<'_, '_> {
+impl<'ctx> StackEffectSink<'ctx> for StackifyCodegen<'ctx, '_> {
     fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error> {
         let idx = self.emit(Instruction::StoreField(field));
         self.set_operand(idx, OperandMeta::Field(name.to_string()));
@@ -3927,6 +3955,7 @@ mod tests {
         };
 
         let globals = HashMap::new();
+        let body_slots = HashMap::new();
         let classes = HashMap::new();
         let class_object_indices = HashMap::new();
         let enum_object_indices = HashMap::new();
@@ -3946,6 +3975,7 @@ mod tests {
             &line_starts,
             MirCodegenContext {
                 globals: &globals,
+                body_slots: &body_slots,
                 classes: &classes,
                 class_object_indices: &class_object_indices,
                 enum_object_indices: &enum_object_indices,

@@ -1046,7 +1046,7 @@ use baml_compiler2_hir::{
     compiler2_all_files, contributions::Definition, file_package::file_package,
 };
 
-pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> ItemRef {
+pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> ItemRef<'db> {
     use baml_compiler2_ppir::item_data::{
         MethodOwner, class_data, client_data, enum_data, function_data, interface_data, let_data,
         method_owner, retry_policy_data, template_string_data, test_data, type_alias_data,
@@ -1075,33 +1075,30 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                 return method_item_ref(db, class_loc, func_loc);
             }
             Some(MethodOwner::Interface(iface_loc)) => {
-                return ItemRef::Method {
+                return ItemRef::Body(Box::new(crate::BodyRef {
                     package: pkg_info.package.clone(),
                     namespace: pkg_info.namespace_path,
-                    class: interface_data(db, iface_loc).name.clone(),
-                    name,
-                };
+                    display_owner: interface_data(db, iface_loc).name.clone(),
+                    decl: func_loc,
+                    method: name,
+                }));
             }
             Some(MethodOwner::Impl(impl_loc)) => {
-                // One spelling for every impl-block method — in-class and
-                // out-of-body blocks are the same construct. Impl blocks are
-                // anonymous, so the segment is SYNTHESIZED (the lambda
-                // convention) from the impl's coherence identity, spelled
-                // with the language's own qualification syntax:
-                // `<(target as iface)>`. Both halves are canonically
-                // resolved and fully qualified (never the written
-                // spellings, which may be namespace-relative or ride a
-                // `root.` alias); generic and interface arguments are part
-                // of the identity, associated-type pins are NOT (they are
-                // members of the impl, outputs of the match); the impl's
-                // own type variables render as frame indices (`#0`), not
-                // their declared names.
-                return ItemRef::Method {
+                // The identity is the DECLARATION (an opaque session id);
+                // only the DISPLAY segment is synthesized (the lambda
+                // convention), spelled with the language's own qualification
+                // syntax: `<(target as iface)>` — both halves canonically
+                // resolved and fully qualified; generic and interface
+                // arguments appear in the spelling, associated-type pins do
+                // NOT (members of the impl, outputs of the match); the
+                // impl's own type variables render as frame indices (`#0`).
+                return ItemRef::Body(Box::new(crate::BodyRef {
                     package: pkg_info.package.clone(),
                     namespace: pkg_info.namespace_path,
-                    class: Name::new(impl_display_segment(db, impl_loc)),
-                    name,
-                };
+                    display_owner: Name::new(impl_display_segment(db, impl_loc)),
+                    decl: func_loc,
+                    method: name,
+                }));
             }
             None => {}
         }
@@ -1259,7 +1256,7 @@ fn method_item_ref<'db>(
     db: &'db dyn crate::Db,
     class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
-) -> ItemRef {
+) -> ItemRef<'db> {
     use baml_compiler2_ppir::item_data::{class_data, function_data};
     let pkg_info = file_package(db, class_loc.file(db));
     let class = class_data(db, class_loc).name.clone();
@@ -1278,10 +1275,10 @@ fn method_item_ref<'db>(
 ///
 /// Only `Method` and `Free` variants are callable — callers must guard against
 /// `Field` and `Variant` variants before calling this function.
-fn resolution_to_item_ref(
-    db: &dyn crate::Db,
-    res: &crate::inference_provider::MemberResolution<'_>,
-) -> Option<ItemRef> {
+fn resolution_to_item_ref<'db>(
+    db: &'db dyn crate::Db,
+    res: &crate::inference_provider::MemberResolution<'db>,
+) -> Option<ItemRef<'db>> {
     use crate::inference_provider::MemberResolution;
     match res {
         MemberResolution::Free { func_loc } => {
@@ -1785,7 +1782,7 @@ type PatMetadataKey = (MetadataScope, AstPatId);
 
 struct LoweringContext<'db> {
     db: &'db dyn crate::Db,
-    builder: MirBuilder,
+    builder: MirBuilder<'db>,
     locals: HashMap<Name, Local>,
     binding_locals: HashMap<BindingId, Local>,
     loop_context: Option<LoopContext>,
@@ -1904,7 +1901,7 @@ struct LoweringContext<'db> {
     // Lambda functions lowered during body traversal.
     // Collected here and moved into MirFunction.lambdas at the end of lowering.
     // Each entry is a fully-lowered MirFunction for one lambda expression.
-    pending_lambdas: Vec<MirFunction>,
+    pending_lambdas: Vec<MirFunction<'db>>,
 
     // Generic params of the enclosing lambda(s), accumulated outermost-first.
     // Empty at top-level; `lower_lambda` extends it with the lambda's own
@@ -3534,7 +3531,7 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         expr_id: AstExprId,
         shape: &InterfaceMethodShape,
-    ) -> Option<(Vec<Tir2Ty>, Vec<Operand>)> {
+    ) -> Option<(Vec<Tir2Ty>, Vec<Operand<'db>>)> {
         let plan = self
             .tir_call_plan(self.expr_metadata_key(expr_id))
             .cloned()?;
@@ -3572,7 +3569,7 @@ impl<'db> LoweringContext<'db> {
         expr_id: AstExprId,
         iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
         method: &Name,
-    ) -> Option<Rvalue> {
+    ) -> Option<Rvalue<'db>> {
         let iface_data = baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc);
         let pkg_info = file_package(self.db, iface_loc.file(self.db));
         let iface_tn = TypeName::new(
@@ -3615,8 +3612,8 @@ impl<'db> LoweringContext<'db> {
     /// destination calls into a temp and assigns through in the resume block.
     fn emit_resolved_indirect_call(
         &mut self,
-        callee_op: Operand,
-        arg_operands: Vec<Operand>,
+        callee_op: Operand<'db>,
+        arg_operands: Vec<Operand<'db>>,
         expr_id: AstExprId,
         runtime_id: Option<AstExprId>,
         dest: &Place,
@@ -4278,7 +4275,7 @@ impl<'db> LoweringContext<'db> {
 
 #[allow(clippy::elidable_lifetime_names)]
 impl<'db> LoweringContext<'db> {
-    fn lower_function_body(&mut self) -> MirFunction {
+    fn lower_function_body(&mut self) -> MirFunction<'db> {
         let func_loc = self
             .func_loc
             .expect("lower_function_body called on non-function LoweringContext");
@@ -4512,7 +4509,7 @@ impl<'db> LoweringContext<'db> {
     /// and evaluates the initializer expression, leaving the result in `_0`.
     /// This is used by `compile_init_function` to compile let initializers into bytecode
     /// that can then be called and have their result stored via `StoreGlobal`.
-    fn lower_let_body_inner(&mut self) -> MirFunctionBody {
+    fn lower_let_body_inner(&mut self) -> MirFunctionBody<'db> {
         // Return place _0 (type unknown — let bodies don't have type annotations)
         let ret = self.builder.declare_local(
             Some(Name::new("_0")),
@@ -5047,7 +5044,8 @@ impl<'db> LoweringContext<'db> {
         // capture_indices, we add it as a transitive capture of the current
         // lambda — i.e. the current lambda (f) will need to capture it from ITS
         // parent, and g will receive it via f's capture slot.
-        let mut capture_operands: Vec<Operand> = Vec::with_capacity(extended_hir_captures.len());
+        let mut capture_operands: Vec<Operand<'db>> =
+            Vec::with_capacity(extended_hir_captures.len());
         for (_, binding_id) in &extended_hir_captures {
             if let Some(&local) = self.binding_locals.get(binding_id) {
                 // Mark the local as captured at the capture site — this is the
@@ -5102,7 +5100,7 @@ impl<'db> LoweringContext<'db> {
 
 // ─── 3.1b: Tagged-template lowering (BEP-049 §10 / M4e.1) ─────────────────────
 
-impl LoweringContext<'_> {
+impl<'db> LoweringContext<'db> {
     /// Source-less callable metadata for a callee expression, following the
     /// same flat-vs-path-member precedence as the source-location helpers.
     fn external_callee(
@@ -5308,7 +5306,7 @@ impl LoweringContext<'_> {
         body_params: &[(Name, RuntimeTy)],
         closure_ty: RuntimeTy,
         static_layout: Option<(Vec<String>, Vec<AstExprId>)>,
-    ) -> Operand {
+    ) -> Operand<'db> {
         let parent_name = self.builder.name().to_string();
         let idx = {
             let c = self
@@ -5423,7 +5421,7 @@ impl LoweringContext<'_> {
         // ── Body: construct `baml.TaggedString { parts, values }`. ──
         match static_layout {
             Some((parts, value_exprs)) => {
-                let parts_ops: Vec<Operand> = parts
+                let parts_ops: Vec<Operand<'db>> = parts
                     .into_iter()
                     .map(|s| Operand::Constant(Constant::String(s)))
                     .collect();
@@ -5454,7 +5452,7 @@ impl LoweringContext<'_> {
                 // Mirrors the `None` (dynamic-layout) arm below.
                 let prev_metadata_scope = self.current_metadata_scope;
                 self.current_metadata_scope = saved_metadata_scope;
-                let value_ops: Vec<Operand> = value_exprs
+                let value_ops: Vec<Operand<'db>> = value_exprs
                     .iter()
                     .map(|&e| self.lower_to_operand(e))
                     .collect();
@@ -5558,7 +5556,8 @@ impl LoweringContext<'_> {
             }
         }
 
-        let mut capture_operands: Vec<Operand> = Vec::with_capacity(extended_hir_captures.len());
+        let mut capture_operands: Vec<Operand<'db>> =
+            Vec::with_capacity(extended_hir_captures.len());
         for (_, binding_id) in &extended_hir_captures {
             if let Some(&local) = self.binding_locals.get(binding_id) {
                 self.builder.local_decl_mut(local).is_captured = true;
@@ -5602,7 +5601,7 @@ impl LoweringContext<'_> {
 
 // ─── 3.2: Core lower_expr dispatch ───────────────────────────────────────────
 
-impl LoweringContext<'_> {
+impl<'db> LoweringContext<'db> {
     fn lower_scoped_block(
         &mut self,
         stmts: &[AstStmtId],
@@ -5827,7 +5826,7 @@ impl LoweringContext<'_> {
         (ordinary_args, runtime_id)
     }
 
-    fn lower_runtime_id_operand(&mut self, runtime_id: Option<AstExprId>) -> Option<Operand> {
+    fn lower_runtime_id_operand(&mut self, runtime_id: Option<AstExprId>) -> Option<Operand<'db>> {
         runtime_id.map(|expr_id| {
             let operand = self.lower_to_operand(expr_id);
             let ty = self.expr_ty(expr_id);
@@ -5894,7 +5893,7 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Array { elements } => {
-                let operands: Vec<Operand> =
+                let operands: Vec<Operand<'db>> =
                     elements.iter().map(|&e| self.lower_to_operand(e)).collect();
                 let element_ty = self.array_element_template(expr_id);
                 self.builder
@@ -5902,7 +5901,7 @@ impl LoweringContext<'_> {
             }
 
             AstExpr::Map { entries } => {
-                let pairs: Vec<(Operand, Operand)> = entries
+                let pairs: Vec<(Operand<'db>, Operand<'db>)> = entries
                     .iter()
                     .map(|entry| {
                         (
@@ -6125,7 +6124,7 @@ impl LoweringContext<'_> {
         self.builder.current_source_span = prev_span;
     }
 
-    fn operand_is_marked_rethrow(&self, operand: &Operand) -> bool {
+    fn operand_is_marked_rethrow(&self, operand: &Operand<'db>) -> bool {
         match operand {
             Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
                 self.catch_rethrow_locals.contains(local)
@@ -6279,7 +6278,7 @@ impl LoweringContext<'_> {
 
 // ─── Literal helper ───────────────────────────────────────────────────────────
 
-impl LoweringContext<'_> {
+impl<'db> LoweringContext<'db> {
     /// Whether `segments` is rooted at the BEP-044 `default` receiver keyword
     /// and that keyword is not shadowed by a local of the same name. See
     /// [`baml_compiler2_ast::DEFAULT_RECEIVER_KEYWORD`].
@@ -6290,7 +6289,7 @@ impl LoweringContext<'_> {
             && self.binding_id_for_path(expr_id, &segments[0]).is_none()
     }
 
-    fn lower_literal(lit: &AstLiteral) -> Constant {
+    fn lower_literal(lit: &AstLiteral) -> Constant<'db> {
         use baml_base::Literal;
         match lit {
             Literal::Int(v) => Constant::Int(*v),
@@ -7056,7 +7055,7 @@ impl<'db> LoweringContext<'db> {
 
 // ─── 3.4: Operator mapping and binary/unary lowering ─────────────────────────
 
-impl LoweringContext<'_> {
+impl<'db> LoweringContext<'db> {
     fn convert_binop(op: AstBinaryOp) -> Option<BinOp> {
         match op {
             AstBinaryOp::Add => Some(BinOp::Add),
@@ -7259,7 +7258,7 @@ impl LoweringContext<'_> {
     fn lower_via_ops_driver(
         &mut self,
         driver: &str,
-        args: Vec<Operand>,
+        args: Vec<Operand<'db>>,
         result_ty: RuntimeTy,
         dest: Place,
     ) {
@@ -7976,7 +7975,11 @@ impl LoweringContext<'_> {
 // ─── 3.5: Call lowering with builtin detection ────────────────────────────────
 
 impl<'db> LoweringContext<'db> {
-    fn lower_call_arg_operands(&mut self, expr_id: AstExprId, args: &[AstExprId]) -> Vec<Operand> {
+    fn lower_call_arg_operands(
+        &mut self,
+        expr_id: AstExprId,
+        args: &[AstExprId],
+    ) -> Vec<Operand<'db>> {
         let Some(plan) = self.tir_call_plan(self.expr_metadata_key(expr_id)).cloned() else {
             // No call plan: lower each arg in order (the type checker would
             // have already flagged any mismatch).
@@ -8008,7 +8011,7 @@ impl<'db> LoweringContext<'db> {
         // in the call expression). This preserves the original evaluation
         // order, which matters for side effects.
         let provided_args: Vec<_> = plan.provided_args().collect();
-        let mut lowered_args: FxHashMap<AstExprId, Operand> = FxHashMap::default();
+        let mut lowered_args: FxHashMap<AstExprId, Operand<'db>> = FxHashMap::default();
         for &arg in args {
             if provided_args.contains(&arg) {
                 lowered_args.insert(arg, self.lower_to_operand(arg));
@@ -8040,7 +8043,11 @@ impl<'db> LoweringContext<'db> {
     /// (correct cross-file/cross-package, where the caller's TIR tables don't
     /// cover the callee). Sys-op defaults are constant literals today; a
     /// non-constant default falls back to `OmittedArg` rather than mis-evaluate.
-    fn sysop_default_operand(&self, callee_loc: FunctionLoc<'db>, param_index: usize) -> Operand {
+    fn sysop_default_operand(
+        &self,
+        callee_loc: FunctionLoc<'db>,
+        param_index: usize,
+    ) -> Operand<'db> {
         let defaults = baml_compiler2_ppir::function_parameter_defaults(self.db, callee_loc);
         let constant = defaults
             .param_default(param_index)
@@ -8092,7 +8099,7 @@ impl<'db> LoweringContext<'db> {
         if !callee_untyped {
             return false;
         }
-        let (recv_op, recv_tir_ty): (Operand, Option<Tir2Ty>) = match &callee_expr {
+        let (recv_op, recv_tir_ty): (Operand<'db>, Option<Tir2Ty>) = match &callee_expr {
             AstExpr::MemberAccess { base, .. } => {
                 let base_id = *base;
                 let ty = self.tir_expr_type(self.expr_metadata_key(base_id)).cloned();
@@ -8146,7 +8153,7 @@ impl<'db> LoweringContext<'db> {
         // runtime, so an out-of-scope typevar or unknown receiver type safely
         // drops to ntypeargs=0 — matching how `string.from(x)` is normally emitted.
         let caller_generic_params = self.enclosing_generic_params();
-        let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
+        let type_arg_ops: Vec<Operand<'db>> = match &recv_tir_ty {
             Some(t)
                 if !baml_type_runtime::contains_typevar_where(t, &|name| {
                     !caller_generic_params.iter().any(|p| p == name)
@@ -8248,7 +8255,7 @@ impl<'db> LoweringContext<'db> {
         if !callee_untyped {
             return false;
         }
-        let (recv_op, recv_tir_ty): (Operand, Option<Tir2Ty>) = match &callee_expr {
+        let (recv_op, recv_tir_ty): (Operand<'db>, Option<Tir2Ty>) = match &callee_expr {
             AstExpr::MemberAccess { base, .. } => {
                 let base_id = *base;
                 let ty = self.tir_expr_type(self.expr_metadata_key(base_id)).cloned();
@@ -8295,7 +8302,7 @@ impl<'db> LoweringContext<'db> {
         // under monomorphization (the shim ignores `T` at runtime, so an
         // out-of-scope typevar / unknown receiver safely drops to ntypeargs=0).
         let caller_generic_params = self.enclosing_generic_params();
-        let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
+        let type_arg_ops: Vec<Operand<'db>> = match &recv_tir_ty {
             Some(t)
                 if !baml_type_runtime::contains_typevar_where(t, &|name| {
                     !caller_generic_params.iter().any(|p| p == name)
@@ -8415,7 +8422,7 @@ impl<'db> LoweringContext<'db> {
         let recv_tir_ty: Option<Tir2Ty> =
             self.tir_expr_type(self.expr_metadata_key(expr_id)).cloned();
         let caller_generic_params = self.enclosing_generic_params();
-        let type_arg_ops: Vec<Operand> = match &recv_tir_ty {
+        let type_arg_ops: Vec<Operand<'db>> = match &recv_tir_ty {
             Some(t)
                 if !baml_type_runtime::contains_typevar_where(t, &|name| {
                     !caller_generic_params.iter().any(|p| p == name)
@@ -8602,7 +8609,7 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         callee: AstExprId,
         callee_expr: &AstExpr,
-    ) -> Operand {
+    ) -> Operand<'db> {
         if let AstExpr::MemberAccess { base, member } = callee_expr
             && matches!(
                 &self.body.exprs[callee],
@@ -8713,20 +8720,24 @@ impl<'db> LoweringContext<'db> {
                 pkg_items,
                 &current_pkg.namespace_path,
             ) {
-                let iface_pkg = baml_compiler2_hir::file_package::file_package(
-                    self.db,
-                    iface_loc.file(self.db),
-                );
-                let iface_name = baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc)
-                    .name
-                    .clone();
                 let method_name = segments[1].clone();
-                let item_ref = ItemRef::Method {
-                    package: iface_pkg.package.clone(),
-                    namespace: iface_pkg.namespace_path,
-                    class: iface_name,
-                    name: method_name,
+                // The callee IS the interface's default body: reference it by
+                // its declaration (`ItemRef::Body`), the only key a body has.
+                let Some(default_loc) =
+                    baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc)
+                        .methods
+                        .iter()
+                        .copied()
+                        .find(|&loc| {
+                            baml_compiler2_ppir::item_data::function_data(self.db, loc).name
+                                == method_name
+                        })
+                else {
+                    // TIR already rejected a `default.` call naming no such
+                    // method; nothing sound to lower here.
+                    return;
                 };
+                let item_ref = def_to_item_ref(self.db, Definition::Function(default_loc));
                 let callee_op = Operand::Constant(Constant::Function(item_ref));
                 let Some(&self_local) = self.locals.get(&Name::new("self")) else {
                     return;
@@ -9425,7 +9436,7 @@ impl<'db> LoweringContext<'db> {
             Some(frame) => frame,
             None => &receiver_class_type_args,
         };
-        let receiver_class_type_arg_operands: Vec<Operand> = if !owner_prefix_tys.is_empty() {
+        let receiver_class_type_arg_operands: Vec<Operand<'db>> = if !owner_prefix_tys.is_empty() {
             let generic_params = self.enclosing_generic_params();
             owner_prefix_tys
                 .iter()
@@ -9441,7 +9452,7 @@ impl<'db> LoweringContext<'db> {
             vec![]
         };
 
-        let type_arg_operands: Vec<Operand> = if !receiver_class_type_arg_operands.is_empty() {
+        let type_arg_operands: Vec<Operand<'db>> = if !receiver_class_type_arg_operands.is_empty() {
             let mut combined = receiver_class_type_arg_operands;
             combined.extend(call_type_arg_operands);
             combined
@@ -9921,7 +9932,7 @@ impl<'db> LoweringContext<'db> {
 
 // ─── 3.6: reflect.Type.of intrinsic ─────────────────────────────────────────
 
-impl LoweringContext<'_> {
+impl<'db> LoweringContext<'db> {
     /// Detect a `reflect.Type.of<T>()` call and, if found, resolve the type
     /// argument and return the corresponding `TyTemplate`.
     ///
@@ -10234,7 +10245,7 @@ impl LoweringContext<'_> {
     /// `TypeVar`s are lowered against the *caller's* `enclosing_generic_params`
     /// so they substitute against the caller's `frame.type_args` at runtime
     /// (mirroring the receiver-class-type-args path for direct method calls).
-    fn emit_frame_type_arg_ops(&mut self, tys: &[Tir2Ty]) -> Vec<Operand> {
+    fn emit_frame_type_arg_ops(&mut self, tys: &[Tir2Ty]) -> Vec<Operand<'db>> {
         if tys.is_empty() {
             return Vec::new();
         }
@@ -10353,7 +10364,7 @@ impl LoweringContext<'_> {
         call_expr_id: AstExprId,
         include_inferred: bool,
         max_count: Option<usize>,
-    ) -> Vec<Operand> {
+    ) -> Vec<Operand<'db>> {
         if max_count == Some(0) {
             return Vec::new();
         }
@@ -10530,7 +10541,7 @@ impl LoweringContext<'_> {
     /// Resolve a `GenericApply` base to the underlying function `ItemRef` (free
     /// function or static/interface method). `None` for bound methods, lambdas,
     /// or anything that is not a function path.
-    fn try_resolve_generic_apply_base(&self, base: AstExprId) -> Option<ItemRef> {
+    fn try_resolve_generic_apply_base(&self, base: AstExprId) -> Option<ItemRef<'db>> {
         use crate::inference_provider::MemberResolution;
         let is_fn = |r: &MemberResolution<'_>| {
             matches!(
@@ -10675,14 +10686,14 @@ impl LoweringContext<'_> {
 // ─── 3.7: Helper methods ─────────────────────────────────────────────────────
 
 impl<'db> LoweringContext<'db> {
-    fn lower_to_operand(&mut self, expr_id: AstExprId) -> Operand {
+    fn lower_to_operand(&mut self, expr_id: AstExprId) -> Operand<'db> {
         let ty = self.expr_ty(expr_id);
         let temp = self.builder.temp(ty);
         self.lower_expr(expr_id, Place::local(temp));
         Operand::Copy(Place::Local(temp))
     }
 
-    fn lower_throw_operand(&mut self, expr_id: AstExprId) -> Operand {
+    fn lower_throw_operand(&mut self, expr_id: AstExprId) -> Operand<'db> {
         self.try_resolve_to_local(expr_id)
             .map_or_else(|| self.lower_to_operand(expr_id), Operand::copy_local)
     }
@@ -10756,7 +10767,7 @@ impl<'db> LoweringContext<'db> {
     /// applying the checker-recorded truthiness coercion (B-1563,
     /// `Adjust::Truthy`). A `bool`-typed condition records nothing and
     /// lowers exactly as before; the branch terminators stay strict-bool.
-    fn lower_condition_operand(&mut self, condition: AstExprId) -> Operand {
+    fn lower_condition_operand(&mut self, condition: AstExprId) -> Operand<'db> {
         let op = self.lower_to_operand(condition);
         if !self.tir_truthy_condition(self.expr_metadata_key(condition)) {
             return op;
@@ -10913,12 +10924,12 @@ impl<'db> LoweringContext<'db> {
             // first. The TIR Object handler resolves the type via its qualified
             // path, so `class_fields.get(tn)` always finds the definition for
             // any user-written class literal.
-            let field_operands: Vec<Operand> = if let Some(field_name_to_idx) = type_name_key
+            let field_operands: Vec<Operand<'db>> = if let Some(field_name_to_idx) = type_name_key
                 .as_ref()
                 .and_then(|tn| self.class_fields.get(tn))
                 .cloned()
             {
-                let mut result: Vec<Operand> = (0..field_slot_count(&field_name_to_idx))
+                let mut result: Vec<Operand<'db>> = (0..field_slot_count(&field_name_to_idx))
                     .map(|_| Operand::Constant(Constant::Null))
                     .collect();
                 for field in fields {
@@ -10952,9 +10963,9 @@ impl<'db> LoweringContext<'db> {
             // order), then assemble the aggregate respecting override semantics:
             // later source entries override earlier ones for the same class field.
 
-            enum Entry {
+            enum Entry<'db> {
                 Spread(Local),
-                Named(String, Operand),
+                Named(String, Operand<'db>),
             }
 
             let field_count = type_name_key
@@ -10978,7 +10989,7 @@ impl<'db> LoweringContext<'db> {
             // Assign each named field its source position by counting up and
             // skipping positions occupied by spreads.
             let spread_positions: HashSet<usize> = spreads.iter().map(|s| s.position).collect();
-            let explicit_with_pos: Vec<(usize, String, Operand)> = {
+            let explicit_with_pos: Vec<(usize, String, Operand<'db>)> = {
                 let mut pos = 0usize;
                 fields
                     .iter()
@@ -11006,7 +11017,7 @@ impl<'db> LoweringContext<'db> {
                 Some(m) => m,
                 None => {
                     // Unknown class — just emit named fields in order.
-                    let field_operands: Vec<Operand> = fields
+                    let field_operands: Vec<Operand<'db>> = fields
                         .iter()
                         .map(|field| self.lower_to_operand(field.value))
                         .collect();
@@ -11035,7 +11046,7 @@ impl<'db> LoweringContext<'db> {
             entries.sort_by_key(|(pos, _)| *pos);
 
             // Initialize all fields to null, then apply entries in order.
-            let mut result: Vec<Operand> = (0..field_count)
+            let mut result: Vec<Operand<'db>> = (0..field_count)
                 .map(|_| Operand::Constant(Constant::Null))
                 .collect();
 
@@ -11509,9 +11520,9 @@ impl<'db> LoweringContext<'db> {
     /// side-effectful index expression is evaluated exactly once.
     fn emit_index_access(
         &mut self,
-        base_op: Operand,
+        base_op: Operand<'db>,
         base_ty: &RuntimeTy,
-        index_op: Operand,
+        index_op: Operand<'db>,
         index_ty: RuntimeTy,
         dest: Place,
     ) {
@@ -11557,7 +11568,7 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// Convert an operand to a local, materializing a temp if necessary.
-    fn operand_to_local(&mut self, op: Operand, ty: RuntimeTy) -> Local {
+    fn operand_to_local(&mut self, op: Operand<'db>, ty: RuntimeTy) -> Local {
         match op {
             Operand::Copy(Place::Local(l)) | Operand::Move(Place::Local(l)) => l,
             _ => {
@@ -11705,13 +11716,13 @@ impl<'db> LoweringContext<'db> {
     #[expect(clippy::too_many_arguments)]
     fn emit_virtual_call_with_value_operands(
         &mut self,
-        receiver: Operand,
+        receiver: Operand<'db>,
         iface_tn: &TypeName,
         iface_type_args: &[Tir2Ty],
         iface_assoc: &[(Name, Tir2Ty)],
         method: &Name,
         expr_id: AstExprId,
-        arg_ops: Vec<Operand>,
+        arg_ops: Vec<Operand<'db>>,
         runtime_id: Option<AstExprId>,
         dest: &Place,
     ) -> bool {
@@ -11786,10 +11797,10 @@ impl<'db> LoweringContext<'db> {
         &mut self,
         iface: TyTemplateInterface,
         method: &str,
-        args: Vec<Operand>,
+        args: Vec<Operand<'db>>,
         ntypeargs: usize,
         runtime_type_check: bool,
-        runtime_id: Option<Operand>,
+        runtime_id: Option<Operand<'db>>,
         result_ty: RuntimeTy,
         unwind: Option<BlockId>,
         dest: Place,
@@ -12251,7 +12262,7 @@ impl<'db> LoweringContext<'db> {
     /// resolved by [`Self::virtual_field_assign_target`] before any operand was
     /// lowered, so nothing is left to fail on and there is no fall-through to leave
     /// half-emitted.
-    fn emit_interface_field_store(&mut self, target: &VirtualFieldTarget, value: Operand) {
+    fn emit_interface_field_store(&mut self, target: &VirtualFieldTarget, value: Operand<'db>) {
         self.builder.virtual_field_store(
             target.iface.clone(),
             Operand::Copy(Place::Local(target.receiver)),
@@ -13319,7 +13330,7 @@ impl LoweringContext<'_> {
 
 // ─── Match lowering ───────────────────────────────────────────────────────────
 
-impl LoweringContext<'_> {
+impl<'db> LoweringContext<'db> {
     fn lower_match(
         &mut self,
         expr_id: AstExprId,
@@ -14260,7 +14271,7 @@ impl LoweringContext<'_> {
     fn emit_value_eq_branch(
         &mut self,
         scrutinee: Local,
-        rhs: Operand,
+        rhs: Operand<'db>,
         success: BlockId,
         failure: BlockId,
     ) {
@@ -15811,7 +15822,7 @@ pub fn lower_let_body<'db>(
     db: &'db dyn crate::Db,
     let_loc: LetLoc<'db>,
     opt: crate::OptLevel,
-) -> Option<(MirFunctionBody, Vec<MirFunction>)> {
+) -> Option<(MirFunctionBody<'db>, Vec<MirFunction<'db>>)> {
     lower_let_body_impl(db, let_loc, opt)
 }
 
@@ -15819,7 +15830,7 @@ fn lower_let_body_impl<'db>(
     db: &'db dyn crate::Db,
     let_loc: LetLoc<'db>,
     opt: crate::OptLevel,
-) -> Option<(MirFunctionBody, Vec<MirFunction>)> {
+) -> Option<(MirFunctionBody<'db>, Vec<MirFunction<'db>>)> {
     let body = let_body(db, let_loc);
     let source_map = let_body_source_map(db, let_loc);
 
@@ -15835,11 +15846,19 @@ fn lower_let_body_impl<'db>(
     }
 }
 
+/// Lower one function to MIR.
+///
+/// Tracked (with `(func_loc, opt)` as the memo key) so emit's parallel Pass-4
+/// stage can warm the shared memo table from worker database handles and the
+/// main thread's re-query is a cache hit branded with its own `'db` — see
+/// `lower_seed_mirs` in the emit crate. `no_eq`: nothing tracked consumes the
+/// output, so backdating is inert and the MIR tree carries no `PartialEq`.
+#[salsa::tracked(returns(ref), no_eq)]
 pub fn lower_function<'db>(
     db: &'db dyn crate::Db,
     func_loc: FunctionLoc<'db>,
     opt: crate::OptLevel,
-) -> MirFunction {
+) -> MirFunction<'db> {
     lower_function_impl(db, func_loc, opt)
 }
 
@@ -15847,7 +15866,7 @@ fn lower_function_impl<'db>(
     db: &'db dyn crate::Db,
     func_loc: FunctionLoc<'db>,
     opt: crate::OptLevel,
-) -> MirFunction {
+) -> MirFunction<'db> {
     let body = baml_compiler2_ppir::function_body(db, func_loc);
     let source_map = baml_compiler2_ppir::function_body_source_map(db, func_loc);
     let item_ref = def_to_item_ref(

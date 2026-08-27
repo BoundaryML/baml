@@ -22,7 +22,7 @@ use baml_type::{RealizedTy, RuntimeTy, TyTemplate, TyTemplateInterface};
 ///   testing individual instructions (e.g. `unary_op -` for `-5`).
 /// - `Two`: Everything in `One` plus MIR-level constant folding and future
 ///   advanced transforms (e.g. type-tag switch dispatch).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, salsa::Update)]
 pub enum OptLevel {
     Zero,
     #[default]
@@ -80,9 +80,9 @@ pub struct CatchRegion {
 /// live here, so callers destructure the `MirFunctionKind` first and then work
 /// with `&MirFunctionBody` / `&mut MirFunctionBody` directly — no panics.
 #[derive(Debug, Clone)]
-pub struct MirFunctionBody {
+pub struct MirFunctionBody<'db> {
     /// All basic blocks in the function.
-    pub blocks: Vec<BasicBlock>,
+    pub blocks: Vec<BasicBlock<'db>>,
     /// Entry block index (always 0 by convention).
     pub entry: BlockId,
     /// Local variable declarations.
@@ -94,9 +94,9 @@ pub struct MirFunctionBody {
     pub viz_nodes: Vec<VizNode>,
 }
 
-impl MirFunctionBody {
+impl<'db> MirFunctionBody<'db> {
     /// Get a basic block by ID.
-    pub fn block(&self, id: BlockId) -> &BasicBlock {
+    pub fn block(&self, id: BlockId) -> &BasicBlock<'db> {
         &self.blocks[id.0]
     }
 
@@ -117,9 +117,9 @@ impl MirFunctionBody {
 
 /// Whether a MIR function has a bytecode body or is a Rust-bound builtin.
 #[derive(Debug, Clone)]
-pub enum MirFunctionKind {
+pub enum MirFunctionKind<'db> {
     /// Has a body that will be compiled to bytecode.
-    Bytecode(MirFunctionBody),
+    Bytecode(MirFunctionBody<'db>),
     /// Rust-bound builtin — `SysOp` (Io) or `NativeUnresolved` (Vm).
     Builtin(BuiltinKind),
 }
@@ -183,25 +183,41 @@ pub struct RuntimeInterfaceBound {
 
 /// A function represented as a control flow graph.
 #[derive(Debug, Clone)]
-pub struct MirFunction {
+pub struct MirFunction<'db> {
     /// Parameter count.
     pub arity: usize,
     /// Source span for error reporting.
     pub span: Option<Span>,
     /// Fully-qualified identity (e.g., "`user.my_func`", "baml.sys.panic").
-    pub item_ref: ItemRef,
+    pub item_ref: ItemRef<'db>,
     /// Whether this function has bytecode or is a builtin.
-    pub kind: MirFunctionKind,
+    pub kind: MirFunctionKind<'db>,
     /// Child lambda functions defined inside this function's body.
     ///
     /// Indexed by `lambda_idx` in `Rvalue::MakeClosure`.
     /// Empty until lambda lowering is implemented.
-    pub lambdas: Vec<MirFunction>,
+    pub lambdas: Vec<MirFunction<'db>>,
     /// Runtime signature metadata, populated by `lower_lambda` for lambda
     /// functions only. Top-level functions get theirs from TIR `func_data`
     /// during emit; `None` there (and on synthetic adapters, which fall back
     /// to no metadata).
     pub signature: Option<RuntimeSignature>,
+}
+
+// Safety: replacement-only `Update` (always report changed). MIR feeds the
+// untracked emit stage, so backdating buys nothing, and the tree has no
+// `PartialEq` to compare with; unconditionally replacing the old value is
+// always sound under the `Update` contract.
+#[expect(unsafe_code)]
+unsafe impl salsa::Update for MirFunction<'_> {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        // SAFETY: pointer is Salsa-owned and valid for replacement.
+        unsafe {
+            std::ptr::drop_in_place(old_pointer);
+            std::ptr::write(old_pointer, new_value);
+        }
+        true
+    }
 }
 
 // ============================================================================
@@ -262,20 +278,20 @@ pub struct LocalDecl {
 /// Basic blocks are the fundamental unit of control flow in MIR. Each block
 /// executes its statements in order, then transfers control via its terminator.
 #[derive(Debug, Clone)]
-pub struct BasicBlock {
+pub struct BasicBlock<'db> {
     /// Unique identifier.
     pub id: BlockId,
     /// Statements executed in order.
-    pub statements: Vec<Statement>,
+    pub statements: Vec<Statement<'db>>,
     /// How this block exits (required after construction).
-    pub terminator: Option<Terminator>,
+    pub terminator: Option<Terminator<'db>>,
     /// Source span covering this block.
     pub span: Option<Span>,
     /// Source span for the terminator.
     pub terminator_span: Option<Span>,
 }
 
-impl BasicBlock {
+impl BasicBlock<'_> {
     /// Create a new empty basic block.
     pub fn new(id: BlockId) -> Self {
         Self {
@@ -299,8 +315,8 @@ impl BasicBlock {
 
 /// A single MIR statement (does not transfer control).
 #[derive(Debug, Clone)]
-pub struct Statement {
-    pub kind: StatementKind,
+pub struct Statement<'db> {
+    pub kind: StatementKind<'db>,
     pub span: Option<Span>,
 }
 
@@ -330,9 +346,12 @@ pub enum IntrinsicOp {
 /// The kind of a MIR statement.
 #[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
-pub enum StatementKind {
+pub enum StatementKind<'db> {
     /// Assign a value to a place: `_1 = <rvalue>`
-    Assign { destination: Place, value: Rvalue },
+    Assign {
+        destination: Place,
+        value: Rvalue<'db>,
+    },
 
     /// Drop a value (run destructor if any).
     Drop(Place),
@@ -352,7 +371,10 @@ pub enum StatementKind {
 
     /// Compiler intrinsic — a void side effect (log, send event).
     /// Lowered from calls to `$compiler_intrinsic` functions.
-    Intrinsic { op: IntrinsicOp, args: Vec<Operand> },
+    Intrinsic {
+        op: IntrinsicOp,
+        args: Vec<Operand<'db>>,
+    },
 
     /// Write an interface field on a receiver whose concrete type is not known
     /// statically — the store counterpart of [`Rvalue::VirtualFieldAccess`], with
@@ -362,10 +384,10 @@ pub enum StatementKind {
     /// slot is only known once the receiver's impl is resolved at run time.
     VirtualFieldStore {
         iface: TyTemplateInterface,
-        receiver: Operand,
+        receiver: Operand<'db>,
         field_index: u32,
         field: Name,
-        value: Operand,
+        value: Operand<'db>,
     },
 
     /// No-op (placeholder for removed statements).
@@ -381,20 +403,20 @@ pub enum StatementKind {
 /// Every basic block must end with exactly one terminator. Terminators are
 /// the only way control can flow between blocks.
 #[derive(Debug, Clone)]
-pub enum Terminator {
+pub enum Terminator<'db> {
     /// Unconditional jump to another block.
     Goto { target: BlockId },
 
     /// Conditional branch based on a boolean.
     Branch {
-        condition: Operand,
+        condition: Operand<'db>,
         then_block: BlockId,
         else_block: BlockId,
     },
 
     /// Test one value and bind that same value to `destination` on success.
     NarrowBind {
-        source: Operand,
+        source: Operand<'db>,
         ty_template: TyTemplate,
         destination: Local,
         then_block: BlockId,
@@ -403,7 +425,7 @@ pub enum Terminator {
 
     /// Multi-way branch based on integer discriminant.
     Switch {
-        discriminant: Operand,
+        discriminant: Operand<'db>,
         /// Arms: (value, target block)
         arms: Vec<(i64, BlockId)>,
         /// Default target if no arm matches.
@@ -426,14 +448,14 @@ pub enum Terminator {
     /// Call a function.
     Call {
         /// The function to call.
-        callee: Operand,
+        callee: Operand<'db>,
         /// Arguments to pass.
         ///
         /// The first `ntypeargs` operands are type-argument values (`Object::Type`)
         /// followed by the `nargs` regular value arguments.  The `ntypeargs`
         /// count tells the emitter how many leading slots to account for in
         /// the `Instruction::Call { ntypeargs }` bytecode instruction.
-        args: Vec<Operand>,
+        args: Vec<Operand<'db>>,
         /// Number of leading `args` entries that carry type arguments.
         ///
         /// Zero for non-generic calls (the common case).  Non-zero for
@@ -448,7 +470,7 @@ pub enum Terminator {
         ///
         /// This is not part of ordinary call arity. Emitters push it above the
         /// normal call payload and use an ID-aware bytecode call form.
-        runtime_id: Option<Operand>,
+        runtime_id: Option<Operand<'db>>,
         /// Where to store the result.
         destination: Place,
         /// Block to jump to after call returns normally.
@@ -480,7 +502,7 @@ pub enum Terminator {
         /// **receiver first**. The receiver's runtime concrete type is the `Self`
         /// the method resolves on; the type args are appended to the resolved
         /// frame.
-        args: Vec<Operand>,
+        args: Vec<Operand<'db>>,
         /// Number of leading `args` entries that are method-level type arguments.
         /// Zero for a non-generic method.
         ntypeargs: usize,
@@ -488,7 +510,7 @@ pub enum Terminator {
         /// execute the runtime generic gate before entering the resolved method.
         runtime_type_check: bool,
         /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
-        runtime_id: Option<Operand>,
+        runtime_id: Option<Operand<'db>>,
         /// Where to store the result.
         destination: Place,
         /// Block to jump to after the call returns normally.
@@ -511,11 +533,11 @@ pub enum Terminator {
     /// Suspend point — control returns to the embedder.
     SysOp {
         /// The sys-op global to invoke.
-        callee: Operand,
+        callee: Operand<'db>,
         /// Arguments to the sys-op.
-        args: Vec<Operand>,
+        args: Vec<Operand<'db>>,
         /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
-        runtime_id: Option<Operand>,
+        runtime_id: Option<Operand<'db>>,
         /// Where to store the sys-op's return value.
         destination: Place,
         /// Block to resume at after the sys-op returns.
@@ -532,16 +554,16 @@ pub enum Terminator {
     /// optional human-readable label.
     Spawn {
         /// Closure object representing the spawn body.
-        closure: Operand,
+        closure: Operand<'db>,
         /// Optional name expression (string or null).
-        name: Operand,
+        name: Operand<'db>,
         /// Optional `baml.spawn.options(...)` config value from a `with`
         /// clause (BEP-034 spawn options). `None` when there is no `with`
         /// clause; the engine reads the config's `cancel` (and later
         /// `group`/`detach`) to derive the spawn's effective cancel token.
         /// Boxed to keep `Terminator`'s footprint down (clippy
         /// `large_enum_variant`): `Spawn` is rare relative to `Call`/`Goto`.
-        config: Option<Box<Operand>>,
+        config: Option<Box<Operand<'db>>>,
         /// The `T`/`E` of the `Future<T, E>` this spawn yields. Boxed for the
         /// same footprint reason as `config`.
         future_ty: Box<SpawnFutureTy>,
@@ -575,7 +597,7 @@ pub enum Terminator {
     /// `unwind` is normally `None`; it is kept for shape-parity with `Await`.
     AwaitAny {
         /// The array of futures to wait on (a read operand).
-        futures: Operand,
+        futures: Operand<'db>,
         /// Where to store the winning index (`int`).
         destination: Place,
         /// Block to continue at after the first future settles.
@@ -590,13 +612,13 @@ pub enum Terminator {
     /// The `value` operand holds the error object to be thrown.
     Throw {
         /// The error value to throw.
-        value: Operand,
+        value: Operand<'db>,
     },
 
     /// Re-throw a caught error value, preserving its original trace origin.
     Rethrow {
         /// The caught error value to rethrow.
-        value: Operand,
+        value: Operand<'db>,
     },
 
     /// If the value is a panic instance (`baml.panics.*`), throw it.
@@ -604,7 +626,10 @@ pub enum Terminator {
     ///
     /// Used before wildcard catch arms to prevent them from swallowing
     /// panics the programmer didn't explicitly name.
-    ThrowIfPanic { value: Operand, otherwise: BlockId },
+    ThrowIfPanic {
+        value: Operand<'db>,
+        otherwise: BlockId,
+    },
 
     /// Short-circuit `&&` / `||`.
     ///
@@ -617,7 +642,7 @@ pub enum Terminator {
     /// The `eval_rhs` block must assign to `destination` and then goto `join`.
     /// At `join`, `destination` is on TOS from whichever path executed.
     ShortCircuit {
-        operand: Operand,
+        operand: Operand<'db>,
         is_and: bool,
         destination: Place,
         eval_rhs: BlockId,
@@ -641,7 +666,7 @@ pub struct SpawnFutureTy {
     pub throws: TyTemplate,
 }
 
-impl Terminator {
+impl Terminator<'_> {
     /// Get all successor block IDs.
     pub fn successors(&self) -> Vec<BlockId> {
         match self {
@@ -759,25 +784,25 @@ impl fmt::Display for Place {
 /// Rvalues are computations that produce values. They appear on the right-hand
 /// side of assignments.
 #[derive(Debug, Clone)]
-pub enum Rvalue {
+pub enum Rvalue<'db> {
     /// Use an operand directly.
-    Use(Operand),
+    Use(Operand<'db>),
 
     /// Binary operation: `_1 + _2`
     BinaryOp {
         op: BinOp,
-        left: Operand,
-        right: Operand,
+        left: Operand<'db>,
+        right: Operand<'db>,
     },
 
     /// Unary operation: `!_1`, `-_1`
-    UnaryOp { op: UnaryOp, operand: Operand },
+    UnaryOp { op: UnaryOp, operand: Operand<'db> },
 
     /// Create an array: `[_1, _2, _3]`. The first field is the static element
     /// type (a [`TyTemplate`] so a generic `T[]` resolves against the frame's
     /// type args at runtime), carried so the heap array records its declared
     /// element type.
-    Array(TyTemplate, Vec<Operand>),
+    Array(TyTemplate, Vec<Operand<'db>>),
 
     /// Create a byte array from a literal: `b"hello"`
     Uint8Array(Vec<u8>),
@@ -786,12 +811,12 @@ pub enum Rvalue {
     /// (key, value) pair. The first two fields are the static key and value
     /// types (as [`TyTemplate`]s), carried so the heap map records its declared
     /// key/value types.
-    Map(TyTemplate, TyTemplate, Vec<(Operand, Operand)>),
+    Map(TyTemplate, TyTemplate, Vec<(Operand<'db>, Operand<'db>)>),
 
     /// Create an aggregate (class instance, enum variant): `ClassName { _1, _2 }`
     Aggregate {
         kind: AggregateKind,
-        fields: Vec<Operand>,
+        fields: Vec<Operand<'db>>,
     },
 
     /// Read discriminant of enum/union: `discriminant(_1)`
@@ -821,7 +846,7 @@ pub enum Rvalue {
     /// deliberately-coarse container test carries its own rvalue instead
     /// ([`Rvalue::IsTypeTag`], a proven-sufficient tag).
     IsType {
-        operand: Operand,
+        operand: Operand<'db>,
         ty_template: TyTemplate,
     },
 
@@ -836,14 +861,14 @@ pub enum Rvalue {
     /// emitter to sniff out. `tag` is a `baml_type::typetag` constant; the
     /// emitter lowers this to the same `IsType`-against-`Int` bytecode as the
     /// other coarse tag checks.
-    IsTypeTag { operand: Operand, tag: i64 },
+    IsTypeTag { operand: Operand<'db>, tag: i64 },
 
     /// Runtime-mint identity filter used by `is unreflect(t)` patterns.
     /// `type_value` evaluates to an `Object::Type`; the VM reconstructs the
     /// nominal mint of `operand` and compares the two identity tokens.
     RuntimeIsType {
-        operand: Operand,
-        type_value: Operand,
+        operand: Operand<'db>,
+        type_value: Operand<'db>,
     },
 
     /// Allocate a closure object from a child lambda function.
@@ -856,7 +881,7 @@ pub enum Rvalue {
     /// can pop them into `Closure::captured_type_args`.
     MakeClosure {
         lambda_idx: usize,
-        captures: Vec<Operand>,
+        captures: Vec<Operand<'db>>,
         /// Templates for enclosing generic type params captured by this closure.
         /// Empty (the common case) when the enclosing function has no type params.
         type_arg_templates: Vec<TyTemplate>,
@@ -867,8 +892,8 @@ pub enum Rvalue {
     /// `item_ref` identifies the method (class + name).
     /// `receiver` is the instance the method is bound to.
     MakeBoundMethod {
-        item_ref: ItemRef,
-        receiver: Operand,
+        item_ref: ItemRef<'db>,
+        receiver: Operand<'db>,
     },
 
     /// Create a bound method value for an *interface* method whose impl is
@@ -884,7 +909,7 @@ pub enum Rvalue {
         /// The interface method's name.
         method: String,
         /// The receiver whose runtime concrete type is the `Self` to resolve on.
-        receiver: Operand,
+        receiver: Operand<'db>,
         /// Method-level type-argument templates from the reference site (a
         /// generic interface method's own generics, when specialized there).
         /// Appended to the resolved impl frame by the VM — dropping them would
@@ -916,7 +941,7 @@ pub enum Rvalue {
         /// flows like any other — a written static argument is materialized
         /// by the producer as a `LoadType` temp. The VM pops each as an
         /// `Object::Type` either way.
-        type_args: Vec<Operand>,
+        type_args: Vec<Operand<'db>>,
     },
 
     /// Read an interface field from a receiver whose concrete type is not known
@@ -936,7 +961,7 @@ pub enum Rvalue {
         /// instantiations with different links.
         iface: TyTemplateInterface,
         /// The receiver whose runtime concrete type is the `Self` to resolve on.
-        receiver: Operand,
+        receiver: Operand<'db>,
         /// Index into `iface`'s declared fields.
         field_index: u32,
         /// The field's name — for the pretty-printer and the emitter's
@@ -952,7 +977,7 @@ pub enum Rvalue {
     /// fully-concrete case uses the pooled, interned `Constant::GenericFunction`
     /// instead.
     MakeGenericFunction {
-        item: ItemRef,
+        item: ItemRef<'db>,
         /// One template per type argument; may contain `TypeArgRef(N)`.
         type_arg_templates: Vec<TyTemplate>,
     },
@@ -967,7 +992,7 @@ pub enum Rvalue {
     /// (concrete) or `MakeGenericFunction` (param-dependent) instead.
     MakeGenericFunctionFromValue {
         /// The callable value to specialize.
-        value: Operand,
+        value: Operand<'db>,
         /// One template per type argument; may contain `TypeArgRef(N)`.
         type_arg_templates: Vec<TyTemplate>,
     },
@@ -1014,7 +1039,7 @@ pub enum AggregateKind {
 
 /// An operand: either a place (read) or a constant.
 #[derive(Debug, Clone)]
-pub enum Operand {
+pub enum Operand<'db> {
     /// Copy value from place.
     Copy(Place),
 
@@ -1022,17 +1047,17 @@ pub enum Operand {
     Move(Place),
 
     /// A constant value.
-    Constant(Constant),
+    Constant(Constant<'db>),
 }
 
-impl Operand {
+impl<'db> Operand<'db> {
     /// Create a copy operand from a local.
     pub fn copy_local(local: Local) -> Self {
         Operand::Copy(Place::Local(local))
     }
 
     /// Create a constant operand.
-    pub fn constant(c: Constant) -> Self {
+    pub fn constant(c: Constant<'db>) -> Self {
         Operand::Constant(c)
     }
 }
@@ -1043,7 +1068,7 @@ impl Operand {
 
 /// A constant value in MIR.
 #[derive(Debug, Clone)]
-pub enum Constant {
+pub enum Constant<'db> {
     Int(i64),
     Bigint(num_bigint::BigInt),
     Float(f64),
@@ -1062,20 +1087,20 @@ pub enum Constant {
     /// function-value wrapper (see `emit_pooled_function_value`). Only for
     /// items that ARE functions; a non-function global item read (a client,
     /// a top-level `let`, ...) is [`Constant::GlobalItem`].
-    Function(ItemRef),
+    Function(ItemRef<'db>),
     /// A non-function global item read (a `client<llm>` declaration, a
     /// top-level `let`, a template string, ...): the value the program's
     /// `$init` stored in the item's global slot. Emitted as a plain
     /// `LoadGlobal`, never wrapped — the slot holds an ordinary value
     /// (an instance, a closure, ...), not a `Function` object.
-    GlobalItem(ItemRef),
+    GlobalItem(ItemRef<'db>),
     /// A generic function instantiated with concrete type arguments
     /// (`foo<int>` referenced as a value). Emitted as a pooled, interned
     /// `Object::GenericFunction` so identical instantiations share one object
     /// (pointer-stable identity) and calling it seeds `frame.type_args`.
     GenericFunction {
         /// The base generic function.
-        item: ItemRef,
+        item: ItemRef<'db>,
         /// The concrete type arguments — fully realized (no type parameters),
         /// exactly what the runtime `Object::GenericFunction` carries.
         type_args: Vec<RealizedTy>,
@@ -1083,7 +1108,7 @@ pub enum Constant {
     /// An enum variant value.
     EnumVariant {
         /// Structured reference to the enum type.
-        enum_ref: ItemRef,
+        enum_ref: ItemRef<'db>,
         /// The variant name within the enum.
         variant: Name,
     },
@@ -1094,7 +1119,7 @@ pub enum Constant {
 /// Uses explicit fields for package, namespace, class, and name.
 /// No string-path encoding or display-logic special-casing.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ItemRef {
+pub enum ItemRef<'db> {
     /// A free function or top-level item: `baml.env.get`, `Foo`, `baml.sys.panic`
     Free {
         package: Name,
@@ -1114,9 +1139,34 @@ pub enum ItemRef {
         namespace: Vec<Name>,
         name: Name,
     },
+    /// An interface-machinery BODY: an impl block's provided method or an
+    /// interface's default body. A body is not itself a logical item — its
+    /// one identity is its DECLARATION, carried as the opaque
+    /// session-scoped [`BodyDeclId`]; `display_owner` exists only so
+    /// bytecode and trace spellings keep their `<(target as iface)>` /
+    /// `Iface` form, and is never a key.
+    Body(Box<BodyRef<'db>>),
 }
 
-impl fmt::Display for ItemRef {
+/// A reference to an interface-machinery body: the declaration — a body's
+/// one identity, carried as the `'db` location itself the way every other
+/// compiler layer carries declarations — plus display-only spelling parts.
+/// Never serialized: at decompose, bodies are re-expressed through the rule
+/// / interface tables that reference them by object index.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BodyRef<'db> {
+    pub package: Name,
+    pub namespace: Vec<Name>,
+    /// Display-only owner segment, exactly as the display convention renders
+    /// it: `<(target as iface)>` for an impl body, the interface's bare name
+    /// for a default body. Never an identity, never a key.
+    pub display_owner: Name,
+    /// The body's declaration.
+    pub decl: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    pub method: Name,
+}
+
+impl fmt::Display for ItemRef<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Always include the package prefix (including "user").
         // All parts are joined with ".".
@@ -1157,6 +1207,17 @@ impl fmt::Display for ItemRef {
                     parts.push(ns.as_str());
                 }
                 parts.push(name.as_str());
+                write!(f, "{}", parts.join("."))
+            }
+            // Renders exactly as the pre-structural `Method` spelling did:
+            // `{package}.{ns…}.{display_owner}.{method}`.
+            ItemRef::Body(body) => {
+                let mut parts: Vec<&str> = vec![body.package.as_str()];
+                for ns in &body.namespace {
+                    parts.push(ns.as_str());
+                }
+                parts.push(body.display_owner.as_str());
+                parts.push(body.method.as_str());
                 write!(f, "{}", parts.join("."))
             }
         }

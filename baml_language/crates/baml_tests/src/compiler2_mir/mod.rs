@@ -34,7 +34,7 @@ fn render_mir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
 
     for func_loc in functions {
         let mir = lower_function(db, func_loc, OptLevel::Two);
-        writeln!(output, "{}", display_function(&mir)).unwrap();
+        writeln!(output, "{}", display_function(mir)).unwrap();
     }
 
     output
@@ -140,7 +140,7 @@ function main<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
             .iter()
             .any(|block| matches!(block.terminator, Some(Terminator::Call { .. }))),
         "untrusted mounted builtin did not lower as an ordinary call: {}",
-        display_function(&mir)
+        display_function(mir)
     );
     assert!(
         !body
@@ -148,7 +148,7 @@ function main<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
             .iter()
             .any(|block| matches!(block.terminator, Some(Terminator::AwaitAny { .. }))),
         "untrusted mounted await-any marker selected compiler-owned lowering: {}",
-        display_function(&mir)
+        display_function(mir)
     );
 }
 
@@ -241,7 +241,7 @@ function main() -> reflect.Type {
         call_count,
         2,
         "forged intrinsics did not lower as ordinary calls: {}",
-        display_function(&mir)
+        display_function(mir)
     );
     assert!(
         !body
@@ -250,7 +250,7 @@ function main() -> reflect.Type {
             .flat_map(|block| &block.statements)
             .any(|statement| { matches!(&statement.kind, StatementKind::Intrinsic { .. }) }),
         "forged intrinsic metadata selected compiler-owned lowering: {}",
-        display_function(&mir)
+        display_function(mir)
     );
 }
 
@@ -315,7 +315,7 @@ function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
                 })
             )),
             "{name} dropped its runtime ID: {}",
-            display_function(&mir)
+            display_function(mir)
         );
     }
 
@@ -332,7 +332,7 @@ function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
             })
         )),
         "virtual call dropped its runtime ID: {}",
-        display_function(&virtual_mir)
+        display_function(virtual_mir)
     );
 
     // A union receiver dispatches ONLY through the members' shared interface
@@ -353,14 +353,14 @@ function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
     assert!(
         !union_virtual_calls.is_empty(),
         "union dispatch lowers through the shared interface's virtual call: {}",
-        display_function(&union_mir)
+        display_function(union_mir)
     );
     assert!(
         union_virtual_calls
             .iter()
             .all(|runtime_id| runtime_id.is_some()),
         "the union dispatch dropped its runtime ID: {}",
-        display_function(&union_mir)
+        display_function(union_mir)
     );
 }
 

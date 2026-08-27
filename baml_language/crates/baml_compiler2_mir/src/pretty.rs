@@ -29,14 +29,14 @@ use crate::{
 };
 
 /// Pretty print a MIR function.
-pub fn display_function(func: &MirFunction) -> String {
+pub fn display_function(func: &MirFunction<'_>) -> String {
     let mut output = String::new();
     let _ = write_function(&mut output, func);
     output
 }
 
 /// Write a MIR function to a formatter.
-pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
+pub fn write_function(f: &mut impl Write, func: &MirFunction<'_>) -> fmt::Result {
     match &func.kind {
         MirFunctionKind::Builtin(kind) => {
             let kind_str = match kind {
@@ -54,8 +54,8 @@ pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
 /// Write the bytecode body of a MIR function.
 fn write_bytecode_function(
     f: &mut impl Write,
-    func: &MirFunction,
-    body: &MirFunctionBody,
+    func: &MirFunction<'_>,
+    body: &MirFunctionBody<'_>,
 ) -> fmt::Result {
     // Function header
     write!(f, "fn {}(", func.item_ref)?;
@@ -129,7 +129,7 @@ fn write_local_decl_inline(f: &mut impl Write, id: Local, decl: &LocalDecl) -> f
     }
 }
 
-fn write_block(f: &mut impl Write, block: &BasicBlock) -> fmt::Result {
+fn write_block(f: &mut impl Write, block: &BasicBlock<'_>) -> fmt::Result {
     writeln!(f, "    {}: {{", block.id)?;
 
     for stmt in &block.statements {
@@ -150,7 +150,7 @@ fn write_block(f: &mut impl Write, block: &BasicBlock) -> fmt::Result {
     Ok(())
 }
 
-fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
+fn write_statement(f: &mut impl Write, stmt: &Statement<'_>) -> fmt::Result {
     match &stmt.kind {
         StatementKind::Assign { destination, value } => {
             write!(f, "{destination} = ")?;
@@ -204,7 +204,7 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
     }
 }
 
-fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
+fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
     match term {
         Terminator::Goto { target } => {
             write!(f, "goto -> {target};")
@@ -456,7 +456,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
 fn write_runtime_id_arg(
     f: &mut impl Write,
     wrote_arg: bool,
-    runtime_id: Option<&Operand>,
+    runtime_id: Option<&Operand<'_>>,
 ) -> fmt::Result {
     if let Some(runtime_id) = runtime_id {
         if wrote_arg {
@@ -468,7 +468,7 @@ fn write_runtime_id_arg(
     Ok(())
 }
 
-fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
+fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue<'_>) -> fmt::Result {
     match rvalue {
         Rvalue::Use(operand) => write_operand(f, operand),
         Rvalue::VirtualFieldAccess {
@@ -684,7 +684,7 @@ fn type_tag_name(tag: i64) -> std::borrow::Cow<'static, str> {
     })
 }
 
-fn write_operand(f: &mut impl Write, operand: &Operand) -> fmt::Result {
+fn write_operand(f: &mut impl Write, operand: &Operand<'_>) -> fmt::Result {
     match operand {
         Operand::Copy(place) => write!(f, "copy {place}"),
         Operand::Move(place) => write!(f, "move {place}"),
@@ -692,7 +692,7 @@ fn write_operand(f: &mut impl Write, operand: &Operand) -> fmt::Result {
     }
 }
 
-fn write_constant(f: &mut impl Write, constant: &Constant) -> fmt::Result {
+fn write_constant(f: &mut impl Write, constant: &Constant<'_>) -> fmt::Result {
     match constant {
         Constant::Int(n) => write!(f, "const {n}_i64"),
         Constant::Bigint(n) => write!(f, "const {n}n"),
@@ -715,7 +715,7 @@ fn write_constant(f: &mut impl Write, constant: &Constant) -> fmt::Result {
 // Display implementations
 // ============================================================================
 
-impl fmt::Display for MirFunction {
+impl fmt::Display for MirFunction<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Use a String buffer since fmt::Formatter doesn't implement Write
         let mut buf = String::new();
@@ -729,13 +729,13 @@ mod tests {
     use super::*;
     use crate::{BlockId, Place};
 
-    fn render_terminator(terminator: &Terminator) -> String {
+    fn render_terminator(terminator: &Terminator<'_>) -> String {
         let mut output = String::new();
         write_terminator(&mut output, terminator).expect("terminator renders");
         output
     }
 
-    fn local_copy(local: usize) -> Operand {
+    fn local_copy(local: usize) -> Operand<'static> {
         Operand::copy_local(Local(local))
     }
 

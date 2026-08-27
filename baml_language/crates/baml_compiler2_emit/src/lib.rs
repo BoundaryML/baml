@@ -316,17 +316,22 @@ struct PackageExportArtifact {
 }
 
 /// Read-only whole-project facts consumed while assembling runtime packages.
-struct PackageBuildMetadata<'a> {
+struct PackageBuildMetadata<'a, 'db> {
     /// Field-name → slot for each emitted class, keyed by rendered FQN.
     class_field_indices: &'a HashMap<String, HashMap<String, usize>>,
     /// Typed source-less export artifacts captured before parallel codegen.
     package_exports: &'a indexmap::IndexMap<Name, PackageExportArtifact>,
-    /// Runtime-addressable functions (`Program::function_indices`) — the
-    /// other half of the emitted function space besides [`Self::body_indices`].
+    /// Pooled object index of every function THIS emit registered (Pass 4,
+    /// plus clean-file placeholders on incremental emits), keyed by
+    /// declaration — the structural channel rule baking resolves bodies
+    /// through (a body has no runtime name to look anything up by).
+    function_objects: &'a HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
+    /// Runtime-addressable functions (`Program::function_indices`) — consumed
+    /// only for NAMED items (exported callables, `$init_test` chainers, and
+    /// mount-boundary spellings), never for bodies.
     function_indices: &'a HashMap<String, usize>,
-    /// Interface bodies (`Program::body_indices`): impl-block methods and
-    /// interface defaults, which every impl-rule method reference names.
-    body_indices: &'a HashMap<String, bex_vm_types::types::BodySlots>,
+    /// The pool so far, for reading a MOUNTED interface's `default` operands.
+    objects: &'a [Object],
 }
 
 fn external_call_target_name(
@@ -425,8 +430,62 @@ fn capture_package_exports(
         .collect()
 }
 
-fn build_packages(
-    db: &dyn baml_compiler2_mir::Db,
+/// THE body resolver: a body is anonymous, so it is reached through its
+/// declaration — `body()` over the one declaration-keyed index — never a
+/// name. `function_objects` is total over every declaration the database
+/// sees: this run's Pass-4 registrations, the clean-file placeholders on
+/// incremental emits, and the spliced prefix (indexed by the Pass-1 replay
+/// in `generate_impl`).
+///
+/// The single non-declaration lane is [`Self::interface_default`]'s
+/// fallback: an interface known only as a MOUNTED surface has no
+/// declaration, and its default body is referenced by the pooled interface
+/// object's own `default` operand (the mounted artifact carries its
+/// backfill). A body absent everywhere is either a `$compiler_intrinsic` /
+/// `$await_any` body (never pooled — callers drop just that method) or one
+/// whose owner is only a runtime-compile surface (an engine mount or
+/// earlier session eval): its objects live on the engine heap and bind at
+/// graft, not at emit.
+#[derive(Clone, Copy)]
+struct BodyStore<'a, 'db> {
+    function_objects: &'a HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
+    interface_indices: &'a HashMap<baml_type::TypeName, usize>,
+    objects: &'a [Object],
+}
+
+impl<'db> BodyStore<'_, 'db> {
+    /// The pooled object of `loc`'s compiled body.
+    fn body(&self, loc: baml_compiler2_hir::loc::FunctionLoc<'db>) -> Option<ObjectIndex> {
+        self.function_objects
+            .get(&loc)
+            .copied()
+            .map(ObjectIndex::from_raw)
+    }
+
+    /// The default body of `iface_tn.method`. `live` is the declaration when
+    /// this emit sees one (`None` for an interface known only as a mounted
+    /// surface).
+    fn interface_default(
+        &self,
+        live: Option<baml_compiler2_hir::loc::FunctionLoc<'db>>,
+        iface_tn: &baml_type::TypeName,
+        method: &Name,
+    ) -> Option<ObjectIndex> {
+        live.and_then(|loc| self.body(loc)).or_else(|| {
+            let iface_idx = *self.interface_indices.get(iface_tn)?;
+            let Some(Object::Interface(def)) = self.objects.get(iface_idx) else {
+                return None;
+            };
+            def.methods
+                .iter()
+                .find(|m| m.name == *method)
+                .and_then(|m| m.default)
+        })
+    }
+}
+
+fn build_packages<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
     alias_caches: &HashMap<Name, ResolvedAliases>,
     interface_indices: &HashMap<baml_type::TypeName, usize>,
@@ -435,7 +494,7 @@ fn build_packages(
     // `Class::fields` from, threaded in rather than recomputed: a second
     // derivation of the layout that drifted would make every virtual field
     // access read the wrong slot, silently.
-    metadata: &PackageBuildMetadata<'_>,
+    metadata: &PackageBuildMetadata<'_, 'db>,
     program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
 ) -> Vec<InterfaceDefaultBackfill> {
     use baml_compiler2_hir::type_ref::{TypeRefId, TypeRefStore};
@@ -489,32 +548,11 @@ fn build_packages(
     let class_field_indices = metadata.class_field_indices;
     let package_exports = metadata.package_exports;
     let function_indices = metadata.function_indices;
-    let body_indices = metadata.body_indices;
 
-    // Resolve a function FQN to its emitted object index. `function_indices` holds
-    // every function except `$compiler_intrinsic` / `$await_any` bodies, which
-    // Pass 4 does not emit as callable objects — so a `None` here means the impl/
-    // default method has such a body. The stdlib only ever uses those bodies on
-    // free functions, never interface methods, so this is currently unreachable;
-    // but that convention isn't enforced, so we drop just that method (losing a
-    // dispatch, never adding a wrong one) rather than panic, and the `debug_assert`
-    // catches any regression in the tested corpus.
-    // TODO: make this unrepresentable — reject `$compiler_intrinsic`/`$await_any`
-    // bodies on interface impl and default methods upstream (a check-time
-    // diagnostic), after which this can become a hard `expect`.
-    let resolve_fqn = |fqn: &str| -> Option<ObjectIndex> {
-        // Impl-block methods and interface defaults register under
-        // `body_indices`; `function_indices` remains only as a transitional
-        // fallback for method spellings not yet classified as bodies.
-        let idx = body_indices
-            .get(fqn)
-            .map(|slots| slots.object_index)
-            .or_else(|| function_indices.get(fqn).copied());
-        debug_assert!(
-            idx.is_some(),
-            "impl method `{fqn}` has no emitted function object",
-        );
-        idx.map(ObjectIndex::from_raw)
+    let bodies = BodyStore {
+        function_objects: metadata.function_objects,
+        interface_indices,
+        objects: metadata.objects,
     };
 
     // Per interface, its default methods (`name → fn FQN`). An implementing rule
@@ -524,9 +562,12 @@ fn build_packages(
     // dispatches its inner `self.m()` calls back to the impl). Built across all
     // files first since an impl may live in a different file/package than its
     // interface.
+    // Per interface, its default methods; the value is the declaration when
+    // this emit sees one, `None` for an interface known only as a mounted
+    // surface (its default resolves through the pooled interface object).
     let mut iface_defaults: indexmap::IndexMap<
         baml_type::TypeName,
-        indexmap::IndexMap<Name, String>,
+        indexmap::IndexMap<Name, Option<baml_compiler2_hir::loc::FunctionLoc<'db>>>,
     > = indexmap::IndexMap::new();
     // Per interface, its generic parameter names and its declared
     // associated-type members *in order*, each with its default (lowered once
@@ -591,10 +632,7 @@ fn build_packages(
             }
             let entry = iface_defaults.entry(iface_tn).or_default();
             for &m in &iface_data.default_methods {
-                entry.insert(
-                    function_data(db, m).name.clone(),
-                    def_to_item_ref(db, Definition::Function(m)).to_string(),
-                );
+                entry.insert(function_data(db, m).name.clone(), Some(m));
             }
         }
     }
@@ -646,9 +684,7 @@ fn build_packages(
             if !default_methods.is_empty() {
                 let defaults = iface_defaults.entry(qtn.clone()).or_default();
                 for method in default_methods {
-                    defaults
-                        .entry(method.name.clone())
-                        .or_insert_with(|| external_call_target_name(&method.target));
+                    defaults.entry(method.name.clone()).or_insert(None);
                 }
             }
         }
@@ -712,14 +748,14 @@ fn build_packages(
             ));
         }
     };
-    // Fill a rule's method table with the interface's defaults (override winning),
-    // each carrying the interface frame it is invoked with.
+    // Fill a rule's method table with the interface's defaults (a provided
+    // method winning), each carrying the interface frame it is invoked with.
     let merge_defaults = |methods: &mut indexmap::IndexMap<Name, ProgramMethodImpl>,
                           iface_tn: &baml_type::TypeName,
                           interface_frame: &[bex_vm_types::TyTemplate]| {
         if let Some(defaults) = iface_defaults.get(iface_tn) {
-            for (name, fqn) in defaults {
-                let Some(fqn_idx) = resolve_fqn(fqn) else {
+            for (name, &live) in defaults {
+                let Some(fqn_idx) = bodies.interface_default(live, iface_tn, name) else {
                     continue;
                 };
                 methods
@@ -739,11 +775,13 @@ fn build_packages(
         .iter()
         .filter_map(|(iface_tn, defaults)| {
             let iface_idx = *interface_indices.get(iface_tn)?;
-            Some(defaults.iter().filter_map(move |(name, fqn)| {
+            Some(defaults.iter().filter_map(move |(name, &live)| {
                 Some(InterfaceDefaultBackfill {
                     interface: ObjectIndex::from_raw(iface_idx),
                     method: name.clone(),
-                    default: resolve_fqn(fqn)?,
+                    // A spliced interface already carries its `default`;
+                    // re-stating it here is an identity write.
+                    default: bodies.interface_default(live, iface_tn, name)?,
                 })
             }))
         })
@@ -911,12 +949,26 @@ fn build_packages(
             };
             let mut methods = indexmap::IndexMap::new();
             for &m in &block.methods {
-                let fqn = def_to_item_ref(db, Definition::Function(m)).to_string();
-                let Some(fqn) = resolve_fqn(&fqn) else {
+                let method_name = function_data(db, m).name.clone();
+                // An unindexed body has a `$compiler_intrinsic` /
+                // `$await_any` body Pass 4 never pools — drop just that
+                // method (losing a dispatch, never adding a wrong one). The
+                // stdlib only uses those bodies on free functions, so this is
+                // unreachable today; the debug_assert pins the convention.
+                let Some(fqn) = bodies.body(m) else {
+                    debug_assert!(
+                        matches!(
+                            function_body(db, m).as_ref(),
+                            baml_compiler2_hir::body::FunctionBody::Builtin(
+                                BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
+                            )
+                        ),
+                        "impl method `{method_name}` has no pooled function object",
+                    );
                     continue;
                 };
                 methods.insert(
-                    function_data(db, m).name.clone(),
+                    method_name,
                     ProgramMethodImpl {
                         fqn,
                         frame: impl_frame.clone(),
@@ -1145,6 +1197,10 @@ pub(crate) type ClassFieldSnapshot =
 /// Context for MIR codegen.
 pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub globals: &'ctx HashMap<String, usize>,
+    /// Pass-1 global slot per interface-machinery body, keyed by the body's
+    /// declaration (`BodyRef::decl`). Bodies own slots but no runtime name —
+    /// this map is their ONLY resolution channel.
+    pub body_slots: &'ctx HashMap<baml_compiler2_hir::loc::FunctionLoc<'ctx>, usize>,
     pub classes: &'ctx HashMap<String, HashMap<String, usize>>,
     pub class_object_indices: &'ctx HashMap<String, usize>,
     pub enum_object_indices: &'ctx HashMap<String, usize>,
@@ -2796,12 +2852,14 @@ fn inject_clean_slots(
 /// name. Each placeholder is past the real pool (only ever reversed to a name,
 /// never pool-indexed). Must run **after** the `$init`/`$init_test` tail is
 /// emitted so the placeholders do not collide with the tail's real objects.
-fn inject_clean_object_placeholders(
-    db: &dyn baml_compiler2_mir::Db,
+fn inject_clean_object_placeholders<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
     files: &[baml_base::SourceFile],
     clean: &HashSet<String>,
     globals: &HashMap<String, usize>,
+    body_slots: &HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
     program: &mut Program,
+    function_objects: &mut HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
 ) {
     let mut placeholder = program.objects.len();
     for file in files {
@@ -2815,14 +2873,17 @@ fn inject_clean_object_placeholders(
             if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
                 continue;
             }
-            let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
-            let Some(&slot) = globals.get(&fq) else {
-                continue;
-            };
             if baml_compiler2_mir::function_is_interface_body(db, func_loc) {
                 // A clean body gets its full boundary entry here (its Pass-1
                 // slot plus a placeholder object index), since bodies never
-                // enter the runtime maps `inject_clean_slots` maintains.
+                // enter the runtime maps `inject_clean_slots` maintains. The
+                // slot comes from the declaration-keyed Pass-1 map; intrinsic
+                // and await-any bodies own no slot and are dropped here, like
+                // the `globals` guard drops them on the named path.
+                let Some(&slot) = body_slots.get(&func_loc) else {
+                    continue;
+                };
+                let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
                 #[expect(deprecated, reason = "emit is the table's producer")]
                 if let std::collections::hash_map::Entry::Vacant(entry) =
                     program.body_indices.entry(fq)
@@ -2831,14 +2892,20 @@ fn inject_clean_object_placeholders(
                         object_index: placeholder,
                         global_slot: slot,
                     });
+                    function_objects.insert(func_loc, placeholder);
                     placeholder += 1;
                 }
             } else {
-                program.function_indices.entry(fq).or_insert_with(|| {
+                let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+                let Some(_) = globals.get(&fq) else {
+                    continue;
+                };
+                let idx = *program.function_indices.entry(fq).or_insert_with(|| {
                     let idx = placeholder;
                     placeholder += 1;
                     idx
                 });
+                function_objects.insert(func_loc, idx);
             }
         }
     }
@@ -2852,8 +2919,8 @@ fn inject_clean_object_placeholders(
 /// and only the dirty files are lowered. Dirty functions are written to their
 /// whole-project (Pass-1) global slots so the decomposition reverses their
 /// operands to names identically to a full compile. `None` is a full compile.
-fn generate_impl(
-    db: &dyn crate::Db,
+fn generate_impl<'db>(
+    db: &'db dyn crate::Db,
     options: &CompileOptions,
     opt: OptLevel,
     base: Option<&Program>,
@@ -2886,12 +2953,60 @@ fn generate_impl(
     // and the globals table (`compiler2_all_files` puts builtins first for the
     // same reason). The precompiled-stdlib splice depends on that prefix.
     let (builtin_files, user_files) = all_files.split_at(builtin_count.min(all_files.len()));
+    // Pooled object index per function this emit registers — the structural
+    // channel rule baking resolves bodies through (see `PackageBuildMetadata`).
+    let mut function_objects: HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize> =
+        HashMap::new();
+    // Pass-1 global slot per interface-machinery body — the structural channel
+    // codegen resolves body callees through (see `MirCodegenContext`).
+    let mut body_slots: HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize> = HashMap::new();
     let (mut program, mut tables) = match base {
         // Splice mode: the builtin group's output is taken wholesale from the
         // precompiled slice; whole-program products it carries (template
         // macros, packages) are recomputed by the trailing passes below,
         // exactly as a full compile would.
-        Some(base) => (base.clone(), EmitTables::from_stdlib_program(base)),
+        Some(base) => {
+            // The spliced prefix's objects sit at STABLE indices, and Pass-1
+            // slot order is a pure function of the enumeration — replay it
+            // over the builtin files (same skip set as Pass 1) to index every
+            // spliced declaration by its `FunctionLoc`. Spliced bodies then
+            // resolve exactly like live ones, through the one
+            // declaration-keyed channel — no name keys, no re-matching
+            // against the base's tables. (A source-less runtime-compile
+            // database has no builtin files, so the replay is empty there;
+            // its dependencies are surfaces whose objects bind at graft.)
+            let mut slot = 0usize;
+            for file in builtin_files {
+                for &func_loc in file_functions(db, *file) {
+                    if baml_compiler2_ppir::item_data::is_required_interface_method(db, func_loc) {
+                        continue;
+                    }
+                    if matches!(
+                        function_body(db, func_loc).as_ref(),
+                        baml_compiler2_hir::body::FunctionBody::Builtin(
+                            BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
+                        )
+                    ) {
+                        continue;
+                    }
+                    let Some(ConstValue::Object(idx)) = base.globals.get(slot) else {
+                        return Err(LoweringError::Internal(format!(
+                            "stdlib splice: global slot {slot} does not hold an object",
+                        )));
+                    };
+                    debug_assert!(
+                        matches!(base.objects.get(idx.into_raw()), Some(Object::Function(_))),
+                        "stdlib splice: global slot {slot} does not hold a function",
+                    );
+                    function_objects.insert(func_loc, idx.into_raw());
+                    if baml_compiler2_mir::function_is_interface_body(db, func_loc) {
+                        body_slots.insert(func_loc, slot);
+                    }
+                    slot += 1;
+                }
+            }
+            (base.clone(), EmitTables::from_stdlib_program(base))
+        }
         None => (Program::new(), EmitTables::default()),
     };
     if base.is_none() {
@@ -2901,6 +3016,8 @@ fn generate_impl(
             &mut tables,
             &mut program,
             &alias_caches,
+            &mut function_objects,
+            &mut body_slots,
             opt,
             None,
         )?;
@@ -2911,6 +3028,8 @@ fn generate_impl(
         &mut tables,
         &mut program,
         &alias_caches,
+        &mut function_objects,
+        &mut body_slots,
         opt,
         skip_clean,
     )?;
@@ -2929,10 +3048,6 @@ fn generate_impl(
     // Client values (including sub-clients, retry policies) flow through the $init pipeline.
     // Pass 7 is intentionally empty.
 
-    #[expect(
-        deprecated,
-        reason = "impl-rule baking is a sanctioned boundary consumer"
-    )]
     let interface_default_backfill = build_packages(
         db,
         &all_files,
@@ -2941,8 +3056,9 @@ fn generate_impl(
         &PackageBuildMetadata {
             class_field_indices: &tables.classes,
             package_exports: &package_exports,
+            function_objects: &function_objects,
             function_indices: &program.function_indices,
-            body_indices: &program.body_indices,
+            objects: &program.objects,
         },
         &mut tables.program_packages,
     );
@@ -3052,17 +3168,10 @@ impl EmitTables {
         for (name, &slot) in &base.function_global_indices {
             tables.globals.insert(name.clone(), slot);
         }
-        // Interface bodies are excluded from the runtime name maps but keep
-        // their compile-boundary spellings in `body_indices`; the user group
-        // still direct-calls stdlib bodies (statically resolved impl methods),
-        // so their slots must be resolvable during Pass 4.
-        #[expect(
-            deprecated,
-            reason = "the stdlib splice is a sanctioned boundary consumer"
-        )]
-        for (name, slots) in &base.body_indices {
-            tables.globals.insert(name.clone(), slots.global_slot);
-        }
+        // Interface bodies never enter the name tables: the splice replay in
+        // `generate_impl` pairs each spliced body's declaration with its slot,
+        // so the user group direct-calls stdlib bodies through the same
+        // declaration-keyed channel a full compile uses.
         for (name, &slot) in &base.let_global_indices {
             tables.globals.insert(name.clone(), slot);
         }
@@ -3178,12 +3287,14 @@ fn spliced_throws_match(
 /// prefix property is what makes a precompiled stdlib `Program` slice (keyed
 /// only by the compiler build) spliceable into any project's compile.
 #[allow(clippy::too_many_arguments)]
-fn emit_file_group(
-    db: &dyn crate::Db,
+fn emit_file_group<'db>(
+    db: &'db dyn crate::Db,
     files: &[baml_base::SourceFile],
     tables: &mut EmitTables,
     program: &mut Program,
     alias_caches: &HashMap<Name, ResolvedAliases>,
+    function_objects: &mut HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
+    body_slots: &mut HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
     opt: OptLevel,
     skip_clean: Option<&HashSet<String>>,
 ) -> Result<(), LoweringError> {
@@ -3240,16 +3351,24 @@ fn emit_file_group(
             ) {
                 continue;
             }
-            let fq_name = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
-            // Insertion-unique: two definitions rendering to one key would
-            // silently share a slot (last-written body wins at Pass 4), so a
-            // collision is rejected here rather than shadowed. Upstream
-            // duplicate-definition/coherence checks make this unreachable for
-            // accepted projects.
-            if globals.insert(fq_name.clone(), global_idx).is_some() {
-                return Err(LoweringError::Internal(format!(
-                    "two functions render to the global key `{fq_name}`"
-                )));
+            if baml_compiler2_mir::function_is_interface_body(db, func_loc) {
+                // A body owns a slot but no runtime name: its declaration is
+                // its only key, so its rendered spelling enters no map (and
+                // need not be unique).
+                let prev = body_slots.insert(func_loc, global_idx);
+                debug_assert!(prev.is_none(), "one declaration slotted twice");
+            } else {
+                let fq_name = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+                // Insertion-unique: two definitions rendering to one key would
+                // silently share a slot (last-written body wins at Pass 4), so a
+                // collision is rejected here rather than shadowed. Upstream
+                // duplicate-definition/coherence checks make this unreachable for
+                // accepted projects.
+                if globals.insert(fq_name.clone(), global_idx).is_some() {
+                    return Err(LoweringError::Internal(format!(
+                        "two functions render to the global key `{fq_name}`"
+                    )));
+                }
             }
             global_idx += 1;
         }
@@ -3664,6 +3783,7 @@ fn emit_file_group(
             files,
             skip_clean,
             globals,
+            body_slots,
             classes,
             class_object_indices,
             enum_object_indices,
@@ -3671,6 +3791,7 @@ fn emit_file_group(
             &class_fields,
             alias_caches,
             program,
+            function_objects,
             opt,
         );
     } else {
@@ -3679,6 +3800,7 @@ fn emit_file_group(
             files,
             skip_clean,
             globals,
+            body_slots,
             classes,
             class_object_indices,
             enum_object_indices,
@@ -3686,6 +3808,7 @@ fn emit_file_group(
             &class_fields,
             alias_caches,
             program,
+            function_objects,
             opt,
         );
     }
@@ -3752,6 +3875,7 @@ fn emit_file_group(
                 db,
                 &sorted_bindings,
                 globals,
+                body_slots,
                 classes,
                 class_object_indices,
                 enum_object_indices,
@@ -3938,7 +4062,15 @@ fn emit_file_group(
     // functions + the synthesized `$init`/`$init_test` tail), so register clean
     // functions' object-index placeholders past the end for name reversal.
     if let Some(clean) = skip_clean {
-        inject_clean_object_placeholders(db, files, clean, globals, program);
+        inject_clean_object_placeholders(
+            db,
+            files,
+            clean,
+            globals,
+            body_slots,
+            program,
+            function_objects,
+        );
     }
 
     Ok(())
@@ -4686,7 +4818,10 @@ fn unknown_capture_ty() -> RuntimeTy {
     }
 }
 
-fn local_def_rvalue(body: &MirFunctionBody, local: Local) -> Option<&Rvalue> {
+fn local_def_rvalue<'a, 'db>(
+    body: &'a MirFunctionBody<'db>,
+    local: Local,
+) -> Option<&'a Rvalue<'db>> {
     body.blocks
         .iter()
         .flat_map(|block| &block.statements)
@@ -4699,10 +4834,10 @@ fn local_def_rvalue(body: &MirFunctionBody, local: Local) -> Option<&Rvalue> {
         })
 }
 
-fn resolve_capture_operand_type(
-    body: &MirFunctionBody,
+fn resolve_capture_operand_type<'db>(
+    body: &MirFunctionBody<'db>,
     parent_capture_types: &[RuntimeTy],
-    operand: &Operand,
+    operand: &Operand<'db>,
 ) -> Option<RuntimeTy> {
     match operand {
         Operand::Constant(c) => match c {
@@ -4721,7 +4856,7 @@ fn resolve_capture_operand_type(
 }
 
 fn resolve_capture_place_type(
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     parent_capture_types: &[RuntimeTy],
     place: &Place,
 ) -> Option<RuntimeTy> {
@@ -4732,10 +4867,10 @@ fn resolve_capture_place_type(
     }
 }
 
-fn operand_reads_spawn_capture(
-    body: &MirFunctionBody,
+fn operand_reads_spawn_capture<'db>(
+    body: &MirFunctionBody<'db>,
     parent_spawn_capture_indices: &HashSet<usize>,
-    operand: &Operand,
+    operand: &Operand<'db>,
     seen: &mut HashSet<Local>,
 ) -> bool {
     match operand {
@@ -4747,7 +4882,7 @@ fn operand_reads_spawn_capture(
 }
 
 fn place_reads_spawn_capture(
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     parent_spawn_capture_indices: &HashSet<usize>,
     place: &Place,
     seen: &mut HashSet<Local>,
@@ -4780,11 +4915,11 @@ fn place_reads_spawn_capture(
     }
 }
 
-fn make_closure_for_operand<'a>(
-    body: &'a MirFunctionBody,
-    operand: &'a Operand,
+fn make_closure_for_operand<'a, 'db>(
+    body: &'a MirFunctionBody<'db>,
+    operand: &'a Operand<'db>,
     seen: &mut HashSet<Local>,
-) -> Option<(usize, &'a [Operand])> {
+) -> Option<(usize, &'a [Operand<'db>])> {
     match operand {
         Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
             if !seen.insert(*local) {
@@ -4804,10 +4939,10 @@ fn make_closure_for_operand<'a>(
     }
 }
 
-fn mark_spawned_closure_operand(
-    body: &MirFunctionBody,
+fn mark_spawned_closure_operand<'db>(
+    body: &MirFunctionBody<'db>,
     infos: &mut [LambdaCaptureInfo],
-    operand: &Operand,
+    operand: &Operand<'db>,
     seen_locals: &mut HashSet<Local>,
     seen_lambdas: &mut HashSet<usize>,
 ) {
@@ -4830,7 +4965,7 @@ fn mark_spawned_closure_operand(
 }
 
 fn collect_lambda_capture_infos(
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     lambda_count: usize,
     parent_capture_types: &[RuntimeTy],
     parent_spawn_capture_indices: &HashSet<usize>,
@@ -4895,11 +5030,12 @@ fn collect_lambda_capture_infos(
 /// lower and compile every function body,
 /// file by file, straight into the program pool.
 #[allow(clippy::too_many_arguments)]
-fn emit_functions_serial(
-    db: &dyn baml_compiler2_mir::Db,
+fn emit_functions_serial<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
     files: &[baml_base::SourceFile],
     skip_clean: Option<&HashSet<String>>,
     globals: &HashMap<String, usize>,
+    body_slots: &HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
     classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
@@ -4907,6 +5043,7 @@ fn emit_functions_serial(
     class_fields: &ClassFieldSnapshot,
     alias_caches: &HashMap<Name, ResolvedAliases>,
     program: &mut Program,
+    function_objects: &mut HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
     opt: OptLevel,
 ) {
     for file in files {
@@ -4949,6 +5086,7 @@ fn emit_functions_serial(
                         &line_starts,
                         &source_file,
                         globals,
+                        body_slots,
                         classes,
                         class_object_indices,
                         enum_object_indices,
@@ -4964,6 +5102,7 @@ fn emit_functions_serial(
                         lambda_info.iter().map(|(_, name)| name.clone()).collect();
                     let ctx = MirCodegenContext {
                         globals,
+                        body_slots,
                         classes,
                         class_object_indices,
                         enum_object_indices,
@@ -5006,23 +5145,29 @@ fn emit_functions_serial(
                 &fq_name,
                 &mut compiled_fn,
             );
-            register_compiled_function(
+            let pass1_slot = if compiled_fn.is_interface_body {
+                body_slots[&func_loc]
+            } else {
+                globals[&fq_name]
+            };
+            let obj_idx = register_compiled_function(
                 program,
-                globals,
+                pass1_slot,
                 skip_clean.is_some(),
                 fq_name,
                 compiled_fn,
             );
+            function_objects.insert(func_loc, obj_idx);
         }
     }
 }
 
 /// One function's Pass-4 state carried from the lowering stage to the
 /// parallel codegen stage and the serial merge stage.
-struct FnWorkItem {
+struct FnWorkItem<'db> {
     file: baml_base::SourceFile,
     local_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
-    mir: baml_compiler2_mir::MirFunction,
+    mir: &'db baml_compiler2_mir::MirFunction<'db>,
     fq_name: String,
     /// Project-relative source path (`relative_source_path`).
     source_file: String,
@@ -5047,37 +5192,36 @@ struct FnSeed {
 ///
 /// `FunctionLoc` is minted on the SAME handle the lowering reads from — it is
 /// a `'db`-interned key, and interning is shared storage, so every handle
-/// mints the identical id.
-fn lower_seed(
-    db: &dyn baml_compiler2_mir::Db,
+/// mints the identical id (and hence the identical memo key).
+fn lower_seed<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
     seed: &FnSeed,
     opt: OptLevel,
-) -> baml_compiler2_mir::MirFunction {
+) -> &'db baml_compiler2_mir::MirFunction<'db> {
     lower_function(db, FunctionLoc::new(db, seed.file, seed.local_id), opt)
 }
 
 /// Stage A driver: lower every seed's function to MIR, returned in seed order.
 ///
-/// `lower_function` reads salsa (PPIR bodies, scope type inference) and
-/// returns an owned [`baml_compiler2_mir::MirFunction`] that is a pure
-/// function of the frozen inputs, and every call is independent — so when the
-/// database mints worker handles ([`Db::parallel_db_handle`]) the seeds are
-/// lowered across rayon workers and the reassembled output is exactly the
-/// serial loop's.
+/// [`lower_function`] is a tracked salsa query and all database handles share
+/// one memo table — so the parallel path WARMS the memo across rayon workers
+/// and then re-reads every seed on THIS thread, where each re-read is a cache
+/// hit returning a reference branded with the caller's own `'db`.
 ///
 /// The database type is `Send` but deliberately not `Sync` (each salsa handle
 /// carries thread-confined query-stack state), so — exactly like
 /// `baml_project`'s parallel check — one handle per chunk is cloned on THIS
 /// thread and MOVED into its task; all clones share one memo table, so a
-/// scope inferred by one worker is a cache hit for every other. The first
-/// seed is lowered serially before fanning out to warm the file/package-level
-/// memos every body read reaches. Tiny batches, single-threaded pools, and
-/// databases without handles take the serial loop directly.
-fn lower_seed_mirs(
-    db: &dyn crate::Db,
+/// body lowered (or a scope inferred) by one worker is a cache hit for every
+/// other. The first seed is lowered serially before fanning out to warm the
+/// file/package-level memos every body read reaches. Tiny batches,
+/// single-threaded pools, and databases without handles take the serial loop
+/// directly.
+fn lower_seed_mirs<'db>(
+    db: &'db dyn crate::Db,
     seeds: &[FnSeed],
     opt: OptLevel,
-) -> Vec<baml_compiler2_mir::MirFunction> {
+) -> Vec<&'db baml_compiler2_mir::MirFunction<'db>> {
     // Small chunks keep rayon's work-stealing effective — bodies vary a lot
     // in inference cost — while amortizing the per-task handle clone.
     const CHUNK: usize = 4;
@@ -5085,8 +5229,10 @@ fn lower_seed_mirs(
     // parallel-check threshold in `baml_project`).
     const MIN_PARALLEL: usize = 9;
 
+    let read_all = || seeds.iter().map(|seed| lower_seed(db, seed, opt)).collect();
+
     if seeds.len() < MIN_PARALLEL || rayon::current_num_threads() <= 1 {
-        return seeds.iter().map(|seed| lower_seed(db, seed, opt)).collect();
+        return read_all();
     }
     let (first, rest) = seeds.split_first().expect("seeds checked non-empty above");
 
@@ -5099,44 +5245,27 @@ fn lower_seed_mirs(
     for _ in &chunks {
         match db.parallel_db_handle() {
             Some(handle) => handles.push(handle),
-            None => return seeds.iter().map(|seed| lower_seed(db, seed, opt)).collect(),
+            None => return read_all(),
         }
     }
 
     // Warm the shared file/package-level memos before fanning out, so cold
     // workers don't all block on the same shared memo slots.
-    let first_mir = lower_seed(db, first, opt);
+    lower_seed(db, first, opt);
 
-    let (tx, rx) = std::sync::mpsc::channel::<(usize, Vec<baml_compiler2_mir::MirFunction>)>();
     rayon::scope(move |s| {
-        // Seed index of the current chunk's first element (`first` is 0).
-        let mut next_start = 1usize;
         for (chunk, handle) in chunks.into_iter().zip(handles) {
-            let tx = tx.clone();
-            let chunk_start = next_start;
-            next_start += chunk.len();
             s.spawn(move |_| {
                 let db: &dyn baml_compiler2_mir::Db = &*handle;
-                let out: Vec<baml_compiler2_mir::MirFunction> =
-                    chunk.iter().map(|seed| lower_seed(db, seed, opt)).collect();
-                // Receiver outlives the scope; a send only fails if it
-                // dropped early, which would mean a panic elsewhere.
-                let _ = tx.send((chunk_start, out));
+                for seed in chunk {
+                    lower_seed(db, seed, opt);
+                }
             });
         }
     });
 
-    let mut mirs: Vec<Option<baml_compiler2_mir::MirFunction>> = Vec::with_capacity(seeds.len());
-    mirs.resize_with(seeds.len(), || None);
-    mirs[0] = Some(first_mir);
-    for (chunk_start, out) in rx {
-        for (offset, mir) in out.into_iter().enumerate() {
-            mirs[chunk_start + offset] = Some(mir);
-        }
-    }
-    mirs.into_iter()
-        .map(|mir| mir.expect("every chunk reports exactly its seeds"))
-        .collect()
+    // Every memo is warm: these are cache hits handed back at our own `'db`.
+    read_all()
 }
 
 /// Pass 4, parallel (multi-threaded rayon pools): compile function bodies
@@ -5167,11 +5296,12 @@ fn lower_seed_mirs(
 /// exactly by the merge), concatenating fragments in original function order
 /// reproduces the serial pool layout byte for byte.
 #[allow(clippy::too_many_arguments)]
-fn emit_functions_parallel(
-    db: &dyn crate::Db,
+fn emit_functions_parallel<'db>(
+    db: &'db dyn crate::Db,
     files: &[baml_base::SourceFile],
     skip_clean: Option<&HashSet<String>>,
     globals: &HashMap<String, usize>,
+    body_slots: &HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
     classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
@@ -5179,6 +5309,7 @@ fn emit_functions_parallel(
     class_fields: &ClassFieldSnapshot,
     alias_caches: &HashMap<Name, ResolvedAliases>,
     program: &mut Program,
+    function_objects: &mut HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
     opt: OptLevel,
 ) {
     use rayon::prelude::*;
@@ -5251,6 +5382,7 @@ fn emit_functions_parallel(
                 &item.line_starts,
                 &item.source_file,
                 globals,
+                body_slots,
                 classes,
                 class_object_indices,
                 enum_object_indices,
@@ -5265,6 +5397,7 @@ fn emit_functions_parallel(
                 lambda_info.iter().map(|(_, name)| name.clone()).collect();
             let ctx = MirCodegenContext {
                 globals,
+                body_slots,
                 classes,
                 class_object_indices,
                 enum_object_indices,
@@ -5336,13 +5469,19 @@ fn emit_functions_parallel(
             &item.fq_name,
             &mut compiled_fn,
         );
-        register_compiled_function(
+        let pass1_slot = if compiled_fn.is_interface_body {
+            body_slots[&func_loc]
+        } else {
+            globals[&item.fq_name]
+        };
+        let obj_idx = register_compiled_function(
             program,
-            globals,
+            pass1_slot,
             skip_clean.is_some(),
             item.fq_name,
             compiled_fn,
         );
+        function_objects.insert(func_loc, obj_idx);
     }
 }
 
@@ -5555,11 +5694,11 @@ fn attach_function_metadata<'db>(
 /// runtime name maps: a body is not a runtime-addressable item.
 fn register_compiled_function(
     program: &mut Program,
-    globals: &HashMap<String, usize>,
+    pass1_slot: usize,
     dirty_only: bool,
     fq_name: String,
     compiled_fn: Function,
-) {
+) -> usize {
     let is_body = compiled_fn.is_interface_body;
     let fn_obj_idx = program.add_object(Object::Function(Box::new(compiled_fn)));
     let val = ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx));
@@ -5567,14 +5706,12 @@ fn register_compiled_function(
         // Dirty-only emit: write the function value at its whole-project
         // (Pass-1) slot rather than appending, so clean-file slot holes are
         // preserved and every operand slot reverses to the right name.
-        let slot = globals[&fq_name];
-        program.globals[slot] = val;
-        slot
+        program.globals[pass1_slot] = val;
+        pass1_slot
     } else {
         let slot = program.globals.len();
         debug_assert_eq!(
-            globals.get(&fq_name).copied(),
-            Some(slot),
+            pass1_slot, slot,
             "Pass-4 append slot must match the Pass-1 assignment for {fq_name}",
         );
         program.add_global(val);
@@ -5599,6 +5736,7 @@ fn register_compiled_function(
         program.function_indices.insert(fq_name.clone(), fn_obj_idx);
         program.function_global_indices.insert(fq_name, slot);
     }
+    fn_obj_idx
 }
 
 /// Compile a flat list of lambda `MirFunction`s into bytecode `Function` objects
@@ -5610,14 +5748,15 @@ fn register_compiled_function(
 /// only supports lambdas at one level of nesting inside a top-level function.
 /// Nested lambda support (lambdas inside lambdas) comes in a later phase.
 #[allow(clippy::too_many_arguments)]
-fn compile_lambdas_flat(
-    lambdas: &[baml_compiler2_mir::MirFunction],
-    parent_body: Option<&MirFunctionBody>,
+fn compile_lambdas_flat<'db>(
+    lambdas: &[baml_compiler2_mir::MirFunction<'db>],
+    parent_body: Option<&MirFunctionBody<'db>>,
     parent_capture_types: &[RuntimeTy],
     parent_spawn_capture_indices: &HashSet<usize>,
     line_starts: &[u32],
     source_file: &str,
     globals: &HashMap<String, usize>,
+    body_slots: &HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
     classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
@@ -5653,6 +5792,7 @@ fn compile_lambdas_flat(
                     line_starts,
                     source_file,
                     globals,
+                    body_slots,
                     classes,
                     class_object_indices,
                     enum_object_indices,
@@ -5668,6 +5808,7 @@ fn compile_lambdas_flat(
                     nested_info.iter().map(|(_, name)| name.clone()).collect();
                 let ctx = MirCodegenContext {
                     globals,
+                    body_slots,
                     classes,
                     class_object_indices,
                     enum_object_indices,
@@ -5718,6 +5859,7 @@ fn compile_init_function<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     sorted_bindings: &[(String, LetLoc<'db>, baml_base::SourceFile)],
     globals: &HashMap<String, usize>,
+    body_slots: &HashMap<baml_compiler2_hir::loc::FunctionLoc<'db>, usize>,
     classes: &HashMap<String, HashMap<String, usize>>,
     class_object_indices: &HashMap<String, usize>,
     enum_object_indices: &HashMap<String, usize>,
@@ -5757,6 +5899,7 @@ fn compile_init_function<'db>(
                     &line_starts,
                     &source_file,
                     globals,
+                    body_slots,
                     classes,
                     class_object_indices,
                     enum_object_indices,
@@ -5772,6 +5915,7 @@ fn compile_init_function<'db>(
                     lambda_info.iter().map(|(_, name)| name.clone()).collect();
                 let ctx = MirCodegenContext {
                     globals,
+                    body_slots,
                     classes,
                     class_object_indices,
                     enum_object_indices,

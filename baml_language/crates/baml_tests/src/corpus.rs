@@ -181,7 +181,7 @@ fn render_file_mir(db: &ProjectDatabase, file: SourceFile, out: &mut String) {
     functions.sort_by_key(|loc| function_source_map(db, *loc).span.start());
     for func_loc in functions {
         let mir = lower_function(db, func_loc, OptLevel::Two);
-        writeln!(out, "{}", display_function(&mir)).unwrap();
+        writeln!(out, "{}", display_function(mir)).unwrap();
     }
 }
 
