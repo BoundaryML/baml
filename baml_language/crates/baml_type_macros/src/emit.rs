@@ -20,15 +20,28 @@ use proc_macro2::{Group, Ident, Literal, TokenStream, TokenTree};
 use quote::{ToTokens, format_ident, quote};
 use syn::{Attribute, Fields, GenericParam, Generics, Index, parse_quote};
 
-use crate::parse::{Family, MVariant, Member, Satellite};
+use crate::parse::{Child, Family, MVariant, Member, Satellite};
 
 pub(crate) fn emit(family: &Family) -> TokenStream {
     let mut out = TokenStream::new();
     for member in &family.members {
-        out.extend(gen_member_enum(family, member));
-        out.extend(gen_accessors(family, member));
-        out.extend(gen_head_visitors(family, member));
-        out.extend(gen_head_mappers(family, member));
+        match &member.child {
+            Child::Member(child_idx) => {
+                out.extend(gen_member_enum(family, member, *child_idx));
+                out.extend(gen_accessors(family, member));
+                out.extend(gen_head_visitors(family, member));
+                out.extend(gen_head_mappers(family, member));
+            }
+            // An interned member is the hash-cons pool's kind: children are
+            // handles, so its emission is type-shape-aware rather than
+            // ident-for-ident, and the plain walkers/mappers (which descend
+            // through child *trees*) do not apply.
+            Child::Interned(handle) => {
+                out.extend(crate::interned_member::gen_interned_member(
+                    family, member, handle,
+                ));
+            }
+        }
     }
     // Satellites are generated only for deep members; shallow members reuse
     // their child's satellite (e.g. `ConcreteTy::Function` holds
@@ -43,8 +56,8 @@ pub(crate) fn emit(family: &Family) -> TokenStream {
     out
 }
 
-fn gen_member_enum(family: &Family, member: &Member) -> TokenStream {
-    let child = &family.members[member.child];
+fn gen_member_enum(family: &Family, member: &Member, child_idx: usize) -> TokenStream {
+    let child = &family.members[child_idx];
     let map = replacements(family, &child.name);
 
     // Each variant carries its explicit stable discriminant from the master
@@ -125,7 +138,7 @@ fn gen_accessors(family: &Family, member: &Member) -> TokenStream {
     }
 }
 
-fn attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
+pub(crate) fn attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
     let vident = &v.ident;
     // Attr-less leaves borrow the shared empty attribute set.
     if !v.has_attr {
@@ -142,7 +155,7 @@ fn attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
     }
 }
 
-fn with_attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
+pub(crate) fn with_attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
     let vident = &v.ident;
     // Attr-less leaves have nowhere to store an attribute, so `with_attr` is
     // the identity — the incoming `attr` is dropped. `_ = &attr` silences the
@@ -867,6 +880,6 @@ fn satellite_attrs(attrs: &[Attribute]) -> Vec<&Attribute> {
         .collect()
 }
 
-fn is_doc(attr: &Attribute) -> bool {
+pub(crate) fn is_doc(attr: &Attribute) -> bool {
     attr.path().is_ident("doc")
 }

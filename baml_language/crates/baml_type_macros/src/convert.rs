@@ -57,7 +57,7 @@ use syn::{Fields, GenericArgument, Generics, Index, PathArguments, Type, parse_q
 
 use crate::{
     emit::{member_variants, satellite_name_for, with_clone_bounds},
-    parse::{Family, MVariant, Satellite},
+    parse::{Child, Family, MVariant, Member, Satellite},
 };
 
 pub(crate) fn emit_conversions(family: &Family) -> TokenStream {
@@ -70,8 +70,10 @@ pub(crate) fn emit_conversions(family: &Family) -> TokenStream {
         if (0..family.members.len()).any(|j| j != i && is_le(family, i, j)) {
             out.extend(gen_error(&member.name));
         }
-        if member.child != i {
-            out.extend(gen_error_bridge(family, member.child, i));
+        if let Child::Member(child_idx) = member.child
+            && child_idx != i
+        {
+            out.extend(gen_error_bridge(family, child_idx, i));
         }
     }
 
@@ -363,7 +365,7 @@ fn gen_validators(family: &Family, sub: usize, sup: usize) -> TokenStream {
     let vfn = enum_validator_name(family, sub, sup);
     let body = validate_body(family, sub, sup);
     let (impl_g, _, where_c) = family.generics.split_for_impl();
-    let reachable = reachable_satellites(family, sub);
+    let reachable = reachable_satellites(family, &family.members[sub]);
     let sats = family
         .satellites
         .iter()
@@ -539,7 +541,7 @@ fn gen_sat_validator(family: &Family, sub: usize, sup: usize, sat: &Satellite) -
 /// excluded variant (e.g. `Interface`, reachable solely via the `typevar`
 /// `AssociatedTypeProjection`) needs no validator. Emitting one anyway would be
 /// dead code — this prunes it.
-fn reachable_satellites(family: &Family, sub: usize) -> HashSet<String> {
+pub(crate) fn reachable_satellites(family: &Family, member: &Member) -> HashSet<String> {
     let sat_names: HashSet<String> = family
         .satellites
         .iter()
@@ -562,7 +564,7 @@ fn reachable_satellites(family: &Family, sub: usize) -> HashSet<String> {
 
     let mut work: Vec<String> = Vec::new();
     for v in &family.variants {
-        if family.members[sub].includes.contains(&v.axis) {
+        if member.includes.contains(&v.axis) {
             collect(&v.fields, &mut work);
         }
     }
@@ -602,19 +604,31 @@ fn sat_validator_name(family: &Family, sub: usize, sup: usize, sat: &Satellite) 
 
 // ── Product order ────────────────────────────────────────────────────────────
 
+/// The child index of a member on a comparable pair's side. Comparable pairs
+/// exist only between plain members ([`is_le`] makes interned members
+/// incomparable), so an interned member cannot reach here.
+fn plain_child(member: &Member) -> usize {
+    member
+        .child_member()
+        .unwrap_or_else(|| unreachable!("comparable pairs exist only between plain members"))
+}
+
 fn subset(a: &[usize], b: &[usize]) -> bool {
     a.iter().all(|x| b.contains(x))
 }
 
 /// `a ≤ b` (a is a sub-member of b): top-level include-sets and child
-/// include-sets are both subsets.
+/// include-sets are both subsets. Interned members are incomparable to
+/// everything — their nested positions hold handles, not member trees, so no
+/// structural widening/narrowing exists; their boundary conversions are
+/// hand-written semantic ones (interning / finalization).
 fn is_le(family: &Family, a: usize, b: usize) -> bool {
     let (ma, mb) = (&family.members[a], &family.members[b]);
+    let (Some(ca), Some(cb)) = (ma.child_member(), mb.child_member()) else {
+        return false;
+    };
     subset(&ma.includes, &mb.includes)
-        && subset(
-            &family.members[ma.child].includes,
-            &family.members[mb.child].includes,
-        )
+        && subset(&family.members[ca].includes, &family.members[cb].includes)
 }
 
 /// All ordered pairs `(sub, super)` with `sub < super`.
@@ -681,8 +695,8 @@ fn widen_body(family: &Family, sub: usize, sup: usize, own: Own) -> TokenStream 
     let sup_name = &family.members[sup].name;
     let cx = Cx {
         family,
-        sub_child: family.members[sub].child,
-        sup_child: family.members[sup].child,
+        sub_child: plain_child(&family.members[sub]),
+        sup_child: plain_child(&family.members[sup]),
         own,
     };
     let arms = member_variants(family, &family.members[sub])
@@ -718,8 +732,8 @@ fn narrow_body(family: &Family, sub: usize, sup: usize, own: Own) -> TokenStream
     let sub_includes = &family.members[sub].includes;
     let cx = Cx {
         family,
-        sub_child: family.members[sub].child,
-        sup_child: family.members[sup].child,
+        sub_child: plain_child(&family.members[sub]),
+        sup_child: plain_child(&family.members[sup]),
         own,
     };
     let arms = member_variants(family, &family.members[sup]).map(|v| {
@@ -1139,7 +1153,7 @@ pub(crate) fn wrapper_arg<'a>(ty: &'a Type, wrapper: &str) -> Option<&'a Type> {
 }
 
 /// Whether `ty` mentions the master ident or any satellite name.
-fn contains_recursion(family: &Family, ty: &Type) -> bool {
+pub(crate) fn contains_recursion(family: &Family, ty: &Type) -> bool {
     fn walk(ts: TokenStream, names: &HashSet<String>) -> bool {
         ts.into_iter().any(|tt| match tt {
             TokenTree::Ident(id) => names.contains(&id.to_string()),
