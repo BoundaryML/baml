@@ -3,10 +3,9 @@
 #
 # The dataset (triage_issues / triage_feedback) lives in Supabase; the
 # testsets read it through FEEDBACK_SUPABASE_URL + FEEDBACK_SUPABASE_KEY.
-# Those come from Infisical, env "test", the same way the rest of the repo
-# gets its secrets — nothing is written to disk. The project is the
-# repo-root .infisical.json's unless FEEDBACK_INFISICAL_PROJECT_ID says
-# otherwise.
+# Those come from the Infisical project "boundary-tools" (env "dev"), the
+# same way the rest of the repo gets its secrets — nothing is written to
+# disk. Override with FEEDBACK_INFISICAL_PROJECT_ID / FEEDBACK_INFISICAL_ENV.
 #
 #   tools/atb2/setup_database.sh            # check the link, then run the metrics
 #   tools/atb2/setup_database.sh --check    # only verify infisical + secrets
@@ -15,20 +14,15 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$(cd "$here/../.." && pwd)"
 export BAML_VERSION="${BAML_VERSION:-0.17.0}"
 
 die() { echo "setup_database: $*" >&2; exit 1; }
 
 command -v infisical >/dev/null || die "infisical CLI not found — brew install infisical"
-if [ -n "${FEEDBACK_INFISICAL_PROJECT_ID:-}" ]; then
-    project="$FEEDBACK_INFISICAL_PROJECT_ID"
-else
-    [ -f "$repo/.infisical.json" ] || die "no .infisical.json at $repo — run 'infisical init' at the repo root, or set FEEDBACK_INFISICAL_PROJECT_ID"
-    project="$(sed -n 's/.*"workspaceId": *"\([^"]*\)".*/\1/p' "$repo/.infisical.json")"
-fi
-[ -n "$project" ] || die "could not determine the Infisical project id"
-inf() { infisical "$@" --env=test --projectId="$project"; }
+# Infisical project "boundary-tools"
+project="${FEEDBACK_INFISICAL_PROJECT_ID:-bdd280e2-259c-4750-9b16-a8597a67214c}"
+env="${FEEDBACK_INFISICAL_ENV:-dev}"
+inf() { infisical "$@" --env="$env" --projectId="$project"; }
 
 # The two secrets the testsets need. Fails loudly — and says why — if the
 # CLI is not logged in, the account is not on the project, or a secret is
@@ -43,16 +37,16 @@ for name in FEEDBACK_SUPABASE_URL FEEDBACK_SUPABASE_KEY; do
             *login*|*"log in"*|*session*)
                 die "not logged in — run 'infisical login' in a terminal, then retry" ;;
             *)
-                die "secret $name is not in Infisical project $project, env 'test' — ask a maintainer to add it" ;;
+                die "secret $name is not in Infisical project $project, env '$env' — ask a maintainer to add it" ;;
         esac
     fi
 done
-echo "setup_database: infisical linked (project $project, env test); FEEDBACK_SUPABASE_URL and FEEDBACK_SUPABASE_KEY resolve"
+echo "setup_database: infisical linked (project $project, env $env); FEEDBACK_SUPABASE_URL and FEEDBACK_SUPABASE_KEY resolve"
 
 case "${1:-}" in
     --check) exit 0 ;;
-    --)      shift; cd "$here" && exec inf run -- "$@" ;;
-    "")      cd "$here" && exec inf run -- \
+    --)      shift; cd "$here" && exec infisical run --env="$env" --projectId="$project" -- "$@" ;;
+    "")      cd "$here" && exec infisical run --env="$env" --projectId="$project" -- \
                  baml test -i "root::repro_match::*" -i "root::issue_enrichment::*" -i "root::organize_issue::*" ;;
     *)       die "unknown argument: $1 (use --check, or -- <cmd>)" ;;
 esac
