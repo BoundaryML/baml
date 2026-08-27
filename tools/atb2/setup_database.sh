@@ -21,13 +21,17 @@ die() { echo "setup_database: $*" >&2; exit 1; }
 
 command -v infisical >/dev/null || die "infisical CLI not found — brew install infisical"
 [ -f "$repo/.infisical.json" ] || die "no .infisical.json at $repo — run 'infisical init' at the repo root"
-infisical user get >/dev/null 2>&1 || die "not logged in — run 'infisical login'"
-
-# The two secrets the testsets need. Fails loudly if either is missing so a
-# run never silently skips the dataset.
+# The two secrets the testsets need. Fails loudly — and says why — if the
+# CLI is not logged in or a secret is missing, so a run never silently skips
+# the dataset. (`infisical user get` succeeds without a session, so the
+# session is checked by actually fetching.)
 for name in FEEDBACK_SUPABASE_URL FEEDBACK_SUPABASE_KEY; do
-    infisical secrets get "$name" --env=test --plain --path=/ >/dev/null 2>&1 \
-        || die "secret $name is not in Infisical env 'test' — ask a maintainer to add it"
+    if ! out="$(infisical secrets get "$name" --env=test --plain --path=/ 2>&1 </dev/null)"; then
+        case "$out" in
+            *login*|*"log in"*|*"session"*) die "not logged in — run 'infisical login' in a terminal, then retry" ;;
+            *) die "secret $name is not in Infisical env 'test' — ask a maintainer to add it ($(echo "$out" | tail -1))" ;;
+        esac
+    fi
 done
 echo "setup_database: infisical linked; FEEDBACK_SUPABASE_URL and FEEDBACK_SUPABASE_KEY resolve (env=test)"
 
