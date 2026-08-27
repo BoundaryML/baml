@@ -1202,7 +1202,7 @@ function interfaces.$init_test_ns_interfaces_interfaces_3(registry: testing.Test
     pop 1
     load_var registry
     load_const "root.interfaces"
-    load_const "heterogeneous_union_dispatch_calls_inherent_non_implementor_method"
+    load_const "union_field_write_uses_shared_interface"
     make_closure .<lambda($init_test_ns_interfaces_interfaces_3, 28)>, 0
     load_const null
     call testing.TestCollector.register_test_at
@@ -2002,16 +2002,6 @@ function interfaces.HiadCat.HiadAnimal.speak(self: interfaces.HiadCat) -> string
 
 function interfaces.HiadDog.HiadAnimal.speak(self: interfaces.HiadDog) -> string {
     load_const "Woof!"
-    return
-}
-
-function interfaces.HudA.HudSpeaker.speak(self: interfaces.HudA) -> string {
-    load_const "interface"
-    return
-}
-
-function interfaces.HudB.speak(self: interfaces.HudB) -> string {
-    load_const "inherent"
     return
 }
 
@@ -4155,31 +4145,6 @@ function interfaces.hiad_main() -> string {
     return
 }
 
-function interfaces.hud_speak(x: interfaces.HudA | interfaces.HudB) -> string {
-    load_var x
-    is_type interfaces.HudA
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var x
-    is_type interfaces.HudB
-    pop_jump_if_false L3
-    load_var x
-    call user.interfaces.HudB.speak
-    jump L2
-
-  L1:
-    load_var x
-    call user.interfaces.HudA.HudSpeaker.speak
-
-  L2:
-    return
-
-  L3:
-    unreachable
-}
-
 function interfaces.idmc_differ(x: #0, y: #0) -> bool {
     load_var2 1 2
     load_type interfaces.IdmcEquatable
@@ -5273,6 +5238,17 @@ function interfaces.ufp5_main() -> int {
 
   L1:
     load_var a
+    return
+}
+
+function interfaces.ufw_rename(value: interfaces.UfwA | interfaces.UfwB) -> string {
+    load_var value
+    load_const "renamed"
+    load_type interfaces.UfwNamed
+    virtual_store_field .name
+    load_var value
+    load_type interfaces.UfwNamed
+    virtual_load_field .name
     return
 }
 

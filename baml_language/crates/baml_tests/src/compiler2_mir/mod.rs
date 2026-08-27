@@ -255,7 +255,7 @@ function main() -> reflect.Type {
 }
 
 #[test]
-fn explicit_local_id_reaches_indirect_optional_virtual_and_union_calls() {
+fn explicit_local_id_reaches_indirect_optional_and_virtual_calls() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -271,7 +271,9 @@ class Dog {
 }
 
 class Cat {
-  function speak(self) -> int { 2 }
+  implements Speaker {
+    function speak(self) -> int { 2 }
+  }
 }
 
 function indirect(callback: (int) -> int throws never, id: boundary.LocalId) -> int {
@@ -337,32 +339,42 @@ function union_dispatch(speaker: Dog | Cat, id: boundary.LocalId) -> int {
     let MirFunctionKind::Bytecode(union_body) = &union_mir.kind else {
         panic!("union_dispatch must lower to bytecode")
     };
-    let union_calls = union_body
-        .blocks
-        .iter()
-        .filter_map(|block| match block.terminator.as_ref() {
-            Some(Terminator::Call { runtime_id, .. }) => Some(runtime_id),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
     assert!(
-        union_calls.len() >= 2,
-        "expected one direct call per heterogeneous union member: {}",
+        union_body.blocks.iter().any(|block| matches!(
+            block.terminator,
+            Some(Terminator::VirtualCall {
+                runtime_id: Some(_),
+                ..
+            })
+        )),
+        "union interface call dropped its runtime ID: {}",
         display_function(&union_mir)
     );
-    assert!(
-        !union_body
-            .blocks
-            .iter()
-            .any(|block| matches!(block.terminator, Some(Terminator::VirtualCall { .. }))),
-        "heterogeneous union dispatch must not use the first member's interface: {}",
-        display_function(&union_mir)
+}
+
+#[test]
+fn narrowed_union_field_access_recovers_shared_interface_view() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+interface HasValue { value string }
+class Ok { value string implements HasValue {} }
+class Warn { value string implements HasValue {} }
+class Err { message string }
+
+function f(result: Ok | Warn | Err) -> string {
+    if let value: Ok | Warn = result {
+        value.value
+    } else {
+        result.message
+    }
+}
+"#,
     );
-    assert!(
-        union_calls.iter().all(|runtime_id| runtime_id.is_some()),
-        "a union dispatch branch dropped its runtime ID: {}",
-        display_function(&union_mir)
-    );
+    assert_no_diagnostic_errors(&db);
+    let output = render_mir(&db, file);
+    assert!(output.contains(".value#0 as HasValue"), "{output}");
 }
 
 macro_rules! mir_snapshot {
@@ -631,32 +643,6 @@ fn match_or_mixed_array_class_binding_uses_branch_local_rest_type() {
         "match_or_mixed_array_class_binding_uses_branch_local_rest_type",
         render_mir(&db, file)
     );
-}
-
-#[test]
-fn match_or_class_union_field_access_uses_runtime_dispatch() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-        class A { field int }
-        class B { field int }
-        class C { field int }
-        class D { field int }
-        class E { field string }
-
-        function f(v: A | B | C | D | E) -> int {
-            match (v) {
-                A { field: int } | B { field: int } | C { field: int } | D { field: int } => v.field,
-                _ => 0
-            }
-        }
-        "#,
-    );
-    let output = render_mir(&db, file);
-    assert!(output.contains("type_tag"), "{output}");
-    assert!(output.contains("A:") && output.contains("B:"), "{output}");
-    assert!(output.contains("C:") && output.contains("D:"), "{output}");
 }
 
 #[test]

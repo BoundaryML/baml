@@ -1693,14 +1693,6 @@ fn package_lowering_data<'db>(
     }
 }
 
-#[derive(Clone, Copy)]
-struct DispatchCallLowering<'a> {
-    expr_id: AstExprId,
-    args: &'a [AstExprId],
-    runtime_id: Option<AstExprId>,
-    dest: &'a Place,
-}
-
 type PatMetadataKey = (MetadataScope, AstPatId);
 
 struct LoweringContext<'db> {
@@ -3739,6 +3731,55 @@ impl<'db> LoweringContext<'db> {
             }
         }
         None
+    }
+
+    fn interface_field_views_for_member(
+        &self,
+        recv_ty: &Tir2Ty,
+        field: &Name,
+    ) -> Vec<InterfaceTypeView> {
+        let mut roots = self.l1_impl_views_for_recv(recv_ty);
+        if let Some(view) = self.interface_dispatch_target_for_member(recv_ty, field)
+            && !roots.contains(&view)
+        {
+            roots.push(view);
+        }
+
+        let mut declarers = Vec::new();
+        for view in roots.into_iter().filter_map(|view| {
+            self.interface_view_declaring_field(&view, field)
+                .map(|(view, _)| view)
+        }) {
+            if !declarers.contains(&view) {
+                declarers.push(view);
+            }
+        }
+        declarers
+    }
+
+    fn interface_method_views_for_member(
+        &self,
+        recv_ty: &Tir2Ty,
+        method: &Name,
+    ) -> Vec<InterfaceTypeView> {
+        let mut roots = self.l1_impl_views_for_recv(recv_ty);
+        if let Some(view) = self.interface_dispatch_target_for_member(recv_ty, method)
+            && !roots.contains(&view)
+        {
+            roots.push(view);
+        }
+
+        let mut declarers = Vec::new();
+        for view in roots
+            .into_iter()
+            .filter(|view| self.mir_interface_declares_method(&view.0, method))
+            .map(|view| self.interface_view_declaring_method(&view, method))
+        {
+            if !declarers.contains(&view) {
+                declarers.push(view);
+            }
+        }
+        declarers
     }
 
     /// Whether `iface_qtn` or any interface in its `requires` closure declares a
@@ -6950,21 +6991,6 @@ impl<'db> LoweringContext<'db> {
                 current_ty = target_ty;
                 continue;
             }
-            if self.lower_union_class_field_access(
-                expr_id,
-                base_local,
-                &current_ty,
-                seg,
-                &target_place,
-            ) {
-                if is_last {
-                    return;
-                }
-                current_place = target_place;
-                current_ty = target_ty;
-                continue;
-            }
-
             // Dynamic map key fallback
             let key_local = self.builder.temp(RuntimeTy::String {
                 attr: TyAttr::default(),
@@ -8692,19 +8718,6 @@ impl<'db> LoweringContext<'db> {
             ) {
                 return;
             }
-            // Receiver may be a union of concrete classes sharing the method
-            // (e.g. `(if c { Dog {} } else { Cat {} }).speak()`).
-            if self.try_lower_union_dispatch(
-                expr_id,
-                callee,
-                base_id,
-                &member_name,
-                args,
-                runtime_id,
-                &dest,
-            ) {
-                return;
-            }
             // Receiver may be a union containing an interface member
             // (e.g. `Animal | Vehicle`), where every member declares the
             // method — dispatch on the runtime class across all implementors.
@@ -9058,10 +9071,8 @@ impl<'db> LoweringContext<'db> {
                         return;
                     }
                 }
-                // Parallel to the interface case: the receiver may instead be a
-                // union of concrete classes (a local or field chain bound to a
-                // `match`/`if` whose arms are different classes). Same receiver
-                // type slot, same field-chain lowering.
+                // A union receiver is callable only through an interface shared by
+                // every arm.
                 else if let Some(members) = self
                     .tir_path_segment_type((self.current_metadata_scope, callee, prefix_idx))
                     .and_then(Self::tir_union_members)
@@ -9072,22 +9083,6 @@ impl<'db> LoweringContext<'db> {
                         receiver_segments,
                         recv_root_local,
                     );
-                    if self.emit_union_class_dispatch(
-                        recv_local,
-                        &members,
-                        &method_name,
-                        DispatchCallLowering {
-                            expr_id,
-                            args,
-                            runtime_id,
-                            dest: &dest,
-                        },
-                    ) {
-                        return;
-                    }
-                    // Union whose members share the method through an interface:
-                    // the runtime value is one concrete member, so dispatch
-                    // open-world on the shared interface.
                     if let Some((decl_tn, decl_args, decl_assoc)) =
                         self.union_virtual_dispatch_view(&members, &method_name)
                         && self.emit_virtual_call(
@@ -11370,15 +11365,7 @@ impl<'db> LoweringContext<'db> {
                         )
                     })
             };
-            let handled_union_field = handled_interface_field
-                || self.lower_union_class_field_access(
-                    expr_id,
-                    base_local,
-                    &unwrapped_ty,
-                    field,
-                    &dest,
-                );
-            if handled_union_field {
+            if handled_interface_field {
                 return;
             }
             if let RuntimeTy::Class(tn, _, _) = &unwrapped_ty {
@@ -11487,105 +11474,6 @@ impl<'db> LoweringContext<'db> {
             RuntimeTy::Class(tn, type_args, _) => Some((tn.clone(), type_args.clone())),
             _ => None,
         }
-    }
-
-    fn lower_union_class_field_access(
-        &mut self,
-        _expr_id: AstExprId,
-        base_local: Local,
-        base_ty: &RuntimeTy,
-        field: &Name,
-        dest: &Place,
-    ) -> bool {
-        let Some(candidates) = self.class_union_field_candidates(base_ty, field) else {
-            return false;
-        };
-
-        let bb_entry = self.builder.current_block();
-        let bb_join = self.builder.create_block();
-        let bb_otherwise = self.builder.create_block();
-
-        let tag_local = self.builder.temp(RuntimeTy::Int {
-            attr: TyAttr::default(),
-        });
-        self.builder.assign(
-            Place::local(tag_local),
-            Rvalue::TypeTag(Place::local(base_local)),
-        );
-
-        let mut arms = Vec::with_capacity(candidates.len());
-        let mut arm_names = Vec::with_capacity(candidates.len());
-        for (tag, class_name, field_idx) in candidates {
-            let bb_body = self.builder.create_block();
-            arms.push((tag, bb_body));
-            arm_names.push((tag, class_name.name().to_string()));
-
-            self.builder.set_current_block(bb_body);
-            self.builder.assign(
-                dest.clone(),
-                Rvalue::Use(Operand::Copy(Place::Field {
-                    base: Box::new(Place::Local(base_local)),
-                    field: field_idx,
-                })),
-            );
-            self.builder.goto(bb_join);
-        }
-
-        self.builder.set_current_block(bb_otherwise);
-        self.builder.unreachable();
-
-        self.builder.set_current_block(bb_entry);
-        self.builder.switch(
-            Operand::Copy(Place::Local(tag_local)),
-            arms,
-            bb_otherwise,
-            true,
-            arm_names,
-        );
-        self.builder.set_current_block(bb_join);
-        true
-    }
-
-    fn class_union_field_candidates(
-        &self,
-        ty: &RuntimeTy,
-        field: &Name,
-    ) -> Option<Vec<(i64, TypeName, usize)>> {
-        // A union's arms are the whole candidate set — the type itself closes it, so
-        // a runtime switch over them is complete by construction. That is the only
-        // legitimate shape here: an interface's implementor set is open, and with
-        // generic impls unbounded, so it is never enumerable.
-        let class_names: Vec<TypeName> = match ty {
-            RuntimeTy::Union(members, _) => members
-                .iter()
-                .filter_map(|m| match m {
-                    RuntimeTy::Class(n, _, _) => Some(n.clone()),
-                    _ => None,
-                })
-                .collect(),
-            _ => return None,
-        };
-        if class_names.is_empty() {
-            return None;
-        }
-
-        let mut candidates = Vec::new();
-        for class_name in &class_names {
-            let field_idx = self
-                .class_fields
-                .get(class_name)
-                .and_then(|fields| fields.get(field.as_str()))
-                .copied()?;
-            let tag = self.class_type_tags.get(class_name).copied()?;
-            if !candidates
-                .iter()
-                .any(|(existing_tag, _, _)| *existing_tag == tag)
-            {
-                candidates.push((tag, class_name.clone(), field_idx));
-            }
-        }
-
-        (!candidates.is_empty()).then_some(candidates)
     }
 
     fn lower_index(&mut self, base: AstExprId, index: AstExprId, dest: Place) {
@@ -11980,57 +11868,6 @@ impl<'db> LoweringContext<'db> {
         local
     }
 
-    /// Resolve `class.method` to a callable `ItemRef` by simple name.
-    fn class_method_item_ref_by_name(&self, class_tn: &TypeName, method: &Name) -> Option<ItemRef> {
-        use baml_compiler2_ppir::item_data::{class_data, function_data};
-        let class_loc = self.resolve_class_loc_by_type_name(class_tn)?;
-        let func_loc = class_data(self.db, class_loc)
-            .methods
-            .iter()
-            .copied()
-            .find(|&fl| function_data(self.db, fl).name == *method)?;
-        Some(method_item_ref(self.db, class_loc, func_loc))
-    }
-
-    /// A method call whose receiver is a *union of concrete classes* (e.g. the
-    /// `Dog | Cat` produced by `if`/`match` arms) — dispatch by runtime class.
-    /// Each member must declare `method`; otherwise this isn't a uniform call we
-    /// can lower and we fall through (the caller reports the real error).
-    #[expect(clippy::too_many_arguments)]
-    fn try_lower_union_dispatch(
-        &mut self,
-        expr_id: AstExprId,
-        callee: AstExprId,
-        base: AstExprId,
-        method: &Name,
-        args: &[AstExprId],
-        runtime_id: Option<AstExprId>,
-        dest: &Place,
-    ) -> bool {
-        let Some(members) = self
-            .call_receiver_tir_ty(callee, base)
-            .as_ref()
-            .and_then(Self::tir_union_members)
-        else {
-            return false;
-        };
-        // Lower the receiver once; copy it into every arm.
-        let receiver_op = self.lower_to_operand(base);
-        let receiver_ty = self.expr_ty(base);
-        let recv_local = self.operand_to_local(receiver_op, receiver_ty);
-        self.emit_union_class_dispatch(
-            recv_local,
-            &members,
-            method,
-            DispatchCallLowering {
-                expr_id,
-                args,
-                runtime_id,
-                dest,
-            },
-        )
-    }
-
     /// A method call whose receiver is a union that contains at least one
     /// *interface* member (e.g. `Animal | Vehicle`, where every member declares
     /// `method`). BEP-044: a method every union member provides through a shared
@@ -12077,92 +11914,26 @@ impl<'db> LoweringContext<'db> {
         )
     }
 
-    /// The declaring-interface view for a `method` call on a union receiver.
-    /// Every member must provide the same realized interface; otherwise the
-    /// caller must retain per-member dispatch (or report the checker's error).
+    /// The declaring-interface view for a member access on a union receiver.
+    /// Every member must provide the same realized interface. Fields take
+    /// precedence over methods, matching type checking.
     fn union_virtual_dispatch_view(
         &self,
         members: &[Tir2Ty],
-        method: &Name,
+        member_name: &Name,
     ) -> Option<InterfaceTypeView> {
-        let declaring_view = |member: &Tir2Ty| {
-            self.interface_dispatch_target_for_member(member, method)
-                .or_else(|| self.dispatch_target_for_concrete(member, method))
-                .map(|view| self.interface_view_declaring_method(&view, method))
+        let shared_view = |candidate_views: &dyn Fn(&Tir2Ty) -> Vec<InterfaceTypeView>| {
+            let mut shared = candidate_views(members.first()?);
+            for member in &members[1..] {
+                let candidates = candidate_views(member);
+                shared.retain(|view| candidates.contains(view));
+            }
+            (shared.len() == 1).then(|| shared.remove(0))
         };
-        let first = declaring_view(members.first()?)?;
-        members
-            .iter()
-            .skip(1)
-            .all(|member| declaring_view(member).as_ref() == Some(&first))
-            .then_some(first)
-    }
 
-    /// Emit a class-tag dispatch switch for a method call whose receiver
-    /// (`recv_local`) has the union type `members`. Returns false (lowering
-    /// nothing) unless every member is a class declaring `method`.
-    fn emit_union_class_dispatch(
-        &mut self,
-        recv_local: Local,
-        members: &[Tir2Ty],
-        method: &Name,
-        call: DispatchCallLowering<'_>,
-    ) -> bool {
-        let mut arms: Vec<(TypeName, ItemRef)> = Vec::new();
-        for member in members {
-            let Tir2Ty::Class(qtn, _, _) = member else {
-                return false;
-            };
-            let class_tn = qtn.clone();
-            let Some(item_ref) = self.class_method_item_ref_by_name(&class_tn, method) else {
-                return false;
-            };
-            arms.push((class_tn, item_ref));
-        }
-        if arms.is_empty() {
-            return false;
-        }
-
-        let arg_ops = self.lower_call_arg_operands(call.expr_id, call.args);
-        let runtime_id_operand = self.lower_runtime_id_operand(call.runtime_id);
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-
-        let bb_join = self.builder.create_block();
-        let bb_otherwise = self.builder.create_block();
-        let mut next_check = self.builder.current_block();
-        for (idx, (class_tn, item_ref)) in arms.iter().enumerate() {
-            let bb_body = self.builder.create_block();
-            let bb_next = if idx + 1 == arms.len() {
-                bb_otherwise
-            } else {
-                self.builder.create_block()
-            };
-            self.builder.set_current_block(next_check);
-            self.emit_is_type_branch(
-                recv_local,
-                RuntimeTy::Class(class_tn.clone(), Vec::new(), TyAttr::default()),
-                bb_body,
-                bb_next,
-            );
-            self.builder.set_current_block(bb_body);
-            let callee_op = Operand::Constant(Constant::Function(item_ref.clone()));
-            let mut all_args = vec![Operand::Copy(Place::Local(recv_local))];
-            all_args.extend(arg_ops.iter().cloned());
-            self.builder.call_with_type_args_and_runtime_id(
-                callee_op,
-                all_args,
-                0,
-                runtime_id_operand.clone(),
-                call.dest.clone(),
-                bb_join,
-                unwind,
-            );
-            next_check = bb_next;
-        }
-        self.builder.set_current_block(bb_otherwise);
-        self.builder.unreachable();
-        self.builder.set_current_block(bb_join);
-        true
+        shared_view(&|member| self.interface_field_views_for_member(member, member_name)).or_else(
+            || shared_view(&|member| self.interface_method_views_for_member(member, member_name)),
+        )
     }
 
     /// The frame shape of a SOURCE interface's method: whether it takes a

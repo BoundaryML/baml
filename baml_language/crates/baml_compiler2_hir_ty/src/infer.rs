@@ -5804,61 +5804,6 @@ impl<'db> InferenceContext<'db> {
         (self.infer_expr(body, callee, &Expectation::None), false)
     }
 
-    fn heterogeneous_union_class_method_callee(
-        &self,
-        members: &[Ty],
-        member: &baml_type::Name,
-    ) -> Option<Ty> {
-        let mut has_interface_provider = false;
-        let mut joined: Option<Ty> = None;
-        for arm in members {
-            let TyKind::Class(qtn, _, _) = arm.kind() else {
-                return None;
-            };
-            if matches!(
-                crate::method_resolution::lookup_interface_member(
-                    self.db,
-                    &self.facts,
-                    arm,
-                    member,
-                ),
-                crate::method_resolution::InterfaceMemberLookup::Found(_)
-            ) {
-                has_interface_provider = true;
-            }
-            let Definition::Class(expected_class) = self.facts.definition_of(qtn)? else {
-                return None;
-            };
-            let candidate =
-                crate::method_resolution::lookup_method(self.db, &self.facts, arm, member)?;
-            let crate::method_resolution::MethodCandidateSource::Source { method, class } =
-                candidate.source
-            else {
-                return None;
-            };
-            if class != expected_class
-                || !baml_compiler2_ppir::item_data::class_data(self.db, class)
-                    .methods
-                    .contains(&method)
-            {
-                return None;
-            }
-            let signature = function_signature(self.db, method);
-            if signature.generic_params.len() != candidate.class_args.len() {
-                return None;
-            }
-            let ty = bind_receiver(function_value_ty(signature, &candidate.class_args));
-            if joined
-                .as_ref()
-                .is_some_and(|current| !self.cached_equivalent(current, &ty))
-            {
-                return None;
-            }
-            joined = Some(ty);
-        }
-        if has_interface_provider { joined } else { None }
-    }
-
     /// `receiver.member` in callee position: a method (instantiated - the
     /// receiver pins the class generics, the call site's turbofish or
     /// fresh variables fill the method's own; bound iff it takes `self`),
@@ -5929,23 +5874,7 @@ impl<'db> InferenceContext<'db> {
                     }
                     return (Ty::error(), false, None, false);
                 }
-                crate::method_resolution::UnionMemberLookup::ClassFieldJoin(field_ty) => {
-                    // The agreed class field types the callee; boundness
-                    // is a plain value read (no receiver binding).
-                    return (field_ty, false, None, false);
-                }
-                crate::method_resolution::UnionMemberLookup::NoCommonInterface => {
-                    // One arm may provide an owned method through an
-                    // interface while another owns an equivalent inherent
-                    // method. MIR retains that heterogeneous case as a
-                    // guarded class-tag switch; class-only unions continue
-                    // to require a common interface.
-                    if let Some(ty) =
-                        self.heterogeneous_union_class_method_callee(&union_members, member)
-                    {
-                        return (ty, true, None, false);
-                    }
-                }
+                crate::method_resolution::UnionMemberLookup::NoCommonInterface => {}
             }
         }
         let candidate =
@@ -9118,9 +9047,6 @@ impl<'db> InferenceContext<'db> {
                     });
                 }
                 (Ty::error(), None)
-            }
-            crate::method_resolution::UnionMemberLookup::ClassFieldJoin(field_ty) => {
-                (field_ty, None)
             }
             crate::method_resolution::UnionMemberLookup::NoCommonInterface => {
                 if self.member_probe_depth == 0 && !union_ty.has_error() && !union_ty.has_infer() {
