@@ -25,7 +25,7 @@
 
 use baml_base::Name;
 use baml_compiler2_emit::{
-    CompileOptions, MountedPackageLinkError, OptLevel, decompose_units, emit_units,
+    CompileOptions, MountedPackageLinkError, OptLevel, emit_units,
     generate_project_bytecode_with_mounted_units, generate_project_bytecode_with_opt,
 };
 use baml_compiler2_hir::package::PackageId;
@@ -519,19 +519,17 @@ fn emitted_program_dependency_and_consumer_units_are_byte_identical() {
 
     let blob_db = blob_db(ARTIFACT_USER, artifacts.blob.clone());
     assert_no_diagnostic_errors(&blob_db);
-    let blob_program =
-        generate_project_bytecode_with_mounted_units(&blob_db, &options(), OPT, &artifacts.units)
-            .expect("blob program");
+    let (blob_program, blob_units) =
+        baml_compiler2_emit::generate_project_bytecode_with_mounted_units_artifacts(
+            &blob_db,
+            &options(),
+            OPT,
+            &artifacts.units,
+        )
+        .expect("blob program");
 
     let source_program_bytes = borsh::to_vec(&source_program).expect("serialize source program");
     let blob_program_bytes = borsh::to_vec(&blob_program).expect("serialize blob program");
-
-    // The blob database intentionally has no app source with which to attribute
-    // flat objects during decomposition. Use the source manifest only as the
-    // inverse-link attribution oracle; the bytes being decomposed are the blob
-    // path's independently linked program.
-    let blob_units = decompose_units(&source_db, &options(), &blob_program)
-        .expect("decompose blob image with source manifest");
     let source_user = unit(&source_units, "main.baml");
     let blob_user = unit(&blob_units, "main.baml");
     assert_ne!(

@@ -2111,20 +2111,21 @@ impl BexEngine {
         // resolution surface — grafted packages direct-call static bodies by
         // their link-boundary spellings) but are absent from every
         // name-resolution map (`resolved_function_names` excludes them).
-        #[expect(
-            deprecated,
-            reason = "the runtime linker is a sanctioned boundary consumer"
-        )]
+        // Interface bodies are absent from the image-symbol tables. A runtime
+        // compilation still consumes static impl methods — their SIGNATURES
+        // (possibly subtype refinements of the interface's) through the
+        // package-interface blob, and their bodies through the virtual road,
+        // whose rule tables carry body POINTERS (`MethodImpl::fqn`, bound at
+        // load) with adopted defaults on the interface's `default_fn`. No
+        // current lowering emits a name-addressed reference to a static body:
+        // mount stubs are class/enum skeletons (no impl blocks), so a mounted
+        // impl method has no source lane and every call to one is virtual. A
+        // future devirtualized direct call must reference the body
+        // rule-relatively, never through a revived name entry here.
         let image_objects = bytecode
             .resolved_function_names
             .iter()
             .map(|(name, (idx, _))| (name.clone(), heap.compile_time_ptr(idx.into_raw())))
-            .chain(
-                bytecode
-                    .body_indices
-                    .iter()
-                    .map(|(name, slots)| (name.clone(), heap.compile_time_ptr(slots.object_index))),
-            )
             .chain(
                 class_indices
                     .iter()
@@ -2136,21 +2137,11 @@ impl BexEngine {
                     .map(|(name, idx)| (name.clone(), heap.compile_time_ptr(*idx))),
             )
             .collect();
-        #[expect(
-            deprecated,
-            reason = "the runtime linker is a sanctioned boundary consumer"
-        )]
         let image_globals = bytecode
             .function_global_indices
             .iter()
             .chain(&bytecode.let_global_indices)
             .map(|(name, idx)| (name.clone(), GlobalIndex::from_raw(*idx)))
-            .chain(
-                bytecode
-                    .body_indices
-                    .iter()
-                    .map(|(name, slots)| (name.clone(), GlobalIndex::from_raw(slots.global_slot))),
-            )
             .collect();
         package_index.install_image_symbols(image_objects, image_globals);
         // Shared with every VM so spawned workers see the same package index

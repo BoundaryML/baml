@@ -41,9 +41,10 @@ use std::{
 use baml_db::{
     ProjectDatabase, SourceFile,
     baml_compiler2_emit::{
-        CompileOptions, LoweringError, OptLevel, decompose_units, generate_project_bytecode,
-        generate_project_bytecode_with_reuse_artifacts, generate_project_bytecode_with_stdlib,
-        generate_stdlib_program, reuse_throws_mismatches,
+        CompileOptions, LoweringError, OptLevel, generate_project_bytecode,
+        generate_project_bytecode_with_reuse_artifacts,
+        generate_project_bytecode_with_stdlib_artifacts, generate_stdlib_program,
+        reuse_throws_mismatches,
     },
     baml_compiler2_hir, baml_compiler2_ppir,
 };
@@ -574,7 +575,19 @@ pub(crate) fn compile_program(
 
 pub(crate) struct CompiledArtifacts {
     pub(crate) program: Program,
-    pub(crate) units: Option<Vec<CompilationUnit>>,
+    pub(crate) units: CompiledUnits,
+}
+
+/// How a compile's symbolic units came to be — the store path persists fresh
+/// units for every file but may keep a reuse plan's unit-key POINTERS for
+/// clean files when the units were carried through a successful reuse.
+pub(crate) enum CompiledUnits {
+    /// Cache-less compile: units were never assembled (nothing stores them).
+    None,
+    /// Fresh full/splice compile: freshly decomposed alongside the program.
+    Fresh(Vec<CompilationUnit>),
+    /// Successful reuse compile: clean units carried from the plan.
+    Reused(Vec<CompilationUnit>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -592,7 +605,7 @@ pub(crate) fn compile_program_artifacts(
     let Some(ctx) = cache else {
         return generate_project_bytecode(db, options).map(|program| CompiledArtifacts {
             program,
-            units: None,
+            units: CompiledUnits::None,
         });
     };
     let base = match ctx.cache.load_shared(&ctx.stdlib_key) {
@@ -615,7 +628,7 @@ pub(crate) fn compile_program_artifacts(
             Ok((program, units)) => {
                 return Ok(CompiledArtifacts {
                     program,
-                    units: Some(units),
+                    units: CompiledUnits::Reused(units),
                 });
             }
             // A real compile error must surface — it is not a reuse problem.
@@ -628,12 +641,12 @@ pub(crate) fn compile_program_artifacts(
             }
         }
     }
-    generate_project_bytecode_with_stdlib(db, options, CLI_OPT_LEVEL, &base).map(|program| {
-        CompiledArtifacts {
+    generate_project_bytecode_with_stdlib_artifacts(db, options, CLI_OPT_LEVEL, &base).map(
+        |(program, units)| CompiledArtifacts {
             program,
-            units: None,
-        }
-    })
+            units: CompiledUnits::Fresh(units),
+        },
+    )
 }
 
 /// The per-file reuse decision for one compile: which files' compiled
@@ -1622,40 +1635,16 @@ impl CacheContext {
     /// checked (dirty or degraded), by rel_path. Per file the manifest takes its
     /// fresh blob if present, else the plan's carried clean blob, else an empty
     /// blob — so a re-checked file always overwrites a stale/poison carry.
-    pub(crate) fn store_with_manifest(
-        &self,
-        db: &ProjectDatabase,
-        program: &Program,
-        fresh_by_file: &std::collections::BTreeMap<String, Vec<u8>>,
-        plan: Option<&ReusePlan>,
-    ) -> std::io::Result<CacheStoreStats> {
-        self.store_artifacts_with_manifest(db, program, None, fresh_by_file, plan)
-    }
-
     pub(crate) fn store_artifacts_with_manifest(
         &self,
         db: &ProjectDatabase,
         program: &Program,
-        units: Option<&[CompilationUnit]>,
+        units: &[CompilationUnit],
+        reused_units: bool,
         fresh_by_file: &std::collections::BTreeMap<String, Vec<u8>>,
         plan: Option<&ReusePlan>,
     ) -> std::io::Result<CacheStoreStats> {
         self.store(program)?;
-
-        let reused_units = units.is_some();
-        let owned_units;
-        let units = match units {
-            Some(units) => units,
-            None => {
-                let options = CompileOptions {
-                    emit_test_cases: self.emit_test_cases,
-                };
-                owned_units = decompose_units(db, &options, program).map_err(|error| {
-                    std::io::Error::other(format!("unit decomposition failed: {error}"))
-                })?;
-                &owned_units
-            }
-        };
 
         let mut units_by_source = HashMap::with_capacity(units.len());
         for unit in units {
@@ -1819,10 +1808,21 @@ impl CacheContext {
         self.verify_diagnostics(db)?;
         self.verify_stdlib_diagnostics(db)?;
         self.verify_callable_throws_fragments(db)?;
+        let (units, reused_units) = match &compiled.units {
+            CompiledUnits::Fresh(units) => (units.as_slice(), false),
+            CompiledUnits::Reused(units) => (units.as_slice(), true),
+            CompiledUnits::None => {
+                // Every cached compile assembles units alongside the program;
+                // reaching a cache store without them is a programmer error.
+                debug_assert!(false, "cached compile stored without assembled units");
+                return Ok(());
+            }
+        };
         if let Err(e) = self.store_artifacts_with_manifest(
             db,
             &compiled.program,
-            compiled.units.as_deref(),
+            units,
+            reused_units,
             fresh,
             plan,
         ) {
@@ -3544,8 +3544,13 @@ mod tests {
              function diff(p: Point) -> int {\n  p.x - p.y\n}\n",
         )]);
         let base = generate_stdlib_program(&db, CLI_OPT_LEVEL).expect("stdlib compiles");
-        let program = generate_project_bytecode_with_stdlib(&db, &opts(), CLI_OPT_LEVEL, &base)
-            .expect("project compiles");
+        let program = baml_db::baml_compiler2_emit::generate_project_bytecode_with_stdlib(
+            &db,
+            &opts(),
+            CLI_OPT_LEVEL,
+            &base,
+        )
+        .expect("project compiles");
         let refs = referenced_names_by_file(&program);
         let a = refs.get("a.baml").expect("a.baml has referenced names");
         assert!(
@@ -3650,12 +3655,18 @@ mod tests {
         let r1 = resolved(&root, &initial);
         let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
         let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
-        let program1 = compile_program(&db1, &opts(), Some(&ctx1), None).expect("compile");
+        let compiled1 =
+            compile_program_artifacts(&db1, &opts(), Some(&ctx1), None).expect("compile");
+        let program1 = &compiled1.program;
+        let (CompiledUnits::Fresh(units1) | CompiledUnits::Reused(units1)) = &compiled1.units
+        else {
+            panic!("cached compile assembles units")
+        };
         let fresh1 = ctx1
             .collect_diagnostics_incremental(&db1, None)
             .fresh_by_file;
         let cold_stats = ctx1
-            .store_with_manifest(&db1, &program1, &fresh1, None)
+            .store_artifacts_with_manifest(&db1, program1, units1, false, &fresh1, None)
             .expect("cold store");
         assert_eq!(cold_stats.unit_entries_written, 3);
         assert_eq!(cold_stats.manifest_entries_written, 1);
@@ -3671,11 +3682,16 @@ mod tests {
             .fresh_by_file;
         let compiled =
             compile_program_artifacts(&db2, &opts(), Some(&ctx2), Some(&plan)).expect("compile");
+        let (CompiledUnits::Fresh(units2) | CompiledUnits::Reused(units2)) = &compiled.units else {
+            panic!("cached compile assembles units")
+        };
+        let reused2 = matches!(compiled.units, CompiledUnits::Reused(_));
         let stats = ctx2
             .store_artifacts_with_manifest(
                 &db2,
                 &compiled.program,
-                compiled.units.as_deref(),
+                units2,
+                reused2,
                 &fresh2,
                 Some(&plan),
             )

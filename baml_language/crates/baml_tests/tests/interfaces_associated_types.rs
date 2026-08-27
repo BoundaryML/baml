@@ -102,9 +102,9 @@ fn assert_compile_error_contains(source: &str, needle: &str) {
 
 fn compiled_function_metadata(source: &str, display_name_suffix: &str) -> (Vec<String>, String) {
     let program = compile_source_with_opt(source, OptLevel::One);
-    // Interface bodies live in `body_indices`, not the runtime name maps, so
-    // metadata probes walk the union of both.
-    let matches: Vec<_> = baml_tests::engine::named_and_body_functions(&program)
+    // Interface bodies live in no name map, so metadata probes walk the
+    // named functions plus the pool-enumerated bodies.
+    let matches: Vec<_> = baml_tests::engine::named_and_interface_body_functions(&program)
         .filter(|(name, _)| {
             name.strip_prefix("user.")
                 .unwrap_or(name)
@@ -145,7 +145,7 @@ fn compiled_function_display_metadata(
     display_name_suffix: &str,
 ) -> (Vec<String>, Vec<String>, String) {
     let program = compile_source_with_opt(source, OptLevel::One);
-    let matches: Vec<_> = baml_tests::engine::named_and_body_functions(&program)
+    let matches: Vec<_> = baml_tests::engine::named_and_interface_body_functions(&program)
         .filter(|(name, _)| {
             name.strip_prefix("user.")
                 .unwrap_or(name)

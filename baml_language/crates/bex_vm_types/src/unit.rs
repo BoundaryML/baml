@@ -174,13 +174,14 @@ pub struct ProgramImplRuleFrag {
 /// Symbolic twin of `ProgramMethodImpl`. Rule method tables are
 /// PROVIDED-ONLY, and a provided body is declared by the same file as its
 /// `implements` block — so the callee is always an object in the DECLARING
-/// unit's own `code` bucket, referenced by offset. A body has no name on any
+/// unit's own `code` bucket, referenced by offset. An interface body has no
+/// name on any
 /// wire: an adopted interface default is not in this table at all (the
 /// resolver adopts it at dispatch through the interface's `default_fn`).
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct ProgramMethodImplFrag {
     /// Offset of the callee body in the declaring unit's `code` bucket.
-    pub body: u32,
+    pub code_offset: u32,
     /// The callee's type-argument frame at the impl site.
     pub frame: Vec<TyTemplate>,
 }

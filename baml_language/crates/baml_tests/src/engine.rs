@@ -76,30 +76,34 @@ pub fn display_user_functions(program: &Program) -> String {
 }
 
 /// The program's named functions plus its interface bodies, as
-/// `(fq name, object index)` pairs. Bodies are runtime-anonymous (excluded
-/// from `function_indices`), but bytecode snapshots still display them like
-/// any compiled function under their display spelling.
-#[expect(
-    deprecated,
-    reason = "snapshot display is a sanctioned boundary consumer"
-)]
-pub fn named_and_body_functions(program: &Program) -> impl Iterator<Item = (&String, usize)> {
+/// `(fq name, object index)` pairs. Bodies are anonymous (in no name map), so
+/// they are enumerated straight off the object pool — their `Function::name`
+/// display field is exactly the spelling bytecode snapshots show.
+pub fn named_and_interface_body_functions(
+    program: &Program,
+) -> impl Iterator<Item = (&String, usize)> {
     program
         .function_indices
         .iter()
         .map(|(name, &idx)| (name, idx))
         .chain(
             program
-                .body_indices
+                .objects
                 .iter()
-                .map(|(name, slots)| (name, slots.object_index)),
+                .enumerate()
+                .filter_map(|(idx, obj)| match obj {
+                    bex_vm_types::Object::Function(f) if f.is_interface_body => {
+                        Some((&f.name, idx))
+                    }
+                    _ => None,
+                }),
         )
 }
 
 /// Like [`display_user_functions`], but lets the caller include auto-derived
 /// methods in the bytecode output.
 pub fn display_user_functions_with_options(program: &Program, show_auto_derive: bool) -> String {
-    let mut functions: Vec<(String, &Function)> = named_and_body_functions(program)
+    let mut functions: Vec<(String, &Function)> = named_and_interface_body_functions(program)
         .filter_map(|(name, idx)| match program.objects.get(idx) {
             Some(Object::Function(f)) => {
                 if !f.origin.is_user_callable() {
@@ -177,7 +181,7 @@ pub fn bound_function(heap: &bex_heap::BexHeap, idx: usize) -> Option<&Function>
 /// rendered bytecode show declaration names instead of raw head tags.
 pub fn display_user_functions_bound(program: &Program) -> String {
     let heap = bound_pool(program);
-    let mut functions: Vec<(String, &Function)> = named_and_body_functions(program)
+    let mut functions: Vec<(String, &Function)> = named_and_interface_body_functions(program)
         .filter_map(|(name, idx)| {
             let f = bound_function(&heap, idx)?;
             if !f.origin.is_user_callable() {

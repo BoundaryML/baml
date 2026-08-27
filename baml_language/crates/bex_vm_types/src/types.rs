@@ -78,35 +78,23 @@ pub struct Program {
 
     /// Maps function names to their object indices.
     ///
-    /// Interface-machinery bodies are excluded (see [`Self::body_indices`]).
+    /// Interface-machinery bodies — impl-block methods (in-class or free) and
+    /// interface default-method bodies — are excluded: such a body is pooled
+    /// and
+    /// slotted like any function but is not a table-addressable item (each
+    /// body's [`Function::is_interface_body`](crate::Function::is_interface_body)
+    /// marks it). Where a compile boundary needs a body's coordinates, it
+    /// recovers them structurally: the Pass-1 slot replay + the globals array
+    /// (unit decomposition, the stdlib-splice registration) or the impl-rule
+    /// tables / the interface's `default` operand (rule baking, dispatch).
     pub function_indices: HashMap<String, usize>,
 
     /// Maps function names to their global indices.
     /// Used for dynamic function lookup at runtime.
     ///
-    /// Interface-machinery bodies are excluded (see [`Self::body_indices`]).
+    /// Interface-machinery bodies are excluded (see
+    /// [`Self::function_indices`]).
     pub function_global_indices: HashMap<String, usize>,
-
-    /// Interface-machinery bodies — impl-block methods (in-class or free) and
-    /// interface default-method bodies — by display fq-name.
-    ///
-    /// A body is pooled and slotted like any function, but it is not a runtime-
-    /// addressable item: the runtime never resolves a body by name, so bodies
-    /// are excluded from [`Self::function_indices`] /
-    /// [`Self::function_global_indices`] and from every runtime name scan
-    /// (each body's [`Function::is_interface_body`](crate::Function::is_interface_body)
-    /// marks it). This table exists only for compile/link boundaries — the
-    /// precompiled-stdlib splice, impl-rule baking, unit decomposition's
-    /// operand reversal, and cross-eval graft linking — the same category as
-    /// the unit linker's `Symbol::fq_name` keys. Key strings are the emit-time
-    /// display spellings, uniqueness-asserted at insertion.
-    #[deprecated = "transitional name-shaped channel: a body's only identity is the \
-        implements relation, and the impl-rule tables already reference bodies by \
-        index/pointer. Remove once direct static calls, the stdlib splice, and \
-        graft linking resolve bodies through those tables (the interface's \
-        `default` operand for defaults; coherence-keyed rules for impl methods) \
-        instead of rendered spellings"]
-    pub body_indices: HashMap<String, BodySlots>,
 
     /// Maps let-binding fully-qualified names to their global slot indices.
     /// E.g., `"user.my_const" -> 5`. Populated in Pass 1; slots hold `ConstValue::Null`
@@ -150,17 +138,6 @@ pub struct Program {
     /// validated); a host that cannot leaves `None`.
     #[borsh(skip)]
     pub source_content_hash: Option<[u8; 32]>,
-}
-
-/// Pool + globals coordinates of one interface-machinery body (see
-/// [`Program::body_indices`]): the pair `function_indices` /
-/// `function_global_indices` carry for a named function, in one entry.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
-pub struct BodySlots {
-    /// Index of the body's `Object::Function` in the object pool.
-    pub object_index: usize,
-    /// The body's global slot (holds `Object(object_index)`).
-    pub global_slot: usize,
 }
 
 /// Metadata for building a client tree at runtime.

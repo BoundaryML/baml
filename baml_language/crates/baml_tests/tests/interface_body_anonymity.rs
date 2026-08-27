@@ -1,10 +1,10 @@
 //! Interface-machinery bodies are anonymous-but-slotted: impl-block methods
 //! (in-class or free) and interface default-method bodies are pooled and
 //! slotted like any function — direct calls stay `Call(GlobalIndex)` — but
-//! they are not runtime-addressable items. Their spellings live only in the
-//! compile/link-boundary `Program::body_indices` table, and every runtime
-//! name surface (the runtime name maps, entry-point resolution, suffix
-//! matching) skips them.
+//! they are not addressable items AT ALL: no name map of the compiled
+//! `Program` carries them (their `Function::name` is display-only), and
+//! every runtime name surface (the runtime name maps, entry-point
+//! resolution, suffix matching) skips them.
 
 use baml_tests::{
     baml_test,
@@ -59,37 +59,33 @@ const BODY_SPELLINGS: [&str; 3] = [
 ];
 
 #[test]
-#[expect(deprecated, reason = "the oracle pins the boundary table's contents")]
-fn bodies_live_in_body_indices_not_the_runtime_name_maps() {
+fn interface_bodies_are_pooled_and_slotted_but_in_no_name_map() {
     let program = compile_source_with_opt(SOURCE, OptLevel::One);
 
     for spelling in BODY_SPELLINGS {
-        let slots = program.body_indices.get(spelling).unwrap_or_else(|| {
-            panic!(
-                "`{spelling}` missing from body_indices; present: {:?}",
-                program
-                    .body_indices
-                    .keys()
-                    .filter(|k| k.starts_with("user."))
-                    .collect::<Vec<_>>()
-            )
-        });
-        // The body is a pooled, flagged function whose global slot holds it.
-        let Some(Object::Function(function)) = program.objects.get(slots.object_index) else {
-            panic!("`{spelling}` does not point at a function object");
-        };
+        // The body exists: a pooled, flagged function (found by pool
+        // enumeration — its display name keys nothing) whose global slot
+        // holds it.
+        let (object_index, function) = program
+            .objects
+            .iter()
+            .enumerate()
+            .find_map(|(idx, obj)| match obj {
+                Object::Function(f) if f.name == spelling => Some((idx, f)),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("`{spelling}` has no pooled function object"));
         assert!(
             function.is_interface_body,
             "`{spelling}` must carry the body flag"
         );
-        assert_eq!(
-            program.globals.get(slots.global_slot),
-            Some(&bex_vm_types::ConstValue::Object(
-                bex_vm_types::ObjectIndex::from_raw(slots.object_index)
+        assert!(
+            program.globals.contains(&bex_vm_types::ConstValue::Object(
+                bex_vm_types::ObjectIndex::from_raw(object_index)
             )),
-            "`{spelling}`'s global slot must hold its own function object"
+            "`{spelling}`'s function object must own a global slot"
         );
-        // And it is absent from every runtime name map.
+        // And it is absent from every name map of the program.
         assert!(
             !program.function_indices.contains_key(spelling),
             "`{spelling}` leaked into function_indices"
@@ -103,7 +99,6 @@ fn bodies_live_in_body_indices_not_the_runtime_name_maps() {
     // Real logical items stay where they were.
     assert!(program.function_indices.contains_key("user.main"));
     assert!(program.function_global_indices.contains_key("user.main"));
-    assert!(!program.body_indices.contains_key("user.main"));
 }
 
 #[tokio::test]

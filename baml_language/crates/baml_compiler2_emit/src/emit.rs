@@ -296,8 +296,9 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Resolved global names to indices.
     globals: &'ctx HashMap<String, usize>,
     /// Pass-1 global slot per interface-machinery body, keyed by declaration.
-    /// A body has no runtime name; this is its only resolution channel.
-    body_slots: &'ctx HashMap<baml_compiler2_hir::loc::FunctionLoc<'ctx>, usize>,
+    /// An interface body has no runtime name; this map is its only
+    /// resolution channel.
+    interface_body_slots: &'ctx HashMap<baml_compiler2_hir::loc::FunctionLoc<'ctx>, usize>,
     /// Resolved class field indices.
     #[allow(dead_code)]
     classes: &'ctx HashMap<String, HashMap<String, usize>>,
@@ -445,7 +446,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             arity,
             line_starts,
             globals: ctx.globals,
-            body_slots: ctx.body_slots,
+            interface_body_slots: ctx.interface_body_slots,
             classes: ctx.classes,
             class_object_indices: ctx.class_object_indices,
             enum_object_indices: ctx.enum_object_indices,
@@ -1989,18 +1990,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Pass-1 global slot for a function item.
     ///
     /// An interface-machinery body resolves by its DECLARATION
-    /// ([`baml_compiler2_mir::BodyRef::decl`]) through [`Self::body_slots`] —
+    /// ([`baml_compiler2_mir::InterfaceBodyRef::decl`]) through [`Self::interface_body_slots`] —
     /// its rendered spelling is display-only and keys nothing. Every other
     /// item resolves by its rendered name through [`Self::globals`]; `None`
     /// there means the callee is not statically addressable (the caller falls
     /// back to an indirect call). A body missing its slot is an internal
-    /// error: `ItemRef::Body` only exists for declarations this database
+    /// error: `ItemRef::InterfaceBody` only exists for declarations this database
     /// sees, and Pass 1 slots every one of them.
     fn try_function_global_index(&self, item: &baml_compiler2_mir::ItemRef<'ctx>) -> Option<usize> {
         match item {
-            baml_compiler2_mir::ItemRef::Body(body) => Some(
+            baml_compiler2_mir::ItemRef::InterfaceBody(body) => Some(
                 *self
-                    .body_slots
+                    .interface_body_slots
                     .get(&body.decl)
                     .unwrap_or_else(|| panic!("interface body has no Pass-1 slot: {item}")),
             ),
@@ -3955,7 +3956,7 @@ mod tests {
         };
 
         let globals = HashMap::new();
-        let body_slots = HashMap::new();
+        let interface_body_slots = HashMap::new();
         let classes = HashMap::new();
         let class_object_indices = HashMap::new();
         let enum_object_indices = HashMap::new();
@@ -3975,7 +3976,7 @@ mod tests {
             &line_starts,
             MirCodegenContext {
                 globals: &globals,
-                body_slots: &body_slots,
+                interface_body_slots: &interface_body_slots,
                 classes: &classes,
                 class_object_indices: &class_object_indices,
                 enum_object_indices: &enum_object_indices,

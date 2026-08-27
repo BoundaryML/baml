@@ -361,7 +361,7 @@ fn corpus_snapshots() {
     // Group user (non-stdlib, non-auto-derived) functions by their namespace
     // directory, so each namespace's bytecode lands beside its own sources.
     let mut by_dir: BTreeMap<String, Vec<(String, &Function)>> = BTreeMap::new();
-    for (name, idx) in crate::engine::named_and_body_functions(&program) {
+    for (name, idx) in crate::engine::named_and_interface_body_functions(&program) {
         // Stdlib functions are not the user namespaces' subject; they get the
         // dedicated per-package snapshots below.
         if is_stdlib_function(name) || name.starts_with("env.") {
@@ -398,9 +398,10 @@ fn corpus_snapshots() {
     // Stdlib bytecode, one snapshot per package.
     for pkg in SNAPSHOT_STDLIB_PACKAGES {
         let prefix = format!("{pkg}.");
-        let mut entries: Vec<(&String, usize)> = crate::engine::named_and_body_functions(&program)
-            .filter(|(name, _)| name.starts_with(&prefix))
-            .collect();
+        let mut entries: Vec<(&String, usize)> =
+            crate::engine::named_and_interface_body_functions(&program)
+                .filter(|(name, _)| name.starts_with(&prefix))
+                .collect();
         entries.sort_by(|(a, _), (b, _)| a.cmp(b));
 
         let functions: Vec<(String, &Function)> = entries

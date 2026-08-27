@@ -290,13 +290,15 @@ pub struct Function {
     /// True for interface-machinery bodies: impl-block methods (in-class or
     /// free) and interface default-method bodies.
     ///
-    /// A body is pooled and slotted like any function — statically resolved
+    /// An interface body is pooled and slotted like any function —
+    /// statically resolved
     /// calls stay direct `Call(GlobalIndex)` — but it is not itself a logical
-    /// item, so it has no runtime name: bodies are excluded from
-    /// `Program::function_indices` / `function_global_indices` (they live in
-    /// [`Program::body_indices`](crate::Program::body_indices), a
-    /// compile/link-boundary table) and every runtime name scan skips them.
-    /// [`Self::name`] on a body is display-only (traces, snapshots).
+    /// item, so it has no name anywhere: bodies are excluded from
+    /// `Program::function_indices` / `function_global_indices` and every
+    /// runtime name scan skips them; compile boundaries recover a body's
+    /// coordinates structurally (Pass-1 slot replay + the globals array).
+    /// [`Self::name`] on an interface body is display-only (traces,
+    /// snapshots).
     pub is_interface_body: bool,
 
     /// Native-dispatch key for `$rust_function` bodies (stdlib-only): the key

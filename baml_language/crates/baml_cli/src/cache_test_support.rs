@@ -13,7 +13,7 @@ use std::{
 use baml_db::{ProjectDatabase, SourceFile, baml_compiler2_emit::CompileOptions};
 
 use crate::{
-    bytecode_cache::{CacheContext, compile_program},
+    bytecode_cache::{CacheContext, CompiledUnits, compile_program_artifacts},
     project_load::{self, ResolvedProject},
 };
 
@@ -78,11 +78,15 @@ pub(crate) fn compile_and_store_v1(
     let r1 = resolved(root, files);
     let db1 = project_load::build_db_from_sources(&r1, |_| {});
     let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
-    let program1 = compile_program(&db1, &opts(), Some(&ctx1), None).expect("v1 compile succeeds");
+    let compiled =
+        compile_program_artifacts(&db1, &opts(), Some(&ctx1), None).expect("v1 compile succeeds");
+    let (CompiledUnits::Fresh(units) | CompiledUnits::Reused(units)) = &compiled.units else {
+        panic!("cached compile assembles units");
+    };
     let fresh1 = ctx1
         .collect_diagnostics_incremental(&db1, None)
         .fresh_by_file;
-    ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
+    ctx1.store_artifacts_with_manifest(&db1, &compiled.program, units, false, &fresh1, None)
         .expect("v1 manifest stored");
     (db1, ctx1)
 }

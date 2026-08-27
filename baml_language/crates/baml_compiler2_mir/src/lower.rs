@@ -1075,7 +1075,7 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                 return method_item_ref(db, class_loc, func_loc);
             }
             Some(MethodOwner::Interface(iface_loc)) => {
-                return ItemRef::Body(Box::new(crate::BodyRef {
+                return ItemRef::InterfaceBody(Box::new(crate::InterfaceBodyRef {
                     package: pkg_info.package.clone(),
                     namespace: pkg_info.namespace_path,
                     display_owner: interface_data(db, iface_loc).name.clone(),
@@ -1092,7 +1092,7 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
                 // arguments appear in the spelling, associated-type pins do
                 // NOT (members of the impl, outputs of the match); the
                 // impl's own type variables render as frame indices (`#0`).
-                return ItemRef::Body(Box::new(crate::BodyRef {
+                return ItemRef::InterfaceBody(Box::new(crate::InterfaceBodyRef {
                     package: pkg_info.package.clone(),
                     namespace: pkg_info.namespace_path,
                     display_owner: Name::new(impl_display_segment(db, impl_loc)),
@@ -1228,12 +1228,13 @@ pub fn native_key_for<'db>(
 /// (in-class or free — the compiler sees no distinction) or an interface
 /// default-method body.
 ///
-/// A body is not itself a logical item — it belongs to every `implements`
+/// An interface body is not itself a logical item — it belongs to every
+/// `implements`
 /// relation that selects it — so it gets no runtime name: emit pools and slots
-/// it like any function, but excludes it from the runtime name maps
+/// it like any function, but excludes it from every name map
 /// (`Program::function_indices` / `function_global_indices`) and marks its
 /// `Function::is_interface_body`. The [`def_to_item_ref`] spelling for a body
-/// is display-only plus a compile/link-boundary key (`Program::body_indices`).
+/// is display-only plus a link-internal unit-export key.
 ///
 /// Required interface methods (signature-only, no body) never reach the
 /// emit paths that ask this; the interface-owner arm still classifies them
@@ -8722,7 +8723,7 @@ impl<'db> LoweringContext<'db> {
             ) {
                 let method_name = segments[1].clone();
                 // The callee IS the interface's default body: reference it by
-                // its declaration (`ItemRef::Body`), the only key a body has.
+                // its declaration (`ItemRef::InterfaceBody`), the only key a body has.
                 let Some(default_loc) =
                     baml_compiler2_ppir::item_data::interface_data(self.db, iface_loc)
                         .methods

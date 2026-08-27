@@ -1387,14 +1387,6 @@ pub struct BytecodeProgram {
     /// Maps function names to their global indices.
     /// Used for dynamic function lookup at runtime.
     pub function_global_indices: HashMap<String, usize>,
-    /// Interface-machinery bodies (see [`bex_vm_types::Program::body_indices`]).
-    /// Consumed only by the runtime linker's image-symbol tables so grafted
-    /// packages can resolve direct calls into static bodies — never by
-    /// name-resolution surfaces (entry points, suffix matching).
-    #[deprecated = "transitional (see `bex_vm_types::Program::body_indices`): \
-        dies with it once graft linking resolves bodies through the impl-rule \
-        tables instead of rendered spellings"]
-    pub body_indices: HashMap<String, bex_vm_types::types::BodySlots>,
     /// Maps top-level let names to their global indices.
     pub let_global_indices: HashMap<String, usize>,
     /// Client build metadata, passed through to `SysOpContext`.
@@ -1447,16 +1439,11 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         }
     }
 
-    #[expect(
-        deprecated,
-        reason = "threading the boundary table to the runtime linker"
-    )]
     Ok(BytecodeProgram {
         objects: ObjectPool::from_vec(objects),
         globals: program.globals,
         resolved_function_names,
         function_global_indices: program.function_global_indices,
-        body_indices: program.body_indices,
         let_global_indices: program.let_global_indices,
         client_metadata: program.client_metadata,
         test_cases: program.test_cases,

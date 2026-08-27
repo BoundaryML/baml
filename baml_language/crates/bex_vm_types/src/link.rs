@@ -1132,15 +1132,16 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
         program.test_cases.extend(unit.test_cases.iter().cloned());
     }
 
-    // ---- Body partition ------------------------------------------------------
+    // ---- Interface-body scrub ----------------------------------------------------------
     // Unit symbols address interface bodies by fq name exactly like named
     // functions (link-internal strings), and every resolution pass above ran
-    // against the merged maps. The *output* image must not expose bodies as
-    // runtime-addressable items, so re-partition them into `body_indices` now
-    // that the pooled objects (which carry `Function::is_interface_body`) are
-    // placed. Slot assignment predates placement, which is why this cannot
-    // happen inline in step 1.
-    let body_names: Vec<String> = program
+    // against the merged maps. The *output* image must not expose bodies at
+    // all — an interface body is not a table-addressable item — so scrub
+    // them from the
+    // name maps now that the pooled objects (which carry
+    // `Function::is_interface_body`) are placed. Slot assignment predates
+    // placement, which is why this cannot happen inline in step 1.
+    let interface_body_names: Vec<String> = program
         .function_indices
         .iter()
         .filter(|&(_, &abs)| {
@@ -1151,23 +1152,15 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
         })
         .map(|(name, _)| name.clone())
         .collect();
-    for name in body_names {
-        let object_index = program
+    for name in interface_body_names {
+        program
             .function_indices
             .remove(&name)
-            .unwrap_or_else(|| unreachable!("partitioned name came from this map"));
-        let global_slot = program
+            .unwrap_or_else(|| unreachable!("scrubbed name came from this map"));
+        program
             .function_global_indices
             .remove(&name)
             .ok_or_else(|| LinkError::UnresolvedImport(name.clone()))?;
-        #[expect(deprecated, reason = "the linker is the table's producer on this path")]
-        program.body_indices.insert(
-            name,
-            crate::types::BodySlots {
-                object_index,
-                global_slot,
-            },
-        );
     }
     Ok(program)
 }
@@ -1243,10 +1236,10 @@ fn merge_package_fragment(
                 // A provided body lives in the DECLARING unit's own `code`
                 // bucket; its absolute index is that bucket's placement
                 // (shadow-aware, like a `Code` export).
-                let abs = *code_abs.get(method.body as usize).ok_or_else(|| {
+                let abs = *code_abs.get(method.code_offset as usize).ok_or_else(|| {
                     LinkError::InvalidUnit(format!(
                         "impl rule for `{iface_fq}` references code offset {}                          outside its declaring unit",
-                        method.body
+                        method.code_offset
                     ))
                 })?;
                 methods.insert(

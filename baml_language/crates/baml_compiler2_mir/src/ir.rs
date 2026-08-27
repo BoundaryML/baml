@@ -1140,12 +1140,13 @@ pub enum ItemRef<'db> {
         name: Name,
     },
     /// An interface-machinery BODY: an impl block's provided method or an
-    /// interface's default body. A body is not itself a logical item — its
+    /// interface's default body. An interface body is not itself a logical
+    /// item — its
     /// one identity is its DECLARATION, carried as the opaque
     /// session-scoped [`BodyDeclId`]; `display_owner` exists only so
     /// bytecode and trace spellings keep their `<(target as iface)>` /
     /// `Iface` form, and is never a key.
-    Body(Box<BodyRef<'db>>),
+    InterfaceBody(Box<InterfaceBodyRef<'db>>),
 }
 
 /// A reference to an interface-machinery body: the declaration — a body's
@@ -1154,7 +1155,7 @@ pub enum ItemRef<'db> {
 /// Never serialized: at decompose, bodies are re-expressed through the rule
 /// / interface tables that reference them by object index.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BodyRef<'db> {
+pub struct InterfaceBodyRef<'db> {
     pub package: Name,
     pub namespace: Vec<Name>,
     /// Display-only owner segment, exactly as the display convention renders
@@ -1211,7 +1212,7 @@ impl fmt::Display for ItemRef<'_> {
             }
             // Renders exactly as the pre-structural `Method` spelling did:
             // `{package}.{ns…}.{display_owner}.{method}`.
-            ItemRef::Body(body) => {
+            ItemRef::InterfaceBody(body) => {
                 let mut parts: Vec<&str> = vec![body.package.as_str()];
                 for ns in &body.namespace {
                     parts.push(ns.as_str());
